@@ -1,0 +1,2184 @@
+Feriwala ERP: Complete Project Requirements and Technical Specification
+1. Project Overview
+Feriwala will be a centralized ERP-based Wholesale and Dropshipping Management System.
+The main Feriwala website will not operate as a public Product Storefront. Public visitors will not be able to browse Products, add Products to a cart, or complete a wholesale Checkout from the public website.
+The public-facing Feriwala website will contain an Admin-managed Dynamic Landing Page with platform information, services, Package details, benefits, FAQs, Registration, Login, and other relevant content.
+All operational activities will take place inside the authenticated Feriwala ERP Panel, including:
+Product browsing
+Dropshipping Product selection
+Bulk Wholesale Purchasing
+Package Management
+KYC Management
+Dedicated Website Management
+Order Management
+Inventory
+Wallet and Money Management
+Commissions
+Direct Referrals
+Withdrawals
+Payments
+Notifications
+Reports
+Eligible Packages may include Dedicated Customer-facing E-commerce Websites. These Partner Websites will operate as public Product Storefronts and will be connected to the Feriwala ERP through secure APIs and Webhooks.
+The system will have a Single Account structure. Every user will register, update KYC, select a Package, pay the combined Registration Fee and Package Fee, complete administrative verification, and activate the same Account.
+After activation, the user may use the same Account and ERP Panel for:
+Dropshipping only
+Bulk Wholesale Purchasing only
+Both Dropshipping and Bulk Wholesale Purchasing
+No separate Customer Account, Partner Account, or Account Conversion process will exist.
+2. Required Technology Stack
+The required Technology Stack will be:
+Laravel
+React
+Inertia.js
+PostgreSQL
+Redis
+The final system must follow a modular architecture so that its core business modules, Payment Gateways, SMS Providers, Courier Providers, and Website integrations can be extended without rewriting the entire application.
+3. Core System Modules
+Feriwala ERP will include the following core modules:
+Dynamic Landing Page and CMS
+Registration and Authentication
+Single Account Management
+KYC Verification
+Dynamic Package Management
+Registration and Package Payment
+Dropshipping Management
+Bulk Wholesale Purchasing
+Central Product Catalog
+Partner Product Selection
+Dedicated E-commerce Website Management
+API and Webhook Integration
+Advanced Order Management
+Inventory and Stock Management
+Fulfillment Management
+Courier Management
+Sales and Commission Management
+Wallet and Money Management
+Required Deposit and Minimum Balance Management
+Direct Referral Management
+Withdrawal Management
+Payment Gateway Integration
+Dashboard and SMS Notifications
+Reports and Analytics
+Roles and Permissions
+SEO Management
+Backup and Recovery
+Security and Audit Logs
+Monitoring and Error Management
+SaaS-style UI and UX
+4. Public Dynamic Landing Page
+The public Feriwala website will only contain public information and Account access options.
+It will not contain:
+Public Feriwala Product Catalog
+Public wholesale Product listing
+Public Product details
+Public wholesale Cart
+Public wholesale Checkout
+Public wholesale Order placement
+Public ERP pricing
+4.1 Landing Page Sections
+The Admin or an Authorized User should be able to manage:
+Header
+Navigation Menu
+Hero Section
+Main headline
+Supporting text
+Call-to-action buttons
+About Feriwala
+Platform benefits
+Dropshipping information
+Wholesale Purchasing information
+Package previews
+How the platform works
+Features
+Statistics
+Testimonials
+Frequently Asked Questions
+Contact information
+Registration button
+Login button
+Legal page links
+Footer
+Social media links
+Custom content sections
+4.2 Landing Page CMS
+The CMS should support:
+Creating sections
+Editing sections
+Reordering sections
+Enabling or disabling sections
+Draft and Published status
+Scheduling publication
+Managing text
+Managing images
+Managing videos
+Managing buttons and links
+Managing colors
+Desktop and mobile visibility
+Preview before publication
+Revision history
+SEO metadata
+Role-based access
+4.3 Public Pages
+The system may include the following public pages:
+Home
+About
+Packages
+How It Works
+FAQs
+Contact
+Terms and Conditions
+Privacy Policy
+Refund Policy
+Login
+Registration
+Password Reset
+Other Admin-created public pages
+5. Single Account System
+Every user will have only one Feriwala Account.
+There will be no separate:
+Customer Account
+Partner Account
+Wholesale Account
+Dropshipping Account
+Account Conversion process
+Multiple ERP Panels for the same user
+The same Account will support both Dropshipping and Wholesale Purchasing after activation.
+5.1 Account Registration Flow
+The Account activation flow will be:
+User Registration
+Mobile and Email Verification where required
+KYC information and document submission
+Package selection
+Registration Fee and Package Fee calculation
+Combined Payment
+Payment verification
+KYC review
+Admin or Authorized User approval
+Account activation
+The total activation payment will be:
+Total Activation Payment = Registration Fee + Selected Package Fee
+Registration Fee and Package Fee must appear separately in the Payment breakdown, invoice and Financial Ledger even when paid together.
+5.2 Registration Information
+The Registration Form may include:
+Full name
+Mobile number
+Email address
+Password
+Date of birth
+Gender where required
+Present address
+Permanent address
+Country
+Nationality
+Referral Code where applicable
+Terms and Conditions acceptance
+Privacy Policy acceptance
+Other configurable fields
+5.3 Account Statuses
+The system should support:
+Registered
+Mobile Verification Pending
+Email Verification Pending
+KYC Pending
+KYC Submitted
+KYC Under Review
+KYC Resubmission Required
+KYC Approved
+KYC Rejected
+Package Selection Pending
+Payment Pending
+Payment Verification Pending
+Approval Pending
+Active
+Package Renewal Due
+Package Expired
+Low Wallet Balance
+Wallet Top-up Required
+Temporarily Restricted
+Temporarily Disabled
+Suspended
+Closed
+These statuses will belong to the same Account and will not represent separate Account Types.
+5.4 Account Access Rules
+Before activation, the user may only access:
+Profile
+KYC
+Package selection
+Payment
+Activation status
+Support
+Notifications related to activation
+After activation, the user may access all features included in the selected Package.
+6. Authentication and Account Security
+The system should support:
+Secure Login
+Logout
+Mobile verification
+Email verification
+Password reset
+Strong password requirements
+Password hashing
+Session Management
+Configurable session expiration
+Login attempt limits
+Brute-force protection
+Suspicious Login detection
+Optional two-factor authentication
+Device and session history
+Logout from other devices
+Account Lock and Unlock
+Security notifications
+7. KYC Verification System
+Every user must update KYC before Account activation.
+7.1 KYC Information and Documents
+Possible KYC requirements may include:
+National ID
+Passport
+Profile photograph
+Proof of address
+Bank Account information
+Mobile Financial Service information
+Trade License where required
+Tax Identification Number where required
+Business information
+Nominee information where required
+Other Admin-configured documents
+7.2 Dynamic KYC Requirements
+The Admin or an Authorized User should be able to:
+Create KYC document types
+Mark a document as required or optional
+Configure accepted file formats
+Configure maximum file size
+Add submission instructions
+Enable or disable KYC fields
+Configure Package-specific KYC requirements
+Configure country-specific KYC requirements
+Set KYC update deadlines
+Request future KYC updates
+7.3 KYC Review
+An Authorized Reviewer should be able to:
+View submitted information
+Securely view submitted documents
+Approve KYC
+Reject KYC
+Request corrections
+Request resubmission
+Add internal notes
+Add user-visible feedback
+View KYC submission history
+View KYC review history
+Every KYC action must store:
+Reviewer
+Previous status
+New status
+Date and time
+Reason
+Internal note
+User-visible feedback
+7.4 KYC Deadline
+A configurable number of days may be assigned for KYC completion or future KYC updates.
+If the user fails to complete the required KYC within the configured period:
+Account activation may remain blocked
+An Active Account may be restricted
+Dashboard notifications may be sent
+SMS notifications may be sent
+The action must be recorded in the Audit Log
+7.5 KYC Document Security
+KYC documents must:
+Be stored privately
+Never be exposed through public URLs
+Require authentication and authorization
+Use protected or expiring access links
+Record every document view or download
+Support access restrictions by Role
+Be encrypted where appropriate
+Never be included in public exports
+8. Dynamic Package Management
+The system will support N number of Packages.
+N is not a fixed number. The Admin or an Authorized User can create, edit, activate, deactivate or archive any number of Packages.
+8.1 Package Information
+Each Package may define:
+Package name
+Unique slug
+Short description
+Full description
+Package Fee
+Registration Fee where Package-specific
+Validity period
+Renewal Fee
+Renewal frequency
+Grace Period
+Dedicated Website facility
+Domain facility
+Hosting facility
+Website setup charge
+Website maintenance charge
+Product publishing limit
+Order limit
+Staff limit
+Commission rules
+Referral benefits
+Required Wallet deposit
+Minimum Wallet balance
+Withdrawal rules
+Report access
+SMS quota
+Fulfillment facilities
+Courier facilities
+Support level
+API access
+Other Package-specific features
+Start date
+Expiry date
+Active or inactive status
+8.2 Package Purchase
+The system should support:
+Package selection
+Package comparison
+Package purchase
+Registration Fee calculation
+Combined Payment calculation
+Payment verification
+Package activation
+Package invoice
+Package Payment history
+Package renewal
+Package upgrade
+Package downgrade
+Package cancellation
+Package expiry
+8.3 Package Upgrade and Downgrade
+The Admin should be able to configure:
+Upgrade eligibility
+Downgrade eligibility
+Prorated charges
+Additional deposit requirements
+Minimum balance changes
+Feature transition rules
+Product publishing limit changes
+Order limit changes
+Effective date
+Manual Package assignment
+Promotional Package assignment
+8.4 Package Expiry
+If a Package expires:
+The user will receive Dashboard and SMS notifications
+Package-specific features may be restricted
+Product publishing may be paused
+The Dedicated Website may enter a Grace Period
+The Website may be suspended after the Grace Period
+The Account may retain limited access to Payment and renewal modules
+Features should be restored after successful renewal verification
+9. Combined Registration and Package Payment
+The Registration Fee and selected Package Fee will be calculated together.
+The Checkout must display:
+Registration Fee
+Package Fee
+Applicable discount
+Applicable tax
+Payment Gateway charge where permitted
+Wallet deposit where included in the same transaction
+Total payable amount
+The system should store each amount separately for:
+Reports
+Invoice
+Payment reconciliation
+Financial Ledger
+Refund calculation
+Revenue analysis
+The Admin should be able to configure:
+Global Registration Fee
+Package-specific Registration Fee
+Package Fee
+Promotional discount
+Coupon
+Effective dates
+Tax
+Payment deadline
+Payment verification rules
+10. Business Facilities
+After Account activation, the user may operate in one or both business methods.
+10.1 Dropshipping
+The user can:
+Browse eligible Products inside the ERP
+Select Products from the Central Product Catalog
+Publish selected Products on a Dedicated Website
+Receive Customer Orders
+Submit Orders for Fulfillment
+Track Delivery
+View sales
+View earnings
+View commissions or margins
+Manage Returns and Refunds
+Request withdrawals
+10.2 Bulk Wholesale Purchasing
+The user can:
+Browse wholesale Products inside the ERP
+View wholesale pricing
+View quantity-based pricing
+Add Products to the ERP Cart
+Purchase Products in bulk
+Select delivery information
+Make Payment
+Track the wholesale Order
+Receive Products
+Sell the purchased Products independently through permitted channels
+10.3 Combined Usage
+The same user can use both facilities from the same ERP Panel.
+No additional Account, Login or KYC will be required to switch between Dropshipping and Wholesale Purchasing.
+11. Central Product Catalog
+Only the Admin or an Authorized User can create and manage Products in the Central Product Catalog.
+11.1 Product Information
+The Product Catalog should support:
+Product name
+Unique slug
+SKU
+Barcode where applicable
+Short description
+Full description
+Category
+Subcategory
+Brand
+Attributes
+Variations
+Product images
+Product videos
+Wholesale price
+Base cost
+Suggested selling price
+Minimum selling price
+Maximum selling price
+Minimum Order quantity
+Maximum Order quantity
+Quantity-based pricing
+Available stock
+Product status
+Package eligibility
+User eligibility
+Dropshipping eligibility
+Wholesale eligibility
+Featured status
+Related Products
+SEO metadata for Partner Websites
+Product schema for Partner Websites
+11.2 Product Statuses
+Product statuses may include:
+Draft
+Pending Review
+Active
+Inactive
+Out of Stock
+Discontinued
+Archived
+Dropshipping Enabled
+Dropshipping Disabled
+Wholesale Enabled
+Wholesale Disabled
+11.3 Product Categories and Brands
+Authorized Users can:
+Create Categories
+Create Subcategories
+Create Brands
+Reorder Categories
+Enable or disable Categories
+Assign Products
+Manage Category images
+Manage Category SEO for Partner Websites
+12. Strict Product Creation Restrictions
+A regular user cannot create or add a Product.
+A user must not be able to:
+Create Product Master Data
+Add an external Product
+Upload an unauthorized Product
+Create Product Categories
+Create Product Brands
+Create unauthorized Product variations
+Modify Central SKU
+Modify Central stock
+Modify Central wholesale price
+Modify locked Product information
+Import external Products into the ERP
+Every Dropshipping Product must:
+Exist in the Central Product Catalog
+Be Active
+Be enabled for Dropshipping
+Be eligible for the selected Package
+Be selected by the user
+Be published through the ERP
+These restrictions must be enforced through:
+UI permissions
+Backend authorization
+API authorization
+Request validation
+Database rules where appropriate
+Automated tests
+13. ERP Wholesale Product Browsing
+Wholesale Product browsing will take place inside the authenticated ERP.
+The system should support:
+Product search
+Category filtering
+Brand filtering
+Stock filtering
+Price filtering
+Wholesale eligibility filtering
+Product details
+Product variations
+Wholesale prices
+Quantity-based prices
+Minimum Order quantity
+Stock availability
+Related Products
+ERP Cart
+14. ERP Cart and Wholesale Checkout
+The ERP Cart and Checkout should support:
+Add to Cart
+Update quantity
+Remove from Cart
+Minimum quantity validation
+Maximum quantity validation
+Stock validation
+Tiered Price calculation
+Coupon where applicable
+Discount
+Billing address
+Shipping address
+Delivery charge
+Tax where applicable
+Payment Method
+Order summary
+Checkout confirmation
+Payment initiation
+Invoice generation
+15. Product Selection for Dropshipping
+Users can browse eligible Dropshipping Products and select them for their Dedicated Websites.
+The system should support:
+Eligible Product browsing
+Search and filtering
+Package eligibility
+Product publishing limit
+Product selection
+Product publication
+Product unpublication
+Publication status
+Synchronization status
+Website-specific Category placement
+Website-specific display order
+Featured Product selection
+15.1 Website-specific Product Settings
+If permitted by the Admin, users may configure:
+Product visibility
+Website Category
+Display order
+Featured status
+Website-specific selling price
+Promotional price
+Short promotional title
+Short marketing description
+The Admin can configure:
+Whether user-defined pricing is allowed
+Minimum selling price
+Maximum selling price
+Suggested selling price
+Allowed profit margin
+Locked fields
+Editable fields
+Product publishing limits
+16. Dedicated E-commerce Websites
+Eligible Packages may include Dedicated Customer-facing E-commerce Websites.
+These Websites will remain separate public Storefronts while being centrally managed through Feriwala ERP.
+16.1 Dedicated Website Features
+Depending on Package, the Website may include:
+Homepage
+Product listing
+Product Categories
+Product search
+Product filtering
+Product details
+Cart
+Checkout
+Customer Account
+Guest Checkout where enabled
+Coupons
+Discounts
+Shipping Methods
+Payment Methods
+Order tracking
+Return request
+Refund request
+Contact information
+Legal pages
+SEO features
+16.2 Website Setup Information
+The ERP should manage:
+Website name
+Domain
+Subdomain
+Account reference
+Package reference
+Website setup charge
+Domain charge
+Hosting charge
+Required Wallet deposit
+Minimum Wallet balance
+Website status
+API connection
+Webhook connection
+Branding
+Contact information
+Theme settings
+Payment configuration
+Shipping configuration
+Activation date
+Expiry date
+Last synchronization
+Connection health
+16.3 Website Management from ERP
+Depending on permission and Package, users may manage:
+Website information
+Logo
+Banner
+Contact information
+Website colors
+Basic branding
+Selected Products
+Product visibility
+Permitted Product pricing
+Categories
+Orders
+Customers
+Coupons where permitted
+Discounts where permitted
+Shipping settings
+Website reports
+Users cannot create new Products through Website Management.
+16.4 Website Statuses
+Website statuses may include:
+Setup Pending
+Deposit Pending
+Development
+API Connection Pending
+Active
+Low Wallet Balance
+Grace Period
+Temporarily Disabled
+Package Expired
+Domain Renewal Pending
+Hosting Renewal Pending
+Suspended
+Maintenance
+Closed
+17. API and Webhook Integration
+Dedicated Websites will communicate with Feriwala ERP using secure APIs and Webhooks.
+17.1 Synchronized Data
+The following Data may be synchronized:
+Selected Products
+Product information
+Product images
+Product pricing
+Product availability
+Stock
+Categories
+Website Orders
+Order items
+Customers
+Payments
+Shipping information
+Courier status
+Returns
+Refunds
+Cancellations
+Sales
+Commissions
+Applicable Wallet transactions
+17.2 Synchronization Methods
+Synchronization may be:
+Real-time
+Near real-time
+Scheduled
+Manually retried by an Authorized User
+17.3 API Security
+The Integration System must include:
+Secure authentication
+Website-specific API credentials
+Account-specific credentials
+Encrypted API secrets
+Permission scopes
+Request validation
+Rate limiting
+Webhook signature verification
+Idempotency
+Duplicate Order prevention
+Retry mechanism
+Failed Sync Queue
+API Logs
+Webhook Logs
+Credential rotation
+Credential revocation
+Connection monitoring
+One user’s credentials must never provide access to another user’s Website or Data.
+18. Advanced Order Management System
+Feriwala will operate as a Centralized Advanced Order Management System.
+The OMS will manage:
+ERP Wholesale Orders
+Dropshipping Orders
+Dedicated Website Orders
+Manual Orders where permitted
+Admin-created Orders
+Authorized User-created Orders
+Future connected channel Orders
+Every Order must include:
+Unique Order Reference
+Order source
+User reference
+Website reference where applicable
+Customer information
+Product details
+Payment information
+Fulfillment status
+Courier status
+Delivery status
+Financial breakdown
+Status history
+Notes
+Audit history
+18.1 Order Sources
+Possible Order sources may include:
+ERP Wholesale
+Dedicated Website
+Manual Entry
+API
+Admin Entry
+Future External Channel
+18.2 Order Statuses
+Order statuses may include:
+Draft
+New
+Pending Confirmation
+Customer Verification Pending
+Confirmed
+Payment Pending
+Paid
+Processing
+Stock Reserved
+Ready for Fulfillment
+Picking
+Packing
+Ready for Pickup
+Courier Assigned
+Shipped
+In Transit
+Delivered
+Completed
+Delivery Failed
+On Hold
+Cancelled
+Return Requested
+Return Approved
+Returning
+Returned
+Refund Pending
+Partially Refunded
+Refunded
+The Admin may create additional Custom Order statuses.
+18.3 Order Status History
+Every status change must store:
+Previous status
+New status
+Changed by
+Date and time
+Reason
+Internal note
+User-visible note
+Notification status
+18.4 User Order Dashboard
+Users can only access their own:
+Wholesale Orders
+Dropshipping Orders
+Dedicated Website Orders
+Permitted Customer Data
+Order Reports
+Depending on permission, users may:
+View Orders
+Create Manual Orders where permitted
+Confirm Orders
+Verify Customers
+Cancel Orders
+Submit Fulfillment requests
+Submit Courier requests
+Generate invoices
+Generate packing slips
+Generate shipping labels
+Update permitted statuses
+Submit Return requests
+Submit Refund requests
+Add Order notes
+Export self-scoped Orders
+18.5 Admin Order Dashboard
+Admin and Authorized Users may view:
+Total Orders
+New Orders
+Pending Orders
+Confirmed Orders
+Processing Orders
+Shipped Orders
+Delivered Orders
+Cancelled Orders
+Returned Orders
+Refunded Orders
+Wholesale Orders
+Dropshipping Orders
+Website-wise Orders
+User-wise Orders
+Product-wise Orders
+Courier-wise Orders
+Payment Method-wise Orders
+Date-wise Orders
+Fulfillment status
+Payment status
+COD status
+19. Inventory and Stock Management
+The Inventory System should support:
+Available stock
+Reserved stock
+Processing stock
+Sold stock
+Returned stock
+Damaged stock
+User-allocated stock where applicable
+Warehouse-wise stock
+Website-wise availability
+Stock adjustments
+Stock movement history
+Low-stock notifications
+Out-of-stock protection
+Overselling prevention
+Only the Admin or an Authorized User can directly modify Central stock.
+19.1 Stock Synchronization
+When the same Product is published on multiple Websites:
+All Websites will use Central stock
+New Orders may reserve stock centrally
+Completed Orders will reduce stock
+Cancelled Orders may release stock
+Returned Orders may update stock after inspection
+Stock changes will synchronize with Websites
+Transaction-safe reservation must prevent overselling
+20. Fulfillment Management
+The system should support:
+Fulfillment request
+Warehouse assignment
+Picking
+Packing
+Packaging materials
+Fulfillment charge
+Fulfillment status
+Fulfillment notes
+Staff assignment
+Packing slip
+Shipping label
+Fulfillment history
+User-wise Fulfillment Reports
+21. Courier Management
+The Courier Module should support:
+Courier Provider Management
+Courier API integration
+Manual Courier assignment
+Courier booking
+Tracking number
+Delivery status
+Delivery charge
+COD amount
+Return charge
+Delivery failure
+Courier reconciliation
+Courier-wise Reports
+The Courier architecture should allow additional Providers to be integrated later.
+22. Sales and Commission Management
+The system should calculate user earnings and commission from eligible Dropshipping sales.
+22.1 Commission Rules
+The system should support:
+Global commission
+Package-specific commission
+User-specific commission
+Product-specific commission
+Category-specific commission
+Campaign-specific commission
+Fixed commission
+Percentage commission
+Effective date
+Expiry date
+Calculation base
+Priority rules
+Maximum commission
+Commission history
+22.2 Commission Eligibility
+Commission eligibility may depend on:
+Successful Payment
+Delivered Order
+Completed Order
+Return Period completion
+Verified sale
+Non-cancelled Order
+Non-refunded Order
+Other configured conditions
+Cancelled, returned or refunded Orders must adjust or reverse the related commission.
+22.3 Commission Statuses
+Pending
+On Hold
+Under Review
+Approved
+Available
+Rejected
+Reversed
+Paid
+23. Wallet and Money Management
+Every Active Account will have a Wallet and Financial Ledger.
+The Wallet should separately display:
+Total deposited balance
+Required deposit
+Reserved balance
+Usable service balance
+Available withdrawal balance
+Pending balance
+Hold balance
+Sales earnings
+Pending commission
+Approved commission
+Referral reward
+Joining reward
+COD receivable
+COD collected
+Pending withdrawal
+Total withdrawn
+Refund amount
+Reversed amount
+Registration Fee
+Package Fee
+Website setup charge
+Domain charge
+Hosting charge
+Package renewal charge
+Maintenance charge
+Fulfillment charge
+Courier charge
+Payment Gateway charge
+Platform charge
+Service charge
+Adjustment amount
+23.1 Wallet Transaction Types
+Wallet transactions may include:
+Deposit credit
+Top-up credit
+Sales credit
+Commission credit
+Referral reward credit
+Joining reward credit
+COD collection credit
+Promotional credit
+Registration Fee debit
+Package Fee debit
+Website setup debit
+Domain charge debit
+Hosting charge debit
+Renewal Fee debit
+Maintenance charge debit
+Fulfillment charge debit
+Courier charge debit
+Payment Gateway charge debit
+Platform Fee debit
+Service Fee debit
+Withdrawal debit
+Refund debit
+Return adjustment
+Commission reversal
+Referral reward reversal
+Manual adjustment
+23.2 Financial Ledger
+Every financial transaction must create an immutable Ledger Entry containing:
+Unique Transaction Reference
+User
+Transaction type
+Source
+Related Order
+Related Payment
+Related Withdrawal
+Related Package
+Related Website
+Related Domain or Hosting service
+Related Commission
+Related Referral
+Debit amount
+Credit amount
+Balance before
+Balance after
+Pending amount
+Reserved amount
+Available amount
+Hold amount
+Status
+Created by
+Approved by
+Date and time
+Description
+Internal note
+Ledger Entries must not be directly edited or deleted.
+Corrections must use:
+Adjustment Entry
+Reversal Entry
+Corrective Entry
+23.3 Wallet Transaction Statuses
+Initiated
+Pending
+On Hold
+Under Review
+Approved
+Available
+Settled
+Paid
+Rejected
+Failed
+Cancelled
+Reversed
+24. Required Wallet Deposit and Minimum Balance
+The Admin may require users to deposit and maintain a configured amount in the Wallet.
+The deposit may cover:
+Website setup
+Domain registration
+Domain renewal
+Hosting setup
+Hosting renewal
+Website maintenance
+Package renewal
+Fulfillment charges
+Courier charges
+SMS charges
+Platform charges
+Other services
+24.1 Dynamic Deposit Rules
+The Admin can configure:
+Required initial deposit
+Minimum Wallet balance
+Required top-up amount
+Deposit deadline
+Deposit frequency
+One-time or recurring deposit
+Package-specific deposit
+User-specific deposit
+Website-specific deposit
+Domain-specific deposit
+Hosting-specific deposit
+Effective date
+Grace Period
+Low balance threshold
+Critical balance threshold
+Account restriction rules
+Website restriction rules
+Automatic restoration rules
+24.2 Balance Types
+The Wallet should distinguish:
+Total Wallet balance
+Reserved minimum balance
+Usable service balance
+Available withdrawal balance
+Pending balance
+Hold balance
+Upcoming charge amount
+24.3 Low Balance Actions
+If the Wallet balance falls below the configured requirement:
+Dashboard notification will be sent
+SMS notification will be sent where enabled
+Required top-up will be displayed
+A Grace Period may begin
+Chargeable services may be restricted
+Website setup or renewal may be paused
+Domain and Hosting renewal warnings may be displayed
+The Dedicated Website may be temporarily disabled
+Account features may be restricted
+The Account may be temporarily disabled where configured
+Services should be restored after sufficient top-up and Payment verification.
+24.4 Deposit Refundability
+The Admin can configure whether a deposit is:
+Fully refundable
+Partially refundable
+Non-refundable
+Reserved until Package cancellation
+Usable for service charges
+Withdrawable after all liabilities are settled
+25. Direct Referral System
+The system will include a Direct Single-Level Referral Program.
+It will not operate as an MLM or Multi-Level Referral System.
+25.1 Unlimited Direct Referrals
+Every Active user will receive:
+Unique Referral Code
+Unique Referral Link
+Registration URL
+A user can directly refer an unlimited number of people.
+No second-level, third-level or downline commission will exist.
+25.2 Referral Qualification
+A Referral may qualify after the referred user:
+Registers
+Submits KYC
+Selects a Package
+Completes combined Registration Fee and Package Fee Payment
+Completes other required deposits where applicable
+Receives KYC approval
+Receives Account activation
+Completes any configured holding period
+Meets all Referral Plan conditions
+25.3 Referral Rewards
+The Referrer and newly activated user may both receive rewards.
+Reward types may include:
+Fixed reward
+Percentage-based reward
+Package-based reward
+Referral Plan-based reward
+Campaign-based reward
+25.4 Referral Plan Configuration
+The Admin can configure:
+Plan name
+Referrer reward
+New user reward
+Fixed or percentage calculation
+Calculation base
+Eligible Package
+Minimum qualifying Payment
+KYC requirement
+Account activation requirement
+Holding Period
+Maximum reward
+Start date
+Expiry date
+Reversal rule
+Active or inactive status
+25.5 Referral Fraud Prevention
+The system must prevent:
+Self-referral
+Duplicate rewards
+Duplicate Account abuse
+Multi-level commission
+Referral replacement after qualification
+Rewards from failed Payments
+Rewards from cancelled Payments
+Rewards from refunded Payments
+Rewards from reversed Payments
+Rewards from fraudulent Payments
+Multiple rewards for the same activation
+26. Payment Gateway Integration
+The system will support Bangladeshi and international Payment Gateways.
+26.1 Bangladeshi Payment Gateways
+EPS
+SSLCommerz
+SurjoPay
+AmarPay
+bKash
+Nagad
+26.2 International Payment Gateways
+Stripe
+PayPal
+26.3 Payment Use Cases
+The Payment System should support:
+Registration Fee
+Package Fee
+Combined Activation Payment
+Package renewal
+Package upgrade
+ERP Wholesale Order Payment
+Dedicated Website Order Payment
+Wallet deposit
+Wallet top-up
+Website setup Payment
+Domain Payment
+Hosting Payment
+Maintenance Payment
+Other configurable Payments
+Refund
+Partial Refund where supported
+Payment reversal
+26.4 Payment Requirements
+The Payment Module should support:
+Gateway selection
+Payment initiation
+Callback handling
+Webhook handling
+Signature verification
+Payment verification
+Successful Payment
+Failed Payment
+Cancelled Payment
+Pending Payment
+Refund
+Partial Refund
+Transaction Logs
+Payment receipts
+Currency handling
+Payment reconciliation
+Idempotency
+Duplicate Payment prevention
+Sandbox configuration
+Live configuration
+Gateway enable or disable control
+Payment Gateway credentials must be encrypted and protected.
+27. Withdrawal Management
+Users can submit withdrawal requests from the ERP.
+27.1 Withdrawal Information
+A withdrawal request should include:
+Requested amount
+Available withdrawal balance
+Reserved minimum balance
+Withdrawal Method
+Account details
+Request date
+Status
+Transaction Reference
+Note
+Supporting document where required
+Supported Methods may include:
+Bank transfer
+bKash
+Nagad
+Other Admin-configured Methods
+27.2 Default Withdrawal Rules
+The Admin can configure global Default Withdrawal Rules, including:
+Minimum withdrawal amount
+Maximum withdrawal amount
+Processing Fee
+Withdrawal frequency
+Daily limit
+Weekly limit
+Monthly limit
+Eligible Wallet balance
+Required reserved balance
+KYC requirement
+Active Package requirement
+Minimum Wallet balance requirement
+Approval workflow
+Processing time
+27.3 User-specific Withdrawal Rules
+In addition to Default Withdrawal Rules, the Admin or an Authorized User can assign a specific Withdrawal Rule to an individual user.
+User-specific settings may include:
+User-specific minimum withdrawal
+User-specific maximum withdrawal
+User-specific daily limit
+User-specific weekly limit
+User-specific monthly limit
+User-specific Processing Fee
+User-specific withdrawal frequency
+User-specific approval requirement
+User-specific eligible balance
+User-specific settlement schedule
+If a valid user-specific Withdrawal Rule exists, it will override the corresponding Default Withdrawal Rule for that user.
+Every user-specific change must store:
+Previous value
+New value
+Changed by
+Reason
+Effective date
+Expiry date where applicable
+Audit Log
+27.4 Withdrawal Approval
+The Admin or Authorized User will:
+Review the request
+Verify the Account
+Verify KYC
+Verify Package status
+Verify minimum Wallet balance
+Verify available withdrawal balance
+Apply Default or user-specific Withdrawal Rules
+Approve or reject the request
+Release Payment
+Add Payment proof or Transaction Reference
+Mark the request as Paid
+27.5 Withdrawal Statuses
+Pending
+Under Review
+Approved
+Processing
+Paid
+Rejected
+Cancelled
+Failed
+Reversed
+28. COD and Settlement Management
+For Cash on Delivery Orders, the system should track:
+COD amount
+Courier-collected amount
+Collection date
+Courier charge
+Return charge
+Adjustment
+Net settlement amount
+User payable
+Platform receivable
+Settlement status
+Settlement Reference
+Reconciliation status
+Online Payments and COD Payments must be tracked separately.
+28.1 Financial Reconciliation
+The system should support:
+Order Payment reconciliation
+Payment Gateway reconciliation
+Courier COD reconciliation
+User settlement reconciliation
+Deposit reconciliation
+Service charge reconciliation
+Domain and Hosting charge reconciliation
+Refund reconciliation
+Wallet reconciliation
+Withdrawal reconciliation
+Commission reconciliation
+Referral reward reconciliation
+Mismatches should generate:
+System Alert
+Reconciliation issue
+Administrative notification
+Reconciliation Report
+29. Dashboard Notification System
+The ERP must have an Internal Dashboard Notification System.
+Notifications may include:
+Registration
+KYC submission
+KYC approval
+KYC rejection
+Package selection
+Payment success
+Payment failure
+Account activation
+Package renewal
+Package expiry
+Wallet deposit
+Low Wallet balance
+Top-up requirement
+Website activation
+Website suspension
+Product publication
+New Order
+Order status update
+Payment update
+Delivery update
+Return update
+Refund update
+Commission update
+Referral qualification
+Referral reward
+Withdrawal request
+Withdrawal approval
+Withdrawal rejection
+Withdrawal Payment
+API failure
+System announcement
+Security Alert
+30. SMS Notification System
+SMS integration is mandatory for applicable notifications.
+The Admin can enable or disable SMS:
+Globally
+By SMS Provider
+By notification event
+By Account status
+By Package
+By user where permitted
+30.1 Supported SMS Providers
+The system should support:
+BulkSMSBD
+Nova SMS
+SSLCommerz SMS
+Twilio
+Other Providers through an extendable SMS architecture
+30.2 SMS Features
+The SMS Module should support:
+Provider selection
+Provider credentials
+Bangla templates
+English templates
+Event-based templates
+Template variables
+Queue-based delivery
+Delivery status
+Failed SMS Logs
+Retry failed SMS
+Provider balance where supported
+Cost tracking where supported
+SMS history
+SMS Report
+Provider enable or disable control
+SMS delivery must run through queues so it does not slow down the ERP.
+31. Reporting and Analytics
+The system must provide detailed Administrative and Self-scoped User Reports.
+31.1 Administrative Reports
+Reports should include:
+User Registration Report
+KYC Report
+Active Account Report
+Inactive Account Report
+Package-wise User Report
+Package Purchase Report
+Package Renewal Report
+Package Expiry Report
+Registration Fee Report
+Package Fee Report
+Combined Activation Payment Report
+Wallet Deposit Report
+Minimum Wallet Balance Report
+Low Balance Report
+Top-up Report
+Reserved Balance Report
+Website Setup Report
+Dedicated Website Report
+Domain Renewal Report
+Hosting Renewal Report
+Product Report
+Selected Product Report
+Published Product Report
+ERP Wholesale Order Report
+Dropshipping Order Report
+Website Order Report
+Order Source Report
+Order Status Report
+Product Sales Report
+Inventory Report
+Stock Movement Report
+Fulfillment Report
+Courier Report
+COD Report
+Payment Report
+Gateway-wise Transaction Report
+Commission Report
+Referral Report
+Referral Reward Report
+Wallet Balance Report
+Wallet Transaction Report
+Financial Ledger Report
+Withdrawal Report
+User-specific Withdrawal Rule Report
+Settlement Report
+Refund Report
+Financial Adjustment Report
+Reconciliation Report
+Revenue Report
+SMS Delivery Report
+API Usage Report
+API Failure Report
+Webhook Failure Report
+Audit Report
+Backup Report
+System Activity Report
+31.2 Self-scoped User Reports
+Users should be able to view only their own:
+Package Report
+Payment Report
+Deposit Report
+Top-up Report
+Wallet Balance Report
+Wallet Statement
+Product Selection Report
+Published Product Report
+Wholesale Order Report
+Dropshipping Order Report
+Website Order Report
+Sales Report
+Commission Report
+Referral Report
+Referral Reward Report
+Withdrawal Report
+Settlement Report
+Domain and Hosting Charge Report
+Fulfillment Report
+KYC History
+Notification History
+31.3 Report Features
+Reports should support:
+Date filters
+Status filters
+Product filters
+Category filters
+Package filters
+User filters where permitted
+Website filters
+Payment Method filters
+Search
+Sorting
+Pagination
+Summary totals
+CSV export
+Excel export
+PDF export
+Printable view
+Permission-based visibility
+A user must never access another user’s Report through URL changes, API requests, exports or modified parameters.
+32. Role and Permission Management
+The system must include granular Role-based Access Control.
+32.1 Administrative Roles
+Possible roles may include:
+Super Admin
+Admin
+Content Manager
+KYC Manager
+Package Manager
+Product Manager
+Inventory Manager
+Order Manager
+Fulfillment Manager
+Courier Manager
+Finance Manager
+Wallet Manager
+Withdrawal Approver
+Payment Manager
+Referral Manager
+SMS Manager
+SEO Manager
+Report Viewer
+System Administrator
+Backup Manager
+32.2 Permission Actions
+Permissions should support:
+View
+Create
+Edit
+Delete
+Archive
+Approve
+Reject
+Verify
+Export
+Publish
+Unpublish
+Release Payment
+Adjust Wallet
+Reverse transaction
+Manage settings
+View sensitive Data
+View KYC documents
+View Audit Logs
+Manage backups
+Manage integrations
+Sensitive actions may require:
+Password confirmation
+Two-factor authentication
+Additional approval
+Maker-checker workflow
+Mandatory reason
+Audit logging
+33. SaaS-style UI and UX Requirements
+The ERP must have a clear, smooth and professional SaaS-style User Interface.
+The design should feel custom-built for Feriwala and should not look like a generic Admin template or automatically generated interface.
+33.1 Visual Design Direction
+The UI should use:
+Clean visual hierarchy
+Consistent spacing
+Consistent typography
+Clear navigation
+Purposeful use of brand colors
+Balanced use of white space
+Consistent icons
+Clear status colors
+Readable tables
+Professional cards
+Simple forms
+Focused call-to-action buttons
+Minimal visual clutter
+Subtle and functional animations
+The UI should avoid:
+Random gradients
+Excessive glow effects
+Unnecessary glassmorphism
+Decorative elements without purpose
+Inconsistent icons
+Overcrowded cards
+Excessive rounded elements
+Generic AI-style layouts
+Unnecessary dashboard statistics
+Repeated content blocks
+Confusing technical language
+33.2 ERP Layout
+The ERP should include:
+Responsive Sidebar Navigation
+Top Header
+Global Search where useful
+Notification Center
+Account Menu
+Breadcrumbs
+Page title and description
+Quick Actions
+Filter and Search area
+Main content area
+Responsive Data Tables
+Pagination
+Contextual actions
+Help and guidance where required
+33.3 Dashboard Experience
+The Dashboard should display only relevant information based on:
+User status
+Package
+Permissions
+Business activity
+Pending actions
+The Dashboard may include:
+Account activation status
+KYC status
+Package status
+Wallet balance
+Minimum balance warning
+Dedicated Website status
+Wholesale Orders
+Dropshipping Orders
+Sales
+Commissions
+Referrals
+Withdrawals
+Notifications
+Recent transactions
+Required actions
+33.4 Onboarding Experience
+The activation process should use a clear Stepper:
+Registration
+KYC
+Package Selection
+Payment
+Verification
+Activation
+The user should always understand:
+Current step
+Completed steps
+Pending step
+Required action
+Reason for rejection
+Payment due
+Expected next step
+33.5 Forms
+Forms should support:
+Clear field labels
+Helpful descriptions
+Required field indicators
+Inline validation
+Error messages near the related field
+Saved Drafts where appropriate
+File upload progress
+Upload preview
+Confirmation before sensitive submission
+Mobile-friendly input controls
+Prevention of duplicate submission
+33.6 Data Tables
+Tables should support:
+Search
+Filters
+Sorting
+Pagination
+Column visibility
+Responsive behavior
+Status indicators
+Bulk actions where permitted
+Export
+Empty state
+Loading state
+Error state
+On smaller screens, wide tables should use responsive cards, horizontal scrolling or prioritized columns without breaking usability.
+33.7 Financial UI
+Wallet, Payment and Withdrawal screens should clearly distinguish:
+Total balance
+Reserved balance
+Available balance
+Pending balance
+Hold balance
+Debit
+Credit
+Fees
+Net amount
+Transaction status
+Sensitive Financial actions should use confirmation dialogs and clear summaries before submission.
+33.8 Responsive Design
+The Landing Page, ERP and Dedicated Websites must work properly on:
+Desktop
+Laptop
+Tablet
+Mobile
+The interface must not depend on desktop-only hover actions.
+33.9 Accessibility
+The UI should include:
+Readable contrast
+Keyboard navigation
+Visible focus states
+Proper labels
+Accessible form errors
+Semantic headings
+Alternative text for meaningful images
+Status indicators that do not rely only on color
+Appropriate touch target sizes
+33.10 UI States
+Every important screen should include:
+Skeleton
+Empty state
+Error state
+Success state
+Permission denied state
+Offline or connection failure state where relevant
+Retry action where possible
+34. SEO Requirements
+34.1 Landing Page SEO
+The Dynamic Landing Page should support:
+SEO-friendly URLs
+Meta title
+Meta description
+Canonical URL
+Open Graph metadata
+Social sharing image
+Organization schema
+FAQ schema where applicable
+XML Sitemap
+Robots.txt
+Image alt text
+301 redirects
+Mobile responsiveness
+Fast loading
+34.2 ERP Privacy and Indexing
+Authenticated ERP pages should:
+Require authentication
+Use appropriate no-index directives
+Not expose sensitive information in URLs
+Not expose Database IDs in public URLs
+Prevent Search Engine access to private content
+34.3 Dedicated Website SEO
+Dedicated Websites should support:
+Product slugs
+Category slugs
+SEO-friendly URLs
+Product metadata
+Category metadata
+Canonical URLs
+Open Graph metadata
+Product schema
+Organization schema
+Breadcrumb schema
+XML Sitemap
+Robots.txt
+Image alt text
+301 redirects
+Custom 404 page
+Mobile responsiveness
+Public URLs should use unique human-readable slugs and should avoid Database IDs or unnecessary numerical values.
+35. Backup and Recovery
+35.1 Automatic Backup
+The system must perform automatic weekly Database backups.
+The Backup System should support:
+Scheduled backup
+Success Logs
+Failure Logs
+Retention Policy
+Backup encryption
+Secure storage
+Backup failure notification
+Restore testing
+Optional off-server storage
+Optional Cloud storage
+35.2 Manual Backup
+Authorized Users should be able to create manual backups according to permission.
+Manual Backups should require:
+Role and permission check
+Password confirmation
+Two-factor authentication where enabled
+Audit Log
+Rate limiting
+Backup scope restriction
+Regular users must not access complete Platform backups.
+35.3 Recovery
+The project should maintain documented procedures for:
+Database restoration
+Application restoration
+Media restoration
+Dedicated Website Data restoration
+Configuration restoration
+Backup verification
+Disaster recovery
+36. Security Requirements
+The system should use:
+Strong password hashing
+Encryption for sensitive Data
+Encryption for Financial Data
+Encryption for Gateway credentials
+HTTPS
+Secure cookies
+CSRF protection
+Input validation
+Output escaping
+SQL injection protection
+XSS protection
+Secure file upload validation
+Rate limiting
+Brute-force protection
+Session security
+Password reset security
+Two-factor authentication for sensitive roles
+Data masking
+Secure API authentication
+Server-side authorization
+36.1 Financial Security
+Financial operations must use:
+Database transactions
+Row locking where required
+Idempotency
+Duplicate transaction prevention
+Immutable Ledger Entries
+Adjustment and Reversal Entries
+Approval workflows
+Accurate monetary Data types
+Server-side calculations
+Audit Logs
+36.2 Audit Logs
+Audit Logs should record:
+Login attempts
+KYC decisions
+Package changes
+Payment verification
+Account activation
+Account restriction
+Product changes
+Product publication
+Website changes
+API credential changes
+Order status changes
+Stock changes
+Commission changes
+Referral changes
+Wallet transactions
+Withdrawal decisions
+User-specific Withdrawal Rule changes
+Financial adjustments
+Settings changes
+Permission changes
+Backup actions
+Sensitive document access
+Ordinary Administrative Users must not edit or delete Audit Logs.
+37. Database Design and Indexing
+PostgreSQL will be the primary Database.
+The Database should use:
+Proper relational structure
+Foreign keys
+Unique constraints
+Accurate monetary Data types
+Transaction-safe Financial Operations
+Soft deletion where required
+Timestamp tracking
+Integrity checks
+Migration support
+Rollback support
+Query optimization
+Indexes should be added where necessary for:
+Unique slugs
+Email addresses
+Mobile numbers
+Referral Codes
+Product SKUs
+Order References
+Payment References
+Transaction References
+Account status
+KYC status
+Package status
+Website status
+Product status
+Withdrawal status
+Domain expiry
+Hosting expiry
+Sales dates
+Frequently filtered Report columns
+Indexing should follow actual query requirements without unnecessary over-engineering.
+38. Redis Usage
+Redis should be used for:
+Application cache
+Session storage
+Queue Management
+Rate limiting
+Temporary tokens
+Notification jobs
+SMS jobs
+Report jobs
+Backup jobs
+Product Sync jobs
+Order Sync jobs
+Commission jobs
+Referral jobs
+Wallet jobs
+Balance monitoring
+Scheduled task coordination
+Distributed locks
+Duplicate Payment prevention
+Cache invalidation
+39. Performance Requirements
+Fast loading is a major requirement for:
+Dynamic Landing Page
+ERP
+Dedicated Websites
+APIs
+Reports
+The system should include:
+Optimized Database queries
+Eager loading
+Prevention of unnecessary queries
+Redis caching
+Application caching
+Queue-based heavy processing
+Image optimization
+Lazy loading
+Responsive images
+Minified frontend assets
+Code splitting
+CDN readiness
+Optimized API responses
+Server-side pagination
+Cache invalidation
+Gzip or Brotli compression
+HTTP caching headers
+Production builds
+Performance monitoring
+Heavy operations should run through queues, including:
+SMS
+Email
+Reports
+Exports
+Backups
+Product synchronization
+Order synchronization
+Commission calculation
+Referral processing
+Wallet processing
+Balance checks
+Payment reconciliation
+40. Scalability and Load Balancing
+The architecture should support:
+Multiple Application Servers
+External Load Balancer
+Reverse Proxy
+Shared PostgreSQL Database
+Redis shared cache
+Redis shared sessions
+Queue Workers
+Shared or Object Media Storage
+Stateless Application Servers
+Health-check endpoints
+Worker monitoring
+Database connection management
+Read replicas when required
+CDN integration
+Independent Web and Queue scaling
+The application must not rely on server-local sessions or local-only persistent files.
+41. Scheduled and Automated Tasks
+Laravel Scheduler should manage:
+Weekly backups
+KYC deadline checks
+KYC reminders
+Package expiry checks
+Package renewal reminders
+Wallet balance checks
+Low balance notifications
+Grace Period checks
+Website suspension
+Automatic service restoration
+Domain renewal reminders
+Hosting renewal reminders
+Maintenance charge deductions
+Product synchronization
+Inventory synchronization
+Order Sync retries
+Commission processing
+Referral qualification
+Referral reward processing
+Wallet balance release
+COD settlement checks
+Payment reconciliation
+Notification retries
+Failed Job monitoring
+Temporary file cleanup
+Expired token cleanup
+Sitemap generation
+Scheduled Reports
+Scheduled tasks must be protected against duplicate execution in a multi-server environment.
+42. Logging, Monitoring and Error Management
+The system should include:
+Application Logs
+Payment Logs
+Wallet Logs
+Withdrawal Logs
+SMS Logs
+API Logs
+Webhook Logs
+Product Sync Logs
+Order Sync Logs
+Queue Logs
+Backup Logs
+Security Logs
+Audit Logs
+Failed Job Management
+Error tracking
+Performance monitoring
+Health-check endpoints
+Disk monitoring
+Database monitoring
+Redis monitoring
+Queue monitoring
+Integration monitoring
+Critical failure alerts
+Logs must not contain:
+Passwords
+Security tokens
+API secrets
+Payment Gateway secrets
+Complete Payment credentials
+Unmasked sensitive Personal Data
+Unprotected KYC information
+43. Testing Requirements
+The project should include automated and manual testing for:
+Registration
+Mobile and Email Verification
+KYC submission
+KYC review
+Package selection
+Combined Registration and Package Fee calculation
+Payment verification
+Account activation
+Package renewal
+Package upgrade and downgrade
+ERP Wholesale Product browsing
+ERP Cart and Checkout
+Product creation permission
+Rejection of unauthorized Product creation
+Dropshipping Product selection
+Product publication
+Product synchronization
+Dedicated Website Cart and Checkout
+Website Order synchronization
+Inventory reservation
+Overselling prevention
+Order status workflow
+Commission calculation
+Commission reversal
+Unlimited Direct Referrals
+Referral qualification
+Referrer reward
+New user reward
+Referral reversal
+Self-referral prevention
+Wallet credit and debit
+Reserved balance protection
+Wallet top-up
+Low balance restriction
+Automatic service restoration
+Default Withdrawal Rules
+User-specific Withdrawal Rules
+Withdrawal approval
+COD settlement
+Financial reconciliation
+Payment callbacks
+Webhooks
+SMS notifications
+Roles and permissions
+Self-scoped Data access
+SEO slugs
+ERP no-index rules
+Backup scheduling
+Concurrent Financial Transactions
+Duplicate Payment prevention
+Duplicate Order prevention
+Duplicate reward prevention
+Responsive UI
+Accessibility
+Loading, Empty and Error states
+44. Mandatory Business Rules
+The following Business Rules are mandatory:
+Feriwala will operate as an ERP-based Wholesale and Dropshipping Management System.
+The main public Website will have a Dynamic Landing Page and will not have a public Feriwala Product Storefront.
+Wholesale Product browsing and purchasing will take place inside the authenticated ERP.
+Every user will have only one Feriwala Account.
+There will be no separate Customer or Partner Account.
+The user must submit KYC after Registration.
+The user must select a Package.
+Registration Fee and Package Fee will be calculated and paid together.
+Account activation will require Payment verification, KYC approval and Administrative approval.
+The same Active Account can use Dropshipping, Wholesale Purchasing or both.
+The system will support N number of configurable Packages.
+Eligible Packages may include Dedicated Customer-facing E-commerce Websites.
+Only the Admin or an Authorized User can create Products.
+Users can only select Products from the Central Product Catalog.
+Dedicated Websites will connect through secure APIs and Webhooks.
+Feriwala will operate as a Centralized Advanced Order Management System.
+Users can only access their own operational and Financial Data.
+Every Active Account will have a Wallet and immutable Financial Ledger.
+The Admin may configure required deposits and minimum Wallet balances.
+Low Wallet balance may restrict Account or Website services.
+The Direct Referral System will remain Single-Level and will not be MLM.
+Active users can refer an unlimited number of people directly.
+Both Referrer and new user may receive configurable rewards.
+The Admin can configure Default Withdrawal Rules.
+The Admin can configure user-specific Withdrawal Rules.
+User-specific Withdrawal Rules will override corresponding Default Rules.
+Every sensitive action must be recorded in the Audit Log.
+Dashboard notifications and configurable SMS notifications are mandatory.
+The ERP must have a clear, smooth, responsive and custom SaaS-style UI.
+The interface must not look like a generic template or AI-generated Dashboard.
+45. Final Core Requirements
+The following requirements must not be removed, reduced or changed without explicit written approval from the Project Owner:
+Single Account System
+KYC before Account activation
+Dynamic Package selection
+Combined Registration Fee and Package Fee Payment
+Administrative verification
+Dropshipping and Wholesale facilities from the same ERP Panel
+Dynamic Landing Page
+No public Feriwala Product Storefront
+ERP-only Wholesale Purchasing
+Central Product Catalog
+Product creation by Admin or Authorized User only
+Product selection by users
+Dedicated Customer-facing E-commerce Websites
+Secure API and Webhook integration
+Centralized Order Management
+Inventory and Stock Management
+Fulfillment and Courier Management
+Commission Management
+Advanced Wallet and Money Management
+Required Deposit and Minimum Balance Management
+Immutable Financial Ledger
+Direct Single-Level Referral System
+Unlimited Direct Referrals
+Rewards for Referrer and new user
+EPS
+SSLCommerz
+SurjoPay
+AmarPay
+bKash
+Nagad
+Stripe
+PayPal
+Default Withdrawal Rules
+User-specific Withdrawal Rule overrides
+Dashboard Notifications
+BulkSMSBD
+Nova SMS
+SSLCommerz SMS
+Twilio
+Administrative Reports
+Self-scoped User Reports
+Role-based Permissions
+Secure KYC Storage
+Audit Logs
+Weekly Automatic Backups
+Permission-based Manual Backups
+SEO-friendly Landing Page and Dedicated Websites
+ERP Privacy and No-index Rules
+Proper PostgreSQL Database Design
+Redis Caching and Queue Management
+Fast Loading
+Horizontal Scalability
+Load-balancer-ready Architecture
+Monitoring and Error Management
+Automated Security and Financial Testing
+Clear and Smooth SaaS-style UI and UX
+Responsive Design
+Accessibility
+Laravel
+React
+Inertia.js
+PostgreSQL
+Redis
+46. Final Implementation Principle
+This document represents the complete functional, Financial, operational, UI and technical requirements for Feriwala ERP.
+Developers may add supporting validation, security controls, monitoring, automation, performance improvements and usability enhancements where necessary.
+No mandatory Account rule, KYC requirement, Package rule, Payment flow, Product restriction, Dropshipping facility, Wholesale facility, Website integration, Order Management feature, Wallet requirement, Referral rule, Withdrawal rule, Notification Provider, UI requirement, Reporting requirement, Security control or Technology Stack requirement may be removed, reduced or changed without explicit written approval from the Project Owner.
+
