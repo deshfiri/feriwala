@@ -2,7 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\File;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -46,6 +49,54 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'currentTeam' => fn () => $user?->currentTeam ? $user->toUserTeam($user->currentTeam) : null,
             'teams' => fn () => $user?->toUserTeams(includeCurrent: true) ?? [],
+            'locale' => [
+                'current' => App::getLocale(),
+                'direction' => Locale::parse(App::getLocale())->direction(),
+                'available' => Locale::options(),
+            ],
+            'translations' => fn () => $this->translations(App::getLocale()),
         ];
+    }
+
+    /**
+     * The translation lines for the active locale.
+     *
+     * Sent as a lazy prop so it is resolved once per full page load rather than on
+     * every partial reload. Missing lines fall back to English rather than
+     * rendering a raw key at the user (decision D6).
+     *
+     * @return array<string, mixed>
+     */
+    protected function translations(string $locale): array
+    {
+        $fallback = $this->loadTranslations(Locale::default()->value);
+
+        if ($locale === Locale::default()->value) {
+            return $fallback;
+        }
+
+        return array_replace_recursive($fallback, $this->loadTranslations($locale));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function loadTranslations(string $locale): array
+    {
+        $path = lang_path($locale);
+
+        if (! File::isDirectory($path)) {
+            return [];
+        }
+
+        $lines = [];
+
+        foreach (File::files($path) as $file) {
+            if ($file->getExtension() === 'php') {
+                $lines[$file->getFilenameWithoutExtension()] = require $file->getPathname();
+            }
+        }
+
+        return $lines;
     }
 }

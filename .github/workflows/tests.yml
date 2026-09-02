@@ -13,6 +13,46 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # Versions are pinned to match local development (decision D5, amended):
+    # PostgreSQL 18, Redis 8. CI running a different version than development
+    # would let a version-specific bug pass here and fail in front of a user.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: feriwala
+          POSTGRES_USER: feriwala
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: feriwala
+      DB_USERNAME: feriwala
+      DB_PASSWORD: secret
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      # predis rather than the phpredis extension, matching local development.
+      REDIS_CLIENT: predis
+
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -22,7 +62,8 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: '8.3'
+          php-version: '8.5'
+          extensions: pdo, pdo_pgsql, pgsql, mbstring, bcmath, intl
           tools: composer:v2
           coverage: none
 
@@ -30,9 +71,30 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+          cache: npm
 
-      - name: Setup Application
-        run: composer setup
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Run CI Checks
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # Tests run in their own schema rather than their own database, matching
+      # local development and needing no CREATEDB privilege.
+      - name: Create the testing schema
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U feriwala -d feriwala -c 'CREATE SCHEMA IF NOT EXISTS testing;'
+
+      - name: Run migrations
+        run: php artisan migrate --force --no-interaction
+
+      - name: Build assets
+        run: npm run build
+
+      # Pint, PHPStan, Pest, plus the frontend format, lint, and type checks.
+      - name: Run CI checks
         run: composer ci:check

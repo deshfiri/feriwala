@@ -2,6 +2,8 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\PreventSearchIndexing;
+use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\SetTeamUrlDefaults;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,9 +22,19 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             HandleAppearance::class,
+            // Runs before Inertia shares props so the locale and translations
+            // shipped to the client match the one the server rendered with.
+            SetLocale::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             SetTeamUrlDefaults::class,
+        ]);
+
+        // Applied per-route to authenticated ERP and admin groups. The public
+        // landing site and partner storefronts must stay indexable (§34.1, §34.3),
+        // so this is deliberately not a global web middleware.
+        $middleware->alias([
+            'noindex' => PreventSearchIndexing::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -68,6 +68,11 @@ export default defineConfig({
             'composer.json',
             'resources/js/components/ui/*',
             'resources/views/mail/*',
+            // Tooling files owned by their generators, not by our style config.
+            '.claude/**',
+            '.devcontainer/**',
+            '.mcp.json',
+            'boost.json',
         ],
         sortTailwindcss: {
             functions: ['clsx', 'cn', 'cva'],

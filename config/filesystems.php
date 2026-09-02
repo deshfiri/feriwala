@@ -38,6 +38,27 @@ return [
             'report' => false,
         ],
 
+        /*
+         * KYC identity documents (§7.5).
+         *
+         * Deliberately separate from `local` and with `serve` off: Laravel's
+         * local-disk serving route would make these fetchable by path, and the
+         * whole point is that a document is only ever read through the
+         * controller that checks permission and records the access.
+         *
+         * `throw` is on because a missing identity document is a real problem —
+         * silently returning null would let a reviewer approve an applicant
+         * whose file is gone.
+         */
+        'kyc' => [
+            'driver' => env('KYC_DISK_DRIVER', 'local'),
+            'root' => storage_path('app/kyc'),
+            'serve' => false,
+            'throw' => true,
+            'report' => true,
+            'visibility' => 'private',
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

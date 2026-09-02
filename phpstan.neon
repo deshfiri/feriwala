@@ -1,8 +1,20 @@
 includes:
     - vendor/larastan/larastan/extension.neon
     - vendor/nesbot/carbon/extension.neon
+    - phpstan-baseline.neon
 
 parameters:
+    # Pins the working directory before Larastan boots the application. Without
+    # it, PHPStan's parallel workers intermittently fail to locate
+    # bootstrap/app.php and the run dies with a misleading
+    # "Undefined constant Larastan\Larastan\LARAVEL_VERSION".
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+
+    # Keep the result cache inside the project rather than /tmp, which WSL
+    # clears between sessions.
+    tmpDir: build/phpstan
+
     paths:
         - app/
         - bootstrap/app.php
@@ -10,4 +22,20 @@ parameters:
         - database/
         - routes/
 
-    level: 7
+    # Level 8 adds null-safety analysis. The starter kit's Teams, Settings, and
+    # Dashboard code does not satisfy it, so those 32 findings are captured in
+    # phpstan-baseline.neon rather than lowering the bar for everything. All new
+    # code is held to level 8 from the start.
+    #
+    # Most of the baseline disappears when Teams becomes Accounts (D1, P1-64);
+    # the baseline should shrink over time and never grow.
+    level: 8
+
+    ignoreErrors:
+        # Shared model traits land before the models that consume them. PHPStan
+        # cannot analyse a trait with no user, so it reports them as unused until
+        # the first domain model applies them. They are covered by unit tests in
+        # tests/Unit/Support in the meantime.
+        -
+            identifier: trait.unused
+            path: app/Concerns/*

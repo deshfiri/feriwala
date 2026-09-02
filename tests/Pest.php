@@ -20,6 +20,46 @@ pest()->extend(TestCase::class)
 
 /*
 |--------------------------------------------------------------------------
+| Test Groups
+|--------------------------------------------------------------------------
+|
+| Groups let a slice be run on its own — `pest --group=wallet` while working on
+| the ledger, rather than the whole suite. They are declared here so the names
+| stay consistent instead of being invented per file.
+|
+| Several exist because requirements.txt §43 names them explicitly and they are
+| the ones most likely to be skipped otherwise: concurrency, self-scoped data
+| access, and the product creation restrictions of §12.
+|
+*/
+
+pest()->group('onboarding')->in('Feature/Onboarding');
+pest()->group('kyc')->in('Feature/Kyc');
+pest()->group('package')->in('Feature/Package');
+pest()->group('payment')->in('Feature/Payment');
+pest()->group('wallet')->in('Feature/Wallet');
+pest()->group('ledger')->in('Feature/Ledger');
+pest()->group('commission')->in('Feature/Commission');
+pest()->group('referral')->in('Feature/Referral');
+pest()->group('withdrawal')->in('Feature/Withdrawal');
+pest()->group('catalog')->in('Feature/Catalog');
+pest()->group('product-restrictions')->in('Feature/ProductRestrictions');
+pest()->group('inventory')->in('Feature/Inventory');
+pest()->group('wholesale')->in('Feature/Wholesale');
+pest()->group('dropshipping')->in('Feature/Dropshipping');
+pest()->group('website-api')->in('Feature/WebsiteApi');
+pest()->group('orders')->in('Feature/Orders');
+pest()->group('fulfillment')->in('Feature/Fulfillment');
+pest()->group('courier')->in('Feature/Courier');
+pest()->group('settlement')->in('Feature/Settlement');
+pest()->group('reports')->in('Feature/Reports');
+pest()->group('permissions')->in('Feature/Permissions');
+pest()->group('self-scope')->in('Feature/SelfScope');
+pest()->group('security')->in('Feature/Security');
+pest()->group('concurrency')->in('Feature/Concurrency');
+
+/*
+|--------------------------------------------------------------------------
 | Expectations
 |--------------------------------------------------------------------------
 |

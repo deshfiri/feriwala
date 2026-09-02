@@ -58,6 +58,55 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        /*
+         * Dedicated channels per §42. Each is separated so an investigation into
+         * a payment does not mean reading through every request the application
+         * served that day, and so retention can differ — security and audit
+         * trails outlive a debug log.
+         *
+         * Nothing written to these may contain passwords, tokens, API secrets,
+         * gateway secrets, full payment credentials, or unmasked personal data.
+         */
+        'payment' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/payment.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        'wallet' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/wallet.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        'sms' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/sms.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'integration' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/integration.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 365,
+            'replace_placeholders' => true,
+        ],
+
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
