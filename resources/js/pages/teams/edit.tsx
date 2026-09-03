@@ -72,7 +72,8 @@ export default function TeamEdit({
     );
 
     const updateMemberRole = (member: TeamMember, newRole: string) => {
-        router.visit(updateMember([team.slug, member.id]), {
+        // Routes bind users on public_id, never the database id (§34.2).
+        router.visit(updateMember([team.slug, member.public_id]), {
             data: { role: newRole },
             preserveScroll: true,
         });

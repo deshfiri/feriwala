@@ -25,6 +25,17 @@ class EnsureAccountIsActivated
     /**
      * Route name prefixes an unactivated account may reach (§5.4).
      *
+     * Every entry must match a real route — a prefix that matches nothing is not
+     * harmless, it is a §5.4 area the user cannot actually get to. A test asserts
+     * this, because the failure mode is silent: `payment.` sat here matching
+     * nothing while the checkout routes are named `checkout.`, so payment was
+     * closed to exactly the accounts that need it.
+     *
+     * Administration is deliberately absent. Feriwala staff accounts are Active,
+     * so they pass the check above and never reach this list; keeping `admin.`
+     * out means a suspended staff member loses the admin panel with everything
+     * else, rather than keeping it because a prefix said they could.
+     *
      * @var array<int, string>
      */
     public const ALLOWED_ROUTE_PREFIXES = [
@@ -32,14 +43,32 @@ class EnsureAccountIsActivated
         'profile.',
         'kyc.',
         'packages.',        // selection and comparison
-        'payment.',
-        'support.',
-        'notifications.',
-        'settings.',        // password, 2FA, language
+        'checkout.',        // the combined activation payment and its return
+        'security.',        // 2FA, passkeys, sessions
+        'user-password.',
+        'well-known.',      // passkey discovery, needed to sign in at all
+        'invitations.',     // a staff invitation may arrive before activation
         'locale.',
         'logout',
-        'verification.',    // email and mobile verification
         'password.',
+
+        ...self::PENDING_ROUTE_PREFIXES,
+    ];
+
+    /**
+     * §5.4 areas that do not exist yet.
+     *
+     * Listed so they are open the moment they are built rather than forgotten,
+     * and declared separately so the "no dead prefix" test can tell a deliberate
+     * placeholder from a typo. Each entry is a standing reminder: while it
+     * matches nothing, that §5.4 area is unreachable for everyone.
+     *
+     * @var array<int, string>
+     */
+    public const PENDING_ROUTE_PREFIXES = [
+        'support.',         // not built — Phase 8
+        'notifications.',   // not built — Phase 8
+        'verification.',    // email and mobile verification are not wired yet
     ];
 
     public function handle(Request $request, Closure $next): Response

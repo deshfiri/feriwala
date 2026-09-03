@@ -63,6 +63,9 @@ class TeamController extends Controller
 
                 return [
                     'id' => $member->id,
+                    // Routes bind users on public_id (§34.2), so the client
+                    // needs it to build a link.
+                    'public_id' => $member->public_id,
                     'name' => $member->name,
                     'email' => $member->email,
                     'avatar' => $member->avatar ?? null,

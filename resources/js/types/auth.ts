@@ -1,5 +1,10 @@
 export type User = {
     id: number;
+    /**
+     * The ULID used in URLs and API payloads. Route model binding resolves on
+     * this, never on `id` — §34.2 forbids database IDs in public URLs.
+     */
+    public_id: string;
     name: string;
     email: string;
     avatar?: string;

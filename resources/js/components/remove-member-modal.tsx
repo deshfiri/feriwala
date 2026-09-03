@@ -33,7 +33,8 @@ export default function RemoveMemberModal({
             return;
         }
 
-        router.visit(destroyMember([team.slug, member.id]), {
+        // Routes bind users on public_id, never the database id (§34.2).
+        router.visit(destroyMember([team.slug, member.public_id]), {
             onStart: () => setProcessing(true),
             onFinish: () => setProcessing(false),
             onSuccess: () => onOpenChange(false),

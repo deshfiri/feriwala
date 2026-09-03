@@ -1,5 +1,11 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import {
+    BookOpen,
+    FolderGit2,
+    LayoutGrid,
+    ShieldCheck,
+    UserCheck,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -15,6 +21,8 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as activationQueue } from '@/routes/admin/activations';
+import { index as kycQueue } from '@/routes/admin/kyc';
 import type { NavItem } from '@/types';
 
 export function AppSidebar() {
@@ -23,12 +31,34 @@ export function AppSidebar() {
         ? dashboard(page.props.currentTeam.slug)
         : '/';
 
+    const permissions = page.props.permissions ?? {};
+
     const mainNavItems: NavItem[] = [
         {
             title: 'Dashboard',
             href: dashboardUrl,
             icon: LayoutGrid,
         },
+        // Staff entries appear only for the roles that hold them. Hiding the
+        // link is a courtesy — the route's policy is what refuses.
+        ...(permissions['kyc.view']
+            ? [
+                  {
+                      title: 'KYC review',
+                      href: kycQueue(),
+                      icon: ShieldCheck,
+                  },
+              ]
+            : []),
+        ...(permissions['account.view']
+            ? [
+                  {
+                      title: 'Activation approvals',
+                      href: activationQueue(),
+                      icon: UserCheck,
+                  },
+              ]
+            : []),
     ];
 
     const footerNavItems: NavItem[] = [

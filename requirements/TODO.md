@@ -62,7 +62,7 @@ test.
 
 - [x] **P0-32** Design tokens in `resources/css/app.css`: warm-biased neutrals, brand accent, status system, credit/debit, light + dark (D6). _Brand orange is a placeholder pending the official hex_
 - [x] **P0-33** `StatusPill` + `lib/status.ts` — five tones, every one carrying an icon and a required label, never colour alone (§33.9)
-- [ ] **P0-34** ERP layout shell: responsive sidebar, top header, global search slot, notification centre slot, account menu, breadcrumbs (§33.2)
+- [~] **P0-34** ERP layout shell: responsive sidebar, top header, global search slot, notification centre slot, account menu, breadcrumbs (§33.2). _Still the starter kit's shell. Sidebar entries are now permission-gated off a shared `permissions` prop — a short, explicit list of the abilities the nav reads, not the whole 161-permission set. First staff entry: KYC review_
 - [~] **P0-35** `PageHeader` (title, description, quick actions) done; _breadcrumb + content region land with the ERP layout_
 - [x] **P0-36** `DataTable` + `useTableQuery` + `TablePagination` + `ColumnVisibilityMenu`: URL-persisted search/sort/filters, server-side pagination, column visibility, bulk actions, card degradation on mobile, all four states (§33.6, §39)
 - [x] **P0-37** UI state components: `TableSkeleton`, `EmptyState`, `ErrorState`, `PermissionDeniedState`, `OfflineState` over a shared `StateShell` (§33.10)
@@ -106,7 +106,7 @@ test.
 - [x] **P1-7** `ReferralCode` + `ResolveReferrer`: unambiguous 8-char alphabet, random not sequential (so the user base cannot be enumerated), normalises lower-case/spaced input, and **only an Active account can refer** (§25.1). A wrong code never blocks registration — 8 tests
 - [ ] **P1-8** Email verification flow (Fortify) wired to account status
 - [x] **P1-9** Mobile OTP: `VerificationCodes` (hashed in Redis, constant-time compare, 5-attempt budget, 5-min TTL, 60s resend cooldown, identifier hashed into the key) + `SendMobileVerificationCode` / `VerifyMobile` with bilingual SMS. Verification never drags a further-along account backwards — 26 tests
-- [ ] **P1-10** Pre-activation access gate — only profile, KYC, package, payment, activation status, support, activation notifications (§5.4)
+- [x] **P1-10** Pre-activation access gate (§5.4). `EnsureAccountIsActivated` existed but was registered nowhere; now aliased as `activated` and applied to the authenticated ERP and settings groups. An **allow-list**, so a new route is shut by default — a test asserts no listed prefix matches nothing (`payment.` was dead while the real routes are `checkout.`), and unbuilt §5.4 areas are declared in a separate `PENDING_ROUTE_PREFIXES` so a placeholder is distinguishable from a typo. Administration is deliberately not exempt: a suspended staff member loses the panel with everything else — 8 tests
 - [ ] **P1-11** Post-activation feature gate driven by package entitlements
 
 ## P1.B Authentication & account security (§6)
@@ -124,13 +124,13 @@ test.
 
 - [ ] **P1-20** `kyc_document_types` CRUD: required/optional, accepted formats, max size, instructions, active
 - [ ] **P1-21** Package-specific and country-specific KYC requirement scoping (§7.2)
-- [ ] **P1-22** Dynamic KYC submission form rendered from configured types + fields
+- [x] **P1-22** KYC form rendered from the configured types that apply to _this_ applicant (country + package). Each requirement **saves on its own**, so a rejected upload never costs the ones that were fine; rejection messages name the accepted formats and limit (§7.2) — 12 tests
 - [x] **P1-23** `KycDocumentStore`: validates against the admin's per-type rules **before** touching disk, stores under a random name on a private `kyc` disk with `serve` off, encrypts at rest, records a SHA-256 checksum, and exposes **no** URL method at all (§7.5, §36) — 15 tests
 - [x] **P1-24** `kyc_submissions` + `kyc_submission_fields` (encrypted, masked for display) + `kyc_documents`, with resubmission as a **new round** rather than an edit — so a review keeps describing the documents it was actually made on
-- [~] **P1-25** `SubmitKyc` / `ReviewKyc` / `StartKycResubmission` + `KycDecision`. Rejection requires both a reason and applicant-facing feedback; requesting corrections requires feedback — enforced in the constructor, not by convention (§7.3). _Reviewer UI still to build_
+- [x] **P1-25** `SubmitKyc` / `ReviewKyc` / `StartKycResubmission` + `KycDecision`. Rejection requires both a reason and applicant-facing feedback; requesting corrections requires feedback — enforced in the constructor, not by convention (§7.3). Reviewer UI: queue at `admin/kyc/index` (oldest first, waiting-days column, whitelisted sort) and `admin/kyc/show` with the decision form — 13 tests
 - [x] **P1-26** `KycReview` append-only with the full §7.3 field set. Submission status, review row, account status and timestamp all move in **one transaction**
-- [ ] **P1-27** Submission history + review history views (user and admin)
-- [ ] **P1-28** Protected document delivery: authorized controller + short-lived signed URL, never a public path (§7.5)
+- [~] **P1-27** Submission history + review history views. _Admin side done — the review history renders on `admin/kyc/show`. The applicant's own history view is still to build_
+- [x] **P1-28** Protected document delivery: `Erp\KycDocumentController` authorises, records the access, then streams from the private disk. **No signed URL** — a signed URL is a bearer token that outlives the check and can be forwarded, so the controller is the whole surface and re-authorises on every request (§7.5)
 - [x] **P1-29** `kyc_document_accesses` — every read recorded before the file is returned, view distinguished from download, append-only (§7.5)
 - [x] **P1-30** `disk`, `path` and `checksum` hidden from every array/JSON representation; field values encrypted and hidden, with `masked()` for list display (§7.5)
 - [ ] **P1-31** KYC deadline config + scheduled checks → blocked activation / restricted account / notifications / audit (§7.4)
@@ -138,7 +138,8 @@ test.
 
 ## P1.H Staff management & tax engine (decision-driven)
 
-- [ ] **P1-64** Rename Team → Account/Organization in the business layer; Account Owner = the activated user (D1)
+- [~] **P1-64** Team → `BusinessAccount`, **including the identity/commercial split** (D23). _Design approved and the schema built: `UserStatus` enum, `BusinessAccount` + `AccountMembership` + `BusinessAccountStatusChange` models, and a migration that moves `status`/`activated_at`/`approval_pending_at`, KYC, payments, subscriptions and status history off `users`. Verified to apply and roll back cleanly, then **held out of `database/migrations/`** in [requirements/wip/](wip/) — the application layer (~30 files) and its tests are not converted yet, and a half-wired schema is worse than none_
+- [ ] **P1-78** Convert the application layer to D23: actions, requirements, queries, policies, the two access gates (identity everywhere, business activation on the ERP only), controllers, factories and tests
 - [ ] **P1-65** Remove `{current_team}` from ERP URLs; resolve account context from session (D1)
 - [ ] **P1-66** Staff invitation + own-credential login as sub-users of one Account (D1)
 - [ ] **P1-67** Package **staff limit** enforcement on invitation and activation (D1, §8.1)
@@ -155,7 +156,7 @@ test.
 - [ ] **P1-32** `packages` CRUD — all §8.1 fields — create/edit/activate/deactivate/archive, N packages
 - [x] **P1-33** `PackageFeature` enum (15 typed entitlements) + `package_features`. Facilities default **off** and limits default to **0**, so a misconfigured package under-delivers visibly; `null` means unlimited and is kept distinct from `0`
 - [x] **P1-34** `package_charges` (setup, maintenance, domain, hosting) with recurrence
-- [ ] **P1-35** Package selection + comparison UI
+- [x] **P1-35** Package selection and comparison. Each card leads with the **total payable today**, not the package fee alone — the registration fee is charged alongside (§5.1), and showing only the package price would surprise the user at checkout. Choosing again supersedes the earlier choice rather than stacking unpaid subscriptions
 - [ ] **P1-36** `user_packages` subscription record with validity, expiry, renewal state, source
 - [x] **P1-37** `Entitlements` — the single place package limits are read. No package grants nothing (limits read `0`, never `null`); `RenewalDue` and `GracePeriod` keep granting so a late invoice does not strand live orders (§8.4) — 20 tests
 - [ ] **P1-38** Package renewal flow + renewal fee + frequency + grace period (§8.2)
@@ -172,25 +173,28 @@ test.
 - [ ] **P1-46** Coupon + promotional discount application with effective dates (§9)
 - [ ] **P1-47** Tax rules application (§9)
 - [ ] **P1-48** Payment deadline configuration + expiry handling (§9)
-- [ ] **P1-49** Checkout UI showing the full itemised breakdown before payment (§9)
+- [x] **P1-49** Checkout with the full itemised breakdown, gateway choice, and the amount restated on the button. Recalculated server-side on view **and** on pay — a submitted total is ignored entirely (§9, §36.1). Gateway return + IPN endpoint wired, CSRF-exempt on signature — 15 tests
 - [ ] **P1-50** Activation invoice with registration fee and package fee as separate lines (§5.1)
 
 ## P1.F First payment gateway + minimal SMS
 
-- [ ] **P1-51** `PaymentGateway` contract + `PaymentGatewayManager` + `payment_gateways` / credentials tables (§26.4)
-- [ ] **P1-52** Implement first gateway end to end (initiate → callback → webhook → verify) **⚠ Q7**
-- [ ] **P1-53** Payment verification, idempotency, duplicate-payment prevention (§26.4, §36.1)
+- [~] **P1-51** `PaymentGateway` contract + `PaymentGatewayManager` + `config/payment.php` listing all eight gateways. A gateway is offered only when enabled **and** credentialled. A decline is a result; only genuine faults throw `GatewayUnavailable` (§26.4). _Admin credential UI still to build_
+- [~] **P1-52** SSLCommerz: initiate, callback, **IPN signature verification**, server-side validation. Credentials read from encrypted settings with separate sandbox/live keys — never from code (D7) — 24 tests. _Wiring into the payment flow next_
+- [x] **P1-53** `SettlePayment` — the single path a payment becomes settled. Server-side verification always, distributed lock + `lockForUpdate` re-check, idempotent replay without re-asking the gateway, amount mismatch refused and logged critical, gateway outage throws and leaves the payment retryable (§26.4, §36.1) — 14 tests
 - [ ] **P1-54** `payment_logs` with secret redaction (§42)
 - [~] **P1-55** `SmsProvider` contract + `SmsMessage`/`SmsResult` + `LogSmsProvider` + `SmsServiceProvider` resolver. Segment counting knows Bangla is UCS-2 (70 chars, not 160), so a "one message" template cannot quietly cost three. _Real providers land in P8_
 - [ ] **P1-56** Queue-based SMS dispatch from the start (§30.2)
 
 ## P1.G Activation & onboarding UX
 
-- [ ] **P1-57** Admin approval queue: payment verified + KYC approved + admin approval → `Active` (§5.1, §44)
-- [ ] **P1-58** Activation action: wallet creation, referral qualification hook, entitlement grant, notifications, audit
-- [ ] **P1-59** Onboarding stepper: Registration → KYC → Package → Payment → Verification → Activation (§33.4)
-- [ ] **P1-60** Always show current step, completed steps, pending step, required action, rejection reason, payment due, next step (§33.4)
-- [ ] **P1-61** Activation-status dashboard for pre-active accounts (§33.3)
+- [x] **P1-57** `ActivationRequirements` — all three §5.1 conditions checked in one place, reporting **every** unmet reason rather than the first. Queue at `admin/activations/index`, keyed on the conditions themselves rather than on `ApprovalPending`, so an account that is genuinely ready cannot hide behind a status nobody moved. `admin/activations/show` shows each condition with its evidence — 22 tests
+- [x] **P1-75** Activation review outcomes as three explicit actions (D22). `ActivateAccount`, `RequestKycResubmission`, `SuspendAccount` — each with its own validation, notification, audit entry and permission. **No generic Reject**; suspension uses `account.reject`, is reversible, and is never a substitute for closure (D18)
+- [x] **P1-76** `EvaluateActivationReadiness` + `approval_pending_at` (D22). Runs on every requirement change — KYC decision, payment settlement — moving an account to `ApprovalPending` and stamping when it became ready, or clearing the stamp when a requirement reverses. Idempotent under a per-account lock. `ApprovalPending` is the queue's canonical state; the condition query survives only as a compatibility net — 19 tests
+- [x] **P1-77** Concurrency: every decision runs in one transaction with `lockForUpdate`, requirements re-checked **inside** it. Two reviewers deciding at once resolve to one winner and the loser writes nothing
+- [~] **P1-58** `ActivateAccount` — the only route into `Active`, re-checking preconditions rather than trusting the queue. Account status and subscription go live in one transaction; the term starts at **activation, not purchase**, so a slow approval does not eat paid days — 15 tests. _Wallet creation and referral qualification hook land with P2/P7_
+- [x] **P1-59** `OnboardingStep` + `ActivationStepper` — six steps collapsing the 22 statuses into what a person needs to know. State carried by shape and label, never colour alone (§33.4, §33.9)
+- [x] **P1-60** `OnboardingProgress` — current step, done/upcoming/blocked states, **one** required action, blocked reason, and reviewer feedback. Assembled in one place so stepper, dashboard and notifications cannot disagree (§33.4) — 14 tests
+- [x] **P1-61** `/onboarding` status screen, reachable throughout and after activation, no-indexed. A response-level test asserts the reviewer's internal note never reaches the browser (§7.3, §33.3)
 - [ ] **P1-62** Tests: registration, verification, KYC submission + review, package selection, combined fee calculation, payment verification, activation (§43)
 
 ---
@@ -655,25 +659,37 @@ sized accordingly rather than as one line item under provisioning.
 
 ## Progress
 
-| Phase                                           | Tasks   | Done  |
-| ----------------------------------------------- | ------- | ----- |
-| P0 Foundation                                   | 55      | 0     |
-| P1 Identity & Onboarding                        | 74      | 0     |
-| P2 Money Core                                   | 38      | 0     |
-| P3 Catalog & Inventory                          | 31      | 0     |
-| P4 Wholesale                                    | 14      | 0     |
-| P5 Dropship, Websites & Storefront              | 50      | 0     |
-| P6 OMS, Fulfillment, Courier                    | 33      | 0     |
-| P7 Commission, Referral, Withdrawal, Settlement | 41      | 0     |
-| P8 Notifications & SMS                          | 18      | 0     |
-| P9 Reports                                      | 23      | 0     |
-| P10 CMS & SEO                                   | 20      | 0     |
-| P11 Hardening                                   | 38      | 0     |
-| P12 Final QA                                    | 12      | 0     |
-| **Total**                                       | **447** | **0** |
+Counted from the checkboxes above — `[x]` done, `[~]` started. Recount rather than
+increment by hand; a progress table that has drifted is worse than none.
+
+| Phase                                           | Tasks   | Done   | Started |
+| ----------------------------------------------- | ------- | ------ | ------- |
+| P0 Foundation                                   | 55      | 27     | 10      |
+| P1 Identity & Onboarding                        | 78      | 30     | 7       |
+| P2 Money Core                                   | 38      | 0      | 0       |
+| P3 Catalog & Inventory                          | 31      | 0      | 0       |
+| P4 Wholesale                                    | 14      | 0      | 0       |
+| P5 Dropship, Websites & Storefront              | 50      | 0      | 0       |
+| P6 OMS, Fulfillment, Courier                    | 33      | 0      | 0       |
+| P7 Commission, Referral, Withdrawal, Settlement | 41      | 0      | 0       |
+| P8 Notifications & SMS                          | 18      | 0      | 0       |
+| P9 Reports                                      | 23      | 0      | 0       |
+| P10 CMS & SEO                                   | 20      | 0      | 0       |
+| P11 Hardening                                   | 38      | 0      | 0       |
+| P12 Final QA                                    | 12      | 0      | 0       |
+| **Total**                                       | **451** | **57** | **17**  |
 
 ### Revision log
 
+- **2026-09-03** — **D23** approved: `User` identity separated from `BusinessAccount`, so platform
+  staff need no commercial activation and invited staff need no KYC of their own. P1-64 restated to
+  carry the split; **P1-78** added for the application-layer conversion. Factory states and a
+  route-access matrix added. Total 450 → 451.
+- **2026-09-03** — Activation gate refinements approved and recorded as **D22**. Added **P1-75**
+  (three explicit outcome actions, no generic Reject), **P1-76** (`EvaluateActivationReadiness` and
+  `approval_pending_at`, making `ApprovalPending` canonical), **P1-77** (concurrency: one winner,
+  loser writes nothing). D5 confirmed: local development runs natively in WSL with
+  `php artisan serve`; Docker and Sail must not be required. Total 447 → 450.
 - **2026-09-01** — Verification pass against the spec. Corrected six item counts (permission
   actions 23→20, order statuses 30+→28, website statuses 13→14, notification events ~35→32,
   self-scoped reports 20→21, admin reports ~60→56). Added P5.D — the §16.1 customer-facing

@@ -66,7 +66,11 @@ class KycSubmission extends Model
      */
     public function reviews(): HasMany
     {
-        return $this->hasMany(KycReview::class, 'kyc_submission_id')->latest('created_at');
+        // `id` breaks the tie — see the note on User::statusHistory(). Two
+        // reviews can share a second, and their order is the story.
+        return $this->hasMany(KycReview::class, 'kyc_submission_id')
+            ->latest('created_at')
+            ->latest('id');
     }
 
     /**

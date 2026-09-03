@@ -67,6 +67,11 @@ class KycDocumentStore
         $contents = (string) file_get_contents($file->getRealPath());
         $checksum = hash('sha256', $contents);
 
+        // The length actually written, not what the upload claimed. They agree
+        // for a real upload; recording the stored length means the figure always
+        // describes the bytes a reviewer will receive.
+        $storedBytes = strlen($contents);
+
         // Random name, not the original. An original filename can carry the
         // applicant's name, and a predictable path is a path someone can try.
         $path = sprintf(
@@ -84,7 +89,7 @@ class KycDocumentStore
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $mime,
-            'size_bytes' => $size,
+            'size_bytes' => $storedBytes,
             'checksum' => $checksum,
             'is_encrypted' => true,
         ]);

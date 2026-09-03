@@ -4,10 +4,11 @@ includes:
     - phpstan-baseline.neon
 
 parameters:
-    # Pins the working directory before Larastan boots the application. Without
-    # it, PHPStan's parallel workers intermittently fail to locate
-    # bootstrap/app.php and the run dies with a misleading
-    # "Undefined constant Larastan\Larastan\LARAVEL_VERSION".
+    # Guarantees LARAVEL_VERSION exists in every process, including the parallel
+    # workers where Larastan's own lookup does not reliably find the application.
+    # Without it the run dies with a misleading
+    # "Undefined constant Larastan\Larastan\LARAVEL_VERSION" — and only outside
+    # --debug, which is single-process. See the file for the full account.
     bootstrapFiles:
         - phpstan-bootstrap.php
 

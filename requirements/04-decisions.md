@@ -49,9 +49,15 @@ on top of auth/authorization.
 - If an international gateway ever settles in another currency, record **original currency,
   original amount, and settlement information** — never silently rewrite the BDT base ledger. 🔒
 
-## D5 — Local environment (was Q5) — **AMENDED 2026-09-01**
+## D5 — Local environment (was Q5) — **AMENDED 2026-09-01, confirmed 2026-09-03**
 
 **Native services in WSL Ubuntu. No Docker.**
+
+Confirmed on 2026-09-03 as settled rather than provisional: PHP, PostgreSQL, Redis and Node all run
+natively in WSL, and the application is served by `php artisan serve`. **Docker and Sail must not
+become a requirement for local development** — not for a service, not for a test run, not for a
+one-off tool. Production architecture stays container-ready and load-balancer-ready (D10); that is a
+deployment concern and does not reach back into how the machine in front of you runs.
 
 | Component  | Version       | Source                                        |
 | ---------- | ------------- | --------------------------------------------- |
@@ -94,9 +100,9 @@ development data — with none of that. Verified: 81 feature tests pass against 
 
 ### What did not change
 
-`compose.yaml` is kept and updated to match (PostgreSQL 18, Redis 8). It is no longer the primary
-development path, but it remains the reference for production parity and for any machine that does
-use containers. CI runs the same pinned versions.
+`compose.yaml` is kept and updated to match (PostgreSQL 18, Redis 8). It is **not** a development
+path and nothing may come to depend on it; it remains the reference for production parity and for
+any machine that does use containers. CI runs the same pinned versions.
 
 **Everything in D10 still holds.** Running services natively is a local convenience, not a licence
 to change the architecture: sessions, cache, and queues remain on Redis, the application stays
@@ -287,6 +293,95 @@ available regardless**.
 restrictions, account agreements, and administrative action on reported misuse. The ERP may record
 an **optional intended resale channel** for reporting only — it does not track or block where
 independently purchased wholesale stock is sold.
+
+## D22 — Activation review outcomes and readiness (2026-09-03)
+
+Refinements to the activation gate, approved after the first implementation of the approval queue.
+
+### No generic Reject
+
+Three outcomes, and no fourth. §5.3 gives `ApprovalPending` exactly these moves that a reviewer may
+take, and each means something different to the applicant:
+
+| Outcome                      | Target status             | Requires                                              | Permission        |
+| ---------------------------- | ------------------------- | ----------------------------------------------------- | ----------------- |
+| **Activate**                 | `Active`                  | every §5.1 condition, re-checked under a row lock     | `account.approve` |
+| **Request KYC resubmission** | `KycResubmissionRequired` | an internal reason **and** applicant-visible feedback | `account.approve` |
+| **Suspend**                  | `Suspended`               | an internal reason                                    | `account.reject`  |
+
+A generic `Reject` status must not be introduced at this stage. Each outcome is its own domain
+action — `ActivateAccount`, `RequestKycResubmission`, `SuspendAccount` — with its own validation,
+notification, audit entry and permission check. A single `DeclineActivation` taking an outcome
+parameter was built first and **removed**: it let two decisions with different consequences share one
+permission, and a route named `decline` invites a fourth outcome nobody designed.
+
+**Suspension is not permanent denial.** It stays reversible. Permanent closure and final denial
+belong to the closure and retention workflow (D18), which carries its own retention rules — and
+suspension must never become a quiet substitute for it.
+
+### ApprovalPending is canonical
+
+`EvaluateActivationReadiness` is the orchestration that keeps the status honest. It runs whenever any
+activation requirement moves — KYC approved or withdrawn, activation payment settled, refunded or
+reversed, package selected or changed — and, under a per-account lock:
+
+- moves a fully-qualified account to `ApprovalPending` and stamps `approval_pending_at`;
+- clears that stamp when a requirement is reversed, so the account leaves the queue;
+- does nothing when the account is already in the right place, so a repeated webhook does not
+  produce repeated status changes.
+
+`approval_pending_at` exists because "oldest first" has to mean _waiting longest for us_. Ordering by
+registration would put someone who signed up in March above someone who completed everything last
+week — inverting the queue exactly where it matters.
+
+The queue reads that state. Its condition-based branch is a **compatibility net** for accounts that
+qualified before the orchestration existed, or whose readiness event was lost; it is expected to
+match nothing in steady state. `ActivationRequirements` remains the authority, and `ActivateAccount`
+re-checks every requirement inside its transaction before activating — the queue is a view, the
+action is the decision.
+
+### Concurrency
+
+Every decision runs inside one transaction with `lockForUpdate` on the account, and the status
+machine is the arbiter. Two reviewers deciding at once resolve to one winner; the loser writes
+nothing — no status change, no history row, no audit entry, no subscription change.
+
+## D23 — User identity vs Business Account (2026-09-03) 🔒
+
+**Approved, not yet implemented.** Amends D1. Supersedes the single-status model on `users`.
+
+The problem it fixes: `users.status` was answering two different questions at once — "may this
+person sign in" and "may this business trade". So a Feriwala staff member had to complete commercial
+KYC, choose a package and pay an activation fee before they could open the admin panel, and an
+invited staff member would have had to do the same to join someone else's workspace.
+
+### The two boundaries
+
+|                                                 | Governs                                            | Gates                                                                |
+| ----------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------- |
+| `User.identity_status`                          | login-level suspension, security blocking, closure | **everything**, administration included                              |
+| `BusinessAccount.status` (the 22 §5.3 statuses) | the commercial lifecycle                           | dropshipping, wholesale, wallet, orders, websites — the business ERP |
+| Platform permissions                            | what a staff member may administer                 | admin routes                                                         |
+
+### Rules
+
+- `User` is a human login identity. `BusinessAccount` is the commercial workspace.
+- A user may **own at most one** business account; the database enforces it.
+- An invited staff user is a **member** of the owner's account and completes no KYC, no package
+  selection and no activation payment of their own.
+- A platform staff user may reach permitted admin routes **without owning a business account**.
+- A commercially suspended account loses business ERP access, **and so do its members**.
+- A globally suspended user loses everything, admin included.
+- One person who is both an owner and platform staff keeps admin access when their business is
+  suspended — unless their identity is suspended too.
+
+A broad `admin.*` bypass is explicitly **not** an acceptable substitute: it would leave a suspended
+staff member holding the panel.
+
+### Naming
+
+`BusinessAccount` internally, however the UI labels it. `Account` alone reads as "the thing I log
+into", which is the confusion the split exists to end.
 
 ---
 

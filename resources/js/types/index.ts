@@ -1,6 +1,9 @@
+export type * from './activation';
 export type * from './auth';
 export type * from './data-table';
+export type * from './kyc';
 export type * from './localization';
 export type * from './navigation';
+export type * from './onboarding';
 export type * from './teams';
 export type * from './ui';

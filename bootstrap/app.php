@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountIsActivated;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventSearchIndexing;
@@ -35,6 +36,16 @@ return Application::configure(basePath: dirname(__DIR__))
         // so this is deliberately not a global web middleware.
         $middleware->alias([
             'noindex' => PreventSearchIndexing::class,
+            'activated' => EnsureAccountIsActivated::class,
+        ]);
+
+        /*
+         * Payment gateways cannot carry a CSRF token. The signature check in
+         * PaymentWebhookController is what authenticates these instead, and it
+         * runs before the payment is even looked up (§17.3, §26.4).
+         */
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/payment/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

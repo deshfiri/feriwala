@@ -3,6 +3,7 @@
 namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Account\Actions\ChangeAccountStatus;
+use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Kyc\Data\KycDecision;
@@ -27,12 +28,13 @@ class ReviewKyc
 {
     public function __construct(
         protected ChangeAccountStatus $changeAccountStatus,
+        protected EvaluateActivationReadiness $readiness,
         protected DatabaseManager $database,
     ) {}
 
     public function handle(KycSubmission $submission, KycDecision $decision): KycReview
     {
-        return $this->database->transaction(function () use ($submission, $decision) {
+        $review = $this->database->transaction(function () use ($submission, $decision) {
             $from = $submission->status;
 
             // A submission that arrives straight from Submitted is picked up and
@@ -61,6 +63,17 @@ class ReviewKyc
 
             return $review;
         });
+
+        // KYC approval or its withdrawal is one of the requirements the
+        // activation gate watches (§5.1). Re-evaluated after the transaction
+        // commits, so the gate never sees a half-applied decision.
+        $user = $submission->user()->first();
+
+        if ($user !== null) {
+            $this->readiness->handle($user, 'KYC decision recorded.');
+        }
+
+        return $review;
     }
 
     /**

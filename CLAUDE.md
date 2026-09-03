@@ -265,7 +265,10 @@ hold relationships, casts, and scopes — not workflow. See
 ## Environment
 
 PostgreSQL 18 and Redis 8, running natively in WSL (decision D5, amended twice — read it before
-changing versions). Redis carries cache, sessions, queues, rate limiting, and locks — on **four
+changing versions). **Docker and Sail are not a development path** and nothing may come to require
+them: PHP, PostgreSQL, Redis and Node all run natively, and the app is served by
+`php artisan serve`. `compose.yaml` exists only as the production-parity reference. Production stays
+container-ready; that is a deployment concern and does not reach back into local development. Redis carries cache, sessions, queues, rate limiting, and locks — on **four
 separate databases**, with locks isolated so a cache flush cannot drop a lock guarding a financial
 operation. Verified against the live server.
 
@@ -306,10 +309,17 @@ Groups are declared in `tests/Pest.php`. Run a slice with `pest --group=wallet`.
 
 ```bash
 vendor/bin/pint --parallel        # PHP formatting
-vendor/bin/phpstan analyse        # level 8, baseline in phpstan-baseline.neon
+composer types:check              # PHPStan level 8, baseline in phpstan-baseline.neon
 vendor/bin/pest                   # tests
 npm run check                     # format + lint + types
 ```
+
+Run PHPStan through `composer types:check`, not `vendor/bin/phpstan` directly. A stale result cache
+in `build/phpstan` puts the run on a path where bootstrap files never execute, and Larastan then
+dies with `Undefined constant "Larastan\Larastan\LARAVEL_VERSION"` — a message that points nowhere
+near the cause and persists until the cache is cleared. `--debug` hides it, because that path is
+single-process. [scripts/phpstan.sh](scripts/phpstan.sh) clears the cache and retries **only** on
+that message; every other failure passes straight through.
 
 All four must pass before work is considered done. The PHPStan baseline holds starter-kit
 debt only — it should shrink over time and must never grow.

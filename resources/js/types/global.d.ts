@@ -15,6 +15,11 @@ declare module '@inertiajs/core' {
             sidebarOpen: boolean;
             currentTeam: Team | null;
             teams: Team[];
+            /**
+             * The abilities the navigation gates on — not the whole permission
+             * set. Hiding a link is a convenience; the route's policy refuses.
+             */
+            permissions: Record<string, boolean>;
             [key: string]: unknown;
         };
     }

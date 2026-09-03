@@ -12,6 +12,8 @@ export type Team = {
 
 export type TeamMember = {
     id: number;
+    /** Used in routes; user routes bind on public_id, never `id` (§34.2). */
+    public_id: string;
     name: string;
     email: string;
     avatar?: string | null;

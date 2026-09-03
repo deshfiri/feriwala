@@ -2,6 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Access\PermissionCatalogue;
+use App\Models\User;
 use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -55,6 +59,35 @@ class HandleInertiaRequests extends Middleware
                 'available' => Locale::options(),
             ],
             'translations' => fn () => $this->translations(App::getLocale()),
+            'permissions' => fn () => $this->navigationPermissions($user),
+        ];
+    }
+
+    /**
+     * The abilities the navigation gates on.
+     *
+     * An explicit short list, not the user's whole permission set. Shipping all
+     * 161 would put the entire access model in the browser on every page load
+     * for the sake of a handful of menu entries — and hiding a link is only a
+     * convenience anyway. The policy on the route is what actually refuses.
+     *
+     * @return array<string, bool>
+     */
+    protected function navigationPermissions(?User $user): array
+    {
+        if ($user === null) {
+            return [];
+        }
+
+        return [
+            'kyc.view' => $user->can(PermissionCatalogue::name(
+                PermissionModule::Kyc,
+                PermissionAction::View,
+            )),
+            'account.view' => $user->can(PermissionCatalogue::name(
+                PermissionModule::Account,
+                PermissionAction::View,
+            )),
         ];
     }
 

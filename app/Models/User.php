@@ -44,6 +44,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property Carbon|null $email_verified_at
  * @property CarbonImmutable|null $mobile_verified_at
  * @property CarbonImmutable|null $activated_at
+ * @property CarbonImmutable|null $approval_pending_at
  * @property string|null $referral_code
  * @property int|null $referred_by_user_id
  * @property string $locale
@@ -87,6 +88,21 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * Mirrors the column default, so a model that has not been read back from
+     * the database still has a status.
+     *
+     * Without it a fresh `create()` leaves `status` unset until the row is
+     * re-read, and `$user->status->isActivated()` — which the §5.4 funnel gate
+     * asks on every request — fatals on null for a user that is perfectly valid
+     * in the database.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'status' => AccountStatus::Registered->value,
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -101,6 +117,7 @@ class User extends Authenticatable implements PasskeyUser
             // mutable Carbon that behaves differently under modification.
             'mobile_verified_at' => 'immutable_datetime',
             'activated_at' => 'immutable_datetime',
+            'approval_pending_at' => 'immutable_datetime',
             'date_of_birth' => 'immutable_date',
             'terms_accepted_at' => 'immutable_datetime',
             'privacy_accepted_at' => 'immutable_datetime',
@@ -114,7 +131,13 @@ class User extends Authenticatable implements PasskeyUser
      */
     public function statusHistory(): HasMany
     {
-        return $this->hasMany(UserStatusChange::class)->latest('created_at');
+        // `id` breaks the tie. A single decision can write two changes in the
+        // same second — picked up for review, then decided — and ordering on
+        // the timestamp alone leaves their order undefined, so the history can
+        // render the steps backwards or return the wrong one to `first()`.
+        return $this->hasMany(UserStatusChange::class)
+            ->latest('created_at')
+            ->latest('id');
     }
 
     /**
