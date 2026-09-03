@@ -6,8 +6,11 @@ use App\Actions\Teams\CreateTeam;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Enums\UserStatus;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Referral\Actions\ResolveReferrer;
 use App\Domain\Referral\ReferralCode;
+use App\Enums\TeamRole;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -72,7 +75,7 @@ class CreateNewUser implements CreatesNewUsers
             ]);
 
             $user->forceFill([
-                'status' => AccountStatus::Registered,
+                'identity_status' => UserStatus::Active,
                 // Issued at registration so the code is stable for the life of
                 // the account; it only becomes usable once the account is active
                 // (§25.1), which ResolveReferrer enforces.
@@ -81,6 +84,26 @@ class CreateNewUser implements CreatesNewUsers
                 'terms_accepted_at' => now(),
                 'privacy_accepted_at' => now(),
             ])->save();
+
+            /*
+             * Registering creates two things now (D23): the person, and the
+             * business they are about to onboard. They are the owner, and the
+             * commercial funnel — KYC, package, activation payment — runs
+             * against the account rather than against them.
+             *
+             * Somebody Feriwala hires as platform staff gets no account, which
+             * is why this belongs to registration rather than to User::create.
+             */
+            $account = BusinessAccount::create([
+                'name' => $user->name,
+                'owner_id' => $user->id,
+                'status' => AccountStatus::Registered,
+            ]);
+
+            $account->memberships()->create([
+                'user_id' => $user->id,
+                'role' => TeamRole::Owner->value,
+            ]);
 
             $this->createTeam->handle($user, $user->name."'s Team", isPersonal: true);
 

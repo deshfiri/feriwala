@@ -1,5 +1,15 @@
 <?php
 
+use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Account\Actions\EvaluateActivationReadiness;
+use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Enums\PaymentPurpose;
+use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Models\Payment;
+use App\Domain\Kyc\Enums\KycStatus;
+use App\Domain\Kyc\Models\KycSubmission;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -84,7 +94,75 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/*
+ * Shared fixtures for the identity / business-account split (D23).
+ *
+ * These live here rather than in one test file because Pest loads every test
+ * into a single global function namespace: a helper defined in one file and
+ * called from another works only while both happen to be loaded, which breaks
+ * the moment somebody runs that second file on its own.
+ *
+ * Named for what they build, not for the module that happens to use them first.
+ */
+
+/**
+ * A business account sitting at `$status`, with an owner and a membership.
+ *
+ * Reach the person through `$account->owner`. The commercial lifecycle belongs
+ * to the account, so tests about trading build one of these; tests about a
+ * login build a `User` and give it no account at all.
+ */
+function testBusinessAccount(?AccountStatus $status = null): BusinessAccount
 {
-    // ..
+    $factory = BusinessAccount::factory();
+
+    return ($status === null ? $factory : $factory->onboarding($status))->create();
+}
+
+/**
+ * An account that has cleared every §5.1 condition and is waiting on us.
+ *
+ * Built through the real orchestration rather than by setting the columns:
+ * only the clock is moved, so ordering tests exercise the column the
+ * application actually writes.
+ */
+function testAccountReadyForActivation(int $readyDaysAgo = 0): BusinessAccount
+{
+    $account = testBusinessAccount(AccountStatus::PaymentVerificationPending);
+
+    KycSubmission::create([
+        'business_account_id' => $account->id,
+        'status' => KycStatus::Approved,
+        'round' => 1,
+        'reviewed_at' => now()->subDays($readyDaysAgo + 1),
+    ]);
+
+    Payment::create([
+        'business_account_id' => $account->id,
+        'purpose' => PaymentPurpose::Activation,
+        'status' => PaymentStatus::Paid,
+        'amount_minor' => 600000,
+        'currency_code' => 'BDT',
+        'completed_at' => now()->subDays($readyDaysAgo),
+    ]);
+
+    app(EvaluateActivationReadiness::class)->handle($account);
+
+    if ($readyDaysAgo > 0) {
+        $account->forceFill(['approval_pending_at' => now()->subDays($readyDaysAgo)])->save();
+    }
+
+    return $account->refresh();
+}
+
+/**
+ * A Feriwala staff member: an active login holding `$role`, and **no business
+ * account** — which is the whole point of D23.
+ */
+function testPlatformStaff(PlatformRole $role): User
+{
+    $user = User::factory()->staff()->create();
+    $user->assignRole($role->value);
+
+    return $user;
 }

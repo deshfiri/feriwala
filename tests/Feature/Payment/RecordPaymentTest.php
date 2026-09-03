@@ -9,7 +9,6 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
-use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\References\Reference;
 use App\Support\References\ReferencePrefix;
@@ -21,7 +20,8 @@ beforeEach(function () {
     $settings->define('billing.tax_rate_percent', 'billing', SettingType::Decimal, '15');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
 
-    $this->user = User::factory()->create();
+    $this->account = testBusinessAccount();
+    $this->user = $this->account->owner;
 
     $this->package = Package::create([
         'name' => 'Growth',
@@ -38,7 +38,7 @@ function recordActivation(?string $key = null, ?Money $deposit = null): Payment
     );
 
     return app(RecordPaymentFromQuote::class)->handle(
-        test()->user,
+        test()->account,
         $quote,
         PaymentPurpose::Activation,
         idempotencyKey: $key,

@@ -33,7 +33,7 @@ describe('creating the account', function () {
     it('starts a new account at Registered, not Active', function () {
         // §5.1: registration opens the account; activation needs verification,
         // KYC, payment, and administrative approval.
-        expect(registerAccount()->status)->toBe(AccountStatus::Registered);
+        expect(registerAccount()->businessAccount->status)->toBe(AccountStatus::Registered);
     });
 
     it('records the §5.2 details', function () {
@@ -116,10 +116,7 @@ describe('referral capture (§25.1)', function () {
     });
 
     it('links a new account to an active referrer', function () {
-        $referrer = User::factory()->create([
-            'status' => AccountStatus::Active,
-            'referral_code' => 'K7M3QX9P',
-        ]);
+        $referrer = tap(testBusinessAccount(AccountStatus::Active)->owner, fn ($u) => $u->forceFill(['referral_code' => 'K7M3QX9P'])->save());
 
         $user = registerAccount(['referral_code' => 'K7M3QX9P']);
 
@@ -129,10 +126,7 @@ describe('referral capture (§25.1)', function () {
     });
 
     it('accepts a code typed in lower case or with spaces', function () {
-        $referrer = User::factory()->create([
-            'status' => AccountStatus::Active,
-            'referral_code' => 'K7M3QX9P',
-        ]);
+        $referrer = tap(testBusinessAccount(AccountStatus::Active)->owner, fn ($u) => $u->forceFill(['referral_code' => 'K7M3QX9P'])->save());
 
         $user = registerAccount(['referral_code' => ' k7m3-qx9p ']);
 
@@ -142,10 +136,7 @@ describe('referral capture (§25.1)', function () {
     it('ignores a referral code belonging to an account that is not active', function () {
         // §25.1: only active users refer. A suspended account must not keep
         // earning rewards, or suspension means nothing.
-        User::factory()->create([
-            'status' => AccountStatus::Suspended,
-            'referral_code' => 'K7M3QX9P',
-        ]);
+        tap(testBusinessAccount(AccountStatus::Suspended)->owner, fn ($u) => $u->forceFill(['referral_code' => 'K7M3QX9P'])->save());
 
         expect(registerAccount(['referral_code' => 'K7M3QX9P'])->referred_by_user_id)
             ->toBeNull();

@@ -54,9 +54,38 @@ class EnsureIdentityHasPlatformAccess
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        // Only routes that wanted a user get redirected. The public marketing
+        // site does not: a suspended person may still read it, and bouncing
+        // them off the home page is nobody's intention.
+        //
+        // Asked of the route rather than left to the now-logged-out guard,
+        // because this middleware runs in the web group and the request has
+        // already resolved its user — clearing the guard does not un-resolve it
+        // for the rest of this request.
+        if (! $this->routeRequiresAuthentication($request)) {
+            return $next($request);
+        }
+
         return redirect()
             ->route('login')
             ->withErrors(['email' => __('This account is not available. Contact support if you believe this is a mistake.')]);
+    }
+
+    protected function routeRequiresAuthentication(Request $request): bool
+    {
+        $middleware = $request->route()?->gatherMiddleware() ?? [];
+
+        foreach ($middleware as $name) {
+            if (! is_string($name)) {
+                continue;
+            }
+
+            if ($name === 'auth' || str_starts_with($name, 'auth:')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function isAllowed(Request $request): bool

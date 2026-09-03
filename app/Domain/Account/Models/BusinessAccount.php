@@ -80,6 +80,16 @@ class BusinessAccount extends Model
     }
 
     /**
+     * Laravel guesses `Database\Factories\Domain\Account\Models\...` from the
+     * model's namespace. Domain models live deeper than the convention expects,
+     * so the binding is stated rather than guessed.
+     */
+    protected static function newFactory(): BusinessAccountFactory
+    {
+        return BusinessAccountFactory::new();
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

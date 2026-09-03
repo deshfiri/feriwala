@@ -21,9 +21,9 @@ beforeEach(function () {
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
     $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
 
-    $this->applicant = User::factory()->create([
-        'status' => AccountStatus::PackageSelectionPending,
-    ]);
+    // The screens are used by a person; the money belongs to their business.
+    $this->account = testBusinessAccount(AccountStatus::PackageSelectionPending);
+    $this->applicant = $this->account->owner;
 
     $this->package = Package::create([
         'name' => 'Growth',
@@ -52,8 +52,8 @@ describe('choosing a package', function () {
             ->post(route('packages.select', $this->package))
             ->assertRedirect(route('checkout.show'));
 
-        expect($this->applicant->fresh()->status)->toBe(AccountStatus::PaymentPending)
-            ->and(UserPackage::where('user_id', $this->applicant->id)->count())->toBe(1);
+        expect($this->account->fresh()->status)->toBe(AccountStatus::PaymentPending)
+            ->and(UserPackage::where('business_account_id', $this->account->id)->count())->toBe(1);
     });
 
     it('replaces an earlier unpaid choice rather than stacking them', function () {
@@ -62,7 +62,7 @@ describe('choosing a package', function () {
         $this->actingAs($this->applicant)->post(route('packages.select', $this->package));
         $this->actingAs($this->applicant)->post(route('packages.select', $other));
 
-        $pending = UserPackage::where('user_id', $this->applicant->id)
+        $pending = UserPackage::where('business_account_id', $this->account->id)
             ->where('status', UserPackageStatus::PendingPayment)
             ->get();
 
@@ -77,7 +77,7 @@ describe('choosing a package', function () {
         $this->actingAs($this->applicant)->post(route('packages.select', $this->package));
         $this->actingAs($this->applicant)->post(route('packages.select', $other));
 
-        expect(UserPackage::where('user_id', $this->applicant->id)->count())->toBe(2);
+        expect(UserPackage::where('business_account_id', $this->account->id)->count())->toBe(2);
     });
 
     it('does not offer an unavailable package', function () {

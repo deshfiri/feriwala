@@ -5,8 +5,8 @@ use App\Models\Team;
 use App\Models\User;
 
 test('team member roles can be updated by owners', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -24,9 +24,9 @@ test('team member roles can be updated by owners', function () {
 });
 
 test('team member roles cannot be updated by non owners', function () {
-    $owner = User::factory()->create();
-    $admin = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $admin = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -43,8 +43,8 @@ test('team member roles cannot be updated by non owners', function () {
 });
 
 test('team members can be removed by owners', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -60,9 +60,9 @@ test('team members can be removed by owners', function () {
 });
 
 test('team members cannot be removed by non owners', function () {
-    $owner = User::factory()->create();
-    $admin = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $admin = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -77,7 +77,7 @@ test('team members cannot be removed by non owners', function () {
 });
 
 test('team owner cannot be removed', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -92,8 +92,8 @@ test('team owner cannot be removed', function () {
 });
 
 test('team member role cannot be set to owner', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -111,8 +111,8 @@ test('team member role cannot be set to owner', function () {
 });
 
 test('removed member current team is set to personal team', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $personalTeam = $member->personalTeam();
     $team = Team::factory()->create();
 

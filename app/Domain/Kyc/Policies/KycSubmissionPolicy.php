@@ -24,7 +24,7 @@ class KycSubmissionPolicy
     public function view(User $user, KycSubmission $submission): bool
     {
         // An applicant may look at their own submission.
-        if ($submission->user_id === $user->id) {
+        if ($user->accountMembership()->where('business_account_id', $submission->business_account_id)->exists()) {
             return true;
         }
 
@@ -37,7 +37,7 @@ class KycSubmissionPolicy
      */
     public function review(User $user, KycSubmission $submission): bool
     {
-        if ($submission->user_id === $user->id) {
+        if ($user->accountMembership()->where('business_account_id', $submission->business_account_id)->exists()) {
             // Nobody reviews their own KYC, whatever else they hold.
             return false;
         }

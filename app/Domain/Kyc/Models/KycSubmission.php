@@ -14,6 +14,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * One round of KYC submission (§7.3).
  *
+ * Belongs to the business account rather than the person (D23): commercial
+ * onboarding is completed once, by the owner, and an invited staff member has
+ * no KYC of their own.
+ *
+ * @property int $business_account_id
  * @property KycStatus $status
  * @property int $round
  * @property CarbonImmutable|null $submitted_at

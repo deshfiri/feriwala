@@ -47,6 +47,12 @@ class KycDocumentPolicy
 
     protected function isOwner(User $user, KycDocument $document): bool
     {
-        return $document->submission()->value('user_id') === $user->id;
+        // The applicant is the account that submitted, so "their own" means a
+        // document belonging to an account they work in — an invited staff
+        // member may see what their own business sent.
+        $accountId = $document->submission()->value('business_account_id');
+
+        return $accountId !== null
+            && $user->accountMembership()->where('business_account_id', $accountId)->exists();
     }
 }

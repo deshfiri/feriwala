@@ -16,10 +16,11 @@ beforeEach(function () {
 
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->applicant = User::factory()->create();
+    $this->account = testBusinessAccount();
+    $this->applicant = $this->account->owner;
 
     $submission = KycSubmission::create([
-        'user_id' => $this->applicant->id,
+        'business_account_id' => $this->account->id,
         'status' => KycStatus::UnderReview,
         'round' => 1,
     ]);
@@ -40,10 +41,7 @@ beforeEach(function () {
 
 function reviewerWithRole(PlatformRole $role): User
 {
-    $user = User::factory()->create();
-    $user->assignRole($role->value);
-
-    return $user;
+    return testPlatformStaff($role);
 }
 
 describe('who may open a document (§7.5)', function () {
@@ -81,7 +79,7 @@ describe('who may open a document (§7.5)', function () {
     });
 
     it('refuses one applicant another applicant’s document', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(testBusinessAccount()->owner)
             ->get(route('kyc.documents.show', $this->document))
             ->assertForbidden();
     });

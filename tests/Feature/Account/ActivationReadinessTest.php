@@ -12,7 +12,6 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Models\User;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
@@ -22,22 +21,17 @@ beforeEach(function () {
 
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->approver = User::factory()->staff()->create();
-    $this->approver->assignRole(PlatformRole::Admin->value);
+    $this->approver = testPlatformStaff(PlatformRole::Admin);
 
     // Sitting one step short of the gate: verified, and waiting on KYC and
     // payment, which is where the orchestration has something to do.
-    $this->applicant = User::factory()->create([
-        'status' => AccountStatus::PaymentVerificationPending,
-        'email_verified_at' => now(),
-        'mobile_verified_at' => now(),
-    ]);
+    $this->applicant = testBusinessAccount(AccountStatus::PaymentVerificationPending);
 });
 
 function approveApplicantKyc(): KycSubmission
 {
     return KycSubmission::create([
-        'user_id' => test()->applicant->id,
+        'business_account_id' => test()->applicant->id,
         'status' => KycStatus::Approved,
         'round' => 1,
         'reviewed_at' => now(),
@@ -47,7 +41,7 @@ function approveApplicantKyc(): KycSubmission
 function settleApplicantActivationPayment(): Payment
 {
     return Payment::create([
-        'user_id' => test()->applicant->id,
+        'business_account_id' => test()->applicant->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
         'amount_minor' => 600000,
@@ -130,7 +124,7 @@ describe('a requirement reversed after reaching the gate', function () {
     });
 
     it('takes the account back out of the queue', function () {
-        Payment::where('user_id', $this->applicant->id)
+        Payment::where('business_account_id', $this->applicant->id)
             ->update(['status' => PaymentStatus::Refunded]);
 
         expect(evaluateApplicantReadiness())->toBeFalse()
@@ -144,7 +138,7 @@ describe('a requirement reversed after reaching the gate', function () {
             'approval_pending_at' => now()->subMonths(3),
         ])->save();
 
-        KycSubmission::where('user_id', $this->applicant->id)
+        KycSubmission::where('business_account_id', $this->applicant->id)
             ->update(['status' => KycStatus::Rejected]);
 
         evaluateApplicantReadiness();
@@ -152,7 +146,7 @@ describe('a requirement reversed after reaching the gate', function () {
         expect($this->applicant->fresh()->approval_pending_at)->toBeNull();
 
         // Back in, with today's date rather than March's.
-        KycSubmission::where('user_id', $this->applicant->id)
+        KycSubmission::where('business_account_id', $this->applicant->id)
             ->update(['status' => KycStatus::Approved]);
 
         evaluateApplicantReadiness();
@@ -163,7 +157,7 @@ describe('a requirement reversed after reaching the gate', function () {
     it('refuses activation even though the account is still at the gate', function () {
         // The queue is a view and can be stale; the action re-checks under a row
         // lock, which is what actually decides.
-        Payment::where('user_id', $this->applicant->id)
+        Payment::where('business_account_id', $this->applicant->id)
             ->update(['status' => PaymentStatus::Refunded]);
 
         expect(fn () => app(ActivateAccount::class)
@@ -180,8 +174,7 @@ describe('two reviewers deciding at once', function () {
         settleApplicantActivationPayment();
         evaluateApplicantReadiness();
 
-        $this->second = User::factory()->staff()->create();
-        $this->second->assignRole(PlatformRole::Admin->value);
+        $this->second = testPlatformStaff(PlatformRole::Admin);
     });
 
     it('does not activate an account the other reviewer just suspended', function () {
@@ -189,7 +182,7 @@ describe('two reviewers deciding at once', function () {
         // suspension lands first; the approval is working from a view that is
         // now stale, and must not let the account through anyway.
         app(SuspendAccount::class)->handle(
-            user: $this->applicant,
+            account: $this->applicant,
             decidedBy: $this->approver->id,
             reason: 'Documents belong to someone else.',
         );
@@ -212,7 +205,7 @@ describe('two reviewers deciding at once', function () {
         app(ActivateAccount::class)->handle($this->applicant, $this->approver->id);
 
         app(SuspendAccount::class)->handle(
-            user: $this->applicant,
+            account: $this->applicant,
             decidedBy: $this->second->id,
             reason: 'Documents belong to someone else.',
         );
@@ -223,13 +216,13 @@ describe('two reviewers deciding at once', function () {
 
     it('lets only one of two declines win', function () {
         app(SuspendAccount::class)->handle(
-            user: $this->applicant,
+            account: $this->applicant,
             decidedBy: $this->approver->id,
             reason: 'Documents belong to someone else.',
         );
 
         expect(fn () => app(RequestKycResubmission::class)->handle(
-            user: $this->applicant,
+            account: $this->applicant,
             decidedBy: $this->second->id,
             reason: 'Licence expired.',
             feedback: 'Please upload a current licence.',
@@ -243,7 +236,7 @@ describe('two reviewers deciding at once', function () {
         // entry, or a subscription change — the whole decision is one
         // transaction or it is nothing.
         app(SuspendAccount::class)->handle(
-            user: $this->applicant,
+            account: $this->applicant,
             decidedBy: $this->approver->id,
             reason: 'Documents belong to someone else.',
         );
@@ -252,7 +245,7 @@ describe('two reviewers deciding at once', function () {
 
         try {
             app(RequestKycResubmission::class)->handle(
-                user: $this->applicant,
+                account: $this->applicant,
                 decidedBy: $this->second->id,
                 reason: 'Licence expired.',
                 feedback: 'Please upload a current licence.',

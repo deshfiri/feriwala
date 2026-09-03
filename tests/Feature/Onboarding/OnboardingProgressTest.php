@@ -6,13 +6,12 @@ use App\Domain\Account\OnboardingProgress;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycReview;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Models\User;
 
 function progressFor(AccountStatus $status): array
 {
-    return app(OnboardingProgress::class)->for(
-        User::factory()->create(['status' => $status]),
-    );
+    // The funnel belongs to the business, so progress is read from an
+    // account rather than from the person signed in.
+    return app(OnboardingProgress::class)->for(testBusinessAccount($status));
 }
 
 function stateOfStep(array $progress, OnboardingStep $step): string
@@ -106,10 +105,10 @@ describe('when something is wrong', function () {
 
 describe('reviewer feedback', function () {
     it('shows the applicant-facing message', function () {
-        $user = User::factory()->create(['status' => AccountStatus::KycResubmissionRequired]);
+        $account = testBusinessAccount(AccountStatus::KycResubmissionRequired);
 
         $submission = KycSubmission::create([
-            'user_id' => $user->id,
+            'business_account_id' => $account->id,
             'status' => KycStatus::ResubmissionRequired,
             'round' => 1,
         ]);
@@ -122,7 +121,7 @@ describe('reviewer feedback', function () {
             'internal_note' => 'Third attempt — escalate to fraud.',
         ]);
 
-        $progress = app(OnboardingProgress::class)->for($user);
+        $progress = app(OnboardingProgress::class)->for($account);
 
         expect($progress['feedback'])->toBe('Please upload a clearer photo of your NID.');
     });
@@ -130,10 +129,10 @@ describe('reviewer feedback', function () {
     it('never leaks the internal note', function () {
         // §7.3: the private note and the applicant's message are different
         // things and must stay that way all the way to the screen.
-        $user = User::factory()->create(['status' => AccountStatus::KycResubmissionRequired]);
+        $account = testBusinessAccount(AccountStatus::KycResubmissionRequired);
 
         $submission = KycSubmission::create([
-            'user_id' => $user->id,
+            'business_account_id' => $account->id,
             'status' => KycStatus::ResubmissionRequired,
             'round' => 1,
         ]);
@@ -146,7 +145,7 @@ describe('reviewer feedback', function () {
             'internal_note' => 'Suspected forgery — do not tell the applicant.',
         ]);
 
-        $serialised = json_encode(app(OnboardingProgress::class)->for($user));
+        $serialised = json_encode(app(OnboardingProgress::class)->for($account));
 
         expect($serialised)->not->toContain('Suspected forgery')
             ->and($serialised)->not->toContain('do not tell');
