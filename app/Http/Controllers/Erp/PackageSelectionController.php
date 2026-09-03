@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Erp;
 
+use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Billing\Actions\CalculateActivationQuote;
 use App\Domain\Package\Actions\SelectPackage;
 use App\Domain\Package\Enums\PackageFeature;
@@ -24,6 +25,8 @@ use Inertia\Response;
  */
 class PackageSelectionController extends Controller
 {
+    use ResolvesBusinessAccount;
+
     /**
      * Features shown side by side. A fixed list, so the comparison table has
      * the same rows for every package and a missing entitlement reads as
@@ -42,10 +45,9 @@ class PackageSelectionController extends Controller
 
     public function index(Request $request, CalculateActivationQuote $quotes): Response
     {
-        /** @var User $user */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
-        $selected = $user->packages()
+        $selected = $account->packages()
             ->where('status', UserPackageStatus::PendingPayment)
             ->first();
 
@@ -89,10 +91,9 @@ class PackageSelectionController extends Controller
         Package $package,
         SelectPackage $select,
     ): RedirectResponse {
-        /** @var User $user */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
-        $select->handle($user, $package);
+        $select->handle($account, $package);
 
         return to_route('checkout.show');
     }

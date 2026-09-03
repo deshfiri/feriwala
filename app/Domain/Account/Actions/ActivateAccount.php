@@ -6,11 +6,11 @@ use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Exceptions\ActivationBlocked;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
-use App\Models\User;
 use App\Notifications\Account\AccountActivated;
 use App\Support\Concurrency\DistributedLock;
 use Illuminate\Database\DatabaseManager;
@@ -43,21 +43,21 @@ class ActivateAccount
      *
      * @throws ActivationBlocked
      */
-    public function handle(User $user, int $approvedBy, ?string $note = null): User
+    public function handle(BusinessAccount $account, int $approvedBy, ?string $note = null): BusinessAccount
     {
         // Serialised per account. Two reviewers deciding at the same moment must
         // resolve to one outcome, and the requirements re-check below has to
         // happen inside that serialisation to be worth anything.
         $activated = $this->lock->run(
-            key: 'account:activation:'.$user->id,
-            callback: fn () => $this->activate($user, $approvedBy, $note),
+            key: 'account:activation:'.$account->id,
+            callback: fn () => $this->activate($account, $approvedBy, $note),
             ttlSeconds: 30,
             waitSeconds: 10,
         );
 
         // Outside the transaction: a queued mail for a change that then rolled
         // back is worse than a slightly later one.
-        $user->notify(new AccountActivated($note));
+        $account->owner?->notify(new AccountActivated($note));
 
         return $activated;
     }
@@ -65,11 +65,11 @@ class ActivateAccount
     /**
      * @throws ActivationBlocked
      */
-    protected function activate(User $user, int $approvedBy, ?string $note): User
+    protected function activate(BusinessAccount $account, int $approvedBy, ?string $note): BusinessAccount
     {
-        return $this->database->transaction(function () use ($user, $approvedBy, $note) {
-            /** @var User $locked */
-            $locked = User::query()->lockForUpdate()->findOrFail($user->id);
+        return $this->database->transaction(function () use ($account, $approvedBy, $note) {
+            /** @var BusinessAccount $locked */
+            $locked = BusinessAccount::query()->lockForUpdate()->findOrFail($account->id);
 
             // Re-checked under the row lock, not before it. Between the queue
             // rendering and this moment a payment can be refunded or a KYC
@@ -110,7 +110,7 @@ class ActivateAccount
             $this->audit->handle(new AuditEntry(
                 action: 'account.activated',
                 actorId: $approvedBy,
-                auditableType: User::class,
+                auditableType: BusinessAccount::class,
                 auditableId: $locked->id,
                 before: ['status' => $from->value],
                 after: ['status' => AccountStatus::Active->value],
@@ -120,9 +120,9 @@ class ActivateAccount
                 module: 'account',
             ));
 
-            $user->setRawAttributes($locked->getAttributes(), sync: true);
+            $account->setRawAttributes($locked->getAttributes(), sync: true);
 
-            return $user;
+            return $account;
         });
     }
 
@@ -133,10 +133,10 @@ class ActivateAccount
      * in a queue for three days should not lose three days of the package they
      * paid for.
      */
-    protected function activateSubscription(User $user): void
+    protected function activateSubscription(BusinessAccount $account): void
     {
         $subscription = UserPackage::query()
-            ->where('user_id', $user->id)
+            ->where('business_account_id', $account->id)
             ->where('status', UserPackageStatus::PendingPayment)
             ->latest('id')
             ->lockForUpdate()
@@ -162,6 +162,6 @@ class ActivateAccount
                     ->addDays($package->grace_period_days ?? 0),
         ])->save();
 
-        $user->forceFill(['current_user_package_id' => $subscription->id])->save();
+        $account->forceFill(['current_user_package_id' => $subscription->id])->save();
     }
 }

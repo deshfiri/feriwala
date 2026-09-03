@@ -33,7 +33,7 @@ class PaymentReturnController extends Controller
         $user = $request->user();
 
         $payment = Payment::query()
-            ->where('user_id', $user->id)
+            ->where('business_account_id', $user->businessAccount?->id)
             ->where('purpose', PaymentPurpose::Activation)
             ->latest('id')
             ->first();

@@ -50,7 +50,16 @@ class VerifyMobile
      */
     protected function advanceIfWaitingOnMobile(User $user): void
     {
-        $next = match ($user->status) {
+        // Verifying a mobile is a fact about the person; advancing the funnel is
+        // a change to their business (D23). Platform staff have no account, and
+        // there is simply nothing to advance for them.
+        $account = $user->businessAccount;
+
+        if ($account === null) {
+            return;
+        }
+
+        $next = match ($account->status) {
             AccountStatus::Registered,
             AccountStatus::MobileVerificationPending => $user->email_verified_at === null
                 ? AccountStatus::EmailVerificationPending
@@ -59,11 +68,11 @@ class VerifyMobile
             default => null,
         };
 
-        if ($next === null || ! $user->canTransitionTo($next)) {
+        if ($next === null || ! $account->canTransitionTo($next)) {
             return;
         }
 
-        $this->changeStatus->handle($user, new AccountStatusChange(
+        $this->changeStatus->handle($account, new AccountStatusChange(
             to: $next,
             reason: 'Mobile number verified.',
         ));

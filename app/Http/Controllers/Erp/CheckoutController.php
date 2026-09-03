@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Erp;
 
+use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\CalculateActivationQuote;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
 use App\Domain\Billing\Enums\PaymentPurpose;
@@ -12,7 +14,6 @@ use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -29,15 +30,16 @@ use Inertia\Response;
  */
 class CheckoutController extends Controller
 {
+    use ResolvesBusinessAccount;
+
     public function show(
         Request $request,
         CalculateActivationQuote $quotes,
         PaymentGatewayManager $gateways,
     ): Response|RedirectResponse {
-        /** @var User $user */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
-        $subscription = $this->pendingSubscription($user);
+        $subscription = $this->pendingSubscription($account);
         $package = $subscription?->package;
 
         // A subscription whose package has gone is not something to check out —
@@ -72,14 +74,13 @@ class CheckoutController extends Controller
         RecordPaymentFromQuote $record,
         PaymentGatewayManager $gateways,
     ): RedirectResponse {
-        /** @var User $user */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
         $validated = $request->validate([
             'gateway' => ['required', 'string', Rule::in($gateways->available())],
         ]);
 
-        $subscription = $this->pendingSubscription($user);
+        $subscription = $this->pendingSubscription($account);
         $package = $subscription?->package;
 
         if ($subscription === null || $package === null) {
@@ -96,7 +97,7 @@ class CheckoutController extends Controller
         }
 
         $payment = $record->handle(
-            user: $user,
+            account: $account,
             quote: $quote,
             purpose: PaymentPurpose::Activation,
             // Ties the payment to this subscription attempt, so a double-submit
@@ -131,9 +132,9 @@ class CheckoutController extends Controller
         return redirect()->away($redirect->url);
     }
 
-    protected function pendingSubscription(User $user): ?UserPackage
+    protected function pendingSubscription(BusinessAccount $account): ?UserPackage
     {
-        return $user->packages()
+        return $account->packages()
             ->where('status', UserPackageStatus::PendingPayment)
             ->with('package.features')
             ->first();

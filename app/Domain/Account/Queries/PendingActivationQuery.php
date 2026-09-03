@@ -7,14 +7,14 @@ use App\Domain\Account\Actions\ChangeAccountStatus;
 use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Kyc\Enums\KycStatus;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Accounts waiting for an activation decision (§5.1, §44).
+ * Business accounts waiting for an activation decision (§5.1, §44).
  *
  * {@see AccountStatus::ApprovalPending} is the canonical state, maintained by
  * {@see EvaluateActivationReadiness} whenever a requirement moves. This query
@@ -25,24 +25,25 @@ use Illuminate\Database\Eloquent\Builder;
  * existed, or one whose readiness event was lost — without them such an account
  * would sit unreachable, having done everything asked of it. They are expected
  * to match nothing once the orchestration has been running, and
- * {@see ActivationRequirements} remains the authority in both branches:
- * the controller re-checks per row, and {@see ActivateAccount}
- * re-checks again under a row lock, which is what actually decides.
+ * {@see ActivationRequirements} remains the authority in both branches: the
+ * controller re-checks per row, and
+ * {@see ActivateAccount} re-checks again under a row
+ * lock, which is what actually decides.
  *
  * Ordering is by `approval_pending_at` — when the account started waiting on us.
- * Ordering by registration would put someone who signed up in March above
- * someone who completed everything last week, which inverts the queue exactly
- * where it matters.
+ * Ordering by registration would put a business that signed up in March above
+ * one that completed everything last week, which inverts the queue exactly where
+ * it matters.
  */
 class PendingActivationQuery
 {
     /**
      * Statuses that are never in this queue, whatever else is true.
      *
-     * Suspended and closed accounts are not awaiting a decision, and every
-     * activated status is excluded by `activated_at` rather than by listing the
-     * twelve of them — one column that {@see ChangeAccountStatus}
-     * sets in one place cannot fall out of step the way a list would.
+     * Every activated status is excluded by `activated_at` rather than by
+     * listing the twelve of them — one column that
+     * {@see ChangeAccountStatus} sets in one place
+     * cannot fall out of step the way a list would.
      */
     public const INELIGIBLE = [
         AccountStatus::Suspended,
@@ -51,12 +52,12 @@ class PendingActivationQuery
     ];
 
     /**
-     * @return Builder<User>
+     * @return Builder<BusinessAccount>
      */
     public function builder(): Builder
     {
-        return User::query()
-            ->select('users.*')
+        return BusinessAccount::query()
+            ->select('business_accounts.*')
 
             ->whereNull('activated_at')
             ->whereNotIn('status', self::INELIGIBLE)
@@ -80,7 +81,7 @@ class PendingActivationQuery
             // A stable tie-break. Without it two accounts stamped in the same
             // transaction can swap places between pages, and an account can be
             // shown twice or skipped entirely while a reviewer pages through.
-            ->orderBy('users.id');
+            ->orderBy('business_accounts.id');
     }
 
     /**
@@ -90,22 +91,29 @@ class PendingActivationQuery
      * return one row per settled payment, so an account that paid twice would
      * appear twice in the queue.
      *
-     * @param  Builder<User>  $query
+     * @param  Builder<BusinessAccount>  $query
      */
     protected function meetsEveryRequirement(Builder $query): void
     {
         $query
-            ->whereNotNull('email_verified_at')
-            ->whereNotNull('mobile_verified_at')
+            // Verification is a fact about the owner, not the business — an
+            // invited staff member's unverified mobile is nothing to do with
+            // whether the business may trade.
+            ->whereExists(fn ($owner) => $owner
+                ->selectRaw('1')
+                ->from('users')
+                ->whereColumn('users.id', 'business_accounts.owner_id')
+                ->whereNotNull('email_verified_at')
+                ->whereNotNull('mobile_verified_at'))
             ->whereExists(fn ($kyc) => $kyc
                 ->selectRaw('1')
                 ->from('kyc_submissions')
-                ->whereColumn('kyc_submissions.user_id', 'users.id')
+                ->whereColumn('kyc_submissions.business_account_id', 'business_accounts.id')
                 ->where('status', KycStatus::Approved->value))
             ->whereExists(fn ($payment) => $payment
                 ->selectRaw('1')
                 ->from('payments')
-                ->whereColumn('payments.user_id', 'users.id')
+                ->whereColumn('payments.business_account_id', 'business_accounts.id')
                 ->where('purpose', PaymentPurpose::Activation->value)
                 // The same statuses as Payment::scopeSettled(), which is not
                 // reachable from a plain query builder inside whereExists.

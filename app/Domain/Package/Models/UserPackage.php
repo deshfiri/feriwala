@@ -4,8 +4,8 @@ namespace App\Domain\Package\Models;
 
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Enums\UserPackageStatus;
-use App\Models\User;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,11 +40,11 @@ class UserPackage extends Model
     }
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<BusinessAccount, $this>
      */
-    public function user(): BelongsTo
+    public function businessAccount(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(BusinessAccount::class);
     }
 
     /**

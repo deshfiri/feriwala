@@ -4,8 +4,8 @@ namespace App\Domain\Kyc\Models;
 
 use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,11 +38,11 @@ class KycSubmission extends Model
     }
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<BusinessAccount, $this>
      */
-    public function user(): BelongsTo
+    public function businessAccount(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(BusinessAccount::class);
     }
 
     /**

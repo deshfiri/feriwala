@@ -2,9 +2,9 @@
 
 namespace App\Domain\Kyc\Queries;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Models\User;
 use Illuminate\Support\Collection;
 
 /**
@@ -19,13 +19,13 @@ class ApplicableRequirements
     /**
      * @return Collection<int, KycDocumentType>
      */
-    public function forUser(User $user, ?string $packageKey = null): Collection
+    public function forUser(BusinessAccount $account, ?string $packageKey = null): Collection
     {
         return KycDocumentType::query()
             ->active()
             ->with('scopes')
             ->get()
-            ->filter(fn (KycDocumentType $type) => $type->appliesTo($packageKey, $user->country))
+            ->filter(fn (KycDocumentType $type) => $type->appliesTo($packageKey, $account->owner?->country))
             ->values();
     }
 
@@ -35,11 +35,11 @@ class ApplicableRequirements
      * @return array<int, array<string, mixed>>
      */
     public function forForm(
-        User $user,
+        BusinessAccount $account,
         ?KycSubmission $submission = null,
         ?string $packageKey = null,
     ): array {
-        $types = $this->forUser($user, $packageKey);
+        $types = $this->forUser($account, $packageKey);
 
         $documents = $submission?->documents()->get()->keyBy('kyc_document_type_id')
             ?? collect();

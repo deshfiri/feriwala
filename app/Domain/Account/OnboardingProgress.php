@@ -4,8 +4,8 @@ namespace App\Domain\Account;
 
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\OnboardingStep;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Models\User;
 
 /**
  * Works out where an account is in the activation funnel (§33.4).
@@ -25,18 +25,18 @@ class OnboardingProgress
     /**
      * @return array<string, mixed>
      */
-    public function for(User $user): array
+    public function for(BusinessAccount $account): array
     {
-        $status = $user->status;
+        $status = $account->status;
         $current = OnboardingStep::forStatus($status);
 
         return [
-            'is_complete' => $user->isActivated(),
+            'is_complete' => $account->isActivated(),
             'current_step' => $current->value,
-            'steps' => $this->steps($user, $current),
-            'action' => $this->requiredAction($user),
-            'blocked_reason' => $this->blockedReason($user),
-            'feedback' => $this->latestFeedback($user),
+            'steps' => $this->steps($account, $current),
+            'action' => $this->requiredAction($account),
+            'blocked_reason' => $this->blockedReason($account),
+            'feedback' => $this->latestFeedback($account),
             'status' => [
                 'value' => $status->value,
                 'label' => $status->label(),
@@ -50,7 +50,7 @@ class OnboardingProgress
      *
      * @return array<int, array<string, mixed>>
      */
-    protected function steps(User $user, OnboardingStep $current): array
+    protected function steps(BusinessAccount $account, OnboardingStep $current): array
     {
         $steps = [];
 
@@ -59,7 +59,7 @@ class OnboardingProgress
                 'key' => $step->value,
                 'label' => $step->label(),
                 'position' => $step->position(),
-                'state' => $this->stateOf($user, $step, $current),
+                'state' => $this->stateOf($account, $step, $current),
             ];
         }
 
@@ -73,9 +73,9 @@ class OnboardingProgress
      * user can see it is their KYC that needs attention and not wonder which
      * part of the process went wrong.
      */
-    protected function stateOf(User $user, OnboardingStep $step, OnboardingStep $current): string
+    protected function stateOf(BusinessAccount $account, OnboardingStep $step, OnboardingStep $current): string
     {
-        if ($user->isActivated()) {
+        if ($account->isActivated()) {
             return 'done';
         }
 
@@ -87,12 +87,12 @@ class OnboardingProgress
             return 'upcoming';
         }
 
-        return $this->isBlocked($user) ? 'blocked' : 'current';
+        return $this->isBlocked($account) ? 'blocked' : 'current';
     }
 
-    protected function isBlocked(User $user): bool
+    protected function isBlocked(BusinessAccount $account): bool
     {
-        return in_array($user->status, [
+        return in_array($account->status, [
             AccountStatus::KycRejected,
             AccountStatus::KycResubmissionRequired,
         ], true);
@@ -106,9 +106,9 @@ class OnboardingProgress
      *
      * @return array<string, string>|null
      */
-    protected function requiredAction(User $user): ?array
+    protected function requiredAction(BusinessAccount $account): ?array
     {
-        return match ($user->status) {
+        return match ($account->status) {
             AccountStatus::Registered,
             AccountStatus::MobileVerificationPending => [
                 'label' => 'Verify your mobile number',
@@ -151,9 +151,9 @@ class OnboardingProgress
     /**
      * Why the account cannot proceed, in the user's own terms.
      */
-    protected function blockedReason(User $user): ?string
+    protected function blockedReason(BusinessAccount $account): ?string
     {
-        return match ($user->status) {
+        return match ($account->status) {
             AccountStatus::KycRejected => 'Your KYC could not be verified.',
             AccountStatus::KycResubmissionRequired => 'Your KYC needs a correction.',
             AccountStatus::Suspended => 'This account is suspended. Contact support.',
@@ -168,14 +168,14 @@ class OnboardingProgress
      * Only ever the user-visible field. The internal note lives beside it in the
      * database and must never surface here (§7.3).
      */
-    protected function latestFeedback(User $user): ?string
+    protected function latestFeedback(BusinessAccount $account): ?string
     {
-        if (! $this->isBlocked($user)) {
+        if (! $this->isBlocked($account)) {
             return null;
         }
 
         $submission = KycSubmission::query()
-            ->where('user_id', $user->id)
+            ->where('business_account_id', $account->id)
             ->orderByDesc('round')
             ->first();
 

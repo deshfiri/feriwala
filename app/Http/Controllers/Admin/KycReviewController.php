@@ -49,9 +49,9 @@ class KycReviewController extends Controller
                 in_array($status, [KycStatus::Submitted->value, KycStatus::UnderReview->value], true),
                 fn ($query) => $query->where('status', $status),
             )
-            ->with('user:id,public_id,name,email,mobile,country')
+            ->with('businessAccount.owner:id,public_id,name,email,mobile,country')
             ->when($request->string('search')->toString(), function ($query, string $search) {
-                $query->whereHas('user', fn ($q) => $q
+                $query->whereHas('businessAccount.owner', fn ($q) => $q
                     ->where('name', 'ilike', "%{$search}%")
                     ->orWhere('email', 'ilike', "%{$search}%")
                     ->orWhere('mobile', 'ilike', "%{$search}%"));
@@ -82,9 +82,9 @@ class KycReviewController extends Controller
                 'status_label' => $submission->status->label(),
                 'status_tone' => $submission->status->tone(),
                 'applicant' => [
-                    'name' => $submission->user?->name,
-                    'email' => $submission->user?->email,
-                    'country' => $submission->user?->country,
+                    'name' => $submission->businessAccount?->owner?->name,
+                    'email' => $submission->businessAccount?->owner?->email,
+                    'country' => $submission->businessAccount?->owner?->country,
                 ],
             ]);
 
@@ -109,7 +109,7 @@ class KycReviewController extends Controller
             PermissionAction::ViewKycDocuments,
         ));
 
-        $submission->load(['user', 'documents.documentType', 'fields.documentType', 'reviews.reviewer']);
+        $submission->load(['businessAccount.owner', 'documents.documentType', 'fields.documentType', 'reviews.reviewer']);
 
         return Inertia::render('admin/kyc/show', [
             'submission' => [
@@ -126,12 +126,12 @@ class KycReviewController extends Controller
                 'can_review' => $reviewer->can('review', $submission),
             ],
             'applicant' => [
-                'id' => $submission->user?->public_id,
-                'name' => $submission->user?->name,
-                'email' => $submission->user?->email,
-                'mobile' => $submission->user?->mobile,
-                'country' => $submission->user?->country,
-                'status_label' => $submission->user?->status->label(),
+                'id' => $submission->businessAccount?->owner?->public_id,
+                'name' => $submission->businessAccount?->owner?->name,
+                'email' => $submission->businessAccount?->owner?->email,
+                'mobile' => $submission->businessAccount?->owner?->mobile,
+                'country' => $submission->businessAccount?->owner?->country,
+                'status_label' => $submission->businessAccount?->status->label(),
             ],
             'documents' => $submission->documents->map(fn ($document) => [
                 'id' => $document->public_id,

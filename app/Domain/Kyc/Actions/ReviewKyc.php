@@ -67,10 +67,10 @@ class ReviewKyc
         // KYC approval or its withdrawal is one of the requirements the
         // activation gate watches (§5.1). Re-evaluated after the transaction
         // commits, so the gate never sees a half-applied decision.
-        $user = $submission->user()->first();
+        $account = $submission->businessAccount()->first();
 
-        if ($user !== null) {
-            $this->readiness->handle($user, 'KYC decision recorded.');
+        if ($account !== null) {
+            $this->readiness->handle($account, 'KYC decision recorded.');
         }
 
         return $review;
@@ -84,9 +84,9 @@ class ReviewKyc
      */
     protected function applyToAccount(KycSubmission $submission, KycDecision $decision): void
     {
-        $user = $submission->user;
+        $account = $submission->businessAccount;
 
-        if ($user === null) {
+        if ($account === null) {
             return;
         }
 
@@ -102,20 +102,20 @@ class ReviewKyc
         }
 
         // The account has to pass through review before a decision lands on it.
-        if ($user->status === AccountStatus::KycSubmitted
-            && $user->canTransitionTo(AccountStatus::KycUnderReview)) {
-            $this->changeAccountStatus->handle($user, new AccountStatusChange(
+        if ($account->status === AccountStatus::KycSubmitted
+            && $account->canTransitionTo(AccountStatus::KycUnderReview)) {
+            $this->changeAccountStatus->handle($account, new AccountStatusChange(
                 to: AccountStatus::KycUnderReview,
                 changedBy: $decision->reviewerId,
                 reason: 'Picked up for review.',
             ));
         }
 
-        if (! $user->canTransitionTo($target)) {
+        if (! $account->canTransitionTo($target)) {
             return;
         }
 
-        $this->changeAccountStatus->handle($user, new AccountStatusChange(
+        $this->changeAccountStatus->handle($account, new AccountStatusChange(
             to: $target,
             changedBy: $decision->reviewerId,
             reason: $decision->reason,
@@ -126,8 +126,8 @@ class ReviewKyc
         // Clearing KYC opens package selection (§5.1). It does not activate the
         // account — payment and administrative approval still stand between.
         if ($decision->outcome === KycStatus::Approved
-            && $user->canTransitionTo(AccountStatus::PackageSelectionPending)) {
-            $this->changeAccountStatus->handle($user, new AccountStatusChange(
+            && $account->canTransitionTo(AccountStatus::PackageSelectionPending)) {
+            $this->changeAccountStatus->handle($account, new AccountStatusChange(
                 to: AccountStatus::PackageSelectionPending,
                 reason: 'KYC approved — package selection open.',
             ));

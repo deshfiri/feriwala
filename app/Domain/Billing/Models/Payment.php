@@ -6,10 +6,10 @@ use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
-use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
 use Illuminate\Database\Eloquent\Builder;
@@ -59,11 +59,11 @@ class Payment extends Model
     }
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<BusinessAccount, $this>
      */
-    public function user(): BelongsTo
+    public function businessAccount(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(BusinessAccount::class);
     }
 
     /**

@@ -148,18 +148,18 @@ class SettlePayment
             return;
         }
 
-        $user = $payment->user()->first();
+        $account = $payment->businessAccount()->first();
 
-        if ($user === null) {
+        if ($account === null) {
             return;
         }
 
         try {
-            $this->readiness->handle($user, 'Activation payment settled.');
+            $this->readiness->handle($account, 'Activation payment settled.');
         } catch (Throwable $throwable) {
             $this->log->channel('payment')->error('Could not re-evaluate activation readiness', [
                 'payment' => $payment->reference,
-                'user' => $user->id,
+                'business_account' => $account->id,
                 'error' => $throwable->getMessage(),
             ]);
         }

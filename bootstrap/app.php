@@ -1,6 +1,7 @@
 <?php
 
-use App\Http\Middleware\EnsureAccountIsActivated;
+use App\Http\Middleware\EnsureBusinessAccountIsActivated;
+use App\Http\Middleware\EnsureIdentityHasPlatformAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventSearchIndexing;
@@ -23,6 +24,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             HandleAppearance::class,
+            /*
+             * The identity gate is global, not per-route (D23). A suspended
+             * login must lose every panel, and a gate that has to be remembered
+             * on each route group is one somebody will eventually forget.
+             */
+            EnsureIdentityHasPlatformAccess::class,
             // Runs before Inertia shares props so the locale and translations
             // shipped to the client match the one the server rendered with.
             SetLocale::class,
@@ -36,7 +43,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // so this is deliberately not a global web middleware.
         $middleware->alias([
             'noindex' => PreventSearchIndexing::class,
-            'activated' => EnsureAccountIsActivated::class,
+
+            // The commercial gate, applied to business ERP routes only.
+            // Administration is identity plus permission and never uses it.
+            'business.activated' => EnsureBusinessAccountIsActivated::class,
         ]);
 
         /*

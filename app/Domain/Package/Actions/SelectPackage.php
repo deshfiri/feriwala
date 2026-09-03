@@ -5,10 +5,10 @@ namespace App\Domain\Package\Actions;
 use App\Domain\Account\Actions\ChangeAccountStatus;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
-use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use RuntimeException;
 
@@ -30,24 +30,24 @@ class SelectPackage
         protected DatabaseManager $database,
     ) {}
 
-    public function handle(User $user, Package $package): UserPackage
+    public function handle(BusinessAccount $account, Package $package): UserPackage
     {
         if (! $package->isAvailable()) {
             throw new RuntimeException('That package is not currently available.');
         }
 
-        return $this->database->transaction(function () use ($user, $package) {
+        return $this->database->transaction(function () use ($account, $package) {
             // Supersede rather than delete: an abandoned choice is history worth
             // keeping, and deleting rows a payment might reference is how
             // orphaned payments happen.
             UserPackage::query()
-                ->where('user_id', $user->id)
+                ->where('business_account_id', $account->id)
                 ->where('status', UserPackageStatus::PendingPayment)
                 ->lockForUpdate()
                 ->update(['status' => UserPackageStatus::Superseded]);
 
             $subscription = UserPackage::create([
-                'user_id' => $user->id,
+                'business_account_id' => $account->id,
                 'package_id' => $package->id,
                 'status' => UserPackageStatus::PendingPayment,
                 'source' => 'purchase',
@@ -58,8 +58,8 @@ class SelectPackage
                 'currency_code' => $package->fee_minor->currency->value,
             ]);
 
-            if ($user->canTransitionTo(AccountStatus::PaymentPending)) {
-                $this->changeStatus->handle($user, new AccountStatusChange(
+            if ($account->canTransitionTo(AccountStatus::PaymentPending)) {
+                $this->changeStatus->handle($account, new AccountStatusChange(
                     to: AccountStatus::PaymentPending,
                     reason: 'Selected the '.$package->name.' package.',
                 ));

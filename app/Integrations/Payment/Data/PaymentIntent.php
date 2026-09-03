@@ -33,7 +33,7 @@ class PaymentIntent
         string $cancelUrl,
         string $ipnUrl,
     ): self {
-        $user = $payment->user;
+        $user = $payment->businessAccount?->owner;
 
         return new self(
             reference: $payment->reference,

@@ -5,7 +5,7 @@ namespace App\Domain\Account\Actions;
 use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
-use App\Models\User;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Support\Concurrency\DistributedLock;
 use Illuminate\Database\DatabaseManager;
 
@@ -45,21 +45,21 @@ class EvaluateActivationReadiness
     /**
      * @return bool whether the account is at the approval gate afterwards
      */
-    public function handle(User $user, ?string $reason = null): bool
+    public function handle(BusinessAccount $account, ?string $reason = null): bool
     {
         return $this->lock->run(
-            key: 'account:readiness:'.$user->id,
-            callback: fn () => $this->evaluate($user, $reason),
+            key: 'account:readiness:'.$account->id,
+            callback: fn () => $this->evaluate($account, $reason),
             ttlSeconds: 15,
             waitSeconds: 10,
         );
     }
 
-    protected function evaluate(User $user, ?string $reason): bool
+    protected function evaluate(BusinessAccount $account, ?string $reason): bool
     {
-        return $this->database->transaction(function () use ($user, $reason) {
-            /** @var User|null $locked */
-            $locked = User::query()->lockForUpdate()->find($user->id);
+        return $this->database->transaction(function () use ($account, $reason) {
+            /** @var BusinessAccount|null $locked */
+            $locked = BusinessAccount::query()->lockForUpdate()->find($account->id);
 
             if ($locked === null) {
                 return false;
@@ -73,14 +73,14 @@ class EvaluateActivationReadiness
 
             if ($isReady && ! $isAtGate) {
                 $this->moveToGate($locked, $reason);
-                $user->setRawAttributes($locked->getAttributes(), sync: true);
+                $account->setRawAttributes($locked->getAttributes(), sync: true);
 
                 return true;
             }
 
             if (! $isReady && $isAtGate) {
                 $this->leaveGate($locked);
-                $user->setRawAttributes($locked->getAttributes(), sync: true);
+                $account->setRawAttributes($locked->getAttributes(), sync: true);
 
                 return false;
             }
@@ -90,28 +90,28 @@ class EvaluateActivationReadiness
             // not sort as though it had been waiting forever.
             if ($isAtGate && $locked->approval_pending_at === null) {
                 $locked->forceFill(['approval_pending_at' => now()])->save();
-                $user->setRawAttributes($locked->getAttributes(), sync: true);
+                $account->setRawAttributes($locked->getAttributes(), sync: true);
             }
 
             return $isAtGate;
         });
     }
 
-    protected function moveToGate(User $user, ?string $reason): void
+    protected function moveToGate(BusinessAccount $account, ?string $reason): void
     {
         // The status machine decides whether this move is legal. An account
         // part-way through onboarding may not be able to jump straight here,
         // and forcing it would destroy the history §5.3 depends on.
-        if (! $user->canTransitionTo(AccountStatus::ApprovalPending)) {
+        if (! $account->canTransitionTo(AccountStatus::ApprovalPending)) {
             return;
         }
 
-        $this->changeStatus->handle($user, AccountStatusChange::automatic(
+        $this->changeStatus->handle($account, AccountStatusChange::automatic(
             AccountStatus::ApprovalPending,
             $reason ?? 'All activation requirements are met.',
         ));
 
-        $user->forceFill(['approval_pending_at' => now()])->save();
+        $account->forceFill(['approval_pending_at' => now()])->save();
     }
 
     /**
@@ -122,8 +122,8 @@ class EvaluateActivationReadiness
      * withdrawn KYC approval belong in different places, and guessing between
      * them here would put accounts in a state nobody chose.
      */
-    protected function leaveGate(User $user): void
+    protected function leaveGate(BusinessAccount $account): void
     {
-        $user->forceFill(['approval_pending_at' => null])->save();
+        $account->forceFill(['approval_pending_at' => null])->save();
     }
 }

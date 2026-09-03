@@ -31,23 +31,23 @@ class SubmitKyc
      */
     public function handle(KycSubmission $submission, ?string $packageKey = null): KycSubmission
     {
-        $user = $submission->user;
+        $account = $submission->businessAccount;
 
-        $missing = $this->missingRequirements($submission, $packageKey, $user?->country);
+        $missing = $this->missingRequirements($submission, $packageKey, $account?->owner?->country);
 
         if ($missing !== []) {
             throw KycIncomplete::missing($missing);
         }
 
-        return $this->database->transaction(function () use ($submission, $user) {
+        return $this->database->transaction(function () use ($submission, $account) {
             $submission->transitionTo(KycStatus::Submitted);
             $submission->submitted_at = now();
             $submission->save();
 
             // Move the account along only when it is actually waiting on KYC.
             // Someone re-submitting after a correction is already further on.
-            if ($user !== null && $user->canTransitionTo(AccountStatus::KycSubmitted)) {
-                $this->changeAccountStatus->handle($user, new AccountStatusChange(
+            if ($account !== null && $account->canTransitionTo(AccountStatus::KycSubmitted)) {
+                $this->changeAccountStatus->handle($account, new AccountStatusChange(
                     to: AccountStatus::KycSubmitted,
                     reason: 'KYC documents submitted for review.',
                 ));
