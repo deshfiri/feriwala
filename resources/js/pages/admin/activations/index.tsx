@@ -49,8 +49,11 @@ export default function AdminActivationsIndex({
             cell: (row) => (
                 <div className="min-w-0">
                     <div className="truncate font-medium">{row.name}</div>
+                    {/* The business is the subject; the owner is how a reviewer
+                        recognises it. Both, because the two are now different
+                        things and a queue showing only one is ambiguous. */}
                     <div className="text-muted-foreground truncate text-xs">
-                        {row.email}
+                        {[row.owner, row.email].filter(Boolean).join(' · ')}
                     </div>
                 </div>
             ),

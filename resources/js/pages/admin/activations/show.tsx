@@ -98,7 +98,8 @@ export default function AdminActivationsShow({
 
                             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                                 {[
-                                    ['Name', account.name],
+                                    ['Business', account.name],
+                                    ['Owner', account.owner],
                                     ['Email', account.email],
                                     ['Mobile', account.mobile],
                                     ['Country', account.country],
