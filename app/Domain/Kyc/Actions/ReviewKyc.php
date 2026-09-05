@@ -29,6 +29,7 @@ class ReviewKyc
     public function __construct(
         protected ChangeAccountStatus $changeAccountStatus,
         protected EvaluateActivationReadiness $readiness,
+        protected LiftKycDeadlineRestriction $liftRestriction,
         protected DatabaseManager $database,
     ) {}
 
@@ -71,6 +72,13 @@ class ReviewKyc
 
         if ($account !== null) {
             $this->readiness->handle($account, 'KYC decision recorded.');
+
+            // The recovery path (§7.4). An account restricted for missing a
+            // deadline gets that back the moment the reason is gone — a
+            // restriction only a human could lift would be a trap, not a policy.
+            if ($decision->outcome === KycStatus::Approved) {
+                $this->liftRestriction->handle($account);
+            }
         }
 
         return $review;

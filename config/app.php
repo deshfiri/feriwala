@@ -65,7 +65,12 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Bangladesh. Deadlines, schedules and anything a person reads as a date
+    // are calculated in it, so "due on the 30th" means the 30th where the
+    // account holder is — not wherever the server happens to be provisioned.
+    // Stated explicitly rather than left to the host: a server rebuilt in
+    // another region would otherwise move every deadline by six hours.
+    'timezone' => env('APP_TIMEZONE', 'Asia/Dhaka'),
 
     /*
     |--------------------------------------------------------------------------

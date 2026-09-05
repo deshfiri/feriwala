@@ -8,6 +8,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Kyc\KycDeadlines;
+use App\Domain\Kyc\Models\KycDeadlineEvent;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
@@ -21,19 +22,20 @@ use Throwable;
  * Applies the consequences of one missed KYC deadline (§7.4).
  *
  * §7.4 lists four: activation stays blocked, an active account may be
- * restricted, notifications may be sent, and the action is recorded in the
- * audit log. The first needs no action — an unactivated account is already
- * blocked, and *that is the point*: the deadline does not push it backwards,
- * it simply stops the clock running in the applicant's favour.
+ * restricted, notifications may be sent, and the action is recorded in the audit
+ * log. The first needs no action — an unactivated account is already blocked,
+ * and *that is the point*: the deadline does not push it backwards, it stops the
+ * clock running in the applicant's favour.
  *
  * Restricting an active account is the only destructive step, and only happens
  * when an administrator has turned it on. §7.4 offers it rather than requiring
  * it, and the safe reading of "may" is not to do it by default.
  *
- * Marks the round enforced before doing anything else. The sweep runs daily and
- * a round stays overdue until it is completed, so without the marker the
- * applicant would get the same SMS every morning and the audit log would fill
- * with copies of one event.
+ * Idempotent through {@see KycDeadlineEvent::claim()}, not through a flag. The
+ * claim is an insert against a unique index, so two workers reaching the same
+ * overdue round — a scheduler retry overlapping a slow first attempt — resolve
+ * at the database rather than on which read the row first. Only the winner
+ * notifies, so a retry can never produce a second SMS or a second audit entry.
  */
 class EnforceKycDeadline
 {
@@ -55,13 +57,18 @@ class EnforceKycDeadline
             /** @var KycSubmission|null $locked */
             $locked = KycSubmission::query()->lockForUpdate()->find($submission->id);
 
-            // Re-read under the lock: two workers can reach the same overdue
-            // round, and the second must find it already dealt with.
-            if ($locked === null || $locked->deadline_enforced_at !== null || ! $locked->isOverdue()) {
+            if ($locked === null || ! $locked->isOverdue()) {
                 return null;
             }
 
-            $locked->forceFill(['deadline_enforced_at' => now()])->save();
+            // The claim comes first and decides everything after it.
+            $claim = KycDeadlineEvent::claim($locked, KycDeadlineEvent::ENFORCED, [
+                'deadline_at' => $locked->deadline_at,
+            ]);
+
+            if ($claim === null) {
+                return null;
+            }
 
             $account = $locked->businessAccount;
             $restricted = false;
@@ -76,6 +83,7 @@ class EnforceKycDeadline
                 ));
 
                 $restricted = true;
+                $claim->forceFill(['account_restricted' => true])->saveQuietly();
             }
 
             $this->audit->handle(new AuditEntry(
@@ -94,8 +102,6 @@ class EnforceKycDeadline
                 module: 'kyc',
             ));
 
-            $submission->setRawAttributes($locked->getAttributes(), sync: true);
-
             return $restricted;
         });
 
@@ -109,12 +115,16 @@ class EnforceKycDeadline
     }
 
     /**
-     * Tell the owner, on both channels §7.4 names.
+     * Tell the owner on every channel §7.4 and D20 name.
+     *
+     * The dashboard entry and the mail both go through the notification, which
+     * declares `database` and `mail`; the SMS is separate because it is a paid
+     * channel with its own failure mode.
      *
      * After the transaction, and never allowed to undo it: the deadline passed
-     * whether or not a text message got through, and rolling back a recorded
-     * status change because an SMS gateway was down would leave the account in
-     * a state contradicting its own audit entry.
+     * whether or not a text got through, and rolling back a recorded status
+     * change because an SMS gateway was down would leave the account in a state
+     * contradicting its own audit entry.
      */
     protected function notify(KycSubmission $submission, bool $restricted): void
     {
@@ -141,8 +151,8 @@ class EnforceKycDeadline
                 userId: $owner->id,
             ));
         } catch (Throwable) {
-            // The mail has gone and the audit entry is written. A failed text
-            // is not a reason to lose either.
+            // The dashboard entry and the mail have gone, and the audit entry is
+            // written. A failed text is not a reason to lose any of them.
         }
     }
 }

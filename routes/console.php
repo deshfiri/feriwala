@@ -28,6 +28,10 @@ Schedule::call(fn () => app(SweepKycDeadlines::class)->handle())
     // server lock on, and Laravel refuses rather than guessing.
     ->name('kyc-deadline-sweep')
     ->dailyAt('02:00')
+    // 02:00 where the account holders are, not where the server is. Without
+    // this a host in another region runs the sweep at a different local hour
+    // and "overdue today" means a different day to the person it affects.
+    ->timezone(config('app.timezone'))
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Warn and enforce KYC deadlines (§7.4)');

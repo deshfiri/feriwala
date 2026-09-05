@@ -79,6 +79,16 @@ class KycSubmission extends Model
     }
 
     /**
+     * What the deadline has already caused for this round (§7.4).
+     *
+     * @return HasMany<KycDeadlineEvent, $this>
+     */
+    public function deadlineEvents(): HasMany
+    {
+        return $this->hasMany(KycDeadlineEvent::class, 'kyc_submission_id');
+    }
+
+    /**
      * Whether the §7.4 deadline has passed without the round being completed.
      */
     public function isOverdue(): bool

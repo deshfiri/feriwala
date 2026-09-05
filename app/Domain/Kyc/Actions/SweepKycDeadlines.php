@@ -4,8 +4,10 @@ namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
+use App\Domain\Kyc\Models\KycDeadlineEvent;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Notifications\Kyc\KycDeadlineApproaching;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -68,23 +70,33 @@ class SweepKycDeadlines
         $warned = 0;
 
         $this->pending()
-            ->whereNull('deadline_warned_at')
-            ->where('deadline_at', '>', now())
-            ->where('deadline_at', '<=', now()->addDays($days))
+            ->where('deadline_at', '>', $this->now())
+            ->where('deadline_at', '<=', $this->now()->addDays($days))
+            ->whereDoesntHave('deadlineEvents', fn ($event) => $event
+                ->where('event', KycDeadlineEvent::WARNED))
             ->with('businessAccount.owner')
             ->chunkById(200, function ($submissions) use (&$warned) {
                 foreach ($submissions as $submission) {
-                    $owner = $submission->businessAccount?->owner;
+                    // The claim comes before the message. A retry overlapping a
+                    // slow first pass loses at the unique index rather than
+                    // sending a second warning.
+                    $claim = KycDeadlineEvent::claim($submission, KycDeadlineEvent::WARNED, [
+                        'deadline_at' => $submission->deadline_at,
+                    ]);
 
-                    // Stamped either way. Without an owner there is nobody to
-                    // warn, and leaving it unstamped would retry every day.
-                    $submission->forceFill(['deadline_warned_at' => now()])->save();
+                    if ($claim === null) {
+                        continue;
+                    }
+
+                    $owner = $submission->businessAccount?->owner;
 
                     if ($owner === null) {
                         continue;
                     }
 
-                    $remaining = (int) ceil(now()->diffInDays($submission->deadline_at, absolute: true));
+                    $remaining = (int) ceil(
+                        $this->now()->diffInDays($submission->deadline_at, absolute: true)
+                    );
 
                     $owner->notify(new KycDeadlineApproaching(max($remaining, 1)));
                     $warned++;
@@ -99,8 +111,9 @@ class SweepKycDeadlines
         $enforced = 0;
 
         $this->pending()
-            ->whereNull('deadline_enforced_at')
-            ->where('deadline_at', '<=', now())
+            ->where('deadline_at', '<=', $this->now())
+            ->whereDoesntHave('deadlineEvents', fn ($event) => $event
+                ->where('event', KycDeadlineEvent::ENFORCED))
             ->chunkById(200, function ($submissions) use (&$enforced) {
                 foreach ($submissions as $submission) {
                     if ($this->enforce->handle($submission)) {
@@ -110,6 +123,18 @@ class SweepKycDeadlines
             });
 
         return $enforced;
+    }
+
+    /**
+     * Now, in the platform's timezone (§7.4).
+     *
+     * Stated rather than inherited. "Due on the 30th" has to mean the 30th
+     * where the account holder is, and a server rebuilt in another region must
+     * not silently move every deadline.
+     */
+    protected function now(): CarbonImmutable
+    {
+        return CarbonImmutable::now(config('app.timezone'));
     }
 
     /**

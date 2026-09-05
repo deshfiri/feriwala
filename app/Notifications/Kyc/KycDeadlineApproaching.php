@@ -27,7 +27,10 @@ class KycDeadlineApproaching extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        // Dashboard first, and not optional (D20). Mail can be missed,
+        // filtered, or sent to an address nobody reads; the ERP entry is the
+        // one the account holder is certain to see.
+        return ['database', 'mail'];
     }
 
     public function toMail(object $notifiable): MailMessage

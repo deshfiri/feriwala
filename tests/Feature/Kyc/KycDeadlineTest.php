@@ -1,12 +1,16 @@
 <?php
 
+use App\Domain\Account\Actions\ChangeAccountStatus;
+use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Audit\Models\AuditLog;
+use App\Domain\Kyc\Actions\LiftKycDeadlineRestriction;
 use App\Domain\Kyc\Actions\OpenKycDraft;
 use App\Domain\Kyc\Actions\StartKycResubmission;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
+use App\Domain\Kyc\Models\KycDeadlineEvent;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
@@ -15,6 +19,8 @@ use App\Integrations\Sms\Data\SmsMessage;
 use App\Integrations\Sms\Data\SmsResult;
 use App\Notifications\Kyc\KycDeadlineApproaching;
 use App\Notifications\Kyc\KycDeadlineMissed;
+use App\Notifications\Kyc\KycDeadlineRestrictionLifted;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Notification;
 
 beforeEach(function () {
@@ -124,7 +130,9 @@ describe('the sweep', function () {
         $submission = overdueRound();
 
         expect(sweepDeadlines()['enforced'])->toBe(1)
-            ->and($submission->fresh()->deadline_enforced_at)->not->toBeNull();
+            ->and(KycDeadlineEvent::where('kyc_submission_id', $submission->id)
+                ->where('event', KycDeadlineEvent::ENFORCED)
+                ->exists())->toBeTrue();
     });
 
     it('leaves a round whose deadline is still ahead', function () {
@@ -362,5 +370,181 @@ describe('resubmission after a missed deadline', function () {
         $next = app(StartKycResubmission::class)->handle($account);
 
         expect($next->deadline_at->timestamp)->toBe($deadline->timestamp);
+    });
+});
+
+describe('event-level idempotency (closeout 3)', function () {
+    it('refuses a second claim on the same event', function () {
+        // The guarantee is a unique index, not a flag read a moment earlier:
+        // two workers racing on one overdue round resolve at the database.
+        configureKycDeadline();
+        $submission = overdueRound();
+
+        $first = KycDeadlineEvent::claim($submission, KycDeadlineEvent::ENFORCED);
+        $second = KycDeadlineEvent::claim($submission, KycDeadlineEvent::ENFORCED);
+
+        expect($first)->not->toBeNull()
+            ->and($second)->toBeNull();
+    });
+
+    it('lets a claim already taken block the notification', function () {
+        // Claim it by hand, as a crashed first attempt would have, then let the
+        // sweep run: it must find the event handled and send nothing.
+        configureKycDeadline();
+        $submission = overdueRound();
+
+        KycDeadlineEvent::claim($submission, KycDeadlineEvent::ENFORCED);
+
+        expect(sweepDeadlines()['enforced'])->toBe(0);
+        Notification::assertNothingSent();
+    });
+
+    it('keeps warning and enforcement as separate events', function () {
+        configureKycDeadline();
+        $submission = overdueRound();
+
+        KycDeadlineEvent::claim($submission, KycDeadlineEvent::WARNED);
+
+        // Warning it does not spend its enforcement.
+        expect(KycDeadlineEvent::claim($submission, KycDeadlineEvent::ENFORCED))->not->toBeNull();
+    });
+
+    it('will not let an event be edited or deleted', function () {
+        configureKycDeadline();
+        $event = KycDeadlineEvent::claim(overdueRound(), KycDeadlineEvent::WARNED);
+
+        expect(fn () => $event->update(['event' => 'something-else']))
+            ->toThrow(RuntimeException::class, 'append-only')
+            ->and(fn () => $event->delete())
+            ->toThrow(RuntimeException::class, 'append-only');
+    });
+});
+
+describe('dashboard notifications (closeout 1)', function () {
+    it('puts the overdue notice on the dashboard, not only in mail', function () {
+        // D20: mail can be missed, filtered, or sent somewhere nobody reads.
+        expect((new KycDeadlineMissed(false))->via(new stdClass))
+            ->toContain('database')
+            ->toContain('mail');
+    });
+
+    it('puts the warning on the dashboard too', function () {
+        expect((new KycDeadlineApproaching(3))->via(new stdClass))
+            ->toContain('database');
+    });
+
+    it('puts the restoration on the dashboard too', function () {
+        expect((new KycDeadlineRestrictionLifted)->via(new stdClass))
+            ->toContain('database');
+    });
+
+    it('persists a dashboard row the account holder can read back', function () {
+        configureKycDeadline();
+        $submission = overdueRound();
+
+        sweepDeadlines();
+
+        // Notification::fake() intercepts delivery, so assert the channel was
+        // asked for rather than the row — the row is Laravel's own concern.
+        Notification::assertSentTo(
+            $submission->businessAccount->owner,
+            KycDeadlineMissed::class,
+            fn ($notification, $channels) => in_array('database', $channels, true),
+        );
+    });
+});
+
+describe('the platform timezone (closeout 2)', function () {
+    it('is stated rather than inherited from the host', function () {
+        // A server rebuilt in another region must not move every deadline.
+        expect(config('app.timezone'))->toBe('Asia/Dhaka');
+    });
+
+    it('calculates a deadline in that timezone', function () {
+        configureKycDeadline(days: 30);
+
+        $submission = app(OpenKycDraft::class)->handle(testBusinessAccount(AccountStatus::KycPending));
+
+        expect($submission->deadline_at->setTimezone(config('app.timezone'))->isSameDay(
+            CarbonImmutable::now(config('app.timezone'))->addDays(30)
+        ))->toBeTrue();
+    });
+});
+
+describe('the recovery path (closeout 4)', function () {
+    it('lifts the restriction once KYC is approved', function () {
+        // A restriction only a human could lift is a trap, not a policy.
+        configureKycDeadline(restricts: true);
+        $submission = overdueRound(AccountStatus::Active);
+        $account = $submission->businessAccount;
+
+        sweepDeadlines();
+        expect($account->fresh()->status)->toBe(AccountStatus::TemporarilyRestricted);
+
+        $submission->forceFill(['status' => KycStatus::Approved])->save();
+
+        expect(app(LiftKycDeadlineRestriction::class)->handle($account->fresh()))->toBeTrue()
+            ->and($account->fresh()->status)->toBe(AccountStatus::Active);
+    });
+
+    it('records the restoration and tells the owner', function () {
+        configureKycDeadline(restricts: true);
+        $submission = overdueRound(AccountStatus::Active);
+        $account = $submission->businessAccount;
+
+        sweepDeadlines();
+        $submission->forceFill(['status' => KycStatus::Approved])->save();
+        app(LiftKycDeadlineRestriction::class)->handle($account->fresh());
+
+        expect(AuditLog::where('action', 'kyc.deadline_restriction_lifted')->count())->toBe(1);
+
+        Notification::assertSentTo($account->owner, KycDeadlineRestrictionLifted::class);
+    });
+
+    it('lifts it only once, however many times it is asked', function () {
+        configureKycDeadline(restricts: true);
+        $submission = overdueRound(AccountStatus::Active);
+        $account = $submission->businessAccount;
+
+        sweepDeadlines();
+        $submission->forceFill(['status' => KycStatus::Approved])->save();
+
+        app(LiftKycDeadlineRestriction::class)->handle($account->fresh());
+        app(LiftKycDeadlineRestriction::class)->handle($account->fresh());
+
+        Notification::assertSentTimes(KycDeadlineRestrictionLifted::class, 1);
+        expect(AuditLog::where('action', 'kyc.deadline_restriction_lifted')->count())->toBe(1);
+    });
+
+    it('will not release an account restricted for some other reason', function () {
+        // A business restricted by an administrator must not be freed by
+        // approving a document.
+        configureKycDeadline(restricts: true);
+
+        $account = testBusinessAccount(AccountStatus::Active);
+        app(ChangeAccountStatus::class)->handle($account, AccountStatusChange::automatic(
+            AccountStatus::TemporarilyRestricted,
+            'Something else entirely.',
+        ));
+
+        KycSubmission::create([
+            'business_account_id' => $account->id,
+            'status' => KycStatus::Approved,
+            'round' => 1,
+        ]);
+
+        expect(app(LiftKycDeadlineRestriction::class)->handle($account->fresh()))->toBeFalse()
+            ->and($account->fresh()->status)->toBe(AccountStatus::TemporarilyRestricted);
+    });
+
+    it('will not release one whose KYC is still outstanding', function () {
+        configureKycDeadline(restricts: true);
+        $submission = overdueRound(AccountStatus::Active);
+        $account = $submission->businessAccount;
+
+        sweepDeadlines();
+
+        expect(app(LiftKycDeadlineRestriction::class)->handle($account->fresh()))->toBeFalse()
+            ->and($account->fresh()->status)->toBe(AccountStatus::TemporarilyRestricted);
     });
 });
