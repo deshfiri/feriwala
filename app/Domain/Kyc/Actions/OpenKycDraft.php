@@ -4,6 +4,7 @@ namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
+use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycSubmission;
 use Illuminate\Database\DatabaseManager;
 
@@ -19,6 +20,7 @@ class OpenKycDraft
 {
     public function __construct(
         protected StartKycResubmission $startResubmission,
+        protected KycDeadlines $deadlines,
         protected DatabaseManager $database,
     ) {}
 
@@ -36,6 +38,12 @@ class OpenKycDraft
                     'business_account_id' => $account->id,
                     'status' => KycStatus::Draft,
                     'round' => 1,
+
+                    // The §7.4 clock starts when the applicant is first able to
+                    // act, not at registration — they cannot be late for
+                    // something that was not yet open to them. Null when no
+                    // deadline is configured.
+                    'deadline_at' => $this->deadlines->deadlineFrom(),
                 ]);
             }
 

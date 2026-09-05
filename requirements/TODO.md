@@ -133,7 +133,7 @@ test.
 - [x] **P1-28** Protected document delivery: `Erp\KycDocumentController` authorises, records the access, then streams from the private disk. **No signed URL** — a signed URL is a bearer token that outlives the check and can be forwarded, so the controller is the whole surface and re-authorises on every request (§7.5)
 - [x] **P1-29** `kyc_document_accesses` — every read recorded before the file is returned, view distinguished from download, append-only (§7.5)
 - [x] **P1-30** `disk`, `path` and `checksum` hidden from every array/JSON representation; field values encrypted and hidden, with `masked()` for list display (§7.5)
-- [ ] **P1-31** KYC deadline config + scheduled checks → blocked activation / restricted account / notifications / audit (§7.4)
+- [x] **P1-31** KYC deadline (§7.4). `KycDeadlines` holds the policy: `kyc.deadline_days`, `kyc.deadline_warning_days`, `kyc.overdue_restricts_active_account` — all opt-in, because inventing a window would start restricting real accounts on a number nobody agreed. The clock starts when the applicant can first act, not at registration. `SweepKycDeadlines` runs daily under `onOneServer` + `withoutOverlapping`: warns once inside the window, then applies the four §7.4 consequences once — activation stays blocked, an active account is restricted **only if configured**, mail and SMS go to the owner, and the audit entry records a `system` actor rather than naming a person. A round awaiting review is our delay, not the applicant's, and is skipped — 22 tests
 - [ ] **P1-63** Admin action: **request a future KYC update** from an already-active user, with its own deadline (§7.2)
 
 ## P1.H Staff management & tax engine (decision-driven)

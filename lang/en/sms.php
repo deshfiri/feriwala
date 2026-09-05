@@ -9,4 +9,6 @@ return [
 
     'mobile_verification' => 'Your Feriwala verification code is :code. It expires in 5 minutes. Do not share it with anyone.',
 
+    'kyc_deadline_missed' => 'Your Feriwala verification deadline has passed. Send your documents to restore your account.',
+
 ];

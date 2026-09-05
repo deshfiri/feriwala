@@ -33,6 +33,11 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
 
+            // §5.2 makes mobile a required, unique identifier, and anything
+            // that sends an SMS silently does nothing without one — so the
+            // default has to have it, or those paths never get exercised.
+            'mobile' => fake()->unique()->numerify('+88017########'),
+
             // An ordinary, usable login. The commercial lifecycle is not here
             // any more (D23) — a user with no business account is a perfectly
             // valid Feriwala staff member.

@@ -4,7 +4,9 @@ namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
+use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycSubmission;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use RuntimeException;
 
@@ -19,6 +21,7 @@ use RuntimeException;
 class StartKycResubmission
 {
     public function __construct(
+        protected KycDeadlines $deadlines,
         protected DatabaseManager $database,
     ) {}
 
@@ -54,8 +57,31 @@ class StartKycResubmission
                 'business_account_id' => $account->id,
                 'status' => KycStatus::Draft,
                 'round' => $latest->round + 1,
-                'deadline_at' => $latest->deadline_at,
+                'deadline_at' => $this->deadlineFor($latest),
             ]);
         });
+    }
+
+    /**
+     * The deadline a resubmission inherits (§7.4).
+     *
+     * Normally the original: the window covers completing KYC, not each attempt
+     * at it, so a reviewer answering on day 25 of 30 leaves five days rather
+     * than resetting the clock.
+     *
+     * Unless it has already passed. Carrying a spent deadline forward would
+     * make the new round overdue the moment it opened — the applicant fixes
+     * what was asked, resubmits, and is restricted again before they can act.
+     * A round they have just been invited to start gets a full window.
+     */
+    protected function deadlineFor(KycSubmission $previous): ?CarbonImmutable
+    {
+        $deadline = $previous->deadline_at;
+
+        if ($deadline !== null && $deadline->isFuture()) {
+            return $deadline;
+        }
+
+        return $this->deadlines->deadlineFrom();
     }
 }
