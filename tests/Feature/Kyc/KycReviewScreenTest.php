@@ -1,10 +1,12 @@
 <?php
 
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Enums\TeamRole;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
@@ -16,17 +18,16 @@ beforeEach(function () {
 
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->reviewer = User::factory()->staff()->create();
-    $this->reviewer->assignRole(PlatformRole::KycManager->value);
+    $this->reviewer = testPlatformStaff(PlatformRole::KycManager);
 });
 
 /**
  * A submission sitting in the queue, waiting since `$daysAgo`.
  */
-function queuedKycSubmission(int $daysAgo = 0, ?User $applicant = null): KycSubmission
+function queuedKycSubmission(int $daysAgo = 0, ?BusinessAccount $account = null): KycSubmission
 {
     return KycSubmission::create([
-        'user_id' => ($applicant ?? User::factory()->create())->id,
+        'business_account_id' => ($account ?? testBusinessAccount())->id,
         'status' => KycStatus::Submitted,
         'round' => 1,
         'submitted_at' => now()->subDays($daysAgo),
@@ -35,7 +36,7 @@ function queuedKycSubmission(int $daysAgo = 0, ?User $applicant = null): KycSubm
 
 describe('the queue', function () {
     it('is closed to a role without the KYC permission', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->staff()->create())
             ->get(route('admin.kyc.index'))
             ->assertForbidden();
     });
@@ -59,7 +60,7 @@ describe('the queue', function () {
         queuedKycSubmission();
 
         KycSubmission::create([
-            'user_id' => User::factory()->create()->id,
+            'business_account_id' => testBusinessAccount()->id,
             'status' => KycStatus::Approved,
             'round' => 1,
             'submitted_at' => now()->subDay(),
@@ -71,8 +72,9 @@ describe('the queue', function () {
     });
 
     it('finds an applicant by email', function () {
-        $found = User::factory()->create(['email' => 'nusrat@example.test']);
-        queuedKycSubmission(applicant: $found);
+        $found = testBusinessAccount();
+        $found->owner->forceFill(['email' => 'nusrat@example.test'])->save();
+        queuedKycSubmission(account: $found);
         queuedKycSubmission();
 
         $this->actingAs($this->reviewer)
@@ -178,8 +180,7 @@ describe('the submission page', function () {
             UploadedFile::fake()->image('nid.jpg')->size(100),
         );
 
-        $viewer = User::factory()->staff()->create();
-        $viewer->assignRole(PlatformRole::WithdrawalApprover->value);
+        $viewer = testPlatformStaff(PlatformRole::WithdrawalApprover);
 
         $this->actingAs($viewer)
             ->get(route('admin.kyc.show', $submission))
@@ -193,7 +194,12 @@ describe('the submission page', function () {
 
     it('offers no decision form on a reviewer’s own submission', function () {
         // Nobody reviews their own KYC, whatever else they hold.
-        $submission = queuedKycSubmission(applicant: $this->reviewer);
+        $own = testBusinessAccount();
+        $own->memberships()->create([
+            'user_id' => $this->reviewer->id,
+            'role' => TeamRole::Owner->value,
+        ]);
+        $submission = queuedKycSubmission(account: $own);
 
         $this->actingAs($this->reviewer)
             ->get(route('admin.kyc.show', $submission))
@@ -217,8 +223,9 @@ describe('the navigation entry', function () {
 
     it('is withheld from a user with no KYC permission', function () {
         // Asserted on a page they can actually open, since the queue itself
-        // would refuse them before any prop was rendered.
-        $this->actingAs(User::factory()->create())
+        // would refuse them before any prop was rendered. The KYC form is a
+        // commercial screen, so the subject needs a business account.
+        $this->actingAs(testBusinessAccount()->owner)
             ->get(route('kyc.create'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('permissions', fn (Assert $permissions) => $permissions
@@ -255,8 +262,7 @@ describe('deciding', function () {
     it('refuses a decision from someone who may only view', function () {
         $submission = queuedKycSubmission();
 
-        $viewer = User::factory()->staff()->create();
-        $viewer->assignRole(PlatformRole::WithdrawalApprover->value);
+        $viewer = testPlatformStaff(PlatformRole::WithdrawalApprover);
 
         $this->actingAs($viewer)
             ->post(route('admin.kyc.decide', $submission), ['outcome' => 'approve'])

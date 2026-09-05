@@ -2,11 +2,11 @@
 
 namespace App\Domain\Billing\Actions;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Data\ActivationQuote;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
-use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -31,7 +31,7 @@ class RecordPaymentFromQuote
     ) {}
 
     public function handle(
-        User $user,
+        BusinessAccount $account,
         ActivationQuote $quote,
         PaymentPurpose $purpose,
         ?string $idempotencyKey = null,
@@ -39,7 +39,7 @@ class RecordPaymentFromQuote
     ): Payment {
         try {
             return $this->database->transaction(
-                fn () => $this->create($user, $quote, $purpose, $idempotencyKey, $payable)
+                fn () => $this->create($account, $quote, $purpose, $idempotencyKey, $payable)
             );
         } catch (UniqueConstraintViolationException $e) {
             // Another request got there first with the same key. Returning its
@@ -58,14 +58,14 @@ class RecordPaymentFromQuote
     }
 
     protected function create(
-        User $user,
+        BusinessAccount $account,
         ActivationQuote $quote,
         PaymentPurpose $purpose,
         ?string $idempotencyKey,
         ?Model $payable,
     ): Payment {
         $payment = new Payment([
-            'user_id' => $user->id,
+            'business_account_id' => $account->id,
             'purpose' => $purpose,
             'status' => PaymentStatus::Draft,
             'amount_minor' => $quote->total(),

@@ -4,6 +4,7 @@ use App\Domain\Account\Actions\ActivateAccount;
 use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Exceptions\ActivationBlocked;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
@@ -15,7 +16,7 @@ use App\Domain\Package\Models\UserPackage;
 use App\Models\User;
 
 beforeEach(function () {
-    $this->admin = User::factory()->create();
+    $this->admin = User::factory()->staff()->create();
 
     $this->package = Package::create([
         'name' => 'Growth',
@@ -25,17 +26,13 @@ beforeEach(function () {
         'grace_period_days' => 14,
     ]);
 
-    $this->applicant = User::factory()->create([
-        'status' => AccountStatus::ApprovalPending,
-        'email_verified_at' => now(),
-        'mobile_verified_at' => now(),
-    ]);
+    $this->applicant = testBusinessAccount(AccountStatus::ApprovalPending);
 });
 
 function approveKyc(): void
 {
     KycSubmission::create([
-        'user_id' => test()->applicant->id,
+        'business_account_id' => test()->applicant->id,
         'status' => KycStatus::Approved,
         'round' => 1,
     ]);
@@ -44,7 +41,7 @@ function approveKyc(): void
 function settleActivationPayment(): Payment
 {
     return Payment::create([
-        'user_id' => test()->applicant->id,
+        'business_account_id' => test()->applicant->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
         'amount_minor' => 600000,
@@ -55,13 +52,13 @@ function settleActivationPayment(): Payment
 function pendingSubscription(): UserPackage
 {
     return UserPackage::create([
-        'user_id' => test()->applicant->id,
+        'business_account_id' => test()->applicant->id,
         'package_id' => test()->package->id,
         'status' => UserPackageStatus::PendingPayment,
     ]);
 }
 
-function activate(?string $note = null): User
+function activate(?string $note = null): BusinessAccount
 {
     return app(ActivateAccount::class)->handle(test()->applicant, test()->admin->id, $note);
 }
@@ -96,7 +93,7 @@ describe('the three conditions (§5.1, §44)', function () {
         approveKyc();
 
         Payment::create([
-            'user_id' => $this->applicant->id,
+            'business_account_id' => $this->applicant->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Pending,
             'amount_minor' => 600000,
@@ -110,7 +107,7 @@ describe('the three conditions (§5.1, §44)', function () {
         approveKyc();
         settleActivationPayment();
 
-        $this->applicant->forceFill(['mobile_verified_at' => null])->save();
+        $this->applicant->owner->forceFill(['mobile_verified_at' => null])->save();
 
         expect(fn () => activate())
             ->toThrow(ActivationBlocked::class, 'not both verified');

@@ -5,25 +5,30 @@ namespace App\Domain\Account\Policies;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Models\User;
 
 /**
- * Who may look at accounts, and who may decide on them (§32).
+ * Who may look at business accounts, and who may decide on them (§32, D23).
  *
  * Seeing the approval queue and approving from it are separate permissions. A
  * support agent should be able to answer "where has my application got to"
  * without being able to let anyone onto the platform.
+ *
+ * The subject is the account; the actor is a person. "Their own" therefore means
+ * an account they are a member of — an owner must not approve their own
+ * business, and neither must a staff member they invited.
  */
-class UserPolicy
+class BusinessAccountPolicy
 {
     public function viewAny(User $user): bool
     {
         return $user->can($this->permission(PermissionAction::View));
     }
 
-    public function view(User $user, User $account): bool
+    public function view(User $user, BusinessAccount $account): bool
     {
-        if ($account->is($user)) {
+        if ($user->belongsToAccount($account)) {
             return true;
         }
 
@@ -31,12 +36,12 @@ class UserPolicy
     }
 
     /**
-     * Approving an activation is the moment someone gains the run of the
+     * Approving an activation is the moment a business gains the run of the
      * platform (§5.1, §44), so it is its own permission — and never one's own.
      */
-    public function approveActivation(User $user, User $account): bool
+    public function approveActivation(User $user, BusinessAccount $account): bool
     {
-        if ($account->is($user)) {
+        if ($user->belongsToAccount($account)) {
             return false;
         }
 
@@ -50,7 +55,7 @@ class UserPolicy
      * document first — the alternative is a queue whose only options are yes or
      * escalate, which produces approvals that should not have happened.
      */
-    public function requestKycResubmission(User $user, User $account): bool
+    public function requestKycResubmission(User $user, BusinessAccount $account): bool
     {
         return $this->approveActivation($user, $account);
     }
@@ -58,14 +63,15 @@ class UserPolicy
     /**
      * Suspension is a separate permission from approval, on purpose.
      *
-     * It removes someone's ability to trade, and §5.3 keeps it reversible while
-     * closure is terminal — so it must not become a quiet route to permanent
-     * denial in the hands of anyone who happens to work the approval queue.
-     * Permanent closure belongs to the closure and retention workflow (D18).
+     * It removes a business's ability to trade — and its invited staff lose the
+     * ERP with it — while §5.3 keeps it reversible and closure is what is not.
+     * It must never become a quiet route to permanent denial in the hands of
+     * anyone who happens to work the approval queue; closure belongs to the
+     * closure and retention workflow (D18).
      */
-    public function suspend(User $user, User $account): bool
+    public function suspend(User $user, BusinessAccount $account): bool
     {
-        if ($account->is($user)) {
+        if ($user->belongsToAccount($account)) {
             return false;
         }
 

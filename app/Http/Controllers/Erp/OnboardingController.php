@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Erp;
 
+use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\OnboardingProgress;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,13 +18,14 @@ use Inertia\Response;
  */
 class OnboardingController extends Controller
 {
+    use ResolvesBusinessAccount;
+
     public function status(Request $request, OnboardingProgress $progress): Response
     {
-        /** @var User $user Guaranteed by the auth middleware on this route. */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
         return Inertia::render('onboarding/status', [
-            'progress' => $progress->for($user),
+            'progress' => $progress->for($account),
         ]);
     }
 }

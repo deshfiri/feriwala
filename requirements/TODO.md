@@ -138,8 +138,8 @@ test.
 
 ## P1.H Staff management & tax engine (decision-driven)
 
-- [~] **P1-64** Team → `BusinessAccount`, **including the identity/commercial split** (D23). _Design approved and the schema built: `UserStatus` enum, `BusinessAccount` + `AccountMembership` + `BusinessAccountStatusChange` models, and a migration that moves `status`/`activated_at`/`approval_pending_at`, KYC, payments, subscriptions and status history off `users`. Verified to apply and roll back cleanly, then **held out of `database/migrations/`** in [requirements/wip/](wip/) — the application layer (~30 files) and its tests are not converted yet, and a half-wired schema is worse than none_
-- [ ] **P1-78** Convert the application layer to D23: actions, requirements, queries, policies, the two access gates (identity everywhere, business activation on the ERP only), controllers, factories and tests
+- [x] **P1-64** Team → `BusinessAccount`, including the identity/commercial split (D23). `business_accounts` + `business_account_members`; `status`, `activated_at`, `approval_pending_at`, KYC, payments, subscriptions, the current-package pointer and the status history all moved off `users`, which keeps `identity_status`. One owner, one account, one membership per person — unique indexes, not convention
+- [x] **P1-78** Application layer converted to D23. Two gates: `EnsureIdentityHasPlatformAccess` global (a suspended login loses every panel, and it signs out rather than redirecting so the public site still renders), `EnsureBusinessAccountIsActivated` on business ERP routes only. Administration is identity plus permission — **no `admin.*` bypass**. Found three real bugs on the way: admin routes were nested inside the commercial gate, §25.1's referrer check read the wrong subject, and the KYC policies matched `user_id` instead of account membership — 642 tests
 - [ ] **P1-65** Remove `{current_team}` from ERP URLs; resolve account context from session (D1)
 - [ ] **P1-66** Staff invitation + own-credential login as sub-users of one Account (D1)
 - [ ] **P1-67** Package **staff limit** enforcement on invitation and activation (D1, §8.1)

@@ -10,19 +10,19 @@ use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
 /*
- * `activated` applies here too. Profile and security are two of the seven §5.4
- * areas and pass its allow-list; staff management does not, and would otherwise
- * be reachable by an account that has not paid for the package whose staff limit
- * governs it.
+ * The business gate applies here too. Profile and security are two of the seven
+ * §5.4 areas and pass its allow-list; staff management does not, and would
+ * otherwise be reachable by an account that has not paid for the package whose
+ * staff limit governs it.
  */
-Route::middleware(['auth', 'activated'])->group(function () {
+Route::middleware(['auth', 'business.activated'])->group(function () {
     Route::redirect('settings', '/settings/profile');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
-Route::middleware(['auth', 'verified', 'activated'])->group(function () {
+Route::middleware(['auth', 'verified', 'business.activated'])->group(function () {
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('settings/security', [SecurityController::class, 'edit'])

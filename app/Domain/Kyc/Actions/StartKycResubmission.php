@@ -2,9 +2,9 @@
 
 namespace App\Domain\Kyc\Actions;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use RuntimeException;
 
@@ -22,11 +22,11 @@ class StartKycResubmission
         protected DatabaseManager $database,
     ) {}
 
-    public function handle(User $user): KycSubmission
+    public function handle(BusinessAccount $account): KycSubmission
     {
-        return $this->database->transaction(function () use ($user) {
+        return $this->database->transaction(function () use ($account) {
             $latest = KycSubmission::query()
-                ->where('user_id', $user->id)
+                ->where('business_account_id', $account->id)
                 ->orderByDesc('round')
                 ->lockForUpdate()
                 ->first();
@@ -51,7 +51,7 @@ class StartKycResubmission
             }
 
             return KycSubmission::create([
-                'user_id' => $user->id,
+                'business_account_id' => $account->id,
                 'status' => KycStatus::Draft,
                 'round' => $latest->round + 1,
                 'deadline_at' => $latest->deadline_at,

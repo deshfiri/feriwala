@@ -6,7 +6,7 @@ use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('the teams index page can be rendered', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
 
     $response = $this
         ->actingAs($user)
@@ -16,7 +16,7 @@ test('the teams index page can be rendered', function () {
 });
 
 test('teams can be created', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
 
     $response = $this
         ->actingAs($user)
@@ -33,7 +33,7 @@ test('teams can be created', function () {
 });
 
 test('team slug uses next available suffix', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
 
     Team::factory()->create(['name' => 'Acme', 'slug' => 'acme']);
     Team::factory()->create(['name' => 'Acme One', 'slug' => 'acme-1']);
@@ -52,7 +52,7 @@ test('team slug uses next available suffix', function () {
 });
 
 test('the team edit page can be rendered', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -71,7 +71,7 @@ test('the team edit page can be rendered', function () {
 });
 
 test('teams can be updated by owners', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create(['name' => 'Original Name']);
 
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -91,8 +91,8 @@ test('teams can be updated by owners', function () {
 });
 
 test('teams cannot be updated by members', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -108,7 +108,7 @@ test('teams cannot be updated by members', function () {
 });
 
 test('teams can be deleted by owners', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -127,7 +127,7 @@ test('teams can be deleted by owners', function () {
 });
 
 test('team deletion requires name confirmation', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -147,7 +147,7 @@ test('team deletion requires name confirmation', function () {
 });
 
 test('deleting current team switches to alphabetically first remaining team', function () {
-    $user = User::factory()->create(['name' => 'Mike']);
+    $user = User::factory()->withBusinessAccount()->create(['name' => 'Mike']);
 
     $zuluTeam = Team::factory()->create(['name' => 'Zulu Team']);
     $zuluTeam->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -176,7 +176,7 @@ test('deleting current team switches to alphabetically first remaining team', fu
 });
 
 test('deleting current team falls back to personal team when alphabetically first', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $personalTeam = $user->personalTeam();
     $team = Team::factory()->create(['name' => 'Zulu Team']);
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -199,7 +199,7 @@ test('deleting current team falls back to personal team when alphabetically firs
 });
 
 test('deleting non current team leaves current team unchanged', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $personalTeam = $user->personalTeam();
     $team = Team::factory()->create();
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
@@ -222,8 +222,8 @@ test('deleting non current team leaves current team unchanged', function () {
 });
 
 test('members can leave non personal teams', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -240,8 +240,8 @@ test('members can leave non personal teams', function () {
 });
 
 test('leaving current team switches to alphabetically first remaining team', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create(['name' => 'Mike']);
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create(['name' => 'Mike']);
 
     $zuluTeam = Team::factory()->create(['name' => 'Zulu Team']);
     $zuluTeam->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -266,7 +266,7 @@ test('leaving current team switches to alphabetically first remaining team', fun
 });
 
 test('personal teams cannot be left', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $personalTeam = $user->personalTeam();
 
     $response = $this
@@ -279,7 +279,7 @@ test('personal teams cannot be left', function () {
 });
 
 test('team owners cannot leave their team', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -294,7 +294,7 @@ test('team owners cannot leave their team', function () {
 });
 
 test('users cannot leave teams they dont belong to', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $response = $this
@@ -305,8 +305,8 @@ test('users cannot leave teams they dont belong to', function () {
 });
 
 test('deleting team switches other affected users to their personal team', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
 
     $team = Team::factory()->create();
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -327,7 +327,7 @@ test('deleting team switches other affected users to their personal team', funct
 });
 
 test('personal teams cannot be deleted', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
 
     $personalTeam = $user->personalTeam();
 
@@ -346,8 +346,8 @@ test('personal teams cannot be deleted', function () {
 });
 
 test('teams cannot be deleted by non owners', function () {
-    $owner = User::factory()->create();
-    $member = User::factory()->create();
+    $owner = User::factory()->withBusinessAccount()->create();
+    $member = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
@@ -363,7 +363,7 @@ test('teams cannot be deleted by non owners', function () {
 });
 
 test('users can switch teams', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $team->members()->attach($user, ['role' => TeamRole::Member->value]);
@@ -378,7 +378,7 @@ test('users can switch teams', function () {
 });
 
 test('users cannot switch to team they dont belong to', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withBusinessAccount()->create();
     $team = Team::factory()->create();
 
     $response = $this

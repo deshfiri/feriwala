@@ -1,10 +1,16 @@
 import type { StatusTone } from '@/lib/status';
 
-/** One row of the activation approval queue (§5.1, §44). */
+/**
+ * One row of the activation approval queue (§5.1, §44).
+ *
+ * The subject is a business; `owner` and the contact details below are the
+ * person behind it, which is how a reviewer actually identifies the row.
+ */
 export type ActivationQueueRow = {
     id: string;
     name: string;
-    email: string;
+    owner: string | null;
+    email: string | null;
     mobile: string | null;
     country: string | null;
     status_label: string;
@@ -17,7 +23,8 @@ export type ActivationQueueRow = {
 export type ActivationAccount = {
     id: string;
     name: string;
-    email: string;
+    owner: string | null;
+    email: string | null;
     mobile: string | null;
     country: string | null;
     registered_at: string | null;

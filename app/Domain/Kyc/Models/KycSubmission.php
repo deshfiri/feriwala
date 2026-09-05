@@ -4,8 +4,8 @@ namespace App\Domain\Kyc\Models;
 
 use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +14,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * One round of KYC submission (§7.3).
  *
+ * Belongs to the business account rather than the person (D23): commercial
+ * onboarding is completed once, by the owner, and an invited staff member has
+ * no KYC of their own.
+ *
+ * @property int $business_account_id
  * @property KycStatus $status
  * @property int $round
  * @property CarbonImmutable|null $submitted_at
@@ -38,11 +43,11 @@ class KycSubmission extends Model
     }
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<BusinessAccount, $this>
      */
-    public function user(): BelongsTo
+    public function businessAccount(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(BusinessAccount::class);
     }
 
     /**

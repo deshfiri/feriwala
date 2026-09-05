@@ -7,6 +7,7 @@ use App\Domain\Account\Actions\RequestKycResubmission;
 use App\Domain\Account\Actions\SuspendAccount;
 use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Exceptions\ActivationBlocked;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\PendingActivationQuery;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
@@ -40,14 +41,19 @@ class ActivationReviewController extends Controller
 
     public function index(Request $request, PendingActivationQuery $pending): Response
     {
-        Gate::authorize('viewAny', User::class);
+        Gate::authorize('viewAny', BusinessAccount::class);
 
         $accounts = $pending->builder()
+            // The owner comes along for the row: the queue shows a business, but
+            // a reviewer identifies it by the person behind it.
+            ->with('owner:id,name,email,mobile,country')
             ->when($request->string('search')->toString(), fn ($query, string $search) => $query
                 ->where(fn ($q) => $q
-                    ->where('name', 'ilike', "%{$search}%")
-                    ->orWhere('email', 'ilike', "%{$search}%")
-                    ->orWhere('mobile', 'ilike', "%{$search}%")))
+                    ->where('business_accounts.name', 'ilike', "%{$search}%")
+                    ->orWhereHas('owner', fn ($owner) => $owner
+                        ->where('name', 'ilike', "%{$search}%")
+                        ->orWhere('email', 'ilike', "%{$search}%")
+                        ->orWhere('mobile', 'ilike', "%{$search}%"))))
             ->when(
                 in_array($request->string('sort')->toString(), self::SORTABLE, true),
                 fn ($query) => $query->reorder(
@@ -57,12 +63,13 @@ class ActivationReviewController extends Controller
             )
             ->paginate(25)
             ->withQueryString()
-            ->through(fn (User $account) => [
+            ->through(fn (BusinessAccount $account) => [
                 'id' => $account->public_id,
                 'name' => $account->name,
-                'email' => $account->email,
-                'mobile' => $account->mobile,
-                'country' => $account->country,
+                'owner' => $account->owner?->name,
+                'email' => $account->owner?->email,
+                'mobile' => $account->owner?->mobile,
+                'country' => $account->owner?->country,
                 'status_label' => $account->status->label(),
                 'status_tone' => $account->status->tone(),
                 'ready_since' => $account->approval_pending_at?->toIso8601String(),
@@ -74,7 +81,7 @@ class ActivationReviewController extends Controller
         ]);
     }
 
-    public function show(Request $request, User $account): Response
+    public function show(Request $request, BusinessAccount $account): Response
     {
         Gate::authorize('view', $account);
 
@@ -87,9 +94,10 @@ class ActivationReviewController extends Controller
             'account' => [
                 'id' => $account->public_id,
                 'name' => $account->name,
-                'email' => $account->email,
-                'mobile' => $account->mobile,
-                'country' => $account->country,
+                'owner' => $account->owner?->name,
+                'email' => $account->owner?->email,
+                'mobile' => $account->owner?->mobile,
+                'country' => $account->owner?->country,
                 'registered_at' => $account->created_at?->toIso8601String(),
                 'status' => $account->status->value,
                 'status_label' => $account->status->label(),
@@ -126,7 +134,7 @@ class ActivationReviewController extends Controller
 
     public function approve(
         Request $request,
-        User $account,
+        BusinessAccount $account,
         ActivateAccount $activate,
     ): RedirectResponse {
         Gate::authorize('approveActivation', $account);
@@ -162,7 +170,7 @@ class ActivationReviewController extends Controller
      */
     public function requestResubmission(
         Request $request,
-        User $account,
+        BusinessAccount $account,
         RequestKycResubmission $action,
     ): RedirectResponse {
         Gate::authorize('requestKycResubmission', $account);
@@ -179,7 +187,7 @@ class ActivationReviewController extends Controller
         ]);
 
         $action->handle(
-            user: $account,
+            account: $account,
             decidedBy: $reviewer->id,
             reason: $validated['reason'],
             feedback: $validated['feedback'],
@@ -192,7 +200,7 @@ class ActivationReviewController extends Controller
 
     public function suspend(
         Request $request,
-        User $account,
+        BusinessAccount $account,
         SuspendAccount $suspend,
     ): RedirectResponse {
         // A separate permission from approval (§5.3, D18). Suspension removes
@@ -210,7 +218,7 @@ class ActivationReviewController extends Controller
         ]);
 
         $suspend->handle(
-            user: $account,
+            account: $account,
             decidedBy: $reviewer->id,
             reason: $validated['reason'],
             userVisibleNote: $validated['feedback'] ?? null,
@@ -225,7 +233,7 @@ class ActivationReviewController extends Controller
      * Whole days this account has been waiting on us, or null if it is not yet
      * waiting on anyone but itself.
      */
-    protected function waitingDays(User $account): ?int
+    protected function waitingDays(BusinessAccount $account): ?int
     {
         $readySince = $account->approval_pending_at;
 
@@ -239,16 +247,16 @@ class ActivationReviewController extends Controller
     /**
      * @return array<int, array{key: string, label: string, met: bool, detail: string|null}>
      */
-    protected function conditions(User $account): array
+    protected function conditions(BusinessAccount $account): array
     {
         $kyc = KycSubmission::query()
-            ->where('user_id', $account->id)
+            ->where('business_account_id', $account->id)
             ->where('status', KycStatus::Approved)
             ->latest('reviewed_at')
             ->first();
 
         $payment = Payment::query()
-            ->where('user_id', $account->id)
+            ->where('business_account_id', $account->id)
             ->where('purpose', PaymentPurpose::Activation)
             ->settled()
             ->latest('completed_at')
@@ -258,10 +266,11 @@ class ActivationReviewController extends Controller
             [
                 'key' => 'verified',
                 'label' => 'Email and mobile verified',
-                'met' => $account->isVerified(),
-                'detail' => $account->isVerified()
+                // Verification is a fact about the owner, not the business.
+                'met' => $this->requirements->ownerVerified($account),
+                'detail' => $this->requirements->ownerVerified($account)
                     ? null
-                    : ($account->email_verified_at === null ? 'Email not verified' : 'Mobile not verified'),
+                    : ($account->owner?->email_verified_at === null ? 'Email not verified' : 'Mobile not verified'),
             ],
             [
                 'key' => 'kyc',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Erp;
 
+use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Kyc\Actions\OpenKycDraft;
 use App\Domain\Kyc\Actions\SubmitKyc;
 use App\Domain\Kyc\Exceptions\KycIncomplete;
@@ -9,7 +10,6 @@ use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Queries\ApplicableRequirements;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -26,15 +26,16 @@ use Inertia\Response;
  */
 class KycController extends Controller
 {
+    use ResolvesBusinessAccount;
+
     public function create(
         Request $request,
         OpenKycDraft $openDraft,
         ApplicableRequirements $requirements,
     ): Response {
-        /** @var User $user */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
-        $submission = $openDraft->handle($user);
+        $submission = $openDraft->handle($account);
 
         return Inertia::render('onboarding/kyc', [
             'submission' => [
@@ -46,7 +47,7 @@ class KycController extends Controller
                 'is_editable' => $submission->status->isEditable(),
                 'deadline_at' => $submission->deadline_at?->toIso8601String(),
             ],
-            'requirements' => $requirements->forForm($user, $submission),
+            'requirements' => $requirements->forForm($account, $submission),
             'feedback' => $submission->reviews()->first()?->user_visible_feedback,
         ]);
     }
@@ -59,8 +60,7 @@ class KycController extends Controller
         OpenKycDraft $openDraft,
         KycDocumentStore $store,
     ): RedirectResponse {
-        /** @var User $user */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
         $validated = $request->validate([
             'document_type' => ['required', 'string'],
@@ -68,7 +68,7 @@ class KycController extends Controller
             'value' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $submission = $openDraft->handle($user);
+        $submission = $openDraft->handle($account);
 
         if (! $submission->status->isEditable()) {
             throw ValidationException::withMessages([
@@ -109,10 +109,9 @@ class KycController extends Controller
         OpenKycDraft $openDraft,
         SubmitKyc $submit,
     ): RedirectResponse {
-        /** @var User $user */
-        $user = $request->user();
+        $account = $this->businessAccountFor($request);
 
-        $submission = $openDraft->handle($user);
+        $submission = $openDraft->handle($account);
 
         try {
             $submit->handle($submission);

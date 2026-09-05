@@ -11,15 +11,22 @@ beforeEach(function () {
     $this->codes = app(VerificationCodes::class);
 });
 
+/**
+ * Someone part-way through registration: verified email, unverified mobile, and
+ * a business account at the start of the funnel.
+ */
 function verifyingUser(array $overrides = []): User
 {
-    return User::factory()->create([
-        'status' => AccountStatus::Registered,
+    $account = testBusinessAccount(AccountStatus::Registered);
+
+    $account->owner->forceFill([
         'mobile' => '+8801712345678',
         'mobile_verified_at' => null,
         'email_verified_at' => now(),
         ...$overrides,
-    ]);
+    ])->save();
+
+    return $account->owner->fresh();
 }
 
 it('sends a code and accepts it', function () {
@@ -59,7 +66,7 @@ it('advances a registered account to KYC once mobile and email are both verified
 
     app(VerifyMobile::class)->handle($user, $code);
 
-    expect($user->fresh()->status)->toBe(AccountStatus::KycPending);
+    expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::KycPending);
 });
 
 it('sends an account still needing email verification to that step instead', function () {
@@ -68,18 +75,19 @@ it('sends an account still needing email verification to that step instead', fun
 
     app(VerifyMobile::class)->handle($user, $code);
 
-    expect($user->fresh()->status)->toBe(AccountStatus::EmailVerificationPending);
+    expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::EmailVerificationPending);
 });
 
 it('does not drag a further-along account backwards', function () {
     // Someone who verifies their mobile late — while KYC is already under
     // review — must not be reset to an earlier step.
-    $user = verifyingUser(['status' => AccountStatus::KycUnderReview]);
+    $user = verifyingUser();
+    $user->businessAccount->forceFill(['status' => AccountStatus::KycUnderReview])->save();
     $code = $this->codes->issue(SendMobileVerificationCode::PURPOSE, $user->mobile);
 
     app(VerifyMobile::class)->handle($user, $code);
 
-    expect($user->fresh()->status)->toBe(AccountStatus::KycUnderReview)
+    expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::KycUnderReview)
         ->and($user->fresh()->mobile_verified_at)->not->toBeNull();
 });
 
@@ -89,7 +97,7 @@ it('records the status change with a reason', function () {
 
     app(VerifyMobile::class)->handle($user, $code);
 
-    expect($user->statusHistory()->first()->reason)->toBe('Mobile number verified.');
+    expect($user->businessAccount->statusHistory()->first()->reason)->toBe('Mobile number verified.');
 });
 
 it('does not let a used code be replayed', function () {

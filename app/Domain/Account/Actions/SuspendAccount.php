@@ -4,10 +4,10 @@ namespace App\Domain\Account\Actions;
 
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
-use App\Domain\Account\Models\UserStatusChange;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Account\Models\BusinessAccountStatusChange;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
-use App\Models\User;
 use App\Notifications\Account\AccountSuspended;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
@@ -40,21 +40,21 @@ class SuspendAccount
      * @param  string|null  $userVisibleNote  what the account holder is told, if anything
      */
     public function handle(
-        User $user,
+        BusinessAccount $account,
         int $decidedBy,
         string $reason,
         ?string $userVisibleNote = null,
         ?string $internalNote = null,
-    ): UserStatusChange {
+    ): BusinessAccountStatusChange {
         if (trim($reason) === '') {
             throw new InvalidArgumentException(
                 'Suspending an account requires a recorded reason.'
             );
         }
 
-        $change = $this->database->transaction(function () use ($user, $decidedBy, $reason, $userVisibleNote, $internalNote) {
-            /** @var User $locked */
-            $locked = User::query()->lockForUpdate()->findOrFail($user->id);
+        $change = $this->database->transaction(function () use ($account, $decidedBy, $reason, $userVisibleNote, $internalNote) {
+            /** @var BusinessAccount $locked */
+            $locked = BusinessAccount::query()->lockForUpdate()->findOrFail($account->id);
 
             $from = $locked->status;
 
@@ -73,7 +73,7 @@ class SuspendAccount
             $this->audit->handle(new AuditEntry(
                 action: 'account.suspended',
                 actorId: $decidedBy,
-                auditableType: User::class,
+                auditableType: BusinessAccount::class,
                 auditableId: $locked->id,
                 before: ['status' => $from->value],
                 after: ['status' => AccountStatus::Suspended->value],
@@ -85,12 +85,12 @@ class SuspendAccount
                 isSensitive: true,
             ));
 
-            $user->setRawAttributes($locked->getAttributes(), sync: true);
+            $account->setRawAttributes($locked->getAttributes(), sync: true);
 
             return $change;
         });
 
-        $user->notify(new AccountSuspended($userVisibleNote));
+        $account->owner?->notify(new AccountSuspended($userVisibleNote));
 
         return $change;
     }

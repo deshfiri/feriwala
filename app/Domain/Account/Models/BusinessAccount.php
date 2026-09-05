@@ -6,17 +6,23 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Billing\Models\Payment;
+use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Package\Entitlements;
+use App\Domain\Package\Models\UserPackage;
 use App\Enums\TeamRole;
 use App\Models\User;
+use Carbon\CarbonImmutable;
+use Database\Factories\BusinessAccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\CarbonImmutable;
 
 /**
  * A commercial Feriwala workspace (§5, D1).
@@ -59,7 +65,29 @@ use Illuminate\Support\CarbonImmutable;
 #[Fillable(['name', 'slug', 'owner_id', 'status'])]
 class BusinessAccount extends Model
 {
-    use HasPublicId, HasSlug, HasStateMachine, SoftDeletes;
+    /** @use HasFactory<BusinessAccountFactory> */
+    use HasFactory, HasStateMachine, SoftDeletes;
+
+    /*
+     * Both traits offer a route key. The public id wins: it is opaque, stable,
+     * and cannot be guessed from a business name, whereas a slug changes when
+     * the account is renamed and would break links behind it. The slug is kept
+     * for display and for the account's own storefront-facing paths (§34.2).
+     */
+    use HasPublicId, HasSlug {
+        HasPublicId::getRouteKeyName insteadof HasSlug;
+        HasSlug::getRouteKeyName as slugRouteKeyName;
+    }
+
+    /**
+     * Laravel guesses `Database\Factories\Domain\Account\Models\...` from the
+     * model's namespace. Domain models live deeper than the convention expects,
+     * so the binding is stated rather than guessed.
+     */
+    protected static function newFactory(): BusinessAccountFactory
+    {
+        return BusinessAccountFactory::new();
+    }
 
     /**
      * @return array<string, string>
@@ -123,6 +151,44 @@ class BusinessAccount extends Model
         return $this->hasMany(BusinessAccountStatusChange::class)
             ->latest('created_at')
             ->latest('id');
+    }
+
+    /**
+     * The account's live subscription.
+     *
+     * Read entitlements through {@see Entitlements} rather
+     * than from here — a raw relation tempts callers into their own feature
+     * checks, which is how limits drift apart across the codebase.
+     *
+     * @return BelongsTo<UserPackage, $this>
+     */
+    public function currentPackage(): BelongsTo
+    {
+        return $this->belongsTo(UserPackage::class, 'current_user_package_id');
+    }
+
+    /**
+     * @return HasMany<UserPackage, $this>
+     */
+    public function packages(): HasMany
+    {
+        return $this->hasMany(UserPackage::class);
+    }
+
+    /**
+     * @return HasMany<KycSubmission, $this>
+     */
+    public function kycSubmissions(): HasMany
+    {
+        return $this->hasMany(KycSubmission::class);
+    }
+
+    /**
+     * @return HasMany<Payment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
     }
 
     /**

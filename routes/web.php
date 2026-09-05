@@ -22,19 +22,22 @@ Route::inertia('/', 'welcome')->name('home');
 Route::put('locale', [LocaleController::class, 'update'])->name('locale.update');
 
 Route::prefix('{current_team}')
-    ->middleware(['auth', 'verified', 'activated', EnsureTeamMembership::class])
+    ->middleware(['auth', 'verified', 'business.activated', EnsureTeamMembership::class])
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
     });
 
 /*
- * `activated` is the §5.4 funnel gate, and it is applied to the whole
- * authenticated group rather than to the routes that need closing. It works as
- * an allow-list, so a new ERP route is shut to an unactivated account by
- * default — forgetting to list a route locks it down, where forgetting to add
- * it to a block-list would quietly expose it.
+ * `business.activated` is the §5.4 funnel gate. It works as an allow-list, so a
+ * new ERP route is shut to an unactivated account by default — forgetting to
+ * list a route locks it down, where forgetting to add it to a block-list would
+ * quietly expose it.
+ *
+ * The identity gate is not here because it is global (bootstrap/app.php): a
+ * suspended login must lose every panel, and a gate that has to be remembered
+ * per route group is one somebody will eventually forget.
  */
-Route::middleware(['auth', 'activated'])->group(function () {
+Route::middleware(['auth', 'business.activated'])->group(function () {
     Route::post('invitations/{invitation}/accept', [TeamInvitationController::class, 'accept'])->name('invitations.accept');
     Route::delete('invitations/{invitation}', [TeamInvitationController::class, 'decline'])->name('invitations.decline');
 
@@ -78,26 +81,43 @@ Route::middleware(['auth', 'activated'])->group(function () {
         Route::get('kyc/documents/{document}/download', [KycDocumentController::class, 'download'])
             ->name('kyc.documents.download');
 
-        // Administrative review queues.
-        Route::prefix('admin')->name('admin.')->group(function () {
-            Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
-            Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
-            Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
-
-            // The last gate before an account can trade (§5.1, §44).
-            Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');
-            Route::get('activations/{account}', [ActivationReviewController::class, 'show'])->name('activations.show');
-            // Three outcomes, three routes. §5.3 gives approval-pending no
-            // generic "reject", and a shared decline endpoint would invite one.
-            Route::post('activations/{account}/approve', [ActivationReviewController::class, 'approve'])
-                ->name('activations.approve');
-            Route::post('activations/{account}/request-resubmission', [ActivationReviewController::class, 'requestResubmission'])
-                ->name('activations.request-resubmission');
-            Route::post('activations/{account}/suspend', [ActivationReviewController::class, 'suspend'])
-                ->name('activations.suspend');
-        });
     });
 });
+
+/*
+ * Administration (§32, D23).
+ *
+ * Outside `business.activated` on purpose, and this is the whole point of the
+ * identity/account split: a Feriwala staff member administers the platform
+ * without owning a business, so requiring commercial KYC and an activation
+ * payment to open the KYC queue was never right.
+ *
+ * It is not a bypass. Two things still stand between a request and these
+ * routes — the global identity gate, which takes the panel from a suspended or
+ * locked login before anything here runs, and a policy on every action. What
+ * changed is which question closes the panel: being barred from the platform,
+ * rather than not having bought a package.
+ */
+Route::middleware(['auth', 'noindex'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
+        Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
+        Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
+
+        // The last gate before an account can trade (§5.1, §44).
+        Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');
+        Route::get('activations/{account}', [ActivationReviewController::class, 'show'])->name('activations.show');
+        // Three outcomes, three routes. §5.3 gives approval-pending no generic
+        // "reject", and a shared decline endpoint would invite one.
+        Route::post('activations/{account}/approve', [ActivationReviewController::class, 'approve'])
+            ->name('activations.approve');
+        Route::post('activations/{account}/request-resubmission', [ActivationReviewController::class, 'requestResubmission'])
+            ->name('activations.request-resubmission');
+        Route::post('activations/{account}/suspend', [ActivationReviewController::class, 'suspend'])
+            ->name('activations.suspend');
+    });
 
 /*
  * Gateway IPN. Unauthenticated by necessity and outside the web session, so the

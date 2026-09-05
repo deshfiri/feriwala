@@ -4,10 +4,10 @@ namespace App\Domain\Account\Actions;
 
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
-use App\Domain\Account\Models\UserStatusChange;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Account\Models\BusinessAccountStatusChange;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
-use App\Models\User;
 use App\Notifications\Account\KycResubmissionRequested;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
@@ -38,12 +38,12 @@ class RequestKycResubmission
      * @param  string  $feedback  what the applicant is shown and must act on
      */
     public function handle(
-        User $user,
+        BusinessAccount $account,
         int $decidedBy,
         string $reason,
         string $feedback,
         ?string $internalNote = null,
-    ): UserStatusChange {
+    ): BusinessAccountStatusChange {
         if (trim($reason) === '') {
             throw new InvalidArgumentException(
                 'A correction request must record why, against the person who decided it.'
@@ -59,9 +59,9 @@ class RequestKycResubmission
 
         // Status change, history row and audit entry together. An audit trail
         // that can disagree with the account's own history is not a trail.
-        $change = $this->database->transaction(function () use ($user, $decidedBy, $reason, $feedback, $internalNote) {
-            /** @var User $locked */
-            $locked = User::query()->lockForUpdate()->findOrFail($user->id);
+        $change = $this->database->transaction(function () use ($account, $decidedBy, $reason, $feedback, $internalNote) {
+            /** @var BusinessAccount $locked */
+            $locked = BusinessAccount::query()->lockForUpdate()->findOrFail($account->id);
 
             $from = $locked->status;
 
@@ -82,7 +82,7 @@ class RequestKycResubmission
             $this->audit->handle(new AuditEntry(
                 action: 'account.kyc_resubmission_requested',
                 actorId: $decidedBy,
-                auditableType: User::class,
+                auditableType: BusinessAccount::class,
                 auditableId: $locked->id,
                 before: ['status' => $from->value],
                 after: ['status' => AccountStatus::KycResubmissionRequired->value],
@@ -92,14 +92,14 @@ class RequestKycResubmission
                 module: 'account',
             ));
 
-            $user->setRawAttributes($locked->getAttributes(), sync: true);
+            $account->setRawAttributes($locked->getAttributes(), sync: true);
 
             return $change;
         });
 
         // After the transaction commits. Notifying inside it would tell someone
         // to fix their documents for a change that then rolled back.
-        $user->notify(new KycResubmissionRequested($feedback));
+        $account->owner?->notify(new KycResubmissionRequested($feedback));
 
         return $change;
     }

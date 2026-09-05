@@ -4,7 +4,6 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycReview;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 it('is closed to guests', function () {
@@ -12,7 +11,8 @@ it('is closed to guests', function () {
 });
 
 it('shows an unactivated account its progress', function () {
-    $user = User::factory()->create(['status' => AccountStatus::KycPending]);
+    $account = testBusinessAccount(AccountStatus::KycPending);
+    $user = $account->owner;
 
     $this->actingAs($user)
         ->get(route('onboarding.status'))
@@ -29,10 +29,7 @@ it('shows an unactivated account its progress', function () {
 it('stays reachable after activation', function () {
     // Someone just activated should see that, not a 404 on the page that has
     // been guiding them.
-    $user = User::factory()->create([
-        'status' => AccountStatus::Active,
-        'activated_at' => now(),
-    ]);
+    $user = testBusinessAccount(AccountStatus::Active)->owner;
 
     $this->actingAs($user)
         ->get(route('onboarding.status'))
@@ -42,7 +39,8 @@ it('stays reachable after activation', function () {
 
 it('is not indexable', function () {
     // §34.2: authenticated ERP pages must carry no-index.
-    $user = User::factory()->create();
+    $account = testBusinessAccount(AccountStatus::Active);
+    $user = $account->owner;
 
     $this->actingAs($user)
         ->get(route('onboarding.status'))
@@ -52,10 +50,11 @@ it('is not indexable', function () {
 it('never sends the reviewer internal note to the browser', function () {
     // §7.3. The check is on the rendered response, not just the service, so a
     // future prop change cannot leak it silently.
-    $user = User::factory()->create(['status' => AccountStatus::KycResubmissionRequired]);
+    $account = testBusinessAccount(AccountStatus::KycResubmissionRequired);
+    $user = $account->owner;
 
     $submission = KycSubmission::create([
-        'user_id' => $user->id,
+        'business_account_id' => $account->id,
         'status' => KycStatus::ResubmissionRequired,
         'round' => 1,
     ]);

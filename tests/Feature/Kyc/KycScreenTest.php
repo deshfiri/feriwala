@@ -6,7 +6,6 @@ use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -14,10 +13,9 @@ use Inertia\Testing\AssertableInertia as Assert;
 beforeEach(function () {
     Storage::fake(KycDocumentStore::DISK);
 
-    $this->applicant = User::factory()->create([
-        'status' => AccountStatus::KycPending,
-        'country' => 'BD',
-    ]);
+    $this->account = testBusinessAccount(AccountStatus::KycPending);
+    $this->applicant = $this->account->owner;
+    $this->applicant->forceFill(['country' => 'BD'])->save();
 
     $this->nid = KycDocumentType::create([
         'key' => 'national_id',
@@ -45,7 +43,7 @@ describe('the form', function () {
                 ->where('requirements.0.name', 'National ID'),
             );
 
-        expect(KycSubmission::where('user_id', $this->applicant->id)->count())->toBe(1);
+        expect(KycSubmission::where('business_account_id', $this->account->id)->count())->toBe(1);
     });
 
     it('reuses the open draft rather than starting a new round', function () {
@@ -53,7 +51,7 @@ describe('the form', function () {
         $this->actingAs($this->applicant)->get(route('kyc.create'));
         $this->actingAs($this->applicant)->get(route('kyc.create'));
 
-        expect(KycSubmission::where('user_id', $this->applicant->id)->count())->toBe(1);
+        expect(KycSubmission::where('business_account_id', $this->account->id)->count())->toBe(1);
     });
 
     it('omits a requirement scoped to another country', function () {
@@ -73,7 +71,7 @@ describe('the form', function () {
     it('never sends a storage path to the browser', function () {
         // §7.5. The form shows that a file exists, not where it lives.
         $submission = KycSubmission::create([
-            'user_id' => $this->applicant->id,
+            'business_account_id' => $this->account->id,
             'status' => KycStatus::Draft,
             'round' => 1,
         ]);
@@ -135,7 +133,7 @@ describe('uploading', function () {
 
     it('refuses to change a submission under review', function () {
         KycSubmission::create([
-            'user_id' => $this->applicant->id,
+            'business_account_id' => $this->account->id,
             'status' => KycStatus::UnderReview,
             'round' => 1,
         ]);
@@ -161,7 +159,7 @@ describe('submitting', function () {
             ->assertRedirect(route('onboarding.status'));
 
         expect(KycSubmission::first()->status)->toBe(KycStatus::Submitted)
-            ->and($this->applicant->fresh()->status)->toBe(AccountStatus::KycSubmitted);
+            ->and($this->account->fresh()->status)->toBe(AccountStatus::KycSubmitted);
     });
 
     it('refuses an incomplete round and says what is missing', function () {

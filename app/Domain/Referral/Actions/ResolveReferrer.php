@@ -36,7 +36,11 @@ class ResolveReferrer
 
         return User::query()
             ->where('referral_code', $normalised)
-            ->where('status', AccountStatus::Active)
+            // §25.1 lets only an active account refer. The code lives on
+            // the person; whether they may use it is a fact about their
+            // business (D23).
+            ->whereHas('ownedAccount', fn ($account) => $account
+                ->where('status', AccountStatus::Active))
             ->first();
     }
 }

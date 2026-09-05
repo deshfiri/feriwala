@@ -1,27 +1,21 @@
 <?php
 
+use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
-use App\Http\Middleware\EnsureAccountIsActivated;
+use App\Http\Middleware\EnsureBusinessAccountIsActivated;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Route;
 
 beforeEach(function () {
-    $this->onboarding = User::factory()->create([
-        'status' => AccountStatus::KycPending,
-        'email_verified_at' => now(),
-        'mobile_verified_at' => now(),
-    ]);
+    $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->active = User::factory()->create([
-        'status' => AccountStatus::Active,
-        'activated_at' => now(),
-        'email_verified_at' => now(),
-        'mobile_verified_at' => now(),
-    ]);
+    $this->onboarding = testBusinessAccount(AccountStatus::KycPending)->owner;
+    $this->trading = testBusinessAccount(AccountStatus::Active)->owner;
 });
 
-describe('what an unactivated account may reach (§5.4)', function () {
-    it('lets them into the areas that are built', function () {
+describe('what an unactivated business may reach (§5.4)', function () {
+    it('lets it into the areas that are built', function () {
         foreach ([
             'onboarding.status',
             'kyc.create',
@@ -42,22 +36,22 @@ describe('what an unactivated account may reach (§5.4)', function () {
         }
     });
 
-    it('turns them away from everything else', function () {
+    it('turns it away from everything else', function () {
         $this->actingAs($this->onboarding)
             ->get(route('teams.index'))
             ->assertRedirect(route('onboarding.status'));
     });
 
     it('redirects rather than refusing', function () {
-        // The user has done nothing wrong; they have steps left. A 403 says the
-        // opposite, and gives them nowhere to go.
+        // The account holder has done nothing wrong; they have steps left. A 403
+        // says the opposite, and gives them nowhere to go.
         $this->actingAs($this->onboarding)
             ->get(route('teams.index'))
             ->assertStatus(302);
     });
 
-    it('lets an active account through', function () {
-        $this->actingAs($this->active)
+    it('lets an activated business through', function () {
+        $this->actingAs($this->trading)
             ->get(route('teams.index'))
             ->assertOk();
     });
@@ -68,17 +62,14 @@ describe('the allow-list itself', function () {
         // A prefix matching no route is not harmless — it is a §5.4 area the
         // user silently cannot reach. `payment.` sat here for exactly that
         // reason while the real routes were named `checkout.`.
-        //
-        // Fortify and passkey routes are registered by packages, so a prefix
-        // owned by one of those is checked against the full route list too.
         $names = collect(Route::getRoutes()->getRoutesByName())->keys();
 
         $matches = fn (string $prefix) => $names->contains(
             fn (string $name) => str_starts_with($name, $prefix),
         );
 
-        $dead = collect(EnsureAccountIsActivated::ALLOWED_ROUTE_PREFIXES)
-            ->diff(EnsureAccountIsActivated::PENDING_ROUTE_PREFIXES)
+        $dead = collect(EnsureBusinessAccountIsActivated::ALLOWED_ROUTE_PREFIXES)
+            ->diff(EnsureBusinessAccountIsActivated::PENDING_ROUTE_PREFIXES)
             ->reject($matches)
             ->values()
             ->all();
@@ -92,7 +83,7 @@ describe('the allow-list itself', function () {
         // being invisible in the roadmap.
         $names = collect(Route::getRoutes()->getRoutesByName())->keys();
 
-        $built = collect(EnsureAccountIsActivated::PENDING_ROUTE_PREFIXES)
+        $built = collect(EnsureBusinessAccountIsActivated::PENDING_ROUTE_PREFIXES)
             ->filter(fn (string $prefix) => $names->contains(
                 fn (string $name) => str_starts_with($name, $prefix),
             ))
@@ -105,7 +96,7 @@ describe('the allow-list itself', function () {
     it('closes an unlisted route by default', function () {
         // The direction that matters: a new ERP route nobody thought about is
         // shut, not open.
-        Route::middleware(['web', 'auth', 'activated'])
+        Route::middleware(['web', 'auth', 'business.activated'])
             ->get('_test/unlisted', fn () => 'reached')
             ->name('unlisted.route');
 
@@ -113,17 +104,42 @@ describe('the allow-list itself', function () {
             ->get('/_test/unlisted')
             ->assertRedirect(route('onboarding.status'));
     });
+});
 
-    it('does not let an unactivated account work an admin queue', function () {
-        // Administration is deliberately absent from the allow-list, so a
-        // suspended staff member loses the panel with everything else.
-        $suspended = User::factory()->create([
-            'status' => AccountStatus::Suspended,
-            'email_verified_at' => now(),
-        ]);
+describe('administration is not behind the commercial gate (D23)', function () {
+    it('lets platform staff work a queue without owning a business', function () {
+        // The point of the whole split: administering the platform takes an
+        // identity and a permission, not commercial KYC and an activation fee.
+        $reviewer = testPlatformStaff(PlatformRole::KycManager);
 
-        $this->actingAs($suspended)
+        expect($reviewer->businessAccount)->toBeNull();
+
+        $this->actingAs($reviewer)
             ->get(route('admin.kyc.index'))
+            ->assertOk();
+    });
+
+    it('still refuses staff who lack the permission', function () {
+        // Not a bypass — the policy is what admits them, and it has not moved.
+        $this->actingAs(User::factory()->staff()->create())
+            ->get(route('admin.kyc.index'))
+            ->assertForbidden();
+    });
+
+    it('keeps a commercially suspended owner out of the ERP but not the panel', function () {
+        // One person, two roles. Suspending their business takes the business
+        // ERP; it does not take the admin panel, because that was never what
+        // the business account governed.
+        $account = testBusinessAccount(AccountStatus::Suspended);
+        $reviewer = $account->owner;
+        $reviewer->assignRole(PlatformRole::KycManager->value);
+
+        $this->actingAs($reviewer)
+            ->get(route('teams.index'))
             ->assertRedirect(route('onboarding.status'));
+
+        $this->actingAs($reviewer)
+            ->get(route('admin.kyc.index'))
+            ->assertOk();
     });
 });

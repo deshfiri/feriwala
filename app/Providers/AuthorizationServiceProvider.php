@@ -3,7 +3,8 @@
 namespace App\Providers;
 
 use App\Domain\Access\Enums\PlatformRole;
-use App\Domain\Account\Policies\UserPolicy;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Policies\KycDocumentPolicy;
@@ -21,7 +22,7 @@ class AuthorizationServiceProvider extends ServiceProvider
     {
         Gate::policy(KycSubmission::class, KycSubmissionPolicy::class);
         Gate::policy(KycDocument::class, KycDocumentPolicy::class);
-        Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(BusinessAccount::class, BusinessAccountPolicy::class);
 
         /*
          * Super Admin passes every check without holding permission rows, so

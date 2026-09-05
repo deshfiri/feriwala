@@ -7,7 +7,6 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
-use App\Models\User;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -17,7 +16,7 @@ beforeEach(function () {
     $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
 
     $this->payment = Payment::create([
-        'user_id' => User::factory()->create()->id,
+        'business_account_id' => testBusinessAccount()->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Initiated,
         'gateway' => 'sslcommerz',

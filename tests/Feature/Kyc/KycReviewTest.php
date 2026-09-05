@@ -17,15 +17,14 @@ use Illuminate\Support\Facades\Storage;
 beforeEach(function () {
     Storage::fake(KycDocumentStore::DISK);
 
-    $this->applicant = User::factory()->create([
-        'status' => AccountStatus::KycPending,
-        'country' => 'BD',
-    ]);
+    $this->account = testBusinessAccount(AccountStatus::KycPending);
+    $this->applicant = $this->account->owner;
+    $this->applicant->forceFill(['country' => 'BD'])->save();
 
-    $this->reviewer = User::factory()->create();
+    $this->reviewer = User::factory()->staff()->create();
 
     $this->submission = KycSubmission::create([
-        'user_id' => $this->applicant->id,
+        'business_account_id' => $this->account->id,
         'status' => KycStatus::Draft,
         'round' => 1,
     ]);
@@ -61,7 +60,7 @@ describe('submitting', function () {
 
         expect($this->submission->fresh()->status)->toBe(KycStatus::Submitted)
             ->and($this->submission->fresh()->submitted_at)->not->toBeNull()
-            ->and($this->applicant->fresh()->status)->toBe(AccountStatus::KycSubmitted);
+            ->and($this->account->fresh()->status)->toBe(AccountStatus::KycSubmitted);
     });
 
     it('ignores a requirement that does not apply to this applicant', function () {
@@ -114,7 +113,7 @@ describe('approving', function () {
         );
 
         expect($this->submission->fresh()->status)->toBe(KycStatus::Approved)
-            ->and($this->applicant->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
+            ->and($this->account->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
     });
 
     it('does not activate the account', function () {
@@ -125,11 +124,12 @@ describe('approving', function () {
             KycDecision::approve($this->reviewer->id),
         );
 
-        $applicant = $this->applicant->fresh();
+        // Clearing KYC opens the next step; it does not activate the business.
+        $account = $this->account->fresh();
 
-        expect($applicant->status)->not->toBe(AccountStatus::Active)
-            ->and($applicant->isActivated())->toBeFalse()
-            ->and($applicant->activated_at)->toBeNull();
+        expect($account->status)->not->toBe(AccountStatus::Active)
+            ->and($account->isActivated())->toBeFalse()
+            ->and($account->activated_at)->toBeNull();
     });
 
     it('names the reviewer on the review record', function () {
@@ -166,7 +166,7 @@ describe('rejecting', function () {
         ));
 
         expect($this->submission->fresh()->status)->toBe(KycStatus::Rejected)
-            ->and($this->applicant->fresh()->status)->toBe(AccountStatus::KycRejected);
+            ->and($this->account->fresh()->status)->toBe(AccountStatus::KycRejected);
     });
 
     it('keeps the internal note off the account history', function () {
@@ -177,7 +177,7 @@ describe('rejecting', function () {
             internalNote: 'Third attempt from this device — escalate to fraud.',
         ));
 
-        $history = $this->applicant->statusHistory()->first();
+        $history = $this->account->statusHistory()->first();
 
         expect($history->user_visible_note)->toBe('We could not verify your document.')
             ->and($history->internal_note)->toBe('Third attempt from this device — escalate to fraud.');
@@ -203,7 +203,7 @@ describe('requesting corrections', function () {
         ));
 
         expect($this->submission->fresh()->status)->toBe(KycStatus::ResubmissionRequired)
-            ->and($this->applicant->fresh()->status)->toBe(AccountStatus::KycResubmissionRequired);
+            ->and($this->account->fresh()->status)->toBe(AccountStatus::KycResubmissionRequired);
     });
 });
 
@@ -218,7 +218,7 @@ describe('resubmission rounds', function () {
     });
 
     it('opens a new round rather than editing the reviewed one', function () {
-        $next = app(StartKycResubmission::class)->handle($this->applicant);
+        $next = app(StartKycResubmission::class)->handle($this->account);
 
         expect($next->round)->toBe(2)
             ->and($next->status)->toBe(KycStatus::Draft)
@@ -226,7 +226,7 @@ describe('resubmission rounds', function () {
     });
 
     it('leaves the reviewed round untouched', function () {
-        app(StartKycResubmission::class)->handle($this->applicant);
+        app(StartKycResubmission::class)->handle($this->account);
 
         // The reviewer's decision must keep describing what they actually saw.
         expect($this->submission->fresh()->status)->toBe(KycStatus::ResubmissionRequired)
@@ -234,28 +234,30 @@ describe('resubmission rounds', function () {
     });
 
     it('returns the existing draft instead of creating a second one', function () {
-        $first = app(StartKycResubmission::class)->handle($this->applicant);
-        $second = app(StartKycResubmission::class)->handle($this->applicant);
+        $first = app(StartKycResubmission::class)->handle($this->account);
+        $second = app(StartKycResubmission::class)->handle($this->account);
 
         expect($second->id)->toBe($first->id)
-            ->and(KycSubmission::where('user_id', $this->applicant->id)->count())->toBe(2);
+            ->and(KycSubmission::where('business_account_id', $this->account->id)->count())->toBe(2);
     });
 
     it('refuses to resubmit an approved round', function () {
-        $approved = KycSubmission::create([
-            'user_id' => User::factory()->create()->id,
+        $other = testBusinessAccount();
+
+        KycSubmission::create([
+            'business_account_id' => $other->id,
             'status' => KycStatus::Approved,
             'round' => 1,
         ]);
 
-        expect(fn () => app(StartKycResubmission::class)->handle($approved->user))
+        expect(fn () => app(StartKycResubmission::class)->handle($other))
             ->toThrow(RuntimeException::class);
     });
 
     it('carries the deadline across to the new round', function () {
         $this->submission->update(['deadline_at' => now()->addDays(7)]);
 
-        $next = app(StartKycResubmission::class)->handle($this->applicant);
+        $next = app(StartKycResubmission::class)->handle($this->account);
 
         expect($next->deadline_at)->not->toBeNull();
     });
@@ -269,7 +271,7 @@ it('keeps the full review history across rounds', function () {
         userVisibleFeedback: 'Clearer photo please.',
     ));
 
-    $round2 = app(StartKycResubmission::class)->handle($this->applicant);
+    $round2 = app(StartKycResubmission::class)->handle($this->account);
     app(KycDocumentStore::class)->store(
         $round2,
         $this->nid,
@@ -280,5 +282,5 @@ it('keeps the full review history across rounds', function () {
 
     expect($this->submission->reviews()->count())->toBe(1)
         ->and($round2->reviews()->count())->toBe(1)
-        ->and($this->applicant->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
+        ->and($this->account->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
 });

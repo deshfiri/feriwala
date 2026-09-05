@@ -2,10 +2,10 @@
 
 namespace App\Domain\Package;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\PackageFeatureType;
 use App\Domain\Package\Models\UserPackage;
-use App\Models\User;
 
 /**
  * Answers "may this account do X, and how much of it" (§8.1, §5.4).
@@ -24,9 +24,9 @@ class Entitlements
     /**
      * Whether a boolean facility is granted.
      */
-    public function allows(User $user, PackageFeature $feature): bool
+    public function allows(BusinessAccount $account, PackageFeature $feature): bool
     {
-        $value = $this->value($user, $feature);
+        $value = $this->value($account, $feature);
 
         return $value === true;
     }
@@ -34,9 +34,9 @@ class Entitlements
     /**
      * The cap for a limited feature. Null means unlimited.
      */
-    public function limit(User $user, PackageFeature $feature): ?int
+    public function limit(BusinessAccount $account, PackageFeature $feature): ?int
     {
-        $value = $this->value($user, $feature);
+        $value = $this->value($account, $feature);
 
         return is_int($value) ? $value : null;
     }
@@ -49,16 +49,16 @@ class Entitlements
      * staff on this account — and a check that guesses would be wrong somewhere.
      */
     public function hasCapacityFor(
-        User $user,
+        BusinessAccount $account,
         PackageFeature $feature,
         int $currentCount,
         int $adding = 1,
     ): bool {
-        $limit = $this->limit($user, $feature);
+        $limit = $this->limit($account, $feature);
 
         // Unlimited only when the package explicitly says so, which is why an
         // account with no package returns 0 rather than null.
-        if ($limit === null && $this->activePackage($user) !== null) {
+        if ($limit === null && $this->activePackage($account) !== null) {
             return true;
         }
 
@@ -68,11 +68,11 @@ class Entitlements
     /**
      * How many more are allowed. Null means unlimited.
      */
-    public function remaining(User $user, PackageFeature $feature, int $currentCount): ?int
+    public function remaining(BusinessAccount $account, PackageFeature $feature, int $currentCount): ?int
     {
-        $limit = $this->limit($user, $feature);
+        $limit = $this->limit($account, $feature);
 
-        if ($limit === null && $this->activePackage($user) !== null) {
+        if ($limit === null && $this->activePackage($account) !== null) {
             return null;
         }
 
@@ -82,9 +82,9 @@ class Entitlements
     /**
      * The raw entitlement value.
      */
-    public function value(User $user, PackageFeature $feature): bool|int|string|null
+    public function value(BusinessAccount $account, PackageFeature $feature): bool|int|string|null
     {
-        $userPackage = $this->activePackage($user);
+        $userPackage = $this->activePackage($account);
 
         if ($userPackage === null) {
             // No package means no entitlements — but a limit still reads as 0
@@ -110,11 +110,11 @@ class Entitlements
     /**
      * The account's package, if it currently entitles them to anything.
      */
-    public function activePackage(User $user): ?UserPackage
+    public function activePackage(BusinessAccount $account): ?UserPackage
     {
-        $userPackage = $user->relationLoaded('currentPackage')
-            ? $user->currentPackage
-            : $user->currentPackage()->with('package.features')->first();
+        $userPackage = $account->relationLoaded('currentPackage')
+            ? $account->currentPackage
+            : $account->currentPackage()->with('package.features')->first();
 
         if ($userPackage === null || ! $userPackage->entitlesNow()) {
             return null;

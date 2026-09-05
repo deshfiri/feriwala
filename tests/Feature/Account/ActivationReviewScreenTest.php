@@ -9,6 +9,7 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Enums\TeamRole;
 use App\Models\User;
 use App\Notifications\Account\AccountSuspended;
 use App\Notifications\Account\KycResubmissionRequested;
@@ -21,64 +22,19 @@ beforeEach(function () {
 
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->approver = User::factory()->staff()->create();
-    $this->approver->assignRole(PlatformRole::Admin->value);
+    $this->approver = testPlatformStaff(PlatformRole::Admin);
 });
-
-/**
- * An account that has cleared every activation condition and has been waiting on
- * us since `$readyDaysAgo`.
- *
- * The readiness stamp is backdated rather than faked wholesale: the account
- * genuinely goes through {@see EvaluateActivationReadiness}, and only the clock
- * is moved, so the ordering tests exercise the real column rather than one this
- * helper invented.
- */
-function readyForActivation(int $readyDaysAgo = 0): User
-{
-    $account = User::factory()->create([
-        'status' => AccountStatus::PaymentVerificationPending,
-        'email_verified_at' => now(),
-        'mobile_verified_at' => now(),
-    ]);
-
-    KycSubmission::create([
-        'user_id' => $account->id,
-        'status' => KycStatus::Approved,
-        'round' => 1,
-        'reviewed_at' => now()->subDays($readyDaysAgo + 1),
-    ]);
-
-    Payment::create([
-        'user_id' => $account->id,
-        'purpose' => PaymentPurpose::Activation,
-        'status' => PaymentStatus::Paid,
-        'amount_minor' => 600000,
-        'currency_code' => 'BDT',
-        'completed_at' => now()->subDays($readyDaysAgo),
-    ]);
-
-    app(EvaluateActivationReadiness::class)->handle($account);
-
-    if ($readyDaysAgo > 0) {
-        $account->forceFill([
-            'approval_pending_at' => now()->subDays($readyDaysAgo),
-        ])->save();
-    }
-
-    return $account->refresh();
-}
 
 describe('the queue', function () {
     it('is closed to a role without the account permission', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBusinessAccount()->create())
             ->get(route('admin.activations.index'))
             ->assertForbidden();
     });
 
     it('lists ready accounts, longest wait first', function () {
-        $waitingLongest = readyForActivation(readyDaysAgo: 9);
-        readyForActivation(readyDaysAgo: 1);
+        $waitingLongest = testAccountReadyForActivation(readyDaysAgo: 9);
+        testAccountReadyForActivation(readyDaysAgo: 1);
 
         $this->actingAs($this->approver)
             ->get(route('admin.activations.index'))
@@ -95,10 +51,10 @@ describe('the queue', function () {
         // Someone who registered months ago but finished paying today has been
         // waiting on us for a day. Sorting by registration inverts the queue
         // exactly where it matters.
-        $recentSignupWaitingLongest = readyForActivation(readyDaysAgo: 9);
+        $recentSignupWaitingLongest = testAccountReadyForActivation(readyDaysAgo: 9);
         $recentSignupWaitingLongest->forceFill(['created_at' => now()->subDay()])->save();
 
-        $oldSignupReadyToday = readyForActivation(readyDaysAgo: 0);
+        $oldSignupReadyToday = testAccountReadyForActivation(readyDaysAgo: 0);
         $oldSignupReadyToday->forceFill(['created_at' => now()->subMonths(6)])->save();
 
         $this->actingAs($this->approver)
@@ -110,10 +66,10 @@ describe('the queue', function () {
 
     it('never lists an account twice, however many times it paid', function () {
         // A join against payments would return one row per settled payment.
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         Payment::create([
-            'user_id' => $account->id,
+            'business_account_id' => $account->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Paid,
             'amount_minor' => 600000,
@@ -129,9 +85,9 @@ describe('the queue', function () {
     it('drops an account whose requirement was reversed', function () {
         // Reversal runs through the same orchestration that put it there — the
         // queue reads state, it does not re-derive eligibility per request.
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
-        Payment::where('user_id', $account->id)
+        Payment::where('business_account_id', $account->id)
             ->update(['status' => PaymentStatus::Refunded]);
 
         app(EvaluateActivationReadiness::class)->handle($account);
@@ -144,7 +100,7 @@ describe('the queue', function () {
     it('picks up an account that met everything before the orchestration existed', function () {
         // The compatibility net. Without it an account that did everything asked
         // of it sits unreachable because no event ever stamped it.
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
         $account->forceFill([
             'status' => AccountStatus::PaymentVerificationPending,
             'approval_pending_at' => null,
@@ -157,20 +113,16 @@ describe('the queue', function () {
 
     it('leaves out an account with an outstanding requirement', function () {
         // "Pending" looks like success on a gateway redirect and is not.
-        $account = User::factory()->create([
-            'status' => AccountStatus::PaymentVerificationPending,
-            'email_verified_at' => now(),
-            'mobile_verified_at' => now(),
-        ]);
+        $account = testBusinessAccount(AccountStatus::PaymentVerificationPending);
 
         KycSubmission::create([
-            'user_id' => $account->id,
+            'business_account_id' => $account->id,
             'status' => KycStatus::Approved,
             'round' => 1,
         ]);
 
         Payment::create([
-            'user_id' => $account->id,
+            'business_account_id' => $account->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Pending,
             'amount_minor' => 600000,
@@ -183,12 +135,12 @@ describe('the queue', function () {
     });
 
     it('leaves out an account that is not fully verified', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
         $account->forceFill([
             'status' => AccountStatus::PaymentVerificationPending,
             'approval_pending_at' => null,
-            'mobile_verified_at' => null,
         ])->save();
+        $account->owner->forceFill(['mobile_verified_at' => null])->save();
 
         $this->actingAs($this->approver)
             ->get(route('admin.activations.index'))
@@ -201,12 +153,12 @@ describe('the queue', function () {
             AccountStatus::Closed,
             AccountStatus::TemporarilyDisabled,
         ] as $status) {
-            readyForActivation()->forceFill(['status' => $status])->save();
+            testAccountReadyForActivation()->forceFill(['status' => $status])->save();
         }
 
         // And an activated account, excluded by activated_at rather than by
         // listing the twelve post-activation statuses.
-        readyForActivation()->forceFill([
+        testAccountReadyForActivation()->forceFill([
             'status' => AccountStatus::Active,
             'activated_at' => now(),
         ])->save();
@@ -227,8 +179,8 @@ describe('the queue', function () {
     });
 
     it('ignores a sort column that is not on the whitelist', function () {
-        $waitingLongest = readyForActivation(readyDaysAgo: 9);
-        readyForActivation(readyDaysAgo: 1);
+        $waitingLongest = testAccountReadyForActivation(readyDaysAgo: 9);
+        testAccountReadyForActivation(readyDaysAgo: 1);
 
         $this->actingAs($this->approver)
             ->get(route('admin.activations.index', ['sort' => 'password', 'direction' => 'desc']))
@@ -241,7 +193,7 @@ describe('the queue', function () {
 
 describe('the account page', function () {
     it('shows each condition with the evidence behind it', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->get(route('admin.activations.show', $account))
@@ -260,9 +212,8 @@ describe('the account page', function () {
         // Nothing done: unverified, no KYC, no payment. All three must be
         // reported so an administrator fixes them at once rather than being
         // refused three times.
-        $account = User::factory()->onboarding(AccountStatus::ApprovalPending)->create([
-            'mobile_verified_at' => null,
-        ]);
+        $account = testBusinessAccount(AccountStatus::ApprovalPending);
+        $account->owner->forceFill(['email_verified_at' => null, 'mobile_verified_at' => null])->save();
 
         $this->actingAs($this->approver)
             ->get(route('admin.activations.show', $account))
@@ -273,12 +224,16 @@ describe('the account page', function () {
     });
 
     it('offers no decision on the approver’s own account', function () {
-        // The approver's own status is beside the point — the policy refuses on
-        // identity, not on where the account sits. Leaving them Active also
-        // keeps them past the §5.4 gate, so the policy is what answers.
+        // A reviewer who also owns a business must not decide on it. The
+        // policy refuses on membership, not on the account's status.
+        $own = testBusinessAccount(AccountStatus::ApprovalPending);
+        $own->memberships()->create([
+            'user_id' => $this->approver->id,
+            'role' => TeamRole::Owner->value,
+        ]);
 
         $this->actingAs($this->approver)
-            ->get(route('admin.activations.show', $this->approver))
+            ->get(route('admin.activations.show', $own))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('account.can_approve', false)
                 ->where('account.can_suspend', false)
@@ -289,7 +244,7 @@ describe('the account page', function () {
 
 describe('approving', function () {
     it('activates the account and returns to the queue', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.approve', $account))
@@ -300,8 +255,8 @@ describe('approving', function () {
 
     it('reports the blocking conditions rather than failing opaquely', function () {
         // A condition can come undone between the page rendering and the submit.
-        $account = readyForActivation();
-        Payment::where('user_id', $account->id)
+        $account = testAccountReadyForActivation();
+        Payment::where('business_account_id', $account->id)
             ->update(['status' => PaymentStatus::Pending]);
 
         $this->actingAs($this->approver)
@@ -312,21 +267,22 @@ describe('approving', function () {
     });
 
     it('refuses an approver acting on their own account', function () {
-        // The approver's own status is beside the point — the policy refuses on
-        // identity, not on where the account sits. Leaving them Active also
-        // keeps them past the §5.4 gate, so the policy is what answers.
+        $own = testBusinessAccount(AccountStatus::ApprovalPending);
+        $own->memberships()->create([
+            'user_id' => $this->approver->id,
+            'role' => TeamRole::Owner->value,
+        ]);
 
         $this->actingAs($this->approver)
-            ->post(route('admin.activations.approve', $this->approver))
+            ->post(route('admin.activations.approve', $own))
             ->assertForbidden();
     });
 
     it('refuses someone who may view but not approve', function () {
         // A KYC Manager holds account.view for context, not account.approve.
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
-        $viewer = User::factory()->staff()->create();
-        $viewer->assignRole(PlatformRole::KycManager->value);
+        $viewer = testPlatformStaff(PlatformRole::KycManager);
 
         $this->actingAs($viewer)
             ->post(route('admin.activations.approve', $account))
@@ -338,7 +294,7 @@ describe('approving', function () {
 
 describe('requesting corrections', function () {
     it('sends an account back to fix its evidence', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.request-resubmission', $account), [
@@ -352,7 +308,7 @@ describe('requesting corrections', function () {
     });
 
     it('refuses with nothing for the applicant to act on', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.request-resubmission', $account), [
@@ -364,7 +320,7 @@ describe('requesting corrections', function () {
     });
 
     it('tells the applicant what to fix', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.request-resubmission', $account), [
@@ -374,7 +330,7 @@ describe('requesting corrections', function () {
             ]);
 
         Notification::assertSentTo(
-            $account,
+            $account->owner,
             KycResubmissionRequested::class,
             // The internal note must not travel with it (§7.3).
             fn (KycResubmissionRequested $notification) => $notification->feedback
@@ -383,7 +339,7 @@ describe('requesting corrections', function () {
     });
 
     it('records its own audit entry', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.request-resubmission', $account), [
@@ -399,7 +355,7 @@ describe('suspending', function () {
     it('is a separate permission from approving', function () {
         // §5.3, D18. Suspension removes the ability to trade and must not be
         // reachable by everyone who happens to work the approval queue.
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $approveOnly = User::factory()->staff()->create();
         $approveOnly->givePermissionTo('account.view', 'account.approve');
@@ -420,7 +376,7 @@ describe('suspending', function () {
     });
 
     it('requires a recorded reason', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.suspend', $account), [])
@@ -430,7 +386,7 @@ describe('suspending', function () {
     });
 
     it('suspends an application that should not proceed', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.suspend', $account), [
@@ -445,7 +401,7 @@ describe('suspending', function () {
 
     it('keeps the internal note off the account holder’s record', function () {
         // §7.3 keeps private review notes private.
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.suspend', $account), [
@@ -459,14 +415,14 @@ describe('suspending', function () {
             ->and($change->user_visible_note)->toBeNull();
 
         Notification::assertSentTo(
-            $account,
+            $account->owner,
             AccountSuspended::class,
             fn (AccountSuspended $notification) => $notification->note === null,
         );
     });
 
     it('records a sensitive audit entry', function () {
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.suspend', $account), [
@@ -483,7 +439,7 @@ describe('suspending', function () {
     it('is not a permanent denial', function () {
         // Closure is terminal and belongs to the closure workflow (D18).
         // Suspension must stay reversible or it becomes closure by the back door.
-        $account = readyForActivation();
+        $account = testAccountReadyForActivation();
 
         $this->actingAs($this->approver)
             ->post(route('admin.activations.suspend', $account), [

@@ -15,10 +15,11 @@ beforeEach(function () {
 
     $this->store = app(KycDocumentStore::class);
 
-    $this->applicant = User::factory()->create();
+    $this->account = testBusinessAccount();
+    $this->applicant = $this->account->owner;
 
     $this->submission = KycSubmission::create([
-        'user_id' => $this->applicant->id,
+        'business_account_id' => $this->account->id,
         'status' => KycStatus::Draft,
         'round' => 1,
     ]);
@@ -119,7 +120,7 @@ describe('reading', function () {
     });
 
     it('records who read it (§7.5)', function () {
-        $reviewer = User::factory()->create();
+        $reviewer = User::factory()->staff()->create();
 
         $this->store->read($this->document, $reviewer->id, 'view', '203.0.113.7', 'Firefox');
 
@@ -133,7 +134,7 @@ describe('reading', function () {
 
     it('distinguishes a view from a download', function () {
         // Opening a photograph is not the same as taking a copy away.
-        $reviewer = User::factory()->create();
+        $reviewer = User::factory()->staff()->create();
 
         $this->store->read($this->document, $reviewer->id, 'view');
         $this->store->read($this->document, $reviewer->id, 'download');
@@ -143,7 +144,7 @@ describe('reading', function () {
     });
 
     it('records every read, not just the first', function () {
-        $reviewer = User::factory()->create();
+        $reviewer = User::factory()->staff()->create();
 
         $this->store->read($this->document, $reviewer->id);
         $this->store->read($this->document, $reviewer->id);
@@ -153,7 +154,7 @@ describe('reading', function () {
     });
 
     it('refuses to edit or delete an access record', function () {
-        $this->store->read($this->document, User::factory()->create()->id, 'view');
+        $this->store->read($this->document, User::factory()->staff()->create()->id, 'view');
         $access = KycDocumentAccess::first();
 
         // A genuinely different value — an update to the same value is a no-op

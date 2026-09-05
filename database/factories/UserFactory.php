@@ -2,7 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Enums\UserStatus;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
@@ -32,13 +33,10 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
 
-            // An ordinary, usable account. Most features live past activation,
-            // and the §5.4 funnel gate turns an unactivated account back — so a
-            // default of `Registered` would mean nearly every test had to say
-            // "and it is activated" before testing anything. Tests that care
-            // about the funnel set the status they mean, explicitly.
-            'status' => AccountStatus::Active,
-            'activated_at' => now(),
+            // An ordinary, usable login. The commercial lifecycle is not here
+            // any more (D23) — a user with no business account is a perfectly
+            // valid Feriwala staff member.
+            'identity_status' => UserStatus::Active,
             'mobile_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
@@ -49,70 +47,70 @@ class UserFactory extends Factory
     }
 
     /*
-     * Named states for every point of the lifecycle a gate can turn on.
+     * Identity states (§6, D23). The commercial lifecycle — onboarding,
+     * approval-pending, activated, suspended-as-a-business — lives on
+     * {@see BusinessAccountFactory}, because those are facts about a business
+     * rather than about a person.
      *
-     * The default is an ordinary usable account, which suits the great majority
-     * of tests. But a default that quietly satisfies an access gate is exactly
-     * how a broken gate passes its own test suite — so activation, middleware,
-     * policy and security tests must name the state they mean, and these exist
-     * so naming it costs one word.
+     * A default that quietly satisfies an access gate is how a broken gate
+     * passes its own test suite, so security, middleware and policy tests must
+     * name the state they mean. These exist so naming it costs one word.
      */
 
-    /** Fully activated and trading. */
-    public function active(): static
+    /**
+     * A Feriwala staff account: a login with **no business account**.
+     *
+     * The point of D23 in one factory state — administering the platform takes
+     * an identity and a permission, not commercial KYC and an activation fee.
+     */
+    public function staff(): static
+    {
+        return $this->state(fn () => ['identity_status' => UserStatus::Active]);
+    }
+
+    /** Locked by a security control rather than a person (§6). */
+    public function locked(): static
+    {
+        return $this->identity(UserStatus::Locked);
+    }
+
+    /** Suspended by an administrator: no access anywhere, admin included. */
+    public function suspendedIdentity(): static
+    {
+        return $this->identity(UserStatus::Suspended);
+    }
+
+    /** Closed. Terminal; retention rules take over (D18). */
+    public function closedIdentity(): static
+    {
+        return $this->identity(UserStatus::Closed);
+    }
+
+    public function identity(UserStatus $status): static
     {
         return $this->state(fn () => [
-            'status' => AccountStatus::Active,
-            'activated_at' => now(),
+            'identity_status' => $status,
+            'identity_status_changed_at' => now(),
         ]);
     }
 
     /**
-     * A Feriwala staff account.
+     * Someone who owns a business account.
      *
-     * Distinct from {@see active()} at the call site even though it produces the
-     * same row today: staff and traders are different kinds of user, and the
-     * separation of identity from business account will give them genuinely
-     * different shapes.
-     */
-    public function staff(): static
-    {
-        return $this->active();
-    }
-
-    /**
-     * Still inside the activation funnel (§5.4).
+     * The commercial state is the account's, so it is named there:
+     * `withBusinessAccount(fn ($f) => $f->approvalPending())`.
      *
-     * @param  AccountStatus  $status  where in the funnel it sits
+     * @param  (callable(BusinessAccountFactory): BusinessAccountFactory)|null  $state
      */
-    public function onboarding(AccountStatus $status = AccountStatus::Registered): static
+    public function withBusinessAccount(?callable $state = null): static
     {
-        return $this->state(fn () => ['status' => $status]);
-    }
+        return $this->afterCreating(function (User $user) use ($state) {
+            $factory = BusinessAccount::factory()->for($user, 'owner');
 
-    /** Everything done, waiting on a human (§5.1, §44). */
-    public function approvalPending(): static
-    {
-        return $this->onboarding(AccountStatus::ApprovalPending)
-            ->state(fn () => ['approval_pending_at' => now()]);
-    }
-
-    /** Sent back to fix their evidence (§7.3). */
-    public function kycResubmissionRequired(): static
-    {
-        return $this->onboarding(AccountStatus::KycResubmissionRequired);
-    }
-
-    /** Suspended by an administrator. Reversible (§5.3). */
-    public function suspended(): static
-    {
-        return $this->onboarding(AccountStatus::Suspended);
-    }
-
-    /** Closed. Terminal; retention rules take over (D18). */
-    public function closed(): static
-    {
-        return $this->onboarding(AccountStatus::Closed);
+            ($state ? $state($factory) : $factory)->create([
+                'name' => $user->name."'s Business",
+            ]);
+        });
     }
 
     /**
@@ -134,21 +132,7 @@ class UserFactory extends Factory
      */
     public function configure(): static
     {
-        return $this->afterMaking(function (User $user) {
-            // Keep the pair honest. A test that asks for `KycPending` should not
-            // silently inherit the default's `activated_at`, and having to
-            // remember to null it at every call site is how that inconsistency
-            // gets into the fixtures in the first place.
-            if (! $user->status->isActivated()) {
-                $user->activated_at = null;
-            }
-
-            // Likewise for the readiness stamp: only an account actually at the
-            // gate has been waiting at it.
-            if ($user->status !== AccountStatus::ApprovalPending) {
-                $user->approval_pending_at = null;
-            }
-        })->afterCreating(function ($user) {
+        return $this->afterCreating(function ($user) {
             $team = Team::factory()->personal()->create([
                 'name' => $user->name."'s Team",
             ]);

@@ -52,7 +52,7 @@ test('new users can register', function () {
     $user = User::where('email', 'test@example.com')->first();
 
     expect($user)->not->toBeNull()
-        ->and($user->status)->toBe(AccountStatus::Registered);
+        ->and($user->businessAccount->status)->toBe(AccountStatus::Registered);
 
     $response->assertRedirect(route('dashboard'));
 });
