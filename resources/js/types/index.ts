@@ -5,5 +5,5 @@ export type * from './kyc';
 export type * from './localization';
 export type * from './navigation';
 export type * from './onboarding';
-export type * from './teams';
+export type * from './account';
 export type * from './ui';

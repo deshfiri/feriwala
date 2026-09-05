@@ -38,7 +38,7 @@ describe('what an unactivated business may reach (§5.4)', function () {
 
     it('turns it away from everything else', function () {
         $this->actingAs($this->onboarding)
-            ->get(route('teams.index'))
+            ->get(route('dashboard'))
             ->assertRedirect(route('onboarding.status'));
     });
 
@@ -46,13 +46,13 @@ describe('what an unactivated business may reach (§5.4)', function () {
         // The account holder has done nothing wrong; they have steps left. A 403
         // says the opposite, and gives them nowhere to go.
         $this->actingAs($this->onboarding)
-            ->get(route('teams.index'))
+            ->get(route('dashboard'))
             ->assertStatus(302);
     });
 
     it('lets an activated business through', function () {
         $this->actingAs($this->trading)
-            ->get(route('teams.index'))
+            ->get(route('dashboard'))
             ->assertOk();
     });
 });
@@ -135,7 +135,7 @@ describe('administration is not behind the commercial gate (D23)', function () {
         $reviewer->assignRole(PlatformRole::KycManager->value);
 
         $this->actingAs($reviewer)
-            ->get(route('teams.index'))
+            ->get(route('dashboard'))
             ->assertRedirect(route('onboarding.status'));
 
         $this->actingAs($reviewer)

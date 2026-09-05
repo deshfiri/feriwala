@@ -5,13 +5,13 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
-use App\Concerns\HasTeams;
+use App\Domain\Account\Enums\AccountPermission;
+use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Account\Models\AccountMembership;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Models\UserAddress;
-use App\Enums\TeamRole;
 use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -58,41 +58,22 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $remember_token
- * @property int|null $current_team_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Team|null $currentTeam
- * @property-read Collection<int, Team> $ownedTeams
- * @property-read Collection<int, Membership> $teamMemberships
- * @property-read Collection<int, Team> $teams
  * @property-read Collection<int, UserAddress> $addresses
  * @property-read BusinessAccount|null $businessAccount
  * @property-read BusinessAccount|null $ownedAccount
  * @property-read AccountMembership|null $accountMembership
  */
 #[Fillable([
-    'name', 'email', 'mobile', 'password', 'current_team_id',
+    'name', 'email', 'mobile', 'password',
     'date_of_birth', 'gender', 'country', 'nationality', 'locale',
 ])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasPublicId, HasStateMachine, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
-
-    /*
-     * Both traits define teams(). They mean different things: HasTeams::teams
-     * is the account's own membership relation, while Spatie's is the set of
-     * role-scoping teams. The account relation is the one the application uses,
-     * so it wins; Spatie's is kept under a distinct name rather than dropped,
-     * because the package calls it internally when teams mode is enabled (D2).
-     *
-     * This resolves when Team becomes Account in P1-64.
-     */
-    use HasRoles, HasTeams {
-        HasTeams::teams insteadof HasRoles;
-        HasRoles::teams as spatieRoleTeams;
-    }
+    use HasFactory, HasPublicId, HasRoles, HasStateMachine, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
     /**
      * Mirrors the column default, so a model that has not been read back from
@@ -202,7 +183,46 @@ class User extends Authenticatable implements PasskeyUser
 
     public function isAccountOwner(): bool
     {
-        return $this->accountMembership()->value('role') === TeamRole::Owner->value;
+        return $this->accountRole() === AccountRole::Owner;
+    }
+
+    /**
+     * This person's role inside their business account (D1, §32).
+     *
+     * There is one, because there is one account. The starter kit's
+     * "which team am I looking at" question does not exist here: no session
+     * value, no URL segment, nothing to switch. The membership row is the
+     * answer, and it is the same answer on every request.
+     */
+    public function accountRole(?BusinessAccount $account = null): ?AccountRole
+    {
+        $membership = $this->relationLoaded('accountMembership')
+            ? $this->accountMembership
+            : $this->accountMembership()->first();
+
+        if ($membership === null) {
+            return null;
+        }
+
+        if ($account !== null && $membership->business_account_id !== $account->id) {
+            return null;
+        }
+
+        return $membership->role;
+    }
+
+    /**
+     * Whether this person holds an account-level permission.
+     *
+     * Scoped to the account they are actually a member of. Passing a different
+     * account returns false rather than falling through to their own role —
+     * §31.3 makes self-scoping a query concern, and a permission check that
+     * ignores which account it was asked about is how a manager of one business
+     * ends up managing another.
+     */
+    public function hasAccountPermission(BusinessAccount $account, AccountPermission $permission): bool
+    {
+        return $this->accountRole($account)?->hasPermission($permission) ?? false;
     }
 
     /**

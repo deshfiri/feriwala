@@ -5,12 +5,12 @@ namespace App\Domain\Account\Models;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
 use App\Concerns\HasStateMachine;
+use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Models\UserPackage;
-use App\Enums\TeamRole;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Factories\BusinessAccountFactory;
@@ -198,7 +198,7 @@ class BusinessAccount extends Model
      */
     public function staff(): BelongsToMany
     {
-        return $this->members()->wherePivot('role', '!=', TeamRole::Owner->value);
+        return $this->members()->wherePivot('role', '!=', AccountRole::Owner->value);
     }
 
     public function isActivated(): bool

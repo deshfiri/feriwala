@@ -2,6 +2,7 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Actions\EvaluateActivationReadiness;
+use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Billing\Enums\PaymentPurpose;
@@ -9,7 +10,6 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Enums\TeamRole;
 use App\Models\User;
 use App\Notifications\Account\AccountSuspended;
 use App\Notifications\Account\KycResubmissionRequested;
@@ -229,7 +229,7 @@ describe('the account page', function () {
         $own = testBusinessAccount(AccountStatus::ApprovalPending);
         $own->memberships()->create([
             'user_id' => $this->approver->id,
-            'role' => TeamRole::Owner->value,
+            'role' => AccountRole::Owner->value,
         ]);
 
         $this->actingAs($this->approver)
@@ -270,7 +270,7 @@ describe('approving', function () {
         $own = testBusinessAccount(AccountStatus::ApprovalPending);
         $own->memberships()->create([
             'user_id' => $this->approver->id,
-            'role' => TeamRole::Owner->value,
+            'role' => AccountRole::Owner->value,
         ]);
 
         $this->actingAs($this->approver)

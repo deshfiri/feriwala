@@ -2,7 +2,6 @@
 
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\UserStatus;
-use App\Enums\TeamRole;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +33,15 @@ use Illuminate\Support\Str;
  */
 return new class extends Migration
 {
+    /**
+     * The owner role, spelled out rather than referenced.
+     *
+     * A migration is a record of what happened, so it must keep running after
+     * the enum it was written against has been renamed or deleted — as
+     * `App\Enums\TeamRole` was, one migration later.
+     */
+    private const OWNER_ROLE = 'owner';
+
     /** Commercial tables that hang off the account rather than the person. */
     private const COMMERCIAL_TABLES = [
         'kyc_submissions',
@@ -105,7 +113,7 @@ return new class extends Migration
                 $team = DB::table('teams')
                     ->join('team_members', 'teams.id', '=', 'team_members.team_id')
                     ->where('team_members.user_id', $user->id)
-                    ->where('team_members.role', TeamRole::Owner->value)
+                    ->where('team_members.role', self::OWNER_ROLE)
                     ->orderBy('teams.id')
                     ->select('teams.name', 'teams.slug')
                     ->first();
@@ -125,7 +133,7 @@ return new class extends Migration
                 DB::table('business_account_members')->insert([
                     'business_account_id' => $accountId,
                     'user_id' => $user->id,
-                    'role' => TeamRole::Owner->value,
+                    'role' => self::OWNER_ROLE,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]);

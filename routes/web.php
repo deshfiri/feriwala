@@ -9,10 +9,9 @@ use App\Http\Controllers\Erp\KycDocumentController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
+use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\LocaleController;
-use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
-use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -21,8 +20,15 @@ Route::inertia('/', 'welcome')->name('home');
 // login screen can be read in Bangla before an account exists (D6).
 Route::put('locale', [LocaleController::class, 'update'])->name('locale.update');
 
-Route::prefix('{current_team}')
-    ->middleware(['auth', 'verified', 'business.activated', EnsureTeamMembership::class])
+/*
+ * One dashboard at one address (D1).
+ *
+ * The `{current_team}` prefix that used to wrap this is gone, not renamed. A
+ * person belongs to exactly one business account and cannot switch, so an
+ * account segment in the URL had nothing to vary — it only offered somebody
+ * else's identifier to try.
+ */
+Route::middleware(['auth', 'verified', 'business.activated'])
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
     });
@@ -37,17 +43,28 @@ Route::prefix('{current_team}')
  * suspended login must lose every panel, and a gate that has to be remembered
  * per route group is one somebody will eventually forget.
  */
-Route::middleware(['auth', 'business.activated'])->group(function () {
-    Route::post('invitations/{invitation}/accept', [TeamInvitationController::class, 'accept'])->name('invitations.accept');
-    Route::delete('invitations/{invitation}', [TeamInvitationController::class, 'decline'])->name('invitations.decline');
+/*
+ * Joining somebody else's account (§8.1, D23).
+ *
+ * Outside `business.activated`, and it has to be: the invitee has no business
+ * account of their own — that is what being invited means — so a gate asking
+ * whether their business is activated would refuse every invitation ever sent.
+ * The global identity gate still applies, and the action checks that the person
+ * signing in is the one the invitation was addressed to.
+ */
+Route::middleware(['auth', 'noindex'])->group(function () {
+    Route::get('staff/invitation/{token}', [StaffInvitationController::class, 'show'])
+        ->name('staff.invitation.show');
+    Route::post('staff/invitation/{token}', [StaffInvitationController::class, 'accept'])
+        ->name('staff.invitation.accept');
+});
 
+Route::middleware(['auth', 'business.activated'])->group(function () {
     /*
      * Onboarding is one of the seven areas an unactivated account may reach
      * (§5.4), and stays reachable after activation so a newly active user can
      * see that rather than hitting a 404 on the page that has been guiding them.
      *
-     * Deliberately outside the {current_team} prefix — a partly-registered
-     * account has no team context to resolve, and D1 removes that prefix anyway.
      */
     Route::middleware('noindex')->group(function () {
         Route::get('onboarding', [OnboardingController::class, 'status'])

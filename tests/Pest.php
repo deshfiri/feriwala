@@ -9,8 +9,13 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Package\Enums\UserPackageStatus;
+use App\Domain\Package\Models\Package;
+use App\Domain\Package\Models\UserPackage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /*
@@ -165,4 +170,55 @@ function testPlatformStaff(PlatformRole $role): User
     $user->assignRole($role->value);
 
     return $user;
+}
+
+/**
+ * An active account on a package that allows `$staffLimit` staff (§8.1).
+ *
+ * Null means the package sets no cap; zero means it grants no staff at all —
+ * two different answers that must not be conflated, which is why the fixture
+ * writes the feature row for both rather than leaving one absent.
+ *
+ * Built through real package rows rather than by stubbing Entitlements: the
+ * limit is read from a subscription in the tests exactly as it is in production,
+ * so a package that has lapsed stops granting staff without anything else being
+ * told about it.
+ */
+function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = null): BusinessAccount
+{
+    $account = $status === null
+        ? BusinessAccount::factory()->create()
+        : BusinessAccount::factory()->onboarding($status)->create();
+
+    $package = Package::create([
+        'slug' => 'staff-limit-'.Str::lower(Str::random(8)),
+        'name' => 'Test package',
+        'fee_minor' => 500000,
+        'currency_code' => 'BDT',
+        'is_active' => true,
+        'is_public' => true,
+    ]);
+
+    // The row is always written, including for unlimited. A **missing** row is
+    // not "unlimited" — PackageFeature::default() makes it zero, so that a
+    // package which forgets a feature under-delivers rather than handing out
+    // free staff. Unlimited is a row whose value is null.
+    $package->features()->create([
+        'feature' => PackageFeature::StaffLimit->value,
+        'value' => $staffLimit === null ? null : (string) $staffLimit,
+    ]);
+
+    $userPackage = UserPackage::create([
+        'business_account_id' => $account->id,
+        'package_id' => $package->id,
+        'status' => UserPackageStatus::Active,
+        'started_at' => now()->subDay(),
+        'expires_at' => now()->addYear(),
+        'paid_fee_minor' => 500000,
+        'currency_code' => 'BDT',
+    ]);
+
+    $account->forceFill(['current_user_package_id' => $userPackage->id])->save();
+
+    return $account->refresh();
 }

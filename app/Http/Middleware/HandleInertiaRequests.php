@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Account\Data\AccountContext;
+use App\Domain\Account\StaffAllowance;
 use App\Models\User;
 use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
@@ -14,6 +16,10 @@ use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    public function __construct(
+        protected StaffAllowance $allowance,
+    ) {}
+
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -51,8 +57,18 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
-            'currentTeam' => fn () => $user?->currentTeam ? $user->toUserTeam($user->currentTeam) : null,
-            'teams' => fn () => $user?->toUserTeams(includeCurrent: true) ?? [],
+
+            /*
+             * One account, shared as a fact rather than a choice (D1).
+             *
+             * This replaces the starter kit's `currentTeam` plus `teams` pair.
+             * There is no list, because a person belongs to one business account
+             * and cannot switch; sending a list is what makes a front end build
+             * a switcher for it.
+             */
+            'account' => fn () => $user === null
+                ? null
+                : AccountContext::forUser($user, $this->allowance),
             'locale' => [
                 'current' => App::getLocale(),
                 'direction' => Locale::parse(App::getLocale())->direction(),

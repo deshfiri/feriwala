@@ -2,19 +2,22 @@
 
 namespace App\Actions\Fortify;
 
-use App\Actions\Teams\CreateTeam;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
+use App\Domain\Account\Actions\AcceptStaffInvitation;
+use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\UserStatus;
+use App\Domain\Account\Exceptions\StaffLimitReached;
+use App\Domain\Account\Models\AccountInvitation;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Referral\Actions\ResolveReferrer;
 use App\Domain\Referral\ReferralCode;
-use App\Enums\TeamRole;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
 /**
@@ -29,7 +32,7 @@ class CreateNewUser implements CreatesNewUsers
     use PasswordValidationRules, ProfileValidationRules;
 
     public function __construct(
-        private CreateTeam $createTeam,
+        private AcceptStaffInvitation $acceptStaffInvitation,
         private ReferralCode $referralCodes,
         private ResolveReferrer $resolveReferrer,
     ) {}
@@ -50,6 +53,11 @@ class CreateNewUser implements CreatesNewUsers
             'country' => ['nullable', 'string', 'size:2'],
             'nationality' => ['nullable', 'string', 'max:64'],
             'referral_code' => ['nullable', 'string', 'max:16'],
+
+            // Carried through from the invitation link. Not validated against
+            // the database here: an unusable token means "register normally",
+            // not "refuse the registration".
+            'invitation' => ['nullable', 'string', 'max:64'],
 
             // §5.2 requires both acceptances, so they are validated rather than
             // assumed from the presence of a form.
@@ -86,9 +94,35 @@ class CreateNewUser implements CreatesNewUsers
             ])->save();
 
             /*
-             * Registering creates two things now (D23): the person, and the
-             * business they are about to onboard. They are the owner, and the
-             * commercial funnel — KYC, package, activation payment — runs
+             * Somebody registering to accept an invitation is joining a business
+             * that already exists, so no second one is opened for them (D1, D23).
+             *
+             * Without this they would leave registration owning an account and
+             * therefore holding the one membership D1 allows — and the
+             * invitation that brought them here would be unacceptable, refused
+             * for a conflict registration itself had just created.
+             */
+            $invitation = $this->invitationFor($input, $user);
+
+            if ($invitation !== null) {
+                try {
+                    $this->acceptStaffInvitation->handle($invitation, $user);
+                } catch (StaffLimitReached $exception) {
+                    // The seat went while they were filling in the form. Said
+                    // plainly rather than quietly opening a business of their
+                    // own, which is not what they came here to do.
+                    throw ValidationException::withMessages([
+                        'invitation' => $exception->getMessage(),
+                    ]);
+                }
+
+                return $user;
+            }
+
+            /*
+             * Otherwise registering creates two things (D23): the person, and
+             * the business they are about to onboard. They are the owner, and
+             * the commercial funnel — KYC, package, activation payment — runs
              * against the account rather than against them.
              *
              * Somebody Feriwala hires as platform staff gets no account, which
@@ -102,12 +136,33 @@ class CreateNewUser implements CreatesNewUsers
 
             $account->memberships()->create([
                 'user_id' => $user->id,
-                'role' => TeamRole::Owner->value,
+                'role' => AccountRole::Owner->value,
             ]);
-
-            $this->createTeam->handle($user, $user->name."'s Team", isPersonal: true);
 
             return $user;
         });
+    }
+
+    /**
+     * The invitation this registration is answering, if it is answering one.
+     *
+     * The token is not enough on its own: {@see AccountInvitation::matches()}
+     * still has to agree that this is the person it was addressed to, so
+     * registering with somebody else's link produces an ordinary new business
+     * rather than access to theirs.
+     *
+     * @param  array<string, string>  $input
+     */
+    private function invitationFor(array $input, User $user): ?AccountInvitation
+    {
+        $token = $input['invitation'] ?? null;
+
+        if (! is_string($token) || $token === '') {
+            return null;
+        }
+
+        $invitation = AccountInvitation::query()->where('token', $token)->live()->first();
+
+        return $invitation?->matches($user) === true ? $invitation : null;
     }
 }

@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,10 @@ import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
-import { index as teams } from '@/routes/teams';
+import { index as staff } from '@/routes/staff';
 import type { NavItem } from '@/types';
 
-const sidebarNavItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
     {
         title: 'Profile',
         href: edit(),
@@ -22,20 +22,31 @@ const sidebarNavItems: NavItem[] = [
         href: editSecurity(),
         icon: null,
     },
-    {
-        title: 'Teams',
-        href: teams(),
-        icon: null,
-    },
-    {
-        title: 'Appearance',
-        href: editAppearance(),
-        icon: null,
-    },
 ];
+
+const appearanceNavItem: NavItem = {
+    title: 'Appearance',
+    href: editAppearance(),
+    icon: null,
+};
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { account } = usePage().props;
+
+    /*
+     * Staff appears only when the account has staff to manage and this person
+     * may manage them. A solo package, or a staff member who is not a manager,
+     * sees no entry at all — not a greyed-out one, which reads as something
+     * withheld rather than something the plan never included.
+     */
+    const sidebarNavItems: NavItem[] = [
+        ...baseNavItems,
+        ...(account?.allowsStaff && account.managesStaff
+            ? [{ title: 'Staff', href: staff(), icon: null }]
+            : []),
+        appearanceNavItem,
+    ];
 
     return (
         <div className="px-4 py-6">

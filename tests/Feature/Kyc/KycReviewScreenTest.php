@@ -1,12 +1,12 @@
 <?php
 
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
-use App\Enums\TeamRole;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
@@ -197,7 +197,7 @@ describe('the submission page', function () {
         $own = testBusinessAccount();
         $own->memberships()->create([
             'user_id' => $this->reviewer->id,
-            'role' => TeamRole::Owner->value,
+            'role' => AccountRole::Owner->value,
         ]);
         $submission = queuedKycSubmission(account: $own);
 

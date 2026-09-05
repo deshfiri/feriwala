@@ -1,8 +1,6 @@
 <?php
 
-use App\Enums\TeamRole;
-use App\Models\Team;
-use App\Models\TeamInvitation;
+use App\Domain\Account\Models\AccountInvitation;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,25 +14,28 @@ test('login screen can be rendered', function () {
     $response->assertOk();
 });
 
-test('login screen includes team invitation context', function () {
-    $owner = User::factory()->create();
-    $team = Team::factory()->create(['name' => 'Laravel Team']);
-    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+test('login screen names the account an invitation came from', function () {
+    // Someone invited to work in an account usually has no login yet, so the
+    // link lands them here first. Without the business name, being asked to
+    // sign in is indistinguishable from having clicked the wrong thing.
+    $owner = User::factory()
+        ->withBusinessAccount(fn ($account) => $account->active()->state(['name' => 'Karim Traders']))
+        ->create();
 
-    $invitation = TeamInvitation::factory()->create([
-        'team_id' => $team->id,
+    $invitation = AccountInvitation::factory()->create([
+        'business_account_id' => $owner->businessAccount->id,
         'email' => 'invited@example.com',
         'invited_by' => $owner->id,
     ]);
 
-    $response = $this->get(route('login', ['invitation' => $invitation->code]));
-
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('auth/login')
-        ->where('teamInvitation.code', $invitation->code)
-        ->where('teamInvitation.teamName', 'Laravel Team'),
-    );
+    $this->get(route('login', ['invitation' => $invitation->token]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('auth/login')
+            ->where('staffInvitation.token', $invitation->token)
+            ->where('staffInvitation.account', 'Karim Traders')
+            ->missing('teamInvitation'),
+        );
 });
 
 test('users can authenticate using the login screen', function () {
@@ -49,7 +50,7 @@ test('users can authenticate using the login screen', function () {
     $response->assertRedirect(route('dashboard'));
 });
 
-test('passkey login response redirects to the current team dashboard', function () {
+test('passkey login response redirects to the one dashboard', function () {
     $user = User::factory()->create();
 
     $request = Request::create(route('login', absolute: false), 'GET', server: [
@@ -60,7 +61,8 @@ test('passkey login response redirects to the current team dashboard', function 
 
     $jsonResponse = app(PasskeyLoginResponse::class)->toResponse($request);
 
-    expect($jsonResponse->getData()->redirect)->toBe(route('dashboard', ['current_team' => $user->personalTeam()->slug]));
+    // No account segment to fill in: there is one dashboard at one address (D1).
+    expect($jsonResponse->getData()->redirect)->toBe(route('dashboard'));
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {

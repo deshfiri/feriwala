@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Cannot access property \$email on App\\Models\\User\|null\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: app/Http/Controllers/DashboardController.php
-
-		-
 			message: '#^Cannot access property \$email_verified_at on App\\Models\\User\|null\.$#'
 			identifier: property.nonObject
 			count: 1
@@ -63,95 +57,6 @@ parameters:
 		-
 			message: '#^Cannot access property \$id on App\\Models\\User\|null\.$#'
 			identifier: property.nonObject
-			count: 2
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot call method belongsToTeam\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot call method fallbackTeam\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot call method isCurrentTeam\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot call method switchTeam\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 3
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot call method toISOString\(\) on Illuminate\\Support\\Carbon\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot call method toTeamPermissions\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot call method toUserTeams\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:switchTeam\(\) expects App\\Models\\Team, App\\Models\\Team\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Actions\\Teams\\CreateTeam\:\:handle\(\) expects App\\Models\\User, App\\Models\\User\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Teams/TeamController.php
-
-		-
-			message: '#^Cannot access property \$id on App\\Models\\User\|null\.$#'
-			identifier: property.nonObject
-			count: 2
-			path: app/Http/Controllers/Teams/TeamInvitationController.php
-
-		-
-			message: '#^Cannot call method switchTeam\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Teams/TeamInvitationController.php
-
-		-
-			message: '#^Parameter \#1 \$boolean of function abort_if expects bool, bool\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Teams/TeamMemberController.php
-
-		-
-			message: '#^Parameter \#1 \$team of method App\\Models\\User\:\:switchTeam\(\) expects App\\Models\\Team, App\\Models\\Team\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Teams/TeamMemberController.php
-
-		-
-			message: '#^Cannot access property \$id on App\\Models\\User\|null\.$#'
-			identifier: property.nonObject
 			count: 1
 			path: app/Http/Requests/Settings/ProfileUpdateRequest.php
 
-		-
-			message: '#^Cannot access property \$id on App\\Models\\Team\|null\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: app/Models/User.php

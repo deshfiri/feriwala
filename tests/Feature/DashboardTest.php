@@ -1,135 +1,115 @@
 <?php
 
-use App\Enums\TeamRole;
-use App\Models\Team;
-use App\Models\TeamInvitation;
+use App\Domain\Account\Models\AccountInvitation;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected to the login page', function () {
-    $user = User::factory()->withBusinessAccount()->create();
-    $team = $user->currentTeam;
-
-    $response = $this->get(route('dashboard'));
-    $response->assertRedirect(route('login'));
+    $this->get(route('dashboard'))->assertRedirect(route('login'));
 });
 
 test('authenticated users can visit the dashboard', function () {
-    $user = User::factory()->withBusinessAccount()->create();
-    $team = $user->currentTeam;
+    $user = User::factory()->withBusinessAccount(fn ($account) => $account->active())->create();
 
-    $response = $this
-        ->actingAs($user)
-        ->get(route('dashboard'));
-
-    $response->assertOk();
+    $this->actingAs($user)->get(route('dashboard'))->assertOk();
 });
 
-test('dashboard includes pending invitations for the authenticated user', function () {
-    $owner = User::factory()->withBusinessAccount()->create(['name' => 'Taylor Otwell']);
-    $invitedUser = User::factory()->withBusinessAccount()->create(['email' => 'invited@example.com']);
-    $team = Team::factory()->create(['name' => 'Laravel Team']);
+test('the dashboard has one address with no account segment', function () {
+    // D1 removes {current_team}. A dashboard URL that still carried an account
+    // identifier would be one more thing to try somebody else's value in.
+    expect(route('dashboard', absolute: false))->toBe('/dashboard');
+});
 
-    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+test('the dashboard names the account without offering a list to switch between', function () {
+    $user = User::factory()->withBusinessAccount(fn ($account) => $account->active())->create();
 
-    $invitation = TeamInvitation::factory()->create([
-        'team_id' => $team->id,
-        'email' => 'invited@example.com',
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('dashboard')
+            ->where('account.name', $user->businessAccount->name)
+            ->missing('teams')
+            ->missing('currentTeam'),
+        );
+});
+
+/**
+ * Someone invited but not yet joined: a login with no membership, which is
+ * exactly the state registration used to make impossible.
+ *
+ * @return array{0: User, 1: AccountInvitation}
+ */
+function dashboardInvitee(string $email = 'invited@example.com'): array
+{
+    $owner = User::factory()
+        ->withBusinessAccount(fn ($account) => $account->active())
+        ->create(['name' => 'Taylor Otwell']);
+
+    $invitation = AccountInvitation::factory()->to($email)->create([
+        'business_account_id' => $owner->businessAccount->id,
         'invited_by' => $owner->id,
     ]);
 
-    $response = $this
-        ->actingAs($invitedUser)
-        ->get(route('dashboard'));
+    return [User::factory()->create(['email' => $email]), $invitation];
+}
 
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('dashboard')
-        ->has('pendingInvitations', 1)
-        ->where('pendingInvitations.0.code', $invitation->code)
-        ->where('pendingInvitations.0.inviterName', 'Taylor Otwell')
-        ->where('pendingInvitations.0.team.name', 'Laravel Team')
-        ->where('pendingInvitations.0.team.slug', $team->slug)
-        ->missing('pendingInvitations.0.teamName'),
-    );
-});
+describe('an invited person who has no account of their own', function () {
+    it('is sent to the invitation rather than into a funnel that is not theirs', function () {
+        // The §5.4 stepper belongs to a business being onboarded. An invitee is
+        // not onboarding one — they are waiting to join somebody else's.
+        [$invited, $invitation] = dashboardInvitee();
 
-test('dashboard does not include accepted invitations', function () {
-    $owner = User::factory()->withBusinessAccount()->create();
-    $invitedUser = User::factory()->withBusinessAccount()->create(['email' => 'invited@example.com']);
-    $team = Team::factory()->create();
+        $this->actingAs($invited)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('staff.invitation.show', $invitation->token));
+    });
 
-    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+    it('sees who invited them and to what', function () {
+        [$invited, $invitation] = dashboardInvitee();
 
-    TeamInvitation::factory()->accepted()->create([
-        'team_id' => $team->id,
-        'email' => 'invited@example.com',
-        'invited_by' => $owner->id,
+        $this->actingAs($invited)
+            ->get(route('staff.invitation.show', $invitation->token))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('staff/invitation')
+                ->where('invitation.invitedBy', 'Taylor Otwell')
+                ->where('viewer.matches', true)
+                ->where('viewer.hasAccount', false),
+            );
+    });
+
+    it('is told plainly when the invitation is spent', function (array $spent) {
+        [$invited, $invitation] = dashboardInvitee();
+        $invitation->forceFill($spent)->save();
+
+        $this->actingAs($invited)
+            ->get(route('staff.invitation.show', $invitation->token))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('invitation', null)
+                ->whereNot('reason', null),
+            );
+
+        // Kept: the record of who was invited and what became of it survives
+        // the invitation ceasing to be usable.
+        $this->assertDatabaseHas('account_invitations', ['id' => $invitation->id]);
+    })->with([
+        'accepted' => fn () => ['accepted_at' => now()],
+        'revoked' => fn () => ['revoked_at' => now()],
+        'expired' => fn () => ['expires_at' => now()->subDay()],
     ]);
 
-    $response = $this
-        ->actingAs($invitedUser)
-        ->get(route('dashboard'));
+    it('cannot accept one addressed to somebody else', function () {
+        [, $invitation] = dashboardInvitee('meant-for@example.com');
+        $stranger = User::factory()->create(['email' => 'stranger@example.com']);
 
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('dashboard')
-        ->has('pendingInvitations', 0),
-    );
-});
+        $this->actingAs($stranger)
+            ->get(route('staff.invitation.show', $invitation->token))
+            ->assertInertia(fn (Assert $page) => $page->where('viewer.matches', false));
 
-test('dashboard excludes expired invitations without deleting them', function () {
-    $owner = User::factory()->withBusinessAccount()->create();
-    $invitedUser = User::factory()->withBusinessAccount()->create(['email' => 'invited@example.com']);
-    $team = Team::factory()->create();
-
-    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
-
-    $invitation = TeamInvitation::factory()->expired()->create([
-        'team_id' => $team->id,
-        'email' => 'invited@example.com',
-        'invited_by' => $owner->id,
-    ]);
-
-    $response = $this
-        ->actingAs($invitedUser)
-        ->get(route('dashboard'));
-
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('dashboard')
-        ->has('pendingInvitations', 0),
-    );
-
-    $this->assertDatabaseHas('team_invitations', [
-        'id' => $invitation->id,
-    ]);
-});
-
-test('dashboard does not include or delete other users invitations', function () {
-    $owner = User::factory()->withBusinessAccount()->create();
-    $invitedUser = User::factory()->withBusinessAccount()->create(['email' => 'invited@example.com']);
-    $team = Team::factory()->create();
-
-    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
-
-    $invitation = TeamInvitation::factory()->expired()->create([
-        'team_id' => $team->id,
-        'email' => 'someone@example.com',
-        'invited_by' => $owner->id,
-    ]);
-
-    $response = $this
-        ->actingAs($invitedUser)
-        ->get(route('dashboard'));
-
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('dashboard')
-        ->has('pendingInvitations', 0),
-    );
-
-    $this->assertDatabaseHas('team_invitations', [
-        'id' => $invitation->id,
-    ]);
+        $this->actingAs($stranger)
+            ->from(route('staff.invitation.show', $invitation->token))
+            ->post(route('staff.invitation.accept', $invitation->token))
+            ->assertSessionHasErrors('invitation');
+    });
 });

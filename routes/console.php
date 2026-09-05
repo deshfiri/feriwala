@@ -1,15 +1,17 @@
 <?php
 
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
-use App\Models\TeamInvitation;
 use Illuminate\Support\Facades\Schedule;
 
-Schedule::call(function () {
-    TeamInvitation::query()
-        ->whereNotNull('expires_at')
-        ->where('expires_at', '<', now())
-        ->delete();
-})->daily()->description('Delete expired team invitations');
+/*
+ * Expired staff invitations are not pruned, deliberately.
+ *
+ * The starter kit deleted them nightly. An expired invitation stops being live
+ * the moment its window closes — it occupies no staff seat and cannot be
+ * accepted — so deleting it buys nothing and destroys the answer to "who did we
+ * invite, and what happened to it", which is the sort of question that only
+ * gets asked once the record is gone.
+ */
 
 /*
  * The §7.4 KYC deadline pass: warn what is due, act on what is overdue.

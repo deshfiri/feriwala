@@ -1,11 +1,8 @@
 <?php
 
+use App\Http\Controllers\Erp\StaffController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
-use App\Http\Controllers\Teams\TeamController;
-use App\Http\Controllers\Teams\TeamInvitationController;
-use App\Http\Controllers\Teams\TeamMemberController;
-use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
@@ -35,22 +32,24 @@ Route::middleware(['auth', 'verified', 'business.activated'])->group(function ()
 
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
 
-    Route::get('settings/teams', [TeamController::class, 'index'])->name('teams.index');
-    Route::post('settings/teams', [TeamController::class, 'store'])->name('teams.store');
-
-    Route::middleware(EnsureTeamMembership::class)->group(function () {
-        Route::get('settings/teams/{team}', [TeamController::class, 'edit'])->name('teams.edit');
-        Route::patch('settings/teams/{team}', [TeamController::class, 'update'])->name('teams.update');
-        Route::delete('settings/teams/{team}', [TeamController::class, 'destroy'])->name('teams.destroy');
-        Route::post('settings/teams/{team}/switch', [TeamController::class, 'switch'])->name('teams.switch');
-        Route::delete('settings/teams/{team}/leave', [TeamController::class, 'leave'])->name('teams.leave');
-
-        Route::patch('settings/teams/{team}/members/{user}', [TeamMemberController::class, 'update'])->name('teams.members.update');
-        Route::delete('settings/teams/{team}/members/{user}', [TeamMemberController::class, 'destroy'])->name('teams.members.destroy');
-
-        Route::post('settings/teams/{team}/invitations', [TeamInvitationController::class, 'store'])->name('teams.invitations.store');
-        Route::delete('settings/teams/{team}/invitations/{invitation}', [TeamInvitationController::class, 'destroy'])->name('teams.invitations.destroy');
-    });
+    /*
+     * Staff (§8.1, D1).
+     *
+     * No account segment. Every route here resolves the account from the
+     * signed-in person's membership, so there is no identifier to swap for
+     * somebody else's — and no switcher, because there is nothing to switch
+     * between. Staff are addressed by their own public id and looked up inside
+     * the caller's account.
+     */
+    Route::get('settings/staff', [StaffController::class, 'index'])->name('staff.index');
+    Route::post('settings/staff/invitations', [StaffController::class, 'invite'])
+        ->name('staff.invitations.store');
+    Route::delete('settings/staff/invitations/{invitation}', [StaffController::class, 'revokeInvitation'])
+        ->name('staff.invitations.destroy');
+    Route::patch('settings/staff/{staff}', [StaffController::class, 'updateRole'])
+        ->name('staff.update');
+    Route::delete('settings/staff/{staff}', [StaffController::class, 'remove'])
+        ->name('staff.destroy');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

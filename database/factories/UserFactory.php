@@ -2,10 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Account\Models\BusinessAccount;
-use App\Enums\TeamRole;
-use App\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -110,11 +109,14 @@ class UserFactory extends Factory
     public function withBusinessAccount(?callable $state = null): static
     {
         return $this->afterCreating(function (User $user) use ($state) {
-            $factory = BusinessAccount::factory()->for($user, 'owner');
+            // The default name goes on first so the caller's state can replace
+            // it. Applying it afterwards would silently discard a name the test
+            // had asked for, and the assertion would fail somewhere else.
+            $factory = BusinessAccount::factory()
+                ->for($user, 'owner')
+                ->state(['name' => $user->name."'s Business"]);
 
-            ($state ? $state($factory) : $factory)->create([
-                'name' => $user->name."'s Business",
-            ]);
+            ($state ? $state($factory) : $factory)->create();
         });
     }
 
@@ -133,20 +135,19 @@ class UserFactory extends Factory
     }
 
     /**
-     * Configure the model factory.
+     * Someone invited into an account they do not own.
+     *
+     * The counterpart to {@see withBusinessAccount()}: a staff member has a
+     * membership but no ownership, is never asked for KYC or a package, and is
+     * the case that broke whenever identity and account were the same row.
      */
-    public function configure(): static
+    public function staffOf(BusinessAccount $account, AccountRole $role = AccountRole::Staff): static
     {
-        return $this->afterCreating(function ($user) {
-            $team = Team::factory()->personal()->create([
-                'name' => $user->name."'s Team",
+        return $this->afterCreating(function (User $user) use ($account, $role) {
+            $account->memberships()->create([
+                'user_id' => $user->id,
+                'role' => $role,
             ]);
-
-            $team->members()->attach($user, [
-                'role' => TeamRole::Owner->value,
-            ]);
-
-            $user->switchTeam($team);
         });
     }
 

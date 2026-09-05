@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
-use App\Enums\TeamRole;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -107,7 +107,7 @@ class BusinessAccountFactory extends Factory
             // beside the members table — so "who may work here" has one answer.
             $account->memberships()->create([
                 'user_id' => $account->owner_id,
-                'role' => TeamRole::Owner->value,
+                'role' => AccountRole::Owner->value,
             ]);
         });
     }

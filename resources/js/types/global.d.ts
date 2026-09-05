@@ -1,5 +1,5 @@
 import type { Auth } from '@/types/auth';
-import type { Team } from '@/types/teams';
+import type { AccountContext } from '@/types/account';
 
 declare module 'react' {
     interface InputHTMLAttributes<T> {
@@ -13,8 +13,12 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
-            currentTeam: Team | null;
-            teams: Team[];
+            /**
+             * The one business account this person works in, or null for
+             * platform staff who have none. Never a list: there is nothing to
+             * switch between (D1).
+             */
+            account: AccountContext | null;
             /**
              * The abilities the navigation gates on — not the whole permission
              * set. Hiding a link is a convenience; the route's policy refuses.

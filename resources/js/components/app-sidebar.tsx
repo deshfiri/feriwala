@@ -10,7 +10,7 @@ import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { TeamSwitcher } from '@/components/team-switcher';
+import { AccountBadge } from '@/components/account-badge';
 import {
     Sidebar,
     SidebarContent,
@@ -27,9 +27,8 @@ import type { NavItem } from '@/types';
 
 export function AppSidebar() {
     const page = usePage();
-    const dashboardUrl = page.props.currentTeam
-        ? dashboard(page.props.currentTeam.slug)
-        : '/';
+    // One dashboard at one address (D1): no account segment to fill in.
+    const dashboardUrl = dashboard();
 
     const permissions = page.props.permissions ?? {};
 
@@ -88,7 +87,7 @@ export function AppSidebar() {
                 </SidebarMenu>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <TeamSwitcher />
+                        <AccountBadge />
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>

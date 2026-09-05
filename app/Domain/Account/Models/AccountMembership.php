@@ -2,7 +2,7 @@
 
 namespace App\Domain\Account\Models;
 
-use App\Enums\TeamRole;
+use App\Domain\Account\Enums\AccountRole;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,7 +25,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $business_account_id
  * @property int $user_id
- * @property TeamRole $role
+ * @property AccountRole $role
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read BusinessAccount $businessAccount
@@ -60,12 +60,12 @@ class AccountMembership extends Pivot
     protected function casts(): array
     {
         return [
-            'role' => TeamRole::class,
+            'role' => AccountRole::class,
         ];
     }
 
     public function isOwner(): bool
     {
-        return $this->role === TeamRole::Owner;
+        return $this->role === AccountRole::Owner;
     }
 }

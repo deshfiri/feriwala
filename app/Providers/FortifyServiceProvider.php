@@ -4,11 +4,12 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Domain\Account\Actions\AcceptStaffInvitation;
+use App\Domain\Account\Models\AccountInvitation;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\PasskeyLoginResponse;
 use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
-use App\Models\TeamInvitation;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -62,7 +63,7 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
             'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'status' => $request->session()->get('status'),
-            'teamInvitation' => $this->teamInvitation($request),
+            'staffInvitation' => $this->staffInvitation($request),
         ]));
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
@@ -75,7 +76,7 @@ class FortifyServiceProvider extends ServiceProvider
         ]));
 
         Fortify::registerView(fn (Request $request) => Inertia::render('auth/register', [
-            'teamInvitation' => $this->teamInvitation($request),
+            'staffInvitation' => $this->staffInvitation($request),
         ]));
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
@@ -108,34 +109,39 @@ class FortifyServiceProvider extends ServiceProvider
     }
 
     /**
-     * Get the pending team invitation context for auth pages.
+     * The invitation a visitor arrived with, for the sign-in and register pages.
      *
-     * @return array{code: string, teamName: string}|null
+     * Someone invited to work in an account usually has no login yet, so the
+     * link lands them on register or sign-in first. Naming the business there
+     * is what makes the detour make sense rather than look like a dead end.
+     *
+     * The token identifies the invitation; it authorises nothing. Acceptance
+     * checks who is signed in ({@see AcceptStaffInvitation}).
+     *
+     * @return array{token: string, account: string, role: string}|null
      */
-    private function teamInvitation(Request $request): ?array
+    private function staffInvitation(Request $request): ?array
     {
-        $invitationCode = $request->query('invitation');
+        $token = $request->query('invitation');
 
-        if (! is_string($invitationCode)) {
+        if (! is_string($token)) {
             return null;
         }
 
-        $invitation = TeamInvitation::query()
-            ->with('team')
-            ->where('code', $invitationCode)
-            ->whereNull('accepted_at')
-            ->where(fn ($query) => $query
-                ->whereNull('expires_at')
-                ->orWhere('expires_at', '>=', now()))
+        $invitation = AccountInvitation::query()
+            ->with('businessAccount')
+            ->where('token', $token)
+            ->live()
             ->first();
 
-        if (! $invitation) {
+        if ($invitation === null) {
             return null;
         }
 
         return [
-            'code' => $invitation->code,
-            'teamName' => $invitation->team->name,
+            'token' => $invitation->token,
+            'account' => $invitation->businessAccount->name,
+            'role' => $invitation->role->label(),
         ];
     }
 }

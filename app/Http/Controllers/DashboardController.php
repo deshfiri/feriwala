@@ -2,37 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\TeamInvitation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * The business ERP's home screen.
+ *
+ * It carries no invitation list, deliberately. Under D1 only someone with no
+ * account of their own can accept an invitation, and someone with no account
+ * never reaches this page — the §5.4 gate sends them to the invitation itself.
+ * A list here could therefore only ever be shown to people who cannot act on it.
+ */
 class DashboardController extends Controller
 {
     public function __invoke(Request $request): Response
     {
-        $email = strtolower($request->user()->email);
-
-        $pendingInvitations = TeamInvitation::query()
-            ->with(['inviter', 'team'])
-            ->whereRaw('LOWER(email) = ?', [$email])
-            ->whereNull('accepted_at')
-            ->where(fn ($query) => $query
-                ->whereNull('expires_at')
-                ->orWhere('expires_at', '>=', now()))
-            ->latest()
-            ->get()
-            ->map(fn (TeamInvitation $invitation) => [
-                'code' => $invitation->code,
-                'inviterName' => $invitation->inviter->name,
-                'team' => [
-                    'name' => $invitation->team->name,
-                    'slug' => $invitation->team->slug,
-                ],
-            ]);
-
-        return Inertia::render('dashboard', [
-            'pendingInvitations' => $pendingInvitations,
-        ]);
+        return Inertia::render('dashboard');
     }
 }

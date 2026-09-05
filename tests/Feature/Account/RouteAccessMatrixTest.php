@@ -37,8 +37,10 @@ function matrixRoutes(): array
         // A §5.4 area: open throughout onboarding.
         'onboarding' => route('onboarding.status'),
 
-        // Business ERP: staff management, gated on the account's activation.
-        'business' => route('teams.index'),
+        // Business ERP: gated on the account's activation, and on nothing
+        // else — the staff screen would also answer to the package, which is a
+        // different question from the one this matrix asks.
+        'business' => route('dashboard'),
 
         // Administration: gated on identity plus a platform permission.
         'admin' => route('admin.kyc.index'),

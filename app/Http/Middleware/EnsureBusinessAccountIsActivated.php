@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Account\Models\AccountInvitation;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
@@ -49,7 +50,7 @@ class EnsureBusinessAccountIsActivated
         'security.',        // 2FA, passkeys, sessions
         'user-password.',
         'well-known.',      // passkey discovery, needed to sign in at all
-        'invitations.',     // a staff invitation may arrive before activation
+        'staff.invitation.', // joining someone else's account needs no account
         'locale.',
         'logout',
         'password.',
@@ -89,11 +90,34 @@ class EnsureBusinessAccountIsActivated
             return $next($request);
         }
 
+        /*
+         * Somebody with no account at all is not half-way through onboarding —
+         * they are an invitee waiting to join someone else's business. Sending
+         * them to the activation stepper would put them in a funnel that is not
+         * theirs, and the stepper 403s without an account anyway.
+         */
+        if ($user->businessAccount === null) {
+            $invitation = $this->openInvitationFor($user);
+
+            if ($invitation !== null) {
+                return redirect()->route('staff.invitation.show', $invitation->token);
+            }
+        }
+
         // Redirected rather than refused with a 403: the account holder has
         // done nothing wrong, they have steps left. The stepper says which.
         return redirect()
             ->route('onboarding.status')
             ->with('info', __('Finish setting up your account to reach this.'));
+    }
+
+    protected function openInvitationFor(User $user): ?AccountInvitation
+    {
+        return AccountInvitation::query()
+            ->whereRaw('lower(email) = ?', [mb_strtolower($user->email)])
+            ->live()
+            ->orderByDesc('id')
+            ->first();
     }
 
     protected function isAllowed(Request $request): bool
