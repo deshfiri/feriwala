@@ -66,9 +66,18 @@ class KycDocumentTypeController extends Controller
                     'is_required' => $scope->is_required,
                 ])->values(),
 
+                /*
+                 * Permission **and** invariant, not permission alone.
+                 *
+                 * Super Admin passes every policy through `Gate::before`, so
+                 * asking the policy by itself would offer Edit on an archived
+                 * requirement and Delete on one a round was judged against —
+                 * and the action would then refuse. A button that sometimes
+                 * lies teaches an administrator to distrust all of them.
+                 */
                 'can' => [
-                    'update' => $actor->can('update', $type),
-                    'delete' => $actor->can('delete', $type),
+                    'update' => ! $type->isArchived() && $actor->can('update', $type),
+                    'delete' => ! $type->isReferenced() && $actor->can('delete', $type),
                 ],
             ]),
             'can' => [

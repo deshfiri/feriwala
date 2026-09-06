@@ -69,3 +69,78 @@ export type KycReviewHistoryEntry = {
 };
 
 export type KycDecisionOutcome = 'approve' | 'reject' | 'resubmit';
+
+/**
+ * One scope rule on a requirement (§7.2).
+ *
+ * Both dimensions nullable: null matches anything, so a rule naming only a
+ * country applies on every package there. `is_required` null means "use the
+ * type's own setting" — the safe fallback.
+ */
+export type KycDocumentTypeScopeRow = {
+    package: string | null;
+    country: string | null;
+    is_required: boolean | null;
+};
+
+/** A requirement in the catalogue, as the admin screen sees it (§7.2). */
+export type KycDocumentTypeRow = {
+    /** The public id. §34.2 keeps database ids out of the client. */
+    id: string;
+    key: string;
+    name: string;
+    instructions: string | null;
+    is_required: boolean;
+    is_active: boolean;
+    is_archived: boolean;
+    requires_file: boolean;
+    requires_value: boolean;
+    value_label: string | null;
+    accepted_mime_types: string[];
+    max_size_kb: number;
+    sort_order: number;
+    /** Rounds opened against it — why deletion may be unavailable. */
+    used_by_rounds: number;
+    scopes: KycDocumentTypeScopeRow[];
+    can: { update: boolean; delete: boolean };
+};
+
+/** How far one requirement got in a round, for the applicant's history. */
+export type KycRequirementStatus = 'supplied' | 'outstanding' | 'not_supplied';
+
+/**
+ * One round as the **applicant** sees it (§7.3, P1-27).
+ *
+ * Carries only what was written to them. The reviewer's internal note, the
+ * internal reason behind a requested update, the reviewer's identity and every
+ * file path are absent from the payload, not merely unrendered.
+ */
+export type KycHistoryRound = {
+    id: string;
+    round: number;
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+    is_editable: boolean;
+    opened_at: string | null;
+    submitted_at: string | null;
+    reviewed_at: string | null;
+    deadline_at: string | null;
+    days_remaining: number | null;
+    is_overdue: boolean;
+    /** Whether an administrator asked for this round (§7.2). */
+    was_requested: boolean;
+    instructions: string | null;
+    requirements: {
+        key: string;
+        name: string;
+        instructions: string | null;
+        is_required: boolean;
+        status: KycRequirementStatus;
+    }[];
+    feedback: {
+        outcome: string;
+        feedback: string;
+        at: string | null;
+    }[];
+};

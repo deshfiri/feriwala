@@ -1,6 +1,111 @@
 <?php
 
 return [
+    'document_types' => [
+        'title' => 'Verification requirements',
+        'description' => 'What applicants are asked for, and who is asked for it.',
+        'nav' => 'Requirements',
+
+        'empty_title' => 'No requirements configured',
+        'empty_description' => 'Applicants are asked for nothing until you add one.',
+        'forbidden_title' => 'You cannot configure verification',
+        'forbidden_description' => 'Configuring requirements needs the KYC settings permission. Ask an administrator if you need it.',
+
+        'add' => 'Add requirement',
+        'archived_heading' => 'Archived',
+        'archived_description' => 'Retired requirements, kept because past rounds were judged against them.',
+
+        'state' => [
+            'active' => 'Active',
+            'paused' => 'Paused',
+            'archived' => 'Archived',
+            'required' => 'Required',
+            'optional' => 'Optional',
+        ],
+
+        'actions' => [
+            'pause' => 'Pause',
+            'resume' => 'Resume',
+            'edit' => 'Edit',
+            'archive' => 'Archive',
+            'delete' => 'Delete',
+            'move_up' => 'Move up',
+            'move_down' => 'Move down',
+        ],
+
+        'meta' => [
+            'formats' => 'Accepted: :formats',
+            'max_size' => 'up to :size KB',
+            'used' => 'Used by :count round(s)',
+            'cannot_delete' => 'In use — archive instead',
+            'archived_locked' => 'Archived requirements cannot be edited.',
+        ],
+
+        'scopes' => [
+            'heading' => 'Who is asked for this',
+            'everyone' => 'Everyone',
+            'package_and_country' => ':package accounts in :country',
+            'country_only' => 'Accounts in :country',
+            'package_only' => ':package accounts',
+            'add' => 'Add a rule',
+            'remove' => 'Remove',
+            'package' => 'Package slug',
+            'package_placeholder' => 'Any package',
+            'country' => 'Country code',
+            'country_placeholder' => 'Any country',
+            'requirement' => 'Requirement here',
+            'inherit' => 'Same as above',
+            'help' => 'Leave both blank and it applies to everyone. A country rule outranks a package rule.',
+        ],
+
+        'form' => [
+            'create_title' => 'New requirement',
+            'edit_title' => 'Edit requirement',
+            'description' => 'Applicants see the name and instructions exactly as written here.',
+            'key' => 'Key',
+            'key_help' => 'Lowercase letters, numbers and underscores. Used internally and cannot be reused.',
+            'name' => 'Name',
+            'instructions' => 'Instructions for the applicant',
+            'instructions_help' => 'What to send, and what makes an upload acceptable.',
+            'is_required' => 'Required to submit',
+            'is_active' => 'Offered on the form',
+            'requires_file' => 'Asks for a file',
+            'requires_value' => 'Asks for a typed value',
+            'value_label' => 'Label for the typed value',
+            'accepted_mime_types' => 'Accepted file types',
+            'accepted_help' => 'One MIME type per line, for example image/jpeg.',
+            'max_size_kb' => 'Maximum size (KB)',
+            'save' => 'Save requirement',
+            'cancel' => 'Cancel',
+        ],
+    ],
+
+    'history' => [
+        'title' => 'Verification history',
+        'description' => 'Every round of verification on this account, and what came of it.',
+        'nav' => 'History',
+        'empty_title' => 'Nothing to show yet',
+        'empty_description' => 'Your verification history will appear here once you start.',
+        'start' => 'Start verification',
+        'continue' => 'Continue this round',
+        'round' => 'Round :number',
+        'requested' => 'requested by Feriwala',
+        'opened' => 'Opened :date',
+        'submitted' => 'Submitted :date',
+        'reviewed' => 'Reviewed :date',
+        'due' => 'Due :date',
+        'due_with_days' => 'Due :date — :count days left',
+        'overdue' => 'This was due on :date.',
+        'requirements' => 'What we asked for',
+        'feedback' => 'What we told you',
+        'status' => [
+            'supplied' => 'Provided',
+            'outstanding' => 'Still needed',
+            'not_supplied' => 'Not provided',
+        ],
+        'optional' => 'optional',
+    ],
+
     'queue' => [
         'title' => 'KYC review',
         'description' => 'Applications waiting for a decision, oldest first.',

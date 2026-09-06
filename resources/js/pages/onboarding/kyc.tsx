@@ -8,9 +8,11 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { StatusTone } from '@/lib/status';
+import { history as kycHistory } from '@/routes/kyc';
 
 type Requirement = {
-    id: string;
+    // No id: §34.2 keeps database ids out of the payload, and the form
+    // addresses a requirement by its key — which is what it posts back.
     key: string;
     name: string;
     instructions: string | null;
@@ -77,6 +79,16 @@ export default function KycForm({
                         {submission.round > 1 &&
                             ` This is attempt ${submission.round}.`}
                     </p>
+
+                    {/*
+                     * Reachable from the form rather than only from a menu:
+                     * "what did they ask me last time" is a question that
+                     * arises here, while the applicant is looking at a round
+                     * they have been sent back from.
+                     */}
+                    <Button variant="link" size="sm" className="px-0" asChild>
+                        <Link href={kycHistory()}>View my history</Link>
+                    </Button>
                 </header>
 
                 {/* Why the documents are safe to send matters more here than

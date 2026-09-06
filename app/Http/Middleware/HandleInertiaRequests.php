@@ -104,6 +104,13 @@ class HandleInertiaRequests extends Middleware
                 PermissionModule::Account,
                 PermissionAction::View,
             )),
+
+            // Configuring what applicants are asked for is a different job
+            // from reviewing one application (§7.2).
+            'kyc.manage_settings' => $user->can(PermissionCatalogue::name(
+                PermissionModule::Kyc,
+                PermissionAction::ManageSettings,
+            )),
         ];
     }
 

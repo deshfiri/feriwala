@@ -3,6 +3,7 @@ import {
     BookOpen,
     FolderGit2,
     LayoutGrid,
+    ListChecks,
     ShieldCheck,
     UserCheck,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import {
 import { dashboard } from '@/routes';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as kycQueue } from '@/routes/admin/kyc';
+import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import type { NavItem } from '@/types';
 
 export function AppSidebar() {
@@ -46,6 +48,15 @@ export function AppSidebar() {
                       title: 'KYC review',
                       href: kycQueue(),
                       icon: ShieldCheck,
+                  },
+              ]
+            : []),
+        ...(permissions['kyc.manage_settings']
+            ? [
+                  {
+                      title: 'Verification requirements',
+                      href: kycRequirements(),
+                      icon: ListChecks,
                   },
               ]
             : []),

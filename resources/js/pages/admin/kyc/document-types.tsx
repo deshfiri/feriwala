@@ -1,143 +1,258 @@
 import { Head, router } from '@inertiajs/react';
-import { Archive, GripVertical } from 'lucide-react';
-import Heading from '@/components/heading';
+import {
+    Archive,
+    ChevronDown,
+    ChevronUp,
+    Pencil,
+    Plus,
+    Trash2,
+} from 'lucide-react';
+import { useState } from 'react';
+import KycDocumentTypeController from '@/actions/App/Http/Controllers/Admin/KycDocumentTypeController';
+import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
+import PermissionDeniedState from '@/components/states/permission-denied-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
-import KycDocumentTypeController from '@/actions/App/Http/Controllers/Admin/KycDocumentTypeController';
-
-type Scope = {
-    package: string | null;
-    country: string | null;
-    is_required: boolean | null;
-};
-
-type DocumentType = {
-    id: string;
-    key: string;
-    name: string;
-    instructions: string | null;
-    is_required: boolean;
-    is_active: boolean;
-    is_archived: boolean;
-    requires_file: boolean;
-    requires_value: boolean;
-    value_label: string | null;
-    accepted_mime_types: string[];
-    max_size_kb: number;
-    sort_order: number;
-    used_by_rounds: number;
-    scopes: Scope[];
-    can: { update: boolean; delete: boolean };
-};
+import type { KycDocumentTypeRow } from '@/types';
+import RequirementDialog from './requirement-dialog';
 
 type Props = {
-    types: DocumentType[];
+    types: KycDocumentTypeRow[];
     can: { create: boolean };
 };
 
 /**
  * The KYC requirement catalogue (§7.2).
  *
- * Three states are shown apart, because they mean different things: **active**
- * is on the form now, **paused** is off but can come back, **archived** is
- * retired for good and cannot be edited — it is part of the record of what past
- * rounds were asked for.
+ * An ordered list rather than a `DataTable`, deliberately. The order here is
+ * the order applicants see, and it is set by hand — a paginated, sortable table
+ * would let a reviewer sort by name and then reorder rows they are no longer
+ * looking at in sequence. The catalogue is also short by nature: a form with
+ * fifty requirements is a problem to fix, not to paginate.
+ *
+ * Three states are shown apart because they mean different things: **active**
+ * is on the form now, **paused** is off but can return, **archived** is retired
+ * for good and cannot be edited — it is part of the record of what past rounds
+ * were asked for.
  */
-export default function KycDocumentTypes({ types }: Props) {
+export default function KycDocumentTypes({ types, can }: Props) {
     const { t } = useTranslation();
+    const [editing, setEditing] = useState<KycDocumentTypeRow | null>(null);
+    const [creating, setCreating] = useState(false);
 
     const live = types.filter((type) => !type.is_archived);
     const archived = types.filter((type) => type.is_archived);
 
+    // The catalogue is platform configuration; without the permission there is
+    // nothing here to show rather than an empty version of the page.
+    if (!can.create && types.length === 0) {
+        return (
+            <>
+                <Head title={t('kyc.document_types.title')} />
+                <div className="p-4">
+                    <PermissionDeniedState
+                        title={t('kyc.document_types.forbidden_title')}
+                        description={t(
+                            'kyc.document_types.forbidden_description',
+                        )}
+                    />
+                </div>
+            </>
+        );
+    }
+
+    const move = (index: number, direction: -1 | 1) => {
+        const next = [...live];
+        const target = index + direction;
+
+        if (target < 0 || target >= next.length) {
+            return;
+        }
+
+        [next[index], next[target]] = [next[target], next[index]];
+
+        router.post(
+            KycDocumentTypeController.reorder.url(),
+            { order: next.map((type) => type.id) },
+            { preserveScroll: true },
+        );
+    };
+
     return (
         <>
-            <Head title={t('Verification requirements')} />
+            <Head title={t('kyc.document_types.title')} />
 
             <div className="space-y-6 p-4">
-                <Heading
-                    title={t('Verification requirements')}
-                    description={t(
-                        'What applicants are asked for, and who is asked for it.',
-                    )}
+                <PageHeader
+                    title={t('kyc.document_types.title')}
+                    description={t('kyc.document_types.description')}
+                    actions={
+                        can.create ? (
+                            <Button size="sm" onClick={() => setCreating(true)}>
+                                <Plus className="size-4" />
+                                {t('kyc.document_types.add')}
+                            </Button>
+                        ) : undefined
+                    }
                 />
 
                 {live.length === 0 ? (
                     <EmptyState
-                        title={t('No requirements configured')}
-                        description={t(
-                            'Applicants are asked for nothing until you add a document type.',
-                        )}
+                        title={t('kyc.document_types.empty_title')}
+                        description={t('kyc.document_types.empty_description')}
+                        action={
+                            can.create ? (
+                                <Button
+                                    size="sm"
+                                    onClick={() => setCreating(true)}
+                                >
+                                    <Plus className="size-4" />
+                                    {t('kyc.document_types.add')}
+                                </Button>
+                            ) : undefined
+                        }
                     />
                 ) : (
-                    <ul className="divide-border divide-y rounded-lg border">
-                        {live.map((type) => (
-                            <TypeRow key={type.id} type={type} />
+                    <ul className="divide-border divide-y rounded-xl border">
+                        {live.map((type, index) => (
+                            <TypeRow
+                                key={type.id}
+                                type={type}
+                                onEdit={() => setEditing(type)}
+                                onMoveUp={
+                                    index > 0
+                                        ? () => move(index, -1)
+                                        : undefined
+                                }
+                                onMoveDown={
+                                    index < live.length - 1
+                                        ? () => move(index, 1)
+                                        : undefined
+                                }
+                            />
                         ))}
                     </ul>
                 )}
 
-                {archived.length > 0 ? (
-                    <div className="space-y-3">
-                        <Heading
-                            variant="small"
-                            title={t('Archived')}
-                            description={t(
-                                'Retired requirements. Kept because past rounds were judged against them.',
-                            )}
-                        />
-                        <ul className="divide-border divide-y rounded-lg border opacity-70">
+                {archived.length > 0 && (
+                    <section className="space-y-3">
+                        <div>
+                            <h2 className="font-medium">
+                                {t('kyc.document_types.archived_heading')}
+                            </h2>
+                            <p className="text-muted-foreground text-sm">
+                                {t('kyc.document_types.archived_description')}
+                            </p>
+                        </div>
+
+                        <ul className="divide-border divide-y rounded-xl border">
                             {archived.map((type) => (
                                 <TypeRow key={type.id} type={type} />
                             ))}
                         </ul>
-                    </div>
-                ) : null}
+                    </section>
+                )}
             </div>
+
+            <RequirementDialog
+                open={creating}
+                onOpenChange={setCreating}
+                type={null}
+            />
+
+            <RequirementDialog
+                open={editing !== null}
+                onOpenChange={(open) => !open && setEditing(null)}
+                type={editing}
+            />
         </>
     );
 }
 
-function TypeRow({ type }: { type: DocumentType }) {
+function TypeRow({
+    type,
+    onEdit,
+    onMoveUp,
+    onMoveDown,
+}: {
+    type: KycDocumentTypeRow;
+    onEdit?: () => void;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
+}) {
     const { t } = useTranslation();
 
     return (
-        <li className="flex flex-wrap items-start justify-between gap-3 p-4">
-            <div className="flex min-w-0 gap-3">
-                <GripVertical
-                    aria-hidden="true"
-                    className="text-muted-foreground mt-1 size-4 shrink-0"
-                />
+        <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 gap-2">
+                {onMoveUp || onMoveDown ? (
+                    <div className="flex shrink-0 flex-col">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6"
+                            disabled={!onMoveUp}
+                            onClick={onMoveUp}
+                            aria-label={t('kyc.document_types.actions.move_up')}
+                        >
+                            <ChevronUp className="size-3.5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6"
+                            disabled={!onMoveDown}
+                            onClick={onMoveDown}
+                            aria-label={t(
+                                'kyc.document_types.actions.move_down',
+                            )}
+                        >
+                            <ChevronDown className="size-3.5" />
+                        </Button>
+                    </div>
+                ) : null}
 
                 <div className="min-w-0 space-y-1">
                     <p className="font-medium">
                         {type.name}
-                        <span className="text-muted-foreground">
-                            {' '}
-                            · {type.key}
+                        <span className="text-muted-foreground font-normal">
+                            {' · '}
+                            {type.key}
                         </span>
                     </p>
 
-                    {type.instructions ? (
+                    {type.instructions && (
                         <p className="text-muted-foreground text-sm">
                             {type.instructions}
                         </p>
-                    ) : null}
+                    )}
 
-                    <p className="text-muted-foreground text-xs">
-                        {type.accepted_mime_types.join(', ')} ·{' '}
-                        {t('up to :size KB', { size: type.max_size_kb })}
-                    </p>
+                    {type.requires_file && (
+                        <p className="text-muted-foreground text-xs">
+                            {t('kyc.document_types.meta.formats', {
+                                formats: type.accepted_mime_types.join(', '),
+                            })}{' '}
+                            ·{' '}
+                            {t('kyc.document_types.meta.max_size', {
+                                size: type.max_size_kb,
+                            })}
+                        </p>
+                    )}
 
                     <ScopeSummary scopes={type.scopes} />
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
                 <StatusPill
                     tone={type.is_required ? 'warning' : 'neutral'}
-                    label={type.is_required ? t('Required') : t('Optional')}
+                    label={
+                        type.is_required
+                            ? t('kyc.document_types.state.required')
+                            : t('kyc.document_types.state.optional')
+                    }
                 />
 
                 <StatusPill
@@ -150,14 +265,21 @@ function TypeRow({ type }: { type: DocumentType }) {
                     }
                     label={
                         type.is_archived
-                            ? t('Archived')
+                            ? t('kyc.document_types.state.archived')
                             : type.is_active
-                              ? t('Active')
-                              : t('Paused')
+                              ? t('kyc.document_types.state.active')
+                              : t('kyc.document_types.state.paused')
                     }
                 />
 
-                {type.can.update ? (
+                {type.can.update && onEdit && (
+                    <Button variant="ghost" size="sm" onClick={onEdit}>
+                        <Pencil className="size-4" />
+                        {t('kyc.document_types.actions.edit')}
+                    </Button>
+                )}
+
+                {type.can.update && (
                     <Button
                         variant="ghost"
                         size="sm"
@@ -171,11 +293,13 @@ function TypeRow({ type }: { type: DocumentType }) {
                             )
                         }
                     >
-                        {type.is_active ? t('Pause') : t('Resume')}
+                        {type.is_active
+                            ? t('kyc.document_types.actions.pause')
+                            : t('kyc.document_types.actions.resume')}
                     </Button>
-                ) : null}
+                )}
 
-                {!type.is_archived ? (
+                {!type.is_archived && type.can.update && (
                     <Button
                         variant="ghost"
                         size="sm"
@@ -188,14 +312,15 @@ function TypeRow({ type }: { type: DocumentType }) {
                         }
                     >
                         <Archive className="size-4" />
-                        {t('Archive')}
+                        {t('kyc.document_types.actions.archive')}
                     </Button>
-                ) : null}
+                )}
 
                 {/*
                  * Deletion is offered only for a type nothing has referenced.
                  * Offering it and refusing on submit would teach an
-                 * administrator that the button sometimes lies.
+                 * administrator that the button sometimes lies — so where it is
+                 * unavailable, the reason is shown instead.
                  */}
                 {type.can.delete ? (
                     <Button
@@ -208,52 +333,52 @@ function TypeRow({ type }: { type: DocumentType }) {
                             )
                         }
                     >
-                        {t('Delete')}
+                        <Trash2 className="size-4" />
+                        {t('kyc.document_types.actions.delete')}
                     </Button>
-                ) : (
+                ) : type.used_by_rounds > 0 ? (
                     <span className="text-muted-foreground text-xs">
-                        {t('Used by :count rounds', {
-                            count: type.used_by_rounds,
-                        })}
+                        {t('kyc.document_types.meta.cannot_delete')}
                     </span>
-                )}
+                ) : null}
             </div>
         </li>
     );
 }
 
-function ScopeSummary({ scopes }: { scopes: Scope[] }) {
+function ScopeSummary({ scopes }: { scopes: KycDocumentTypeRow['scopes'] }) {
     const { t } = useTranslation();
 
     if (scopes.length === 0) {
         return (
             <p className="text-muted-foreground text-xs">
-                {t('Applies to everyone')}
+                {t('kyc.document_types.scopes.everyone')}
             </p>
         );
     }
 
     return (
-        <ul className="text-muted-foreground text-xs">
+        <ul className="text-muted-foreground space-y-0.5 text-xs">
             {scopes.map((scope, index) => (
                 <li key={index}>
                     {scope.package && scope.country
-                        ? t(':package accounts in :country', {
+                        ? t('kyc.document_types.scopes.package_and_country', {
                               package: scope.package,
                               country: scope.country,
                           })
                         : scope.country
-                          ? t('Accounts in :country', {
+                          ? t('kyc.document_types.scopes.country_only', {
                                 country: scope.country,
                             })
-                          : t(':package accounts', {
+                          : t('kyc.document_types.scopes.package_only', {
                                 package: scope.package ?? '',
                             })}
-                    {scope.is_required === null
-                        ? ''
-                        : scope.is_required
-                          ? ` — ${t('required')}`
-                          : ` — ${t('optional')}`}
+                    {scope.is_required !== null &&
+                        ` — ${
+                            scope.is_required
+                                ? t('kyc.document_types.state.required')
+                                : t('kyc.document_types.state.optional')
+                        }`}
                 </li>
             ))}
         </ul>

@@ -1,105 +1,70 @@
 import { Head, Link } from '@inertiajs/react';
-import Heading from '@/components/heading';
+import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
-import type { StatusTone } from '@/lib/status';
 import { create as kycForm } from '@/routes/kyc';
-
-type RequirementStatus = 'supplied' | 'outstanding' | 'not_supplied';
-
-type Round = {
-    id: string;
-    round: number;
-    status: string;
-    status_label: string;
-    status_tone: StatusTone;
-    is_editable: boolean;
-    opened_at: string | null;
-    submitted_at: string | null;
-    reviewed_at: string | null;
-    deadline_at: string | null;
-    days_remaining: number | null;
-    is_overdue: boolean;
-    was_requested: boolean;
-    instructions: string | null;
-    requirements: {
-        key: string;
-        name: string;
-        instructions: string | null;
-        is_required: boolean;
-        status: RequirementStatus;
-    }[];
-    feedback: {
-        outcome: string;
-        feedback: string;
-        at: string | null;
-    }[];
-};
+import type { KycHistoryRound } from '@/types';
 
 /**
- * The applicant's own verification history (§7.3).
+ * The applicant's own verification history (§7.3, P1-27).
  *
  * Everything here was written *to* them — the reviewer's feedback, the
- * instruction on a requested update. Nothing written *about* them reaches this
- * page: the internal reason and the reviewer's note stay on the decision
- * record, and the server payload never carries them.
+ * instruction on a requested update. Nothing written *about* them appears: the
+ * internal reason and the reviewer's note stay on the decision record, and the
+ * server payload never carries them, so this page cannot leak one by accident.
  */
-export default function KycHistory({ rounds }: { rounds: Round[] }) {
+export default function KycHistory({ rounds }: { rounds: KycHistoryRound[] }) {
     const { t } = useTranslation();
 
     return (
         <>
-            <Head title={t('Verification history')} />
+            <Head title={t('kyc.history.title')} />
 
             <div className="mx-auto max-w-3xl space-y-6 p-4">
-                <Heading
-                    title={t('Verification history')}
-                    description={t(
-                        'Every round of verification on this account, and what came of it.',
-                    )}
+                <PageHeader
+                    title={t('kyc.history.title')}
+                    description={t('kyc.history.description')}
                 />
 
                 {rounds.length === 0 ? (
                     <EmptyState
-                        title={t('Nothing to show yet')}
-                        description={t(
-                            'Your verification history will appear here once you start.',
-                        )}
+                        title={t('kyc.history.empty_title')}
+                        description={t('kyc.history.empty_description')}
                         action={
                             <Button asChild size="sm">
                                 <Link href={kycForm()}>
-                                    {t('Start verification')}
+                                    {t('kyc.history.start')}
                                 </Link>
                             </Button>
                         }
                     />
-                ) : null}
-
-                {rounds.map((round) => (
-                    <RoundCard key={round.id} round={round} />
-                ))}
+                ) : (
+                    rounds.map((round) => (
+                        <RoundCard key={round.id} round={round} />
+                    ))
+                )}
             </div>
         </>
     );
 }
 
-function RoundCard({ round }: { round: Round }) {
+function RoundCard({ round }: { round: KycHistoryRound }) {
     const { t } = useTranslation();
 
     return (
-        <section className="border-sidebar-border/70 dark:border-sidebar-border space-y-4 rounded-xl border p-4">
-            <header className="flex flex-wrap items-center justify-between gap-3">
-                <div>
+        <section className="space-y-4 rounded-xl border p-4">
+            <header className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
                     <h2 className="font-medium">
-                        {t('Round :number', { number: round.round })}
-                        {round.was_requested ? (
-                            <span className="text-muted-foreground">
-                                {' '}
-                                — {t('requested by Feriwala')}
+                        {t('kyc.history.round', { number: round.round })}
+                        {round.was_requested && (
+                            <span className="text-muted-foreground font-normal">
+                                {' — '}
+                                {t('kyc.history.requested')}
                             </span>
-                        ) : null}
+                        )}
                     </h2>
                     <Dates round={round} />
                 </div>
@@ -111,99 +76,117 @@ function RoundCard({ round }: { round: Round }) {
                 />
             </header>
 
-            {round.instructions ? (
+            {round.instructions && (
                 <p className="text-sm">{round.instructions}</p>
-            ) : null}
+            )}
 
             <Deadline round={round} />
 
-            <ul className="divide-border divide-y rounded-lg border text-sm">
-                {round.requirements.map((requirement) => (
-                    <li
-                        key={requirement.key}
-                        className="flex flex-wrap items-center justify-between gap-2 p-3"
-                    >
-                        <div className="min-w-0">
-                            <p className="truncate">
-                                {requirement.name}
-                                {!requirement.is_required ? (
-                                    <span className="text-muted-foreground">
-                                        {' '}
-                                        ({t('optional')})
-                                    </span>
-                                ) : null}
-                            </p>
-                            {requirement.instructions ? (
-                                <p className="text-muted-foreground truncate">
-                                    {requirement.instructions}
-                                </p>
-                            ) : null}
-                        </div>
+            {round.requirements.length > 0 && (
+                <div className="space-y-2">
+                    <h3 className="text-sm font-medium">
+                        {t('kyc.history.requirements')}
+                    </h3>
 
-                        <span className="text-muted-foreground">
-                            {requirement.status === 'supplied'
-                                ? t('Provided')
-                                : requirement.status === 'outstanding'
-                                  ? t('Still needed')
-                                  : t('Not provided')}
-                        </span>
-                    </li>
-                ))}
-            </ul>
+                    <ul className="divide-border divide-y rounded-lg border text-sm">
+                        {round.requirements.map((requirement) => (
+                            <li
+                                key={requirement.key}
+                                className="flex flex-wrap items-start justify-between gap-2 p-3"
+                            >
+                                <div className="min-w-0">
+                                    <p>
+                                        {requirement.name}
+                                        {!requirement.is_required && (
+                                            <span className="text-muted-foreground">
+                                                {' ('}
+                                                {t('kyc.history.optional')}
+                                                {')'}
+                                            </span>
+                                        )}
+                                    </p>
+                                    {requirement.instructions && (
+                                        <p className="text-muted-foreground text-xs">
+                                            {requirement.instructions}
+                                        </p>
+                                    )}
+                                </div>
 
-            {round.feedback.length > 0 ? (
-                <div className="space-y-2 text-sm">
-                    <h3 className="font-medium">{t('What we told you')}</h3>
+                                <span className="text-muted-foreground shrink-0 text-xs">
+                                    {t(
+                                        `kyc.history.status.${requirement.status}`,
+                                    )}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {round.feedback.length > 0 && (
+                <div className="space-y-2">
+                    <h3 className="text-sm font-medium">
+                        {t('kyc.history.feedback')}
+                    </h3>
                     {round.feedback.map((entry, index) => (
-                        <p key={index} className="text-muted-foreground">
+                        <p
+                            key={index}
+                            className="text-muted-foreground text-sm"
+                        >
                             {entry.feedback}
                         </p>
                     ))}
                 </div>
-            ) : null}
+            )}
 
-            {round.is_editable ? (
+            {round.is_editable && (
                 <Button asChild size="sm">
-                    <Link href={kycForm()}>{t('Continue this round')}</Link>
+                    <Link href={kycForm()}>{t('kyc.history.continue')}</Link>
                 </Button>
-            ) : null}
+            )}
         </section>
     );
 }
 
-function Dates({ round }: { round: Round }) {
-    const { t } = useTranslation();
-    const format = (value: string | null) =>
-        value === null ? null : new Date(value).toLocaleDateString();
+function Dates({ round }: { round: KycHistoryRound }) {
+    const { t, locale } = useTranslation();
+
+    const format = (value: string) =>
+        new Date(value).toLocaleDateString(locale, {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        });
 
     const parts = [
-        round.opened_at
-            ? t('Opened :date', { date: format(round.opened_at)! })
-            : null,
-        round.submitted_at
-            ? t('Submitted :date', { date: format(round.submitted_at)! })
-            : null,
-        round.reviewed_at
-            ? t('Reviewed :date', { date: format(round.reviewed_at)! })
-            : null,
+        round.opened_at &&
+            t('kyc.history.opened', { date: format(round.opened_at) }),
+        round.submitted_at &&
+            t('kyc.history.submitted', { date: format(round.submitted_at) }),
+        round.reviewed_at &&
+            t('kyc.history.reviewed', { date: format(round.reviewed_at) }),
     ].filter(Boolean);
 
     return <p className="text-muted-foreground text-sm">{parts.join(' · ')}</p>;
 }
 
-function Deadline({ round }: { round: Round }) {
-    const { t } = useTranslation();
+function Deadline({ round }: { round: KycHistoryRound }) {
+    const { t, locale } = useTranslation();
 
     if (round.deadline_at === null) {
         return null;
     }
 
-    const due = new Date(round.deadline_at).toLocaleDateString();
+    const due = new Date(round.deadline_at).toLocaleDateString(locale, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    });
 
     if (round.is_overdue) {
         return (
-            <p className="text-sm font-medium">
-                {t('This was due on :date.', { date: due })}
+            <p className="text-danger text-sm font-medium">
+                {t('kyc.history.overdue', { date: due })}
             </p>
         );
     }
@@ -211,8 +194,8 @@ function Deadline({ round }: { round: Round }) {
     return (
         <p className="text-muted-foreground text-sm">
             {round.days_remaining === null
-                ? t('Due :date', { date: due })
-                : t('Due :date — :count days left', {
+                ? t('kyc.history.due', { date: due })
+                : t('kyc.history.due_with_days', {
                       date: due,
                       count: Math.max(round.days_remaining, 0),
                   })}
