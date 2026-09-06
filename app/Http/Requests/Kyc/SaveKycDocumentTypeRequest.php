@@ -66,7 +66,7 @@ class SaveKycDocumentTypeRequest extends FormRequest
             'scopes' => ['sometimes', 'array'],
             'scopes.*.package' => [
                 'nullable', 'string',
-                Rule::exists(Package::class, 'slug')->whereNull('deleted_at'),
+                Rule::exists(Package::class, 'public_id')->whereNull('deleted_at'),
             ],
             'scopes.*.country' => [
                 'nullable', 'string', 'size:2',

@@ -12,12 +12,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * because §7.2 asks for package-**and**-country rules and one column per row
  * cannot express "Enterprise accounts in Bangladesh".
  *
+ * The package is held by its **public id**, not its slug. A slug is a routing
+ * decision and may be edited; a rule keyed on one is silently orphaned the day
+ * somebody renames a URL, and nothing says so until an applicant is asked for
+ * the wrong documents. A ULID is assigned once and never changes, so it can
+ * carry the relationship while the slug goes back to being a URL.
+ *
  * `is_required` is a nullable **override**. A trade licence can be optional in
  * general and mandatory in one country; forcing that into two document types
  * would show an applicant the same requirement twice. Null means "use the
  * type's own setting", which is the safe fallback.
  *
- * @property string|null $package_slug
+ * @property string|null $package_public_id
  * @property string|null $country_code
  * @property bool|null $is_required
  */
@@ -49,9 +55,12 @@ class KycDocumentTypeScope extends Model
      * A null dimension matches anything: a rule naming only a country applies
      * on every package there.
      */
+    /**
+     * @param  string|null  $package  the account's package **public id**
+     */
     public function matches(?string $package, ?string $country): bool
     {
-        if ($this->package_slug !== null && $this->package_slug !== $package) {
+        if ($this->package_public_id !== null && $this->package_public_id !== $package) {
             return false;
         }
 
@@ -81,9 +90,9 @@ class KycDocumentTypeScope extends Model
     public function specificity(): int
     {
         return match (true) {
-            $this->package_slug !== null && $this->country_code !== null => 3,
+            $this->package_public_id !== null && $this->country_code !== null => 3,
             $this->country_code !== null => 2,
-            $this->package_slug !== null => 1,
+            $this->package_public_id !== null => 1,
             default => 0,
         };
     }

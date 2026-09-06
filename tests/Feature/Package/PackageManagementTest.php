@@ -160,7 +160,7 @@ describe('the archive guard', function () {
         $package = Package::create(packageTestPayload());
 
         KycDocumentType::factory()
-            ->scopedTo(package: 'growth')
+            ->scopedTo(package: $package->public_id)
             ->create(['name' => 'Trade licence']);
 
         expect(fn () => app(ManagePackages::class)->archive($package, $this->admin))
@@ -176,7 +176,7 @@ describe('the archive guard', function () {
 
         KycDocumentType::factory()
             ->archived()
-            ->scopedTo(package: 'growth')
+            ->scopedTo(package: $package->public_id)
             ->create();
 
         app(ManagePackages::class)->archive($package, $this->admin);
@@ -229,7 +229,7 @@ describe('the archive guard', function () {
         // A guard met only on submit is one met after writing a change that now
         // has to be undone.
         $package = Package::create(packageTestPayload());
-        KycDocumentType::factory()->scopedTo(package: 'growth')->create(['name' => 'Trade licence']);
+        KycDocumentType::factory()->scopedTo(package: $package->public_id)->create(['name' => 'Trade licence']);
 
         $blockers = app(ManagePackages::class)->blockers($package);
 
@@ -289,8 +289,8 @@ describe('the admin screen', function () {
     });
 
     it('sends the blockers with the row', function () {
-        Package::create(packageTestPayload());
-        KycDocumentType::factory()->scopedTo(package: 'growth')->create(['name' => 'Trade licence']);
+        $package = Package::create(packageTestPayload());
+        KycDocumentType::factory()->scopedTo(package: $package->public_id)->create(['name' => 'Trade licence']);
 
         $this->actingAs($this->admin)
             ->get(route('admin.packages.index'))
@@ -354,8 +354,8 @@ describe('the admin screen', function () {
     });
 
     it('turns a blocked archive into a form error naming the rules', function () {
-        Package::create(packageTestPayload());
-        KycDocumentType::factory()->scopedTo(package: 'growth')->create(['name' => 'Trade licence']);
+        $package = Package::create(packageTestPayload());
+        KycDocumentType::factory()->scopedTo(package: $package->public_id)->create(['name' => 'Trade licence']);
 
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))

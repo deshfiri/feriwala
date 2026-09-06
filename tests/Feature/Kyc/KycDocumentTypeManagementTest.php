@@ -301,7 +301,7 @@ describe('the admin screen', function () {
         //
         // The replacement rule names a real package, because a slug that
         // resolves to nothing is refused — see KycScopeSelectionTest.
-        Package::create([
+        $package = Package::create([
             'slug' => 'enterprise',
             'name' => 'Enterprise',
             'fee_minor' => 500000,
@@ -323,13 +323,13 @@ describe('the admin screen', function () {
                 'requires_value' => false,
                 'accepted_mime_types' => ['application/pdf'],
                 'max_size_kb' => 1024,
-                'scopes' => [['package' => 'enterprise', 'country' => null]],
+                'scopes' => [['package' => $package->public_id, 'country' => null]],
             ]);
 
         $scopes = $type->refresh()->scopes;
 
         expect($scopes)->toHaveCount(1)
-            ->and($scopes->first()->package_slug)->toBe('enterprise')
+            ->and($scopes->first()->package_public_id)->toBe($package->public_id)
             ->and($scopes->first()->country_code)->toBeNull();
     });
 

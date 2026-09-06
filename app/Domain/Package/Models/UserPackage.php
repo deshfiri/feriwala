@@ -5,6 +5,7 @@ namespace App\Domain\Package\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Package\Data\SubscriptionTerms;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -20,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $started_at
  * @property CarbonImmutable|null $expires_at
  * @property CarbonImmutable|null $grace_ends_at
+ * @property array<string, mixed>|null $terms
+ * @property CarbonImmutable|null $terms_captured_at
  */
 class UserPackage extends Model
 {
@@ -36,6 +39,8 @@ class UserPackage extends Model
             'expires_at' => 'immutable_datetime',
             'grace_ends_at' => 'immutable_datetime',
             'cancelled_at' => 'immutable_datetime',
+            'terms' => 'array',
+            'terms_captured_at' => 'immutable_datetime',
         ];
     }
 
@@ -53,6 +58,33 @@ class UserPackage extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+
+    /**
+     * What this account actually bought (§8.1, §8.3).
+     *
+     * The snapshot taken when the subscription was created. Falls back to the
+     * live package only for rows written before snapshots existed — granting
+     * nothing there would strand real accounts mid-term, which is worse than
+     * reading a row that may since have moved.
+     */
+    public function terms(): ?SubscriptionTerms
+    {
+        if (is_array($this->terms)) {
+            return SubscriptionTerms::fromArray($this->terms);
+        }
+
+        $package = $this->package;
+
+        return $package === null ? null : SubscriptionTerms::capture($package);
+    }
+
+    /**
+     * Whether the terms were captured, rather than inferred from the package.
+     */
+    public function hasCapturedTerms(): bool
+    {
+        return $this->terms_captured_at !== null;
     }
 
     /**

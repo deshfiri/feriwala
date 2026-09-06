@@ -26,20 +26,20 @@ class CaptureRoundRequirements
     /**
      * @return int how many requirements were captured (zero when already done)
      */
-    public function handle(KycSubmission $submission, ?string $packageSlug = null): int
+    public function handle(KycSubmission $submission, ?string $packageId = null): int
     {
         if ($submission->requirements()->exists()) {
             return 0;
         }
 
         $account = $submission->businessAccount;
-        $packageSlug ??= $this->packageSlugFor($submission);
+        $packageId ??= $this->packageIdFor($submission);
         $country = $account?->owner?->country;
 
         $rows = [];
 
         foreach (KycDocumentType::query()->active()->with('scopes')->get() as $type) {
-            if (! $type->appliesTo($packageSlug, $country)) {
+            if (! $type->appliesTo($packageId, $country)) {
                 continue;
             }
 
@@ -47,7 +47,7 @@ class CaptureRoundRequirements
                 $type,
                 // The scope may make it mandatory here and optional elsewhere,
                 // so the round records what *this* applicant was asked for.
-                $type->isRequiredFor($packageSlug, $country),
+                $type->isRequiredFor($packageId, $country),
             );
         }
 
@@ -66,7 +66,7 @@ class CaptureRoundRequirements
      * unpaid choice would ask them for the wrong documents at exactly the point
      * the scoping is supposed to help.
      */
-    protected function packageSlugFor(KycSubmission $submission): ?string
+    protected function packageIdFor(KycSubmission $submission): ?string
     {
         $account = $submission->businessAccount;
 
@@ -80,6 +80,8 @@ class CaptureRoundRequirements
             ->latest('id')
             ->first();
 
-        return $subscription?->package?->slug;
+        // The immutable id, not the slug: a scope rule must survive a URL
+        // being renamed.
+        return $subscription?->package?->public_id;
     }
 }

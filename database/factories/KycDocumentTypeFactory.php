@@ -72,11 +72,14 @@ class KycDocumentTypeFactory extends Factory
     /**
      * Limited to a package, a country, or both (§7.2).
      */
+    /**
+     * @param  string|null  $package  a package **public id**, not a slug
+     */
     public function scopedTo(?string $package = null, ?string $country = null, ?bool $isRequired = null): static
     {
         return $this->afterCreating(function (KycDocumentType $type) use ($package, $country, $isRequired) {
             $type->scopes()->create([
-                'package_slug' => $package,
+                'package_public_id' => $package,
                 'country_code' => $country === null ? null : mb_strtoupper($country),
                 'is_required' => $isRequired,
             ]);

@@ -55,29 +55,45 @@ function scopeTestPayload(array $scopes = []): array
 }
 
 describe('package scoping', function () {
-    it('accepts a slug that resolves to a package', function () {
-        scopeTestPackage();
+    it('accepts an id that resolves to a package', function () {
+        $package = scopeTestPackage();
 
         $this->actingAs($this->admin)
             ->from(route('admin.kyc.document-types.index'))
             ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
-                ['package' => 'enterprise', 'country' => null, 'is_required' => '1'],
+                ['package' => $package->public_id, 'country' => null, 'is_required' => '1'],
             ]))
             ->assertSessionHasNoErrors();
 
-        expect(KycDocumentTypeScope::query()->where('package_slug', 'enterprise')->exists())
+        expect(KycDocumentTypeScope::query()->where('package_public_id', $package->public_id)->exists())
             ->toBeTrue();
     });
 
-    it('refuses a slug that resolves to nothing', function () {
-        // The failure this guards: a typo saved as configuration, matching
+    it('survives the package slug being renamed', function () {
+        /*
+         * The reason a rule keys on the public id rather than the slug. A slug
+         * is a routing decision; a rule keyed on one is silently orphaned the
+         * day somebody renames a URL, and nothing says so until an applicant
+         * is asked for the wrong documents.
+         */
+        $package = scopeTestPackage();
+
+        $type = KycDocumentType::factory()->scopedTo(package: $package->public_id)->create();
+
+        $package->forceFill(['slug' => 'enterprise-2027'])->save();
+
+        expect($type->refresh()->appliesTo($package->public_id, null))->toBeTrue();
+    });
+
+    it('refuses an id that resolves to nothing', function () {
+        // The failure this guards: a value saved as configuration, matching
         // nobody, discovered when an applicant is asked for the wrong papers.
         scopeTestPackage();
 
         $this->actingAs($this->admin)
             ->from(route('admin.kyc.document-types.index'))
             ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
-                ['package' => 'enterprize', 'country' => null],
+                ['package' => '01NOTAREALPACKAGEID000000', 'country' => null],
             ]))
             ->assertSessionHasErrors('scopes.0.package');
 
@@ -96,32 +112,31 @@ describe('package scoping', function () {
             ->assertSessionHasErrors('scopes.0.package');
     });
 
-    it('refuses a slug belonging to a deleted package', function () {
-        // Soft-deleted is gone as far as scoping is concerned; a rule naming it
-        // would be orphaned in everything but the foreign key.
+    it('refuses an id belonging to an archived package', function () {
+        // Archived is gone as far as new scoping is concerned.
         $package = scopeTestPackage();
         $package->delete();
 
         $this->actingAs($this->admin)
             ->from(route('admin.kyc.document-types.index'))
             ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
-                ['package' => $package->slug, 'country' => null],
+                ['package' => $package->public_id, 'country' => null],
             ]))
             ->assertSessionHasErrors('scopes.0.package');
     });
 
     it('leaves no orphaned package rules behind', function () {
-        // The invariant, asserted directly: every stored package slug resolves.
-        scopeTestPackage();
+        // The invariant, asserted directly: every stored package id resolves.
+        $package = scopeTestPackage();
 
         $this->actingAs($this->admin)
             ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
-                ['package' => 'enterprise', 'country' => null],
+                ['package' => $package->public_id, 'country' => null],
             ]));
 
         $orphans = KycDocumentTypeScope::query()
-            ->whereNotNull('package_slug')
-            ->whereNotIn('package_slug', Package::query()->pluck('slug'))
+            ->whereNotNull('package_public_id')
+            ->whereNotIn('package_public_id', Package::query()->pluck('public_id'))
             ->count();
 
         expect($orphans)->toBe(0);
@@ -239,16 +254,16 @@ describe('what the screen is given', function () {
             ->assertInertia(fn (Assert $page) => $page->has('packages', 0));
     });
 
-    it('sends the packages once they exist', function () {
+    it('sends the packages keyed by their immutable id', function () {
         scopeTestPackage('Starter');
-        scopeTestPackage('Growth');
+        $growth = scopeTestPackage('Growth');
 
         $this->actingAs($this->admin)
             ->get(route('admin.kyc.document-types.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('packages', 2)
                 ->where('packages.0.label', 'Growth')
-                ->where('packages.0.value', 'growth'),
+                ->where('packages.0.value', $growth->public_id),
             );
     });
 

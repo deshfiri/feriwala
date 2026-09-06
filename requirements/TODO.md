@@ -209,7 +209,25 @@ applicant's own history.
       availability. Historical KYC rounds are untouched either way — they carry a captured snapshot, not a live
       lookup. No hard delete: a payment and an invoice name the package they were for (§36.2). Admin catalogue at
       `admin/packages`, archived plans listed alongside live ones so "which plan were they on" stays answerable —
-      27 tests
+      27 tests.
+
+    **Two invariants were checked before closing and neither held; both are now enforced and tested.**
+
+    _Historical snapshot._ `Entitlements` read the live package row, so lowering a staff limit silently took a
+    seat from every account that had already bought the larger one. §8.3 makes a change of terms an upgrade or a
+    renewal — something an account agrees to. `user_packages.terms` now carries a `SubscriptionTerms` snapshot
+    captured at purchase: name, package and registration and renewal fees, frequency, validity, grace, deposit,
+    minimum balance, currency, service charges and every resolved entitlement. Money already paid was already
+    safe — payments, allocations and tax lines all snapshot at the moment of charge, and a test asserts a settled
+    payment does not recalculate. Rows written before snapshots existed fall back to the package rather than
+    granting nothing, which would strand real accounts mid-term — 12 tests.
+
+    _Slug stability._ KYC scope rules keyed on `package_slug`, making a routing decision into a relationship key:
+    renaming a slug orphaned every rule pointing at it, silently. Scopes now key on the package's immutable
+    `public_id`, and the slug goes back to being the public URL. A test renames a slug and asserts the rule still
+    matches. The column is `varchar`, not `ulid`, because a `char(26)` pads in PostgreSQL and an equality check
+    that looks obviously correct then quietly fails — which is how the first version of this failed.
+
 - [x] **P1-33** `PackageFeature` enum (15 typed entitlements) + `package_features`. Facilities default **off** and limits default to **0**, so a misconfigured package under-delivers visibly; `null` means unlimited and is kept distinct from `0`
 - [x] **P1-34** `package_charges` (setup, maintenance, domain, hosting) with recurrence
 - [x] **P1-35** Package selection and comparison. Each card leads with the **total payable today**, not the package fee alone — the registration fee is charged alongside (§5.1), and showing only the package price would surprise the user at checkout. Choosing again supersedes the earlier choice rather than stacking unpaid subscriptions

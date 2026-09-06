@@ -67,7 +67,7 @@ class KycDocumentTypeController extends Controller
                 'used_by_rounds' => $type->submission_requirements_count,
 
                 'scopes' => $type->scopes->map(fn (KycDocumentTypeScope $scope) => [
-                    'package' => $scope->package_slug,
+                    'package' => $scope->package_public_id,
                     'country' => $scope->country_code,
                     'is_required' => $scope->is_required,
                 ])->values(),
@@ -95,11 +95,16 @@ class KycDocumentTypeController extends Controller
              * Package CRUD (P1-32) has not been built yet, and the screen says
              * so instead of offering a box to guess into.
              */
+            /*
+             * Keyed by the **public id**, labelled by the name. A slug is a
+             * routing decision and may be edited; a rule keyed on one is
+             * orphaned the day somebody renames a URL.
+             */
             'packages' => Package::query()
                 ->orderBy('name')
-                ->get(['slug', 'name'])
+                ->get(['public_id', 'name'])
                 ->map(fn (Package $package) => [
-                    'value' => $package->slug,
+                    'value' => $package->public_id,
                     'label' => $package->name,
                 ]),
 
@@ -220,7 +225,7 @@ class KycDocumentTypeController extends Controller
 
         foreach ($scopes as $scope) {
             $type->scopes()->create([
-                'package_slug' => filled($scope['package'] ?? null)
+                'package_public_id' => filled($scope['package'] ?? null)
                     ? $scope['package']
                     : null,
                 'country_code' => filled($scope['country'] ?? null)

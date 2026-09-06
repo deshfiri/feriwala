@@ -96,15 +96,22 @@ class Entitlements
             };
         }
 
-        $package = $userPackage->package;
+        /*
+         * The subscription's own terms, not the package's current ones (§8.3).
+         *
+         * Reading the live row made an administrator's edit change what every
+         * existing subscriber was entitled to, retroactively and without anyone
+         * agreeing to it. A change of terms is an upgrade or a renewal, which
+         * an account accepts; it is not something that happens to them between
+         * one request and the next.
+         *
+         * Falls back to the package only for subscriptions written before
+         * snapshots existed — and to the feature's default when even that has
+         * gone, rather than assuming anything.
+         */
+        $terms = $userPackage->terms();
 
-        // A subscription whose package row has gone is not an entitlement —
-        // fall back to the feature's default rather than assuming anything.
-        if ($package === null) {
-            return $feature->default();
-        }
-
-        return $package->feature($feature);
+        return $terms === null ? $feature->default() : $terms->feature($feature);
     }
 
     /**

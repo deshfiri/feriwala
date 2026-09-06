@@ -26,8 +26,8 @@ it('seeds a catalogue covering every scoping shape', function () {
         ->and(KycDocumentType::query()->active()->count())->toBe(5)
         ->and(KycDocumentType::query()->where('key', 'trade_licence')->first()->scopes)
         ->toHaveCount(1)
-        ->and(KycDocumentType::query()->where('key', 'company_registration')->first()->scopes->first()->package_slug)
-        ->toBe('enterprise');
+        ->and(KycDocumentType::query()->where('key', 'company_registration')->first()->scopes->first()->package_public_id)
+        ->toBe(Package::query()->where('slug', 'enterprise')->value('public_id'));
 });
 
 it('seeds packages for the package-scoped rule to point at', function () {

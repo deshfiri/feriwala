@@ -180,7 +180,7 @@ class ManagePackages
         return KycDocumentType::query()
             ->notArchived()
             ->whereIn('id', KycDocumentTypeScope::query()
-                ->where('package_slug', $package->slug)
+                ->where('package_public_id', $package->public_id)
                 ->select('kyc_document_type_id'))
             ->orderBy('sort_order')
             ->pluck('name')

@@ -6,6 +6,7 @@ use App\Domain\Account\Actions\ChangeAccountStatus;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Package\Data\SubscriptionTerms;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
@@ -56,6 +57,15 @@ class SelectPackage
                 // applicant was quoted.
                 'paid_fee_minor' => $package->fee_minor,
                 'currency_code' => $package->fee_minor->currency->value,
+
+                /*
+                 * And everything else the package says, for the same reason
+                 * (§8.3). Entitlements read this rather than the live row, so
+                 * an administrator lowering a staff limit changes what future
+                 * buyers get — not what this account already agreed to.
+                 */
+                'terms' => SubscriptionTerms::capture($package->load(['features', 'charges']))->toArray(),
+                'terms_captured_at' => now(),
             ]);
 
             if ($account->canTransitionTo(AccountStatus::PaymentPending)) {

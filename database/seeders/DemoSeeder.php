@@ -191,7 +191,7 @@ class DemoSeeder extends Seeder
             'is_required' => false,
             'sort_order' => 4,
         ])->scopes()->create([
-            'package_slug' => 'enterprise',
+            'package_public_id' => Package::query()->where('slug', 'enterprise')->value('public_id'),
             'is_required' => true,
         ]);
 
