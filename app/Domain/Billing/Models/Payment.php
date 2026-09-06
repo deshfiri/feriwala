@@ -75,6 +75,20 @@ class Payment extends Model
     }
 
     /**
+     * The tax charged, per rate (D19).
+     *
+     * Alongside the single rolled-up Tax allocation, not instead of it. An
+     * invoice reads "VAT 15% on 5,000 — 750" per rate, and a tax return needs
+     * the taxable base as well as the tax; neither survives a total.
+     *
+     * @return HasMany<PaymentTaxLine, $this>
+     */
+    public function taxLines(): HasMany
+    {
+        return $this->hasMany(PaymentTaxLine::class)->orderBy('id');
+    }
+
+    /**
      * @return MorphTo<Model, $this>
      */
     public function payable(): MorphTo

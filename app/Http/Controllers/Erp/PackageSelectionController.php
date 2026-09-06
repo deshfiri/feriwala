@@ -55,8 +55,8 @@ class PackageSelectionController extends Controller
             ->publiclyListed()
             ->with('features')
             ->get()
-            ->map(function (Package $package) use ($quotes) {
-                $quote = $quotes->handle($package);
+            ->map(function (Package $package) use ($quotes, $account) {
+                $quote = $quotes->handle($package, account: $account);
 
                 return [
                     'slug' => $package->slug,

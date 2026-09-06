@@ -4,6 +4,7 @@ namespace App\Domain\Billing\Data;
 
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Tax\Data\TaxBreakdown;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 
@@ -22,11 +23,24 @@ class ActivationQuote
 {
     /**
      * @param  array<int, QuoteLine>  $lines
+     * @param  TaxBreakdown|null  $tax  per-rate detail behind the single Tax
+     *                                  line. An invoice must show "VAT 15% on
+     *                                  5,000 — 750" per rate, and that is not
+     *                                  recoverable from a rolled-up total (D19).
      */
     public function __construct(
         public readonly array $lines,
         public readonly Currency $currency,
+        public readonly ?TaxBreakdown $tax = null,
     ) {}
+
+    /**
+     * The per-rate tax detail, empty rather than null when nothing was charged.
+     */
+    public function taxBreakdown(): TaxBreakdown
+    {
+        return $this->tax ?? TaxBreakdown::empty($this->currency);
+    }
 
     /**
      * The amount for one component, zero when absent.
@@ -117,6 +131,11 @@ class ActivationQuote
             'total' => $this->total()->jsonSerialize(),
             'currency' => $this->currency->value,
             'is_payable' => $this->isPayable(),
+
+            // Per-rate, for the invoice and the checkout summary. Separate from
+            // the single Tax line above, which is what joins the total (D19).
+            'tax' => $this->taxBreakdown()->toArray(),
+            'tax_included' => $this->taxBreakdown()->includedTotal()->jsonSerialize(),
         ];
     }
 }

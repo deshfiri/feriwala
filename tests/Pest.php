@@ -52,6 +52,7 @@ pest()->group('onboarding')->in('Feature/Onboarding');
 pest()->group('kyc')->in('Feature/Kyc');
 pest()->group('package')->in('Feature/Package');
 pest()->group('payment')->in('Feature/Payment');
+pest()->group('tax')->in('Feature/Tax');
 pest()->group('wallet')->in('Feature/Wallet');
 pest()->group('ledger')->in('Feature/Ledger');
 pest()->group('commission')->in('Feature/Commission');

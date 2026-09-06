@@ -9,6 +9,8 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Tax\Models\TaxRate;
+use App\Domain\Tax\Models\TaxRule;
 use App\Support\Money\Money;
 use App\Support\References\Reference;
 use App\Support\References\ReferencePrefix;
@@ -17,7 +19,10 @@ use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
     $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
-    $settings->define('billing.tax_rate_percent', 'billing', SettingType::Decimal, '15');
+
+    // Tax is configuration, not a setting string (D19).
+    TaxRate::factory()->percent(15)->create();
+    TaxRule::factory()->create();
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
 
     $this->account = testBusinessAccount();

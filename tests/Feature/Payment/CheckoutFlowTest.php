@@ -15,7 +15,6 @@ use Inertia\Testing\AssertableInertia as Assert;
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
     $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
-    $settings->define('billing.tax_rate_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);

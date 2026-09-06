@@ -92,6 +92,19 @@ class RecordPaymentFromQuote
             ]);
         }
 
-        return $payment->load('allocations');
+        /*
+         * The per-rate tax detail, alongside the single rolled-up Tax
+         * allocation (D19).
+         *
+         * The rate and its basis points are copied in rather than referenced.
+         * When the rate changes next year, this invoice must still say what it
+         * said — and a tax return needs the taxable base as well as the tax,
+         * neither of which is recoverable from a total.
+         */
+        foreach ($quote->taxBreakdown()->charges as $charge) {
+            $payment->taxLines()->create($charge->toPaymentLine());
+        }
+
+        return $payment->load(['allocations', 'taxLines']);
     }
 }

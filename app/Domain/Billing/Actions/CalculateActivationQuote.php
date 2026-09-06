@@ -2,13 +2,18 @@
 
 namespace App\Domain\Billing\Actions;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Data\ActivationQuote;
 use App\Domain\Billing\Data\QuoteLine;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Tax\Data\TaxBreakdown;
+use App\Domain\Tax\Data\TaxCharge;
+use App\Domain\Tax\TaxEngine;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Carbon\CarbonImmutable;
 
 /**
  * Works out what an activation costs (§9).
@@ -20,18 +25,24 @@ use App\Support\Money\Money;
  * Order of operations matters and is fixed here rather than left to callers:
  *
  *   1. fees are gathered
- *   2. discount comes off the fees
- *   3. tax is charged on what remains, and only on taxable components
+ *   2. discount comes off the fees, apportioned across them
+ *   3. tax is charged per fee on what remains, at that fee's own rate (D19)
  *   4. the wallet deposit is added, untaxed — it is the partner's own money
  *   5. the gateway charge is applied last, to the amount actually transacted
  *
  * Taxing before discount would overcharge; taxing the deposit would charge VAT
  * on someone's savings.
+ *
+ * The discount is **apportioned** rather than deducted from a single pooled
+ * total, because two fees can carry different rates (D19). Taking 500 off a
+ * pool and taxing the remainder at one rate would be arithmetic that no longer
+ * belongs to either fee, and an invoice cannot show it per rate.
  */
 class CalculateActivationQuote
 {
     public function __construct(
         protected SettingsRepository $settings,
+        protected TaxEngine $tax,
     ) {}
 
     public function handle(
@@ -39,8 +50,11 @@ class CalculateActivationQuote
         ?Money $walletDeposit = null,
         ?Money $discount = null,
         ?string $discountDescription = null,
+        ?BusinessAccount $account = null,
+        ?CarbonImmutable $at = null,
     ): ActivationQuote {
         $currency = $package->fee_minor->currency;
+        $at ??= CarbonImmutable::now();
 
         $lines = [];
 
@@ -63,23 +77,28 @@ class CalculateActivationQuote
 
         // 2. Discount, capped at the fees so a generous coupon can never make
         //    the total negative and turn a sale into a payout.
-        $taxableBase = $this->taxableTotal($lines, $currency);
+        $taxableAmounts = $this->taxableAmounts($lines, $currency);
+        $taxableBase = $this->sum($taxableAmounts, $currency);
 
         if ($discount !== null && $discount->isPositive()) {
             $applied = $discount->greaterThan($taxableBase) ? $taxableBase : $discount;
 
             $lines[] = new QuoteLine(AllocationType::Discount, $applied, $discountDescription);
-            $taxableBase = $taxableBase->minus($applied);
+            $taxableAmounts = $this->afterDiscount($taxableAmounts, $applied, $currency);
         }
 
-        // 3. Tax on the discounted, taxable amount.
-        $taxRate = (float) $this->settings->get('billing.tax_rate_percent', '0');
+        // 3. Tax, per fee, at that fee's own rate and mode (D19).
+        $breakdown = $this->taxOn($taxableAmounts, $account, $at, $currency);
 
-        if ($taxRate > 0 && $taxableBase->isPositive()) {
+        // Only tax that is *added* joins the total. Inclusive tax is already
+        // inside the fee lines above; adding it here would charge it twice.
+        $addedTax = $breakdown->addedTotal();
+
+        if ($addedTax->isPositive()) {
             $lines[] = new QuoteLine(
                 AllocationType::Tax,
-                $taxableBase->percentage($taxRate),
-                sprintf('VAT (%s%%)', rtrim(rtrim(number_format($taxRate, 2, '.', ''), '0'), '.')),
+                $addedTax,
+                $this->taxLabel($breakdown),
             );
         }
 
@@ -88,7 +107,7 @@ class CalculateActivationQuote
             $lines[] = new QuoteLine(AllocationType::WalletDeposit, $walletDeposit);
         }
 
-        $quote = new ActivationQuote($lines, $currency);
+        $quote = new ActivationQuote($lines, $currency, $breakdown);
 
         // 5. Gateway charge on what is actually being transacted, where the
         //    administrator has chosen to pass it on (§9).
@@ -100,7 +119,7 @@ class CalculateActivationQuote
                 $quote->total()->percentage($gatewayRate),
             );
 
-            $quote = new ActivationQuote($lines, $currency);
+            $quote = new ActivationQuote($lines, $currency, $breakdown);
         }
 
         return $quote;
@@ -121,16 +140,116 @@ class CalculateActivationQuote
     }
 
     /**
+     * The taxable fee lines, keyed by allocation type.
+     *
      * @param  array<int, QuoteLine>  $lines
+     * @return array<string, Money>
      */
-    protected function taxableTotal(array $lines, Currency $currency): Money
+    protected function taxableAmounts(array $lines, Currency $currency): array
+    {
+        $amounts = [];
+
+        foreach ($lines as $line) {
+            if (! $line->type->isTaxable()) {
+                continue;
+            }
+
+            $key = $line->type->value;
+
+            $amounts[$key] = isset($amounts[$key])
+                ? $amounts[$key]->plus($line->amount)
+                : $line->amount;
+        }
+
+        return $amounts;
+    }
+
+    /**
+     * Spread the discount across the taxable fees in proportion to their size.
+     *
+     * {@see Money::allocate()} hands out remainder units largest-first, so the
+     * shares always sum back to the discount exactly. Splitting by a percentage
+     * and rounding each share would lose or invent a poisha, and the tax
+     * charged would then not match the discount given.
+     *
+     * @param  array<string, Money>  $amounts
+     * @return array<string, Money>
+     */
+    protected function afterDiscount(array $amounts, Money $discount, Currency $currency): array
+    {
+        if ($amounts === []) {
+            return $amounts;
+        }
+
+        $ratios = array_map(fn (Money $amount) => $amount->minorUnits, $amounts);
+
+        if (array_sum($ratios) === 0) {
+            return $amounts;
+        }
+
+        $shares = $discount->allocate($ratios);
+
+        $net = [];
+
+        foreach ($amounts as $key => $amount) {
+            $net[$key] = $amount->minus($shares[$key]);
+        }
+
+        return $net;
+    }
+
+    /**
+     * @param  array<string, Money>  $amounts
+     */
+    protected function taxOn(
+        array $amounts,
+        ?BusinessAccount $account,
+        CarbonImmutable $at,
+        Currency $currency,
+    ): TaxBreakdown {
+        $charges = [];
+
+        foreach ($amounts as $key => $amount) {
+            $type = AllocationType::from($key);
+
+            $charge = $this->tax->charge(
+                amount: $amount,
+                feeType: $type,
+                account: $account,
+                at: $at,
+            );
+
+            if (! $charge->isZero()) {
+                $charges[] = $charge;
+            }
+        }
+
+        return TaxBreakdown::of($charges, $currency);
+    }
+
+    /**
+     * "VAT (15%)" for one rate; a plain "Tax" when several are in play, because
+     * naming one of them on a combined line would be wrong about the others.
+     */
+    protected function taxLabel(TaxBreakdown $breakdown): ?string
+    {
+        $added = array_values(array_filter(
+            $breakdown->charges,
+            fn (TaxCharge $charge) => ! $charge->mode->isInclusive(),
+        ));
+
+        return count($added) === 1 ? $added[0]->label : null;
+    }
+
+    /**
+     * @param  array<string, Money>  $amounts
+     */
+    protected function sum(array $amounts, Currency $currency): Money
     {
         $total = Money::zero($currency);
 
-        foreach ($lines as $line) {
-            if ($line->type->isTaxable()) {
-                $total = $total->plus($line->amount);
-            }
+        foreach ($amounts as $amount) {
+            $total = $total->plus($amount);
         }
 
         return $total;

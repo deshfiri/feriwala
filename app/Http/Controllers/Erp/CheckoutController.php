@@ -49,7 +49,7 @@ class CheckoutController extends Controller
                 ->with('info', 'Choose a package to continue.');
         }
 
-        $quote = $quotes->handle($package);
+        $quote = $quotes->handle($package, account: $account);
 
         return Inertia::render('onboarding/checkout', [
             'package' => [
@@ -88,7 +88,7 @@ class CheckoutController extends Controller
         }
 
         // Recalculated here rather than trusting anything submitted.
-        $quote = $quotes->handle($package);
+        $quote = $quotes->handle($package, account: $account);
 
         if (! $quote->isPayable()) {
             throw ValidationException::withMessages([

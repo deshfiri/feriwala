@@ -5,13 +5,14 @@ use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Tax\Models\TaxRate;
+use App\Domain\Tax\Models\TaxRule;
 use App\Support\Money\Money;
 
 beforeEach(function () {
     $this->settings = app(SettingsRepository::class);
 
     $this->settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
-    $this->settings->define('billing.tax_rate_percent', 'billing', SettingType::Decimal, '0');
     $this->settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
 });
 
@@ -25,6 +26,18 @@ function quoteFor(array $packageAttributes = [], ...$args)
     ]);
 
     return app(CalculateActivationQuote::class)->handle($package, ...$args);
+}
+
+/**
+ * A standard rate on everything.
+ *
+ * Tax is configuration now, not a setting string (D19): a rate with a window,
+ * and a rule saying what it applies to.
+ */
+function quoteTestStandardRate(float $percent = 15.0): void
+{
+    TaxRate::factory()->percent($percent)->create();
+    TaxRule::factory()->create();
 }
 
 describe('the combined activation payment (§5.1)', function () {
@@ -94,7 +107,7 @@ describe('discount', function () {
 
 describe('tax', function () {
     beforeEach(function () {
-        $this->settings->set('billing.tax_rate_percent', '15');
+        quoteTestStandardRate();
     });
 
     it('is charged on the fees', function () {
@@ -164,7 +177,7 @@ describe('gateway charge', function () {
 
 describe('the full breakdown', function () {
     it('itemises every component §9 requires', function () {
-        $this->settings->set('billing.tax_rate_percent', '15');
+        quoteTestStandardRate();
         $this->settings->set('billing.gateway_charge_percent', '2');
 
         $quote = quoteFor([], walletDeposit: Money::of(1000000), discount: Money::of(50000));
@@ -182,7 +195,7 @@ describe('the full breakdown', function () {
     });
 
     it('has a total equal to the sum of its signed lines', function () {
-        $this->settings->set('billing.tax_rate_percent', '15');
+        quoteTestStandardRate();
 
         $quote = quoteFor([], walletDeposit: Money::of(1000000), discount: Money::of(50000));
 
