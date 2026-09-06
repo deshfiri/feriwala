@@ -1,0 +1,211 @@
+<?php
+
+use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Kyc\Models\KycDocumentType;
+use App\Domain\Kyc\Models\KycDocumentTypeScope;
+use App\Domain\Package\Models\Package;
+use App\Support\Localization\Countries;
+use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
+
+/*
+ * What a scope rule may name (§7.2).
+ *
+ * Neither dimension is free text. A slug resolving to no package, or a code
+ * that is not a country we serve, produces a rule that looks configured and
+ * matches nobody — and nothing says so until an applicant is asked for the
+ * wrong documents.
+ */
+
+beforeEach(function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    $this->admin = testPlatformStaff(PlatformRole::SuperAdmin);
+});
+
+function scopeTestPackage(string $name = 'Enterprise'): Package
+{
+    return Package::create([
+        'slug' => Str::slug($name),
+        'name' => $name,
+        'fee_minor' => 500000,
+        'currency_code' => 'BDT',
+        'is_active' => true,
+        'is_public' => true,
+    ]);
+}
+
+/**
+ * @param  array<int, array<string, mixed>>  $scopes
+ * @return array<string, mixed>
+ */
+function scopeTestPayload(array $scopes = []): array
+{
+    return [
+        'key' => 'trade_licence',
+        'name' => 'Trade licence',
+        'is_required' => '1',
+        'is_active' => '1',
+        'requires_file' => '1',
+        'requires_value' => '0',
+        'accepted_mime_types' => ['application/pdf'],
+        'max_size_kb' => 2048,
+        'scopes' => $scopes,
+    ];
+}
+
+describe('package scoping', function () {
+    it('accepts a slug that resolves to a package', function () {
+        scopeTestPackage();
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => 'enterprise', 'country' => null, 'is_required' => '1'],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        expect(KycDocumentTypeScope::query()->where('package_slug', 'enterprise')->exists())
+            ->toBeTrue();
+    });
+
+    it('refuses a slug that resolves to nothing', function () {
+        // The failure this guards: a typo saved as configuration, matching
+        // nobody, discovered when an applicant is asked for the wrong papers.
+        scopeTestPackage();
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => 'enterprize', 'country' => null],
+            ]))
+            ->assertSessionHasErrors('scopes.0.package');
+
+        expect(KycDocumentType::query()->where('key', 'trade_licence')->exists())
+            ->toBeFalse();
+    });
+
+    it('refuses any package rule while no packages exist', function () {
+        // P1-32 has not been built. Nothing resolves, so nothing is accepted —
+        // rather than storing a rule that will orphan the moment it is read.
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => 'anything', 'country' => null],
+            ]))
+            ->assertSessionHasErrors('scopes.0.package');
+    });
+
+    it('refuses a slug belonging to a deleted package', function () {
+        // Soft-deleted is gone as far as scoping is concerned; a rule naming it
+        // would be orphaned in everything but the foreign key.
+        $package = scopeTestPackage();
+        $package->delete();
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => $package->slug, 'country' => null],
+            ]))
+            ->assertSessionHasErrors('scopes.0.package');
+    });
+
+    it('leaves no orphaned package rules behind', function () {
+        // The invariant, asserted directly: every stored package slug resolves.
+        scopeTestPackage();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => 'enterprise', 'country' => null],
+            ]));
+
+        $orphans = KycDocumentTypeScope::query()
+            ->whereNotNull('package_slug')
+            ->whereNotIn('package_slug', Package::query()->pluck('slug'))
+            ->count();
+
+        expect($orphans)->toBe(0);
+    });
+});
+
+describe('country scoping', function () {
+    it('accepts a supported country, however it was typed', function () {
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => null, 'country' => 'bd'],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        expect(KycDocumentTypeScope::query()->first()->country_code)->toBe('BD');
+    });
+
+    it('refuses a code that is not a country we serve', function () {
+        // "Bangladsh" looks configured and matches nobody.
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => null, 'country' => 'ZZ'],
+            ]))
+            ->assertSessionHasErrors('scopes.0.country');
+    });
+
+    it('still refuses a rule naming neither dimension', function () {
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => null, 'country' => null],
+            ]))
+            ->assertSessionHasErrors('scopes.0.package');
+    });
+});
+
+describe('the supported country list', function () {
+    it('puts the home market first', function () {
+        $options = app(Countries::class)->options();
+
+        expect($options[0]['value'])->toBe('BD')
+            ->and($options[0]['label'])->toBe('Bangladesh');
+    });
+
+    it('answers about a code however it was written', function () {
+        $countries = app(Countries::class);
+
+        expect($countries->supports('bd'))->toBeTrue()
+            ->and($countries->supports(' BD '))->toBeTrue()
+            ->and($countries->supports('ZZ'))->toBeFalse()
+            ->and($countries->nameFor('in'))->toBe('India');
+    });
+});
+
+describe('what the screen is given', function () {
+    it('sends an empty package list while none exist', function () {
+        // The screen reads this as "P1-32 is not built" and shows the
+        // dependency note instead of a control.
+        $this->actingAs($this->admin)
+            ->get(route('admin.kyc.document-types.index'))
+            ->assertInertia(fn (Assert $page) => $page->has('packages', 0));
+    });
+
+    it('sends the packages once they exist', function () {
+        scopeTestPackage('Starter');
+        scopeTestPackage('Growth');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.kyc.document-types.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('packages', 2)
+                ->where('packages.0.label', 'Growth')
+                ->where('packages.0.value', 'growth'),
+            );
+    });
+
+    it('sends the countries a rule may name', function () {
+        $this->actingAs($this->admin)
+            ->get(route('admin.kyc.document-types.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('countries.0.value', 'BD')
+                ->has('countries', count(app(Countries::class)->codes())),
+            );
+    });
+});

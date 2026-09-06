@@ -17,7 +17,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import type { KycDocumentTypeRow, KycDocumentTypeScopeRow } from '@/types';
+import type {
+    KycDocumentTypeRow,
+    KycDocumentTypeScopeRow,
+    SelectOption,
+} from '@/types';
 
 /** What a new requirement starts with — the formats a phone camera produces. */
 const DEFAULT_MIME_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
@@ -27,6 +31,10 @@ type Props = {
     onOpenChange: (open: boolean) => void;
     /** Null creates; a row edits it. */
     type: KycDocumentTypeRow | null;
+    /** Packages a rule may name. Empty until P1-32 builds Package CRUD. */
+    packages: SelectOption[];
+    /** The countries Feriwala serves (config/countries.php). */
+    countries: SelectOption[];
 };
 
 /**
@@ -40,7 +48,13 @@ type Props = {
  * The server replaces the rules wholesale on save, so what is on screen is what
  * will exist — there is no merge to reason about.
  */
-export default function RequirementDialog({ open, onOpenChange, type }: Props) {
+export default function RequirementDialog({
+    open,
+    onOpenChange,
+    type,
+    packages,
+    countries,
+}: Props) {
     const { t } = useTranslation();
     const [scopes, setScopes] = useState<KycDocumentTypeScopeRow[]>([]);
     const [requiresFile, setRequiresFile] = useState(true);
@@ -267,6 +281,8 @@ export default function RequirementDialog({ open, onOpenChange, type }: Props) {
                                 scopes={scopes}
                                 onChange={setScopes}
                                 errors={errors}
+                                packages={packages}
+                                countries={countries}
                             />
 
                             <DialogFooter>
@@ -336,12 +352,24 @@ function ScopeEditor({
     scopes,
     onChange,
     errors,
+    packages,
+    countries,
 }: {
     scopes: KycDocumentTypeScopeRow[];
     onChange: (scopes: KycDocumentTypeScopeRow[]) => void;
     errors: Record<string, string | undefined>;
+    packages: SelectOption[];
+    countries: SelectOption[];
 }) {
     const { t } = useTranslation();
+
+    /*
+     * With no packages configured there is nothing to choose between, so the
+     * control is absent rather than an empty dropdown or a box to guess a slug
+     * into. A rule naming a package that does not exist matches nobody, and
+     * nothing tells anyone until an applicant is asked for the wrong documents.
+     */
+    const canScopeByPackage = packages.length > 0;
 
     const update = (index: number, patch: Partial<KycDocumentTypeScopeRow>) => {
         onChange(
@@ -399,18 +427,39 @@ function ScopeEditor({
                             >
                                 {t('kyc.document_types.scopes.package')}
                             </Label>
-                            <Input
-                                id={`scope-package-${index}`}
-                                value={scope.package ?? ''}
-                                placeholder={t(
-                                    'kyc.document_types.scopes.package_placeholder',
-                                )}
-                                onChange={(event) =>
-                                    update(index, {
-                                        package: event.target.value || null,
-                                    })
-                                }
-                            />
+
+                            {canScopeByPackage ? (
+                                <select
+                                    id={`scope-package-${index}`}
+                                    value={scope.package ?? ''}
+                                    onChange={(event) =>
+                                        update(index, {
+                                            package: event.target.value || null,
+                                        })
+                                    }
+                                    className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+                                >
+                                    <option value="">
+                                        {t(
+                                            'kyc.document_types.scopes.package_placeholder',
+                                        )}
+                                    </option>
+                                    {packages.map((option) => (
+                                        <option
+                                            key={option.value}
+                                            value={option.value}
+                                        >
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <p className="text-muted-foreground text-xs">
+                                    {t(
+                                        'kyc.document_types.scopes.packages_pending',
+                                    )}
+                                </p>
+                            )}
                         </div>
 
                         <div className="grid gap-1">
@@ -420,21 +469,35 @@ function ScopeEditor({
                             >
                                 {t('kyc.document_types.scopes.country')}
                             </Label>
-                            <Input
+
+                            {/*
+                             * Chosen, never typed. "Bangladsh" looks configured
+                             * and matches nobody.
+                             */}
+                            <select
                                 id={`scope-country-${index}`}
                                 value={scope.country ?? ''}
-                                maxLength={2}
-                                placeholder={t(
-                                    'kyc.document_types.scopes.country_placeholder',
-                                )}
                                 onChange={(event) =>
                                     update(index, {
-                                        country:
-                                            event.target.value.toUpperCase() ||
-                                            null,
+                                        country: event.target.value || null,
                                     })
                                 }
-                            />
+                                className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+                            >
+                                <option value="">
+                                    {t(
+                                        'kyc.document_types.scopes.country_placeholder',
+                                    )}
+                                </option>
+                                {countries.map((option) => (
+                                    <option
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 

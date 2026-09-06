@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Kyc;
 
 use App\Domain\Kyc\Models\KycDocumentType;
+use App\Domain\Package\Models\Package;
+use App\Support\Localization\Countries;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -53,12 +55,51 @@ class SaveKycDocumentTypeRequest extends FormRequest
 
             'sort_order' => ['nullable', 'integer', 'min:0'],
 
-            // §7.2 scoping: global, package, country, or both.
+            /*
+             * §7.2 scoping: global, package, country, or both.
+             *
+             * Neither dimension is free text. A slug that resolves to no
+             * package, or a code that is not a country we serve, produces a
+             * rule that looks configured and matches nobody — and nobody finds
+             * out until an applicant is asked for the wrong documents.
+             */
             'scopes' => ['sometimes', 'array'],
-            'scopes.*.package' => ['nullable', 'string', 'max:255'],
-            'scopes.*.country' => ['nullable', 'string', 'size:2'],
+            'scopes.*.package' => [
+                'nullable', 'string',
+                Rule::exists(Package::class, 'slug')->whereNull('deleted_at'),
+            ],
+            'scopes.*.country' => [
+                'nullable', 'string', 'size:2',
+                Rule::in(app(Countries::class)->codes()),
+            ],
             'scopes.*.is_required' => ['nullable', 'boolean'],
         ];
+    }
+
+    /**
+     * Upper-case the country codes before validation.
+     *
+     * A picker sends what it was given, and a code typed into an API call may
+     * be lower case; normalising here means the `in` rule and the stored value
+     * agree without every caller having to remember.
+     */
+    protected function prepareForValidation(): void
+    {
+        $scopes = $this->input('scopes');
+
+        if (! is_array($scopes)) {
+            return;
+        }
+
+        $this->merge([
+            'scopes' => array_map(function ($scope) {
+                if (is_array($scope) && filled($scope['country'] ?? null)) {
+                    $scope['country'] = mb_strtoupper(trim((string) $scope['country']));
+                }
+
+                return $scope;
+            }, $scopes),
+        ]);
     }
 
     public function withValidator(Validator $validator): void

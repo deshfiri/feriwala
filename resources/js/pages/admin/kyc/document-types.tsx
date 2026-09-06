@@ -15,11 +15,15 @@ import PermissionDeniedState from '@/components/states/permission-denied-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
-import type { KycDocumentTypeRow } from '@/types';
+import type { KycDocumentTypeRow, SelectOption } from '@/types';
 import RequirementDialog from './requirement-dialog';
 
 type Props = {
     types: KycDocumentTypeRow[];
+    /** Packages a scope rule may name. Empty until P1-32 (Package CRUD). */
+    packages: SelectOption[];
+    /** The countries Feriwala serves (config/countries.php). */
+    countries: SelectOption[];
     can: { create: boolean };
 };
 
@@ -37,7 +41,12 @@ type Props = {
  * for good and cannot be edited — it is part of the record of what past rounds
  * were asked for.
  */
-export default function KycDocumentTypes({ types, can }: Props) {
+export default function KycDocumentTypes({
+    types,
+    packages,
+    countries,
+    can,
+}: Props) {
     const { t } = useTranslation();
     const [editing, setEditing] = useState<KycDocumentTypeRow | null>(null);
     const [creating, setCreating] = useState(false);
@@ -160,12 +169,16 @@ export default function KycDocumentTypes({ types, can }: Props) {
                 open={creating}
                 onOpenChange={setCreating}
                 type={null}
+                packages={packages}
+                countries={countries}
             />
 
             <RequirementDialog
                 open={editing !== null}
                 onOpenChange={(open) => !open && setEditing(null)}
                 type={editing}
+                packages={packages}
+                countries={countries}
             />
         </>
     );

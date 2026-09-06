@@ -56,6 +56,7 @@ return [
             'requirement' => 'Requirement here',
             'inherit' => 'Same as above',
             'help' => 'Leave both blank and it applies to everyone. A country rule outranks a package rule.',
+            'packages_pending' => 'Package-specific rules need packages to exist first. They can be added once package management is built (P1-32).',
         ],
 
         'form' => [

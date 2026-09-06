@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Kyc\Actions\ManageKycDocumentTypes;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycDocumentTypeScope;
+use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Kyc\SaveKycDocumentTypeRequest;
 use App\Models\User;
+use App\Support\Localization\Countries;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +28,10 @@ use InvalidArgumentException;
  */
 class KycDocumentTypeController extends Controller
 {
+    public function __construct(
+        protected Countries $countries,
+    ) {}
+
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', KycDocumentType::class);
@@ -80,6 +86,25 @@ class KycDocumentTypeController extends Controller
                     'delete' => ! $type->isReferenced() && $actor->can('delete', $type),
                 ],
             ]),
+            /*
+             * What a scope rule may name (§7.2).
+             *
+             * Sent as lists rather than left to free text: a slug that resolves
+             * to no package produces a rule that looks configured and matches
+             * nobody. An empty `packages` list is not an oversight — it means
+             * Package CRUD (P1-32) has not been built yet, and the screen says
+             * so instead of offering a box to guess into.
+             */
+            'packages' => Package::query()
+                ->orderBy('name')
+                ->get(['slug', 'name'])
+                ->map(fn (Package $package) => [
+                    'value' => $package->slug,
+                    'label' => $package->name,
+                ]),
+
+            'countries' => $this->countries->options(),
+
             'can' => [
                 'create' => $actor->can('create', KycDocumentType::class),
             ],
@@ -195,8 +220,10 @@ class KycDocumentTypeController extends Controller
 
         foreach ($scopes as $scope) {
             $type->scopes()->create([
-                'package_slug' => $scope['package'] ?? null,
-                'country_code' => isset($scope['country'])
+                'package_slug' => filled($scope['package'] ?? null)
+                    ? $scope['package']
+                    : null,
+                'country_code' => filled($scope['country'] ?? null)
                     ? mb_strtoupper((string) $scope['country'])
                     : null,
                 'is_required' => $scope['is_required'] ?? null,

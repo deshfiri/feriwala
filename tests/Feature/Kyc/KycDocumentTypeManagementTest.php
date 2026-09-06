@@ -9,6 +9,7 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Models\KycSubmissionRequirement;
+use App\Domain\Package\Models\Package;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -297,6 +298,18 @@ describe('the admin screen', function () {
     it('replaces scope rules wholesale rather than merging them', function () {
         // Merging would make removing a rule impossible through the form that
         // added it.
+        //
+        // The replacement rule names a real package, because a slug that
+        // resolves to nothing is refused — see KycScopeSelectionTest.
+        Package::create([
+            'slug' => 'enterprise',
+            'name' => 'Enterprise',
+            'fee_minor' => 500000,
+            'currency_code' => 'BDT',
+            'is_active' => true,
+            'is_public' => true,
+        ]);
+
         $type = KycDocumentType::factory()->scopedTo(country: 'BD')->create();
 
         $this->actingAs($this->admin)
