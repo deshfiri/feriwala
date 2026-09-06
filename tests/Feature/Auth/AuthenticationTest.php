@@ -39,7 +39,12 @@ test('login screen names the account an invitation came from', function () {
 });
 
 test('users can authenticate using the login screen', function () {
-    $user = User::factory()->create();
+    // A business owner, because the landing depends on who is signing in —
+    // see HomeRouteTest. A bare identity with no account and no role has no
+    // dashboard to land on, and sending it there was a lockout (D23).
+    $user = User::factory()
+        ->withBusinessAccount(fn ($account) => $account->active())
+        ->create();
 
     $response = $this->post(route('login.store'), [
         'email' => $user->email,
@@ -51,7 +56,9 @@ test('users can authenticate using the login screen', function () {
 });
 
 test('passkey login response redirects to the one dashboard', function () {
-    $user = User::factory()->create();
+    $user = User::factory()
+        ->withBusinessAccount(fn ($account) => $account->active())
+        ->create();
 
     $request = Request::create(route('login', absolute: false), 'GET', server: [
         'HTTP_ACCEPT' => 'application/json',

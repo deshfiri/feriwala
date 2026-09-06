@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Domain\Account\Models\AccountInvitation;
 use App\Models\User;
+use App\Support\Navigation\HomeRoute;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -74,6 +74,10 @@ class EnsureBusinessAccountIsActivated
         'verification.',    // email and mobile verification are not wired yet
     ];
 
+    public function __construct(
+        protected HomeRoute $home,
+    ) {}
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
@@ -91,17 +95,14 @@ class EnsureBusinessAccountIsActivated
         }
 
         /*
-         * Somebody with no account at all is not half-way through onboarding —
-         * they are an invitee waiting to join someone else's business. Sending
-         * them to the activation stepper would put them in a funnel that is not
-         * theirs, and the stepper 403s without an account anyway.
+         * Somebody with no account at all is not half-way through onboarding.
+         * They are an invitee waiting to join a business, or Feriwala's own
+         * staff — and the activation stepper 403s without an account, so
+         * sending them there turned "you cannot see this page" into "you cannot
+         * use the product" (D23).
          */
         if ($user->businessAccount === null) {
-            $invitation = $this->openInvitationFor($user);
-
-            if ($invitation !== null) {
-                return redirect()->route('staff.invitation.show', $invitation->token);
-            }
+            return redirect()->to($this->home->urlFor($user));
         }
 
         // Redirected rather than refused with a 403: the account holder has
@@ -109,15 +110,6 @@ class EnsureBusinessAccountIsActivated
         return redirect()
             ->route('onboarding.status')
             ->with('info', __('Finish setting up your account to reach this.'));
-    }
-
-    protected function openInvitationFor(User $user): ?AccountInvitation
-    {
-        return AccountInvitation::query()
-            ->whereRaw('lower(email) = ?', [mb_strtolower($user->email)])
-            ->live()
-            ->orderByDesc('id')
-            ->first();
     }
 
     protected function isAllowed(Request $request): bool

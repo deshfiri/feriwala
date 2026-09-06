@@ -48,9 +48,10 @@ function matrixRoutes(): array
 }
 
 /**
- * What each route did for this user: 'ok', 'funnel' (sent back to onboarding),
- * 'denied', or 'guest' (sent to login — which is also where a refused identity
- * lands, because the identity gate signs it out).
+ * What each route did for this user: 'ok' (rendered), 'funnel' (sent back to
+ * onboarding), 'redirected' (sent somewhere else — their own landing), 'denied',
+ * or 'guest' (sent to login, which is also where a refused identity lands,
+ * because the identity gate signs it out).
  *
  * @return array<string, string>
  */
@@ -65,10 +66,19 @@ function accessMatrixFor(?User $user): array
 
         $location = $response->headers->get('Location');
 
+        /*
+         * `ok` means the page **rendered**, not "did not obviously fail".
+         *
+         * A 302 is under 400, so an earlier version of this read every redirect
+         * as success — and platform staff being bounced off the business
+         * dashboard scored `ok` on it. A matrix that cannot tell a render from
+         * a redirect is one that agrees with whatever the code does.
+         */
         $result[$kind] = match (true) {
             $response->getStatusCode() === 403 => 'denied',
             $location === route('login') => 'guest',
             $location === route('onboarding.status') => 'funnel',
+            $location !== null => 'redirected',
             $response->getStatusCode() < 400 => 'ok',
             default => 'error:'.$response->getStatusCode(),
         };
@@ -165,7 +175,14 @@ it('opens administration to platform staff who own no business', function () {
             // different from the funnel's "come back when you are ready".
             'onboarding' => 'denied',
 
-            'business' => 'funnel',
+            /*
+             * Turned back from the business ERP — but to **their own landing**,
+             * not into the onboarding funnel. Sending them to the stepper was a
+             * lockout: the stepper 403s without a business account, so a staff
+             * member signing in met a dead end at the front door (D23).
+             */
+            'business' => 'redirected',
+
             'admin' => 'ok',
         ]);
 });
