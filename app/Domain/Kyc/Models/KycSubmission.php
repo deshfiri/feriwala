@@ -73,6 +73,21 @@ class KycSubmission extends Model
     }
 
     /**
+     * What this round was opened against (§7.2).
+     *
+     * A snapshot, not a live lookup. Later configuration changes must not
+     * rewrite what an in-progress or historical round was asked for.
+     *
+     * @return HasMany<KycSubmissionRequirement, $this>
+     */
+    public function requirements(): HasMany
+    {
+        return $this->hasMany(KycSubmissionRequirement::class, 'kyc_submission_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    /**
      * @return HasMany<KycReview, $this>
      */
     public function reviews(): HasMany

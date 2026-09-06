@@ -20,6 +20,7 @@ class OpenKycDraft
 {
     public function __construct(
         protected StartKycResubmission $startResubmission,
+        protected CaptureRoundRequirements $captureRequirements,
         protected KycDeadlines $deadlines,
         protected DatabaseManager $database,
     ) {}
@@ -34,7 +35,7 @@ class OpenKycDraft
                 ->first();
 
             if ($latest === null) {
-                return KycSubmission::create([
+                $first = KycSubmission::create([
                     'business_account_id' => $account->id,
                     'status' => KycStatus::Draft,
                     'round' => 1,
@@ -45,10 +46,18 @@ class OpenKycDraft
                     // deadline is configured.
                     'deadline_at' => $this->deadlines->deadlineFrom(),
                 ]);
+
+                return $this->withRequirements($first);
             }
 
             if ($latest->status->isEditable()) {
-                return $latest;
+                /*
+                 * Captured here as well as at creation, and idempotently.
+                 * Rounds opened before requirement snapshots existed have none,
+                 * and a form rendering nothing at all would be worse than one
+                 * built from the configuration as it stands today.
+                 */
+                return $this->withRequirements($latest);
             }
 
             // Awaiting or holding a decision — the applicant should be looking
@@ -57,7 +66,17 @@ class OpenKycDraft
                 return $latest;
             }
 
-            return $this->startResubmission->handle($account);
+            return $this->withRequirements($this->startResubmission->handle($account));
         });
+    }
+
+    /**
+     * The round, with what it asks for recorded against it (§7.2).
+     */
+    protected function withRequirements(KycSubmission $submission): KycSubmission
+    {
+        $this->captureRequirements->handle($submission);
+
+        return $submission;
     }
 }

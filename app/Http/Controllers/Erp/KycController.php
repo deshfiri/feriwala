@@ -9,6 +9,7 @@ use App\Domain\Kyc\Exceptions\KycIncomplete;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Queries\ApplicableRequirements;
+use App\Domain\Kyc\Queries\ApplicantKycHistory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,22 @@ class KycController extends Controller
             ],
             'requirements' => $requirements->forForm($account, $submission),
             'feedback' => $submission->reviews()->first()?->user_visible_feedback,
+        ]);
+    }
+
+    /**
+     * The applicant's own KYC history (§7.3, P1-27).
+     *
+     * Self-scoped by construction: the account comes from the signed-in
+     * person's membership, never from the URL, so there is no identifier to
+     * substitute for somebody else's (§31.3).
+     */
+    public function history(Request $request, ApplicantKycHistory $history): Response
+    {
+        $account = $this->businessAccountFor($request);
+
+        return Inertia::render('onboarding/kyc-history', [
+            'rounds' => $history->forAccount($account),
         ]);
     }
 

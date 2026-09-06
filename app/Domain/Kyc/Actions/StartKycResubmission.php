@@ -22,6 +22,7 @@ class StartKycResubmission
 {
     public function __construct(
         protected KycDeadlines $deadlines,
+        protected CaptureRoundRequirements $captureRequirements,
         protected DatabaseManager $database,
     ) {}
 
@@ -53,12 +54,24 @@ class StartKycResubmission
                 );
             }
 
-            return KycSubmission::create([
+            $submission = KycSubmission::create([
                 'business_account_id' => $account->id,
                 'status' => KycStatus::Draft,
                 'round' => $latest->round + 1,
                 'deadline_at' => $this->deadlineFor($latest),
             ]);
+
+            /*
+             * The new round is snapshotted afresh rather than inheriting the
+             * previous one's requirements. A resubmission is judged against
+             * the configuration as it stands when it opens — which is the one
+             * the applicant is now being shown — and copying stale rules
+             * forward would ask them for a document that has since been
+             * withdrawn.
+             */
+            $this->captureRequirements->handle($submission);
+
+            return $submission;
         });
     }
 

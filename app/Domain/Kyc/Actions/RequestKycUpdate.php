@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Notifications\Kyc\KycUpdateRequested;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Notification;
 use InvalidArgumentException;
 
@@ -39,6 +40,7 @@ class RequestKycUpdate
 {
     public function __construct(
         protected KycDeadlines $deadlines,
+        protected CaptureRoundRequirements $captureRequirements,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
@@ -103,10 +105,21 @@ class RequestKycUpdate
         string $instructions,
         ?CarbonImmutable $deadline,
     ): KycSubmission {
+        /*
+         * The **account** is locked, not the latest round.
+         *
+         * Locking the latest submission looks equivalent and is not: two
+         * concurrent requests both lock round 1, the winner inserts round 2,
+         * and the loser wakes still holding round 1 as "the latest" — because
+         * `FOR UPDATE` re-checks the rows it locked, not the ordering of a
+         * query it already ran. It would then try to insert a second round 2.
+         * Locking the account serialises the whole read-decide-write.
+         */
+        BusinessAccount::query()->lockForUpdate()->findOrFail($account->id);
+
         $latest = KycSubmission::query()
             ->where('business_account_id', $account->id)
             ->orderByDesc('round')
-            ->lockForUpdate()
             ->first();
 
         if ($latest === null) {
@@ -128,21 +141,23 @@ class RequestKycUpdate
             );
         }
 
-        $submission = KycSubmission::create([
-            'business_account_id' => $account->id,
-            'status' => KycStatus::Draft,
-            'round' => $latest->round + 1,
+        try {
+            $submission = $this->createRound($account, $latest->round + 1, $requestedBy, $reason, $instructions, $deadline);
+        } catch (UniqueConstraintViolationException) {
+            /*
+             * The unique index on (business_account_id, round) — the backstop
+             * behind the lock above. A round number cannot exist twice, so a
+             * duplicate request under any concurrency the lock did not cover
+             * is refused at the database rather than doubling a deadline or a
+             * notification.
+             */
+            throw new InvalidArgumentException(
+                'This account already has a KYC round in progress.'
+            );
+        }
 
-            // An explicit deadline wins over the configured window; null when
-            // neither is set, which leaves the request open-ended rather than
-            // inventing an expiry nobody chose (§7.4).
-            'deadline_at' => $deadline ?? $this->deadlines->deadlineFrom(),
-
-            'requested_at' => now(),
-            'requested_by' => $requestedBy->id,
-            'request_reason' => $reason,
-            'request_instructions' => $instructions,
-        ]);
+        // What the round asks for, fixed at the moment it opens (§7.2).
+        $this->captureRequirements->handle($submission);
 
         $this->audit->handle(new AuditEntry(
             action: 'kyc.update_requested',
@@ -160,5 +175,30 @@ class RequestKycUpdate
         ));
 
         return $submission;
+    }
+
+    protected function createRound(
+        BusinessAccount $account,
+        int $round,
+        User $requestedBy,
+        string $reason,
+        string $instructions,
+        ?CarbonImmutable $deadline,
+    ): KycSubmission {
+        return KycSubmission::create([
+            'business_account_id' => $account->id,
+            'status' => KycStatus::Draft,
+            'round' => $round,
+
+            // An explicit deadline wins over the configured window; null when
+            // neither is set, which leaves the request open-ended rather than
+            // inventing an expiry nobody chose (§7.4).
+            'deadline_at' => $deadline ?? $this->deadlines->deadlineFrom(),
+
+            'requested_at' => now(),
+            'requested_by' => $requestedBy->id,
+            'request_reason' => $reason,
+            'request_instructions' => $instructions,
+        ]);
     }
 }

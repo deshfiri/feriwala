@@ -61,7 +61,7 @@ describe('the form', function () {
             'accepted_mime_types' => ['application/pdf'],
             'max_size_kb' => 2048,
         ]);
-        $other->scopes()->create(['scope_type' => 'country', 'scope_value' => 'IN']);
+        $other->scopes()->create(['country_code' => 'IN']);
 
         $this->actingAs($this->applicant)
             ->get(route('kyc.create'))

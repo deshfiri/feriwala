@@ -73,7 +73,7 @@ describe('submitting', function () {
             'accepted_mime_types' => ['application/pdf'],
             'max_size_kb' => 2048,
         ]);
-        $tradeLicence->scopes()->create(['scope_type' => 'country', 'scope_value' => 'IN']);
+        $tradeLicence->scopes()->create(['country_code' => 'IN']);
 
         attachNid();
 

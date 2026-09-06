@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivationReviewController;
+use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
 use App\Http\Controllers\DashboardController;
@@ -74,6 +75,10 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // KYC (§7). Documents save one at a time so a rejected upload never
         // costs the applicant the ones that were fine.
         Route::get('kyc', [KycController::class, 'create'])->name('kyc.create');
+
+        // The applicant's own history (§7.3). Self-scoped from their
+        // membership; there is no account identifier in the URL to change.
+        Route::get('kyc/history', [KycController::class, 'history'])->name('kyc.history');
         Route::post('kyc/documents', [KycController::class, 'storeDocument'])->name('kyc.documents.store');
         Route::post('kyc/submit', [KycController::class, 'submit'])->name('kyc.submit');
 
@@ -120,6 +125,28 @@ Route::middleware(['auth', 'noindex'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
+        /*
+         * The requirement catalogue (§7.2).
+         *
+         * Platform configuration, with no account in any of it: scoping is
+         * expressed as rules about packages and countries, so nothing here can
+         * reveal what one particular business was asked for.
+         */
+        Route::get('kyc/document-types', [KycDocumentTypeController::class, 'index'])
+            ->name('kyc.document-types.index');
+        Route::post('kyc/document-types', [KycDocumentTypeController::class, 'store'])
+            ->name('kyc.document-types.store');
+        Route::post('kyc/document-types/reorder', [KycDocumentTypeController::class, 'reorder'])
+            ->name('kyc.document-types.reorder');
+        Route::patch('kyc/document-types/{documentType}', [KycDocumentTypeController::class, 'update'])
+            ->name('kyc.document-types.update');
+        Route::patch('kyc/document-types/{documentType}/active', [KycDocumentTypeController::class, 'setActive'])
+            ->name('kyc.document-types.active');
+        Route::post('kyc/document-types/{documentType}/archive', [KycDocumentTypeController::class, 'archive'])
+            ->name('kyc.document-types.archive');
+        Route::delete('kyc/document-types/{documentType}', [KycDocumentTypeController::class, 'destroy'])
+            ->name('kyc.document-types.destroy');
+
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');

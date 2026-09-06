@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Notifications\Kyc\KycUpdateRequested;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 /*
@@ -268,6 +269,54 @@ describe('what it refuses', function () {
             $account, $this->officer, 'Reason.', 'Instructions.',
         ))->toThrow(InvalidArgumentException::class, 'already has a KYC round in progress');
     })->with([KycStatus::Draft, KycStatus::Submitted, KycStatus::UnderReview]);
+
+    it('opens only one round when the request is repeated', function () {
+        /*
+         * Repeated clicks, a retry, two staff at once. The account row is
+         * locked for the whole read-decide-write, and the unique index on
+         * (account, round) stands behind it — so a duplicate cannot create a
+         * second deadline, a second notification or a second audit entry.
+         */
+        $account = kycUpdateTestAccount();
+        $action = app(RequestKycUpdate::class);
+
+        $action->handle($account, $this->officer, 'Reason.', 'Instructions.');
+
+        expect(fn () => $action->handle($account, $this->officer, 'Reason.', 'Instructions.'))
+            ->toThrow(InvalidArgumentException::class, 'already has a KYC round in progress');
+
+        expect(KycSubmission::query()->where('business_account_id', $account->id)->count())
+            ->toBe(2);
+
+        Notification::assertSentToTimes($account->owner, KycUpdateRequested::class, 1);
+
+        expect(DB::table('audit_logs')->where('action', 'kyc.update_requested')->count())
+            ->toBe(1);
+    });
+
+    it('writes nothing at all when the request is refused', function () {
+        // A refusal must leave no round, no deadline and no audit entry behind.
+        $account = kycUpdateTestAccount();
+        KycSubmission::create([
+            'business_account_id' => $account->id,
+            'status' => KycStatus::Draft,
+            'round' => 2,
+        ]);
+
+        try {
+            app(RequestKycUpdate::class)->handle($account, $this->officer, 'Reason.', 'Instructions.');
+        } catch (InvalidArgumentException) {
+            // Expected.
+        }
+
+        expect(KycSubmission::query()->where('business_account_id', $account->id)->count())
+            ->toBe(2);
+
+        Notification::assertNothingSent();
+
+        expect(DB::table('audit_logs')->where('action', 'kyc.update_requested')->count())
+            ->toBe(0);
+    });
 
     it('allows a fresh request after an earlier one was approved', function () {
         $account = kycUpdateTestAccount();

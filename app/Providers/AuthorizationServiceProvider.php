@@ -9,8 +9,10 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Policies\AccountMembershipPolicy;
 use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Kyc\Models\KycDocument;
+use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Policies\KycDocumentPolicy;
+use App\Domain\Kyc\Policies\KycDocumentTypePolicy;
 use App\Domain\Kyc\Policies\KycSubmissionPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
@@ -25,6 +27,10 @@ class AuthorizationServiceProvider extends ServiceProvider
     {
         Gate::policy(KycSubmission::class, KycSubmissionPolicy::class);
         Gate::policy(KycDocument::class, KycDocumentPolicy::class);
+
+        // Configuring what applicants are asked for is `kyc.manage_settings`,
+        // not `kyc.approve` — shaping the catalogue is not reviewing a case.
+        Gate::policy(KycDocumentType::class, KycDocumentTypePolicy::class);
         Gate::policy(BusinessAccount::class, BusinessAccountPolicy::class);
 
         // Both staff management and invitations answer to the membership policy:

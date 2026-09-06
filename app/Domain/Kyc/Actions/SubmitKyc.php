@@ -60,9 +60,61 @@ class SubmitKyc
     /**
      * Names of required items this submission still lacks.
      *
+     * Judged against the round's **snapshot** — what it was actually opened
+     * against (§7.2). Re-resolving live configuration here would let an
+     * administrator adding a requirement this morning block an applicant who
+     * completed everything they were shown yesterday, and the form would still
+     * be telling them they were done.
+     *
      * @return array<int, string>
      */
     public function missingRequirements(
+        KycSubmission $submission,
+        ?string $packageKey,
+        ?string $country,
+    ): array {
+        $requirements = $submission->requirements()->get();
+
+        if ($requirements->isEmpty()) {
+            // A round from before snapshots existed. Falling back to live
+            // configuration is the only answer available, and is better than
+            // treating an unsnapshotted round as having no requirements at all.
+            return $this->missingAgainstLiveConfiguration($submission, $packageKey, $country);
+        }
+
+        $documentTypeIds = $submission->documents()->pluck('kyc_document_type_id')->all();
+        $fieldTypeIds = $submission->fields()
+            ->whereNotNull('value')
+            ->pluck('kyc_document_type_id')
+            ->all();
+
+        $missing = [];
+
+        foreach ($requirements as $requirement) {
+            if (! $requirement->is_required) {
+                continue;
+            }
+
+            $typeId = $requirement->kyc_document_type_id;
+
+            if ($requirement->requires_file && ! in_array($typeId, $documentTypeIds, true)) {
+                $missing[] = $requirement->name;
+
+                continue;
+            }
+
+            if ($requirement->requires_value && ! in_array($typeId, $fieldTypeIds, true)) {
+                $missing[] = $requirement->name;
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function missingAgainstLiveConfiguration(
         KycSubmission $submission,
         ?string $packageKey,
         ?string $country,
@@ -78,7 +130,8 @@ class SubmitKyc
         $missing = [];
 
         foreach ($types as $type) {
-            if (! $type->is_required || ! $type->appliesTo($packageKey, $country)) {
+            if (! $type->appliesTo($packageKey, $country)
+                || ! $type->isRequiredFor($packageKey, $country)) {
                 continue;
             }
 

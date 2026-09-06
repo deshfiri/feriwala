@@ -53,14 +53,26 @@ class KycDocumentStore
         $mime = (string) $file->getMimeType();
         $size = (int) $file->getSize();
 
-        if (! $type->accepts($mime, $size)) {
+        /*
+         * Judged against the rules **this round** was opened with, falling back
+         * to the live type only for a round that has no snapshot (§7.2).
+         *
+         * An administrator tightening the size limit this morning must not
+         * start rejecting an upload the applicant was told yesterday would be
+         * accepted — the form is still showing them the old figure.
+         */
+        $rules = $submission->requirements()
+            ->where('kyc_document_type_id', $type->id)
+            ->first() ?? $type;
+
+        if (! $rules->accepts($mime, $size)) {
             throw new InvalidArgumentException(sprintf(
                 'A %s of %d KB is not accepted for %s. Allowed: %s, up to %d KB.',
                 $mime,
                 (int) round($size / 1024),
-                $type->name,
-                implode(', ', $type->accepted_mime_types),
-                $type->max_size_kb,
+                $rules->name,
+                implode(', ', $rules->accepted_mime_types),
+                $rules->max_size_kb,
             ));
         }
 
@@ -76,7 +88,7 @@ class KycDocumentStore
         // applicant's name, and a predictable path is a path someone can try.
         $path = sprintf(
             'kyc/%s/%s/%s',
-            $submission->user_id,
+            $submission->business_account_id,
             $submission->public_id,
             bin2hex(random_bytes(16)),
         );
