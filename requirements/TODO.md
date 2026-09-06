@@ -26,6 +26,22 @@ the task that owns it. Every entry names the screen to return to.
 | FD-2 | Package CRUD                   | **P1-32**   | `admin/kyc/document-types` | Replace the package scope control with a **searchable** package selector. Today: packages are loaded into a selector when any exist, and package-specific rules are refused outright when none do — a slug that resolves to no package is rejected server-side, so no orphaned rule can be stored                                                                                                                                                                  |
 | FD-3 | Vitest + React Testing Library | **P0-56**   | —                          | Interactive component behaviour: dialog state, scope-rule editing, reorder controls, conditional fields. Pest continues to cover authorization, Inertia props, server validation and permission visibility, which is where the security-relevant assertions belong                                                                                                                                                                                                 |
 
+## Lifecycle rules for controlled sources
+
+A value that has been persisted must stay resolvable. These keep the controlled sources above from
+silently invalidating data that already names them.
+
+**Packages** (owned by **P1-32**) — a package referenced by an active KYC scope rule cannot be
+deleted or archived without either blocking the action and naming the rules, or replacing or
+deactivating those rules in the same transaction. Historical rounds are unaffected either way: they
+carry a captured snapshot rather than a live lookup.
+
+**Countries** (`config/countries.php`) — **implemented**. A code that has ever been offered is
+permanent. To stop selling into a market, move its code from `supported` to `retired`: it leaves
+every picker, nothing new can be scoped to it, and it stays resolvable so existing addresses, KYC
+rules, courier zones and historical records keep working. Labels may be corrected; codes may not be
+renamed, and entries are never deleted.
+
 ---
 
 # Phase 0 — Foundation & Infrastructure
@@ -180,7 +196,13 @@ applicant's own history.
 
 ## P1.D Packages (§8)
 
-- [ ] **P1-32** `packages` CRUD — all §8.1 fields — create/edit/activate/deactivate/archive, N packages
+- [ ] **P1-32** `packages` CRUD — all §8.1 fields — create/edit/activate/deactivate/archive, N packages.
+      **Lifecycle guard:** a package named by an active KYC scope rule (§7.2) must not be deleted or archived in a
+      way that silently breaks resolution. Either block the action and name the rules that reference it, or require
+      an explicit replacement or deactivation of those rules **in the same transaction**. Historical KYC rounds keep
+      resolving regardless — they carry a captured snapshot, not a live lookup, so an inactive package cannot change
+      what a past round was judged on. Carries **FD-2**: return to `admin/kyc/document-types` and replace the package
+      control with a searchable selector
 - [x] **P1-33** `PackageFeature` enum (15 typed entitlements) + `package_features`. Facilities default **off** and limits default to **0**, so a misconfigured package under-delivers visibly; `null` means unlimited and is kept distinct from `0`
 - [x] **P1-34** `package_charges` (setup, maintenance, domain, hosting) with recurrence
 - [x] **P1-35** Package selection and comparison. Each card leads with the **total payable today**, not the package fee alone — the registration fee is charged alongside (§5.1), and showing only the package price would surprise the user at checkout. Choosing again supersedes the earlier choice rather than stacking unpaid subscriptions

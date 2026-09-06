@@ -171,10 +171,62 @@ describe('the supported country list', function () {
     it('answers about a code however it was written', function () {
         $countries = app(Countries::class);
 
-        expect($countries->supports('bd'))->toBeTrue()
-            ->and($countries->supports(' BD '))->toBeTrue()
-            ->and($countries->supports('ZZ'))->toBeFalse()
+        expect($countries->selectable('bd'))->toBeTrue()
+            ->and($countries->selectable(' BD '))->toBeTrue()
+            ->and($countries->selectable('ZZ'))->toBeFalse()
             ->and($countries->nameFor('in'))->toBe('India');
+    });
+});
+
+describe('retiring a market', function () {
+    /*
+     * The rule that makes a code permanent: a country Feriwala stops selling
+     * into disappears from every picker and stays readable everywhere else.
+     * Deleting the configuration entry instead would turn every address, scope
+     * rule and historical record naming it into data nothing can resolve —
+     * silently, with no error anywhere.
+     */
+    beforeEach(function () {
+        config([
+            'countries.supported' => ['BD' => 'Bangladesh'],
+            'countries.retired' => ['LK' => 'Sri Lanka'],
+        ]);
+    });
+
+    it('offers a retired market to nobody', function () {
+        $countries = app(Countries::class);
+
+        expect($countries->selectable('LK'))->toBeFalse()
+            ->and(collect($countries->options())->pluck('value'))->not->toContain('LK');
+    });
+
+    it('keeps a retired code resolvable, with its name', function () {
+        $countries = app(Countries::class);
+
+        expect($countries->resolves('LK'))->toBeTrue()
+            ->and($countries->nameFor('lk'))->toBe('Sri Lanka');
+    });
+
+    it('still answers no for a code that was never offered at all', function () {
+        expect(app(Countries::class)->resolves('ZZ'))->toBeFalse();
+    });
+
+    it('refuses a new scope rule naming a retired market', function () {
+        // Nothing new is scoped there…
+        $this->actingAs($this->admin)
+            ->from(route('admin.kyc.document-types.index'))
+            ->post(route('admin.kyc.document-types.store'), scopeTestPayload([
+                ['package' => null, 'country' => 'LK'],
+            ]))
+            ->assertSessionHasErrors('scopes.0.country');
+    });
+
+    it('leaves a rule written before the market closed working', function () {
+        // …and everything already scoped there keeps matching.
+        $type = KycDocumentType::factory()->scopedTo(country: 'LK')->create();
+
+        expect($type->appliesTo(null, 'LK'))->toBeTrue()
+            ->and($type->appliesTo(null, 'BD'))->toBeFalse();
     });
 });
 
