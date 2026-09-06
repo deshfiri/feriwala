@@ -111,6 +111,11 @@ class HandleInertiaRequests extends Middleware
                 PermissionModule::Kyc,
                 PermissionAction::ManageSettings,
             )),
+
+            'package.view' => $user->can(PermissionCatalogue::name(
+                PermissionModule::Package,
+                PermissionAction::View,
+            )),
         ];
     }
 

@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Support\Money\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,11 +16,27 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * One package an account can hold (§8).
  *
+ * @property int $id
+ * @property string $slug
+ * @property string $name
+ * @property string|null $short_description
+ * @property string|null $description
  * @property Money $fee_minor
  * @property Money|null $registration_fee_minor
  * @property Money|null $renewal_fee_minor
  * @property Money $required_deposit_minor
  * @property Money $minimum_balance_minor
+ * @property string $currency_code
+ * @property int|null $validity_days
+ * @property string|null $renewal_frequency
+ * @property int|null $grace_period_days
+ * @property CarbonImmutable|null $available_from
+ * @property CarbonImmutable|null $available_until
+ * @property bool $is_active
+ * @property bool $is_public
+ * @property int $sort_order
+ * @property CarbonImmutable|null $deleted_at
+ * @property-read int|null $subscriptions_count
  */
 class Package extends Model
 {
@@ -66,6 +83,20 @@ class Package extends Model
     public function charges(): HasMany
     {
         return $this->hasMany(PackageCharge::class);
+    }
+
+    /**
+     * Accounts that have bought this package (§8.2).
+     *
+     * What the archive guard counts, and why a retired package's row survives:
+     * a subscription names the package it was for, and deleting the row would
+     * take the meaning of every payment and invoice with it (§36.2).
+     *
+     * @return HasMany<UserPackage, $this>
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(UserPackage::class);
     }
 
     /**

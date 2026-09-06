@@ -13,6 +13,8 @@ use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
@@ -48,6 +50,7 @@ class DemoSeeder extends Seeder
         $this->call(RolesAndPermissionsSeeder::class);
 
         $this->configureDeadlines();
+        $this->packages();
         $this->documentTypes();
 
         $this->platformStaff();
@@ -69,6 +72,69 @@ class DemoSeeder extends Seeder
 
         $settings->define('kyc.deadline_days', 'kyc', SettingType::Integer, 30);
         $settings->define('kyc.deadline_warning_days', 'kyc', SettingType::Integer, 7);
+    }
+
+    /**
+     * Three plans, so the catalogue and the package-scoped KYC rule both have
+     * something real to point at (§8.1).
+     */
+    protected function packages(): void
+    {
+        $this->package('starter', 'Starter', 150000, [
+            PackageFeature::StaffLimit->value => '0',
+            PackageFeature::ProductPublishLimit->value => '25',
+            PackageFeature::DedicatedWebsite->value => '0',
+        ]);
+
+        $this->package('growth', 'Growth', 500000, [
+            PackageFeature::StaffLimit->value => '5',
+            PackageFeature::ProductPublishLimit->value => '250',
+            PackageFeature::DedicatedWebsite->value => '1',
+            PackageFeature::CourierEnabled->value => '1',
+        ]);
+
+        // No staff limit row at all: unlimited is the absence of a cap, and
+        // seeding it proves the distinction survives a round trip (§8.1).
+        $this->package('enterprise', 'Enterprise', 1500000, [
+            PackageFeature::ProductPublishLimit->value => '5000',
+            PackageFeature::DedicatedWebsite->value => '1',
+            PackageFeature::CourierEnabled->value => '1',
+            PackageFeature::ApiAccess->value => '1',
+            PackageFeature::FulfillmentEnabled->value => '1',
+        ]);
+    }
+
+    /**
+     * @param  array<string, string>  $features
+     */
+    protected function package(string $slug, string $name, int $feeMinor, array $features): Package
+    {
+        /** @var Package $package */
+        $package = Package::query()->updateOrCreate(
+            ['slug' => $slug],
+            [
+                'name' => $name,
+                'short_description' => $name.' plan',
+                'fee_minor' => $feeMinor,
+                'currency_code' => 'BDT',
+                'validity_days' => 365,
+                'renewal_fee_minor' => $feeMinor,
+                'renewal_frequency' => 'yearly',
+                'grace_period_days' => 14,
+                'required_deposit_minor' => 0,
+                'minimum_balance_minor' => 0,
+                'is_active' => true,
+                'is_public' => true,
+            ],
+        );
+
+        $package->features()->delete();
+
+        foreach ($features as $feature => $value) {
+            $package->features()->create(['feature' => $feature, 'value' => $value]);
+        }
+
+        return $package->refresh();
     }
 
     /**
@@ -117,6 +183,18 @@ class DemoSeeder extends Seeder
             'sort_order' => 3,
         ]);
 
+        // Package-scoped: only Enterprise accounts are asked for this.
+        $this->documentType([
+            'key' => 'company_registration',
+            'name' => 'Company registration certificate',
+            'instructions' => 'The certificate of incorporation, all pages.',
+            'is_required' => false,
+            'sort_order' => 4,
+        ])->scopes()->create([
+            'package_slug' => 'enterprise',
+            'is_required' => true,
+        ]);
+
         // Paused: configured, but not currently on the form.
         $this->documentType([
             'key' => 'bank_statement',
@@ -124,7 +202,7 @@ class DemoSeeder extends Seeder
             'instructions' => 'Six months, stamped by the branch.',
             'is_required' => false,
             'is_active' => false,
-            'sort_order' => 4,
+            'sort_order' => 5,
         ]);
 
         unset($national);

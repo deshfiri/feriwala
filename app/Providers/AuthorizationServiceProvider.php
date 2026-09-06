@@ -14,6 +14,8 @@ use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Policies\KycDocumentPolicy;
 use App\Domain\Kyc\Policies\KycDocumentTypePolicy;
 use App\Domain\Kyc\Policies\KycSubmissionPolicy;
+use App\Domain\Package\Models\Package;
+use App\Domain\Package\Policies\PackagePolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -32,6 +34,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // not `kyc.approve` — shaping the catalogue is not reviewing a case.
         Gate::policy(KycDocumentType::class, KycDocumentTypePolicy::class);
         Gate::policy(BusinessAccount::class, BusinessAccountPolicy::class);
+
+        // Shaping what Feriwala sells is its own permission set (§8.1):
+        // writing package copy and withdrawing a plan are different jobs.
+        Gate::policy(Package::class, PackagePolicy::class);
 
         // Both staff management and invitations answer to the membership policy:
         // the question in each case is what the actor's own membership permits.

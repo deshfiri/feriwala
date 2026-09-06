@@ -4,6 +4,7 @@ import {
     FolderGit2,
     LayoutGrid,
     ListChecks,
+    Package as PackageIcon,
     ShieldCheck,
     UserCheck,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import { dashboard } from '@/routes';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
+import { index as packageCatalogue } from '@/routes/admin/packages';
 import type { NavItem } from '@/types';
 
 export function AppSidebar() {
@@ -57,6 +59,15 @@ export function AppSidebar() {
                       title: 'Verification requirements',
                       href: kycRequirements(),
                       icon: ListChecks,
+                  },
+              ]
+            : []),
+        ...(permissions['package.view']
+            ? [
+                  {
+                      title: 'Packages',
+                      href: packageCatalogue(),
+                      icon: PackageIcon,
                   },
               ]
             : []),

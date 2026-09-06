@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
+use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -159,6 +160,21 @@ Route::middleware(['auth', 'noindex'])
          */
         Route::post('accounts/{account}/kyc-update', KycUpdateRequestController::class)
             ->name('kyc.request-update');
+
+        /*
+         * The package catalogue (§8.1).
+         *
+         * Archived packages stay listed: a subscription, a payment and an
+         * invoice all name the package they were for, so a catalogue that drops
+         * retired plans makes "which plan were they on" unanswerable.
+         */
+        Route::get('packages', [PackageController::class, 'index'])->name('packages.index');
+        Route::post('packages', [PackageController::class, 'store'])->name('packages.store');
+        Route::patch('packages/{package}', [PackageController::class, 'update'])->name('packages.update');
+        Route::patch('packages/{package}/active', [PackageController::class, 'setActive'])
+            ->name('packages.active');
+        Route::post('packages/{package}/archive', [PackageController::class, 'archive'])
+            ->name('packages.archive');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

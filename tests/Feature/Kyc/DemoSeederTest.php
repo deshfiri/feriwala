@@ -2,6 +2,7 @@
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Models\KycDocumentType;
+use App\Domain\Package\Models\Package;
 use App\Models\User;
 use Database\Seeders\DemoSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -19,10 +20,21 @@ beforeEach(function () {
 });
 
 it('seeds a catalogue covering every scoping shape', function () {
-    expect(KycDocumentType::query()->count())->toBe(5)
-        ->and(KycDocumentType::query()->active()->count())->toBe(4)
+    // Global, country-scoped, package-scoped, value-only, and one paused —
+    // so every branch of §7.2 resolution has something real to exercise.
+    expect(KycDocumentType::query()->count())->toBe(6)
+        ->and(KycDocumentType::query()->active()->count())->toBe(5)
         ->and(KycDocumentType::query()->where('key', 'trade_licence')->first()->scopes)
-        ->toHaveCount(1);
+        ->toHaveCount(1)
+        ->and(KycDocumentType::query()->where('key', 'company_registration')->first()->scopes->first()->package_slug)
+        ->toBe('enterprise');
+});
+
+it('seeds packages for the package-scoped rule to point at', function () {
+    // A scope naming a slug that resolves to nothing is refused, so the
+    // seeder cannot create one without the catalogue behind it.
+    expect(Package::query()->count())->toBe(3)
+        ->and(Package::query()->where('slug', 'enterprise')->exists())->toBeTrue();
 });
 
 it('opens the requirement catalogue for the KYC manager', function () {
@@ -33,7 +45,7 @@ it('opens the requirement catalogue for the KYC manager', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('admin/kyc/document-types')
-            ->has('types', 5)
+            ->has('types', 6)
             ->where('can.create', true),
         );
 });

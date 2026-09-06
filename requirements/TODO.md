@@ -23,8 +23,10 @@ the task that owns it. Every entry names the screen to return to.
 | #    | Waiting on                     | Owning task | Screen to finish           | What to add                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---- | ------------------------------ | ----------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | FD-1 | Admin Account Detail screen    | **P1-79**   | `admin/accounts/{account}` | The §7.2 **Request KYC update** action: applicant-visible instructions, internal reason, optional request-specific deadline, required document selection, confirmation before submission, `kyc.verify` check, success notification, and the request history. The endpoint exists and is tested; it must stay unreachable from any unrelated UI, and explicitly **not** from the activation queue, which represents pending activation rather than trading accounts |
-| FD-2 | Package CRUD                   | **P1-32**   | `admin/kyc/document-types` | Replace the package scope control with a **searchable** package selector. Today: packages are loaded into a selector when any exist, and package-specific rules are refused outright when none do — a slug that resolves to no package is rejected server-side, so no orphaned rule can be stored                                                                                                                                                                  |
 | FD-3 | Vitest + React Testing Library | **P0-56**   | —                          | Interactive component behaviour: dialog state, scope-rule editing, reorder controls, conditional fields. Pest continues to cover authorization, Inertia props, server validation and permission visibility, which is where the security-relevant assertions belong                                                                                                                                                                                                 |
+
+**Discharged:** FD-2 — P1-32 shipped, and `admin/kyc/document-types` now offers a searchable package
+selector backed by the real catalogue.
 
 ## Lifecycle rules for controlled sources
 
@@ -196,13 +198,18 @@ applicant's own history.
 
 ## P1.D Packages (§8)
 
-- [ ] **P1-32** `packages` CRUD — all §8.1 fields — create/edit/activate/deactivate/archive, N packages.
-      **Lifecycle guard:** a package named by an active KYC scope rule (§7.2) must not be deleted or archived in a
-      way that silently breaks resolution. Either block the action and name the rules that reference it, or require
-      an explicit replacement or deactivation of those rules **in the same transaction**. Historical KYC rounds keep
-      resolving regardless — they carry a captured snapshot, not a live lookup, so an inactive package cannot change
-      what a past round was judged on. Carries **FD-2**: return to `admin/kyc/document-types` and replace the package
-      control with a searchable selector
+- [x] **P1-32** `packages` CRUD — every §8.1 field, with entitlements and charges edited in the same form,
+      because what a package grants is what a package _is_. Entitlements replace wholesale: an absent feature means
+      "does not grant it" and the enum default applies, so a facility can be withdrawn through the form that granted
+      it. **Archiving is guarded and the guard names what is in the way** — a live KYC requirement scoped to the
+      package, or an account still subscribed — because archiving silently would leave a scope rule matching nobody,
+      discovered when an applicant is asked for the wrong documents. The blockers are sent with the row, so an
+      administrator meets them before pressing the button rather than after writing a change they must undo. Taking a
+      package **off sale** is unguarded and reversible; entitlements are read from the subscription, not from
+      availability. Historical KYC rounds are untouched either way — they carry a captured snapshot, not a live
+      lookup. No hard delete: a payment and an invoice name the package they were for (§36.2). Admin catalogue at
+      `admin/packages`, archived plans listed alongside live ones so "which plan were they on" stays answerable —
+      27 tests
 - [x] **P1-33** `PackageFeature` enum (15 typed entitlements) + `package_features`. Facilities default **off** and limits default to **0**, so a misconfigured package under-delivers visibly; `null` means unlimited and is kept distinct from `0`
 - [x] **P1-34** `package_charges` (setup, maintenance, domain, hosting) with recurrence
 - [x] **P1-35** Package selection and comparison. Each card leads with the **total payable today**, not the package fee alone — the registration fee is charged alongside (§5.1), and showing only the package price would surprise the user at checkout. Choosing again supersedes the earlier choice rather than stacking unpaid subscriptions

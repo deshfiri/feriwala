@@ -429,30 +429,38 @@ function ScopeEditor({
                             </Label>
 
                             {canScopeByPackage ? (
-                                <select
-                                    id={`scope-package-${index}`}
-                                    value={scope.package ?? ''}
-                                    onChange={(event) =>
-                                        update(index, {
-                                            package: event.target.value || null,
-                                        })
-                                    }
-                                    className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-                                >
-                                    <option value="">
-                                        {t(
+                                <>
+                                    {/*
+                                     * Searchable by typing, and still a closed
+                                     * set: the value posted is a slug the
+                                     * server re-validates, so narrowing the
+                                     * list cannot widen what is accepted.
+                                     */}
+                                    <Input
+                                        id={`scope-package-${index}`}
+                                        list={`packages-${index}`}
+                                        value={scope.package ?? ''}
+                                        placeholder={t(
                                             'kyc.document_types.scopes.package_placeholder',
                                         )}
-                                    </option>
-                                    {packages.map((option) => (
-                                        <option
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                        onChange={(event) =>
+                                            update(index, {
+                                                package:
+                                                    event.target.value || null,
+                                            })
+                                        }
+                                    />
+                                    <datalist id={`packages-${index}`}>
+                                        {packages.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </datalist>
+                                </>
                             ) : (
                                 <p className="text-muted-foreground text-xs">
                                     {t(
