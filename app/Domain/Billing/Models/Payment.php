@@ -21,10 +21,13 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 /**
  * One payment, with its components (§9, §26).
  *
+ * @property int $id
+ * @property int $business_account_id
  * @property PaymentStatus $status
  * @property PaymentPurpose $purpose
  * @property Money $amount_minor
  * @property Money $revenue_minor
+ * @property-read BusinessAccount|null $businessAccount
  */
 class Payment extends Model
 {
