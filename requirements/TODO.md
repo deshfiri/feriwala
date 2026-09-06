@@ -97,7 +97,7 @@ test.
 
 ## P1.A Account model & lifecycle (§5, §6)
 
-- [ ] **P1-1** Resolve teams/staff decision and migrate or remove starter-kit team scaffolding **⚠ Q1**
+- [x] **P1-1** Resolved by D1 and delivered in P1-64/P1-78/P1-65..68: the starter-kit team scaffolding is **removed**, not migrated — tables, models, policies, routes, components and vocabulary. One business account per person, one membership, no switcher
 - [x] **P1-2** `users` extended and migrated: `public_id`, `status`, mobile + verification, DOB, gender, country, nationality, referral code + referrer, `activated_at`, locale, T&C/privacy timestamps, with the §37 indexes
 - [x] **P1-3** `AccountStatus` — all 22 statuses from §5.3 with a guarded transition map. `ApprovalPending` is the **only** route into `Active` (§5.1, §44); KYC rejection allows resubmission (§7.3); low balance and package expiry both restore to `Active` (§24.3, §8.4). Helpers: `isActivated()`, `isOnboarding()`, `canTransact()`, `tone()`. 26 tests
 - [x] **P1-4** `user_status_history` + `ChangeAccountStatus` — transition and history written in **one transaction**; internal and user-visible notes kept in separate columns (§7.3); append-only — 10 tests
@@ -134,7 +134,7 @@ test.
 - [x] **P1-29** `kyc_document_accesses` — every read recorded before the file is returned, view distinguished from download, append-only (§7.5)
 - [x] **P1-30** `disk`, `path` and `checksum` hidden from every array/JSON representation; field values encrypted and hidden, with `masked()` for list display (§7.5)
 - [x] **P1-31** KYC deadline (§7.4). `KycDeadlines` holds the policy: `kyc.deadline_days`, `kyc.deadline_warning_days`, `kyc.overdue_restricts_active_account` — all opt-in, because inventing a window would start restricting real accounts on a number nobody agreed. The clock starts when the applicant can first act, not at registration. `SweepKycDeadlines` runs daily under `onOneServer` + `withoutOverlapping`: warns once inside the window, then applies the four §7.4 consequences once — activation stays blocked, an active account is restricted **only if configured**, mail and SMS go to the owner, and the audit entry records a `system` actor rather than naming a person. A round awaiting review is our delay, not the applicant's, and is skipped — 22 tests
-- [ ] **P1-63** Admin action: **request a future KYC update** from an already-active user, with its own deadline (§7.2)
+- [x] **P1-63** `RequestKycUpdate` — a new round on a **trading** account, and the account keeps trading: asking a live business for a document and stopping its orders in the same breath would punish it for a request it has not had a chance to answer. §7.4's restriction is what applies if the deadline then passes, and only when configured. The deadline may be given per request — "within seven days" is a different instruction from the standing window — and stays null when neither is set. Internal reason and account-facing instruction are separate columns, as on `kyc_reviews`; a test asserts the reason never reaches the notification. Refuses while a round is already open, because two would leave the account holder unable to tell which the request refers to. Permissioned on `kyc.verify`, not `kyc.approve` — 27 tests
 
 ## P1.H Staff management & tax engine (decision-driven)
 

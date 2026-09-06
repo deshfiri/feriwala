@@ -5,6 +5,7 @@ namespace App\Domain\Kyc\Policies;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Models\User;
 
@@ -43,6 +44,25 @@ class KycSubmissionPolicy
         }
 
         return $user->can($this->permission(PermissionAction::Approve));
+    }
+
+    /**
+     * Ask a trading business for fresh KYC (§7.2).
+     *
+     * `kyc.verify` rather than `kyc.approve`: this is requiring verification,
+     * not deciding on one. Someone who monitors expiring documents should be
+     * able to ask for a new copy without also being able to let an account onto
+     * the platform.
+     *
+     * Never one's own account, for the same reason nobody reviews their own.
+     */
+    public function requestUpdate(User $user, BusinessAccount $account): bool
+    {
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::Verify));
     }
 
     protected function permission(PermissionAction $action): string

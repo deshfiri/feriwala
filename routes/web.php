@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\KycReviewController;
+use App\Http\Controllers\Admin\KycUpdateRequestController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -122,6 +123,15 @@ Route::middleware(['auth', 'noindex'])
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
+
+        /*
+         * Asking a trading business for fresh KYC (§7.2).
+         *
+         * Keyed on the account, not a submission: there is no round to name
+         * until this creates one, and the business being asked is the subject.
+         */
+        Route::post('accounts/{account}/kyc-update', KycUpdateRequestController::class)
+            ->name('kyc.request-update');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

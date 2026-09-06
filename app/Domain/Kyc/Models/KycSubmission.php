@@ -6,6 +6,7 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Enums\KycStatus;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,6 +25,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $submitted_at
  * @property CarbonImmutable|null $reviewed_at
  * @property CarbonImmutable|null $deadline_at
+ * @property CarbonImmutable|null $requested_at
+ * @property int|null $requested_by
+ * @property string|null $request_reason
+ * @property string|null $request_instructions
  */
 class KycSubmission extends Model
 {
@@ -39,6 +44,7 @@ class KycSubmission extends Model
             'submitted_at' => 'immutable_datetime',
             'reviewed_at' => 'immutable_datetime',
             'deadline_at' => 'immutable_datetime',
+            'requested_at' => 'immutable_datetime',
         ];
     }
 
@@ -86,6 +92,26 @@ class KycSubmission extends Model
     public function deadlineEvents(): HasMany
     {
         return $this->hasMany(KycDeadlineEvent::class, 'kyc_submission_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function requestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    /**
+     * Whether an administrator asked for this round (§7.2).
+     *
+     * Distinct from a round the applicant opened themselves. The two mean
+     * different things to everyone who reads them: one is somebody working
+     * through onboarding, the other is a request the business has to answer.
+     */
+    public function wasRequested(): bool
+    {
+        return $this->requested_at !== null;
     }
 
     /**
