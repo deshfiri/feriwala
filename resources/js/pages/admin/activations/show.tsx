@@ -3,7 +3,9 @@ import { AlertTriangle, ArrowLeft, Check, X } from 'lucide-react';
 import { useState } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
+import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,7 +68,7 @@ export default function AdminActivationsShow({
         <>
             <Head title={t('activation.detail.title')} />
 
-            <div className="space-y-6 p-4">
+            <PageContainer>
                 <PageHeader
                     title={t('activation.detail.title')}
                     description={account.name}
@@ -91,11 +93,7 @@ export default function AdminActivationsShow({
 
                 <div className="grid gap-6 lg:grid-cols-3">
                     <div className="space-y-6 lg:col-span-2">
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="mb-3 text-sm font-semibold">
-                                {t('activation.detail.account')}
-                            </h2>
-
+                        <SectionCard title={t('activation.detail.account')}>
                             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                                 {[
                                     ['Business', account.name],
@@ -118,16 +116,12 @@ export default function AdminActivationsShow({
                                     </div>
                                 ))}
                             </dl>
-                        </section>
+                        </SectionCard>
 
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="text-sm font-semibold">
-                                {t('activation.detail.conditions')}
-                            </h2>
-                            <p className="text-muted-foreground mt-0.5 mb-3 text-xs">
-                                {t('activation.detail.conditions_help')}
-                            </p>
-
+                        <SectionCard
+                            title={t('activation.detail.conditions')}
+                            description={t('activation.detail.conditions_help')}
+                        >
                             <ul className="divide-border divide-y">
                                 {conditions.map((condition) => (
                                     <li
@@ -167,13 +161,9 @@ export default function AdminActivationsShow({
                                     </li>
                                 ))}
                             </ul>
-                        </section>
+                        </SectionCard>
 
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="mb-3 text-sm font-semibold">
-                                {t('activation.detail.history')}
-                            </h2>
-
+                        <SectionCard title={t('activation.detail.history')}>
                             {history.length === 0 ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('activation.detail.no_history')}
@@ -230,18 +220,14 @@ export default function AdminActivationsShow({
                                     ))}
                                 </ol>
                             )}
-                        </section>
+                        </SectionCard>
                     </div>
 
                     <aside className="lg:col-span-1">
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="text-sm font-semibold">
-                                {t('activation.decision.title')}
-                            </h2>
-                            <p className="text-muted-foreground mt-0.5 mb-4 text-xs">
-                                {t('activation.decision.description')}
-                            </p>
-
+                        <SectionCard
+                            title={t('activation.decision.title')}
+                            description={t('activation.decision.description')}
+                        >
                             {available.length === 0 ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('activation.decision.not_permitted')}
@@ -477,10 +463,10 @@ export default function AdminActivationsShow({
                                     )}
                                 </div>
                             )}
-                        </section>
+                        </SectionCard>
                     </aside>
                 </div>
-            </div>
+            </PageContainer>
         </>
     );
 }

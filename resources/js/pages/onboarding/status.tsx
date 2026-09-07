@@ -37,7 +37,7 @@ export default function OnboardingStatus({
                     </p>
                 </header>
 
-                <div className="bg-card border-border rounded-lg border p-5 shadow-sm">
+                <div className="bg-card border-border rounded-xl border p-5 shadow-sm">
                     <ActivationStepper steps={progress.steps} />
                 </div>
 
@@ -67,7 +67,7 @@ export default function OnboardingStatus({
                     </section>
                 )}
 
-                <section className="bg-card border-border flex flex-wrap items-center gap-4 rounded-lg border p-5 shadow-sm">
+                <section className="bg-card border-border flex flex-wrap items-center gap-4 rounded-xl border p-5 shadow-sm">
                     <div className="min-w-0 flex-1 space-y-1">
                         <p className="text-muted-foreground text-xs font-medium">
                             Current status

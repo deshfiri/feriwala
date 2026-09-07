@@ -1,4 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
@@ -22,7 +23,7 @@ export default function KycHistory({ rounds }: { rounds: KycHistoryRound[] }) {
         <>
             <Head title={t('kyc.history.title')} />
 
-            <div className="mx-auto max-w-3xl space-y-6 p-4">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={t('kyc.history.title')}
                     description={t('kyc.history.description')}
@@ -45,7 +46,7 @@ export default function KycHistory({ rounds }: { rounds: KycHistoryRound[] }) {
                         <RoundCard key={round.id} round={round} />
                     ))
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }
@@ -54,7 +55,7 @@ function RoundCard({ round }: { round: KycHistoryRound }) {
     const { t } = useTranslation();
 
     return (
-        <section className="space-y-4 rounded-xl border p-4">
+        <section className="bg-card space-y-4 rounded-xl border p-4">
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h2 className="font-medium">
@@ -88,7 +89,7 @@ function RoundCard({ round }: { round: KycHistoryRound }) {
                         {t('kyc.history.requirements')}
                     </h3>
 
-                    <ul className="divide-border divide-y rounded-lg border text-sm">
+                    <ul className="bg-card divide-border divide-y rounded-xl border text-sm">
                         {round.requirements.map((requirement) => (
                             <li
                                 key={requirement.key}
@@ -160,11 +161,11 @@ function Dates({ round }: { round: KycHistoryRound }) {
 
     const parts = [
         round.opened_at &&
-            t('kyc.history.opened', { date: format(round.opened_at) }),
+        t('kyc.history.opened', { date: format(round.opened_at) }),
         round.submitted_at &&
-            t('kyc.history.submitted', { date: format(round.submitted_at) }),
+        t('kyc.history.submitted', { date: format(round.submitted_at) }),
         round.reviewed_at &&
-            t('kyc.history.reviewed', { date: format(round.reviewed_at) }),
+        t('kyc.history.reviewed', { date: format(round.reviewed_at) }),
     ].filter(Boolean);
 
     return <p className="text-muted-foreground text-sm">{parts.join(' · ')}</p>;
@@ -196,9 +197,9 @@ function Deadline({ round }: { round: KycHistoryRound }) {
             {round.days_remaining === null
                 ? t('kyc.history.due', { date: due })
                 : t('kyc.history.due_with_days', {
-                      date: due,
-                      count: Math.max(round.days_remaining, 0),
-                  })}
+                    date: due,
+                    count: Math.max(round.days_remaining, 0),
+                })}
         </p>
     );
 }

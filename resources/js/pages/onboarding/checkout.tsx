@@ -59,7 +59,7 @@ export default function Checkout({
                     </p>
                 </header>
 
-                <section className="bg-card border-border overflow-hidden rounded-lg border shadow-sm">
+                <section className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
                     <dl className="divide-border divide-y">
                         {quote.lines.map((line) => (
                             <div
@@ -98,7 +98,7 @@ export default function Checkout({
                 <Form
                     action="/checkout"
                     method="post"
-                    className="bg-card border-border space-y-4 rounded-lg border p-5 shadow-sm"
+                    className="bg-card border-border space-y-4 rounded-xl border p-5 shadow-sm"
                 >
                     {({ processing, errors }) => (
                         <>

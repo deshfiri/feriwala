@@ -82,7 +82,7 @@ export default function Staff({
 
                 <p className="text-muted-foreground text-sm">{seatsLeft}</p>
 
-                <ul className="divide-border divide-y rounded-lg border">
+                <ul className="bg-card divide-border divide-y rounded-xl border">
                     {staff.map((member) => (
                         <li
                             key={member.id}
@@ -185,7 +185,7 @@ export default function Staff({
                             )}
                         />
 
-                        <ul className="divide-border divide-y rounded-lg border">
+                        <ul className="bg-card divide-border divide-y rounded-xl border">
                             {invitations.map((invitation) => (
                                 <li
                                     key={invitation.id}

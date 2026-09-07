@@ -41,4 +41,28 @@ return [
         'label' => 'Language',
         'switch' => 'Change language',
     ],
+
+    'settings' => [
+        'title' => 'Settings',
+        'description' => 'Manage your profile and account settings',
+        'nav' => [
+            'label' => 'Settings sections',
+            'profile' => 'Profile',
+            'security' => 'Security',
+            'appearance' => 'Appearance',
+            'package' => 'Package',
+            'staff' => 'Staff',
+        ],
+    ],
+
+    'appearance' => [
+        'label' => 'Appearance',
+        // Stored per browser, not on the account, so say so rather than let
+        // someone wonder why their phone did not change with their laptop.
+        'description' => 'Choose how Feriwala looks on this device.',
+        'light' => 'Light',
+        'dark' => 'Dark',
+        'system' => 'System',
+        'system_hint' => 'Follows your device setting.',
+    ],
 ];

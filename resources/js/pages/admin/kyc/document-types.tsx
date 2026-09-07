@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import KycDocumentTypeController from '@/actions/App/Http/Controllers/Admin/KycDocumentTypeController';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import PermissionDeniedState from '@/components/states/permission-denied-state';
@@ -60,14 +61,14 @@ export default function KycDocumentTypes({
         return (
             <>
                 <Head title={t('kyc.document_types.title')} />
-                <div className="p-4">
+                <PageContainer>
                     <PermissionDeniedState
                         title={t('kyc.document_types.forbidden_title')}
                         description={t(
                             'kyc.document_types.forbidden_description',
                         )}
                     />
-                </div>
+                </PageContainer>
             </>
         );
     }
@@ -93,7 +94,7 @@ export default function KycDocumentTypes({
         <>
             <Head title={t('kyc.document_types.title')} />
 
-            <div className="space-y-6 p-4">
+            <PageContainer>
                 <PageHeader
                     title={t('kyc.document_types.title')}
                     description={t('kyc.document_types.description')}
@@ -124,7 +125,7 @@ export default function KycDocumentTypes({
                         }
                     />
                 ) : (
-                    <ul className="divide-border divide-y rounded-xl border">
+                    <ul className="bg-card divide-border divide-y rounded-xl border">
                         {live.map((type, index) => (
                             <TypeRow
                                 key={type.id}
@@ -156,14 +157,14 @@ export default function KycDocumentTypes({
                             </p>
                         </div>
 
-                        <ul className="divide-border divide-y rounded-xl border">
+                        <ul className="bg-card divide-border divide-y rounded-xl border">
                             {archived.map((type) => (
                                 <TypeRow key={type.id} type={type} />
                             ))}
                         </ul>
                     </section>
                 )}
-            </div>
+            </PageContainer>
 
             <RequirementDialog
                 open={creating}

@@ -37,6 +37,15 @@
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
 
+    /*
+     * Surfaces are rounder than controls. Cards land at 16px and page-level
+     * panels at 20px, which is what makes a dense screen read as panels rather
+     * than boxes; `rounded-lg` and below stay where they were, because a 16px
+     * button in a toolbar reads as a pill and stops looking pressable.
+     */
+    --radius-xl: calc(var(--radius) + 0.5rem);
+    --radius-2xl: calc(var(--radius) + 0.75rem);
+
     --color-background: var(--background);
     --color-foreground: var(--foreground);
 

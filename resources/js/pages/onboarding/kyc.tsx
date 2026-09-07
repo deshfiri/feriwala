@@ -118,7 +118,7 @@ export default function KycForm({
                 )}
 
                 {!submission.is_editable ? (
-                    <section className="bg-card border-border space-y-3 rounded-lg border p-5 text-center shadow-sm">
+                    <section className="bg-card border-border space-y-3 rounded-xl border p-5 text-center shadow-sm">
                         <CheckCircle2
                             className="text-success mx-auto size-6"
                             aria-hidden="true"
@@ -148,7 +148,7 @@ export default function KycForm({
                         <Form
                             action="/kyc/submit"
                             method="post"
-                            className="bg-card border-border flex flex-wrap items-center gap-4 rounded-lg border p-5 shadow-sm"
+                            className="bg-card border-border flex flex-wrap items-center gap-4 rounded-xl border p-5 shadow-sm"
                         >
                             {({ processing, errors }) => (
                                 <>
@@ -216,7 +216,7 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
     };
 
     return (
-        <section className="bg-card border-border space-y-3 rounded-lg border p-4 shadow-sm">
+        <section className="bg-card border-border space-y-3 rounded-xl border p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-0.5">
                     <h2 className="flex items-center gap-1.5 text-sm font-semibold">

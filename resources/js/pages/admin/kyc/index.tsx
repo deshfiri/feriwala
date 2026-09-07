@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { ShieldCheck } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
@@ -139,7 +140,7 @@ export default function AdminKycIndex({
         <>
             <Head title={t('kyc.queue.title')} />
 
-            <div className="space-y-6 p-4">
+            <PageContainer>
                 <PageHeader
                     title={t('kyc.queue.title')}
                     description={t('kyc.queue.description')}
@@ -192,7 +193,7 @@ export default function AdminKycIndex({
                         />
                     }
                 />
-            </div>
+            </PageContainer>
         </>
     );
 }

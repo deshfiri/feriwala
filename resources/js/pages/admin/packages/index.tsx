@@ -3,6 +3,7 @@ import { Archive, Package as PackageIcon, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import PackageController from '@/actions/App/Http/Controllers/Admin/PackageController';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import PermissionDeniedState from '@/components/states/permission-denied-state';
@@ -50,12 +51,12 @@ export default function AdminPackages({
         return (
             <>
                 <Head title={t('package.title')} />
-                <div className="p-4">
+                <PageContainer>
                     <PermissionDeniedState
                         title={t('package.forbidden_title')}
                         description={t('package.forbidden_description')}
                     />
-                </div>
+                </PageContainer>
             </>
         );
     }
@@ -64,7 +65,7 @@ export default function AdminPackages({
         <>
             <Head title={t('package.title')} />
 
-            <div className="space-y-6 p-4">
+            <PageContainer>
                 <PageHeader
                     title={t('package.title')}
                     description={t('package.description')}
@@ -96,7 +97,7 @@ export default function AdminPackages({
                         }
                     />
                 ) : (
-                    <ul className="divide-border divide-y rounded-xl border">
+                    <ul className="bg-card divide-border divide-y rounded-xl border">
                         {live.map((row) => (
                             <PackageCard
                                 key={row.id}
@@ -118,14 +119,14 @@ export default function AdminPackages({
                             </p>
                         </div>
 
-                        <ul className="divide-border divide-y rounded-xl border">
+                        <ul className="bg-card divide-border divide-y rounded-xl border">
                             {archived.map((row) => (
                                 <PackageCard key={row.id} row={row} />
                             ))}
                         </ul>
                     </section>
                 )}
-            </div>
+            </PageContainer>
 
             <PackageDialog
                 open={creating}

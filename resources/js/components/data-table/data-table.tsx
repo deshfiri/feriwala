@@ -41,6 +41,7 @@ export default function DataTable<T>({
     onRetry,
     onlyReload,
     caption,
+    stickyHeader = false,
 }: {
     columns: Column<T>[];
     paginator: Paginator<T>;
@@ -69,6 +70,15 @@ export default function DataTable<T>({
     /** Inertia partial-reload keys, so a filter change re-fetches only the table. */
     onlyReload?: string[];
     caption?: string;
+    /**
+     * Keeps the column headings in view on a long table.
+     *
+     * Off by default because it only works by giving the table its own scroll
+     * area, and a table short enough to read in one screen is worse for having
+     * one — the page scrolls, then the table scrolls, and neither goes where the
+     * reader expected.
+     */
+    stickyHeader?: boolean;
 }) {
     const { t } = useTranslation();
     const { search, setSearch, sort, toggleSort, goToPage } = useTableQuery({
@@ -161,6 +171,10 @@ export default function DataTable<T>({
                     className={cn(
                         'overflow-x-auto',
                         renderCard && 'hidden md:block',
+                        // Sticky needs a scroll container with a height to stick
+                        // inside; without one the heading has nothing to hold on
+                        // to and simply scrolls away with the page.
+                        stickyHeader && 'max-h-[70vh] overflow-y-auto',
                     )}
                 >
                     <table className="w-full border-collapse text-sm">
@@ -168,8 +182,17 @@ export default function DataTable<T>({
                             <caption className="sr-only">{caption}</caption>
                         )}
 
-                        <thead>
-                            <tr className="bg-muted/60 border-border border-b">
+                        <thead
+                            className={cn(stickyHeader && 'sticky top-0 z-10')}
+                        >
+                            <tr
+                                className={cn(
+                                    'border-border border-b',
+                                    // Opaque once it floats, or the rows passing
+                                    // beneath it read straight through.
+                                    stickyHeader ? 'bg-muted' : 'bg-muted/60',
+                                )}
+                            >
                                 {selection && (
                                     <th scope="col" className="w-9 px-4 py-2">
                                         <Checkbox
@@ -288,7 +311,7 @@ export default function DataTable<T>({
     };
 
     return (
-        <div className="bg-card border-border overflow-hidden rounded-lg border shadow-sm">
+        <div className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
             <div className="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2.5">
                 {selectedCount > 0 && bulkActions ? (
                     <>

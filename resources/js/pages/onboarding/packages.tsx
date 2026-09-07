@@ -85,7 +85,7 @@ function PackageCard({
     return (
         <section
             className={cn(
-                'bg-card flex flex-col rounded-lg border p-5 shadow-sm',
+                'bg-card flex flex-col rounded-xl border p-5 shadow-sm',
                 isSelected
                     ? 'border-brand ring-brand/20 ring-2'
                     : 'border-border',

@@ -19,14 +19,22 @@
             })();
         </script>
 
-        {{-- Inline style to set the HTML background color based on our theme in app.css --}}
+        {{--
+            Painted before the stylesheet loads, so the page never flashes a
+            colour it is about to stop being.
+
+            These two values must mirror `--background` in resources/css/app.css.
+            They did not: this painted pure white while the light canvas is a warm
+            off-white, and a near-black while the dark canvas is warmer still — so
+            every load began with a flash of the wrong ground.
+        --}}
         <style>
             html {
-                background-color: oklch(1 0 0);
+                background-color: oklch(0.969 0.003 75);
             }
 
             html.dark {
-                background-color: oklch(0.145 0 0);
+                background-color: oklch(0.175 0.003 60);
             }
         </style>
 

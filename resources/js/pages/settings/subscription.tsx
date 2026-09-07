@@ -71,7 +71,7 @@ export default function Subscription({ current, history }: Props) {
                             title={t('package.subscription.history')}
                         />
 
-                        <ul className="divide-border divide-y rounded-xl border text-sm">
+                        <ul className="bg-card divide-border divide-y rounded-xl border text-sm">
                             {previous.map((row) => (
                                 <li
                                     key={row.id}
@@ -108,7 +108,7 @@ function CurrentTerm({
     const { t } = useTranslation();
 
     return (
-        <section className="space-y-4 rounded-xl border p-4">
+        <section className="bg-card space-y-4 rounded-xl border p-4">
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h2 className="font-medium">{subscription.package}</h2>
@@ -163,7 +163,8 @@ function CurrentTerm({
                         {t('package.subscription.entitlements')}
                     </h3>
 
-                    <ul className="divide-border divide-y rounded-lg border text-sm">
+                    {/* Already on a card, so no surface colour of its own. */}
+                    <ul className="divide-border divide-y rounded-xl border text-sm">
                         {subscription.features.map((feature) => (
                             <li
                                 key={feature.key}

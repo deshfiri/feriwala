@@ -3,7 +3,9 @@ import { ArrowLeft, Download, Eye, FileText, Lock } from 'lucide-react';
 import { useState } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
+import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,7 +62,7 @@ export default function AdminKycShow({
         <>
             <Head title={t('kyc.queue.title')} />
 
-            <div className="space-y-6 p-4">
+            <PageContainer>
                 <PageHeader
                     title={t('kyc.detail.title', { round: submission.round })}
                     description={applicant.name ?? undefined}
@@ -85,11 +87,7 @@ export default function AdminKycShow({
 
                 <div className="grid gap-6 lg:grid-cols-3">
                     <div className="space-y-6 lg:col-span-2">
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="mb-3 text-sm font-semibold">
-                                {t('kyc.detail.applicant')}
-                            </h2>
-
+                        <SectionCard title={t('kyc.detail.applicant')}>
                             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                                 {[
                                     ['Name', applicant.name],
@@ -112,13 +110,9 @@ export default function AdminKycShow({
                                     </div>
                                 ))}
                             </dl>
-                        </section>
+                        </SectionCard>
 
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="mb-3 text-sm font-semibold">
-                                {t('kyc.detail.documents')}
-                            </h2>
-
+                        <SectionCard title={t('kyc.detail.documents')}>
                             {documents.length === 0 ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('kyc.detail.no_documents')}
@@ -210,13 +204,9 @@ export default function AdminKycShow({
                                     ))}
                                 </ul>
                             )}
-                        </section>
+                        </SectionCard>
 
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="mb-3 text-sm font-semibold">
-                                {t('kyc.detail.fields')}
-                            </h2>
-
+                        <SectionCard title={t('kyc.detail.fields')}>
                             {fields.length === 0 ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('kyc.detail.no_fields')}
@@ -235,13 +225,9 @@ export default function AdminKycShow({
                                     ))}
                                 </dl>
                             )}
-                        </section>
+                        </SectionCard>
 
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="mb-3 text-sm font-semibold">
-                                {t('kyc.detail.history')}
-                            </h2>
-
+                        <SectionCard title={t('kyc.detail.history')}>
                             {history.length === 0 ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('kyc.detail.no_history')}
@@ -294,18 +280,14 @@ export default function AdminKycShow({
                                     ))}
                                 </ol>
                             )}
-                        </section>
+                        </SectionCard>
                     </div>
 
                     <aside className="lg:col-span-1">
-                        <section className="bg-card border-border rounded-lg border p-5 shadow-sm">
-                            <h2 className="text-sm font-semibold">
-                                {t('kyc.decision.title')}
-                            </h2>
-                            <p className="text-muted-foreground mt-0.5 mb-4 text-xs">
-                                {t('kyc.decision.description')}
-                            </p>
-
+                        <SectionCard
+                            title={t('kyc.decision.title')}
+                            description={t('kyc.decision.description')}
+                        >
                             {!submission.can_review ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('kyc.decision.not_permitted')}
@@ -437,10 +419,10 @@ export default function AdminKycShow({
                                     )}
                                 </Form>
                             )}
-                        </section>
+                        </SectionCard>
                     </aside>
                 </div>
-            </div>
+            </PageContainer>
         </>
     );
 }
