@@ -15,6 +15,9 @@ type QueryValue = string | number | undefined;
  *
  * Every change is a server round trip because filtering and sorting must happen
  * in the database (§39) — the browser only ever holds one page of rows.
+ *
+ * Nothing here polls. Every request is the direct result of a user action, so
+ * an idle table must sit at zero requests.
  */
 export function useTableQuery({
     only = [],
@@ -28,9 +31,27 @@ export function useTableQuery({
         typeof window === 'undefined' ? '' : window.location.search,
     );
 
-    const [search, setSearch] = useState(params.get('search') ?? '');
-    const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isFirstRender = useRef(true);
+    const urlSearch = params.get('search') ?? '';
+
+    const [search, setSearch] = useState(urlSearch);
+
+    /**
+     * The search value the URL is already known to carry.
+     *
+     * Tracked separately from `search` so the two directions stay
+     * distinguishable: the user editing the box, and the URL moving underneath
+     * us because of a back button or another instance of this hook.
+     */
+    const syncedSearch = useRef(urlSearch);
+
+    /**
+     * `only` arrives as a fresh array on every render — an inline prop at the
+     * call site, or the default above. Keying the callback on its contents
+     * instead of its identity is what keeps `visit` stable; rebuilt every
+     * render, it retriggers the debounce effect below, whose own request
+     * re-renders the page and starts the whole cycle again.
+     */
+    const onlyKey = only.join(',');
 
     const currentSort: TableSort | null = params.get('sort')
         ? {
@@ -55,36 +76,45 @@ export function useTableQuery({
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: only.length ? only : undefined,
+                only: onlyKey ? onlyKey.split(',') : undefined,
             });
         },
-        [only],
+        [onlyKey],
     );
+
+    // Adopt the URL when it changes underneath us — a back button, or the one
+    // instance of this hook that owns the search box on a page holding two.
+    // Without this the effect below reads the difference as an unsent edit and
+    // pushes the stale value straight back.
+    useEffect(() => {
+        if (urlSearch !== syncedSearch.current) {
+            syncedSearch.current = urlSearch;
+            setSearch(urlSearch);
+        }
+    }, [urlSearch]);
 
     // Debounce the search box so a fast typist does not fire a request per
     // keystroke against a table of hundreds of thousands of rows.
+    //
+    // The equality guard is what keeps this from running away: once the URL
+    // carries what the box holds there is nothing left to send, so a re-render
+    // — including the one caused by this visit's own response — schedules no
+    // further request. The timer is local to the effect, so React's development
+    // double-invoke cannot leave a second one running, and unmounting clears it.
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-
+        if (search === syncedSearch.current) {
             return;
         }
 
-        if (debounce.current) {
-            clearTimeout(debounce.current);
-        }
+        const timer = setTimeout(() => {
+            syncedSearch.current = search;
 
-        debounce.current = setTimeout(() => {
             // Any change to the result set returns to page one; staying on
             // page 7 of a narrower result set shows an empty table.
             visit({ search: search || undefined, page: undefined });
         }, searchDebounceMs);
 
-        return () => {
-            if (debounce.current) {
-                clearTimeout(debounce.current);
-            }
-        };
+        return () => clearTimeout(timer);
     }, [search, searchDebounceMs, visit]);
 
     /**
@@ -122,6 +152,7 @@ export function useTableQuery({
 
     const clearAll = useCallback(() => {
         setSearch('');
+        syncedSearch.current = '';
         router.get(
             window.location.pathname,
             {},

@@ -5,10 +5,13 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Account\Models\AccountInvitation;
 use App\Models\User;
 use App\Support\Navigation\HomeRoute;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Http\Request;
+use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
 
 /*
  * Where a signed-in person lands (D23, §5.4).
@@ -144,5 +147,108 @@ describe('the funnel gate', function () {
         $this->actingAs($staff)
             ->get(route('admin.kyc.index'))
             ->assertOk();
+    });
+});
+
+describe('the eight cases that must stay covered', function () {
+    it('reaches the onboarding flow for a business still in the funnel', function () {
+        // Lands on the dashboard and is redirected by the §5.4 gate. One hop
+        // more than necessary — recorded as a refinement on P1-80 — but it
+        // arrives, which is what must not regress.
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $this->post(route('login.store'), [
+            'email' => $account->owner->email,
+            'password' => 'password',
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $this->actingAs($account->owner)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('onboarding.status'));
+
+        $this->actingAs($account->owner)
+            ->get(route('onboarding.status'))
+            ->assertOk();
+    });
+
+    it('never lands staff on an admin screen they cannot open', function () {
+        /*
+         * The landing walks the admin screens in order and stops at the first
+         * the person can actually see. A fixed page would refuse half of them,
+         * which is the lockout in a smaller form.
+         */
+        $limited = User::factory()->staff()->create();
+        $limited->givePermissionTo(PermissionCatalogue::name(
+            PermissionModule::Package,
+            PermissionAction::View,
+        ));
+
+        $landing = app(HomeRoute::class)->nameFor($limited->refresh());
+
+        expect($landing)->toBe('admin.packages.index');
+
+        $this->actingAs($limited)->get(route($landing))->assertOk();
+
+        // And the screens they do not hold stay shut.
+        $this->actingAs($limited)->get(route('admin.kyc.index'))->assertForbidden();
+    });
+
+    it('does not let a suspended identity in through a direct URL', function () {
+        // The identity gate is global and signs them out rather than
+        // redirecting, so no landing can be reached by typing one (D23).
+        $staff = testPlatformStaff(PlatformRole::KycManager);
+        $staff->forceFill(['identity_status' => UserStatus::Suspended])->save();
+
+        $this->actingAs($staff)
+            ->get(route('admin.kyc.index'))
+            ->assertRedirect(route('login'));
+
+        $this->assertGuest();
+    });
+
+    it('does not let a locked identity in either', function () {
+        $account = testBusinessAccount();
+        $account->owner->forceFill(['identity_status' => UserStatus::Locked])->save();
+
+        $this->actingAs($account->owner->refresh())
+            ->get(route('dashboard'))
+            ->assertRedirect(route('login'));
+
+        $this->assertGuest();
+    });
+
+    it('uses the same resolver when registering', function () {
+        // Registering with an invitation creates no business account, so a
+        // fixed /dashboard would drop that person into the §5.4 funnel instead
+        // of the invitation they came for.
+        $account = testAccountWithStaffLimit(5);
+
+        $invitation = AccountInvitation::factory()->to('joiner@example.com')->create([
+            'business_account_id' => $account->id,
+        ]);
+
+        $this->post(route('register.store'), [
+            'name' => 'New Joiner',
+            'email' => 'joiner@example.com',
+            'mobile' => '+8801712349999',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'terms_accepted' => '1',
+            'privacy_accepted' => '1',
+            'invitation' => $invitation->token,
+        ])->assertRedirect(route('dashboard', absolute: false));
+    });
+
+    it('uses the same resolver after verifying an email', function () {
+        // Fortify's default is a fixed config('fortify.home'), which is the
+        // shape of the bug that locked staff out at login.
+        $staff = testPlatformStaff(PlatformRole::KycManager);
+
+        $response = app(VerifyEmailResponseContract::class)->toResponse(
+            Request::create('/verify')->setUserResolver(fn () => $staff)
+        );
+
+        expect($response->getTargetUrl())
+            ->toContain(route('admin.kyc.index', absolute: false));
     });
 });

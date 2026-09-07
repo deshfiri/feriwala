@@ -20,6 +20,14 @@ import type { Column, KycQueueRow, Paginator } from '@/types';
 const ALL = 'all';
 
 /**
+ * The only prop a filter, sort, or page change needs back. Shared by both
+ * readers of the query state so neither falls back to refetching the whole
+ * page — translations and permissions do not change because a reviewer picked
+ * a status.
+ */
+const RELOAD_PROPS = ['submissions'];
+
+/**
  * The KYC review queue (§7.3).
  *
  * Ordered oldest-first by default, and the waiting column is the reason: the
@@ -34,7 +42,7 @@ export default function AdminKycIndex({
     statuses: { value: string; label: string }[];
 }) {
     const { t, locale } = useTranslation();
-    const { getFilter, setFilter } = useTableQuery();
+    const { getFilter, setFilter } = useTableQuery({ only: RELOAD_PROPS });
 
     const formatDate = (value: string | null) =>
         value === null
@@ -143,7 +151,7 @@ export default function AdminKycIndex({
                     rowKey={(row) => row.id}
                     caption={t('kyc.queue.caption')}
                     searchPlaceholder={t('kyc.queue.search_placeholder')}
-                    onlyReload={['submissions']}
+                    onlyReload={RELOAD_PROPS}
                     filters={
                         <Select
                             value={getFilter('status') ?? ALL}

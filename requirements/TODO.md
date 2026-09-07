@@ -28,6 +28,29 @@ the task that owns it. Every entry names the screen to return to.
 **Discharged:** FD-2 — P1-32 shipped, and `admin/kyc/document-types` now offers a searchable package
 selector backed by the real catalogue.
 
+## Where a signed-in person lands
+
+`App\Support\Navigation\HomeRoute` answers it, and **login, registration, two-factor, passkey and email
+verification all use it**. Three call sites each answered "/dashboard" independently, and for a Feriwala staff
+member that composed into a 403 at the front door — the dashboard is business ERP, the §5.4 gate turned them
+back to the onboarding stepper, and the stepper refuses anyone without a business account.
+
+Eight cases are covered permanently in `tests/Feature/Auth/HomeRouteTest.php`:
+
+| Who                              | Lands on                                                         |
+| -------------------------------- | ---------------------------------------------------------------- |
+| Active business owner            | the ERP dashboard                                                |
+| Onboarding business              | the dashboard, then the §5.4 gate to its stepper (see **P1-80**) |
+| Platform staff, no business      | the first admin screen their permissions actually open           |
+| Staff without a given permission | never that screen — it stays a 403                               |
+| Pending invitation               | that invitation                                                  |
+| Roles withdrawn                  | profile, which is on the §5.4 allow-list                         |
+| Suspended or locked identity     | signed out to login; no landing is reachable by typing a URL     |
+| Registration and verification    | the same resolver, never a fixed path                            |
+
+A 302 is not page access. `RouteAccessMatrixTest` distinguishes `ok` (rendered) from `redirected`, because
+reading every redirect as success is what let the lockout sit green.
+
 ## Lifecycle rules for controlled sources
 
 A value that has been persisted must stay resolvable. These keep the controlled sources above from
@@ -122,6 +145,12 @@ renamed, and entries are never deleted.
 - [ ] **P0-52** Laravel Horizon behind the `system.monitoring` permission, not publicly reachable (D3)
 - [x] **P0-53** **Storefront API contract `v1` — APPROVED AND FROZEN** 2026-09-01, at [05-storefront-api-contract.md](05-storefront-api-contract.md) (D11). Implementation obligations it creates are listed in its §11 and folded into P3–P6 below.
 - [ ] **P0-54** S3-compatible object storage config; verify no local-only persistent files (D10)
+- [ ] **P0-57** Give each test run its own PostgreSQL schema. Every run currently shares `testing`, and
+      `RefreshDatabase` opens by dropping every table in it — so two concurrent runs deadlock on the drop
+      (`SQLSTATE[40P01]`) and fail in scattered files that look exactly like code defects. It has already cost real
+      time twice. Derive the schema from Paratest's `TEST_TOKEN` where present and the PID otherwise, create it on
+      boot and drop it at the end; the migration cost is unchanged, because `RefreshDatabase` already migrates once
+      per run
 - [ ] **P0-56** Frontend test runner: **Vitest + React Testing Library**, for interactive component behaviour the server cannot assert — dialog state, scope-rule editing, reorder controls, conditional fields. Wanted **before** the UI-heavy Order, Wallet, Payment and Withdrawal phases, where a screen's own logic starts carrying real weight; not before, because it would delay the roadmap for coverage Pest already provides. Browser-level tests for critical end-to-end workflows may follow (FD-3)
 - [~] **P0-55** Docker stack: PostgreSQL 16, Redis 7, PHP 8.5, queue worker, scheduler, Mailpit (D5) — _`compose.yaml` written and version-pinned; blocked on Docker install (needs sudo)_
 
@@ -175,6 +204,11 @@ applicant's own history.
 - [x] **P1-63** `RequestKycUpdate` — a new round on a **trading** account, and the account keeps trading: asking a live business for a document and stopping its orders in the same breath would punish it for a request it has not had a chance to answer. §7.4's restriction is what applies if the deadline then passes, and only when configured. The deadline may be given per request — "within seven days" is a different instruction from the standing window — and stays null when neither is set. Internal reason and account-facing instruction are separate columns, as on `kyc_reviews`; a test asserts the reason never reaches the notification. Refuses while a round is already open, because two would leave the account holder unable to tell which the request refers to. Permissioned on `kyc.verify`, not `kyc.approve`. Concurrency: the **account** row is locked for the whole read-decide-write — locking the latest round is not equivalent, since `FOR UPDATE` re-checks the rows it locked rather than the ordering of a query already run — with the unique index on (account, round) behind it. A repeated or concurrent request opens no second round, sends no second notification and writes no second audit entry — 29 tests
 
 ## P1.H Staff management & tax engine (decision-driven)
+
+- [ ] **P1-80** `HomeRoute` sends an onboarding business straight to its current step. Today it lands on the
+      dashboard and the §5.4 gate redirects it to `onboarding.status` — correct, tested, and one hop more than
+      necessary. `OnboardingProgress` already knows the current step, so the resolver can name it directly. **Not
+      urgent:** the flow arrives at the right place, and the redirect costs a round trip rather than an error
 
 - [ ] **P1-79** **Admin Account Detail** screen — one trading business, everything an administrator
       needs about it in one place: identity and contact, commercial status and its history, KYC rounds

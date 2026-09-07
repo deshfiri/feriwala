@@ -275,6 +275,18 @@ operation. Verified against the live server.
 Tests run in a **`testing` schema** inside the same database, not a separate one, so the suite
 needs no `CREATEDB` privilege. `DB_SEARCH_PATH` in `phpunit.xml` selects it.
 
+**One suite at a time.** Every run shares that one schema, and `RefreshDatabase` opens by dropping
+every table in it — so two concurrent runs deadlock on the drop and fail in ways that look exactly
+like code defects (`SQLSTATE[40P01]`, scattered across whichever files happened to be running). If
+you need a second run, give it a schema of its own:
+
+```bash
+psql -c 'CREATE SCHEMA IF NOT EXISTS testing_mine'
+DB_SEARCH_PATH=testing_mine php artisan test
+```
+
+**P0-57** covers doing this automatically per run.
+
 **Never switch session, cache, or queue to `file`/`sync`/`database` drivers**, even temporarily to
 work around a local environment problem. The application must stay stateless and horizontally
 scalable (§40, D10). `.env.example` is the reference.
