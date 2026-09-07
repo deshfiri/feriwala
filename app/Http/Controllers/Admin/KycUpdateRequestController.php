@@ -42,6 +42,15 @@ class KycUpdateRequestController extends Controller
             // §7.2 offers a deadline beside the standing window — "within seven
             // days" is a different instruction from the configured default.
             'deadline' => ['nullable', 'date', 'after:today'],
+
+            /*
+             * Which documents to ask for. Absent means everything that applies
+             * to this account, which is the common case; a present-but-empty
+             * array is a request for nothing and is refused by the action rather
+             * than quietly widened back to everything.
+             */
+            'document_type_ids' => ['sometimes', 'array'],
+            'document_type_ids.*' => ['string', 'max:26'],
         ]);
 
         /** @var User $actor */
@@ -56,6 +65,7 @@ class KycUpdateRequestController extends Controller
                 deadline: isset($validated['deadline'])
                     ? CarbonImmutable::parse($validated['deadline'])
                     : null,
+                documentTypeIds: $validated['document_type_ids'] ?? null,
             );
         } catch (InvalidArgumentException $exception) {
             // A round already in progress is a rejected form, not a 500.

@@ -226,12 +226,25 @@ applicant's own history.
       necessary. `OnboardingProgress` already knows the current step, so the resolver can name it directly. **Not
       urgent:** the flow arrives at the right place, and the redirect costs a round trip rather than an error
 
-- [ ] **P1-79** **Admin Account Detail** screen — one trading business, everything an administrator
-      needs about it in one place: identity and contact, commercial status and its history, KYC rounds
-      and outcomes, package and subscription, payments, and staff. Read-only where another task owns the
-      action. Carries **FD-1**: the §7.2 Request KYC update action, which has a tested endpoint and no
-      screen. Distinct from the activation queue (`admin/activations/show`), which is scoped to accounts
-      awaiting activation — a trading account never appears there, so the action cannot live on it
+- [x] **P1-79** **Admin Account Detail** at `admin/accounts/{account}` — identity and contact, commercial
+      status and its history, every KYC round with what it asked for, package, payments and staff, in one
+      place. Read-only except for **FD-1**, the §7.2 request, which now has the screen its endpoint had been
+      waiting for: reason and instructions written separately because they go to different readers, an
+      optional per-request deadline, and a **document selection** so an expired licence does not force a
+      business to re-upload everything it was already cleared on. The round list doubles as the request
+      history — a requested round carries its reason, its instructions and who asked.
+
+    _A leak, found by the test that asserts an applicant cannot open their own file._ `BusinessAccountPolicy::view`
+    admits a member, which is right for a screen written for them; both admin screens carry internal reasons
+    and reviewer notes, and §7.2 forbids those reaching the applicant. An owner opening
+    `admin/accounts/{their own}` — or `admin/activations/{their own}`, which lists reviewer `internal_note`
+    beside each status change — was shown the lot. Both now authorise `viewDossier`, where membership is a
+    refusal rather than a grant, exactly as it already was for approving one's own activation — 16 tests
+
+    _Selection is bounded by the scope rules._ Choosing a document the rules say does not apply here is
+    refused, rather than widening a scope through the request form and leaving the applicant failing a rule
+    nobody wrote. An empty selection is refused too: read as "everything", it would send an account a demand
+    for the documents the requester had just deselected
 
 - [x] **P1-64** Team → `BusinessAccount`, including the identity/commercial split (D23). `business_accounts` + `business_account_members`; `status`, `activated_at`, `approval_pending_at`, KYC, payments, subscriptions, the current-package pointer and the status history all moved off `users`, which keeps `identity_status`. One owner, one account, one membership per person — unique indexes, not convention
 - [x] **P1-78** Application layer converted to D23. Two gates: `EnsureIdentityHasPlatformAccess` global (a suspended login loses every panel, and it signs out rather than redirecting so the public site still renders), `EnsureBusinessAccountIsActivated` on business ERP routes only. Administration is identity plus permission — **no `admin.*` bypass**. Found three real bugs on the way: admin routes were nested inside the commercial gate, §25.1's referrer check read the wrong subject, and the KYC policies matched `user_id` instead of account membership — 642 tests

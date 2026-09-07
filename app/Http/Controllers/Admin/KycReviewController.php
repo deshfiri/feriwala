@@ -127,6 +127,14 @@ class KycReviewController extends Controller
             ],
             'applicant' => [
                 'id' => $submission->businessAccount?->owner?->public_id,
+                /*
+                 * The business, so the reviewer can open its full file (P1-79).
+                 * Offered only to someone the dossier would actually admit —
+                 * a link that leads to a refusal is worse than no link.
+                 */
+                'account_id' => $reviewer->can('viewDossier', $submission->businessAccount)
+                    ? $submission->businessAccount?->public_id
+                    : null,
                 'name' => $submission->businessAccount?->owner?->name,
                 'email' => $submission->businessAccount?->owner?->email,
                 'mobile' => $submission->businessAccount?->owner?->mobile,

@@ -57,29 +57,38 @@ export function useNavigation(): {
         },
         {
             label: t('nav.groups.business'),
-            items: [
-                {
-                    title: t('nav.verification'),
-                    href: kycHistory(),
-                    icon: ShieldCheck,
-                },
-                {
-                    title: t('nav.subscription'),
-                    href: subscription(),
-                    icon: CreditCard,
-                },
-                // A package with no staff facility shows no Staff door at all,
-                // rather than one that opens onto a refusal.
-                ...(account?.managesStaff
-                    ? [
+            /*
+             * Only for someone who has a business. Every entry here is scoped to
+             * the reader's own account, and platform staff have none — the links
+             * would lead to a refusal, which is worse than their absence. The
+             * group drops out entirely once it is empty.
+             */
+            items:
+                account === null || account === undefined
+                    ? []
+                    : [
                           {
-                              title: t('nav.staff'),
-                              href: staffDirectory(),
-                              icon: Users,
+                              title: t('nav.verification'),
+                              href: kycHistory(),
+                              icon: ShieldCheck,
                           },
-                      ]
-                    : []),
-            ],
+                          {
+                              title: t('nav.subscription'),
+                              href: subscription(),
+                              icon: CreditCard,
+                          },
+                          // A package with no staff facility shows no Staff door at all,
+                          // rather than one that opens onto a refusal.
+                          ...(account?.managesStaff
+                              ? [
+                                    {
+                                        title: t('nav.staff'),
+                                        href: staffDirectory(),
+                                        icon: Users,
+                                    },
+                                ]
+                              : []),
+                      ],
         },
         {
             label: t('nav.groups.administration'),

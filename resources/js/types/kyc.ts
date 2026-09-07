@@ -30,6 +30,12 @@ export type KycSubmissionSummary = {
 
 export type KycApplicant = {
     id: string | null;
+    /**
+     * The business behind the round, for the link to its full file (P1-79).
+     * Null when this reader may not open that screen, so the link is absent
+     * rather than leading to a refusal.
+     */
+    account_id: string | null;
     name: string | null;
     email: string | null;
     mobile: string | null;

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
@@ -151,6 +152,16 @@ Route::middleware(['auth', 'noindex'])
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
+
+        /*
+         * One trading business, in full (P1-79).
+         *
+         * Separate from the activation queue, which only ever holds accounts
+         * awaiting activation — a trading account is not in it, so this is the
+         * only screen from which its KYC can be asked for again.
+         */
+        Route::get('accounts/{account}', [AccountController::class, 'show'])
+            ->name('accounts.show');
 
         /*
          * Asking a trading business for fresh KYC (§7.2).

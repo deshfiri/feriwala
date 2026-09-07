@@ -146,6 +146,7 @@ return [
         'view' => 'দেখুন',
         'download' => 'ডাউনলোড',
         'back_to_queue' => 'তালিকায় ফিরুন',
+        'view_account' => 'অ্যাকাউন্ট দেখুন',
         'submitted_at' => 'জমা দেওয়া হয়েছে',
         'internal_note_label' => 'অভ্যন্তরীণ নোট',
     ],

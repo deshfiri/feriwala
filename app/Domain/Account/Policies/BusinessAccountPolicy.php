@@ -36,6 +36,28 @@ class BusinessAccountPolicy
     }
 
     /**
+     * Reading the administrator's view of an account (§7.2, §32).
+     *
+     * Deliberately **not** {@see view()}. That one lets a member see their own
+     * account, which is right for a screen written for them; an administrative
+     * screen is written for somebody else and carries internal reasons,
+     * staff-only notes and reviewer metadata beside the facts. §7.2 forbids that
+     * material reaching the applicant, and a policy that admits members would
+     * hand it to them through their own account's URL.
+     *
+     * So membership is a refusal here rather than a grant, exactly as it is for
+     * approving one's own activation.
+     */
+    public function viewDossier(User $user, BusinessAccount $account): bool
+    {
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::View));
+    }
+
+    /**
      * Approving an activation is the moment a business gains the run of the
      * platform (§5.1, §44), so it is its own permission — and never one's own.
      */

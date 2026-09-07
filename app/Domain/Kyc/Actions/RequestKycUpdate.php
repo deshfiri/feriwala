@@ -49,6 +49,10 @@ class RequestKycUpdate
      * @param  string  $reason  internal: why we asked
      * @param  string  $instructions  what the account holder is told to do
      * @param  CarbonImmutable|null  $deadline  overrides the configured window
+     * @param  array<int, string>|null  $documentTypeIds  narrows the round to
+     *                                                    these documents; null
+     *                                                    asks for everything
+     *                                                    that applies
      *
      * @throws InvalidArgumentException
      */
@@ -58,6 +62,7 @@ class RequestKycUpdate
         string $reason,
         string $instructions,
         ?CarbonImmutable $deadline = null,
+        ?array $documentTypeIds = null,
     ): KycSubmission {
         $reason = trim($reason);
         $instructions = trim($instructions);
@@ -81,8 +86,24 @@ class RequestKycUpdate
             );
         }
 
+        if ($documentTypeIds !== null && $documentTypeIds === []) {
+            // An empty selection is a request for nothing at all. Silently
+            // treating it as "everything" would send an account a demand for
+            // documents the requester had just deselected.
+            throw new InvalidArgumentException(
+                'Select at least one document to ask for.'
+            );
+        }
+
         $submission = $this->database->transaction(
-            fn () => $this->open($account, $requestedBy, $reason, $instructions, $deadline)
+            fn () => $this->open(
+                $account,
+                $requestedBy,
+                $reason,
+                $instructions,
+                $deadline,
+                $documentTypeIds,
+            )
         );
 
         /*
@@ -98,12 +119,16 @@ class RequestKycUpdate
         return $submission;
     }
 
+    /**
+     * @param  array<int, string>|null  $documentTypeIds
+     */
     protected function open(
         BusinessAccount $account,
         User $requestedBy,
         string $reason,
         string $instructions,
         ?CarbonImmutable $deadline,
+        ?array $documentTypeIds = null,
     ): KycSubmission {
         /*
          * The **account** is locked, not the latest round.
@@ -156,8 +181,23 @@ class RequestKycUpdate
             );
         }
 
-        // What the round asks for, fixed at the moment it opens (§7.2).
-        $this->captureRequirements->handle($submission);
+        /*
+         * What the round asks for, fixed at the moment it opens (§7.2).
+         *
+         * A narrowed request has to actually narrow something: a selection that
+         * matches nothing applicable would open a round demanding no documents,
+         * which the account holder could never satisfy or clear.
+         */
+        $captured = $this->captureRequirements->handle(
+            $submission,
+            onlyTypeIds: $documentTypeIds,
+        );
+
+        if ($documentTypeIds !== null && $captured === 0) {
+            throw new InvalidArgumentException(
+                'None of the selected documents apply to this account.'
+            );
+        }
 
         $this->audit->handle(new AuditEntry(
             action: 'kyc.update_requested',

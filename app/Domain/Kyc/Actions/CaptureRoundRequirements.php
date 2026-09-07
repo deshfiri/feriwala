@@ -2,10 +2,12 @@
 
 namespace App\Domain\Kyc\Actions;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Models\KycSubmissionRequirement;
 use App\Domain\Package\Enums\UserPackageStatus;
+use Illuminate\Support\Collection;
 
 /**
  * Records what a round is being asked for, at the moment it opens (§7.2).
@@ -24,10 +26,16 @@ use App\Domain\Package\Enums\UserPackageStatus;
 class CaptureRoundRequirements
 {
     /**
+     * @param  array<int, string>|null  $onlyTypeIds  public ids to narrow the round
+     *                                                to; null asks for everything
+     *                                                that applies
      * @return int how many requirements were captured (zero when already done)
      */
-    public function handle(KycSubmission $submission, ?string $packageId = null): int
-    {
+    public function handle(
+        KycSubmission $submission,
+        ?string $packageId = null,
+        ?array $onlyTypeIds = null,
+    ): int {
         if ($submission->requirements()->exists()) {
             return 0;
         }
@@ -36,26 +44,72 @@ class CaptureRoundRequirements
         $packageId ??= $this->packageIdFor($submission);
         $country = $account?->owner?->country;
 
-        $rows = [];
+        $types = $this->applicableFor($packageId, $country);
 
-        foreach (KycDocumentType::query()->active()->with('scopes')->get() as $type) {
-            if (! $type->appliesTo($packageId, $country)) {
-                continue;
-            }
+        /*
+         * A narrowed round asks for a subset, never for something outside the
+         * scope rules. §7.2 requests fresh copies of documents this account is
+         * already subject to; asking for one the rules say does not apply here
+         * would be a scope change made through the back door, and the applicant
+         * would have no way to tell which rule they were failing.
+         */
+        if ($onlyTypeIds !== null) {
+            $wanted = array_flip($onlyTypeIds);
 
-            $rows[] = KycSubmissionRequirement::snapshotOf(
-                $type,
-                // The scope may make it mandatory here and optional elsewhere,
-                // so the round records what *this* applicant was asked for.
-                $type->isRequiredFor($packageId, $country),
+            $types = $types->filter(
+                fn (KycDocumentType $type) => isset($wanted[$type->public_id]),
             );
         }
 
-        foreach ($rows as $row) {
-            $submission->requirements()->create($row);
+        foreach ($types as $type) {
+            $submission->requirements()->create(
+                KycSubmissionRequirement::snapshotOf(
+                    $type,
+                    // The scope may make it mandatory here and optional
+                    // elsewhere, so the round records what *this* applicant was
+                    // asked for.
+                    $type->isRequiredFor($packageId, $country),
+                ),
+            );
         }
 
-        return count($rows);
+        return $types->count();
+    }
+
+    /**
+     * The active document types that apply to a given package and country.
+     *
+     * Public because the screen offering a document selection has to show the
+     * same list this captures from. Two implementations of "which documents
+     * apply here" would disagree the first time a scope rule changed, and the
+     * disagreement would surface as an administrator selecting a document that
+     * silently never got asked for.
+     *
+     * @return Collection<int, KycDocumentType>
+     */
+    public function applicableFor(?string $packageId, ?string $country): Collection
+    {
+        return KycDocumentType::query()
+            ->active()
+            ->with('scopes')
+            ->get()
+            ->filter(fn (KycDocumentType $type) => $type->appliesTo($packageId, $country))
+            ->values();
+    }
+
+    /**
+     * The package scoping an account's requirements, for callers that hold an
+     * account rather than a round.
+     */
+    public function packageIdForAccount(BusinessAccount $account): ?string
+    {
+        $subscription = $account->packages()
+            ->whereIn('status', [UserPackageStatus::Active, UserPackageStatus::PendingPayment])
+            ->with('package')
+            ->latest('id')
+            ->first();
+
+        return $subscription?->package?->public_id;
     }
 
     /**
@@ -70,18 +124,8 @@ class CaptureRoundRequirements
     {
         $account = $submission->businessAccount;
 
-        if ($account === null) {
-            return null;
-        }
-
-        $subscription = $account->packages()
-            ->whereIn('status', [UserPackageStatus::Active, UserPackageStatus::PendingPayment])
-            ->with('package')
-            ->latest('id')
-            ->first();
-
         // The immutable id, not the slug: a scope rule must survive a URL
         // being renamed.
-        return $subscription?->package?->public_id;
+        return $account === null ? null : $this->packageIdForAccount($account);
     }
 }

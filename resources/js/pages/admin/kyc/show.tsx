@@ -1,5 +1,12 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Download, Eye, FileText, Lock } from 'lucide-react';
+import {
+    ArrowLeft,
+    Building2,
+    Download,
+    Eye,
+    FileText,
+    Lock,
+} from 'lucide-react';
 import { useState } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
@@ -10,6 +17,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import { show as accountDossier } from '@/routes/admin/accounts';
 import { decide, index } from '@/routes/admin/kyc';
 import { download, show as documentShow } from '@/routes/kyc/documents';
 import type {
@@ -72,6 +80,27 @@ export default function AdminKycShow({
                                 tone={submission.status_tone}
                                 label={submission.status_label}
                             />
+                            {/*
+                             * The whole business behind this round (P1-79) —
+                             * its other rounds, its package, its payments. Only
+                             * rendered when the reader may actually open it.
+                             */}
+                            {applicant.account_id && (
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link
+                                        href={accountDossier(
+                                            applicant.account_id,
+                                        )}
+                                    >
+                                        <Building2
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {t('kyc.detail.view_account')}
+                                    </Link>
+                                </Button>
+                            )}
+
                             <Button variant="outline" size="sm" asChild>
                                 <Link href={index()}>
                                     <ArrowLeft

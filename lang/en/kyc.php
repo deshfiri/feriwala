@@ -148,6 +148,7 @@ return [
         'view' => 'View',
         'download' => 'Download',
         'back_to_queue' => 'Back to queue',
+        'view_account' => 'View account',
         'submitted_at' => 'Submitted',
         'internal_note_label' => 'Internal note',
     ],

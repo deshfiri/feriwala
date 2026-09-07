@@ -83,7 +83,13 @@ class ActivationReviewController extends Controller
 
     public function show(Request $request, BusinessAccount $account): Response
     {
-        Gate::authorize('view', $account);
+        /*
+         * `viewDossier`, not `view`. This page lists the status history
+         * including its `internal_note`, and `view` admits the account's own
+         * members — so an owner could read the reviewer's private notes about
+         * their own application through this URL (§7.2).
+         */
+        Gate::authorize('viewDossier', $account);
 
         /** @var User $reviewer */
         $reviewer = $request->user();
