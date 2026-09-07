@@ -51,6 +51,59 @@ describe('the pre-hydration canvas', function () {
     });
 });
 
+describe('the appearance modes', function () {
+    it('offers exactly light, dark and system', function () {
+        /*
+         * Three, and only three. A fourth — Dim, High Contrast, a brand theme —
+         * is a whole second palette to keep in step across every surface, and
+         * the one that gets forgotten is always the one nobody is looking at.
+         */
+        $hook = File::get(resource_path('js/hooks/use-appearance.tsx'));
+
+        preg_match('/export type ResolvedAppearance = (?<resolved>[^;]+);/', $hook, $resolved);
+        preg_match('/export type Appearance = (?<all>[^;]+);/', $hook, $all);
+
+        expect(trim($resolved['resolved']))->toBe("'light' | 'dark'")
+            ->and(trim($all['all']))->toBe("ResolvedAppearance | 'system'");
+    });
+
+    it('follows the operating system when told to, and says so out loud', function () {
+        // "System" is not a third palette — it is a standing instruction to read
+        // prefers-color-scheme, including when the device flips at sunset with
+        // nobody touching the app.
+        $hook = File::get(resource_path('js/hooks/use-appearance.tsx'));
+
+        expect($hook)->toContain('(prefers-color-scheme: dark)')
+            ->and($hook)->toContain("addEventListener('change'")
+            ->and($hook)->toContain("localStorage.setItem('appearance'")
+            ->and($hook)->toContain('setCookie');
+    });
+
+    it('has the server dress the document for a stored dark preference', function () {
+        /*
+         * The cookie is what lets the very first byte of HTML already be dark.
+         * Waiting for React would mean a light page for as long as the bundle
+         * takes to arrive — which on a slow connection is the whole point.
+         */
+        // Unencrypted on purpose: the hook writes this cookie from JavaScript
+        // via `document.cookie`, which is why bootstrap/app.php exempts it.
+        $this->withUnencryptedCookie('appearance', 'dark')
+            ->get(route('login'))
+            ->assertOk()
+            ->assertSee('<html lang="en" class="dark"', escape: false);
+    });
+
+    it('leaves the decision to the browser under system', function () {
+        // No class server-side: the inline script reads the media query and
+        // decides before anything paints.
+        $response = $this->withUnencryptedCookie('appearance', 'system')
+            ->get(route('login'));
+
+        expect($response->getContent())->not->toContain('<html lang="en" class="dark"')
+            ->and($response->getContent())->toContain("document.documentElement.classList.add('dark')");
+    });
+});
+
 describe('the appearance and settings vocabulary', function () {
     it('says the same things in both languages', function (string $key) {
         // A key present in one language and missing in the other renders the
