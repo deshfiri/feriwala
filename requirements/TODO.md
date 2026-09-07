@@ -153,6 +153,22 @@ renamed, and entries are never deleted.
       per run
 - [ ] **P0-56** Frontend test runner: **Vitest + React Testing Library**, for interactive component behaviour the server cannot assert — dialog state, scope-rule editing, reorder controls, conditional fields. Wanted **before** the UI-heavy Order, Wallet, Payment and Withdrawal phases, where a screen's own logic starts carrying real weight; not before, because it would delay the roadmap for coverage Pest already provides. Browser-level tests for critical end-to-end workflows may follow (FD-3)
 - [~] **P0-55** Docker stack: PostgreSQL 16, Redis 7, PHP 8.5, queue worker, scheduler, Mailpit (D5) — _`compose.yaml` written and version-pinned; blocked on Docker install (needs sudo)_
+- [ ] **P0-58** Self-hosted typefaces, done properly. Today `Instrument Sans` comes from a third-party CDN and
+      Bangla plus the taka sign (৳, U+09F3) fall through to whatever face the reader's operating system supplies —
+      which works on Windows, macOS, Android and iOS, and gives a bare Linux desktop tofu. Self-hosting fixes that
+      and removes the CDN, but a first attempt was **rejected on 2026-09-07**: the file assigned to `--font-bangla`
+      contained 222 Latin codepoints and not one character in U+0980–U+09FF, so the Bangla face had none of the
+      glyphs it existed to supply, and the accompanying test passed because it checked only that `app.css`,
+      `vite.config.ts` and the files agreed — never that the files contained the glyphs relied on. That attempt is
+      kept at the `rejected-typography-checkpoint` tag. Any replacement must carry:
+      **(a)** a Bengali face whose licence permits self-hosting, recorded with the licence;
+      **(b)** verified coverage of the whole U+0980–U+09FF block, asserted by reading the font's own `cmap` — not by
+      checking the file exists;
+      **(c)** verified U+09F3 in the face that `--font-sans` falls back to, because that is where every amount is
+      actually rendered;
+      **(d)** rendering tests for English and Bangla, in both stacks;
+      **(e)** no layout shift — matched metrics or `size-adjust`, so swapping the face does not reflow a screen;
+      **(f)** the real weights the interface asks for (400/500/600), rather than one file with the rest synthesised
 
 ---
 
