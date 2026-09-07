@@ -12,6 +12,7 @@ use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +28,9 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property PaymentPurpose $purpose
  * @property Money $amount_minor
  * @property Money $revenue_minor
+ * @property CarbonImmutable|null $initiated_at
+ * @property CarbonImmutable|null $completed_at
+ * @property CarbonImmutable|null $failed_at
  * @property-read BusinessAccount|null $businessAccount
  */
 class Payment extends Model

@@ -1,9 +1,12 @@
 export type * from './activation';
 export type * from './auth';
+export type * from './chart';
+export type * from './dashboard';
 export type * from './data-table';
 export type * from './kyc';
 export type * from './localization';
 export type * from './navigation';
+export type * from './notification';
 export type * from './onboarding';
 export type * from './package';
 export type * from './account';

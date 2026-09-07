@@ -17,5 +17,22 @@ export function AppShell({ children, variant = 'sidebar' }: Props) {
         );
     }
 
-    return <SidebarProvider defaultOpen={isOpen}>{children}</SidebarProvider>;
+    return (
+        <SidebarProvider
+            defaultOpen={isOpen}
+            /*
+             * Set here rather than in `ui/sidebar.tsx`, which is vendored and
+             * must not be hand-edited — the provider reads these off its own
+             * style, which is the supported way to size the rail.
+             */
+            style={
+                {
+                    '--sidebar-width': '16.25rem',
+                    '--sidebar-width-icon': '3.25rem',
+                } as React.CSSProperties
+            }
+        >
+            {children}
+        </SidebarProvider>
+    );
 }

@@ -68,8 +68,6 @@ class KycDocumentController extends Controller
             'Content-Disposition' => sprintf(
                 '%s; filename="%s"',
                 $inline ? 'inline' : 'attachment',
-                // The original name is echoed back to the reviewer, sanitised —
-                // it came from an upload and cannot be trusted in a header.
                 addslashes(basename($document->original_name)),
             ),
 

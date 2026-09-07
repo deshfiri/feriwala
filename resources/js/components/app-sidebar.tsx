@@ -1,112 +1,45 @@
-import { Link, usePage } from '@inertiajs/react';
-import {
-    BookOpen,
-    FolderGit2,
-    LayoutGrid,
-    ListChecks,
-    Package as PackageIcon,
-    ShieldCheck,
-    UserCheck,
-} from 'lucide-react';
-import AppLogo from '@/components/app-logo';
-import { NavFooter } from '@/components/nav-footer';
-import { NavMain } from '@/components/nav-main';
-import { NavUser } from '@/components/nav-user';
+import { Link } from '@inertiajs/react';
 import { AccountBadge } from '@/components/account-badge';
+import AppLogo from '@/components/app-logo';
+import { NavMain } from '@/components/nav-main';
 import {
     Sidebar,
     SidebarContent,
-    SidebarFooter,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarRail,
+    SidebarSeparator,
 } from '@/components/ui/sidebar';
+import { useNavigation } from '@/hooks/use-navigation';
 import { dashboard } from '@/routes';
-import { index as activationQueue } from '@/routes/admin/activations';
-import { index as kycQueue } from '@/routes/admin/kyc';
-import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
-import { index as packageCatalogue } from '@/routes/admin/packages';
-import type { NavItem } from '@/types';
 
+/**
+ * The ERP rail (§33.2).
+ *
+ * The account menu lives in the header rather than down here, so there is
+ * exactly one place to find it whether the rail is expanded, collapsed to icons,
+ * or closed altogether on a phone.
+ */
 export function AppSidebar() {
-    const page = usePage();
-    // One dashboard at one address (D1): no account segment to fill in.
-    const dashboardUrl = dashboard();
-
-    const permissions = page.props.permissions ?? {};
-
-    const mainNavItems: NavItem[] = [
-        {
-            title: 'Dashboard',
-            href: dashboardUrl,
-            icon: LayoutGrid,
-        },
-        // Staff entries appear only for the roles that hold them. Hiding the
-        // link is a courtesy — the route's policy is what refuses.
-        ...(permissions['kyc.view']
-            ? [
-                  {
-                      title: 'KYC review',
-                      href: kycQueue(),
-                      icon: ShieldCheck,
-                  },
-              ]
-            : []),
-        ...(permissions['kyc.manage_settings']
-            ? [
-                  {
-                      title: 'Verification requirements',
-                      href: kycRequirements(),
-                      icon: ListChecks,
-                  },
-              ]
-            : []),
-        ...(permissions['package.view']
-            ? [
-                  {
-                      title: 'Packages',
-                      href: packageCatalogue(),
-                      icon: PackageIcon,
-                  },
-              ]
-            : []),
-        ...(permissions['account.view']
-            ? [
-                  {
-                      title: 'Activation approvals',
-                      href: activationQueue(),
-                      icon: UserCheck,
-                  },
-              ]
-            : []),
-    ];
-
-    const footerNavItems: NavItem[] = [
-        {
-            title: 'Repository',
-            href: 'https://github.com/laravel/react-starter-kit',
-            icon: FolderGit2,
-        },
-        {
-            title: 'Documentation',
-            href: 'https://laravel.com/docs/starter-kits#react',
-            icon: BookOpen,
-        },
-    ];
+    const { sidebarGroups } = useNavigation();
 
     return (
         <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader>
+            <SidebarHeader className="gap-2">
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboardUrl} prefetch>
+                            <Link href={dashboard()} prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
+
+                <SidebarSeparator className="mx-0 group-data-[collapsible=icon]:hidden" />
+
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <AccountBadge />
@@ -114,14 +47,12 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent>
-                <NavMain items={mainNavItems} />
+            <SidebarContent className="gap-4">
+                <NavMain groups={sidebarGroups} />
             </SidebarContent>
 
-            <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
-                <NavUser />
-            </SidebarFooter>
+            {/* Drag or click the edge to collapse, for people who never find the header trigger. */}
+            <SidebarRail />
         </Sidebar>
     );
 }

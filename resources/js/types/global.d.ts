@@ -1,5 +1,6 @@
 import type { Auth } from '@/types/auth';
 import type { AccountContext } from '@/types/account';
+import type { HeaderNotification } from '@/types/notification';
 
 declare module 'react' {
     interface InputHTMLAttributes<T> {
@@ -24,6 +25,16 @@ declare module '@inertiajs/core' {
              * set. Hiding a link is a convenience; the route's policy refuses.
              */
             permissions: Record<string, boolean>;
+            /**
+             * The most recent notifications for the header bell, capped
+             * server-side. Empty for a guest, and never invented (D20).
+             */
+            notifications: HeaderNotification[];
+            /**
+             * Counted server-side rather than derived from the capped list —
+             * someone with twelve unread should not be told they have ten.
+             */
+            unreadNotificationCount: number;
             [key: string]: unknown;
         };
     }

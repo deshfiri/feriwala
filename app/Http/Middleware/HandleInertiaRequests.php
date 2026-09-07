@@ -7,6 +7,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Data\AccountContext;
 use App\Domain\Account\StaffAllowance;
+use App\Domain\Notification\Queries\RecentNotifications;
 use App\Models\User;
 use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class HandleInertiaRequests extends Middleware
 {
     public function __construct(
         protected StaffAllowance $allowance,
+        protected RecentNotifications $notifications,
     ) {}
 
     /**
@@ -76,6 +78,20 @@ class HandleInertiaRequests extends Middleware
             ],
             'translations' => fn () => $this->translations(App::getLocale()),
             'permissions' => fn () => $this->navigationPermissions($user),
+
+            /*
+             * The header bell (§33.2, D20).
+             *
+             * Lazy, so the query runs once per full page load rather than on
+             * every partial reload — a notification arriving mid-session is not
+             * urgent enough to pay for on every filter change.
+             */
+            'notifications' => fn () => $user === null
+                ? []
+                : $this->notifications->forUser($user),
+            'unreadNotificationCount' => fn () => $user === null
+                ? 0
+                : $this->notifications->unreadCountFor($user),
         ];
     }
 
