@@ -265,7 +265,14 @@ applicant's own history.
 - [x] **P1-33** `PackageFeature` enum (15 typed entitlements) + `package_features`. Facilities default **off** and limits default to **0**, so a misconfigured package under-delivers visibly; `null` means unlimited and is kept distinct from `0`
 - [x] **P1-34** `package_charges` (setup, maintenance, domain, hosting) with recurrence
 - [x] **P1-35** Package selection and comparison. Each card leads with the **total payable today**, not the package fee alone — the registration fee is charged alongside (§5.1), and showing only the package price would surprise the user at checkout. Choosing again supersedes the earlier choice rather than stacking unpaid subscriptions
-- [ ] **P1-36** `user_packages` subscription record with validity, expiry, renewal state, source
+- [x] **P1-36** `user_packages` subscription record with validity, expiry, renewal state, source. Two real defects
+      surfaced. The term's length was computed from the **live** package at approval time, so an edit made between
+      purchase and approval silently sold a shorter year than the one paid for — it now measures from the captured
+      `SubscriptionTerms`. And `UserPackageStatus` had no transition map, leaving the status assignable to anything,
+      including reviving an expired term into `Active` without a payment; it now implements `TransitionableState`,
+      with expiry, cancellation and supersession as end states. `SubscriptionSource` types how a term was come by and
+      separates granted entitlement from revenue. Account-facing screen at `/settings/subscription`, self-scoped from
+      membership with no account identifier in the URL — 21 tests
 - [x] **P1-37** `Entitlements` — the single place package limits are read. No package grants nothing (limits read `0`, never `null`); `RenewalDue` and `GracePeriod` keep granting so a late invoice does not strand live orders (§8.4) — 20 tests
 - [ ] **P1-38** Package renewal flow + renewal fee + frequency + grace period (§8.2)
 - [ ] **P1-39** Package upgrade/downgrade: eligibility, proration, extra deposit, minimum-balance change, feature transition, effective date (§8.3)

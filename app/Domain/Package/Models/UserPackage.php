@@ -4,8 +4,10 @@ namespace App\Domain\Package\Models;
 
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
+use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Data\SubscriptionTerms;
+use App\Domain\Package\Enums\SubscriptionSource;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -17,16 +19,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * An account's subscription to a package (§8.2).
  *
  * @property UserPackageStatus $status
+ * @property SubscriptionSource $source
  * @property Money|null $paid_fee_minor
  * @property CarbonImmutable|null $started_at
  * @property CarbonImmutable|null $expires_at
  * @property CarbonImmutable|null $grace_ends_at
+ * @property CarbonImmutable|null $cancelled_at
  * @property array<string, mixed>|null $terms
  * @property CarbonImmutable|null $terms_captured_at
  */
 class UserPackage extends Model
 {
-    use HasPublicId;
+    use HasPublicId, HasStateMachine;
 
     protected $guarded = [];
 
@@ -34,6 +38,7 @@ class UserPackage extends Model
     {
         return [
             'status' => UserPackageStatus::class,
+            'source' => SubscriptionSource::class,
             'paid_fee_minor' => MoneyCast::class,
             'started_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',

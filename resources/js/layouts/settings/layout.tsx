@@ -9,6 +9,7 @@ import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
 import { index as staff } from '@/routes/staff';
+import { show as subscription } from '@/routes/subscription';
 import type { NavItem } from '@/types';
 
 const baseNavItems: NavItem[] = [
@@ -42,6 +43,15 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
      */
     const sidebarNavItems: NavItem[] = [
         ...baseNavItems,
+
+        /*
+         * Shown to anyone with an account, activated or not. "What did I choose
+         * and what will it cost" is a question an applicant asks before paying,
+         * and an entry that appears only afterwards answers it too late.
+         */
+        ...(account
+            ? [{ title: 'Package', href: subscription(), icon: null }]
+            : []),
         ...(account?.allowsStaff && account.managesStaff
             ? [{ title: 'Staff', href: staff(), icon: null }]
             : []),

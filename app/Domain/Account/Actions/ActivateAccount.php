@@ -146,20 +146,37 @@ class ActivateAccount
             return;
         }
 
-        $package = $subscription->package;
+        /*
+         * The term comes from what the account **bought**, not from the package
+         * as it stands now (§8.3).
+         *
+         * Reading the live row meant an administrator shortening `validity_days`
+         * between purchase and approval quietly sold a shorter year than the
+         * one that was paid for — and approval can be days later, which is
+         * exactly the window in which a price list gets edited.
+         */
+        $terms = $subscription->terms();
+        $validityDays = $terms?->validityDays;
+        $graceDays = $terms === null ? 0 : ($terms->gracePeriodDays ?? 0);
+
         $startedAt = now();
 
+        // The status machine, not an assignment: PendingPayment may become
+        // Active, and this is the only place it does (§5.1).
+        $subscription->transitionTo(UserPackageStatus::Active);
+
         $subscription->forceFill([
-            'status' => UserPackageStatus::Active,
             'started_at' => $startedAt,
-            'expires_at' => $package?->validity_days === null
+
+            // Null validity is a term that does not end. Distinct from zero,
+            // which nothing sets and which would expire on the day it began.
+            'expires_at' => $validityDays === null
                 ? null
-                : $startedAt->addDays($package->validity_days),
-            'grace_ends_at' => $package?->validity_days === null
+                : $startedAt->addDays($validityDays),
+
+            'grace_ends_at' => $validityDays === null
                 ? null
-                : $startedAt
-                    ->addDays($package->validity_days)
-                    ->addDays($package->grace_period_days ?? 0),
+                : $startedAt->addDays($validityDays)->addDays($graceDays),
         ])->save();
 
         $account->forceFill(['current_user_package_id' => $subscription->id])->save();

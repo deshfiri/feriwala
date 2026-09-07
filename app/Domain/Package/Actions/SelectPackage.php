@@ -7,6 +7,7 @@ use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Data\SubscriptionTerms;
+use App\Domain\Package\Enums\SubscriptionSource;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
@@ -51,7 +52,7 @@ class SelectPackage
                 'business_account_id' => $account->id,
                 'package_id' => $package->id,
                 'status' => UserPackageStatus::PendingPayment,
-                'source' => 'purchase',
+                'source' => SubscriptionSource::Purchase,
                 // The price at the moment of choosing. An administrator editing
                 // the package afterwards must not silently change what this
                 // applicant was quoted.

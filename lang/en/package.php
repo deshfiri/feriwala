@@ -87,6 +87,41 @@ return [
         'charge_frequency' => 'Frequency',
     ],
 
+    'subscription' => [
+        'title' => 'Your package',
+        'description' => 'What you are on, what it grants, and when it renews.',
+        'nav' => 'Package',
+
+        'none_title' => 'No package yet',
+        'none_description' => 'Choose one to continue setting up your account.',
+        'choose' => 'Choose a package',
+
+        'current' => 'Current term',
+        'history' => 'Previous terms',
+        'no_history' => 'Nothing yet. Terms appear here as they end.',
+
+        'started' => 'Started',
+        'expires' => 'Ends',
+        'grace_ends' => 'Grace period ends',
+        'cancelled' => 'Cancelled',
+        'no_expiry' => 'Does not expire',
+        'days_left' => ':count days left',
+        'ends_today' => 'Ends today',
+        'ended' => 'Ended :date',
+        'in_grace' => 'Inside the grace period — renew to restore full access.',
+
+        'paid' => 'Paid',
+        'renewal' => 'Renews at',
+        'renewal_frequency' => 'Renews :frequency',
+        'source' => 'How you got it',
+
+        'entitlements' => 'What this includes',
+        'unlimited' => 'Unlimited',
+        'included' => 'Included',
+        'not_included' => 'Not included',
+        'none' => 'None',
+    ],
+
     'features' => [
         'unlimited' => 'Unlimited',
         'yes' => 'Yes',

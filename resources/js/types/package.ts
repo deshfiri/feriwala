@@ -1,3 +1,5 @@
+import type { StatusTone } from '@/lib/status';
+
 import type { Money } from '@/lib/money';
 
 /** A charge attached to a package (§8.1, §16.2). */
@@ -65,4 +67,47 @@ export type PackageFeatureDefinition = {
     key: string;
     label: string;
     type: 'boolean' | 'limit' | 'text';
+};
+
+/**
+ * An account's own subscription (§8.2, §8.4).
+ *
+ * Built from the terms captured at purchase, not the package as it stands
+ * today — a limit shown here is the limit this account is actually held to.
+ */
+export type AccountSubscriptionRow = {
+    id: string;
+    /** The package name as it was sold, not as it may since have been renamed. */
+    package: string | null;
+
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+    /** Whether this state still grants the package's features (§8.4). */
+    entitles: boolean;
+
+    source: string;
+    source_label: string;
+
+    started_at: string | null;
+    expires_at: string | null;
+    grace_ends_at: string | null;
+    cancelled_at: string | null;
+
+    /** Whole days until the term ends; negative once it has. */
+    days_remaining: number | null;
+    in_grace_period: boolean;
+
+    paid: Money | null;
+    renewal_fee: Money | null;
+    renewal_frequency: string | null;
+
+    /** Only on the current term — the history rows omit it. */
+    features?: {
+        key: string;
+        label: string;
+        type: 'boolean' | 'limit' | 'text';
+        /** Null on a limit means unlimited; zero means none at all (§8.1). */
+        value: boolean | number | string | null;
+    }[];
 };

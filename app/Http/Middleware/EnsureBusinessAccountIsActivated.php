@@ -46,6 +46,7 @@ class EnsureBusinessAccountIsActivated
         'profile.',
         'kyc.',
         'packages.',        // selection and comparison
+        'subscription.',    // what they chose, and what it will cost
         'checkout.',        // the combined activation payment and its return
         'security.',        // 2FA, passkeys, sessions
         'user-password.',

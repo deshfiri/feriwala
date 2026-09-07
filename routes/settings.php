@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Erp\StaffController;
+use App\Http\Controllers\Erp\SubscriptionController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -14,6 +15,18 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware(['auth', 'business.activated'])->group(function () {
     Route::redirect('settings', '/settings/profile');
+
+    /*
+     * The account's own subscription (§8.2).
+     *
+     * In the first group, which is not gated on `verified`, and named
+     * `subscription.` so the §5.4 allow-list can carry it: "what did I choose
+     * and what will it cost" is a question an applicant asks *before* paying,
+     * and a screen that appears only after the money clears answers it too
+     * late.
+     */
+    Route::get('settings/subscription', [SubscriptionController::class, 'show'])
+        ->name('subscription.show');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');

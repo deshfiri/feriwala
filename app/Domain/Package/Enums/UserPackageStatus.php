@@ -2,10 +2,18 @@
 
 namespace App\Domain\Package\Enums;
 
+use App\Support\StateMachine\TransitionableState;
+
 /**
  * The state of an account's subscription (§8.2, §8.4).
+ *
+ * Declares its own legal moves, like every other status in the application. It
+ * did not, and a subscription's status was therefore assignable to anything —
+ * an expired term could be set back to Active without a payment, and a
+ * superseded choice could be revived after the account had moved on. Neither is
+ * reachable now.
  */
-enum UserPackageStatus: string
+enum UserPackageStatus: string implements TransitionableState
 {
     case PendingPayment = 'pending_payment';
     case Active = 'active';
@@ -14,6 +22,40 @@ enum UserPackageStatus: string
     case Expired = 'expired';
     case Cancelled = 'cancelled';
     case Superseded = 'superseded';
+
+    /**
+     * @return array<int, self>
+     */
+    public function transitionsTo(): array
+    {
+        return match ($this) {
+            /*
+             * An unpaid choice either goes live, is replaced by a different
+             * choice, or is abandoned. It cannot reach a renewal state: there
+             * is no term to renew until one has started (§5.1).
+             */
+            self::PendingPayment => [self::Active, self::Superseded, self::Cancelled],
+
+            self::Active => [self::RenewalDue, self::Cancelled, self::Expired],
+
+            // §8.4 restores rather than severs: a renewal that arrives late
+            // returns to Active rather than forcing a fresh purchase.
+            self::RenewalDue => [self::Active, self::GracePeriod, self::Cancelled, self::Expired],
+            self::GracePeriod => [self::Active, self::Expired, self::Cancelled],
+
+            /*
+             * Terminal. Expiry and cancellation are the end of a term, and a
+             * new one is a new subscription with its own source and its own
+             * captured terms — not this row brought back to life.
+             */
+            self::Expired, self::Cancelled, self::Superseded => [],
+        };
+    }
+
+    public function isTerminal(): bool
+    {
+        return $this->transitionsTo() === [];
+    }
 
     public function label(): string
     {
