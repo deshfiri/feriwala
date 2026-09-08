@@ -203,6 +203,7 @@ renamed, and entries are never deleted.
     `Countries` registry the pickers are built from, and defaults rather than storing null. Gender is an
     enum with `Other` (Bangladesh recognises a third gender in law) and `Undisclosed` kept distinct from
     null: asked and declined is not the same as never asked — 14 tests
+
 - [x] **P1-7** `ReferralCode` + `ResolveReferrer`: unambiguous 8-char alphabet, random not sequential (so the user base cannot be enumerated), normalises lower-case/spaced input, and **only an Active account can refer** (§25.1). A wrong code never blocks registration — 8 tests
 - [ ] **P1-8** Email verification flow (Fortify) wired to account status
 - [x] **P1-9** Mobile OTP: `VerificationCodes` (hashed in Redis, constant-time compare, 5-attempt budget, 5-min TTL, 60s resend cooldown, identifier hashed into the key) + `SendMobileVerificationCode` / `VerifyMobile` with bilingual SMS. Verification never drags a further-along account backwards — 26 tests
