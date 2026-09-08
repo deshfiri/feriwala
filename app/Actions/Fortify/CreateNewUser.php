@@ -7,6 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Domain\Account\Actions\AcceptStaffInvitation;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Enums\Gender;
 use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Account\Exceptions\StaffLimitReached;
 use App\Domain\Account\Models\AccountInvitation;
@@ -14,6 +15,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Referral\Actions\ResolveReferrer;
 use App\Domain\Referral\ReferralCode;
 use App\Models\User;
+use App\Support\Localization\Countries;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -48,9 +50,19 @@ class CreateNewUser implements CreatesNewUsers
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
             'mobile' => ['required', 'string', 'max:20', Rule::unique(User::class, 'mobile')],
-            'date_of_birth' => ['nullable', 'date', 'before:today'],
-            'gender' => ['nullable', 'string', 'max:20'],
-            'country' => ['nullable', 'string', 'size:2'],
+            /*
+             * A date of birth in the future is a typo, and one from the 1800s
+             * is a slipped century. Bounded on both sides so the mistake is
+             * caught at the form rather than found later in a report.
+             */
+            'date_of_birth' => ['nullable', 'date', 'before:today', 'after:1900-01-01'],
+
+            // Closed sets, not free text. A column that accepts anything
+            // accumulates four spellings of one answer and no report can group
+            // them again afterwards.
+            'gender' => ['nullable', Rule::in(Gender::values())],
+            'country' => ['nullable', Rule::in(app(Countries::class)->codes())],
+
             'nationality' => ['nullable', 'string', 'max:64'],
             'referral_code' => ['nullable', 'string', 'max:16'],
 
@@ -78,7 +90,7 @@ class CreateNewUser implements CreatesNewUsers
                 'password' => $input['password'],
                 'date_of_birth' => $input['date_of_birth'] ?? null,
                 'gender' => $input['gender'] ?? null,
-                'country' => $input['country'] ?? 'BD',
+                'country' => $input['country'] ?? app(Countries::class)->default(),
                 'nationality' => $input['nationality'] ?? null,
             ]);
 

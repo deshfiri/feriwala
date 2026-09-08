@@ -5,12 +5,14 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Domain\Account\Actions\AcceptStaffInvitation;
+use App\Domain\Account\Enums\Gender;
 use App\Domain\Account\Models\AccountInvitation;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\PasskeyLoginResponse;
 use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
+use App\Support\Localization\Countries;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -86,6 +88,19 @@ class FortifyServiceProvider extends ServiceProvider
 
         Fortify::registerView(fn (Request $request) => Inertia::render('auth/register', [
             'staffInvitation' => $this->staffInvitation($request),
+
+            /*
+             * The pickers come from the same lists the validator checks against
+             * (§5.2). A form offering options the rules refuse — or refusing
+             * ones it offers — is the failure mode this avoids.
+             */
+            'countries' => app(Countries::class)->options(),
+            'defaultCountry' => app(Countries::class)->default(),
+            'genders' => Gender::options(),
+
+            // Prefilled from a referral link so the code is not retyped, and so
+            // a referrer who shared a link is actually credited (§25.1).
+            'referralCode' => $request->string('ref')->toString() ?: null,
         ]));
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));

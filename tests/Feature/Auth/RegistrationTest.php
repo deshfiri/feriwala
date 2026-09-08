@@ -55,6 +55,115 @@ test('new users can register', function () {
     $response->assertRedirect(route('dashboard'));
 });
 
+describe('the form and the validator agree', function () {
+    it('hands the screen every list it has to offer', function () {
+        /*
+         * The failure this guards: the form asked for four fields while the
+         * validator wanted seven, so every real registration failed on a mobile
+         * number the form never collected. The pickers come from the same lists
+         * the rules check against, or a form offers options that are refused.
+         */
+        $this->get(route('register'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('auth/register')
+                ->has('countries')
+                ->has('genders', 4)
+                ->where('defaultCountry', 'BD'),
+            );
+    });
+
+    it('carries a referral code in from the link so it is not retyped', function () {
+        $this->get(route('register', ['ref' => 'ABCD2345']))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('referralCode', 'ABCD2345'),
+            );
+    });
+
+    it('records the optional details when they are given', function () {
+        $this->post(route('register.store'), [
+            'name' => 'Karim Rahman',
+            'email' => 'karim@example.com',
+            'mobile' => '+8801712345601',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'date_of_birth' => '1990-04-12',
+            'gender' => 'male',
+            'country' => 'BD',
+            'nationality' => 'Bangladeshi',
+            'terms_accepted' => '1',
+            'privacy_accepted' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $user = User::where('email', 'karim@example.com')->firstOrFail();
+
+        expect($user->date_of_birth->toDateString())->toBe('1990-04-12')
+            ->and($user->gender)->toBe('male')
+            ->and($user->country)->toBe('BD')
+            ->and($user->nationality)->toBe('Bangladeshi');
+    });
+
+    it('refuses a gender outside the offered set', function () {
+        // Free text accumulates "M", "male", "Male " and "পুরুষ" for one answer,
+        // and no report can group them afterwards.
+        $this->from(route('register'))->post(route('register.store'), [
+            'name' => 'Test User',
+            'email' => 'gender@example.com',
+            'mobile' => '+8801712345602',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'gender' => 'whatever they typed',
+            'terms_accepted' => '1',
+            'privacy_accepted' => '1',
+        ])->assertSessionHasErrors('gender');
+
+        expect(User::where('email', 'gender@example.com')->exists())->toBeFalse();
+    });
+
+    it('refuses a country outside the supported registry', function () {
+        // A country nobody can resolve is a scope rule that matches nobody.
+        $this->from(route('register'))->post(route('register.store'), [
+            'name' => 'Test User',
+            'email' => 'country@example.com',
+            'mobile' => '+8801712345603',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'country' => 'ZZ',
+            'terms_accepted' => '1',
+            'privacy_accepted' => '1',
+        ])->assertSessionHasErrors('country');
+    });
+
+    it('refuses a birth date in the future', function () {
+        $this->from(route('register'))->post(route('register.store'), [
+            'name' => 'Test User',
+            'email' => 'dob@example.com',
+            'mobile' => '+8801712345604',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'date_of_birth' => now()->addDay()->toDateString(),
+            'terms_accepted' => '1',
+            'privacy_accepted' => '1',
+        ])->assertSessionHasErrors('date_of_birth');
+    });
+
+    it('defaults the country rather than storing nothing', function () {
+        // Every account is scoped by country somewhere — KYC requirements,
+        // courier zones, tax. A null there is a row no rule can match.
+        $this->post(route('register.store'), [
+            'name' => 'Test User',
+            'email' => 'default@example.com',
+            'mobile' => '+8801712345605',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'terms_accepted' => '1',
+            'privacy_accepted' => '1',
+        ]);
+
+        expect(User::where('email', 'default@example.com')->value('country'))->toBe('BD');
+    });
+});
+
 test('registration is refused without accepting the terms and privacy policy', function () {
     $response = $this->from(route('register'))->post(route('register.store'), [
         'name' => 'Test User',

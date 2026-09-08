@@ -191,7 +191,18 @@ renamed, and entries are never deleted.
 - [x] **P1-3** `AccountStatus` — all 22 statuses from §5.3 with a guarded transition map. `ApprovalPending` is the **only** route into `Active` (§5.1, §44); KYC rejection allows resubmission (§7.3); low balance and package expiry both restore to `Active` (§24.3, §8.4). Helpers: `isActivated()`, `isOnboarding()`, `canTransact()`, `tone()`. 26 tests
 - [x] **P1-4** `user_status_history` + `ChangeAccountStatus` — transition and history written in **one transaction**; internal and user-visible notes kept in separate columns (§7.3); append-only — 10 tests
 - [x] **P1-5** `user_addresses` + `AddressType`, with `toSnapshot()` so an order keeps its own immutable copy
-- [~] **P1-6** `CreateNewUser` extended for §5.2: mobile (required, unique), DOB, gender, country, nationality, and **validated** T&C + privacy acceptance recorded with timestamps. _Registration UI still to build_
+- [x] **P1-6** `CreateNewUser` extended for §5.2: mobile (required, unique), DOB, gender, country, nationality, and **validated** T&C + privacy acceptance recorded with timestamps.
+
+    _Registration was broken, not merely unfinished._ The form collected four fields while the validator
+    required seven, so every real sign-up failed on a mobile number the form never asked for — invisible to
+    the tests, which posted the fields directly. The form now asks for exactly what the action requires, and
+    a browser-driven registration confirms the whole thing serialises, checkboxes included.
+
+    Gender and country became closed sets on the way. `country` was `size:2` free text, which accepts `ZZ` —
+    a value no KYC scope rule, courier zone or tax rule can ever match; it now comes from the same
+    `Countries` registry the pickers are built from, and defaults rather than storing null. Gender is an
+    enum with `Other` (Bangladesh recognises a third gender in law) and `Undisclosed` kept distinct from
+    null: asked and declined is not the same as never asked — 14 tests
 - [x] **P1-7** `ReferralCode` + `ResolveReferrer`: unambiguous 8-char alphabet, random not sequential (so the user base cannot be enumerated), normalises lower-case/spaced input, and **only an Active account can refer** (§25.1). A wrong code never blocks registration — 8 tests
 - [ ] **P1-8** Email verification flow (Fortify) wired to account status
 - [x] **P1-9** Mobile OTP: `VerificationCodes` (hashed in Redis, constant-time compare, 5-attempt budget, 5-min TTL, 60s resend cooldown, identifier hashed into the key) + `SendMobileVerificationCode` / `VerifyMobile` with bilingual SMS. Verification never drags a further-along account backwards — 26 tests
