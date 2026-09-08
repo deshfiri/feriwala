@@ -13,6 +13,7 @@ use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
 use App\Support\Localization\Countries;
+use App\Support\Security\PasswordPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -80,6 +81,7 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
             'email' => $request->email,
             'token' => $request->route('token'),
+            'passwordRules' => PasswordPolicy::hint(),
         ]));
 
         Fortify::requestPasswordResetLinkView(fn (Request $request) => Inertia::render('auth/forgot-password', [
@@ -88,6 +90,14 @@ class FortifyServiceProvider extends ServiceProvider
 
         Fortify::registerView(fn (Request $request) => Inertia::render('auth/register', [
             'staffInvitation' => $this->staffInvitation($request),
+
+            /*
+             * The same policy the validator applies, in the form a password
+             * manager reads. Both of these screens declared the prop and neither
+             * was given it, so the two flows where a password is *first* chosen
+             * were the two with no guidance at all.
+             */
+            'passwordRules' => PasswordPolicy::hint(),
 
             /*
              * The pickers come from the same lists the validator checks against

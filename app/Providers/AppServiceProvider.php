@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Listeners\RecordEmailVerification;
+use App\Support\Security\PasswordPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Date;
@@ -45,14 +46,14 @@ class AppServiceProvider extends ServiceProvider
             app()->isProduction(),
         );
 
-        Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
-                ->mixedCase()
-                ->letters()
-                ->numbers()
-                ->symbols()
-                ->uncompromised()
-            : null,
-        );
+        /*
+         * §6's strong-password rule, in every environment.
+         *
+         * It was production-only, and returning null there means Laravel falls
+         * back to eight characters and nothing else — so development, staging
+         * and the entire test suite ran a policy nobody had chosen, and the real
+         * one was never exercised anywhere it could be observed.
+         */
+        Password::defaults(fn (): Password => PasswordPolicy::rules());
     }
 }

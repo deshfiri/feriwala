@@ -46,8 +46,8 @@ describe('where an unverified person belongs', function () {
             'name' => 'New Person',
             'email' => 'new@example.com',
             'mobile' => '+8801712345690',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => testStrongPassword(),
+            'password_confirmation' => testStrongPassword(),
             'terms_accepted' => '1',
             'privacy_accepted' => '1',
         ])->assertRedirect(route('verification.notice', absolute: false));

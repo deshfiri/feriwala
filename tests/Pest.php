@@ -165,6 +165,20 @@ function testAccountReadyForActivation(int $readyDaysAgo = 0): BusinessAccount
  * A Feriwala staff member: an active login holding `$role`, and **no business
  * account** — which is the whole point of D23.
  */
+/**
+ * A password the §6 policy accepts: twelve characters, mixed case, a digit and
+ * a symbol.
+ *
+ * The factory's 'password' is fine for signing *in*, which is not
+ * strength-checked. Anything that writes a password needs this, and needs it
+ * from one place — a literal per test file is a policy change that has to be
+ * chased through thirty payloads.
+ */
+function testStrongPassword(): string
+{
+    return 'Feriwala!Test#2026';
+}
+
 function testPlatformStaff(PlatformRole $role): User
 {
     $user = User::factory()->staff()->create();

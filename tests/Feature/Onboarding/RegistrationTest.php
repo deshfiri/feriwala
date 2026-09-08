@@ -16,8 +16,10 @@ function registrationInput(array $overrides = []): array
         'name' => 'Nusrat Jahan',
         'email' => 'nusrat@example.test',
         'mobile' => '+8801712345678',
-        'password' => 'correct-horse-battery-staple',
-        'password_confirmation' => 'correct-horse-battery-staple',
+        // A long passphrase is not enough on its own: §6's policy asks for a
+        // digit and a symbol as well, so the fixture has to carry them.
+        'password' => testStrongPassword(),
+        'password_confirmation' => testStrongPassword(),
         'terms_accepted' => '1',
         'privacy_accepted' => '1',
         ...$overrides,
