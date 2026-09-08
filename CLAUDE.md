@@ -326,6 +326,12 @@ vendor/bin/pest                   # tests
 npm run check                     # format + lint + types
 ```
 
+`vp` owns TypeScript and CSS formatting. If your editor also formats on save, point it at
+`vp check --fix` or turn it off for this project — the two disagree about how ternary continuations
+are indented, and a file open in the editor will keep reappearing in `vp check` no matter how often
+it is fixed. `resources/js/pages/onboarding/kyc-history.tsx` did this five times in one sitting. It is
+whitespace and blocks nothing; just do not spend commits on it.
+
 Run PHPStan through `composer types:check`, not `vendor/bin/phpstan` directly. A stale result cache
 in `build/phpstan` puts the run on a path where bootstrap files never execute, and Larastan then
 dies with `Undefined constant "Larastan\Larastan\LARAVEL_VERSION"` — a message that points nowhere

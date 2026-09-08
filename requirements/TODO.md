@@ -20,13 +20,23 @@ it can operate it. Where a screen genuinely cannot be finished because the modul
 been built, the **working part ships**, no fake control is added, and the gap is recorded here with
 the task that owns it. Every entry names the screen to return to.
 
-| #    | Waiting on                     | Owning task | Screen to finish           | What to add                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---- | ------------------------------ | ----------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| FD-1 | Admin Account Detail screen    | **P1-79**   | `admin/accounts/{account}` | The §7.2 **Request KYC update** action: applicant-visible instructions, internal reason, optional request-specific deadline, required document selection, confirmation before submission, `kyc.verify` check, success notification, and the request history. The endpoint exists and is tested; it must stay unreachable from any unrelated UI, and explicitly **not** from the activation queue, which represents pending activation rather than trading accounts |
-| FD-3 | Vitest + React Testing Library | **P0-56**   | —                          | Interactive component behaviour: dialog state, scope-rule editing, reorder controls, conditional fields. Pest continues to cover authorization, Inertia props, server validation and permission visibility, which is where the security-relevant assertions belong                                                                                                                                                                                                 |
+| #    | Waiting on                     | Owning task | Screen to finish | What to add                                                                                                                                                                                                                                                        |
+| ---- | ------------------------------ | ----------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FD-3 | Vitest + React Testing Library | **P0-56**   | —                | Interactive component behaviour: dialog state, scope-rule editing, reorder controls, conditional fields. Pest continues to cover authorization, Inertia props, server validation and permission visibility, which is where the security-relevant assertions belong |
 
 **Discharged:** FD-2 — P1-32 shipped, and `admin/kyc/document-types` now offers a searchable package
 selector backed by the real catalogue.
+
+**Discharged:** FD-1 — P1-79 shipped `admin/accounts/{account}` with the §7.2 request on it: internal
+reason and applicant-visible instructions as separate fields, an optional request-specific deadline,
+document selection bounded by the scope rules, a stated consequence before submission, the permission
+check, the owner notification, and the request history carried on the round list. It is reachable from
+the KYC review screen and from nowhere else — in particular **not** from the activation queue, which
+holds accounts awaiting activation and never a trading one.
+
+Landed across `76dc00289eb21836bd4532b939faf7a394f490cc` (implementation),
+`edee7640c1a360095abd5fc622f43db2d223c7c1` (the activation-screen test the first commit needed and
+shipped without, which left main failing for two commits) and `1139e4d` (formatting).
 
 ## Where a signed-in person lands
 
