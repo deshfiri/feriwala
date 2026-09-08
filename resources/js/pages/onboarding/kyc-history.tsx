@@ -161,11 +161,11 @@ function Dates({ round }: { round: KycHistoryRound }) {
 
     const parts = [
         round.opened_at &&
-        t('kyc.history.opened', { date: format(round.opened_at) }),
+            t('kyc.history.opened', { date: format(round.opened_at) }),
         round.submitted_at &&
-        t('kyc.history.submitted', { date: format(round.submitted_at) }),
+            t('kyc.history.submitted', { date: format(round.submitted_at) }),
         round.reviewed_at &&
-        t('kyc.history.reviewed', { date: format(round.reviewed_at) }),
+            t('kyc.history.reviewed', { date: format(round.reviewed_at) }),
     ].filter(Boolean);
 
     return <p className="text-muted-foreground text-sm">{parts.join(' · ')}</p>;
@@ -197,9 +197,9 @@ function Deadline({ round }: { round: KycHistoryRound }) {
             {round.days_remaining === null
                 ? t('kyc.history.due', { date: due })
                 : t('kyc.history.due_with_days', {
-                    date: due,
-                    count: Math.max(round.days_remaining, 0),
-                })}
+                      date: due,
+                      count: Math.max(round.days_remaining, 0),
+                  })}
         </p>
     );
 }
