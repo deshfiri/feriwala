@@ -5,6 +5,7 @@ namespace App\Domain\Package;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\PackageFeatureType;
+use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
 
 /**
@@ -116,17 +117,32 @@ class Entitlements
 
     /**
      * The account's package, if it currently entitles them to anything.
+     *
+     * `current_user_package_id` is a pointer written at activation, and nothing
+     * rewrites it when a term ends. So it is checked first — it is the cheap,
+     * usually-right answer — and then verified against
+     * {@see UserPackage::entitlesNow()} rather than trusted.
+     *
+     * When the pointer leads nowhere entitling, the newest subscription that
+     * does is the effective one. A renewal or an upgrade writes a new row, and
+     * an account that has paid must not be told it has nothing because a column
+     * still names the term it replaced.
      */
     public function activePackage(BusinessAccount $account): ?UserPackage
     {
-        $userPackage = $account->relationLoaded('currentPackage')
+        $pointed = $account->relationLoaded('currentPackage')
             ? $account->currentPackage
             : $account->currentPackage()->with('package.features')->first();
 
-        if ($userPackage === null || ! $userPackage->entitlesNow()) {
-            return null;
+        if ($pointed !== null && $pointed->entitlesNow()) {
+            return $pointed;
         }
 
-        return $userPackage;
+        return $account->packages()
+            ->whereIn('status', UserPackageStatus::entitling())
+            ->with('package.features')
+            ->latest('id')
+            ->get()
+            ->first(fn (UserPackage $subscription) => $subscription->entitlesNow());
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountIsEntitled;
 use App\Http\Middleware\EnsureBusinessAccountIsActivated;
 use App\Http\Middleware\EnsureIdentityHasPlatformAccess;
 use App\Http\Middleware\HandleAppearance;
@@ -45,6 +46,15 @@ return Application::configure(basePath: dirname(__DIR__))
             // The commercial gate, applied to business ERP routes only.
             // Administration is identity plus permission and never uses it.
             'business.activated' => EnsureBusinessAccountIsActivated::class,
+
+            /*
+             * The entitlement gate: `entitled:staff_limit` (§8.1).
+             *
+             * Sits *inside* `business.activated` — an account has to be trading
+             * before what it bought is the question. Never on an admin route:
+             * administration is permission-driven and needs no package (D23).
+             */
+            'entitled' => EnsureAccountIsEntitled::class,
         ]);
 
         /*

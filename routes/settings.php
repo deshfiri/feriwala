@@ -54,15 +54,24 @@ Route::middleware(['auth', 'verified', 'business.activated'])->group(function ()
      * between. Staff are addressed by their own public id and looked up inside
      * the caller's account.
      */
-    Route::get('settings/staff', [StaffController::class, 'index'])->name('staff.index');
-    Route::post('settings/staff/invitations', [StaffController::class, 'invite'])
-        ->name('staff.invitations.store');
-    Route::delete('settings/staff/invitations/{invitation}', [StaffController::class, 'revokeInvitation'])
-        ->name('staff.invitations.destroy');
-    Route::patch('settings/staff/{staff}', [StaffController::class, 'updateRole'])
-        ->name('staff.update');
-    Route::delete('settings/staff/{staff}', [StaffController::class, 'remove'])
-        ->name('staff.destroy');
+    /*
+     * Staff is a package facility (§8.1), so it carries the entitlement gate as
+     * well as the policies. The policies answer "may *this person* manage
+     * staff"; the gate answers "did this account buy staff at all" — different
+     * questions, and hiding the nav entry answers neither to somebody who types
+     * the URL (P1-11).
+     */
+    Route::middleware('entitled:staff_limit')->group(function () {
+        Route::get('settings/staff', [StaffController::class, 'index'])->name('staff.index');
+        Route::post('settings/staff/invitations', [StaffController::class, 'invite'])
+            ->name('staff.invitations.store');
+        Route::delete('settings/staff/invitations/{invitation}', [StaffController::class, 'revokeInvitation'])
+            ->name('staff.invitations.destroy');
+        Route::patch('settings/staff/{staff}', [StaffController::class, 'updateRole'])
+            ->name('staff.update');
+        Route::delete('settings/staff/{staff}', [StaffController::class, 'remove'])
+            ->name('staff.destroy');
+    });
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

@@ -83,7 +83,17 @@ enum UserPackageStatus: string implements TransitionableState
      */
     public function entitles(): bool
     {
-        return in_array($this, [self::Active, self::RenewalDue, self::GracePeriod], true);
+        return in_array($this, self::entitling(), true);
+    }
+
+    /**
+     * The statuses that grant anything, for querying rather than testing one.
+     *
+     * @return array<int, self>
+     */
+    public static function entitling(): array
+    {
+        return [self::Active, self::RenewalDue, self::GracePeriod];
     }
 
     public function tone(): string
