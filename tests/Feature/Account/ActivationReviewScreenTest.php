@@ -223,9 +223,15 @@ describe('the account page', function () {
             );
     });
 
-    it('offers no decision on the approver’s own account', function () {
-        // A reviewer who also owns a business must not decide on it. The
-        // policy refuses on membership, not on the account's status.
+    it('closes the review screen entirely on the approver’s own account', function () {
+        /*
+         * A reviewer who also owns a business must not decide on it. This used
+         * to be enforced by rendering the page with the decision controls
+         * withheld — but the page lists the reviewer `internal_note` beside each
+         * status change, so it also handed them the private notes written about
+         * their own application. §7.2 puts that beyond the applicant, whoever
+         * else they happen to be, so membership now refuses the screen itself.
+         */
         $own = testBusinessAccount(AccountStatus::ApprovalPending);
         $own->memberships()->create([
             'user_id' => $this->approver->id,
@@ -234,11 +240,7 @@ describe('the account page', function () {
 
         $this->actingAs($this->approver)
             ->get(route('admin.activations.show', $own))
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('account.can_approve', false)
-                ->where('account.can_suspend', false)
-                ->where('account.can_request_resubmission', false),
-            );
+            ->assertForbidden();
     });
 });
 
