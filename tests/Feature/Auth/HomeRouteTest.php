@@ -218,9 +218,17 @@ describe('the eight cases that must stay covered', function () {
     });
 
     it('uses the same resolver when registering', function () {
-        // Registering with an invitation creates no business account, so a
-        // fixed /dashboard would drop that person into the §5.4 funnel instead
-        // of the invitation they came for.
+        /*
+         * Registering with an invitation creates no business account, so a
+         * fixed /dashboard would drop that person into the §5.4 funnel instead
+         * of the invitation they came for.
+         *
+         * The first answer is now the verification screen (P1-8): the address
+         * is unconfirmed, and every other destination sits behind the
+         * `verified` middleware. What matters is that both answers come from
+         * the resolver rather than from a constant — so the second hop is
+         * asserted too.
+         */
         $account = testAccountWithStaffLimit(5);
 
         $invitation = AccountInvitation::factory()->to('joiner@example.com')->create([
@@ -236,7 +244,13 @@ describe('the eight cases that must stay covered', function () {
             'terms_accepted' => '1',
             'privacy_accepted' => '1',
             'invitation' => $invitation->token,
-        ])->assertRedirect(route('dashboard', absolute: false));
+        ])->assertRedirect(route('verification.notice', absolute: false));
+
+        $joiner = User::where('email', 'joiner@example.com')->firstOrFail();
+        $joiner->markEmailAsVerified();
+
+        expect(app(HomeRoute::class)->urlFor($joiner->refresh()))
+            ->toBe(route('dashboard', absolute: false));
     });
 
     it('uses the same resolver after verifying an email', function () {

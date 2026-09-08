@@ -205,7 +205,28 @@ renamed, and entries are never deleted.
     null: asked and declined is not the same as never asked — 14 tests
 
 - [x] **P1-7** `ReferralCode` + `ResolveReferrer`: unambiguous 8-char alphabet, random not sequential (so the user base cannot be enumerated), normalises lower-case/spaced input, and **only an Active account can refer** (§25.1). A wrong code never blocks registration — 8 tests
-- [ ] **P1-8** Email verification flow (Fortify) wired to account status
+- [x] **P1-8** Email verification, wired to the **identity** rather than the account. Fortify's
+      `emailVerification` feature was never enabled and `User` never implemented `MustVerifyEmail`, so the
+      `verified` middleware already sitting on every ERP route was passing everyone — the gate existed with
+      nothing behind it.
+
+    _The boundary._ Confirming an address says a person reads a mailbox and settles nothing commercial: §5.1
+    still wants KYC, a package, payment and approval afterwards. Verification touches neither the business
+    account nor `identity_status`, so a suspended identity that confirms an address is still suspended and
+    the identity gate still turns it away. Both asserted, not assumed.
+
+    _The landing._ `HomeRoute` answers with the verification screen before anything else, because every
+    other destination it can name sits behind `verified` — any other answer is a redirect straight back.
+    Afterwards the same resolver runs again, so a pending invitation, an onboarding business, an active one
+    and platform staff each land where they belong; all four are pinned.
+
+    Laravel's signed-link guarantees are kept and tested rather than trusted: expired, tampered, wrong-user
+    and wrong-hash links are each refused. The audit entry records the **system** as actor — somebody
+    opening a link in their own mailbox is not an administrator acting on an account — and is written once
+    per identity however many times the event arrives. `verification.` moved out of the §5.4 pending list
+    into the allow-list; the existing dead-prefix test caught that the moment the routes appeared, which is
+    what it was written for — 20 tests
+
 - [x] **P1-9** Mobile OTP: `VerificationCodes` (hashed in Redis, constant-time compare, 5-attempt budget, 5-min TTL, 60s resend cooldown, identifier hashed into the key) + `SendMobileVerificationCode` / `VerifyMobile` with bilingual SMS. Verification never drags a further-along account backwards — 26 tests
 - [x] **P1-10** Pre-activation access gate (§5.4). `EnsureAccountIsActivated` existed but was registered nowhere; now aliased as `activated` and applied to the authenticated ERP and settings groups. An **allow-list**, so a new route is shut by default — a test asserts no listed prefix matches nothing (`payment.` was dead while the real routes are `checkout.`), and unbuilt §5.4 areas are declared in a separate `PENDING_ROUTE_PREFIXES` so a placeholder is distinguishable from a typo. Administration is deliberately not exempt: a suspended staff member loses the panel with everything else — 8 tests
 - [ ] **P1-11** Post-activation feature gate driven by package entitlements

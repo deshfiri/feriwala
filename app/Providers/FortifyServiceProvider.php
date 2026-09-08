@@ -103,6 +103,17 @@ class FortifyServiceProvider extends ServiceProvider
             'referralCode' => $request->string('ref')->toString() ?: null,
         ]));
 
+        Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/verify-email', [
+            /*
+             * Masked. The screen has to name the address so somebody who
+             * mistyped it can see that they did, but it renders on a page a
+             * shoulder-surfer can read and the full address is not needed to
+             * recognise your own.
+             */
+            'email' => $this->maskEmail($request->user()?->email),
+            'status' => $request->session()->get('status'),
+        ]));
+
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
 
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
@@ -142,6 +153,27 @@ class FortifyServiceProvider extends ServiceProvider
      * The token identifies the invitation; it authorises nothing. Acceptance
      * checks who is signed in ({@see AcceptStaffInvitation}).
      *
+     * An address a person can recognise as theirs without it being readable
+     * over their shoulder.
+     *
+     * The first character and the domain survive, which is enough to spot a
+     * typo in your own address and not enough to be somebody else's.
+     */
+    private function maskEmail(?string $email): ?string
+    {
+        if ($email === null || ! str_contains($email, '@')) {
+            return $email;
+        }
+
+        [$local, $domain] = explode('@', $email, 2);
+
+        $visible = mb_substr($local, 0, 1);
+        $hidden = max(mb_strlen($local) - 1, 1);
+
+        return $visible.str_repeat('•', min($hidden, 8)).'@'.$domain;
+    }
+
+    /**
      * @return array{token: string, account: string, role: string}|null
      */
     private function staffInvitation(Request $request): ?array

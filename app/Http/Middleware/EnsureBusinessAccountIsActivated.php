@@ -56,6 +56,14 @@ class EnsureBusinessAccountIsActivated
         'logout',
         'password.',
 
+        /*
+         * Confirming an email address (§5.1, P1-8). It has to open before
+         * activation for the obvious reason: nobody gets activated without
+         * confirming, and a gate that held this closed would be asking for a
+         * step it also refuses to let anyone take.
+         */
+        'verification.',
+
         ...self::PENDING_ROUTE_PREFIXES,
     ];
 
@@ -72,7 +80,6 @@ class EnsureBusinessAccountIsActivated
     public const PENDING_ROUTE_PREFIXES = [
         'support.',         // not built — Phase 8
         'notifications.',   // not built — Phase 8
-        'verification.',    // email and mobile verification are not wired yet
     ];
 
     public function __construct(

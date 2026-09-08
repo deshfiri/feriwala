@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Listeners\RecordEmailVerification;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -24,6 +27,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        // Registered explicitly rather than left to discovery: an audit entry
+        // that stops being written because a convention changed is one nobody
+        // notices is missing.
+        Event::listen(Verified::class, RecordEmailVerification::class);
     }
 
     /**

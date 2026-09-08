@@ -4,6 +4,7 @@ use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\AccountInvitation;
 use App\Models\User;
+use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('registration screen can be rendered', function () {
@@ -52,10 +53,63 @@ test('new users can register', function () {
     expect($user)->not->toBeNull()
         ->and($user->businessAccount->status)->toBe(AccountStatus::Registered);
 
-    $response->assertRedirect(route('dashboard'));
+    // Not the dashboard: §5.1 confirms the address first, and every ERP
+    // destination sits behind the `verified` middleware (P1-8).
+    $response->assertRedirect(route('verification.notice'));
 });
 
 describe('the form and the validator agree', function () {
+    it('offers an input for every field the action validates', function () {
+        /*
+         * The regression this exists for. The form collected four fields while
+         * `CreateNewUser` required seven, so every real sign-up failed on a
+         * mobile number the form never asked for — and no test noticed, because
+         * they all post the fields directly rather than through the page a
+         * person actually fills in.
+         *
+         * Read from the action's own rules, so adding a rule without adding the
+         * field fails here rather than in production.
+         */
+        $action = File::get(app_path('Actions/Fortify/CreateNewUser.php'));
+        $page = File::get(resource_path('js/pages/auth/register.tsx'));
+
+        preg_match(
+            "/Validator::make\(\\\$input, \[(?<rules>.*?)\n        \], \[/s",
+            $action,
+            $block,
+        );
+
+        expect(array_key_exists('rules', $block))
+            ->toBeTrue('Could not read the validation rules out of CreateNewUser.');
+
+        preg_match_all("/^\s{12}'(?<field>[a-z_]+)' =>/m", $block['rules'], $matches);
+
+        $fields = array_diff($matches['field'], [
+            // Carried in a hidden input only when an invitation is being
+            // accepted, so it is legitimately absent from the default form.
+            'invitation',
+        ]);
+
+        expect($fields)->not->toBeEmpty();
+
+        foreach ($fields as $field) {
+            expect(str_contains($page, "name=\"{$field}\""))->toBeTrue(
+                "The registration form has no input for [{$field}], which CreateNewUser validates.",
+            );
+        }
+    });
+
+    it('spreads the profile rules the trait adds, not only the inline ones', function () {
+        // `name` and `email` come from ProfileValidationRules rather than the
+        // inline array, so the scan above cannot see them. They are the two
+        // fields nobody would forget, but the form is asserted to carry them
+        // rather than assumed to.
+        $page = File::get(resource_path('js/pages/auth/register.tsx'));
+
+        expect($page)->toContain('name="name"')
+            ->and($page)->toContain('name="email"');
+    });
+
     it('hands the screen every list it has to offer', function () {
         /*
          * The failure this guards: the form asked for four fields while the

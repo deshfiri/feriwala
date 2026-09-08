@@ -162,6 +162,18 @@ return [
 
     'features' => [
         Features::registration(),
+
+        /*
+         * §5.1 step one. Verification is an **identity** fact — it says this
+         * human reads this mailbox — so it gates sign-in-level access and never
+         * touches the business account's commercial lifecycle (§6, D23).
+         *
+         * `App\Models\User` implements `MustVerifyEmail`, which is what makes
+         * the `verified` middleware on the ERP routes mean anything; without it
+         * the middleware silently passes everyone.
+         */
+        Features::emailVerification(),
+
         Features::resetPasswords(),
         Features::twoFactorAuthentication([
             'confirm' => true,

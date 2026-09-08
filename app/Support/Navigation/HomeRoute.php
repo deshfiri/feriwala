@@ -57,6 +57,21 @@ class HomeRoute
             return 'login';
         }
 
+        /*
+         * Before anything else. An unverified identity has not yet shown that
+         * it reads the mailbox it registered with, and every destination below
+         * this line sits behind the `verified` middleware — so answering with
+         * one of them produces a redirect straight back here, which is the
+         * loop this class exists to prevent (§5.1).
+         *
+         * It is an identity question, not a commercial one: platform staff and
+         * business owners alike come through here, and neither reaches their
+         * own landing until the address is confirmed.
+         */
+        if (! $user->hasVerifiedEmail()) {
+            return 'verification.notice';
+        }
+
         if ($user->businessAccount !== null) {
             return 'dashboard';
         }

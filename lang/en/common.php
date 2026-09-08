@@ -42,6 +42,19 @@ return [
         'switch' => 'Change language',
     ],
 
+    'verify_email' => [
+        'title' => 'Confirm your email address',
+        'description' => 'We sent a link to :email. Open it to finish setting up your account.',
+        'why' => 'Until it is confirmed we cannot reach you about payments, verification or your orders.',
+        'not_arrived' => 'Nothing arrived? Check your spam folder, then send it again.',
+        'resend' => 'Send it again',
+        'sending' => 'Sending…',
+        'sent' => 'Sent. Check your inbox for the new link.',
+        'throttled' => 'You have asked for several links in a short time. Wait a minute and try again.',
+        'wrong_address' => 'Wrong address? Sign out and register again.',
+        'sign_out' => 'Sign out',
+    ],
+
     'settings' => [
         'title' => 'Settings',
         'description' => 'Manage your profile and account settings',
