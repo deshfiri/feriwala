@@ -17,12 +17,25 @@ type QuoteLine = {
     is_deduction: boolean;
 };
 
+/** One rate's share of the tax, behind the single Tax line (D19). */
+type TaxCharge = {
+    code: string;
+    label: string;
+    rate_basis_points: number;
+    mode: string;
+    net: Money;
+    tax: Money;
+    gross: Money;
+};
+
 type Quote = {
     lines: QuoteLine[];
     subtotal: Money;
     total: Money;
     currency: string;
     is_payable: boolean;
+    tax: TaxCharge[];
+    tax_included: Money;
 };
 
 /**
@@ -106,6 +119,37 @@ export default function Checkout({
                             </dd>
                         </div>
                     </dl>
+
+                    {/*
+                        The tax behind the single Tax line, per rate (D19). A
+                        rolled-up figure cannot answer "at what rate, on what",
+                        which is the question anybody filing a return has.
+                        Inclusive tax is shown here and nowhere else: it is
+                        already inside the fees above, and a second line would
+                        read as a second charge.
+                    */}
+                    {quote.tax.length > 0 && (
+                        <dl className="border-border divide-border divide-y border-t">
+                            {quote.tax.map((charge) => (
+                                <div
+                                    key={`${charge.code}-${charge.rate_basis_points}-${charge.mode}`}
+                                    className="text-muted-foreground flex items-center justify-between gap-4 px-4 py-2 text-xs"
+                                >
+                                    <dt>
+                                        {t('billing.tax.checkout_line', {
+                                            label: charge.label,
+                                            net: charge.net.formatted,
+                                        })}
+                                        {charge.mode === 'inclusive' &&
+                                            ` · ${t('billing.tax.checkout_included', { amount: charge.tax.formatted })}`}
+                                    </dt>
+                                    <dd className="tabular-nums">
+                                        {charge.tax.formatted}
+                                    </dd>
+                                </div>
+                            ))}
+                        </dl>
+                    )}
                 </section>
 
                 {/*

@@ -207,6 +207,23 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('billing.coupons.withdraw');
 
         /*
+         * Tax rates and the rules that point at them (D19, P1-47).
+         *
+         * Two things, not one: a rate is what a code is worth on a date, a rule
+         * is what that code applies to. Editing either in place would rewrite
+         * the arithmetic of invoices already issued, so both are opened and
+         * closed rather than changed.
+         */
+        Route::post('billing/tax-rates', [BillingController::class, 'storeTaxRate'])
+            ->name('billing.tax-rates.store');
+        Route::delete('billing/tax-rates/{rate}', [BillingController::class, 'closeTaxRate'])
+            ->name('billing.tax-rates.close');
+        Route::post('billing/tax-rules', [BillingController::class, 'storeTaxRule'])
+            ->name('billing.tax-rules.store');
+        Route::delete('billing/tax-rules/{rule}', [BillingController::class, 'closeTaxRule'])
+            ->name('billing.tax-rules.close');
+
+        /*
          * Giving an account a package without a sale (§8.3, P1-40).
          *
          * Keyed on the account, because the business being given something is

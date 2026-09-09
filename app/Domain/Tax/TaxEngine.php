@@ -11,6 +11,7 @@ use App\Domain\Tax\Models\TaxExemption;
 use App\Domain\Tax\Models\TaxRate;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The single place tax is worked out (D19, §9, §36.1).
@@ -34,6 +35,10 @@ use Carbon\CarbonImmutable;
  * hardcoding a statutory rate on assumption, so an unconfigured system must
  * undercharge visibly rather than invent 15% and put a number nobody agreed
  * onto real invoices.
+ *
+ * *Visibly* is the operative word. A rule naming a code whose rate has been
+ * withdrawn also charges nothing — and that is a misconfiguration, not a
+ * decision, so it is logged rather than passed over in silence.
  */
 class TaxEngine
 {
@@ -80,7 +85,25 @@ class TaxEngine
 
         $rate = $this->rules->rateFor($rule->tax_code, $at);
 
-        if ($rate === null || $rate->isZeroRated()) {
+        if ($rate === null) {
+            /*
+             * The rule matched, but the code it names has no rate in force —
+             * withdrawn, not yet started, or never configured. Nothing is
+             * charged, because D19 forbids inventing a statutory rate. But this
+             * is a misconfiguration rather than a decision, and a rule that
+             * quietly taxes nothing looks on the settings screen exactly like a
+             * rule that works, so it is said out loud.
+             */
+            Log::warning('Tax rule matched a code with no rate in force.', [
+                'tax_rule' => $rule->public_id,
+                'tax_code' => $rule->tax_code,
+                'at' => $at->toIso8601String(),
+            ]);
+
+            return TaxCharge::none($amount);
+        }
+
+        if ($rate->isZeroRated()) {
             return TaxCharge::none($amount);
         }
 

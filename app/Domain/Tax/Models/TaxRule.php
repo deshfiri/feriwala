@@ -71,6 +71,18 @@ class TaxRule extends Model
     }
 
     /**
+     * Active and inside its window right now.
+     */
+    public function isInForce(?CarbonImmutable $at = null): bool
+    {
+        $at ??= CarbonImmutable::now();
+
+        return $this->is_active
+            && $this->effective_from->lessThanOrEqualTo($at)
+            && ($this->effective_until === null || $this->effective_until->greaterThan($at));
+    }
+
+    /**
      * Whether this rule targets the thing described by `$scope`/`$value`.
      *
      * The comparison is case-insensitive on the value because a fee type, a

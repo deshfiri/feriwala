@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\Actions\ManageCoupons;
 use App\Domain\Billing\Actions\ManageFeeRules;
+use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\CouponScope;
 use App\Domain\Billing\Enums\DiscountType;
 use App\Domain\Billing\Enums\FeeType;
@@ -11,6 +12,12 @@ use App\Domain\Billing\Models\Coupon;
 use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Domain\Package\Models\Package;
+use App\Domain\Tax\Actions\ManageTaxRules;
+use App\Domain\Tax\Enums\TaxMode;
+use App\Domain\Tax\Enums\TaxScope;
+use App\Domain\Tax\Models\TaxRate;
+use App\Domain\Tax\Models\TaxRule;
+use App\Domain\Tax\TaxRuleResolver;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Money\Currency;
@@ -41,6 +48,8 @@ class BillingController extends Controller
     public function __construct(
         protected ManageFeeRules $feeRules,
         protected ManageCoupons $coupons,
+        protected ManageTaxRules $taxRules,
+        protected TaxRuleResolver $taxResolver,
     ) {}
 
     public function index(Request $request): Response
@@ -122,8 +131,182 @@ class BillingController extends Controller
                 'label' => $scope->label(),
             ], CouponScope::cases()),
 
+            'tax_rates' => TaxRate::query()
+                ->orderBy('code')
+                ->orderByDesc('effective_from')
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn (TaxRate $rate) => [
+                    'id' => $rate->public_id,
+                    'code' => $rate->code,
+                    'name' => $rate->name,
+                    'percent' => $rate->formattedPercent(),
+                    'effective_from' => $rate->effective_from->toIso8601String(),
+                    'effective_until' => $rate->effective_until?->toIso8601String(),
+                    'is_active' => $rate->is_active,
+                    'in_force' => $rate->appliesAt(CarbonImmutable::now()),
+                ])
+                ->all(),
+
+            'tax_rules' => TaxRule::query()
+                ->orderByDesc('effective_from')
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn (TaxRule $rule) => [
+                    'id' => $rule->public_id,
+                    'scope' => $rule->scope->value,
+                    'scope_label' => $rule->scope->label(),
+                    'scope_value' => $rule->scope_value,
+                    'tax_code' => $rule->tax_code,
+                    'mode' => $rule->mode->value,
+                    'mode_label' => $rule->mode->label(),
+                    'priority' => $rule->priority,
+
+                    /*
+                     * What this rule charges **today**, or null when its code
+                     * has no rate in force. A rule taxing nothing because its
+                     * rate was withdrawn looks identical to one that works
+                     * unless the screen says so (D19).
+                     */
+                    'rate' => $this->taxResolver->rateFor($rule->tax_code)?->label(),
+
+                    'effective_from' => $rule->effective_from->toIso8601String(),
+                    'effective_until' => $rule->effective_until?->toIso8601String(),
+                    'is_active' => $rule->is_active,
+                    'in_force' => $rule->isInForce(),
+                    'note' => $rule->note,
+                ])
+                ->all(),
+
+            'tax_scopes' => array_map(fn (TaxScope $scope) => [
+                'value' => $scope->value,
+                'label' => $scope->label(),
+                'requires_value' => $scope->requiresValue(),
+            ], TaxScope::cases()),
+
+            'tax_modes' => array_map(fn (TaxMode $mode) => [
+                'value' => $mode->value,
+                'label' => $mode->label(),
+            ], TaxMode::cases()),
+
+            // The charge components a fee-scoped rule may target. Offering the
+            // untaxable ones would invite a rule that can never fire.
+            'taxable_fees' => array_values(array_map(fn (AllocationType $type) => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ], array_filter(
+                AllocationType::cases(),
+                fn (AllocationType $type) => $type->isTaxable(),
+            ))),
+
             'can' => ['manage' => BillingSettingsPolicy::canManage($actor)],
         ]);
+    }
+
+    public function storeTaxRate(Request $request): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:64'],
+            'name' => ['required', 'string', 'max:191'],
+            'rate_basis_points' => ['required', 'integer', 'min:0', 'max:10000'],
+            'effective_from' => ['required', 'date'],
+            'effective_until' => ['nullable', 'date', 'after:effective_from'],
+        ]);
+
+        try {
+            $this->taxRules->createRate(
+                actor: $actor,
+                code: $validated['code'],
+                name: $validated['name'],
+                basisPoints: (int) $validated['rate_basis_points'],
+                effectiveFrom: CarbonImmutable::parse($validated['effective_from']),
+                effectiveUntil: isset($validated['effective_until'])
+                    ? CarbonImmutable::parse($validated['effective_until'])
+                    : null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['code' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('billing.tax.rate_created')]);
+
+        return back();
+    }
+
+    public function closeTaxRate(Request $request, string $rate): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManage($actor), 403);
+
+        $record = TaxRate::query()->where('public_id', $rate)->firstOrFail();
+
+        $this->taxRules->closeRate($actor, $record);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('billing.tax.rate_closed')]);
+
+        return back();
+    }
+
+    public function storeTaxRule(Request $request): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            'scope' => ['required', Rule::enum(TaxScope::class)],
+            'scope_value' => ['nullable', 'string', 'max:191'],
+            'tax_code' => ['required', 'string', 'max:64'],
+            'mode' => ['required', Rule::enum(TaxMode::class)],
+            'priority' => ['nullable', 'integer', 'min:0', 'max:65535'],
+            'effective_from' => ['required', 'date'],
+            'effective_until' => ['nullable', 'date', 'after:effective_from'],
+            'note' => ['nullable', 'string', 'max:191'],
+        ]);
+
+        try {
+            $this->taxRules->createRule(
+                actor: $actor,
+                scope: TaxScope::from($validated['scope']),
+                scopeValue: $validated['scope_value'] ?? null,
+                taxCode: $validated['tax_code'],
+                mode: TaxMode::from($validated['mode']),
+                effectiveFrom: CarbonImmutable::parse($validated['effective_from']),
+                effectiveUntil: isset($validated['effective_until'])
+                    ? CarbonImmutable::parse($validated['effective_until'])
+                    : null,
+                priority: (int) ($validated['priority'] ?? 0),
+                note: $validated['note'] ?? null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            // Naming a code that does not exist is a legitimate mistake to make
+            // in a form, not an error page.
+            throw ValidationException::withMessages(['tax_code' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('billing.tax.rule_created')]);
+
+        return back();
+    }
+
+    public function closeTaxRule(Request $request, string $rule): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManage($actor), 403);
+
+        $record = TaxRule::query()->where('public_id', $rule)->firstOrFail();
+
+        $this->taxRules->closeRule($actor, $record);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('billing.tax.rule_closed')]);
+
+        return back();
     }
 
     public function storeCoupon(Request $request): RedirectResponse

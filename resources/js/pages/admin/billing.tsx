@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
 import BillingCoupons, { type CouponRow } from './billing-coupons';
+import BillingTax, { type TaxRateRow, type TaxRuleRow } from './billing-tax';
 import type { Money } from '@/lib/money';
 
 export type FeeRuleRow = {
@@ -34,6 +35,11 @@ type Props = {
     coupons: CouponRow[];
     discount_types: { value: string; label: string }[];
     coupon_scopes: { value: string; label: string }[];
+    tax_rates: TaxRateRow[];
+    tax_rules: TaxRuleRow[];
+    tax_scopes: { value: string; label: string; requires_value: boolean }[];
+    tax_modes: { value: string; label: string }[];
+    taxable_fees: { value: string; label: string }[];
     can: { manage: boolean };
 };
 
@@ -54,6 +60,11 @@ export default function Billing({
     coupons,
     discount_types: discountTypes,
     coupon_scopes: couponScopes,
+    tax_rates: taxRates,
+    tax_rules: taxRules,
+    tax_scopes: taxScopes,
+    tax_modes: taxModes,
+    taxable_fees: taxableFees,
     can,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -320,6 +331,15 @@ export default function Billing({
                     packages={packages}
                     discountTypes={discountTypes}
                     scopes={couponScopes}
+                    canManage={can.manage}
+                />
+
+                <BillingTax
+                    rates={taxRates}
+                    rules={taxRules}
+                    scopes={taxScopes}
+                    modes={taxModes}
+                    taxableFees={taxableFees}
                     canManage={can.manage}
                 />
             </PageContainer>
