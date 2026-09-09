@@ -223,6 +223,11 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::delete('billing/tax-rules/{rule}', [BillingController::class, 'closeTaxRule'])
             ->name('billing.tax-rules.close');
 
+        // How long an unpaid checkout stays open (§9, P1-48). Not
+        // retrospective: every payment carries the deadline it was given.
+        Route::put('billing/payment-deadline', [BillingController::class, 'updateDeadline'])
+            ->name('billing.payment-deadline');
+
         /*
          * Giving an account a package without a sale (§8.3, P1-40).
          *

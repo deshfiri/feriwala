@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Erp;
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\CalculateActivationQuote;
+use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
 use App\Domain\Billing\Actions\ReserveCoupon;
 use App\Domain\Billing\CouponValidator;
@@ -13,6 +14,8 @@ use App\Domain\Billing\Data\CouponOutcome;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\PaymentDeadline;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
@@ -51,6 +54,8 @@ class CheckoutController extends Controller
     public function __construct(
         protected CouponValidator $coupons,
         protected ReserveCoupon $reserveCoupon,
+        protected ExpireUnpaidPayments $expiries,
+        protected PaymentDeadline $deadline,
     ) {}
 
     public function show(
@@ -79,6 +84,10 @@ class CheckoutController extends Controller
 
         $quote = $this->quoteFor($quotes, $package, $account, $coupon);
 
+        // Anything past its deadline is closed before the page is drawn, so the
+        // screen never offers a "Pay" button for a checkout that has run out.
+        $this->expiries->forPayable($subscription);
+
         return Inertia::render('onboarding/checkout', [
             'package' => [
                 'slug' => $package->slug,
@@ -87,6 +96,7 @@ class CheckoutController extends Controller
             ],
             'quote' => $quote->toArray(),
             'coupon' => $coupon?->toArray(),
+            'deadline' => $this->deadlineFor($subscription),
             'gateways' => array_map(fn (string $name) => [
                 'name' => $name,
                 'label' => config("payment.gateways.{$name}.label", $name),
@@ -144,6 +154,13 @@ class CheckoutController extends Controller
         // render (§36.1).
         $coupon = $this->couponOutcome($request, $account, $package, $quotes);
         $quote = $this->quoteFor($quotes, $package, $account, $coupon);
+
+        /*
+         * Close anything overdue before recording (§9). The idempotency key
+         * below would otherwise hand back the dead attempt — with the total it
+         * was quoted at, which may no longer be the price.
+         */
+        $this->expiries->forPayable($subscription);
 
         if (! $quote->isPayable()) {
             throw ValidationException::withMessages([
@@ -261,6 +278,35 @@ class CheckoutController extends Controller
                 : null,
             account: $account,
         );
+    }
+
+    /**
+     * When this checkout has to be paid, and whether an attempt already ran out.
+     *
+     * Two separate facts. "You have until Friday" is what somebody needs while
+     * the window is open; "the last attempt expired" is what they need when they
+     * come back to a page that looks the same as it did before but is not.
+     *
+     * @return array{hours: int|null, expires_at: string|null, expired: bool}
+     */
+    protected function deadlineFor(UserPackage $subscription): array
+    {
+        $latest = Payment::query()
+            ->where('payable_type', $subscription->getMorphClass())
+            ->where('payable_id', $subscription->getKey())
+            ->latest('id')
+            ->first();
+
+        $isOpen = $latest !== null
+            && in_array($latest->status, ExpireUnpaidPayments::EXPIRABLE, true);
+
+        return [
+            'hours' => $this->deadline->hours(),
+            'expires_at' => $isOpen ? $latest->expires_at?->toIso8601String() : null,
+            'expired' => $latest !== null
+                && $latest->status === PaymentStatus::Cancelled
+                && $latest->expires_at !== null,
+        ];
     }
 
     protected function pendingSubscription(BusinessAccount $account): ?UserPackage

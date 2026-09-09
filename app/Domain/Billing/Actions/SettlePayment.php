@@ -273,5 +273,13 @@ class SettlePayment
             'failed_at' => now(),
             'failure_reason' => $reason,
         ])->save();
+
+        /*
+         * The coupon slot goes back (§9). A failed payment is retried as a new
+         * attempt rather than revived, so a hold left on this one would be a
+         * slot nobody can ever spend — and on a coupon with a usage limit, one
+         * fewer promotion than the administrator granted.
+         */
+        $this->couponRedemptions->release($payment);
     }
 }

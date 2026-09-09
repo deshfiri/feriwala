@@ -7,6 +7,7 @@ use App\Domain\Billing\Data\ActivationQuote;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\PaymentDeadline;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -28,6 +29,7 @@ class RecordPaymentFromQuote
 {
     public function __construct(
         protected IssueInvoice $invoices,
+        protected PaymentDeadline $deadline,
         protected DatabaseManager $database,
     ) {}
 
@@ -73,6 +75,14 @@ class RecordPaymentFromQuote
             'revenue_minor' => $quote->revenue(),
             'currency_code' => $quote->currency->value,
             'idempotency_key' => $idempotencyKey,
+
+            /*
+             * The deadline is stamped now rather than derived on every read
+             * (§9). An applicant told they have until Friday must still have
+             * until Friday after somebody shortens the window on Wednesday.
+             * Null when no deadline is configured, which is the default.
+             */
+            'expires_at' => $this->deadline->from(),
         ]);
 
         if ($payable !== null) {

@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\Actions\ManageCoupons;
 use App\Domain\Billing\Actions\ManageFeeRules;
+use App\Domain\Billing\Actions\SetPaymentDeadline;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\CouponScope;
 use App\Domain\Billing\Enums\DiscountType;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Models\Coupon;
 use App\Domain\Billing\Models\FeeRule;
+use App\Domain\Billing\PaymentDeadline;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Domain\Package\Models\Package;
 use App\Domain\Tax\Actions\ManageTaxRules;
@@ -50,6 +52,8 @@ class BillingController extends Controller
         protected ManageCoupons $coupons,
         protected ManageTaxRules $taxRules,
         protected TaxRuleResolver $taxResolver,
+        protected SetPaymentDeadline $paymentDeadline,
+        protected PaymentDeadline $deadline,
     ) {}
 
     public function index(Request $request): Response
@@ -199,8 +203,35 @@ class BillingController extends Controller
                 fn (AllocationType $type) => $type->isTaxable(),
             ))),
 
+            // §9's configurable payment deadline. Null means checkouts do not
+            // expire, which is where a fresh installation starts.
+            'payment_deadline' => ['hours' => $this->deadline->hours()],
+
             'can' => ['manage' => BillingSettingsPolicy::canManage($actor)],
         ]);
+    }
+
+    public function updateDeadline(Request $request): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            'hours' => ['nullable', 'integer', 'min:0', 'max:'.PaymentDeadline::MAXIMUM_HOURS],
+        ]);
+
+        try {
+            $this->paymentDeadline->handle($actor, isset($validated['hours'])
+                ? (int) $validated['hours']
+                : null);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['hours' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('billing.deadline.saved')]);
+
+        return back();
     }
 
     public function storeTaxRate(Request $request): RedirectResponse

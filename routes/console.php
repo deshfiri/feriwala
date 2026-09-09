@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use Illuminate\Support\Facades\Schedule;
@@ -63,3 +64,27 @@ Schedule::call(fn () => app(SweepSubscriptionLifecycle::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Move subscription terms through renewal, grace and expiry (§8.4)');
+
+/*
+ * The §9 payment deadline: close checkouts nobody paid for.
+ *
+ * Hourly, because the deadline is configured in hours — a daily pass would make
+ * "48 hours" mean anything up to 72.
+ *
+ * Same guards as the sweeps above (§41). This one gives coupon slots back, and
+ * two servers releasing the same hold would hand out one more promotion than the
+ * limit allows. It is idempotent on its own as well: the cancellation goes
+ * through the status map under a row lock, so a second pass finds the payment
+ * already cancelled and does nothing — and `Paid` has no move to `Cancelled` at
+ * all, so money that arrived can never be swept away.
+ *
+ * Does nothing until an administrator sets `billing.payment_deadline_hours`.
+ * Cancelling real checkouts on a window nobody chose is not a safe default.
+ */
+Schedule::call(fn () => app(ExpireUnpaidPayments::class)->handle())
+    ->name('payment-deadline-sweep')
+    ->hourly()
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Close unpaid checkouts past their deadline (§9)');

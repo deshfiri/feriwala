@@ -3,6 +3,7 @@ import { Lock } from 'lucide-react';
 import { useState } from 'react';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,6 +54,7 @@ export default function Checkout({
     package: pkg,
     quote,
     coupon,
+    deadline,
     gateways,
 }: {
     package: { slug: string; name: string; validity_days: number | null };
@@ -65,9 +67,15 @@ export default function Checkout({
         discount: Money | null;
         reason: string | null;
     } | null;
+    /** When this checkout has to be paid, and whether one already ran out. */
+    deadline: {
+        hours: number | null;
+        expires_at: string | null;
+        expired: boolean;
+    };
     gateways: { name: string; label: string }[];
 }) {
-    const { t } = useTranslation();
+    const { t, locale } = useTranslation();
     const [gateway, setGateway] = useState(gateways[0]?.name ?? '');
 
     return (
@@ -84,6 +92,22 @@ export default function Checkout({
                         {pkg.validity_days && ` · ${pkg.validity_days} days`}
                     </p>
                 </header>
+
+                {/*
+                    A checkout that ran out (§9). Said plainly and first,
+                    because the page below it looks exactly as it did before and
+                    the applicant needs to know why nothing they did took.
+                */}
+                {deadline.expired && (
+                    <Alert variant="destructive" role="status">
+                        <AlertTitle>
+                            {t('billing.deadline.checkout_expired_title')}
+                        </AlertTitle>
+                        <AlertDescription>
+                            {t('billing.deadline.checkout_expired_body')}
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 <section className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
                     <dl className="divide-border divide-y">
@@ -277,6 +301,16 @@ export default function Checkout({
                             >
                                 Pay {quote.total.formatted}
                             </SubmitButton>
+
+                            {deadline.expires_at !== null && (
+                                <p className="text-muted-foreground text-center text-xs">
+                                    {t('billing.deadline.checkout_due', {
+                                        date: new Date(
+                                            deadline.expires_at,
+                                        ).toLocaleString(locale),
+                                    })}
+                                </p>
+                            )}
 
                             <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs">
                                 <Lock className="size-3" aria-hidden="true" />

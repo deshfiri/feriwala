@@ -29,8 +29,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property Money $amount_minor
  * @property Money $revenue_minor
  * @property CarbonImmutable|null $initiated_at
+ * @property CarbonImmutable|null $expires_at
  * @property CarbonImmutable|null $completed_at
  * @property CarbonImmutable|null $failed_at
+ * @property CarbonImmutable|null $cancelled_at
  * @property-read BusinessAccount|null $businessAccount
  */
 class Payment extends Model
@@ -55,8 +57,10 @@ class Payment extends Model
             'amount_minor' => MoneyCast::class,
             'revenue_minor' => MoneyCast::class,
             'initiated_at' => 'immutable_datetime',
+            'expires_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
             'failed_at' => 'immutable_datetime',
+            'cancelled_at' => 'immutable_datetime',
         ];
     }
 
@@ -145,6 +149,19 @@ class Payment extends Model
     public function isSettled(): bool
     {
         return $this->status->isSettled();
+    }
+
+    /**
+     * Whether this checkout's deadline has passed (§9).
+     *
+     * Read from the stamped column, not recalculated from the setting: an
+     * applicant told they had until Friday still has until Friday after
+     * somebody shortens the window on Wednesday.
+     */
+    public function isOverdue(?CarbonImmutable $at = null): bool
+    {
+        return $this->expires_at !== null
+            && $this->expires_at->lessThanOrEqualTo($at ?? CarbonImmutable::now());
     }
 
     /**

@@ -40,6 +40,7 @@ type Props = {
     tax_scopes: { value: string; label: string; requires_value: boolean }[];
     tax_modes: { value: string; label: string }[];
     taxable_fees: { value: string; label: string }[];
+    payment_deadline: { hours: number | null };
     can: { manage: boolean };
 };
 
@@ -65,6 +66,7 @@ export default function Billing({
     tax_scopes: taxScopes,
     tax_modes: taxModes,
     taxable_fees: taxableFees,
+    payment_deadline: paymentDeadline,
     can,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -342,6 +344,61 @@ export default function Billing({
                     taxableFees={taxableFees}
                     canManage={can.manage}
                 />
+
+                {/*
+                    §9's payment deadline. Stated as a sentence above the field
+                    because "72" alone does not say whether checkouts expire at
+                    all — and off is a real, and the initial, setting.
+                */}
+                <SectionCard
+                    title={t('billing.deadline.title')}
+                    description={t('billing.deadline.description')}
+                >
+                    <p className="text-muted-foreground mb-4 text-sm">
+                        {paymentDeadline.hours === null
+                            ? t('billing.deadline.off')
+                            : t('billing.deadline.current', {
+                                  hours: paymentDeadline.hours,
+                              })}
+                    </p>
+
+                    {can.manage && (
+                        <Form
+                            {...BillingController.updateDeadline.form()}
+                            options={{ preserveScroll: true }}
+                            className="flex flex-wrap items-end gap-3"
+                        >
+                            {({ errors, processing }) => (
+                                <>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="deadline-hours">
+                                            {t('billing.deadline.hours')}
+                                        </Label>
+                                        <Input
+                                            id="deadline-hours"
+                                            name="hours"
+                                            type="number"
+                                            min={0}
+                                            max={720}
+                                            className="w-40"
+                                            defaultValue={
+                                                paymentDeadline.hours ?? ''
+                                            }
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            {t('billing.deadline.hours_help')}
+                                        </p>
+                                        <InputError message={errors.hours} />
+                                    </div>
+
+                                    <Button type="submit" disabled={processing}>
+                                        {t('billing.deadline.save')}
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                    )}
+                </SectionCard>
             </PageContainer>
         </>
     );

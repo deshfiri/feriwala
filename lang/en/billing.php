@@ -132,4 +132,19 @@ return [
         'checkout_included' => 'Includes :amount tax',
         'checkout_line' => ':label on :net',
     ],
+
+    'deadline' => [
+        'title' => 'Payment deadline',
+        'description' => 'How long an unpaid checkout stays open. Changing it decides how long the next checkout has — every payment already recorded keeps the deadline it was given.',
+        'hours' => 'Hours to pay',
+        'hours_help' => 'Leave blank or set to zero for no deadline. Nothing expires until this is set.',
+        'save' => 'Save',
+        'saved' => 'Payment deadline saved.',
+        'off' => 'Checkouts do not expire.',
+        'current' => 'Checkouts expire :hours hours after they are started.',
+
+        'checkout_due' => 'Pay by :date to keep this price.',
+        'checkout_expired_title' => 'That checkout expired',
+        'checkout_expired_body' => 'Nobody has been charged. Start again below — any coupon you used has been released and can be applied again.',
+    ],
 ];
