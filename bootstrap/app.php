@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ApplyConfiguredSessionLifetime;
 use App\Http\Middleware\EnsureAccountIsEntitled;
 use App\Http\Middleware\EnsureBusinessAccountIsActivated;
 use App\Http\Middleware\EnsureIdentityHasPlatformAccess;
@@ -21,6 +22,15 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+
+        /*
+         * Prepended, not appended: `StartSession` reads `session.lifetime` when
+         * it builds the store and again when it writes the cookie, so anything
+         * setting that value has to run first (§6, §36).
+         */
+        $middleware->web(prepend: [
+            ApplyConfiguredSessionLifetime::class,
+        ]);
 
         $middleware->web(append: [
             HandleAppearance::class,

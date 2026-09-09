@@ -73,7 +73,13 @@ return [
     |
     */
 
-    'connection' => env('SESSION_CONNECTION'),
+    /*
+     * Defaults to the dedicated `session` Redis connection (§36) rather than to
+     * null, which lands sessions on the unnamed `default` database. Naming it
+     * here means an existing deployment picks the separation up on deploy
+     * instead of only where somebody remembered to set the variable.
+     */
+    'connection' => env('SESSION_CONNECTION', 'session'),
 
     /*
     |--------------------------------------------------------------------------
@@ -169,7 +175,17 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    /*
+     * On in production, off elsewhere (§36).
+     *
+     * Null — the framework default — means the cookie is never marked Secure,
+     * so a production deployment that forgot the variable ships a session
+     * cookie a downgrade attack can read. Deriving it from the environment
+     * makes HTTPS the default where HTTPS is the deployment, and keeps
+     * `php artisan serve` over plain HTTP working locally, where a Secure
+     * cookie would simply never come back and login would appear to do nothing.
+     */
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

@@ -18,6 +18,7 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
+use App\Support\Security\SessionPolicy;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use RuntimeException;
@@ -72,6 +73,20 @@ class DemoSeeder extends Seeder
 
         $settings->define('kyc.deadline_days', 'kyc', SettingType::Integer, 30);
         $settings->define('kyc.deadline_warning_days', 'kyc', SettingType::Integer, 7);
+
+        /*
+         * Defined with a null value on purpose: the setting exists so it can be
+         * changed without a deploy (§36), and until somebody does,
+         * `SESSION_LIFETIME` is what applies. Seeding a number here would make
+         * the deployed configuration silently unreachable.
+         */
+        $settings->define(
+            SessionPolicy::LIFETIME,
+            'security',
+            SettingType::Integer,
+            label: 'Session lifetime (minutes)',
+            description: 'How long a signed-in session survives without activity. Leave empty to use the deployed SESSION_LIFETIME.',
+        );
     }
 
     /**
