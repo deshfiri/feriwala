@@ -32,7 +32,12 @@ beforeEach(function () {
 /** Somebody who manages packages but is not Super Admin. */
 function packageTestManager(): User
 {
-    $user = User::factory()->staff()->create();
+    /*
+     * Enrolled, because a Package Manager can delete and §36 requires a second
+     * factor before the panel opens at all (P1-18). Without it every assertion
+     * below would be testing the enrolment redirect instead of packages.
+     */
+    $user = User::factory()->staff()->withTwoFactor()->create();
     $user->assignRole(PlatformRole::PackageManager->value);
 
     return $user;

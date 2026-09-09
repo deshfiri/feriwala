@@ -36,23 +36,6 @@ parameters:
 			count: 1
 			path: app/Http/Controllers/Settings/SecurityController.php
 
-		-
-			message: '#^Cannot call method hasEnabledTwoFactorAuthentication\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Settings/SecurityController.php
-
-		-
-			message: '#^Cannot call method passkeys\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Settings/SecurityController.php
-
-		-
-			message: '#^Cannot call method update\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Settings/SecurityController.php
 
 		-
 			message: '#^Cannot access property \$id on App\\Models\\User\|null\.$#'

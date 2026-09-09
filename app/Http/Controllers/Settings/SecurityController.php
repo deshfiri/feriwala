@@ -7,6 +7,7 @@ use App\Domain\Account\Models\AuthenticatedSession;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\PasswordUpdateRequest;
 use App\Http\Requests\Settings\TwoFactorAuthenticationRequest;
+use App\Models\User;
 use App\Notifications\Account\PasswordChanged;
 use App\Support\Security\PasswordPolicy;
 use Illuminate\Http\RedirectResponse;
@@ -38,7 +39,7 @@ class SecurityController extends Controller
             'canManageTwoFactor' => Features::canManageTwoFactorAuthentication(),
             'canManagePasskeys' => Features::canManagePasskeys(),
             'passkeys' => Features::canManagePasskeys()
-                ? $request->user()
+                ? $this->actor($request)
                     ->passkeys()
                     ->select(['id', 'name', 'credential', 'created_at', 'last_used_at'])
                     ->latest()
@@ -60,7 +61,7 @@ class SecurityController extends Controller
         if (Features::canManageTwoFactorAuthentication()) {
             $request->ensureStateIsValid();
 
-            $props['twoFactorEnabled'] = $request->user()->hasEnabledTwoFactorAuthentication();
+            $props['twoFactorEnabled'] = $this->actor($request)->hasEnabledTwoFactorAuthentication();
             $props['requiresConfirmation'] = Features::optionEnabled(Features::twoFactorAuthentication(), 'confirm');
 
             /*
@@ -68,7 +69,7 @@ class SecurityController extends Controller
              * here; without saying so, the screen looks like an ordinary
              * settings page they were sent to for no reason.
              */
-            $props['twoFactorRequired'] = $request->user()->requiresTwoFactorAuthentication();
+            $props['twoFactorRequired'] = $this->actor($request)->requiresTwoFactorAuthentication();
         }
 
         return Inertia::render('settings/security', $props);
@@ -79,7 +80,7 @@ class SecurityController extends Controller
      */
     public function update(PasswordUpdateRequest $request): RedirectResponse
     {
-        $user = $request->user();
+        $user = $this->actor($request);
 
         $user->update([
             'password' => $request->password,
@@ -111,7 +112,7 @@ class SecurityController extends Controller
      */
     public function destroySession(Request $request, string $session): RedirectResponse
     {
-        $user = $request->user();
+        $user = $this->actor($request);
 
         /*
          * Found through the person's own relation, never by looking the id up
@@ -144,7 +145,7 @@ class SecurityController extends Controller
     public function destroyOtherSessions(Request $request): RedirectResponse
     {
         $ended = $this->endSessions->exceptCurrent(
-            $request->user(),
+            $this->actor($request),
             $request->session()->getId(),
         );
 
@@ -170,7 +171,7 @@ class SecurityController extends Controller
     {
         $current = AuthenticatedSession::keyFor($request->session()->getId());
 
-        return $request->user()
+        return $this->actor($request)
             ->authenticatedSessions()
             ->orderByDesc('last_active_at')
             /*
@@ -197,5 +198,18 @@ class SecurityController extends Controller
                 'ended_reason' => $session->ended_reason,
             ])
             ->all();
+    }
+
+    /**
+     * The signed-in person. Every route here is behind `auth`, so null means
+     * the middleware stack changed underneath us rather than a real guest.
+     */
+    protected function actor(Request $request): User
+    {
+        $user = $request->user();
+
+        abort_if(! $user instanceof User, 403);
+
+        return $user;
     }
 }

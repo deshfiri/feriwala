@@ -40,7 +40,22 @@ it('seeds packages for the package-scoped rule to point at', function () {
 it('opens the requirement catalogue for the KYC manager', function () {
     $manager = User::query()->where('email', 'kyc@feriwala.test')->firstOrFail();
 
-    $this->actingAs($manager)
+    /*
+     * Enrolled here rather than by the seeder. A KYC Manager reads personal
+     * documents, so §36 keeps the panel shut until a second factor is set up
+     * (P1-18) — and a seeded fake secret would be worse than the redirect,
+     * because no authenticator could produce a code for it and the demo login
+     * would stop working entirely. Somebody using the demo data enrols once,
+     * exactly as a real staff member does. What this test is about is whether
+     * the seeded catalogue renders.
+     */
+    $manager->forceFill([
+        'two_factor_secret' => encrypt('secret'),
+        'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+        'two_factor_confirmed_at' => now(),
+    ])->save();
+
+    $this->actingAs($manager->refresh())
         ->get(route('admin.kyc.document-types.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page

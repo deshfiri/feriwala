@@ -33,7 +33,7 @@ class IdentityAccessController extends Controller
         Gate::authorize('lock', $user);
 
         $this->apply(
-            fn (string $reason) => $this->access->lock($user, $request->user(), $reason),
+            fn (string $reason) => $this->access->lock($user, $this->actor($request), $reason),
             $this->reason($request),
             __('Sign-in locked.'),
         );
@@ -46,12 +46,25 @@ class IdentityAccessController extends Controller
         Gate::authorize('lock', $user);
 
         $this->apply(
-            fn (string $reason) => $this->access->unlock($user, $request->user(), $reason),
+            fn (string $reason) => $this->access->unlock($user, $this->actor($request), $reason),
             $this->reason($request),
             __('Sign-in restored.'),
         );
 
         return back();
+    }
+
+    /**
+     * The administrator making the change. Behind `auth`, so null means the
+     * middleware stack changed underneath us rather than a real guest.
+     */
+    protected function actor(Request $request): User
+    {
+        $actor = $request->user();
+
+        abort_if(! $actor instanceof User, 403);
+
+        return $actor;
     }
 
     /**
