@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Erp\InvoiceController;
 use App\Http\Controllers\Erp\PackageChangeController;
 use App\Http\Controllers\Erp\RenewalController;
 use App\Http\Controllers\Erp\StaffController;
@@ -39,6 +40,18 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
      * needed. Self-scoped — the account comes from the membership, so there is
      * no subscription identifier in either URL.
      */
+    /*
+     * Invoices and package payment history (§8.2).
+     *
+     * Named under `subscription.` so the §5.4 allow-list carries them: an
+     * account still deciding whether to pay, or one whose term has lapsed,
+     * needs to be able to read what it was billed.
+     */
+    Route::get('settings/invoices', [InvoiceController::class, 'index'])
+        ->name('subscription.invoices.index');
+    Route::get('settings/invoices/{invoice}', [InvoiceController::class, 'show'])
+        ->name('subscription.invoices.show');
+
     /*
      * Cancelling a term (§8.2). In the same group as renewal, because an
      * account whose package has lapsed may want to end it rather than renew,

@@ -27,6 +27,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 class RecordPaymentFromQuote
 {
     public function __construct(
+        protected IssueInvoice $invoices,
         protected DatabaseManager $database,
     ) {}
 
@@ -105,6 +106,20 @@ class RecordPaymentFromQuote
             $payment->taxLines()->create($charge->toPaymentLine());
         }
 
-        return $payment->load(['allocations', 'taxLines']);
+        $payment->load(['allocations', 'taxLines']);
+
+        /*
+         * The invoice, in the same transaction (§8.2). A payment recorded
+         * without the document that explains it would leave an account with a
+         * figure to pay and nothing itemising it — and issuing it later would
+         * make the two able to disagree.
+         *
+         * Issuing is not granting: whether the money arrived stays the
+         * payment's business, and nothing in the subscription lifecycle reads
+         * an invoice.
+         */
+        $this->invoices->handle($payment);
+
+        return $payment;
     }
 }

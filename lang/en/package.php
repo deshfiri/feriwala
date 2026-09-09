@@ -189,6 +189,26 @@ return [
         'nothing_to_cancel' => 'You do not have an active package to cancel.',
     ],
 
+    'invoices' => [
+        'title' => 'Invoices',
+        'description' => 'Everything you have been billed for, and whether it has been paid.',
+        'nav' => 'Invoices',
+        'number' => 'Invoice',
+        'issued' => 'Issued',
+        'total' => 'Total',
+        'status' => 'Status',
+        'paid' => 'Paid',
+        'unpaid' => 'Awaiting payment',
+        'paid_on' => 'Paid :date',
+        'reference' => 'Payment reference',
+        'subtotal' => 'Subtotal',
+        'view' => 'View',
+        'back' => 'Back to invoices',
+        'empty_title' => 'No invoices yet',
+        'empty_description' => 'They appear here as soon as you are billed for anything.',
+        'unpaid_note' => 'This invoice has not been paid, so it grants nothing yet.',
+    ],
+
     'features' => [
         'unlimited' => 'Unlimited',
         'yes' => 'Yes',
