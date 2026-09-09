@@ -112,7 +112,7 @@ class PackageChangePlanner
      */
     protected function directionFor(?SubscriptionTerms $held, SubscriptionTerms $target): SubscriptionSource
     {
-        $heldFee = $held?->feeMinor ?? 0;
+        $heldFee = $held === null ? 0 : $held->feeMinor;
 
         return $target->feeMinor > $heldFee
             ? SubscriptionSource::Upgrade
@@ -185,7 +185,9 @@ class PackageChangePlanner
      */
     protected function additionalDeposit(?SubscriptionTerms $held, SubscriptionTerms $target, Currency $currency): Money
     {
-        $difference = $target->requiredDepositMinor - ($held?->requiredDepositMinor ?? 0);
+        $lodged = $held === null ? 0 : $held->requiredDepositMinor;
+
+        $difference = $target->requiredDepositMinor - $lodged;
 
         return Money::of(max($difference, 0), $currency);
     }

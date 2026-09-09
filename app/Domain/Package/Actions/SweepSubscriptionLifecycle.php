@@ -185,7 +185,7 @@ class SweepSubscriptionLifecycle
      */
     protected function repointAccount(UserPackage $expired): void
     {
-        $account = BusinessAccount::query()->find($expired->business_account_id);
+        $account = BusinessAccount::query()->whereKey($expired->business_account_id)->first();
 
         if ($account === null || $account->current_user_package_id !== $expired->id) {
             return;
@@ -206,7 +206,8 @@ class SweepSubscriptionLifecycle
     {
         BusinessAccount::query()
             ->with('owner')
-            ->find($term->business_account_id)
+            ->whereKey($term->business_account_id)
+            ->first()
             ?->owner
             ?->notify($notification);
     }

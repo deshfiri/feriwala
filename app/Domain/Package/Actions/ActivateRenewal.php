@@ -134,7 +134,7 @@ class ActivateRenewal
      */
     protected function repoint(UserPackage $renewal): void
     {
-        $account = BusinessAccount::query()->lockForUpdate()->find($renewal->business_account_id);
+        $account = BusinessAccount::query()->lockForUpdate()->whereKey($renewal->business_account_id)->first();
 
         $account?->forceFill(['current_user_package_id' => $renewal->id])->save();
     }
@@ -158,7 +158,7 @@ class ActivateRenewal
             module: 'package',
         ));
 
-        $owner = BusinessAccount::query()->find($renewal->business_account_id)?->owner;
+        $owner = BusinessAccount::query()->whereKey($renewal->business_account_id)->first()?->owner;
 
         $owner?->notify(new SubscriptionRenewed(
             package: (string) $renewal->terms()?->name,

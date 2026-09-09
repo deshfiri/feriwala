@@ -94,7 +94,8 @@ class CancelSubscription
 
         BusinessAccount::query()
             ->with('owner')
-            ->find($cancelled->business_account_id)
+            ->whereKey($cancelled->business_account_id)
+            ->first()
             ?->owner
             ?->notify(new SubscriptionCancelled(
                 package: (string) $cancelled->terms()?->name,
@@ -115,7 +116,7 @@ class CancelSubscription
     {
         $account = BusinessAccount::query()
             ->lockForUpdate()
-            ->find($cancelled->business_account_id);
+            ->whereKey($cancelled->business_account_id)->first();
 
         if ($account === null || $account->current_user_package_id !== $cancelled->id) {
             return;

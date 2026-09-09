@@ -99,7 +99,7 @@ class ActivatePackageChange
      */
     protected function repoint(UserPackage $change): void
     {
-        $account = BusinessAccount::query()->lockForUpdate()->find($change->business_account_id);
+        $account = BusinessAccount::query()->lockForUpdate()->whereKey($change->business_account_id)->first();
 
         $account?->forceFill(['current_user_package_id' => $change->id])->save();
     }
@@ -120,7 +120,7 @@ class ActivatePackageChange
             module: 'package',
         ));
 
-        $owner = BusinessAccount::query()->find($change->business_account_id)?->owner;
+        $owner = BusinessAccount::query()->whereKey($change->business_account_id)->first()?->owner;
 
         $owner?->notify(new PackageChanged(
             package: (string) $change->terms()?->name,

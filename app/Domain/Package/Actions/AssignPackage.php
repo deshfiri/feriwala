@@ -115,7 +115,7 @@ class AssignPackage
         $this->record($account, $subscription, $actor, $reason);
 
         $account->owner?->notify(new PackageAssigned(
-            package: $subscription->terms()?->name ?? $package->name,
+            package: (string) $subscription->terms()?->name,
             startsAt: $subscription->started_at?->toDayDateTimeString(),
             expiresAt: $subscription->expires_at?->toDayDateTimeString(),
         ));

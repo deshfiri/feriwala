@@ -18,6 +18,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * An account's subscription to a package (§8.2).
  *
+ * @property int $id
+ * @property string $public_id
+ * @property int $business_account_id
+ * @property int $package_id
+ * @property int|null $renews_user_package_id
  * @property UserPackageStatus $status
  * @property SubscriptionSource $source
  * @property Money|null $paid_fee_minor
