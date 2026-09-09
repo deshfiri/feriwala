@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Erp;
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\InvoiceLine;
+use App\Domain\Billing\Models\PaymentTaxLine;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -62,7 +63,7 @@ class InvoiceController extends Controller
         $record = Invoice::query()
             ->where('business_account_id', $account->id)
             ->where('public_id', $invoice)
-            ->with(['lines', 'payment'])
+            ->with(['lines', 'payment.taxLines'])
             ->firstOrFail();
 
         return Inertia::render('settings/invoice', [
@@ -76,8 +77,41 @@ class InvoiceController extends Controller
                         'is_deduction' => $line->is_deduction,
                     ])
                     ->all(),
+
+                /*
+                 * D19 requires a tax breakdown on the invoice: "VAT 15% on
+                 * 5,000 — 750", per rate, with the taxable base beside the tax.
+                 * Read from the payment's tax lines, which are themselves
+                 * copies taken at the moment of the charge — so this is one
+                 * snapshot rendered, not a second one that could drift from it.
+                 */
+                'tax' => $this->taxBreakdown($record),
             ]),
         ]);
+    }
+
+    /**
+     * The tax charged, per rate, as it was on the day.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function taxBreakdown(Invoice $invoice): array
+    {
+        $payment = $invoice->payment;
+
+        if ($payment === null) {
+            return [];
+        }
+
+        return $payment->taxLines
+            ->map(fn (PaymentTaxLine $line) => [
+                'label' => $line->label,
+                'rate' => $line->formattedRate(),
+                'is_inclusive' => $line->mode->isInclusive(),
+                'net' => $line->taxable_amount_minor->jsonSerialize(),
+                'tax' => $line->tax_amount_minor->jsonSerialize(),
+            ])
+            ->all();
     }
 
     /**

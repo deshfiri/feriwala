@@ -207,6 +207,8 @@ return [
         'empty_title' => 'No invoices yet',
         'empty_description' => 'They appear here as soon as you are billed for anything.',
         'unpaid_note' => 'This invoice has not been paid, so it grants nothing yet.',
+        'tax_line' => ':label on :net',
+        'tax_included' => 'included in the prices above',
     ],
 
     'features' => [

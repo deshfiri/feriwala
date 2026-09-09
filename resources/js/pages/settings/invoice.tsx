@@ -17,6 +17,14 @@ type Props = {
             amount: Money;
             is_deduction: boolean;
         }[];
+        /** Per rate, as it was on the day (D19). */
+        tax: {
+            label: string;
+            rate: string;
+            is_inclusive: boolean;
+            net: Money;
+            tax: Money;
+        }[];
     };
 };
 
@@ -140,6 +148,36 @@ export default function Invoice({ invoice }: Props) {
                             </dd>
                         </div>
                     </dl>
+
+                    {/*
+                        The tax breakdown D19 requires: per rate, with the
+                        taxable base beside the tax, because a return needs
+                        both and dividing one back out of the other goes
+                        wrong on the rounding. The rate shown is the one
+                        that applied on the day, not today's.
+                    */}
+                    {invoice.tax.length > 0 && (
+                        <dl className="border-border divide-border divide-y border-t">
+                            {invoice.tax.map((charge) => (
+                                <div
+                                    key={`${charge.label}-${charge.rate}`}
+                                    className="text-muted-foreground flex items-center justify-between gap-4 px-4 py-2 text-xs"
+                                >
+                                    <dt>
+                                        {t('package.invoices.tax_line', {
+                                            label: charge.label,
+                                            net: charge.net.formatted,
+                                        })}
+                                        {charge.is_inclusive &&
+                                            ` · ${t('package.invoices.tax_included')}`}
+                                    </dt>
+                                    <dd className="tabular-nums">
+                                        {charge.tax.formatted}
+                                    </dd>
+                                </div>
+                            ))}
+                        </dl>
+                    )}
                 </section>
             </div>
         </>
