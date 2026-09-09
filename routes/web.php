@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
+use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
@@ -171,6 +172,19 @@ Route::middleware(['auth', 'noindex'])
          */
         Route::post('accounts/{account}/kyc-update', KycUpdateRequestController::class)
             ->name('kyc.request-update');
+
+        /*
+         * Locking and unlocking a login (§6, P1-17).
+         *
+         * Keyed on the **person**, not on the account they belong to: locking an
+         * owner takes their access away and leaves the business exactly where it
+         * was (D23). Reached from the account dossier only because that is where
+         * an administrator is standing when the question comes up.
+         */
+        Route::post('identities/{user}/lock', [IdentityAccessController::class, 'lock'])
+            ->name('identities.lock');
+        Route::delete('identities/{user}/lock', [IdentityAccessController::class, 'unlock'])
+            ->name('identities.unlock');
 
         /*
          * The package catalogue (§8.1).

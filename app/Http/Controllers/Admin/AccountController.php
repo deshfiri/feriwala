@@ -54,6 +54,14 @@ class AccountController extends Controller
             'staff' => $this->dossier->staff($account),
 
             /*
+             * Who can sign in, and whether they still can (§6, P1-17). A
+             * different question from `staff`, which is about what somebody may
+             * do inside the business — a locked person keeps their role and
+             * loses the platform.
+             */
+            'people' => $this->dossier->people($account),
+
+            /*
              * The documents this account is actually subject to, so the request
              * dialog offers a real list rather than a free-text box. Same source
              * the round captures from, or the two would disagree the first time

@@ -14,6 +14,7 @@ import type { AccountSubscriptionRow } from '@/types';
 import RequestKycUpdateDialog, {
     type DocumentTypeOption,
 } from './request-kyc-update-dialog';
+import SignInAccessDialog, { type Person } from './sign-in-access-dialog';
 
 type Owner = {
     name: string;
@@ -87,6 +88,11 @@ type Props = {
         role: string;
         role_label: string;
     }[];
+    /**
+     * Who can sign in, and whether they still can (§6). A different question
+     * from `staff`, which is about what somebody may do inside the business.
+     */
+    people: Person[];
     document_types: DocumentTypeOption[];
     can: { request_kyc_update: boolean };
     blockers: string[];
@@ -110,12 +116,16 @@ export default function AdminAccountShow({
     subscription,
     payments,
     staff,
+    people,
     document_types: documentTypes,
     can,
     blockers,
 }: Props) {
     const { t, locale } = useTranslation();
     const [requesting, setRequesting] = useState(false);
+    const [changingAccessFor, setChangingAccessFor] = useState<Person | null>(
+        null,
+    );
 
     const date = (value: string | null) =>
         value === null ? '—' : new Date(value).toLocaleDateString(locale);
@@ -476,6 +486,69 @@ export default function AdminAccountShow({
                         </SectionCard>
 
                         <SectionCard
+                            title={t('security.lock.title')}
+                            description={t('security.lock.description')}
+                            contentClassName="p-0"
+                        >
+                            <ul className="divide-border divide-y text-sm">
+                                {people.map((person) => (
+                                    <li
+                                        key={person.id}
+                                        className="flex flex-wrap items-center justify-between gap-2 px-5 py-3"
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="truncate">
+                                                {person.name}
+                                            </p>
+                                            <p className="text-muted-foreground truncate text-xs">
+                                                {person.role_label} ·{' '}
+                                                {person.email}
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                            <StatusPill
+                                                tone={
+                                                    person.identity_status_tone as StatusTone
+                                                }
+                                                label={
+                                                    person.identity_status_label
+                                                }
+                                            />
+
+                                            {person.can_change && (
+                                                <Button
+                                                    variant={
+                                                        person.is_locked
+                                                            ? 'secondary'
+                                                            : 'ghost'
+                                                    }
+                                                    size="sm"
+                                                    className={
+                                                        person.is_locked
+                                                            ? undefined
+                                                            : 'text-destructive hover:bg-destructive/10 hover:text-destructive'
+                                                    }
+                                                    onClick={() =>
+                                                        setChangingAccessFor(
+                                                            person,
+                                                        )
+                                                    }
+                                                >
+                                                    {t(
+                                                        person.is_locked
+                                                            ? 'security.lock.unlock'
+                                                            : 'security.lock.lock',
+                                                    )}
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </SectionCard>
+
+                        <SectionCard
                             title={t('account.detail.status_history')}
                             contentClassName="p-0"
                         >
@@ -519,6 +592,12 @@ export default function AdminAccountShow({
                 onOpenChange={setRequesting}
                 accountId={business.id}
                 documentTypes={documentTypes}
+            />
+
+            <SignInAccessDialog
+                person={changingAccessFor}
+                open={changingAccessFor !== null}
+                onOpenChange={(open) => !open && setChangingAccessFor(null)}
             />
         </>
     );

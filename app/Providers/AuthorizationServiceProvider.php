@@ -8,6 +8,7 @@ use App\Domain\Account\Models\AccountMembership;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Policies\AccountMembershipPolicy;
 use App\Domain\Account\Policies\BusinessAccountPolicy;
+use App\Domain\Account\Policies\UserPolicy;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -43,6 +44,14 @@ class AuthorizationServiceProvider extends ServiceProvider
         // the question in each case is what the actor's own membership permits.
         Gate::policy(AccountMembership::class, AccountMembershipPolicy::class);
         Gate::policy(AccountInvitation::class, AccountMembershipPolicy::class);
+
+        /*
+         * Whether a person may sign in at all is an identity question, so it has
+         * a policy of its own rather than being folded into the business
+         * account's (§6, D23). Registered explicitly because the policy does not
+         * live where auto-discovery looks.
+         */
+        Gate::policy(User::class, UserPolicy::class);
 
         /*
          * Super Admin passes every check without holding permission rows, so

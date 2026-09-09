@@ -2,6 +2,7 @@
 
 namespace App\Domain\Account\Queries;
 
+use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Account\Models\AccountMembership;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Models\BusinessAccountStatusChange;
@@ -9,6 +10,8 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Models\KycSubmissionRequirement;
 use App\Domain\Package\Queries\AccountSubscription;
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Everything an administrator needs about one trading business (P1-79).
@@ -176,5 +179,66 @@ class AccountDossier
                 'role_label' => $membership->role->label(),
             ])
             ->all();
+    }
+
+    /**
+     * The people who can sign in to this account, and whether they still can.
+     *
+     * A different question from {@see staff()}, which answers what somebody is
+     * allowed to do *inside* the business. This one is about the login itself
+     * (§6): a locked person keeps their role and loses the platform.
+     *
+     * Owner first, because they are who an administrator is usually looking for,
+     * and because their membership row is one of the ones being listed —
+     * ordering by anything else would bury them among their own staff.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function people(BusinessAccount $account): array
+    {
+        $owner = $account->owner;
+
+        $memberships = $account->memberships()
+            ->with('user')
+            ->get()
+            ->filter(fn (AccountMembership $membership) => $membership->user->id !== $owner?->id);
+
+        $people = [];
+
+        if ($owner !== null) {
+            $people[] = $this->person($owner, __('security.lock.owner'));
+        }
+
+        foreach ($memberships as $membership) {
+            $people[] = $this->person($membership->user, $membership->role->label());
+        }
+
+        return $people;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function person(User $user, string $role): array
+    {
+        return [
+            'id' => $user->public_id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role_label' => $role,
+            'identity_status' => $user->identity_status->value,
+            'identity_status_label' => $user->identity_status->label(),
+            'identity_status_tone' => $user->identity_status->tone(),
+            'is_locked' => $user->identity_status === UserStatus::Locked,
+            'changed_at' => $user->identity_status_changed_at?->toIso8601String(),
+
+            /*
+             * Asked per person, not once for the screen. The policy refuses a
+             * Super Admin and refuses the actor themselves, so a single "may I
+             * lock" answer would offer a control that the action then declines
+             * — which is a worse experience than not offering it.
+             */
+            'can_change' => Gate::allows('lock', $user),
+        ];
     }
 }

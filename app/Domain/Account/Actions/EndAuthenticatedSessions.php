@@ -57,6 +57,31 @@ class EndAuthenticatedSessions
     }
 
     /**
+     * End every live session this person has.
+     *
+     * Used when a login is locked (§6): a lock that leaves an open tab working
+     * until the person happens to reload is not a lock.
+     *
+     * @return int how many were ended
+     */
+    public function all(User $user, string $reason = AuthenticatedSession::ENDED_REVOKED): int
+    {
+        $sessions = $user->authenticatedSessions()->live()->get();
+
+        foreach ($sessions as $session) {
+            $this->end($session, $reason);
+        }
+
+        $ended = $sessions->count();
+
+        if ($ended > 0) {
+            $this->record($user, $ended, $reason);
+        }
+
+        return $ended;
+    }
+
+    /**
      * End one session.
      */
     public function one(
