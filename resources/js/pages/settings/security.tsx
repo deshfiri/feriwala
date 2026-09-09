@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/security';
 import type { Props as ManagePasskeysProps } from '@/components/manage-passkeys';
 import ManagePasskeys from '@/components/manage-passkeys';
+import type { Props as ManageSessionsProps } from '@/components/manage-sessions';
+import ManageSessions from '@/components/manage-sessions';
 import type { Props as ManageTwoFactorProps } from '@/components/manage-two-factor';
 import ManageTwoFactor from '@/components/manage-two-factor';
 
@@ -16,6 +18,7 @@ import ManageTwoFactor from '@/components/manage-two-factor';
 type Props = {
     passwordRules: string;
 } & ManagePasskeysProps &
+    ManageSessionsProps &
     ManageTwoFactorProps;
 
 export default function Security(props: Props) {
@@ -134,6 +137,8 @@ export default function Security(props: Props) {
                 canManagePasskeys={props.canManagePasskeys}
                 passkeys={props.passkeys}
             />
+
+            <ManageSessions sessions={props.sessions} />
         </>
     );
 }

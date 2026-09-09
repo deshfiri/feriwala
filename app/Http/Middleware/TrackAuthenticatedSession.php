@@ -47,22 +47,62 @@ class TrackAuthenticatedSession
 
     public function handle(Request $request, Closure $next): Response
     {
+        /*
+         * Both sides of the request, because the two interesting cases sit on
+         * opposite sides of it. An ordinary page view is already authenticated
+         * on the way in, and recording it there means the security screen can
+         * show the device it is being read on. A sign-in is not authenticated
+         * until the controller has run, and its identifier is regenerated in
+         * the same breath — so that one can only be recorded on the way out.
+         */
+        $before = $request->user();
+        $sessionId = $request->hasSession() ? $request->session()->getId() : null;
+
+        if ($before !== null && $sessionId !== null) {
+            $this->record($request, $before, $sessionId);
+        }
+
         $response = $next($request);
 
-        $this->record($request);
+        $after = $request->user();
+
+        if ($before === null && $after !== null && $request->hasSession()) {
+            $this->record($request, $after, $request->session()->getId());
+        }
+
+        if ($before !== null && $after === null && $sessionId !== null) {
+            $this->close($sessionId);
+        }
 
         return $response;
     }
 
-    protected function record(Request $request): void
+    /**
+     * Mark the session finished, keeping the row.
+     *
+     * Signing out is the ordinary end of a session and the history should say
+     * so — "you signed out of this device" and "this session expired" are
+     * different answers to somebody checking what happened.
+     */
+    protected function close(string $sessionId): void
     {
-        $user = $request->user();
+        AuthenticatedSession::query()
+            ->where('session_key', AuthenticatedSession::keyFor($sessionId))
+            ->whereNull('ended_at')
+            ->update([
+                'ended_at' => now(),
+                'ended_reason' => AuthenticatedSession::ENDED_SIGNED_OUT,
+                'session_id' => null,
+                'updated_at' => now(),
+            ]);
+    }
 
-        if (! $user instanceof User || ! $request->hasSession()) {
+    protected function record(Request $request, ?object $user, string $sessionId): void
+    {
+        if (! $user instanceof User) {
             return;
         }
 
-        $sessionId = $request->session()->getId();
         $key = AuthenticatedSession::keyFor($sessionId);
 
         $existing = AuthenticatedSession::query()->where('session_key', $key)->first();

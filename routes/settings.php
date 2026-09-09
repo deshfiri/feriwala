@@ -43,6 +43,21 @@ Route::middleware(['auth', 'verified', 'business.activated'])->group(function ()
         ->middleware('throttle:6,1')
         ->name('user-password.update');
 
+    /*
+     * Ending sessions elsewhere (§6).
+     *
+     * Behind password confirmation, like the screen they are reached from:
+     * someone who walks up to an unattended laptop must not be able to sign the
+     * owner out of everywhere else and keep the one session they are sitting at.
+     */
+    Route::delete('settings/security/sessions', [SecurityController::class, 'destroyOtherSessions'])
+        ->middleware(RequirePassword::class)
+        ->name('security.sessions.purge');
+
+    Route::delete('settings/security/sessions/{session}', [SecurityController::class, 'destroySession'])
+        ->middleware(RequirePassword::class)
+        ->name('security.sessions.destroy');
+
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
 
     /*

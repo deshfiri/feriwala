@@ -9,6 +9,7 @@ use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Account\Models\AccountMembership;
+use App\Domain\Account\Models\AuthenticatedSession;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Models\UserAddress;
 use Carbon\CarbonImmutable;
@@ -118,6 +119,21 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function addresses(): HasMany
     {
         return $this->hasMany(UserAddress::class);
+    }
+
+    /**
+     * Every sign-in this person has had, live and finished (§6).
+     *
+     * The relation is how the security screen reaches them, which is what keeps
+     * §31.3 honest: there is no session identifier in a URL to swap for somebody
+     * else's, because the only way to a row is through the person Laravel has
+     * already authenticated.
+     *
+     * @return HasMany<AuthenticatedSession, $this>
+     */
+    public function authenticatedSessions(): HasMany
+    {
+        return $this->hasMany(AuthenticatedSession::class);
     }
 
     /**
