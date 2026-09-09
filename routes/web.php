@@ -94,6 +94,11 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::get('checkout', [CheckoutController::class, 'show'])->name('checkout.show');
         Route::post('checkout', [CheckoutController::class, 'pay'])->name('checkout.pay');
 
+        // Holding a coupon code against this checkout (§9). Nothing is spent
+        // here — the code is revalidated on every render and again at payment.
+        Route::post('checkout/coupon', [CheckoutController::class, 'applyCoupon'])
+            ->name('checkout.coupon');
+
         // Gateways return the user here. The IPN is what settles the payment
         // reliably; this is for the person watching the screen.
         Route::match(['get', 'post'], 'checkout/return', PaymentReturnController::class)
@@ -196,6 +201,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('billing.fee-rules.store');
         Route::delete('billing/fee-rules/{rule}', [BillingController::class, 'closeFeeRule'])
             ->name('billing.fee-rules.close');
+        Route::post('billing/coupons', [BillingController::class, 'storeCoupon'])
+            ->name('billing.coupons.store');
+        Route::delete('billing/coupons/{coupon}', [BillingController::class, 'withdrawCoupon'])
+            ->name('billing.coupons.withdraw');
 
         /*
          * Giving an account a package without a sale (§8.3, P1-40).

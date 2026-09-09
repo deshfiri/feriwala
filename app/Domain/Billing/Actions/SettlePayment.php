@@ -39,6 +39,7 @@ class SettlePayment
         protected EvaluateActivationReadiness $readiness,
         protected ActivateRenewal $renewals,
         protected ActivatePackageChange $packageChanges,
+        protected SettleCouponRedemption $couponRedemptions,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
         protected LogManager $log,
@@ -158,6 +159,15 @@ class SettlePayment
      */
     protected function applyPurpose(Payment $payment): void
     {
+        /*
+         * A coupon held against this payment becomes a use, whatever the
+         * payment was for (§9). Before the purpose switch, because the
+         * redemption is a fact about the money arriving rather than about what
+         * it bought — and because it must happen even if what it bought fails
+         * to activate for some other reason.
+         */
+        $this->couponRedemptions->redeem($payment);
+
         match ($payment->purpose) {
             // A settled activation payment can be the last requirement standing
             // between an account and the approval queue (§5.1).

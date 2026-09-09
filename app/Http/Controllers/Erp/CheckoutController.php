@@ -6,9 +6,15 @@ use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\CalculateActivationQuote;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
+use App\Domain\Billing\Actions\ReserveCoupon;
+use App\Domain\Billing\CouponValidator;
+use App\Domain\Billing\Data\ActivationQuote;
+use App\Domain\Billing\Data\CouponOutcome;
+use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Package\Enums\UserPackageStatus;
+use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\PaymentIntent;
@@ -20,6 +26,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 
 /**
  * The combined registration and package fee checkout (§9).
@@ -31,6 +38,20 @@ use Inertia\Response;
 class CheckoutController extends Controller
 {
     use ResolvesBusinessAccount;
+
+    /**
+     * Where a typed coupon code is held between the render and the payment.
+     *
+     * The session, not a form field or the URL: the code is revalidated
+     * server-side every time it is read, so nothing the browser holds decides
+     * what is charged (§36.1).
+     */
+    public const COUPON_SESSION_KEY = 'checkout.coupon';
+
+    public function __construct(
+        protected CouponValidator $coupons,
+        protected ReserveCoupon $reserveCoupon,
+    ) {}
 
     public function show(
         Request $request,
@@ -49,7 +70,14 @@ class CheckoutController extends Controller
                 ->with('info', 'Choose a package to continue.');
         }
 
-        $quote = $quotes->handle($package, account: $account);
+        /*
+         * The coupon held in the session, re-validated on every render. Nothing
+         * is reserved here: checking what a code is worth must not spend it
+         * (§9), and this runs every time the page is opened.
+         */
+        $coupon = $this->couponOutcome($request, $account, $package, $quotes);
+
+        $quote = $this->quoteFor($quotes, $package, $account, $coupon);
 
         return Inertia::render('onboarding/checkout', [
             'package' => [
@@ -58,11 +86,34 @@ class CheckoutController extends Controller
                 'validity_days' => $package->validity_days,
             ],
             'quote' => $quote->toArray(),
+            'coupon' => $coupon?->toArray(),
             'gateways' => array_map(fn (string $name) => [
                 'name' => $name,
                 'label' => config("payment.gateways.{$name}.label", $name),
             ], $gateways->available()),
         ]);
+    }
+
+    /**
+     * Hold a coupon code against this checkout, or clear it.
+     *
+     * Kept in the session rather than in the URL or a form field: the code is
+     * revalidated server-side on every render and again at payment, so nothing
+     * the browser holds decides what is charged (§36.1).
+     */
+    public function applyCoupon(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'code' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $code = trim((string) ($validated['code'] ?? ''));
+
+        $code === ''
+            ? $request->session()->forget(self::COUPON_SESSION_KEY)
+            : $request->session()->put(self::COUPON_SESSION_KEY, $code);
+
+        return back();
     }
 
     /**
@@ -87,8 +138,12 @@ class CheckoutController extends Controller
             return to_route('packages.index');
         }
 
-        // Recalculated here rather than trusting anything submitted.
-        $quote = $quotes->handle($package, account: $account);
+        // Recalculated here rather than trusting anything submitted — the
+        // coupon included, so a code that expired while the page was open is
+        // refused at the moment it matters rather than honoured from a stale
+        // render (§36.1).
+        $coupon = $this->couponOutcome($request, $account, $package, $quotes);
+        $quote = $this->quoteFor($quotes, $package, $account, $coupon);
 
         if (! $quote->isPayable()) {
             throw ValidationException::withMessages([
@@ -105,6 +160,31 @@ class CheckoutController extends Controller
             idempotencyKey: 'activation:'.$subscription->public_id,
             payable: $subscription,
         );
+
+        /*
+         * The coupon is held now, not when the page was opened (§9). This is
+         * the moment somebody commits to paying, and the hold is what stops two
+         * checkouts started at once from both spending the last slot. It
+         * becomes a redemption when the money arrives and is released if it
+         * never does.
+         */
+        if ($coupon !== null && $coupon->isAccepted && $coupon->coupon !== null) {
+            try {
+                $this->reserveCoupon->handle(
+                    $coupon->coupon,
+                    $account,
+                    $payment,
+                    $coupon->discount ?? $quote->amountFor(AllocationType::Discount),
+                );
+            } catch (RuntimeException $exception) {
+                // The last slot went between the render and here. Better to
+                // refuse the checkout than to charge a discounted total against
+                // a coupon that is no longer available.
+                $request->session()->forget(self::COUPON_SESSION_KEY);
+
+                throw ValidationException::withMessages(['coupon' => $exception->getMessage()]);
+            }
+        }
 
         $payment->forceFill(['gateway' => $validated['gateway']])->save();
 
@@ -130,6 +210,57 @@ class CheckoutController extends Controller
         }
 
         return redirect()->away($redirect->url);
+    }
+
+    /**
+     * The coupon held for this checkout, validated against this purchase.
+     *
+     * Null when no code is held. A refused code still comes back as an outcome
+     * so the screen can say **why** — "that code ended on 30 June" and "that
+     * code is for the Enterprise package" are different problems with different
+     * next steps.
+     */
+    protected function couponOutcome(
+        Request $request,
+        BusinessAccount $account,
+        Package $package,
+        CalculateActivationQuote $quotes,
+    ): ?CouponOutcome {
+        $code = $request->session()->get(self::COUPON_SESSION_KEY);
+
+        if (! is_string($code) || trim($code) === '') {
+            return null;
+        }
+
+        // The undiscounted fees, which is what a coupon is worked out against.
+        $base = $quotes->handle($package, account: $account);
+
+        return $this->coupons->validate(
+            code: $code,
+            account: $account,
+            package: $package,
+            registrationFee: $base->amountFor(AllocationType::RegistrationFee),
+            packageFee: $base->amountFor(AllocationType::PackageFee),
+        );
+    }
+
+    /**
+     * The quote, with the discount applied only if the coupon stands.
+     */
+    protected function quoteFor(
+        CalculateActivationQuote $quotes,
+        Package $package,
+        BusinessAccount $account,
+        ?CouponOutcome $coupon,
+    ): ActivationQuote {
+        return $quotes->handle(
+            $package,
+            discount: $coupon?->isAccepted === true ? $coupon->discount : null,
+            discountDescription: $coupon?->isAccepted === true
+                ? (string) __('billing.coupons.line', ['code' => (string) $coupon->coupon?->code])
+                : null,
+            account: $account,
+        );
     }
 
     protected function pendingSubscription(BusinessAccount $account): ?UserPackage

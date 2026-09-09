@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Billing\Actions\ManageCoupons;
 use App\Domain\Billing\Actions\ManageFeeRules;
+use App\Domain\Billing\Enums\CouponScope;
+use App\Domain\Billing\Enums\DiscountType;
 use App\Domain\Billing\Enums\FeeType;
+use App\Domain\Billing\Models\Coupon;
 use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Domain\Package\Models\Package;
@@ -36,6 +40,7 @@ class BillingController extends Controller
 {
     public function __construct(
         protected ManageFeeRules $feeRules,
+        protected ManageCoupons $coupons,
     ) {}
 
     public function index(Request $request): Response
@@ -81,8 +86,118 @@ class BillingController extends Controller
                 'label' => $type->label(),
             ], FeeType::cases()),
 
+            'coupons' => Coupon::query()
+                ->with('package:id,name')
+                ->orderByDesc('effective_from')
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn (Coupon $coupon) => [
+                    'id' => $coupon->public_id,
+                    'code' => $coupon->code,
+                    'name' => $coupon->name,
+                    'discount_type' => $coupon->discount_type->value,
+                    'discount_label' => $coupon->discount_type === DiscountType::Percentage
+                        ? number_format($coupon->value / 100, 2).'%'
+                        : Money::of($coupon->value, $coupon->currency())->format(),
+                    'applies_to' => $coupon->applies_to->value,
+                    'applies_to_label' => $coupon->applies_to->label(),
+                    'package' => $coupon->package?->name,
+                    'usage_limit' => $coupon->usage_limit,
+                    'redeemed_count' => $coupon->redeemed_count,
+                    'per_account_limit' => $coupon->per_account_limit,
+                    'effective_from' => $coupon->effective_from->toIso8601String(),
+                    'effective_until' => $coupon->effective_until?->toIso8601String(),
+                    'is_active' => $coupon->is_active,
+                    'is_open' => $coupon->isOpen(),
+                ])
+                ->all(),
+
+            'discount_types' => array_map(fn (DiscountType $type) => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ], DiscountType::cases()),
+
+            'coupon_scopes' => array_map(fn (CouponScope $scope) => [
+                'value' => $scope->value,
+                'label' => $scope->label(),
+            ], CouponScope::cases()),
+
             'can' => ['manage' => BillingSettingsPolicy::canManage($actor)],
         ]);
+    }
+
+    public function storeCoupon(Request $request): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:40'],
+            'name' => ['required', 'string', 'max:191'],
+            'discount_type' => ['required', Rule::enum(DiscountType::class)],
+            'value' => ['required', 'integer', 'min:1'],
+            'applies_to' => ['required', Rule::enum(CouponScope::class)],
+            'package' => ['nullable', 'string'],
+            'minimum_spend_minor' => ['nullable', 'integer', 'min:0'],
+            'maximum_discount_minor' => ['nullable', 'integer', 'min:0'],
+            'usage_limit' => ['nullable', 'integer', 'min:1'],
+            'per_account_limit' => ['nullable', 'integer', 'min:1'],
+            'effective_from' => ['required', 'date'],
+            'effective_until' => ['nullable', 'date', 'after:effective_from'],
+        ]);
+
+        $package = empty($validated['package'])
+            ? null
+            : Package::query()->where('public_id', $validated['package'])->firstOrFail();
+
+        try {
+            $this->coupons->create(
+                actor: $actor,
+                code: $validated['code'],
+                name: $validated['name'],
+                type: DiscountType::from($validated['discount_type']),
+                value: (int) $validated['value'],
+                appliesTo: CouponScope::from($validated['applies_to']),
+                currency: Currency::BDT,
+                effectiveFrom: CarbonImmutable::parse($validated['effective_from']),
+                effectiveUntil: isset($validated['effective_until'])
+                    ? CarbonImmutable::parse($validated['effective_until'])
+                    : null,
+                packageId: $package?->id,
+                minimumSpend: isset($validated['minimum_spend_minor'])
+                    ? Money::of((int) $validated['minimum_spend_minor'], Currency::BDT)
+                    : null,
+                maximumDiscount: isset($validated['maximum_discount_minor'])
+                    ? Money::of((int) $validated['maximum_discount_minor'], Currency::BDT)
+                    : null,
+                usageLimit: isset($validated['usage_limit']) ? (int) $validated['usage_limit'] : null,
+                perAccountLimit: isset($validated['per_account_limit'])
+                    ? (int) $validated['per_account_limit']
+                    : null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['code' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('billing.coupons.created')]);
+
+        return back();
+    }
+
+    public function withdrawCoupon(Request $request, string $coupon): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManage($actor), 403);
+
+        $record = Coupon::query()->where('public_id', $coupon)->firstOrFail();
+
+        $this->coupons->withdraw($actor, $record);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('billing.coupons.closed')]);
+
+        return back();
     }
 
     public function storeFeeRule(Request $request): RedirectResponse

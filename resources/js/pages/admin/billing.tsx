@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
+import BillingCoupons, { type CouponRow } from './billing-coupons';
 import type { Money } from '@/lib/money';
 
 export type FeeRuleRow = {
@@ -30,6 +31,9 @@ type Props = {
     fee_rules: FeeRuleRow[];
     packages: { id: string; name: string }[];
     fee_types: { value: string; label: string }[];
+    coupons: CouponRow[];
+    discount_types: { value: string; label: string }[];
+    coupon_scopes: { value: string; label: string }[];
     can: { manage: boolean };
 };
 
@@ -47,6 +51,9 @@ export default function Billing({
     fee_rules: feeRules,
     packages,
     fee_types: feeTypes,
+    coupons,
+    discount_types: discountTypes,
+    coupon_scopes: couponScopes,
     can,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -307,6 +314,14 @@ export default function Billing({
                         </Form>
                     )}
                 </SectionCard>
+
+                <BillingCoupons
+                    coupons={coupons}
+                    packages={packages}
+                    discountTypes={discountTypes}
+                    scopes={couponScopes}
+                    canManage={can.manage}
+                />
             </PageContainer>
         </>
     );

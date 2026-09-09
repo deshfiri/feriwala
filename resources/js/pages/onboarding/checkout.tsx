@@ -4,6 +4,9 @@ import { useState } from 'react';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { Money } from '@/lib/money';
 
@@ -36,12 +39,22 @@ type Quote = {
 export default function Checkout({
     package: pkg,
     quote,
+    coupon,
     gateways,
 }: {
     package: { slug: string; name: string; validity_days: number | null };
     quote: Quote;
+    /** The code held for this checkout, accepted or refused with a reason. */
+    coupon?: {
+        accepted: boolean;
+        code: string | null;
+        name: string | null;
+        discount: Money | null;
+        reason: string | null;
+    } | null;
     gateways: { name: string; label: string }[];
 }) {
+    const { t } = useTranslation();
     const [gateway, setGateway] = useState(gateways[0]?.name ?? '');
 
     return (
@@ -94,6 +107,67 @@ export default function Checkout({
                         </div>
                     </dl>
                 </section>
+
+                {/*
+                    Applying a code recalculates the quote and reserves nothing:
+                    a coupon is held when somebody commits to paying, not when
+                    they look at the page (§9). The refusal says which part
+                    failed, because "not valid" gives nobody a next step.
+                */}
+                <Form
+                    action="/checkout/coupon"
+                    method="post"
+                    className="bg-card border-border space-y-3 rounded-xl border p-5 shadow-sm"
+                >
+                    {({ processing }) => (
+                        <>
+                            <Label htmlFor="coupon-code">
+                                {t('billing.coupons.label')}
+                            </Label>
+
+                            <div className="flex gap-2">
+                                <Input
+                                    id="coupon-code"
+                                    name="code"
+                                    defaultValue={coupon?.code ?? ''}
+                                    placeholder={t(
+                                        'billing.coupons.placeholder',
+                                    )}
+                                    className="font-mono uppercase"
+                                />
+
+                                <Button
+                                    type="submit"
+                                    variant="secondary"
+                                    disabled={processing}
+                                >
+                                    {t('billing.coupons.apply')}
+                                </Button>
+                            </div>
+
+                            {coupon?.accepted === true && (
+                                <p
+                                    className="text-sm font-medium"
+                                    role="status"
+                                >
+                                    {t('billing.coupons.applied', {
+                                        code: coupon.code ?? '',
+                                    })}
+                                </p>
+                            )}
+
+                            {coupon?.accepted === false &&
+                                coupon.reason !== null && (
+                                    <p
+                                        className="text-danger text-sm font-medium"
+                                        role="status"
+                                    >
+                                        {coupon.reason}
+                                    </p>
+                                )}
+                        </>
+                    )}
+                </Form>
 
                 <Form
                     action="/checkout"
