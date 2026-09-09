@@ -64,6 +64,7 @@ return [
             'security' => 'Security',
             'appearance' => 'Appearance',
             'package' => 'Package',
+            'invoices' => 'Invoices',
             'staff' => 'Staff',
         ],
     ],

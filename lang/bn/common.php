@@ -64,6 +64,7 @@ return [
             'security' => 'নিরাপত্তা',
             'appearance' => 'অ্যাপিয়ারেন্স',
             'package' => 'প্যাকেজ',
+            'invoices' => 'চালান',
             'staff' => 'স্টাফ',
         ],
     ],

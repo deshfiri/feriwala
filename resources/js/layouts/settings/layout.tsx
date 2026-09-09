@@ -12,6 +12,7 @@ import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
 import { index as staff } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
+import { index as invoices } from '@/routes/subscription/invoices';
 import type { NavItem } from '@/types';
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
@@ -47,6 +48,18 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                   {
                       title: t('common.settings.nav.package'),
                       href: subscription(),
+                      icon: null,
+                  },
+                  /*
+                   * Beside the package, and on the same terms. The activation
+                   * invoice is issued when the payment is recorded, so an
+                   * applicant who has not paid yet already has a document to
+                   * read — and a screen only reachable by typing its address is
+                   * not reachable.
+                   */
+                  {
+                      title: t('common.settings.nav.invoices'),
+                      href: invoices(),
                       icon: null,
                   },
               ]
