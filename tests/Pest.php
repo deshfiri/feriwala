@@ -181,7 +181,20 @@ function testStrongPassword(): string
 
 function testPlatformStaff(PlatformRole $role): User
 {
-    $user = User::factory()->staff()->create();
+    $factory = User::factory()->staff();
+
+    /*
+     * §36 requires a second factor for sensitive roles and the admin panel
+     * enforces it, so a fixture holding one of those roles has to have one —
+     * otherwise every administration test quietly becomes a test of the
+     * enrolment redirect. A test that is *about* the requirement builds its own
+     * staff without it; see tests/Feature/Auth/TwoFactorRequirementTest.php.
+     */
+    if ($role->requiresTwoFactor()) {
+        $factory = $factory->withTwoFactor();
+    }
+
+    $user = $factory->create();
     $user->assignRole($role->value);
 
     return $user;

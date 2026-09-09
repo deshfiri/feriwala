@@ -124,7 +124,7 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
  * changed is which question closes the panel: being barred from the platform,
  * rather than not having bought a package.
  */
-Route::middleware(['auth', 'noindex'])
+Route::middleware(['auth', 'noindex', 'two-factor'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {

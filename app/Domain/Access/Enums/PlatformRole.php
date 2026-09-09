@@ -5,6 +5,7 @@ namespace App\Domain\Access\Enums;
 use App\Domain\Access\Enums\PermissionAction as Action;
 use App\Domain\Access\Enums\PermissionModule as Module;
 use App\Domain\Access\PermissionCatalogue;
+use Illuminate\Support\Str;
 
 /**
  * The twenty administrative roles from requirements.txt §32.1.
@@ -76,6 +77,43 @@ enum PlatformRole: string
     public function grantsEverything(): bool
     {
         return $this === self::SuperAdmin;
+    }
+
+    /**
+     * Whether this role may not be used without a second factor (§36).
+     *
+     * **Derived, not listed.** §32.2 already names the actions that need more
+     * than a permission behind them — releasing a payment, adjusting a wallet,
+     * reversing a transaction, reading sensitive data or KYC documents, managing
+     * backups or integrations, and deleting things. A role that can do any of
+     * them is a sensitive role, and saying so this way means a role gaining one
+     * of those verbs gains the requirement in the same edit. A hand-kept second
+     * list is one that drifts, and it drifts silently.
+     *
+     * Super Admin qualifies on its own: it holds the catalogue.
+     *
+     * The boundary is real rather than decorative — a Report Viewer sees and
+     * exports reports and neither verb is sensitive, so it stays outside.
+     */
+    public function requiresTwoFactor(): bool
+    {
+        if ($this->grantsEverything()) {
+            return true;
+        }
+
+        /*
+         * Read from the permissions the role actually holds, not from the raw
+         * grants: a verb the module does not accept is dropped by the catalogue,
+         * and an Order Manager granted `delete` on a module with no delete
+         * permission does not, in fact, delete anything.
+         */
+        foreach ($this->permissions() as $permission) {
+            if (Action::tryFrom(Str::after($permission, '.'))?->isSensitive() ?? false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

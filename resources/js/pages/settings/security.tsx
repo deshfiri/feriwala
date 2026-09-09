@@ -1,11 +1,14 @@
 import { Form, Head } from '@inertiajs/react';
+import { ShieldAlert } from 'lucide-react';
 import { useRef } from 'react';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { useTranslation } from '@/hooks/use-translation';
 import { edit } from '@/routes/security';
 import type { Props as ManagePasskeysProps } from '@/components/manage-passkeys';
 import ManagePasskeys from '@/components/manage-passkeys';
@@ -17,19 +20,42 @@ import ManageTwoFactor from '@/components/manage-two-factor';
 // oxfmt-ignore
 type Props = {
     passwordRules: string;
+    /** Whether a role this person holds makes a second factor mandatory (§36). */
+    twoFactorRequired?: boolean;
 } & ManagePasskeysProps &
     ManageSessionsProps &
     ManageTwoFactorProps;
 
 export default function Security(props: Props) {
+    const { t } = useTranslation();
     const passwordInput = useRef<HTMLInputElement>(null);
     const currentPasswordInput = useRef<HTMLInputElement>(null);
+
+    /*
+     * The administration gate redirects here. Without saying why, this looks
+     * like an ordinary settings page somebody was sent to for no reason.
+     */
+    const mustEnrol =
+        (props.twoFactorRequired ?? false) &&
+        !(props.twoFactorEnabled ?? false);
 
     return (
         <>
             <Head title="Security settings" />
 
             <h1 className="sr-only">Security settings</h1>
+
+            {mustEnrol && (
+                <Alert variant="destructive" className="mb-6">
+                    <ShieldAlert className="h-4 w-4" />
+                    <AlertTitle>
+                        {t('security.two_factor.required_title')}
+                    </AlertTitle>
+                    <AlertDescription>
+                        {t('security.two_factor.required_description')}
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <div className="space-y-6">
                 <Heading

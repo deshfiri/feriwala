@@ -7,6 +7,7 @@ use App\Http\Middleware\EnsureIdentityHasPlatformAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventSearchIndexing;
+use App\Http\Middleware\RequireTwoFactorForSensitiveRoles;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\TrackAuthenticatedSession;
 use Illuminate\Foundation\Application;
@@ -73,6 +74,13 @@ return Application::configure(basePath: dirname(__DIR__))
              * administration is permission-driven and needs no package (D23).
              */
             'entitled' => EnsureAccountIsEntitled::class,
+
+            /*
+             * A second factor before administration (§36). Applied to the admin
+             * group rather than globally: it is the platform roles that can move
+             * money and read documents, and a business owner is not one of them.
+             */
+            'two-factor' => RequireTwoFactorForSensitiveRoles::class,
         ]);
 
         /*

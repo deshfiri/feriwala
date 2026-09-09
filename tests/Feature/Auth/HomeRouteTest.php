@@ -33,6 +33,17 @@ describe('signing in', function () {
         // The lockout, asserted end to end.
         $staff = testPlatformStaff(PlatformRole::KycManager);
 
+        /*
+         * Without the second factor, because a sign-in that has one lands on
+         * the two-factor challenge first (§36, P1-18) — and what is under test
+         * here is where the *resolver* sends somebody once they are in.
+         */
+        $staff->forceFill([
+            'two_factor_secret' => null,
+            'two_factor_recovery_codes' => null,
+            'two_factor_confirmed_at' => null,
+        ])->save();
+
         $this->post(route('login.store'), [
             'email' => $staff->email,
             'password' => 'password',

@@ -217,6 +217,14 @@ it('separates the two suspensions', function () {
     $reviewer = $account->owner;
     $reviewer->assignRole(PlatformRole::KycManager->value);
 
+    // §36's second factor is a separate gate on the panel (P1-18) and has to be
+    // satisfied before this one can be observed.
+    $reviewer->forceFill([
+        'two_factor_secret' => encrypt('secret'),
+        'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+        'two_factor_confirmed_at' => now(),
+    ])->save();
+
     expect(accessMatrixFor($reviewer)['admin'])->toBe('ok');
 
     $reviewer->forceFill(['identity_status' => UserStatus::Suspended])->save();

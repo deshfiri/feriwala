@@ -61,6 +61,13 @@ class SecurityController extends Controller
 
             $props['twoFactorEnabled'] = $request->user()->hasEnabledTwoFactorAuthentication();
             $props['requiresConfirmation'] = Features::optionEnabled(Features::twoFactorAuthentication(), 'confirm');
+
+            /*
+             * Why the admin panel turned them away (§36). The gate redirects
+             * here; without saying so, the screen looks like an ordinary
+             * settings page they were sent to for no reason.
+             */
+            $props['twoFactorRequired'] = $request->user()->requiresTwoFactorAuthentication();
         }
 
         return Inertia::render('settings/security', $props);
@@ -147,6 +154,13 @@ class SecurityController extends Controller
         return $request->user()
             ->authenticatedSessions()
             ->orderByDesc('last_active_at')
+            /*
+             * A stable tie-break. Activity is stored to the second, so two
+             * sessions touched in the same second would otherwise come back in
+             * whatever order the database chose — and the row marked "this
+             * device" would move between page loads.
+             */
+            ->orderByDesc('id')
             ->limit(self::SESSION_HISTORY_LIMIT)
             ->get()
             ->map(fn (AuthenticatedSession $session) => [

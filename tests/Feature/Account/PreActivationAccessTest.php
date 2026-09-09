@@ -134,6 +134,15 @@ describe('administration is not behind the commercial gate (D23)', function () {
         $reviewer = $account->owner;
         $reviewer->assignRole(PlatformRole::KycManager->value);
 
+        // KYC Manager reads personal documents, so §36 requires a second
+        // factor before the panel opens at all (P1-18). That gate is a
+        // different question from this one and has to be satisfied first.
+        $reviewer->forceFill([
+            'two_factor_secret' => encrypt('secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+            'two_factor_confirmed_at' => now(),
+        ])->save();
+
         $this->actingAs($reviewer)
             ->get(route('dashboard'))
             ->assertRedirect(route('onboarding.status'));

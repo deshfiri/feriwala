@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
+use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountPermission;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
@@ -273,6 +274,23 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
      * question of a person, and answering it from `users` is what made staff
      * complete KYC and pay an activation fee to open the admin panel.
      */
+    /**
+     * Whether any role this person holds makes a second factor mandatory (§36).
+     *
+     * Asked in two places — the gate on the admin panel and the security screen
+     * that explains why it is closed — so it is answered in one.
+     */
+    public function requiresTwoFactorAuthentication(): bool
+    {
+        foreach (PlatformRole::cases() as $role) {
+            if ($role->requiresTwoFactor() && $this->hasRole($role->value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function hasPlatformAccess(): bool
     {
         return $this->identity_status->permitsAccess();
