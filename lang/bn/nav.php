@@ -19,6 +19,8 @@ return [
     'kyc_requirements' => 'যাচাইকরণের শর্তাবলি',
     'packages' => 'প্যাকেজ',
     'activation_approvals' => 'অ্যাক্টিভেশন অনুমোদন',
+    'billing_rules' => 'বিলিং নিয়ম',
+    'invoices' => 'চালান',
 
     'search' => [
         'open' => 'পেজ খুঁজুন',

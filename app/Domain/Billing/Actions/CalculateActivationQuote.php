@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Data\ActivationQuote;
 use App\Domain\Billing\Data\QuoteLine;
 use App\Domain\Billing\Enums\AllocationType;
+use App\Domain\Billing\FeeRuleResolver;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Tax\Data\TaxBreakdown;
@@ -42,6 +43,7 @@ class CalculateActivationQuote
 {
     public function __construct(
         protected SettingsRepository $settings,
+        protected FeeRuleResolver $fees,
         protected TaxEngine $tax,
     ) {}
 
@@ -58,10 +60,14 @@ class CalculateActivationQuote
 
         $lines = [];
 
-        // 1. Fees. A package-specific registration fee overrides the global
-        //    one; null means "use the global fee" (§9).
-        $registrationFee = $package->registration_fee_minor
-            ?? $this->globalRegistrationFee($currency);
+        /*
+         * 1. Fees. The registration fee is resolved by **dated rule** (§9): a
+         *    rule naming this package first, then the package's own override,
+         *    then the global rule — and always against `$at`, so a reissued
+         *    quote reproduces the arithmetic it did originally rather than
+         *    today's price list.
+         */
+        $registrationFee = $this->fees->registrationFee($package, $currency, $at);
 
         if ($registrationFee->isPositive()) {
             $lines[] = new QuoteLine(AllocationType::RegistrationFee, $registrationFee);
@@ -123,20 +129,6 @@ class CalculateActivationQuote
         }
 
         return $quote;
-    }
-
-    /**
-     * The registration fee that applies when a package does not set its own.
-     */
-    protected function globalRegistrationFee(Currency $currency): Money
-    {
-        $configured = $this->settings->get('billing.registration_fee');
-
-        if ($configured instanceof Money) {
-            return $configured;
-        }
-
-        return Money::of((int) ($configured ?? 0), $currency);
     }
 
     /**

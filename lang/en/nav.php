@@ -25,6 +25,8 @@ return [
     'kyc_requirements' => 'Verification requirements',
     'packages' => 'Packages',
     'activation_approvals' => 'Activation approvals',
+    'billing_rules' => 'Billing rules',
+    'invoices' => 'Invoices',
 
     'search' => [
         'open' => 'Search pages',

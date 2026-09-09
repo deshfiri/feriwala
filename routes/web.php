@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
+use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
@@ -182,6 +183,20 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * was (D23). Reached from the account dossier only because that is where
          * an administrator is standing when the question comes up.
          */
+        /*
+         * What Feriwala charges (§9, P1-43).
+         *
+         * Fee rules, coupons and tax rules on one screen: one decision with
+         * three shapes, all of which change the amount on somebody's invoice.
+         * Behind `payment.manage_settings` — the person who reconciles the money
+         * is the person who should be able to price it.
+         */
+        Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+        Route::post('billing/fee-rules', [BillingController::class, 'storeFeeRule'])
+            ->name('billing.fee-rules.store');
+        Route::delete('billing/fee-rules/{rule}', [BillingController::class, 'closeFeeRule'])
+            ->name('billing.fee-rules.close');
+
         /*
          * Giving an account a package without a sale (§8.3, P1-40).
          *

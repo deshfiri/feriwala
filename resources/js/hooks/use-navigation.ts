@@ -4,6 +4,7 @@ import {
     LayoutGrid,
     ListChecks,
     Package as PackageIcon,
+    Receipt,
     Settings,
     ShieldCheck,
     UserCheck,
@@ -12,6 +13,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
 import { index as activationQueue } from '@/routes/admin/activations';
+import { index as billingRules } from '@/routes/admin/billing';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as packageCatalogue } from '@/routes/admin/packages';
@@ -126,6 +128,17 @@ export function useNavigation(): {
                               title: t('nav.activation_approvals'),
                               href: activationQueue(),
                               icon: UserCheck,
+                          },
+                      ]
+                    : []),
+                // Fee rules, coupons and tax: one destination, because they are
+                // one decision about what an invoice says (§9).
+                ...(permissions['payment.view']
+                    ? [
+                          {
+                              title: t('nav.billing_rules'),
+                              href: billingRules(),
+                              icon: Receipt,
                           },
                       ]
                     : []),
