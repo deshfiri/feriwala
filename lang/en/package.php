@@ -177,6 +177,18 @@ return [
         'warning' => 'This replaces the account\'s current term and grants real entitlement for nothing.',
     ],
 
+    'cancel' => [
+        'action' => 'Cancel this package',
+        'title' => 'Cancel your package?',
+        'description' => 'Your package features stop immediately — this does not run to the end of your term.',
+        'refunds' => 'Anything already paid is not refunded automatically. Contact support if you believe a refund is due.',
+        'reason' => 'Why are you cancelling?',
+        'reason_help' => 'Kept with your account record.',
+        'confirm' => 'Cancel package',
+        'done' => 'Your package has been cancelled.',
+        'nothing_to_cancel' => 'You do not have an active package to cancel.',
+    ],
+
     'features' => [
         'unlimited' => 'Unlimited',
         'yes' => 'Yes',

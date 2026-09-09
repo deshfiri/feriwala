@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
+use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -37,3 +38,28 @@ Schedule::call(fn () => app(SweepKycDeadlines::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Warn and enforce KYC deadlines (§7.4)');
+
+/*
+ * The §8.4 subscription clock: renewal due, grace period, expiry.
+ *
+ * Same guards and for the same reason (§41). This pass sends messages and takes
+ * package features away; two application servers running it at once would mean
+ * two notifications for one event. `onOneServer` and `withoutOverlapping` both
+ * use the isolated Redis lock database, so a cache flush cannot drop them.
+ *
+ * Idempotent on its own as well, not only by the lock: every move is made under
+ * a row lock and only from a state that permits it, so a repeat pass finds the
+ * term already moved and does nothing.
+ *
+ * Daily and early, before the KYC sweep, because a term expiring today should be
+ * expired before anything else reasons about what the account is entitled to.
+ */
+Schedule::call(fn () => app(SweepSubscriptionLifecycle::class)->handle())
+    ->name('subscription-lifecycle-sweep')
+    ->dailyAt('01:30')
+    // The account holder's day, not the server's: "expires on the 30th" has to
+    // mean the 30th where they are.
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Move subscription terms through renewal, grace and expiry (§8.4)');

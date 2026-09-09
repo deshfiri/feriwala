@@ -1,12 +1,17 @@
-import { Head, Link } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import { PackageOpen } from 'lucide-react';
+import { useState } from 'react';
 import Heading from '@/components/heading';
+import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as choosePackage } from '@/routes/packages';
+import { cancel as cancelSubscription } from '@/routes/subscription';
+import { index as changePackage } from '@/routes/subscription/change';
 import { show as renewSubscription } from '@/routes/subscription/renew';
 import type { AccountSubscriptionRow } from '@/types';
 
@@ -149,6 +154,14 @@ function CurrentTerm({
                             </Link>
                         </Button>
                     )}
+
+                    {subscription.entitles && (
+                        <Button asChild variant="secondary" size="sm">
+                            <Link href={changePackage()}>
+                                {t('package.change.action')}
+                            </Link>
+                        </Button>
+                    )}
                 </div>
             </header>
 
@@ -213,7 +226,101 @@ function CurrentTerm({
                     </ul>
                 </div>
             )}
+
+            {subscription.entitles && <CancelTerm />}
         </section>
+    );
+}
+
+/**
+ * Ending a term early (§8.2).
+ *
+ * The consequence is stated before the button and restated in the dialog:
+ * cancelling stops the package **now**, and money already paid is not refunded
+ * by this. Refunds have their own eligibility and approval (§27), and a
+ * cancellation screen that implied otherwise would be making a promise
+ * somebody else has to keep.
+ */
+function CancelTerm() {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+
+    return (
+        <div className="border-border border-t pt-4">
+            {!open ? (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setOpen(true)}
+                >
+                    {t('package.cancel.action')}
+                </Button>
+            ) : (
+                <Form
+                    {...cancelSubscription.form()}
+                    options={{ preserveScroll: true }}
+                    onSuccess={() => setOpen(false)}
+                    className="space-y-3"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium">
+                                    {t('package.cancel.title')}
+                                </p>
+                                <p className="text-muted-foreground text-sm">
+                                    {t('package.cancel.description')}
+                                </p>
+                                <p className="text-muted-foreground text-sm">
+                                    {t('package.cancel.refunds')}
+                                </p>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="cancel-reason">
+                                    {t('package.cancel.reason')}
+                                </Label>
+
+                                <textarea
+                                    id="cancel-reason"
+                                    name="reason"
+                                    rows={2}
+                                    required
+                                    className="border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                />
+
+                                <p className="text-muted-foreground text-xs">
+                                    {t('package.cancel.reason_help')}
+                                </p>
+
+                                <InputError message={errors.reason} />
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setOpen(false)}
+                                >
+                                    {t('common.actions.cancel')}
+                                </Button>
+
+                                <Button
+                                    type="submit"
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={processing}
+                                >
+                                    {t('package.cancel.confirm')}
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </Form>
+            )}
+        </div>
     );
 }
 

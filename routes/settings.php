@@ -39,6 +39,14 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
      * needed. Self-scoped — the account comes from the membership, so there is
      * no subscription identifier in either URL.
      */
+    /*
+     * Cancelling a term (§8.2). In the same group as renewal, because an
+     * account whose package has lapsed may want to end it rather than renew,
+     * and both are reached from the same screen.
+     */
+    Route::post('settings/subscription/cancel', [SubscriptionController::class, 'cancel'])
+        ->name('subscription.cancel');
+
     Route::get('settings/subscription/renew', [RenewalController::class, 'show'])
         ->name('subscription.renew.show');
     Route::post('settings/subscription/renew', [RenewalController::class, 'pay'])

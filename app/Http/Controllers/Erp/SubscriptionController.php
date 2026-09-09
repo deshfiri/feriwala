@@ -4,14 +4,19 @@ namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Package\Actions\CancelSubscription;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
 use App\Domain\Package\Queries\AccountSubscription;
 use App\Domain\Package\SubscriptionPolicy;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * An account's own subscription (§8.2, §8.4).
@@ -53,6 +58,40 @@ class SubscriptionController extends Controller
             // will not say why sends somebody to support to find out.
             'renewal_blocker' => $policy->renewalBlocker($term),
         ]);
+    }
+
+    /**
+     * Cancel the current term (§8.2).
+     *
+     * Self-scoped: the term is found through the signed-in person's own account,
+     * so there is no identifier to substitute for somebody else's (§31.3).
+     */
+    public function cancel(Request $request, CancelSubscription $cancel): RedirectResponse
+    {
+        $account = $this->businessAccountFor($request);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+
+        $term = $account->packages()
+            ->whereIn('status', UserPackageStatus::entitling())
+            ->latest('id')
+            ->first();
+
+        if ($term === null) {
+            return back()->withErrors(['reason' => __('package.cancel.nothing_to_cancel')]);
+        }
+
+        try {
+            $cancel->handle($term, $request->user(), $validated['reason']);
+        } catch (InvalidArgumentException|RuntimeException $exception) {
+            throw ValidationException::withMessages(['reason' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('package.cancel.done')]);
+
+        return back();
     }
 
     /**
