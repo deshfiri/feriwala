@@ -7,25 +7,28 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Domain\Account\Actions\AcceptStaffInvitation;
 use App\Domain\Account\Enums\Gender;
 use App\Domain\Account\Models\AccountInvitation;
+use App\Http\Responses\LockoutResponse;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\PasskeyLoginResponse;
 use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
 use App\Support\Localization\Countries;
+use App\Support\Security\LoginThrottle;
 use App\Support\Security\PasswordPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\LockoutResponse as LockoutResponseContract;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
 use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
 use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
+use Laravel\Fortify\LoginRateLimiter;
 use Laravel\Passkeys\Contracts\PasskeyLoginResponse as PasskeyLoginResponseContract;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -39,6 +42,16 @@ class FortifyServiceProvider extends ServiceProvider
         $this->app->singleton(PasskeyLoginResponseContract::class, PasskeyLoginResponse::class);
         $this->app->singleton(RegisterResponseContract::class, RegisterResponse::class);
         $this->app->singleton(TwoFactorLoginResponseContract::class, TwoFactorLoginResponse::class);
+        $this->app->singleton(LockoutResponseContract::class, LockoutResponse::class);
+
+        /*
+         * Every Fortify action that touches the limiter — the throttle check,
+         * both failure paths and the success path — asks the container for the
+         * concrete class, so replacing it here replaces it for all of them
+         * (§6). {@see LoginThrottle} adds the per-address limit Fortify's own
+         * has no notion of.
+         */
+        $this->app->singleton(LoginRateLimiter::class, LoginThrottle::class);
     }
 
     /**
@@ -138,12 +151,16 @@ class FortifyServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->session()->get('login.id'));
         });
 
-        RateLimiter::for('login', function (Request $request) {
-            $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
-
-            return Limit::perMinute(5)->by($throttleKey);
-        });
-
+        /*
+         * There is deliberately no `login` limiter here, and `fortify.limiters.login`
+         * is null so Fortify uses its own pipeline instead (§6).
+         *
+         * The `throttle` middleware counts **requests**, and login is one of the
+         * few endpoints where that is the wrong unit: a successful sign-in would
+         * spend from the same budget as a guess, so somebody who signs in, signs
+         * out and signs in again is treated as an attacker. {@see LoginThrottle}
+         * counts failures only, which is what a limit on guessing means.
+         */
         RateLimiter::for('passkeys', function (Request $request) {
             $credentialId = $request->input('credential.id');
 

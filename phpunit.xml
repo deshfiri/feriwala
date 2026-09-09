@@ -24,6 +24,13 @@
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
         <!--
+            The rate limiter is pinned to Redis in config/cache.php, because a
+            limit counted per web node is not a limit. The suite still counts
+            in memory: attempts have to start at zero for each test, and a
+            shared Redis would carry a lockout from one test into the next.
+        -->
+        <env name="CACHE_LIMITER" value="array"/>
+        <!--
             Tests share the application database but live in their own schema,
             so RefreshDatabase can never touch development data and the test
             role needs no CREATEDB privilege.

@@ -179,6 +179,10 @@ renamed, and entries are never deleted.
       **(d)** rendering tests for English and Bangla, in both stacks;
       **(e)** no layout shift — matched metrics or `size-adjust`, so swapping the face does not reflow a screen;
       **(f)** the real weights the interface asks for (400/500/600), rather than one file with the rest synthesised
+- [ ] **P0-59** Rate-limit counters share the cache Redis database, so `cache:clear` — an ordinary deploy step —
+      resets every login attempt limit alongside it. Self-healing and not reachable by an attacker, but it means a
+      deploy hands whoever is mid-attack a fresh budget. Locks already have a database of their own for the same
+      reason (§38); this is the same argument one shelf down. Noted from P1-14
 
 ---
 
@@ -229,12 +233,12 @@ renamed, and entries are never deleted.
 
 - [x] **P1-9** Mobile OTP: `VerificationCodes` (hashed in Redis, constant-time compare, 5-attempt budget, 5-min TTL, 60s resend cooldown, identifier hashed into the key) + `SendMobileVerificationCode` / `VerifyMobile` with bilingual SMS. Verification never drags a further-along account backwards — 26 tests
 - [x] **P1-10** Pre-activation access gate (§5.4). `EnsureAccountIsActivated` existed but was registered nowhere; now aliased as `activated` and applied to the authenticated ERP and settings groups. An **allow-list**, so a new route is shut by default — a test asserts no listed prefix matches nothing (`payment.` was dead while the real routes are `checkout.`), and unbuilt §5.4 areas are declared in a separate `PENDING_ROUTE_PREFIXES` so a placeholder is distinguishable from a typo. Administration is deliberately not exempt: a suspended staff member loses the panel with everything else — 8 tests
-- [ ] **P1-11** Post-activation feature gate driven by package entitlements
+- [x] **P1-11** Post-activation feature gate driven by package entitlements (§8.1). `EnsureAccountIsEntitled`, aliased `entitled`, applied inside `business.activated` so trading comes before what was bought. It answers from `Entitlements`, which reads the **terms captured at purchase**, never the live package — repricing or re-scoping a package must not silently change what an account already paid for. Hiding the button was never the enforcement; the route is. Platform staff pass through, because administration is permission-driven and needs no package, and the recovery paths (onboarding, verification, package selection, checkout, profile, subscription) are deliberately outside it — a gate that can strand somebody mid-payment is worse than no gate. An unknown feature name, or one whose type cannot answer yes or no, throws rather than defaulting to allow — `df58e2c8a2e34130fc1fe9d025b66210895b84c9`, 12 tests
 
 ## P1.B Authentication & account security (§6)
 
-- [ ] **P1-12** Strong password policy + hashing config review
-- [ ] **P1-13** Configurable session lifetime; Redis-backed sessions; secure cookies (§36)
+- [x] **P1-12** Strong password policy + hashing config review. `App\Support\Security\PasswordPolicy` is the one definition of the §6 rules, used by registration, reset and the security screen alike. It had been registered through `Password::defaults()`, which returned null outside production — so every non-production environment silently fell back to Laravel's eight-character minimum, and the environments people actually test in were the ones with no policy. `config/hashing.php` now exists rather than being implied: bcrypt at 12 rounds with `rehash_on_login`, so existing hashes keep working and are upgraded on the next successful sign-in instead of by a migration — `b7ff375e04d15258a792499ffd145874f5085b59`, 12 tests
+- [x] **P1-13** Configurable session lifetime; Redis-backed sessions; secure cookies (§36). Lifetime comes from the settings table with `SESSION_LIFETIME` as the deployed fallback, bounded at five minutes and thirty days because a mistyped setting either locks everyone out or never expires; the middleware is **prepended** to the web group, since `StartSession` reads the value when it builds the store and again when it writes the cookie. Sessions moved to a Redis database of their own (db 4), so `cache:clear` can no longer sign every user out. `session.secure` was a bare `env()` with no default — null, never Secure — and now derives from the environment, which keeps plain-HTTP `artisan serve` signing in locally while a production deployment that forgot the variable is still protected — `4dd69cc`, 14 tests
 - [ ] **P1-14** Login attempt limits + brute-force protection (Redis rate limiter)
 - [ ] **P1-15** Suspicious login detection (new device/IP/geo) + security notification
 - [ ] **P1-16** Device & session history UI; "log out other devices"

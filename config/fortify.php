@@ -112,10 +112,16 @@ return [
     | every email and IP address combination. However, if you would like to
     | specify a custom rate limiter to call then you may specify it here.
     |
+    | `login` is null on purpose (§6). Naming a limiter here puts the `throttle`
+    | middleware in front of the route, which counts every request; leaving it
+    | null puts Fortify's own pipeline in charge, which counts only failed
+    | authentications. App\Support\Security\LoginThrottle is what it counts them
+    | with, and it adds the per-address limit the email-and-IP key cannot express.
+    |
     */
 
     'limiters' => [
-        'login' => 'login',
+        'login' => null,
         'two-factor' => 'two-factor',
         'passkeys' => 'passkeys',
     ],

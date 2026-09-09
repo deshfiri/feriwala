@@ -2,8 +2,8 @@
 
 use App\Domain\Account\Models\AccountInvitation;
 use App\Models\User;
+use App\Support\Security\LoginThrottle;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
 use Laravel\Passkeys\Contracts\PasskeyLoginResponse;
@@ -115,14 +115,22 @@ test('users can logout', function () {
 });
 
 test('users are rate limited', function () {
+    // The limits themselves — per identity, per address, the cooldowns and what
+    // a successful sign-in clears — are LoginThrottleTest. This one pins that
+    // the sign-in route is inside them at all.
     $user = User::factory()->create();
 
-    RateLimiter::increment(md5('login'.implode('|', [$user->email, '127.0.0.1'])), amount: 5);
+    foreach (range(1, LoginThrottle::IDENTITY_ATTEMPTS) as $ignored) {
+        $this->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'wrong-password',
+        ]);
+    }
 
-    $response = $this->post(route('login.store'), [
+    $this->postJson(route('login.store'), [
         'email' => $user->email,
-        'password' => 'wrong-password',
-    ]);
+        'password' => 'password',
+    ])->assertTooManyRequests();
 
-    $response->assertTooManyRequests();
+    $this->assertGuest();
 });

@@ -19,6 +19,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Rate Limiter Store
+    |--------------------------------------------------------------------------
+    |
+    | Named rather than left to follow the default store, because a rate limit
+    | that only counts on the node that saw the request is not a rate limit:
+    | five attempts per minute becomes five per minute per web node, and the
+    | protection dissolves exactly as the deployment grows (§6, §40). Redis is
+    | shared, so every node counts against the same figure.
+    |
+    */
+
+    'limiter' => env('CACHE_LIMITER', 'redis'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache Stores
     |--------------------------------------------------------------------------
     |
