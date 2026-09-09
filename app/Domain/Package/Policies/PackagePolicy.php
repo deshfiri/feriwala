@@ -57,6 +57,21 @@ class PackagePolicy
     }
 
     /**
+     * Granting an account a package without a sale (§8.3).
+     *
+     * `package.manage_settings`, not `package.create`. Writing a plan and giving
+     * one away are different decisions with different consequences: the first
+     * changes what is on offer, the second hands a specific business real
+     * entitlement for nothing, and the roles that shape a catalogue are not
+     * automatically the roles that should be able to do that.
+     */
+    public function assign(User $user, Package $package): bool
+    {
+        return ! $package->trashed()
+            && $user->can($this->permission(PermissionAction::ManageSettings));
+    }
+
+    /**
      * Hard deletion is deliberately absent.
      *
      * §8 has packages archived, never removed: a payment, a subscription and an

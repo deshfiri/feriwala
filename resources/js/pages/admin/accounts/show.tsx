@@ -14,6 +14,9 @@ import type { AccountSubscriptionRow } from '@/types';
 import RequestKycUpdateDialog, {
     type DocumentTypeOption,
 } from './request-kyc-update-dialog';
+import AssignPackageDialog, {
+    type AssignablePackage,
+} from './assign-package-dialog';
 import SignInAccessDialog, { type Person } from './sign-in-access-dialog';
 
 type Owner = {
@@ -93,6 +96,8 @@ type Props = {
      * from `staff`, which is about what somebody may do inside the business.
      */
     people: Person[];
+    /** Plans an administrator may grant this account without a sale (§8.3). */
+    assignable_packages: AssignablePackage[];
     document_types: DocumentTypeOption[];
     can: { request_kyc_update: boolean };
     blockers: string[];
@@ -117,6 +122,7 @@ export default function AdminAccountShow({
     payments,
     staff,
     people,
+    assignable_packages: assignablePackages,
     document_types: documentTypes,
     can,
     blockers,
@@ -126,6 +132,7 @@ export default function AdminAccountShow({
     const [changingAccessFor, setChangingAccessFor] = useState<Person | null>(
         null,
     );
+    const [assigning, setAssigning] = useState(false);
 
     const date = (value: string | null) =>
         value === null ? '—' : new Date(value).toLocaleDateString(locale);
@@ -421,7 +428,20 @@ export default function AdminAccountShow({
                     </div>
 
                     <div className="space-y-6">
-                        <SectionCard title={t('account.detail.subscription')}>
+                        <SectionCard
+                            title={t('account.detail.subscription')}
+                            actions={
+                                assignablePackages.length > 0 ? (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setAssigning(true)}
+                                    >
+                                        {t('package.assign.action')}
+                                    </Button>
+                                ) : undefined
+                            }
+                        >
                             {subscription === null ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('account.detail.no_subscription')}
@@ -592,6 +612,13 @@ export default function AdminAccountShow({
                 onOpenChange={setRequesting}
                 accountId={business.id}
                 documentTypes={documentTypes}
+            />
+
+            <AssignPackageDialog
+                accountId={business.id}
+                packages={assignablePackages}
+                open={assigning}
+                onOpenChange={setAssigning}
             />
 
             <SignInAccessDialog

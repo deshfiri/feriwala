@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
+use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
@@ -181,6 +182,16 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * was (D23). Reached from the account dossier only because that is where
          * an administrator is standing when the question comes up.
          */
+        /*
+         * Giving an account a package without a sale (§8.3, P1-40).
+         *
+         * Keyed on the account, because the business being given something is
+         * the subject. Guarded by the **package** policy: writing a plan and
+         * handing one out are different decisions.
+         */
+        Route::post('accounts/{account}/package', PackageAssignmentController::class)
+            ->name('accounts.assign-package');
+
         Route::post('identities/{user}/lock', [IdentityAccessController::class, 'lock'])
             ->name('identities.lock');
         Route::delete('identities/{user}/lock', [IdentityAccessController::class, 'unlock'])

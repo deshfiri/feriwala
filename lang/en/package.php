@@ -161,6 +161,22 @@ return [
         'none' => 'No other plans are available right now.',
     ],
 
+    'assign' => [
+        'title' => 'Assign a package',
+        'description' => 'Give this account a plan without a sale. No payment is created.',
+        'action' => 'Assign a package',
+        'package' => 'Package',
+        'reason' => 'Reason',
+        'reason_help' => 'Recorded in the audit trail. Not shown to the account.',
+        'starts_at' => 'Applies from',
+        'expires_at' => 'Ends',
+        'expires_help' => 'Leave blank for a term that does not expire.',
+        'promotional' => 'Record this as promotional rather than a manual assignment',
+        'submit' => 'Assign',
+        'done' => 'Package assigned.',
+        'warning' => 'This replaces the account\'s current term and grants real entitlement for nothing.',
+    ],
+
     'features' => [
         'unlimited' => 'Unlimited',
         'yes' => 'Yes',

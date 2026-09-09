@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\AccountDossier;
 use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -60,6 +61,26 @@ class AccountController extends Controller
              * loses the platform.
              */
             'people' => $this->dossier->people($account),
+
+            /*
+             * The plans an administrator could grant this account (§8.3, P1-40).
+             * Only what is on sale — assigning an archived plan would hand out
+             * terms nobody can renew onto.
+             */
+            'assignable_packages' => Package::query()
+                ->available()
+                ->orderBy('fee_minor')
+                ->get()
+                // Asked of each package, because the policy refuses an archived
+                // one on its own terms — a single class-level answer would
+                // offer plans the action then declines.
+                ->filter(fn (Package $package) => Gate::allows('assign', $package))
+                ->map(fn (Package $package) => [
+                    'slug' => $package->slug,
+                    'name' => $package->name,
+                ])
+                ->values()
+                ->all(),
 
             /*
              * The documents this account is actually subject to, so the request
