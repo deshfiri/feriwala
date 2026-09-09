@@ -3,7 +3,11 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Package\Enums\UserPackageStatus;
+use App\Domain\Package\Models\UserPackage;
 use App\Domain\Package\Queries\AccountSubscription;
+use App\Domain\Package\SubscriptionPolicy;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -25,13 +29,55 @@ class SubscriptionController extends Controller
 {
     use ResolvesBusinessAccount;
 
-    public function show(Request $request, AccountSubscription $subscriptions): Response
-    {
+    public function show(
+        Request $request,
+        AccountSubscription $subscriptions,
+        SubscriptionPolicy $policy,
+    ): Response {
         $account = $this->businessAccountFor($request);
+
+        $term = $this->renewableTerm($account);
 
         return Inertia::render('settings/subscription', [
             'current' => $subscriptions->current($account),
             'history' => $subscriptions->history($account),
+
+            /*
+             * The same question the renewal screen asks, answered here so the
+             * button and the route agree. The server decides; the page only
+             * renders what it is told (§36.1) and the route checks again.
+             */
+            'can' => ['renew' => $term !== null && $policy->isRenewable($term)],
+
+            // Why not, in the account holder's own words. A missing button that
+            // will not say why sends somebody to support to find out.
+            'renewal_blocker' => $policy->renewalBlocker($term),
         ]);
+    }
+
+    /**
+     * The term a renewal would carry on from.
+     *
+     * The pointer where it still holds, the newest live-or-lapsed term
+     * otherwise — cancelling and expiring do not clear `current_user_package_id`,
+     * and a renewal chained off a closed term would carry on from nothing.
+     */
+    protected function renewableTerm(BusinessAccount $account): ?UserPackage
+    {
+        $pointed = $account->currentPackage()->first();
+
+        if ($pointed !== null && ! $pointed->status->isTerminal()) {
+            return $pointed;
+        }
+
+        return $account->packages()
+            ->whereIn('status', [
+                UserPackageStatus::Active,
+                UserPackageStatus::RenewalDue,
+                UserPackageStatus::GracePeriod,
+                UserPackageStatus::Expired,
+            ])
+            ->latest('id')
+            ->first();
     }
 }

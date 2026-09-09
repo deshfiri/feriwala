@@ -7,11 +7,16 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as choosePackage } from '@/routes/packages';
+import { show as renewSubscription } from '@/routes/subscription/renew';
 import type { AccountSubscriptionRow } from '@/types';
 
 type Props = {
     current: AccountSubscriptionRow | null;
     history: AccountSubscriptionRow[];
+    /** Answered server-side; the route checks again before anything happens. */
+    can: { renew: boolean };
+    /** Why renewal is unavailable, when it is. */
+    renewal_blocker: string | null;
 };
 
 /**
@@ -23,7 +28,12 @@ type Props = {
  * held to, and showing the current package's would be telling them about
  * somebody else's plan.
  */
-export default function Subscription({ current, history }: Props) {
+export default function Subscription({
+    current,
+    history,
+    can,
+    renewal_blocker: renewalBlocker,
+}: Props) {
     const { t } = useTranslation();
 
     /*
@@ -61,7 +71,11 @@ export default function Subscription({ current, history }: Props) {
                         }
                     />
                 ) : (
-                    <CurrentTerm subscription={current} />
+                    <CurrentTerm
+                        subscription={current}
+                        canRenew={can.renew}
+                        renewalBlocker={renewalBlocker}
+                    />
                 )}
 
                 {previous.length > 0 && (
@@ -102,8 +116,12 @@ export default function Subscription({ current, history }: Props) {
 
 function CurrentTerm({
     subscription,
+    canRenew,
+    renewalBlocker,
 }: {
     subscription: AccountSubscriptionRow;
+    canRenew: boolean;
+    renewalBlocker: string | null;
 }) {
     const { t } = useTranslation();
 
@@ -117,16 +135,32 @@ function CurrentTerm({
                     </p>
                 </div>
 
-                {/* Never colour alone (§33.9): the pill carries its label. */}
-                <StatusPill
-                    tone={subscription.status_tone}
-                    label={subscription.status_label}
-                />
+                <div className="flex items-center gap-3">
+                    {/* Never colour alone (§33.9): the pill carries its label. */}
+                    <StatusPill
+                        tone={subscription.status_tone}
+                        label={subscription.status_label}
+                    />
+
+                    {canRenew && (
+                        <Button asChild size="sm">
+                            <Link href={renewSubscription()}>
+                                {t('package.renewal.action')}
+                            </Link>
+                        </Button>
+                    )}
+                </div>
             </header>
 
             {subscription.in_grace_period && (
                 <p className="text-sm font-medium" role="status">
                     {t('package.subscription.in_grace')}
+                </p>
+            )}
+
+            {!canRenew && renewalBlocker !== null && (
+                <p className="text-muted-foreground text-sm">
+                    {renewalBlocker}
                 </p>
             )}
 

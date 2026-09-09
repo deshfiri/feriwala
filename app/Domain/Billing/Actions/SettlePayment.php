@@ -6,6 +6,8 @@ use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Package\Actions\ActivateRenewal;
+use App\Domain\Package\Models\UserPackage;
 use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Concurrency\DistributedLock;
@@ -34,6 +36,7 @@ class SettlePayment
     public function __construct(
         protected PaymentGatewayManager $gateways,
         protected EvaluateActivationReadiness $readiness,
+        protected ActivateRenewal $renewals,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
         protected LogManager $log,
@@ -131,23 +134,62 @@ class SettlePayment
             $payment->setRawAttributes($locked->getAttributes(), sync: true);
         });
 
-        // A settled activation payment can be the last requirement standing
-        // between an account and the approval queue (§5.1). Evaluated after the
-        // transaction commits and never allowed to fail the settlement: the
-        // money moved either way, and a payment that rolled back because a
-        // status could not be recalculated would be far worse than a queue that
-        // catches up on the next evaluation.
-        $this->refreshActivationReadiness($payment);
+        /*
+         * What the money unlocks, once it has actually moved.
+         *
+         * Run after the transaction commits and never allowed to fail the
+         * settlement: the payment happened either way, and rolling it back
+         * because a downstream status could not be recalculated would be far
+         * worse than a follow-up that catches up on the next sweep.
+         */
+        $this->applyPurpose($payment);
 
         return $result;
     }
 
-    protected function refreshActivationReadiness(Payment $payment): void
+    /**
+     * The consequence of this particular payment settling.
+     *
+     * Switched on purpose in one place rather than scattered through the
+     * callers, because every route into settlement — redirect, IPN,
+     * reconciliation, manual retry — has to produce the same consequence.
+     */
+    protected function applyPurpose(Payment $payment): void
     {
-        if ($payment->purpose !== PaymentPurpose::Activation) {
+        match ($payment->purpose) {
+            // A settled activation payment can be the last requirement standing
+            // between an account and the approval queue (§5.1).
+            PaymentPurpose::Activation => $this->refreshActivationReadiness($payment),
+
+            // §8.4's "successful renewal verification": the renewal was created
+            // awaiting payment and grants nothing until this runs.
+            PaymentPurpose::PackageRenewal => $this->activateRenewal($payment),
+
+            default => null,
+        };
+    }
+
+    protected function activateRenewal(Payment $payment): void
+    {
+        $renewal = $payment->payable;
+
+        if (! $renewal instanceof UserPackage) {
             return;
         }
 
+        try {
+            $this->renewals->handle($renewal);
+        } catch (Throwable $throwable) {
+            $this->log->channel('payment')->error('Could not activate a renewed subscription', [
+                'payment' => $payment->reference,
+                'subscription' => $renewal->public_id,
+                'error' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    protected function refreshActivationReadiness(Payment $payment): void
+    {
         $account = $payment->businessAccount()->first();
 
         if ($account === null) {

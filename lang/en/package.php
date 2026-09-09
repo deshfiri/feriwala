@@ -122,6 +122,28 @@ return [
         'none' => 'None',
     ],
 
+    'renewal' => [
+        'title' => 'Renew your package',
+        'description' => 'Carry on with the same plan for another term.',
+        'action' => 'Renew',
+        'line' => ':package package renewal',
+        'summary' => 'What you are renewing',
+        'starts' => 'New term starts',
+        'starts_help' => 'Your current term runs to the end. Renewing early costs you no days.',
+        'runs_for' => 'Runs for :days days',
+        'pay' => 'Pay and renew',
+        'total' => 'Total payable',
+        'nothing_to_pay' => 'There is nothing to pay to renew this package.',
+        'free' => 'This renewal costs nothing.',
+        'terms_unavailable' => 'This package is no longer available to renew. Choose another.',
+
+        'no_subscription' => 'You do not have a package to renew yet.',
+        'awaiting_first_payment' => 'Finish paying for your package before renewing it.',
+        'term_closed' => 'This term has closed. Choose a package to start a new one.',
+        'no_expiry' => 'This package does not expire, so there is nothing to renew.',
+        'too_early' => 'You can renew within :days days of your term ending.',
+    ],
+
     'features' => [
         'unlimited' => 'Unlimited',
         'yes' => 'Yes',

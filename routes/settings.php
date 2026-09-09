@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Erp\RenewalController;
 use App\Http\Controllers\Erp\StaffController;
 use App\Http\Controllers\Erp\SubscriptionController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -27,6 +28,20 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
      */
     Route::get('settings/subscription', [SubscriptionController::class, 'show'])
         ->name('subscription.show');
+
+    /*
+     * Renewing a term (§8.2, §8.4).
+     *
+     * Named under `subscription.` so it passes the §5.4 allow-list: §8.4 keeps
+     * "limited access to Payment and renewal modules" open after a term has run
+     * out, and a renewal page that closes at expiry closes exactly when it is
+     * needed. Self-scoped — the account comes from the membership, so there is
+     * no subscription identifier in either URL.
+     */
+    Route::get('settings/subscription/renew', [RenewalController::class, 'show'])
+        ->name('subscription.renew.show');
+    Route::post('settings/subscription/renew', [RenewalController::class, 'pay'])
+        ->name('subscription.renew.pay');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
