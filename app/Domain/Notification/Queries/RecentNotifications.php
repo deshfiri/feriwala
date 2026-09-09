@@ -141,6 +141,14 @@ class RecentNotifications
 
             'account.suspended' => route('onboarding.status'),
 
+            /*
+             * Security alerts land where they can be acted on. "A new device
+             * signed in" is only useful if the next click is the one that
+             * changes the password and ends the other sessions.
+             */
+            'identity.new_device_sign_in',
+            'identity.password_changed' => route('security.edit'),
+
             default => null,
         };
     }

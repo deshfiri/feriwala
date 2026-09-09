@@ -8,6 +8,7 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventSearchIndexing;
 use App\Http\Middleware\SetLocale;
+use App\Http\Middleware\TrackAuthenticatedSession;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -43,6 +44,13 @@ return Application::configure(basePath: dirname(__DIR__))
             // Runs before Inertia shares props so the locale and translations
             // shipped to the client match the one the server rendered with.
             SetLocale::class,
+            /*
+             * After the locale, because the "new device" alert it can raise is
+             * written in the reader's language; and after the identity gate,
+             * because a session that gate has just ended is not one to record
+             * (§6).
+             */
+            TrackAuthenticatedSession::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);

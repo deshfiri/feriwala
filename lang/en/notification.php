@@ -49,5 +49,25 @@ return [
             'title' => 'Your account has been suspended',
             'description' => 'Contact support to find out what is needed to restore access.',
         ],
+
+        'identity.new_device_sign_in' => [
+            'title' => 'A new device signed in',
+            'description' => 'If this was not you, change your password and sign out the other devices.',
+        ],
+
+        'identity.locked' => [
+            'title' => 'Your sign-in has been locked',
+            'description' => 'Contact support to have access restored.',
+        ],
+
+        'identity.unlocked' => [
+            'title' => 'Your sign-in has been restored',
+            'description' => 'You can sign in again.',
+        ],
+
+        'identity.password_changed' => [
+            'title' => 'Your password was changed',
+            'description' => 'If you did not change it, contact support immediately.',
+        ],
     ],
 ];
