@@ -144,6 +144,23 @@ return [
         'too_early' => 'You can renew within :days days of your term ending.',
     ],
 
+    'change' => [
+        'title' => 'Change your package',
+        'description' => 'Move to another plan. Upgrades apply now; smaller plans start when your current term ends.',
+        'action' => 'Change package',
+        'line' => ':package package',
+        'credit' => 'Credit for the rest of your current term',
+        'deposit' => 'Additional wallet deposit',
+        'effective' => 'Applies from',
+        'payable' => 'Payable now',
+        'choose' => 'Choose this plan',
+        'nothing_to_pay' => 'There is nothing to pay for that change.',
+        'blocked' => 'You are over this plan\'s limits',
+        'must_remove' => ':label — you have :current, this plan allows :limit. Remove :count.',
+        'current' => 'Your current plan',
+        'none' => 'No other plans are available right now.',
+    ],
+
     'features' => [
         'unlimited' => 'Unlimited',
         'yes' => 'Yes',

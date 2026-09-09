@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Erp\PackageChangeController;
 use App\Http\Controllers\Erp\RenewalController;
 use App\Http\Controllers\Erp\StaffController;
 use App\Http\Controllers\Erp\SubscriptionController;
@@ -42,6 +43,16 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         ->name('subscription.renew.show');
     Route::post('settings/subscription/renew', [RenewalController::class, 'pay'])
         ->name('subscription.renew.pay');
+
+    /*
+     * Moving to another package (§8.3). Same group and the same reasoning: an
+     * account whose term is running out may need to move plan as much as renew,
+     * and both are payment paths §8.4 keeps open.
+     */
+    Route::get('settings/subscription/change', [PackageChangeController::class, 'index'])
+        ->name('subscription.change.index');
+    Route::post('settings/subscription/change', [PackageChangeController::class, 'store'])
+        ->name('subscription.change.store');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');

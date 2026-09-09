@@ -6,6 +6,7 @@ use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Package\Actions\ActivatePackageChange;
 use App\Domain\Package\Actions\ActivateRenewal;
 use App\Domain\Package\Models\UserPackage;
 use App\Integrations\Payment\Data\GatewayResult;
@@ -37,6 +38,7 @@ class SettlePayment
         protected PaymentGatewayManager $gateways,
         protected EvaluateActivationReadiness $readiness,
         protected ActivateRenewal $renewals,
+        protected ActivatePackageChange $packageChanges,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
         protected LogManager $log,
@@ -165,8 +167,35 @@ class SettlePayment
             // awaiting payment and grants nothing until this runs.
             PaymentPurpose::PackageRenewal => $this->activateRenewal($payment),
 
+            /*
+             * §8.3, both directions. A downgrade is settled here too, and for
+             * the same reason: a limit taken away by an invoice nobody paid
+             * would be a restriction imposed for free.
+             */
+            PaymentPurpose::PackageUpgrade,
+            PaymentPurpose::PackageDowngrade => $this->activatePackageChange($payment),
+
             default => null,
         };
+    }
+
+    protected function activatePackageChange(Payment $payment): void
+    {
+        $change = $payment->payable;
+
+        if (! $change instanceof UserPackage) {
+            return;
+        }
+
+        try {
+            $this->packageChanges->handle($change);
+        } catch (Throwable $throwable) {
+            $this->log->channel('payment')->error('Could not activate a package change', [
+                'payment' => $payment->reference,
+                'subscription' => $change->public_id,
+                'error' => $throwable->getMessage(),
+            ]);
+        }
     }
 
     protected function activateRenewal(Payment $payment): void
