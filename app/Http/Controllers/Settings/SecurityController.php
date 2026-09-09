@@ -7,6 +7,7 @@ use App\Domain\Account\Models\AuthenticatedSession;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\PasswordUpdateRequest;
 use App\Http\Requests\Settings\TwoFactorAuthenticationRequest;
+use App\Notifications\Account\PasswordChanged;
 use App\Support\Security\PasswordPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -78,9 +79,27 @@ class SecurityController extends Controller
      */
     public function update(PasswordUpdateRequest $request): RedirectResponse
     {
-        $request->user()->update([
+        $user = $request->user();
+
+        $user->update([
             'password' => $request->password,
         ]);
+
+        /*
+         * Everywhere else, signed out (§6, P1-19). Changing a password is what
+         * somebody does when they think another device is not theirs, and on
+         * its own it does nothing at all to a session already open. This one
+         * survives, because the person is sitting at it.
+         */
+        $this->endSessions->exceptCurrent(
+            $user,
+            $request->session()->getId(),
+            AuthenticatedSession::ENDED_PASSWORD_CHANGED,
+        );
+
+        // Told as well as done: somebody who reads this and did not change
+        // their password has just learned that whoever did has their session.
+        $user->notify(new PasswordChanged);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Password updated.')]);
 

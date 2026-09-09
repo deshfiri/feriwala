@@ -7,6 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Domain\Account\Actions\AcceptStaffInvitation;
 use App\Domain\Account\Enums\Gender;
 use App\Domain\Account\Models\AccountInvitation;
+use App\Http\Responses\FailedPasswordResetLinkResponse;
 use App\Http\Responses\LockoutResponse;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\PasskeyLoginResponse;
@@ -21,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse as FailedPasswordResetLinkRequestResponseContract;
 use Laravel\Fortify\Contracts\LockoutResponse as LockoutResponseContract;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
@@ -43,6 +45,16 @@ class FortifyServiceProvider extends ServiceProvider
         $this->app->singleton(RegisterResponseContract::class, RegisterResponse::class);
         $this->app->singleton(TwoFactorLoginResponseContract::class, TwoFactorLoginResponse::class);
         $this->app->singleton(LockoutResponseContract::class, LockoutResponse::class);
+
+        /*
+         * The reset form answers the same way whether or not the address has an
+         * account (§31.3). Fortify's own response reports the broker's status,
+         * which makes the form an enumeration oracle that needs no credentials.
+         */
+        $this->app->singleton(
+            FailedPasswordResetLinkRequestResponseContract::class,
+            FailedPasswordResetLinkResponse::class,
+        );
 
         /*
          * Every Fortify action that touches the limiter — the throttle check,

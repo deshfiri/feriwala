@@ -96,8 +96,29 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
-            'expire' => 60,
-            'throttle' => 60,
+
+            /*
+             * Minutes a reset link stays usable (§6).
+             *
+             * A reset link is a password sitting in a mailbox, and the mailbox
+             * is the thing most likely to be compromised later — so the window
+             * is short enough that a link found in six months' worth of archived
+             * mail is worth nothing. Configurable because "short enough" is an
+             * operational judgement, and named here rather than left to the
+             * framework default so it is a decision somebody made.
+             *
+             * The token is single-use regardless: Laravel deletes it the moment
+             * a reset succeeds, so this bounds the unused ones.
+             */
+            'expire' => (int) env('AUTH_PASSWORD_RESET_EXPIRE', 60),
+
+            /*
+             * Seconds before another link may be requested for the same
+             * address. Stops the reset form being used to flood somebody's
+             * inbox, and stops a stream of links each of which is a live
+             * credential.
+             */
+            'throttle' => (int) env('AUTH_PASSWORD_RESET_THROTTLE', 60),
         ],
     ],
 

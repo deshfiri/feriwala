@@ -3,8 +3,10 @@
 namespace App\Providers;
 
 use App\Listeners\RecordEmailVerification;
+use App\Listeners\SecureAccountAfterPasswordReset;
 use App\Support\Security\PasswordPolicy;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +35,13 @@ class AppServiceProvider extends ServiceProvider
         // that stops being written because a convention changed is one nobody
         // notices is missing.
         Event::listen(Verified::class, RecordEmailVerification::class);
+
+        /*
+         * A reset changes the password and, on its own, changes nothing about
+         * a session that is already open — which is exactly the situation a
+         * reset is usually being done about (§6, P1-19).
+         */
+        Event::listen(PasswordReset::class, SecureAccountAfterPasswordReset::class);
     }
 
     /**
