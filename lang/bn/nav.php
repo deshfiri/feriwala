@@ -22,6 +22,7 @@ return [
     'billing_rules' => 'বিলিং নিয়ম',
     'payment_gateways' => 'পেমেন্ট গেটওয়ে',
     'payments' => 'পেমেন্ট',
+    'sms' => 'এসএমএস',
     'invoices' => 'চালান',
 
     'search' => [

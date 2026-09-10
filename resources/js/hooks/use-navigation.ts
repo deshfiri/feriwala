@@ -3,6 +3,7 @@ import {
     CreditCard,
     LayoutGrid,
     ListChecks,
+    MessageSquare,
     Package as PackageIcon,
     Receipt,
     ScrollText,
@@ -18,6 +19,7 @@ import { index as billingRules } from '@/routes/admin/billing';
 import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as paymentLog } from '@/routes/admin/payments';
+import { index as smsSettings } from '@/routes/admin/sms';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as packageCatalogue } from '@/routes/admin/packages';
 import { history as kycHistory } from '@/routes/kyc';
@@ -163,6 +165,17 @@ export function useNavigation(): {
                               title: t('nav.payments'),
                               href: paymentLog(),
                               icon: ScrollText,
+                          },
+                      ]
+                    : []),
+                // Its own permission: whether customers hear about their own
+                // payments is not the same decision as pricing them (§30).
+                ...(permissions['sms.view']
+                    ? [
+                          {
+                              title: t('nav.sms'),
+                              href: smsSettings(),
+                              icon: MessageSquare,
                           },
                       ]
                     : []),

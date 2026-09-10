@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Domain\Settings\SettingsRepository;
 use App\Listeners\RecordEmailVerification;
 use App\Listeners\SecureAccountAfterPasswordReset;
 use App\Support\Security\PasswordPolicy;
@@ -21,7 +22,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        /*
+         * One settings reader per request.
+         *
+         * It holds the whole table for the life of the request so ten reads
+         * cost one Redis call — which only works if there is one of it.
+         * Resolved fresh each time, two instances kept divergent caches, and a
+         * write through one was invisible to the other for the rest of the
+         * request: a gateway credential saved and then immediately read back as
+         * "not configured", a switch turned off that the same request still
+         * reported as on.
+         */
+        $this->app->singleton(SettingsRepository::class);
     }
 
     /**

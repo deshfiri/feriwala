@@ -1,14 +1,27 @@
 <?php
 
 return [
+    'title' => 'SMS',
+    'description' => 'Whether text messages go out, and which provider carries them.',
+    'nav' => 'SMS',
 
-    /*
-     * Kept short deliberately. An SMS over 160 GSM characters costs a second
-     * segment, and the Bangla equivalent is limited to 70 (§30.2 cost tracking).
-     */
+    'saved' => 'SMS settings saved.',
 
-    'mobile_verification' => 'Your Feriwala verification code is :code. It expires in 5 minutes. Do not share it with anyone.',
+    'switch' => [
+        'title' => 'Sending',
+        'description' => 'The global switch §30 requires. With this off nothing is sent, whatever any individual notification says.',
+        'enabled' => 'Send text messages',
+        'disabled_notice' => 'SMS is switched off. Messages are recorded as suppressed rather than queued.',
+        'unavailable_notice' => 'The selected provider has no driver yet, so nothing can be sent.',
+    ],
 
-    'kyc_deadline_missed' => 'Your Feriwala verification deadline has passed. Send your documents to restore your account.',
-
+    'providers' => [
+        'title' => 'Providers',
+        'description' => 'Every provider §30.1 names. Real providers arrive in a later phase; the log provider records messages instead of sending them.',
+        'active' => 'In use',
+        'not_implemented' => 'Not built yet',
+        'available' => 'Available',
+        'choose' => 'Provider',
+        'submit' => 'Save',
+    ],
 ];

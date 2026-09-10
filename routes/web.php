@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
+use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -265,6 +266,13 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('payments.index');
         Route::get('payments/{payment}', [PaymentLogController::class, 'show'])
             ->name('payments.show');
+
+        /*
+         * SMS (§30, P1-55). Its own permission: turning messaging off decides
+         * whether customers hear about their own payments.
+         */
+        Route::get('sms', [SmsController::class, 'index'])->name('sms.index');
+        Route::put('sms', [SmsController::class, 'update'])->name('sms.update');
 
         /*
          * Giving an account a package without a sale (§8.3, P1-40).

@@ -28,6 +28,7 @@ return [
     'billing_rules' => 'Billing rules',
     'payment_gateways' => 'Payment gateways',
     'payments' => 'Payments',
+    'sms' => 'SMS',
     'invoices' => 'Invoices',
 
     'search' => [
