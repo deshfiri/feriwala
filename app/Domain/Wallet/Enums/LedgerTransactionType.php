@@ -51,6 +51,86 @@ enum LedgerTransactionType: string
     case ReferralRewardReversal = 'referral_reward_reversal';
     case ManualAdjustment = 'manual_adjustment';
 
+    /**
+     * Which way this type moves money, or null when only the caller knows.
+     *
+     * Most types have exactly one direction and nothing should have to
+     * remember which — a courier charge is a debit whoever posts it, and a
+     * commission is a credit. The exceptions are the corrections: an adjustment
+     * that could only ever add would be no use for putting right an
+     * overpayment, and a return adjustment goes whichever way the return went.
+     * Those return null, and {@see PostToLedger} makes the caller say.
+     */
+    public function direction(): ?LedgerDirection
+    {
+        return match ($this) {
+            self::DepositCredit,
+            self::TopUpCredit,
+            self::SalesCredit,
+            self::CommissionCredit,
+            self::ReferralRewardCredit,
+            self::JoiningRewardCredit,
+            self::CodCollectionCredit,
+            self::PromotionalCredit => LedgerDirection::Credit,
+
+            self::RegistrationFeeDebit,
+            self::PackageFeeDebit,
+            self::WebsiteSetupDebit,
+            self::DomainChargeDebit,
+            self::HostingChargeDebit,
+            self::RenewalFeeDebit,
+            self::MaintenanceChargeDebit,
+            self::FulfillmentChargeDebit,
+            self::CourierChargeDebit,
+            self::PaymentGatewayChargeDebit,
+            self::PlatformFeeDebit,
+            self::ServiceFeeDebit,
+            self::WithdrawalDebit,
+            self::RefundDebit => LedgerDirection::Debit,
+
+            // A correction goes whichever way the thing it corrects went.
+            self::ReturnAdjustment,
+            self::CommissionReversal,
+            self::ReferralRewardReversal,
+            self::ManualAdjustment => null,
+        };
+    }
+
+    /**
+     * Whether this type exists to put an earlier entry right (§23.2).
+     *
+     * §23.2 allows corrections only as adjustment, reversal or corrective
+     * entries. These are those four, and the posting service requires each of
+     * them to carry a reason and — for a reversal — the entry it answers.
+     */
+    public function isCorrection(): bool
+    {
+        return $this->direction() === null;
+    }
+
+    /**
+     * Whether a person has to say why.
+     *
+     * Every correction, because a figure that changed for no recorded reason is
+     * the thing an auditor asks about first. Ordinary trading entries explain
+     * themselves through the order or payment they point at.
+     */
+    public function requiresReason(): bool
+    {
+        return $this->isCorrection();
+    }
+
+    /**
+     * Whether posting this needs an administrator behind it.
+     *
+     * A manual adjustment is somebody deciding to move money by hand; the rest
+     * are the system recording something that happened.
+     */
+    public function requiresActor(): bool
+    {
+        return $this === self::ManualAdjustment;
+    }
+
     public function label(): string
     {
         return match ($this) {
