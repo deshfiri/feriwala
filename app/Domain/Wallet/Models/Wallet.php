@@ -68,14 +68,6 @@ class Wallet extends Model
     }
 
     /**
-     * @return HasMany<WalletTransaction, $this>
-     */
-    public function transactions(): HasMany
-    {
-        return $this->hasMany(WalletTransaction::class)->orderByDesc('id');
-    }
-
-    /**
      * @return HasMany<LedgerEntry, $this>
      */
     public function ledgerEntries(): HasMany
