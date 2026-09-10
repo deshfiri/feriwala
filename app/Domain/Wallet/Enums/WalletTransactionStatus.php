@@ -38,14 +38,24 @@ enum WalletTransactionStatus: string implements TransitionableState
                 self::Approved, self::Failed, self::Cancelled,
             ],
 
+            /*
+             * `Settled` is reachable directly from here and from `OnHold`
+             * because that is what capturing a claim is: money that was set
+             * aside against a charge, and then actually taken. Routing it
+             * through `Approved` first would be inventing an approval nobody
+             * gave.
+             */
             self::Pending => [
                 self::OnHold, self::UnderReview, self::Approved,
-                self::Available, self::Failed, self::Cancelled,
+                self::Available, self::Settled, self::Failed, self::Cancelled,
             ],
 
             // A hold or a review is lifted one way or the other; neither is an
             // ending on its own.
-            self::OnHold => [self::UnderReview, self::Approved, self::Available, self::Rejected, self::Cancelled],
+            self::OnHold => [
+                self::UnderReview, self::Approved, self::Available,
+                self::Settled, self::Rejected, self::Cancelled,
+            ],
             self::UnderReview => [self::Approved, self::Rejected, self::OnHold, self::Cancelled],
 
             self::Approved => [self::Available, self::Settled, self::Paid, self::Reversed],
