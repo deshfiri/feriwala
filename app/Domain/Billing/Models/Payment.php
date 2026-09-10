@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
@@ -100,6 +101,28 @@ class Payment extends Model
     public function taxLines(): HasMany
     {
         return $this->hasMany(PaymentTaxLine::class)->orderBy('id');
+    }
+
+    /**
+     * The document issued for this payment (§8.2).
+     *
+     * One each, enforced by a unique index on `invoices.payment_id`.
+     *
+     * @return HasOne<Invoice, $this>
+     */
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
+    }
+
+    /**
+     * Every exchange with a gateway about this payment (§42).
+     *
+     * @return HasMany<PaymentLog, $this>
+     */
+    public function logs(): HasMany
+    {
+        return $this->hasMany(PaymentLog::class)->orderByDesc('id');
     }
 
     /**

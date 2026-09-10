@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Webhook;
 
+use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\SettlePayment;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\Models\PaymentLog;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
@@ -28,6 +30,7 @@ class PaymentWebhookController extends Controller
         string $gateway,
         PaymentGatewayManager $gateways,
         SettlePayment $settle,
+        RecordPaymentLog $logs,
         LogManager $log,
     ): JsonResponse {
         if (! $gateways->isAvailable($gateway)) {
@@ -41,6 +44,23 @@ class PaymentWebhookController extends Controller
                 'gateway' => $gateway,
                 'ip' => $request->ip(),
             ]);
+
+            /*
+             * Recorded, not just logged to a file. "Somebody has been posting
+             * unsigned notifications at us" is a question with an answer only
+             * if the refusals are kept — and the payload is redacted on the way
+             * in, so keeping it costs nothing (§42).
+             */
+            $logs->handle(
+                gateway: $gateway,
+                direction: PaymentLog::INBOUND,
+                event: 'ipn',
+                reference: $request->input('tran_id'),
+                outcome: 'refused_signature',
+                httpStatus: 401,
+                context: $request->all(),
+                request: $request,
+            );
 
             // Deliberately says nothing about whether the payment exists.
             return response()->json(['message' => 'Invalid signature.'], 401);
@@ -58,6 +78,20 @@ class PaymentWebhookController extends Controller
                 'reference' => $result->reference,
             ]);
 
+            // The most interesting entry in the table: a genuine notification
+            // for a payment we cannot find.
+            $logs->handle(
+                gateway: $gateway,
+                direction: PaymentLog::INBOUND,
+                event: 'ipn',
+                reference: $result->reference,
+                gatewayReference: $result->gatewayReference,
+                outcome: 'unknown_payment',
+                httpStatus: 200,
+                context: $request->all(),
+                request: $request,
+            );
+
             // 200 on purpose: the signature was valid, so this is our problem,
             // not the gateway's. Returning an error would make it retry
             // something that can never succeed.
@@ -65,8 +99,31 @@ class PaymentWebhookController extends Controller
         }
 
         if ($result->gatewayReference === null) {
+            $logs->handle(
+                gateway: $gateway,
+                direction: PaymentLog::INBOUND,
+                event: 'ipn',
+                payment: $payment,
+                outcome: 'no_transaction',
+                httpStatus: 200,
+                context: $request->all(),
+                request: $request,
+            );
+
             return response()->json(['message' => 'Acknowledged.']);
         }
+
+        $logs->handle(
+            gateway: $gateway,
+            direction: PaymentLog::INBOUND,
+            event: 'ipn',
+            payment: $payment,
+            gatewayReference: $result->gatewayReference,
+            outcome: 'accepted',
+            httpStatus: 200,
+            context: $request->all(),
+            request: $request,
+        );
 
         try {
             $settle->handle($payment, $result->gatewayReference);
@@ -75,6 +132,18 @@ class PaymentWebhookController extends Controller
                 'payment' => $payment->reference,
                 'error' => $e->getMessage(),
             ]);
+
+            $logs->handle(
+                gateway: $gateway,
+                direction: PaymentLog::INBOUND,
+                event: 'ipn',
+                payment: $payment,
+                gatewayReference: $result->gatewayReference,
+                outcome: 'verification_unavailable',
+                httpStatus: 503,
+                context: ['error' => $e->getMessage()],
+                request: $request,
+            );
 
             // 503 so the gateway retries — the payment is genuinely unresolved.
             return response()->json(['message' => 'Verification unavailable.'], 503);

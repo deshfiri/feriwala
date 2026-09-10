@@ -5,6 +5,7 @@ import {
     ListChecks,
     Package as PackageIcon,
     Receipt,
+    ScrollText,
     Settings,
     ShieldCheck,
     UserCheck,
@@ -16,6 +17,7 @@ import { index as activationQueue } from '@/routes/admin/activations';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as kycQueue } from '@/routes/admin/kyc';
+import { index as paymentLog } from '@/routes/admin/payments';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as packageCatalogue } from '@/routes/admin/packages';
 import { history as kycHistory } from '@/routes/kyc';
@@ -151,6 +153,16 @@ export function useNavigation(): {
                               title: t('nav.payment_gateways'),
                               href: paymentGateways(),
                               icon: CreditCard,
+                          },
+                          /*
+                           * Where the money and the records are compared —
+                           * including the payments that arrived after their
+                           * checkout closed and are waiting on a person (§42).
+                           */
+                          {
+                              title: t('nav.payments'),
+                              href: paymentLog(),
+                              icon: ScrollText,
                           },
                       ]
                     : []),

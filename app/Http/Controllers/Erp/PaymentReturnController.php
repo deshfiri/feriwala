@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Erp;
 
+use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\SettlePayment;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\Models\PaymentLog;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
@@ -32,6 +34,10 @@ use Illuminate\Log\LogManager;
  */
 class PaymentReturnController extends Controller
 {
+    public function __construct(
+        protected RecordPaymentLog $logs,
+    ) {}
+
     /**
      * The gateway says it went through. Ask it whether that is true.
      */
@@ -42,6 +48,8 @@ class PaymentReturnController extends Controller
         LogManager $log,
     ): RedirectResponse {
         $payment = $this->paymentFor($request);
+
+        $this->record($request, 'return', $payment);
 
         if ($payment === null) {
             return to_route('onboarding.status');
@@ -78,11 +86,13 @@ class PaymentReturnController extends Controller
          * reconciliation, which is neither a success nor a "try again" — and
          * telling somebody to pay again there would take their money twice.
          */
+        $status = $payment->refresh()->status;
+
         return match (true) {
-            $payment->isSettled() => to_route('onboarding.status')
+            $status->isSettled() => to_route('onboarding.status')
                 ->with('success', __('payment.return.received')),
 
-            $payment->needsReconciliation() => to_route('checkout.show')
+            $status->needsReconciliation() => to_route('checkout.show')
                 ->with('info', __('payment.return.reconciling')),
 
             default => to_route('checkout.show')->with('error', __('payment.return.failed')),
@@ -94,7 +104,7 @@ class PaymentReturnController extends Controller
      */
     public function cancelled(Request $request): RedirectResponse
     {
-        $this->recordAbandonment($request, PaymentStatus::Cancelled);
+        $this->recordAbandonment($request, PaymentStatus::Cancelled, 'cancel');
 
         return to_route('checkout.show')->with('info', __('payment.return.cancelled'));
     }
@@ -104,7 +114,7 @@ class PaymentReturnController extends Controller
      */
     public function failed(Request $request): RedirectResponse
     {
-        $this->recordAbandonment($request, PaymentStatus::Failed);
+        $this->recordAbandonment($request, PaymentStatus::Failed, 'fail');
 
         return to_route('checkout.show')->with('error', __('payment.return.failed'));
     }
@@ -118,9 +128,11 @@ class PaymentReturnController extends Controller
      * that arrived, and if the gateway is wrong the IPN still corrects it into
      * reconciliation rather than into activation.
      */
-    protected function recordAbandonment(Request $request, PaymentStatus $to): void
+    protected function recordAbandonment(Request $request, PaymentStatus $to, string $event): void
     {
         $payment = $this->paymentFor($request);
+
+        $this->record($request, $event, $payment);
 
         if ($payment === null || ! $payment->canTransitionTo($to)) {
             return;
@@ -132,6 +144,31 @@ class PaymentReturnController extends Controller
             ? ['cancelled_at' => now()]
             : ['failed_at' => now(), 'failure_reason' => __('payment.return.failed')])
             ->save();
+    }
+
+    /**
+     * Keep the redirect on the record (§42).
+     *
+     * A browser redirect is the least trustworthy of the three ways a gateway
+     * reports an outcome, which is exactly why it is worth having: when a
+     * customer says "it told me it worked" and the IPN says otherwise, this is
+     * the only place that remembers what they saw.
+     */
+    protected function record(Request $request, string $event, ?Payment $payment): void
+    {
+        $gateway = $payment?->gateway;
+
+        $this->logs->handle(
+            gateway: is_string($gateway) && $gateway !== '' ? $gateway : 'unknown',
+            direction: PaymentLog::INBOUND,
+            event: $event,
+            payment: $payment,
+            reference: $request->input('tran_id'),
+            gatewayReference: $request->input('val_id'),
+            outcome: $request->input('status'),
+            context: $request->all(),
+            request: $request,
+        );
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Package\Actions\ActivatePackageChange;
 use App\Domain\Package\Actions\ActivateRenewal;
 use App\Domain\Package\Models\UserPackage;
@@ -40,6 +41,7 @@ class SettlePayment
         protected ActivateRenewal $renewals,
         protected ActivatePackageChange $packageChanges,
         protected SettleCouponRedemption $couponRedemptions,
+        protected RecordPaymentLog $logs,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
         protected LogManager $log,
@@ -97,6 +99,22 @@ class SettlePayment
         // Authoritative. Throws rather than guessing if the gateway cannot be
         // reached, leaving the payment untouched for a later retry.
         $result = $gateway->verify($gatewayReference);
+
+        /*
+         * What the gateway actually said, kept (§42). The authoritative answer
+         * is the one worth having on the record — the redirect and the webhook
+         * are only claims, and this is what we acted on.
+         */
+        $this->logs->handle(
+            gateway: (string) $payment->gateway,
+            direction: PaymentLog::OUTBOUND,
+            event: 'verify',
+            payment: $payment,
+            gatewayReference: $gatewayReference,
+            amount: $result->amount,
+            outcome: $result->outcome->value,
+            context: $result->raw,
+        );
 
         if (! $result->isPaid()) {
             // A closed payment stays closed. Re-marking it failed would move

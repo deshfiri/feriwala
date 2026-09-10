@@ -7,6 +7,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\CalculateActivationQuote;
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
+use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\ReserveCoupon;
 use App\Domain\Billing\CouponValidator;
 use App\Domain\Billing\Data\ActivationQuote;
@@ -15,6 +16,7 @@ use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Billing\PaymentDeadline;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
@@ -56,6 +58,7 @@ class CheckoutController extends Controller
         protected ReserveCoupon $reserveCoupon,
         protected ExpireUnpaidPayments $expiries,
         protected PaymentDeadline $deadline,
+        protected RecordPaymentLog $paymentLogs,
     ) {}
 
     public function show(
@@ -231,10 +234,32 @@ class CheckoutController extends Controller
                 ),
             );
         } catch (GatewayUnavailable $e) {
+            $this->paymentLogs->handle(
+                gateway: $validated['gateway'],
+                direction: PaymentLog::OUTBOUND,
+                event: 'initiate',
+                payment: $payment,
+                amount: $payment->amount_minor,
+                outcome: 'unavailable',
+                context: ['error' => $e->getMessage()],
+                request: $request,
+            );
+
             // The payment row stays as a draft — the user can try again, or a
             // different gateway, without losing the quote.
             throw ValidationException::withMessages(['gateway' => $e->getMessage()]);
         }
+
+        $this->paymentLogs->handle(
+            gateway: $validated['gateway'],
+            direction: PaymentLog::OUTBOUND,
+            event: 'initiate',
+            payment: $payment,
+            gatewayReference: $redirect->gatewayReference,
+            amount: $payment->amount_minor,
+            outcome: 'session_created',
+            request: $request,
+        );
 
         if ($payment->canTransitionTo(PaymentStatus::Initiated)) {
             $payment->transitionTo(PaymentStatus::Initiated);

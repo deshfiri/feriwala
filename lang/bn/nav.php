@@ -21,6 +21,7 @@ return [
     'activation_approvals' => 'অ্যাক্টিভেশন অনুমোদন',
     'billing_rules' => 'বিলিং নিয়ম',
     'payment_gateways' => 'পেমেন্ট গেটওয়ে',
+    'payments' => 'পেমেন্ট',
     'invoices' => 'চালান',
 
     'search' => [

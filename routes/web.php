@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\KycUpdateRequestController;
 use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
+use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -252,6 +253,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('gateways.index');
         Route::put('gateways', [PaymentGatewayController::class, 'update'])
             ->name('gateways.update');
+
+        /*
+         * Payments and their gateway trail (§42, P1-54).
+         *
+         * Read-only, and behind `payment.view`. The screen somebody opens when
+         * the money and the records disagree — including the payments that
+         * arrived after their checkout closed and are waiting on a person.
+         */
+        Route::get('payments', [PaymentLogController::class, 'index'])
+            ->name('payments.index');
+        Route::get('payments/{payment}', [PaymentLogController::class, 'show'])
+            ->name('payments.show');
 
         /*
          * Giving an account a package without a sale (§8.3, P1-40).
