@@ -51,7 +51,7 @@ return [
 
     'log' => [
         'title' => 'Gateway trail',
-        'description' => 'Redacted before it was stored: no credentials, no signatures, no unmasked personal data (§42).',
+        'description' => 'Redacted before it was stored, and again before it was sent here: no credentials, no signatures, no unmasked personal data (§42).',
         'empty' => 'Nothing has been exchanged with a gateway for this payment.',
         'inbound' => 'Received',
         'outbound' => 'Sent',
@@ -61,5 +61,6 @@ return [
         'from' => 'From :ip',
         'show_payload' => 'Show payload',
         'hide_payload' => 'Hide payload',
+        'withheld' => ':count field was withheld and is not shown here (§42).|:count fields were withheld and are not shown here (§42).',
     ],
 ];

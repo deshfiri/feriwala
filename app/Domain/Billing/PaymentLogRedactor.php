@@ -19,6 +19,22 @@ namespace App\Domain\Billing;
  * Personal data is **masked rather than dropped**: a support conversation about
  * a failed payment needs to know which number it went to, and the last four
  * digits answer that without the log becoming a phone book.
+ *
+ * There are **two contracts here, and they are deliberately different**:
+ *
+ *   - {@see redact()} is what gets **stored**. The secret's value never
+ *     survives, but the field name does, carrying `[redacted]`. That is what
+ *     lets somebody reading the row afterwards see that a signature was present
+ *     at all — "the IPN carried no signature" and "the IPN's signature was
+ *     removed on the way in" are different facts, and a log that cannot tell
+ *     them apart is no use in an investigation.
+ *   - {@see forBrowser()} is what may be **sent to a browser**. There the field
+ *     is dropped outright, name and all. A rendered page is copied into support
+ *     tickets, screenshotted, cached and pasted into chat threads; the name of
+ *     the credential scheme a gateway uses does not need to travel with it, and
+ *     a payload that is only *mostly* clean is one somebody eventually quotes.
+ *     The count of what was withheld goes instead, so the omission is visible
+ *     rather than silent.
  */
 class PaymentLogRedactor
 {
@@ -93,6 +109,64 @@ class PaymentLogRedactor
         }
 
         return $clean;
+    }
+
+    /**
+     * The same payload with every secret field **removed**, for a screen.
+     *
+     * Not `[redacted]` — gone. `redact()` has already destroyed the value on
+     * the way into the database; this destroys the field name on the way out to
+     * a browser, because a rendered payload travels further than the row it
+     * came from.
+     *
+     * The count comes back beside it so the screen can say what it is not
+     * showing. An administrator reconciling a gateway exchange needs to know
+     * that two fields were withheld; what they were called adds nothing they
+     * can act on.
+     *
+     * Applied to an already-stored payload, so it also catches a row written
+     * before a key joined {@see SECRET_KEYS} — the deny list is allowed to grow,
+     * and history is not rewritten to match it.
+     *
+     * @param  array<array-key, mixed>  $payload
+     * @return array{fields: array<array-key, mixed>, withheld: int}
+     */
+    public function forBrowser(array $payload, int $depth = 0): array
+    {
+        $fields = [];
+        $withheld = 0;
+
+        foreach ($payload as $key => $value) {
+            if ($this->isSecret(mb_strtolower((string) $key))) {
+                $withheld++;
+
+                continue;
+            }
+
+            /*
+             * A value this class already refused to store is withheld too. The
+             * placeholder is not itself a secret, but it is the name of one
+             * standing beside it, which is the thing being kept off the screen.
+             */
+            if ($value === self::REDACTED) {
+                $withheld++;
+
+                continue;
+            }
+
+            if (is_array($value) && $depth < 3) {
+                $nested = $this->forBrowser($value, $depth + 1);
+
+                $withheld += $nested['withheld'];
+                $fields[$key] = $nested['fields'];
+
+                continue;
+            }
+
+            $fields[$key] = $value;
+        }
+
+        return ['fields' => $fields, 'withheld' => $withheld];
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -33,6 +34,34 @@ function paymentLogSettings(): void
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
     $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
+}
+
+/**
+ * The IPN entry as the administration screen actually ships it.
+ *
+ * Found by what it is rather than by where it sits: the trail is newest-first
+ * and a settlement writes its own outbound entry afterwards, so an index would
+ * quietly start pointing at a different exchange.
+ *
+ * @return array<string, mixed>
+ */
+function paymentLogShownIpn(User $manager, Payment $payment): array
+{
+    $response = test()->actingAs($manager)
+        ->get(route('admin.payments.show', $payment->public_id));
+
+    $response->assertOk();
+
+    /** @var array<int, array<string, mixed>> $logs */
+    $logs = $response->viewData('page')['props']['logs'];
+
+    foreach ($logs as $entry) {
+        if ($entry['event'] === 'ipn') {
+            return $entry;
+        }
+    }
+
+    throw new RuntimeException('The screen shipped no inbound IPN entry.');
 }
 
 /**
@@ -386,6 +415,102 @@ describe('the administration screen', function () {
             ->get(route('admin.payments.show', $payment->public_id))
             ->assertOk()
             ->assertDontSee('verify_sign', escape: false);
+    });
+
+    it('sends no secret field name either, whatever it was called', function () {
+        /*
+         * The name of a credential is not itself a credential, but a rendered
+         * page ends up in tickets, screenshots and chat threads — it travels
+         * further than the row it came from. So the field goes entirely, and
+         * even the `[redacted]` placeholder the stored row carries stays behind.
+         *
+         * Asserted against the shipped payload rather than the whole page,
+         * because `store_id` is also the name of a field on the gateway
+         * settings form and its label travels in the translations on every
+         * page. The credentials themselves are checked page-wide below.
+         */
+        $payment = ($this->start)();
+        $ipn = paymentLogSignedIpn($payment->reference);
+
+        $this->post(route('webhooks.payment', 'sslcommerz'), $ipn);
+
+        $response = $this->actingAs($this->manager)
+            ->get(route('admin.payments.show', $payment->public_id));
+
+        $response->assertOk();
+
+        /** @var array<int, array<string, mixed>> $logs */
+        $logs = $response->viewData('page')['props']['logs'];
+
+        expect($logs)->not->toBeEmpty();
+
+        foreach ($logs as $entry) {
+            // Encoded rather than walked, so a nested payload is covered too.
+            $payload = (string) json_encode($entry['context']);
+
+            foreach (PaymentLogRedactor::SECRET_KEYS as $secret) {
+                expect($payload)->not->toContain($secret);
+            }
+
+            expect($payload)->not->toContain(PaymentLogRedactor::REDACTED);
+        }
+
+        // And the credentials themselves reach no part of the page.
+        $response->assertDontSee($ipn['verify_sign'], escape: false);
+        $response->assertDontSee(md5('pass'), escape: false);
+    });
+
+    it('keeps the diagnostic fields that make the trail worth having', function () {
+        // Stripping everything would be safe and useless. What is left has to
+        // be enough to reconcile a payment against a gateway's own records.
+        $payment = ($this->start)();
+
+        $this->post(route('webhooks.payment', 'sslcommerz'), paymentLogSignedIpn($payment->reference));
+
+        $ipn = paymentLogShownIpn($this->manager, $payment);
+
+        expect($ipn['context']['status'])->toBe('VALID')
+            ->and($ipn['context']['val_id'])->toBe('val-1')
+            ->and($ipn['context']['tran_id'])->toBe($payment->reference)
+            ->and($ipn['direction'])->toBe(PaymentLog::INBOUND)
+            ->and($ipn['ip_address'])->not->toBeNull();
+    });
+
+    it('says how many fields it withheld', function () {
+        /*
+         * A field that is simply missing reads as one the gateway never sent,
+         * which is a different fact and a misleading one during an
+         * investigation.
+         */
+        $payment = ($this->start)();
+
+        $this->post(route('webhooks.payment', 'sslcommerz'), paymentLogSignedIpn($payment->reference));
+
+        // `verify_key` and `verify_sign` from the signed IPN.
+        expect(paymentLogShownIpn($this->manager, $payment)['withheld'])->toBe(2);
+    });
+
+    it('still keeps the field name in the stored row', function () {
+        /*
+         * The other half of the contract, and the reason the two differ: "the
+         * IPN carried no signature" and "the IPN's signature was stripped on the
+         * way in" are different facts, and a stored log that cannot tell them
+         * apart is no use in an investigation.
+         */
+        $payment = ($this->start)();
+
+        $this->post(route('webhooks.payment', 'sslcommerz'), paymentLogSignedIpn($payment->reference));
+
+        $stored = PaymentLog::query()
+            ->where('payment_id', $payment->id)
+            ->where('direction', PaymentLog::INBOUND)
+            ->firstOrFail();
+
+        expect($stored->context)->toHaveKey('verify_sign')
+            ->and($stored->context['verify_sign'])->toBe(PaymentLogRedactor::REDACTED)
+            ->and($stored->context['verify_sign'])->not->toBe(
+                paymentLogSignedIpn($payment->reference)['verify_sign'],
+            );
     });
 
     it('is closed to somebody without the payment permission', function () {

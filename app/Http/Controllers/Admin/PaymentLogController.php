@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -34,6 +35,10 @@ class PaymentLogController extends Controller
     protected const SORTABLE = ['created_at', 'amount_minor', 'status'];
 
     public const PER_PAGE = 25;
+
+    public function __construct(
+        protected PaymentLogRedactor $redactor,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -108,21 +113,35 @@ class PaymentLogController extends Controller
             ->orderByDesc('id')
             ->limit(100)
             ->get()
-            ->map(fn (PaymentLog $entry) => [
-                'id' => $entry->public_id,
-                'direction' => $entry->direction,
-                'event' => $entry->event,
-                'outcome' => $entry->outcome,
-                'http_status' => $entry->http_status,
-                'gateway_reference' => $entry->gateway_reference,
-                'ip_address' => $entry->ip_address,
-                'at' => $entry->created_at->toIso8601String(),
+            ->map(function (PaymentLog $entry) {
+                /*
+                 * Redacted once on the way in and again on the way out, and the
+                 * second pass is not the same as the first: the stored row keeps
+                 * a secret's field name carrying `[redacted]`, so an
+                 * investigator can tell "no signature was sent" from "the
+                 * signature was stripped". A browser gets neither the value nor
+                 * the name — a rendered page ends up in tickets, screenshots and
+                 * chat threads, and travels further than the row it came from.
+                 */
+                $payload = $this->redactor->forBrowser($entry->context ?? []);
 
-                // Already redacted at the point of writing. Rendered as it is
-                // stored, because re-deciding here would be a second rule to
-                // keep in step with the first.
-                'context' => $entry->context ?? [],
-            ])
+                return [
+                    'id' => $entry->public_id,
+                    'direction' => $entry->direction,
+                    'event' => $entry->event,
+                    'outcome' => $entry->outcome,
+                    'http_status' => $entry->http_status,
+                    'gateway_reference' => $entry->gateway_reference,
+                    'ip_address' => $entry->ip_address,
+                    'at' => $entry->created_at->toIso8601String(),
+
+                    'context' => $payload['fields'],
+
+                    // Said out loud, so a withheld field reads as withheld
+                    // rather than as a gateway that never sent one.
+                    'withheld' => $payload['withheld'],
+                ];
+            })
             ->all();
 
         return Inertia::render('admin/payments/show', [

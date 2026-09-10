@@ -20,6 +20,13 @@ type LogEntry = {
     ip_address: string | null;
     at: string;
     context: Record<string, unknown>;
+    /**
+     * How many fields the server refused to send (§42).
+     *
+     * A count rather than the names: an administrator needs to know two fields
+     * were withheld, not what a gateway calls its signature.
+     */
+    withheld: number;
 };
 
 type Props = {
@@ -46,8 +53,13 @@ type Props = {
  * and was not done — nothing activated, nothing refunded — so the next person
  * knows what they are picking up.
  *
- * The trail below is rendered exactly as stored, and it was redacted on the way
- * in. There is nothing here to leak.
+ * The trail below was redacted twice: once on the way into the database, where
+ * a secret's value is destroyed but its field name survives so an investigator
+ * can tell "no signature was sent" from "the signature was stripped"; and again
+ * on the way here, where the field is dropped outright. A rendered page ends up
+ * in tickets, screenshots and chat threads, and travels further than the row it
+ * came from — so what reaches this screen is a count of what was withheld, and
+ * nothing else about it (§42).
  */
 export default function AdminPaymentShow({ payment, logs }: Props) {
     const { t, locale } = useTranslation();
@@ -216,8 +228,9 @@ export default function AdminPaymentShow({ payment, logs }: Props) {
                                             </p>
                                         </div>
 
-                                        {Object.keys(entry.context).length >
-                                            0 && (
+                                        {(Object.keys(entry.context).length >
+                                            0 ||
+                                            entry.withheld > 0) && (
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -239,13 +252,29 @@ export default function AdminPaymentShow({ payment, logs }: Props) {
                                     </div>
 
                                     {open === entry.id && (
-                                        <pre className="bg-muted mt-3 overflow-x-auto rounded-lg p-3 text-xs">
-                                            {JSON.stringify(
-                                                entry.context,
-                                                null,
-                                                2,
+                                        <>
+                                            <pre className="bg-muted mt-3 overflow-x-auto rounded-lg p-3 text-xs">
+                                                {JSON.stringify(
+                                                    entry.context,
+                                                    null,
+                                                    2,
+                                                )}
+                                            </pre>
+
+                                            {entry.withheld > 0 && (
+                                                // Said out loud: a field that is
+                                                // simply missing reads as one
+                                                // the gateway never sent.
+                                                <p className="text-muted-foreground mt-2 text-xs">
+                                                    {t(
+                                                        'payments.log.withheld',
+                                                        {
+                                                            count: entry.withheld,
+                                                        },
+                                                    )}
+                                                </p>
                                             )}
-                                        </pre>
+                                        </>
                                     )}
                                 </li>
                             ))}
