@@ -32,6 +32,33 @@ class HandleInertiaRequests extends Middleware
     protected $rootView = 'app';
 
     /**
+     * Every ability the sidebar and command palette gate a link on.
+     *
+     * Declared as data so the list can be read back by a test and compared
+     * against what `resources/js/hooks/use-navigation.ts` actually asks for.
+     * Add a navigation entry, add its ability here.
+     *
+     * @var array<int, array{0: PermissionModule, 1: PermissionAction}>
+     */
+    public const NAVIGATION_ABILITIES = [
+        [PermissionModule::Kyc, PermissionAction::View],
+        [PermissionModule::Account, PermissionAction::View],
+
+        // Configuring what applicants are asked for is a different job from
+        // reviewing one application (§7.2).
+        [PermissionModule::Kyc, PermissionAction::ManageSettings],
+
+        [PermissionModule::Package, PermissionAction::View],
+
+        // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
+        [PermissionModule::Payment, PermissionAction::View],
+
+        // Whether customers hear about their own payments is its own decision,
+        // and its own permission (§30).
+        [PermissionModule::Sms, PermissionAction::View],
+    ];
+
+    /**
      * Determines the current asset version.
      *
      * @see https://inertiajs.com/asset-versioning
@@ -103,6 +130,17 @@ class HandleInertiaRequests extends Middleware
      * for the sake of a handful of menu entries — and hiding a link is only a
      * convenience anyway. The policy on the route is what actually refuses.
      *
+     * **A key missing from this list hides its link silently.** The browser
+     * reads `permissions['payment.view']`, an absent key is `undefined`, and
+     * `undefined` is falsy — so forgetting to add one here looks exactly like
+     * not having the permission, with nothing failing anywhere. That is how
+     * Billing rules, Payment gateways, Payments and SMS all became invisible to
+     * a Super Admin who could open every one of them by typing the address.
+     *
+     * `tests/Feature/Ui/NavigationPermissionsTest.php` now reads the keys the
+     * navigation actually asks for and fails if one is not shipped, so the next
+     * screen cannot go missing the same way.
+     *
      * @return array<string, bool>
      */
     protected function navigationPermissions(?User $user): array
@@ -111,28 +149,15 @@ class HandleInertiaRequests extends Middleware
             return [];
         }
 
-        return [
-            'kyc.view' => $user->can(PermissionCatalogue::name(
-                PermissionModule::Kyc,
-                PermissionAction::View,
-            )),
-            'account.view' => $user->can(PermissionCatalogue::name(
-                PermissionModule::Account,
-                PermissionAction::View,
-            )),
+        $permissions = [];
 
-            // Configuring what applicants are asked for is a different job
-            // from reviewing one application (§7.2).
-            'kyc.manage_settings' => $user->can(PermissionCatalogue::name(
-                PermissionModule::Kyc,
-                PermissionAction::ManageSettings,
-            )),
+        foreach (self::NAVIGATION_ABILITIES as [$module, $action]) {
+            $name = PermissionCatalogue::name($module, $action);
 
-            'package.view' => $user->can(PermissionCatalogue::name(
-                PermissionModule::Package,
-                PermissionAction::View,
-            )),
-        ];
+            $permissions[$name] = $user->can($name);
+        }
+
+        return $permissions;
     }
 
     /**
