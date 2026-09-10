@@ -10,6 +10,7 @@ use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Package\Actions\ActivatePackageChange;
 use App\Domain\Package\Actions\ActivateRenewal;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Wallet\Actions\CreditSettledPayment;
 use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Notifications\Billing\PaymentReceived;
@@ -42,6 +43,7 @@ class SettlePayment
         protected ActivateRenewal $renewals,
         protected ActivatePackageChange $packageChanges,
         protected SettleCouponRedemption $couponRedemptions,
+        protected CreditSettledPayment $walletCredits,
         protected RecordPaymentLog $logs,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
@@ -359,8 +361,43 @@ class SettlePayment
             PaymentPurpose::PackageUpgrade,
             PaymentPurpose::PackageDowngrade => $this->activatePackageChange($payment),
 
+            /*
+             * The only two purposes that put money **into** a wallet (§23.1).
+             *
+             * Everything else on this list is money paid *to* Feriwala, and
+             * crediting a wallet for it would hand back what was just charged —
+             * which is why nothing here credits by default.
+             */
+            PaymentPurpose::WalletDeposit,
+            PaymentPurpose::WalletTopUp => $this->creditWallet($payment),
+
             default => null,
         };
+    }
+
+    /**
+     * Put a settled top-up or deposit into the wallet it was paid into (§23.1).
+     *
+     * Once, however many times the gateway tells us: the posting's idempotency
+     * key comes from the payment's own reference, so a retried IPN finds the
+     * credit already made.
+     *
+     * Wrapped like every other consequence. The money arrived either way, and a
+     * settlement rolled back because a downstream posting failed would be worse
+     * than a critical log an administrator can act on.
+     */
+    protected function creditWallet(Payment $payment): void
+    {
+        try {
+            $this->walletCredits->handle($payment);
+        } catch (Throwable $throwable) {
+            $this->log->channel('wallet')->critical('Could not credit a settled wallet payment', [
+                'payment' => $payment->reference,
+                'business_account' => $payment->business_account_id,
+                'amount_minor' => $payment->amount_minor->minorUnits,
+                'error' => $throwable->getMessage(),
+            ]);
+        }
     }
 
     /**

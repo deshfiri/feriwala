@@ -2,6 +2,8 @@
 
 namespace App\Domain\Wallet\Enums;
 
+use App\Domain\Wallet\WalletService;
+
 /**
  * The twenty-six wallet transaction types §23.1 names.
  *
@@ -59,7 +61,8 @@ enum LedgerTransactionType: string
      * commission is a credit. The exceptions are the corrections: an adjustment
      * that could only ever add would be no use for putting right an
      * overpayment, and a return adjustment goes whichever way the return went.
-     * Those return null, and {@see PostToLedger} makes the caller say.
+     * Those return null, and {@see WalletService} makes the
+     * caller say.
      */
     public function direction(): ?LedgerDirection
     {
