@@ -149,6 +149,18 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
      *
      * @return HasOneThrough<BusinessAccount, AccountMembership, $this>
      */
+    /**
+     * Where a text message goes (§30).
+     *
+     * The verified mobile only. An unverified number is one somebody typed and
+     * nobody confirmed, and sending account notifications to it would tell a
+     * stranger about somebody else's payments.
+     */
+    public function routeNotificationForSms(): ?string
+    {
+        return $this->mobile_verified_at === null ? null : $this->mobile;
+    }
+
     public function businessAccount(): HasOneThrough
     {
         return $this->hasOneThrough(

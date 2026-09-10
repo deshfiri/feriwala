@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Notification\Actions\ConfigureSms;
+use App\Domain\Notification\Models\SmsMessageRecord;
 use App\Domain\Notification\Policies\SmsSettingsPolicy;
 use App\Http\Controllers\Controller;
 use App\Integrations\Sms\SmsProviderManager;
@@ -30,6 +32,7 @@ class SmsController extends Controller
     public function __construct(
         protected ConfigureSms $configure,
         protected SmsProviderManager $providers,
+        protected PaymentLogRedactor $redactor,
     ) {}
 
     public function index(Request $request): Response
@@ -45,6 +48,37 @@ class SmsController extends Controller
                 'can_send' => $this->providers->canSend(),
             ],
             'providers' => $this->providers->catalogue(),
+
+            /*
+             * §30.2's delivery status, failed-SMS log and history, in one list.
+             * Recent rather than paginated: the question this answers is "did
+             * the last hour of messages go out", and anything older belongs in
+             * the reporting module.
+             */
+            'messages' => SmsMessageRecord::query()
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get()
+                ->map(fn (SmsMessageRecord $message) => [
+                    'id' => $message->public_id,
+                    'event' => $message->event,
+
+                    // Masked here even though the row holds it in full: this is
+                    // a screen, and a screen full of phone numbers is a screen
+                    // that leaks them over somebody's shoulder (§42).
+                    'recipient' => $this->redactor->mask($message->recipient),
+
+                    'status' => $message->status->value,
+                    'status_label' => $message->status->label(),
+                    'status_tone' => $message->status->tone(),
+                    'segments' => $message->segments,
+                    'attempts' => $message->attempts,
+                    'provider' => $message->provider,
+                    'error' => $message->error,
+                    'at' => $message->created_at?->toIso8601String(),
+                ])
+                ->all(),
+
             'can' => ['manage' => SmsSettingsPolicy::canManage($actor)],
         ]);
     }

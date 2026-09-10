@@ -12,6 +12,7 @@ use App\Domain\Package\Actions\ActivateRenewal;
 use App\Domain\Package\Models\UserPackage;
 use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\PaymentGatewayManager;
+use App\Notifications\Billing\PaymentReceived;
 use App\Support\Concurrency\DistributedLock;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Log\LogManager;
@@ -332,6 +333,15 @@ class SettlePayment
          */
         $this->couponRedemptions->redeem($payment);
 
+        /*
+         * Tell them the money arrived (D20, §30).
+         *
+         * Never allowed to fail the settlement. The payment happened; an SMS
+         * provider having a bad afternoon must not roll it back, and the
+         * notification's own queue will retry without our help.
+         */
+        $this->announce($payment);
+
         match ($payment->purpose) {
             // A settled activation payment can be the last requirement standing
             // between an account and the approval queue (§5.1).
@@ -351,6 +361,27 @@ class SettlePayment
 
             default => null,
         };
+    }
+
+    /**
+     * Tell the account holder their payment landed.
+     *
+     * D20 lists payment success among the notifications a user cannot turn off:
+     * somebody who has just handed over money is entitled to know it arrived.
+     * Wrapped, because a notification is never worth a rolled-back settlement.
+     */
+    protected function announce(Payment $payment): void
+    {
+        try {
+            $payment->businessAccount()->with('owner')->first()?->owner?->notify(
+                new PaymentReceived($payment->reference, $payment->amount_minor),
+            );
+        } catch (Throwable $throwable) {
+            $this->log->channel('payment')->error('Could not announce a settled payment', [
+                'payment' => $payment->reference,
+                'error' => $throwable->getMessage(),
+            ]);
+        }
     }
 
     protected function activatePackageChange(Payment $payment): void

@@ -24,4 +24,26 @@ return [
         'choose' => 'Provider',
         'submit' => 'Save',
     ],
+
+    /*
+     * Message bodies (§30.2). Kept short on purpose: Bangla is encoded as UCS-2,
+     * so a segment is 70 characters rather than 160, and a template that reads
+     * as one message in English can quietly cost three in Bangla.
+     */
+    'templates' => [
+        'account_activated' => 'Your Feriwala account is now active. You can sign in and start trading.',
+        'payment_received' => 'Feriwala received your payment of :amount. Reference :reference.',
+        'payment_received_subject' => 'We received your payment',
+    ],
+
+    'history' => [
+        'title' => 'Recent messages',
+        'description' => 'Delivery status, and every message that failed (§30.2).',
+        'empty' => 'Nothing has been sent yet.',
+        'event' => 'Event',
+        'recipient' => 'To',
+        'status' => 'Status',
+        'segments' => ':count segment|:count segments',
+        'attempts' => ':count attempt|:count attempts',
+    ],
 ];

@@ -15,9 +15,24 @@ type ProviderRow = {
     is_active: boolean;
 };
 
+type MessageRow = {
+    id: string;
+    event: string;
+    recipient: string;
+    status: string;
+    status_label: string;
+    status_tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+    segments: number;
+    attempts: number;
+    provider: string | null;
+    error: string | null;
+    at: string | null;
+};
+
 type Props = {
     settings: { enabled: boolean; provider: string; can_send: boolean };
     providers: ProviderRow[];
+    messages: MessageRow[];
     can: { manage: boolean };
 };
 
@@ -29,8 +44,13 @@ type Props = {
  * §30.1 names is listed including the unbuilt ones — an absence explains
  * nothing, a row saying "not built yet" explains everything.
  */
-export default function AdminSms({ settings, providers, can }: Props) {
-    const { t } = useTranslation();
+export default function AdminSms({
+    settings,
+    providers,
+    messages,
+    can,
+}: Props) {
+    const { t, locale } = useTranslation();
 
     return (
         <>
@@ -165,6 +185,68 @@ export default function AdminSms({ settings, providers, can }: Props) {
                             </li>
                         ))}
                     </ul>
+                </SectionCard>
+
+                {/*
+                    §30.2's delivery status, failed-SMS log and history in one
+                    list. Recipients are masked: the row holds the number in
+                    full so a message can be chased, but a screen full of phone
+                    numbers is a screen that leaks them over a shoulder (§42).
+                */}
+                <SectionCard
+                    title={t('sms.history.title')}
+                    description={t('sms.history.description')}
+                    contentClassName="p-0"
+                >
+                    {messages.length === 0 ? (
+                        <p className="text-muted-foreground px-5 py-4 text-sm">
+                            {t('sms.history.empty')}
+                        </p>
+                    ) : (
+                        <ul className="divide-border divide-y text-sm">
+                            {messages.map((message) => (
+                                <li
+                                    key={message.id}
+                                    className="flex flex-wrap items-start justify-between gap-3 px-5 py-3"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="font-medium">
+                                            {message.event}
+                                            <span className="text-muted-foreground">
+                                                {' · '}
+                                                {message.recipient}
+                                            </span>
+                                        </p>
+                                        <p className="text-muted-foreground text-xs">
+                                            {message.at === null
+                                                ? '—'
+                                                : new Date(
+                                                      message.at,
+                                                  ).toLocaleString(locale)}
+                                            {' · '}
+                                            {t('sms.history.segments', {
+                                                count: message.segments,
+                                            })}
+                                            {message.attempts > 0 &&
+                                                ` · ${t('sms.history.attempts', { count: message.attempts })}`}
+                                            {message.provider !== null &&
+                                                ` · ${message.provider}`}
+                                        </p>
+                                        {message.error !== null && (
+                                            <p className="text-danger text-xs">
+                                                {message.error}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <StatusPill
+                                        tone={message.status_tone}
+                                        label={message.status_label}
+                                    />
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </SectionCard>
             </PageContainer>
         </>
