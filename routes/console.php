@@ -3,6 +3,7 @@
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
+use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -88,3 +89,26 @@ Schedule::call(fn () => app(ExpireUnpaidPayments::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Close unpaid checkouts past their deadline (§9)');
+
+/*
+ * The §28.1 wallet reconciliation: does every balance still add up?
+ *
+ * The ledger and the balance are written in one transaction, so they should
+ * never diverge. "Should never" is not a control — this is. It re-derives every
+ * wallet from its own entries and shouts when the two disagree, because the
+ * failure mode of a financial system is rarely a crash; it is a number that has
+ * been quietly wrong for a fortnight.
+ *
+ * Reads only, and repairs nothing: a sweep that silently corrected a balance
+ * would destroy the evidence of whatever caused the drift, and §23.2 already has
+ * a way to put things right that leaves a record.
+ *
+ * `onOneServer` because a second copy would double the alert, not the coverage.
+ */
+Schedule::call(fn () => app(VerifyLedgerIntegrity::class)->handle())
+    ->name('ledger-integrity-check')
+    ->dailyAt('03:00')
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Re-derive every wallet from its ledger and alert on a mismatch (§28.1)');
