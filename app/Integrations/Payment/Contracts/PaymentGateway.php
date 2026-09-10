@@ -65,4 +65,14 @@ interface PaymentGateway
      * Whether this gateway is running against its sandbox (§26.4).
      */
     public function isSandbox(): bool;
+
+    /**
+     * Whether the credentials this gateway needs are actually present.
+     *
+     * Asked before the gateway is offered at checkout. A gateway switched on but
+     * never credentialled would send somebody through package selection and the
+     * whole fee breakdown only to fail on the last click — so "enabled" is not
+     * enough on its own (§26.4).
+     */
+    public function isConfigured(): bool;
 }

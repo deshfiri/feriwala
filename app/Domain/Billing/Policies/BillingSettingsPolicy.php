@@ -43,6 +43,18 @@ class BillingSettingsPolicy
         return $user->can(self::permission(PermissionAction::ManageSettings));
     }
 
+    /**
+     * Whether this person may configure the gateways themselves (§26.4).
+     *
+     * A separate permission from pricing, and deliberately narrower: setting a
+     * fee changes an invoice, but holding a merchant account's credentials means
+     * holding the keys to where the money lands.
+     */
+    public static function canManageGateways(User $user): bool
+    {
+        return $user->can(self::permission(PermissionAction::ManageIntegrations));
+    }
+
     protected static function permission(PermissionAction $action): string
     {
         return PermissionCatalogue::name(PermissionModule::Payment, $action);

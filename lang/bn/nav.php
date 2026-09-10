@@ -20,6 +20,7 @@ return [
     'packages' => 'প্যাকেজ',
     'activation_approvals' => 'অ্যাক্টিভেশন অনুমোদন',
     'billing_rules' => 'বিলিং নিয়ম',
+    'payment_gateways' => 'পেমেন্ট গেটওয়ে',
     'invoices' => 'চালান',
 
     'search' => [

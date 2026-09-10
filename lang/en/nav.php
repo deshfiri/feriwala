@@ -26,6 +26,7 @@ return [
     'packages' => 'Packages',
     'activation_approvals' => 'Activation approvals',
     'billing_rules' => 'Billing rules',
+    'payment_gateways' => 'Payment gateways',
     'invoices' => 'Invoices',
 
     'search' => [

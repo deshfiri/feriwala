@@ -48,6 +48,11 @@ class SslCommerzGateway implements PaymentGateway
         return $this->credentials->isSandbox();
     }
 
+    public function isConfigured(): bool
+    {
+        return $this->credentials->areConfigured();
+    }
+
     public function initiate(PaymentIntent $intent): GatewayRedirect
     {
         $response = $this->http

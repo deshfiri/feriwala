@@ -14,6 +14,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as billingRules } from '@/routes/admin/billing';
+import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as packageCatalogue } from '@/routes/admin/packages';
@@ -139,6 +140,17 @@ export function useNavigation(): {
                               title: t('nav.billing_rules'),
                               href: billingRules(),
                               icon: Receipt,
+                          },
+                          /*
+                           * Separate from billing rules, because they are
+                           * separate decisions: a fee rule changes an invoice,
+                           * a gateway credential decides where the money lands
+                           * (§26.4).
+                           */
+                          {
+                              title: t('nav.payment_gateways'),
+                              href: paymentGateways(),
+                              icon: CreditCard,
                           },
                       ]
                     : []),

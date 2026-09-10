@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
 use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
+use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -227,6 +228,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         // retrospective: every payment carries the deadline it was given.
         Route::put('billing/payment-deadline', [BillingController::class, 'updateDeadline'])
             ->name('billing.payment-deadline');
+
+        /*
+         * The gateways themselves (§26.4, P1-51).
+         *
+         * Separate from billing rules, and behind a separate permission:
+         * setting a fee changes an invoice, but holding a merchant account's
+         * credentials means holding the keys to where the money lands.
+         */
+        Route::get('gateways', [PaymentGatewayController::class, 'index'])
+            ->name('gateways.index');
+        Route::put('gateways', [PaymentGatewayController::class, 'update'])
+            ->name('gateways.update');
 
         /*
          * Giving an account a package without a sale (§8.3, P1-40).
