@@ -11,6 +11,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Wallet\Actions\OpenWallet;
 use App\Notifications\Account\AccountActivated;
 use App\Support\Concurrency\DistributedLock;
 use Illuminate\Database\DatabaseManager;
@@ -34,6 +35,7 @@ class ActivateAccount
         protected ActivationRequirements $requirements,
         protected ChangeAccountStatus $changeStatus,
         protected RecordAuditLog $audit,
+        protected OpenWallet $wallets,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
     ) {}
@@ -102,6 +104,18 @@ class ActivateAccount
             ));
 
             $this->activateSubscription($locked);
+
+            /*
+             * "Every Active Account will have a Wallet and Financial Ledger"
+             * (§23). Opened inside the same transaction as the activation, so
+             * an account can never be active without one — and idempotent, so
+             * an account activated twice still has exactly one wallet.
+             *
+             * It opens empty. Every balance starts at zero and moves only
+             * through the ledger, so there is no figure without an entry
+             * explaining it.
+             */
+            $this->wallets->handle($locked);
 
             // The account has left the approval queue. Clearing the stamp keeps
             // the queue's sort key meaning only "waiting for review".
