@@ -2,11 +2,11 @@
 
 Before planning or editing, find the row whose globs match the file's path and read that rule file.
 
-| Applies to                                                      | Rule file                   |
-| --------------------------------------------------------------- | --------------------------- |
-| resources/js/pages/\*\*, layouts/\*\*, components/\*\*, app.css | .ai/rules/ui-surfaces.md    |
-| resources/js/components/charts/\*\*, resources/js/lib/chart.ts  | .ai/rules/charts.md         |
-| app/Domain/Account/{Policies,Queries}/\*\*                      | .ai/rules/account-access.md |
-| app/Http/Controllers/Admin/\*\*                                 | .ai/rules/account-access.md |
-| app/Http/Controllers/DashboardController.php                    | .ai/rules/controllers.md    |
-| app/Domain/Notification/\*\*                                    | .ai/rules/notification.md   |
+| Applies to                                                                                        | Rule file                   |
+| ------------------------------------------------------------------------------------------------- | --------------------------- |
+| app/Domain/Account/Policies/**, app/Http/Controllers/Admin/**, app/Domain/Account/Queries/**      | .ai/rules/account-access.md |
+| resources/js/components/charts/**, resources/js/lib/chart.ts                                      | .ai/rules/charts.md         |
+| app/Http/Controllers/DashboardController.php                                                      | .ai/rules/controllers.md    |
+| app/Domain/Notification/**                                                                        | .ai/rules/notification.md   |
+| tests/**                                                                                          | .ai/rules/tests.md          |
+| resources/js/pages/**, resources/js/layouts/**, resources/js/components/**, resources/css/app.css | .ai/rules/ui-surfaces.md    |
