@@ -196,12 +196,37 @@ describe('when the gateway cannot be reached', function () {
     });
 });
 
-it('refuses to settle a cancelled payment', function () {
+it('never settles a cancelled payment', function () {
+    /*
+     * The gateway confirms money for a checkout that was already closed. It is
+     * not settled — nothing activates, and the status map gives it no route to
+     * `Paid` — but it is not discarded either: confirmed money that vanishes
+     * because the timing was wrong is the worst outcome available (P1-52).
+     */
     $this->payment->transitionTo(PaymentStatus::Cancelled);
     $this->payment->save();
 
     gatewaySays(validResponse());
 
+    settle();
+
+    $payment = $this->payment->fresh();
+
+    expect($payment->status)->toBe(PaymentStatus::ReconciliationRequired)
+        ->and($payment->isSettled())->toBeFalse()
+        ->and($payment->canTransitionTo(PaymentStatus::Paid))->toBeFalse()
+        ->and($payment->reconciliation_reason)->not->toBeNull();
+});
+
+it('leaves a refunded payment entirely alone', function () {
+    // Money already sent back needs no reconciliation, and the status map has
+    // no move out of `Refunded` at all.
+    $this->payment->transitionTo(PaymentStatus::Paid);
+    $this->payment->transitionTo(PaymentStatus::Refunded);
+    $this->payment->save();
+
+    gatewaySays(validResponse());
+
     expect(settle()->isPaid())->toBeFalse()
-        ->and($this->payment->fresh()->status)->toBe(PaymentStatus::Cancelled);
+        ->and($this->payment->fresh()->status)->toBe(PaymentStatus::Refunded);
 });

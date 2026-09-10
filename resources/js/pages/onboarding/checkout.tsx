@@ -67,11 +67,13 @@ export default function Checkout({
         discount: Money | null;
         reason: string | null;
     } | null;
-    /** When this checkout has to be paid, and whether one already ran out. */
+    /** Where the last attempt at paying for this got to. */
     deadline: {
         hours: number | null;
         expires_at: string | null;
         expired: boolean;
+        /** Money arrived after the checkout expired. Do not invite another. */
+        reconciling: boolean;
     };
     gateways: { name: string; label: string }[];
 }) {
@@ -98,13 +100,30 @@ export default function Checkout({
                     because the page below it looks exactly as it did before and
                     the applicant needs to know why nothing they did took.
                 */}
-                {deadline.expired && (
+                {deadline.expired && !deadline.reconciling && (
                     <Alert variant="destructive" role="status">
                         <AlertTitle>
                             {t('billing.deadline.checkout_expired_title')}
                         </AlertTitle>
                         <AlertDescription>
                             {t('billing.deadline.checkout_expired_body')}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/*
+                    Money reached us after this checkout closed (§26.4). The one
+                    state where "try again" would be the wrong thing to offer:
+                    somebody who has already paid must not be invited to pay
+                    twice while a person sorts it out.
+                */}
+                {deadline.reconciling && (
+                    <Alert role="status">
+                        <AlertTitle>
+                            {t('payment.checkout.reconciling_title')}
+                        </AlertTitle>
+                        <AlertDescription>
+                            {t('payment.checkout.reconciling_body')}
                         </AlertDescription>
                     </Alert>
                 )}
@@ -295,7 +314,11 @@ export default function Checkout({
                                 processing={processing}
                                 processingLabel="Taking you to pay…"
                                 disabled={
-                                    gateways.length === 0 || !quote.is_payable
+                                    gateways.length === 0 ||
+                                    !quote.is_payable ||
+                                    // A payment is already being reconciled.
+                                    // Paying again would be paying twice.
+                                    deadline.reconciling
                                 }
                                 className="w-full"
                             >

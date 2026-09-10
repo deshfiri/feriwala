@@ -100,10 +100,22 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::post('checkout/coupon', [CheckoutController::class, 'applyCoupon'])
             ->name('checkout.coupon');
 
-        // Gateways return the user here. The IPN is what settles the payment
-        // reliably; this is for the person watching the screen.
-        Route::match(['get', 'post'], 'checkout/return', PaymentReturnController::class)
+        /*
+         * Where a gateway sends the person back to (§26.4).
+         *
+         * Three endpoints, because a gateway is told three URLs and uses them
+         * to say which of the three happened. One shared URL would throw that
+         * away and leave us reading a status field out of the browser.
+         *
+         * None of them settles anything on its own: the IPN is the reliable
+         * half, and these exist for the person watching the screen.
+         */
+        Route::match(['get', 'post'], 'checkout/return', [PaymentReturnController::class, 'success'])
             ->name('checkout.return');
+        Route::match(['get', 'post'], 'checkout/cancelled', [PaymentReturnController::class, 'cancelled'])
+            ->name('checkout.cancelled');
+        Route::match(['get', 'post'], 'checkout/failed', [PaymentReturnController::class, 'failed'])
+            ->name('checkout.failed');
 
         /*
          * The only route that serves a KYC document (§7.5). Authorisation and

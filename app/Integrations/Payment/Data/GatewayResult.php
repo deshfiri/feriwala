@@ -65,16 +65,22 @@ class GatewayResult
 
     /**
      * @param  array<string, mixed>  $raw
+     * @param  string|null  $gatewayReference  the provider's transaction, when
+     *                                         the request named one — identity
+     *                                         survives a claimed failure, because
+     *                                         the claim is not what decides it
      */
     public static function failed(
         ?string $reference,
         string $error,
         ?string $errorCode = null,
         array $raw = [],
+        ?string $gatewayReference = null,
     ): self {
         return new self(
             outcome: GatewayOutcome::Failed,
             reference: $reference,
+            gatewayReference: $gatewayReference,
             error: $error,
             errorCode: $errorCode,
             raw: $raw,

@@ -74,7 +74,18 @@ class SettlePayment
             );
         }
 
-        if ($payment->status->isTerminal()) {
+        /*
+         * A payment we have already given up on still gets asked (§26.4).
+         *
+         * A checkout expires or fails, and the gateway confirms the money
+         * afterwards — the classic late callback. Returning "already cancelled"
+         * without asking would discard a confirmed payment, so the verification
+         * runs either way and a genuine success lands in
+         * `ReconciliationRequired` instead of activating anything.
+         */
+        $wasClosed = $payment->status->isTerminal();
+
+        if ($wasClosed && ! $payment->canTransitionTo(PaymentStatus::ReconciliationRequired)) {
             return GatewayResult::failed(
                 $payment->reference,
                 'This payment is already '.$payment->status->label().'.',
@@ -88,9 +99,27 @@ class SettlePayment
         $result = $gateway->verify($gatewayReference);
 
         if (! $result->isPaid()) {
-            $this->recordUnsuccessful($payment, $result);
+            // A closed payment stays closed. Re-marking it failed would move
+            // its timestamps every time a stray callback arrived.
+            if (! $wasClosed) {
+                $this->recordUnsuccessful($payment, $result);
+            }
 
             return $result;
+        }
+
+        /*
+         * Whose transaction is this? The callback said which payment to look
+         * at; the gateway says which payment it actually belongs to. A signed
+         * notification naming one payment while carrying another's transaction
+         * would otherwise settle the wrong order with real money.
+         */
+        if (! $this->belongsToPayment($payment, $result, $gatewayReference)) {
+            return GatewayResult::failed(
+                $payment->reference,
+                'That gateway transaction does not belong to this payment.',
+                'reference_mismatch',
+            );
         }
 
         // The amount check. A gateway reporting a different figure means the
@@ -104,12 +133,31 @@ class SettlePayment
                 'gateway' => $payment->gateway,
             ]);
 
-            $this->markFailed($payment, 'Gateway reported a different amount than was requested.');
+            // A closed payment is already closed; a live one is not payment for
+            // this order and must not stay open pretending to be.
+            if (! $wasClosed) {
+                $this->markFailed($payment, 'Gateway reported a different amount than was requested.');
+            }
 
             return GatewayResult::failed(
                 $payment->reference,
                 'The amount confirmed by the gateway does not match this payment.',
             );
+        }
+
+        /*
+         * Verified, matching, and for a purchase that is already over.
+         *
+         * The money is real and the purchase is not being revived: nothing is
+         * activated, the expired quote and its invoice are left exactly as they
+         * are, and the payment is handed to an administrator to reconcile or
+         * refund. Recorded rather than thrown, because an exception here would
+         * leave confirmed money with no durable record anywhere.
+         */
+        if ($wasClosed) {
+            $this->flagForReconciliation($payment, $result, $gatewayReference);
+
+            return $result;
         }
 
         $this->database->transaction(function () use ($payment, $result, $gatewayReference) {
@@ -148,6 +196,104 @@ class SettlePayment
         $this->applyPurpose($payment);
 
         return $result;
+    }
+
+    /**
+     * Whether this gateway transaction really is this payment's.
+     *
+     * Two questions, and both matter. The gateway names the transaction it
+     * verified — if that is a different payment's reference, a signed
+     * notification has been pointed at the wrong order. And no other payment may
+     * already hold this provider transaction: one payment of real money settling
+     * two orders is the failure the unique index exists to make impossible, and
+     * this is the same check with a readable answer instead of a 500.
+     */
+    protected function belongsToPayment(
+        Payment $payment,
+        GatewayResult $result,
+        string $gatewayReference,
+    ): bool {
+        if ($result->reference !== null
+            && $result->reference !== ''
+            && $result->reference !== $payment->reference) {
+            $this->log->channel('payment')->critical('Gateway transaction names a different payment', [
+                'payment' => $payment->reference,
+                'reported_reference' => $result->reference,
+                'gateway' => $payment->gateway,
+            ]);
+
+            return false;
+        }
+
+        $claimed = Payment::query()
+            ->where('gateway_reference', $gatewayReference)
+            ->whereKeyNot($payment->id)
+            ->exists();
+
+        if ($claimed) {
+            $this->log->channel('payment')->critical('Gateway transaction already settled another payment', [
+                'payment' => $payment->reference,
+                'gateway_reference' => $gatewayReference,
+                'gateway' => $payment->gateway,
+            ]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Record confirmed money against a purchase that had already ended.
+     *
+     * Idempotent under a row lock: the transition only runs from a state that
+     * allows it, so a gateway retrying the same notification finds the payment
+     * already flagged and writes nothing further.
+     *
+     * Nothing here reads as settled, so nothing downstream activates: the
+     * account stays where it was, the subscription stays where it was, and the
+     * invoice still answers "not paid" because it asks the payment's status.
+     * What changes is that the payment now says, durably, that money arrived
+     * and somebody has to deal with it.
+     */
+    protected function flagForReconciliation(
+        Payment $payment,
+        GatewayResult $result,
+        string $gatewayReference,
+    ): void {
+        $this->database->transaction(function () use ($payment, $result, $gatewayReference) {
+            $locked = Payment::query()->lockForUpdate()->find($payment->id);
+
+            if ($locked === null || ! $locked->canTransitionTo(PaymentStatus::ReconciliationRequired)) {
+                return;
+            }
+
+            $closed = $locked->status;
+
+            $locked->transitionTo(PaymentStatus::ReconciliationRequired);
+
+            $locked->forceFill([
+                'gateway_reference' => $gatewayReference,
+                'settled_currency_code' => $result->amount?->currency->value,
+                'settled_amount_minor' => $result->amount?->minorUnits,
+                'reconciliation_required_at' => now(),
+                'reconciliation_reason' => sprintf(
+                    'The gateway confirmed this payment after the checkout was %s. '
+                    .'The money is real; the purchase was not reopened.',
+                    mb_strtolower($closed->label()),
+                ),
+            ])->save();
+
+            $payment->setRawAttributes($locked->getAttributes(), sync: true);
+        });
+
+        $this->log->channel('payment')->critical('Payment confirmed after its checkout closed', [
+            'payment' => $payment->reference,
+            'gateway' => $payment->gateway,
+            'gateway_reference' => $gatewayReference,
+            'amount_minor' => $result->amount?->minorUnits,
+            'currency' => $result->amount?->currency->value,
+        ]);
     }
 
     /**

@@ -21,6 +21,16 @@ enum PaymentStatus: string implements TransitionableState
     case PartiallyRefunded = 'partially_refunded';
 
     /**
+     * Money arrived for a purchase that had already been closed (§26.4).
+     *
+     * A checkout expires, and the gateway confirms the payment afterwards. Both
+     * facts are true and neither may be discarded: the money is real, and the
+     * purchase is not being revived on the strength of a late callback. This is
+     * the state that says so out loud, and it waits for a person.
+     */
+    case ReconciliationRequired = 'reconciliation_required';
+
+    /**
      * @return array<int, self>
      */
     public function transitionsTo(): array
@@ -36,10 +46,23 @@ enum PaymentStatus: string implements TransitionableState
             // Money that arrived can be sent back, but never un-arrive.
             self::Paid => [self::Refunded, self::PartiallyRefunded],
 
-            // A failed payment is retried as a new attempt, not by reviving
-            // this one — the gateway reference belongs to the failed attempt.
-            self::Failed => [],
-            self::Cancelled => [],
+            /*
+             * A failed or cancelled payment is retried as a new attempt, never
+             * by reviving this one — the gateway reference belongs to the
+             * attempt that ended.
+             *
+             * The one move each has left is to `ReconciliationRequired`, and it
+             * is not a revival: a gateway can confirm a payment after we have
+             * given up on it, and the money is real whether or not the purchase
+             * is. Nothing downstream reads this as settled, so nothing is
+             * activated by it — it exists so the money cannot vanish quietly.
+             */
+            self::Failed => [self::ReconciliationRequired],
+            self::Cancelled => [self::ReconciliationRequired],
+
+            // Waits for a person. A refund is the way out, and the refund module
+            // is not built yet.
+            self::ReconciliationRequired => [],
 
             self::PartiallyRefunded => [self::Refunded],
             self::Refunded => [],
@@ -48,7 +71,24 @@ enum PaymentStatus: string implements TransitionableState
 
     public function isTerminal(): bool
     {
-        return in_array($this, [self::Failed, self::Cancelled, self::Refunded], true);
+        return in_array($this, [
+            self::Failed,
+            self::Cancelled,
+            self::Refunded,
+            self::ReconciliationRequired,
+        ], true);
+    }
+
+    /**
+     * Whether this payment is waiting for somebody to sort it out.
+     *
+     * Read by the administration screens so these cannot hide among ordinary
+     * failures — a failed payment needs nothing from anyone; this one holds
+     * money that arrived against a purchase nobody received.
+     */
+    public function needsReconciliation(): bool
+    {
+        return $this === self::ReconciliationRequired;
     }
 
     public function label(): string
@@ -62,6 +102,7 @@ enum PaymentStatus: string implements TransitionableState
             self::Cancelled => 'Cancelled',
             self::Refunded => 'Refunded',
             self::PartiallyRefunded => 'Partially refunded',
+            self::ReconciliationRequired => 'Needs reconciliation',
         };
     }
 
@@ -71,6 +112,7 @@ enum PaymentStatus: string implements TransitionableState
             self::Paid => 'success',
             self::Failed, self::Cancelled => 'danger',
             self::Pending, self::PartiallyRefunded, self::Refunded => 'warning',
+            self::ReconciliationRequired => 'warning',
             self::Initiated => 'info',
             self::Draft => 'neutral',
         };

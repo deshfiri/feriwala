@@ -33,6 +33,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property CarbonImmutable|null $completed_at
  * @property CarbonImmutable|null $failed_at
  * @property CarbonImmutable|null $cancelled_at
+ * @property string|null $reconciliation_reason
+ * @property CarbonImmutable|null $reconciliation_required_at
  * @property-read BusinessAccount|null $businessAccount
  */
 class Payment extends Model
@@ -61,6 +63,7 @@ class Payment extends Model
             'completed_at' => 'immutable_datetime',
             'failed_at' => 'immutable_datetime',
             'cancelled_at' => 'immutable_datetime',
+            'reconciliation_required_at' => 'immutable_datetime',
         ];
     }
 
@@ -149,6 +152,14 @@ class Payment extends Model
     public function isSettled(): bool
     {
         return $this->status->isSettled();
+    }
+
+    /**
+     * Whether this payment is waiting for somebody to sort it out (§26.4).
+     */
+    public function needsReconciliation(): bool
+    {
+        return $this->status->needsReconciliation();
     }
 
     /**

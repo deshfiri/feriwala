@@ -125,10 +125,22 @@ class SslCommerzGateway implements PaymentGateway
         $reference = $request->input('tran_id');
         $status = (string) $request->input('status', '');
 
+        /*
+         * The transaction id travels with the result whatever the request
+         * claims happened. Identity and outcome are different things: the
+         * claimed status is unverified, but `val_id` is what we need in order
+         * to go and ask, and dropping it because the browser said "failed"
+         * would leave a real payment unverifiable.
+         */
+        $gatewayReference = $request->input('val_id');
+        $gatewayReference = is_string($gatewayReference) && $gatewayReference !== ''
+            ? $gatewayReference
+            : null;
+
         if ($status === 'VALID' || $status === 'VALIDATED') {
             return GatewayResult::pending(
                 reference: (string) $reference,
-                gatewayReference: $request->input('val_id'),
+                gatewayReference: $gatewayReference,
                 raw: $request->all(),
             );
         }
@@ -142,6 +154,7 @@ class SslCommerzGateway implements PaymentGateway
             error: (string) $request->input('error', 'Payment was not completed.'),
             errorCode: $status !== '' ? $status : null,
             raw: $request->all(),
+            gatewayReference: $gatewayReference,
         );
     }
 

@@ -162,6 +162,18 @@ class CheckoutController extends Controller
          */
         $this->expiries->forPayable($subscription);
 
+        /*
+         * A payment for this order is already being reconciled: money arrived
+         * after the checkout closed and somebody is sorting it out (§26.4).
+         * Taking another would be taking it twice, and the screen already says
+         * so — this is the same refusal on the server, where it counts.
+         */
+        if ($this->deadlineFor($subscription)['reconciling']) {
+            throw ValidationException::withMessages([
+                'gateway' => __('payment.checkout.reconciling_body'),
+            ]);
+        }
+
         if (! $quote->isPayable()) {
             throw ValidationException::withMessages([
                 'gateway' => 'There is nothing to pay for this package.',
@@ -209,9 +221,12 @@ class CheckoutController extends Controller
             $redirect = $gateways->driver($validated['gateway'])->initiate(
                 PaymentIntent::forPayment(
                     $payment,
+                    // Three distinct URLs, so the gateway tells us which of the
+                    // three happened rather than us reading it out of a field
+                    // the browser could have edited (§26.4).
                     successUrl: route('checkout.return'),
-                    failUrl: route('checkout.return'),
-                    cancelUrl: route('checkout.return'),
+                    failUrl: route('checkout.failed'),
+                    cancelUrl: route('checkout.cancelled'),
                     ipnUrl: route('webhooks.payment', $validated['gateway']),
                 ),
             );
@@ -281,13 +296,16 @@ class CheckoutController extends Controller
     }
 
     /**
-     * When this checkout has to be paid, and whether an attempt already ran out.
+     * Where the last attempt at paying for this got to.
      *
-     * Two separate facts. "You have until Friday" is what somebody needs while
-     * the window is open; "the last attempt expired" is what they need when they
-     * come back to a page that looks the same as it did before but is not.
+     * Three separate facts, and each is what somebody needs at a different
+     * moment. "You have until Friday" while the window is open. "The last
+     * attempt expired" when they come back to a page that looks the same as it
+     * did before but is not. And "money arrived after it expired, do not pay
+     * again" — the one state where inviting another attempt would take
+     * somebody's money twice (§26.4).
      *
-     * @return array{hours: int|null, expires_at: string|null, expired: bool}
+     * @return array{hours: int|null, expires_at: string|null, expired: bool, reconciling: bool}
      */
     protected function deadlineFor(UserPackage $subscription): array
     {
@@ -306,6 +324,7 @@ class CheckoutController extends Controller
             'expired' => $latest !== null
                 && $latest->status === PaymentStatus::Cancelled
                 && $latest->expires_at !== null,
+            'reconciling' => $latest !== null && $latest->needsReconciliation(),
         ];
     }
 

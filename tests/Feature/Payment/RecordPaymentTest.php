@@ -183,9 +183,17 @@ describe('status lifecycle', function () {
         $payment->transitionTo(PaymentStatus::Initiated);
         $payment->transitionTo(PaymentStatus::Failed);
 
-        expect($payment->currentState()->transitionsTo())->toBe([])
-            ->and(fn () => $payment->transitionTo(PaymentStatus::Paid))
-            ->toThrow(IllegalStateTransition::class);
+        expect(fn () => $payment->transitionTo(PaymentStatus::Paid))
+            ->toThrow(IllegalStateTransition::class)
+            ->and(fn () => $payment->transitionTo(PaymentStatus::Pending))
+            ->toThrow(IllegalStateTransition::class)
+            /*
+             * The one move it has left, and it is not a revival: a gateway can
+             * confirm a payment after we have given up on it, and that money is
+             * real whether or not the purchase is (P1-52).
+             */
+            ->and($payment->currentState()->transitionsTo())
+            ->toBe([PaymentStatus::ReconciliationRequired]);
     });
 
     it('treats pending as not yet settled', function () {
