@@ -35,7 +35,7 @@ class DeliverSmsMessage implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /** Three attempts, then it is a failure worth a person looking at. */
-    public $tries = 3;
+    public int $tries = 3;
 
     /**
      * A minute, then five. A provider having a bad moment recovers inside that;

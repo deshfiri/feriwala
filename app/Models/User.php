@@ -138,18 +138,6 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * The business account this person works in, if any (D1, D23).
-     *
-     * Null for Feriwala platform staff, who administer the system without
-     * trading on it. Everything commercial — KYC, packages, payments, wallet,
-     * orders — hangs off this rather than off the person.
-     *
-     * Singular because D1 puts a person in exactly one business, and the unique
-     * index on `business_account_members.user_id` holds them to it.
-     *
-     * @return HasOneThrough<BusinessAccount, AccountMembership, $this>
-     */
-    /**
      * Where a text message goes (§30).
      *
      * The verified mobile only. An unverified number is one somebody typed and
@@ -161,6 +149,18 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->mobile_verified_at === null ? null : $this->mobile;
     }
 
+    /**
+     * The business account this person works in, if any (D1, D23).
+     *
+     * Null for Feriwala platform staff, who administer the system without
+     * trading on it. Everything commercial — KYC, packages, payments, wallet,
+     * orders — hangs off this rather than off the person.
+     *
+     * Singular because D1 puts a person in exactly one business, and the unique
+     * index on `business_account_members.user_id` holds them to it.
+     *
+     * @return HasOneThrough<BusinessAccount, AccountMembership, $this>
+     */
     public function businessAccount(): HasOneThrough
     {
         return $this->hasOneThrough(
