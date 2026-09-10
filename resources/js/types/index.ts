@@ -11,3 +11,4 @@ export type * from './onboarding';
 export type * from './package';
 export type * from './account';
 export type * from './ui';
+export type * from './wallet';

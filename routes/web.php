@@ -12,6 +12,8 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Admin\WalletAdjustmentController;
+use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -20,8 +22,10 @@ use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
 use App\Http\Controllers\Erp\StaffInvitationController;
+use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
+use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -129,6 +133,25 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::get('kyc/documents/{document}/download', [KycDocumentController::class, 'download'])
             ->name('kyc.documents.download');
 
+        /*
+         * The account's own wallet and statement (§23, §33.7, P2-8).
+         *
+         * Not on the §5.4 allow-list, deliberately: a wallet opens with the
+         * activation, so before that there is nothing to show and the funnel
+         * gate turns the visitor back to onboarding rather than to an empty
+         * screen that looks broken.
+         *
+         * Self-scoped — the wallet is reached through the membership, so no
+         * identifier appears in any of these URLs (§31.3).
+         */
+        Route::get('wallet', [WalletController::class, 'show'])->name('wallet.show');
+
+        // `download` rather than `export`: the generated TypeScript helper takes
+        // its name from the last segment, and `export` is a reserved word there.
+        Route::get('wallet/statement.csv', [WalletController::class, 'export'])
+            ->name('wallet.download');
+        Route::get('wallet/transactions/{transaction}', [WalletController::class, 'transaction'])
+            ->name('wallet.transactions.show');
     });
 });
 
@@ -273,6 +296,38 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('sms', [SmsController::class, 'index'])->name('sms.index');
         Route::put('sms', [SmsController::class, 'update'])->name('sms.update');
+
+        /*
+         * Account wallets and their ledgers (§23, §33.7, P2-8).
+         *
+         * Read-only behind `wallet.view`, and the same figures the account
+         * holder sees on their own screen — so the two sides of a support call
+         * are not looking at different money.
+         */
+        Route::get('wallets', [AdminWalletController::class, 'index'])
+            ->name('wallets.index');
+        Route::get('wallets/{wallet}', [AdminWalletController::class, 'show'])
+            ->name('wallets.show');
+        Route::get('wallets/{wallet}/statement.csv', [AdminWalletController::class, 'export'])
+            ->name('wallets.download');
+        Route::get('wallets/{wallet}/transactions/{transaction}', [AdminWalletController::class, 'transaction'])
+            ->name('wallets.transactions.show');
+
+        /*
+         * The two operations where a person, rather than an event, decides a
+         * balance should change (§23.2, §32.2).
+         *
+         * Behind a freshly confirmed password on top of the panel's two-factor
+         * requirement: a session left open on a shared desk must not be able to
+         * post money. Each also carries its own permission and a mandatory
+         * reason, and neither edits anything — both write new entries.
+         */
+        Route::post('wallets/{wallet}/adjustments', [WalletAdjustmentController::class, 'store'])
+            ->middleware(RequirePassword::class)
+            ->name('wallets.adjustments.store');
+        Route::post('wallets/{wallet}/transactions/{transaction}/reversal', [WalletAdjustmentController::class, 'reverse'])
+            ->middleware(RequirePassword::class)
+            ->name('wallets.reversals.store');
 
         /*
          * Giving an account a package without a sale (§8.3, P1-40).

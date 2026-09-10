@@ -11,6 +11,7 @@ return [
     'dashboard' => 'ড্যাশবোর্ড',
     'verification' => 'যাচাইকরণ',
     'subscription' => 'সাবস্ক্রিপশন',
+    'wallet' => 'ওয়ালেট',
     'staff' => 'স্টাফ',
     'profile' => 'প্রোফাইল',
     'security' => 'নিরাপত্তা',
@@ -22,6 +23,7 @@ return [
     'billing_rules' => 'বিলিং নিয়ম',
     'payment_gateways' => 'পেমেন্ট গেটওয়ে',
     'payments' => 'পেমেন্ট',
+    'wallets' => 'অ্যাকাউন্ট ওয়ালেট',
     'sms' => 'এসএমএস',
     'invoices' => 'চালান',
 

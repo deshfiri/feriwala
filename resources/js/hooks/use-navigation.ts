@@ -11,6 +11,7 @@ import {
     ShieldCheck,
     UserCheck,
     Users,
+    Wallet as WalletIcon,
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
@@ -20,6 +21,7 @@ import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
+import { index as accountWallets } from '@/routes/admin/wallets';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as packageCatalogue } from '@/routes/admin/packages';
 import { history as kycHistory } from '@/routes/kyc';
@@ -27,6 +29,7 @@ import { edit as profileSettings } from '@/routes/profile';
 import { edit as securitySettings } from '@/routes/security';
 import { index as staffDirectory } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
+import { show as wallet } from '@/routes/wallet';
 import type { NavGroup } from '@/types';
 
 /**
@@ -84,6 +87,21 @@ export function useNavigation(): {
                               href: subscription(),
                               icon: CreditCard,
                           },
+                          /*
+                           * The account's own money (§23, §33.7). Shown once
+                           * the business is active, because that is when the
+                           * wallet is opened — before it there is nothing to
+                           * look at and the funnel gate would turn them back.
+                           */
+                          ...(account?.status === 'active'
+                              ? [
+                                    {
+                                        title: t('nav.wallet'),
+                                        href: wallet(),
+                                        icon: WalletIcon,
+                                    },
+                                ]
+                              : []),
                           // A package with no staff facility shows no Staff door at all,
                           // rather than one that opens onto a refusal.
                           ...(account?.managesStaff
@@ -165,6 +183,21 @@ export function useNavigation(): {
                               title: t('nav.payments'),
                               href: paymentLog(),
                               icon: ScrollText,
+                          },
+                      ]
+                    : []),
+                /*
+                 * Account wallets and their ledgers (§23, §33.7). Its own
+                 * permission rather than `payment.view`: reconciling what a
+                 * gateway sent and reading what a business holds are different
+                 * jobs, and the second is somebody else's money at rest.
+                 */
+                ...(permissions['wallet.view']
+                    ? [
+                          {
+                              title: t('nav.wallets'),
+                              href: accountWallets(),
+                              icon: WalletIcon,
                           },
                       ]
                     : []),

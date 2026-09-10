@@ -2,6 +2,8 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Wallet\Actions\OpenWallet;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -116,6 +118,34 @@ it('sends an SMS manager the SMS ability and not the payment one', function () {
         ->and($permissions['payment.view'])->toBeFalse();
 });
 
+it('sends a wallet manager the wallet ability and not the payment one', function () {
+    // Reading what a business holds is not the same job as reconciling what a
+    // gateway sent, and the sidebar has to reflect that (§23, §42).
+    $permissions = navPermissionsFor(
+        testPlatformStaff(PlatformRole::WalletManager),
+        'admin.wallets.index',
+    );
+
+    expect($permissions['wallet.view'])->toBeTrue()
+        ->and($permissions['payment.view'])->toBeFalse();
+});
+
+it('gives an activated account the status its wallet link is gated on', function () {
+    /*
+     * The member's Wallet link appears when `account.status` is active, because
+     * a wallet opens with the activation. The prop is what the sidebar reads, so
+     * this is the same check the browser makes.
+     */
+    $account = testBusinessAccount(AccountStatus::Active);
+    app(OpenWallet::class)->handle($account);
+
+    $response = test()->actingAs($account->owner)->get(route('wallet.show'));
+
+    $response->assertOk();
+
+    expect($response->viewData('page')['props']['account']->status)->toBe('active');
+});
+
 it('hides the links from somebody who holds neither, and still refuses the routes', function () {
     /*
      * Hiding a link is a convenience; the route is what actually refuses. Both
@@ -167,5 +197,17 @@ it('gives every P1.F screen real content rather than a blank page', function () 
             ->has('providers', 5)
             ->has('messages')
             ->where('settings.enabled', true),
+        );
+});
+
+it('gives the wallet screens real content with no wallets to show', function () {
+    // A zero-wallet platform is an empty state, not a blank page (P2-8).
+    $this->actingAs(testPlatformStaff(PlatformRole::SuperAdmin))
+        ->get(route('admin.wallets.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/wallets/index')
+            ->has('wallets.data', 0)
+            ->has('wallets.total'),
         );
 });

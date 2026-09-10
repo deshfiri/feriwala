@@ -17,6 +17,7 @@ return [
     'dashboard' => 'Dashboard',
     'verification' => 'Verification',
     'subscription' => 'Subscription',
+    'wallet' => 'Wallet',
     'staff' => 'Staff',
     'profile' => 'Profile',
     'security' => 'Security',
@@ -28,6 +29,7 @@ return [
     'billing_rules' => 'Billing rules',
     'payment_gateways' => 'Payment gateways',
     'payments' => 'Payments',
+    'wallets' => 'Account wallets',
     'sms' => 'SMS',
     'invoices' => 'Invoices',
 

@@ -56,6 +56,11 @@ class HandleInertiaRequests extends Middleware
         // Whether customers hear about their own payments is its own decision,
         // and its own permission (§30).
         [PermissionModule::Sms, PermissionAction::View],
+
+        // Account wallets and their ledgers (§23, §33.7). Separate from
+        // `payment.view`: reconciling what a gateway sent and reading what a
+        // business holds are different jobs.
+        [PermissionModule::Wallet, PermissionAction::View],
     ];
 
     /**
