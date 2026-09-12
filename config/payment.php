@@ -2,6 +2,7 @@
 
 use App\Integrations\Payment\Gateways\Eps\EpsGateway;
 use App\Integrations\Payment\Gateways\SslCommerz\SslCommerzGateway;
+use App\Integrations\Payment\Gateways\SurjoPay\SurjoPayGateway;
 
 return [
 
@@ -46,9 +47,9 @@ return [
         ],
 
         'surjopay' => [
-            'driver' => null,
+            'driver' => SurjoPayGateway::class,
             'enabled' => false,
-            'label' => 'SurjoPay',
+            'label' => 'shurjoPay',
         ],
 
         'amarpay' => [

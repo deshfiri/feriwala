@@ -8,6 +8,7 @@ use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\Data\RefundIntent;
 use App\Integrations\Payment\Data\RefundResult;
 use App\Integrations\Payment\Exceptions\GatewayCapabilityMissing;
+use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Support\Money\Currency;
 
 /**
@@ -129,6 +130,24 @@ abstract class Gateway implements PaymentGateway
     public function isConfigured(): bool
     {
         return $this->missingConfiguration() === [];
+    }
+
+    /**
+     * Refuse before dialling out if anything is missing.
+     *
+     * Worth doing up front rather than letting the first credential read throw
+     * wherever it happens to sit. A driver that authenticates successfully and
+     * only then finds it cannot build the request has made a pointless call to
+     * a payment provider — and reports the wrong problem, because "your
+     * credentials were rejected" is what an operator would read.
+     *
+     * @throws GatewayUnavailable
+     */
+    protected function requireConfigured(): void
+    {
+        if ($this->missingConfiguration() !== []) {
+            throw GatewayUnavailable::missingCredentials($this->name());
+        }
     }
 
     /**

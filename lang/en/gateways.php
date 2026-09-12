@@ -50,6 +50,7 @@ return [
         'username' => 'Username',
         'password' => 'Password',
         'hash_key' => 'Hash key',
+        'prefix' => 'Transaction prefix',
     ],
 
     'credentials' => [
