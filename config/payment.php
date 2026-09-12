@@ -3,6 +3,7 @@
 use App\Integrations\Payment\Gateways\AmarPay\AmarPayGateway;
 use App\Integrations\Payment\Gateways\Bkash\BkashGateway;
 use App\Integrations\Payment\Gateways\Eps\EpsGateway;
+use App\Integrations\Payment\Gateways\Nagad\NagadGateway;
 use App\Integrations\Payment\Gateways\SslCommerz\SslCommerzGateway;
 use App\Integrations\Payment\Gateways\SurjoPay\SurjoPayGateway;
 
@@ -66,8 +67,13 @@ return [
             'label' => 'bKash',
         ],
 
+        /*
+         * Configuration foundation only, like EPS. Nagad's Merchant API guide
+         * is issued to registered merchants, and an RSA signing scheme is not
+         * something to reconstruct from the outside. See NagadGateway.
+         */
         'nagad' => [
-            'driver' => null,
+            'driver' => NagadGateway::class,
             'enabled' => false,
             'label' => 'Nagad',
         ],

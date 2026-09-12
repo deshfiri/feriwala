@@ -55,6 +55,9 @@ return [
         'base_url' => 'বেস URL',
         'app_key' => 'অ্যাপ কী',
         'app_secret' => 'অ্যাপ সিক্রেট',
+        'merchant_number' => 'মার্চেন্ট নম্বর',
+        'merchant_private_key' => 'মার্চেন্ট প্রাইভেট কী',
+        'nagad_public_key' => 'নগদ পাবলিক কী',
     ],
 
     'credentials' => [

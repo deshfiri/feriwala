@@ -55,6 +55,9 @@ return [
         'base_url' => 'Base URL',
         'app_key' => 'App key',
         'app_secret' => 'App secret',
+        'merchant_number' => 'Merchant number',
+        'merchant_private_key' => 'Merchant private key',
+        'nagad_public_key' => 'Nagad public key',
     ],
 
     'credentials' => [
