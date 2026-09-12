@@ -379,9 +379,20 @@ class SettlePayment
          */
         $this->announce($payment);
 
+        /*
+         * Every purpose §26.3 names, answered explicitly (P2-33).
+         *
+         * A total match rather than one with a `default`, and deliberately: a
+         * purpose added later must make the compiler ask what it should do
+         * rather than falling silently into "nothing". Money arriving for
+         * something nobody wired up is exactly the failure that goes unnoticed
+         * for a month.
+         */
         match ($payment->purpose) {
             // A settled activation payment can be the last requirement standing
-            // between an account and the approval queue (§5.1).
+            // between an account and the approval queue (§5.1). Registration
+            // and package fees paid together are one activation payment with
+            // two allocations, not two payments.
             PaymentPurpose::Activation => $this->refreshActivationReadiness($payment),
 
             // §8.4's "successful renewal verification": the renewal was created
@@ -400,14 +411,53 @@ class SettlePayment
              * The only two purposes that put money **into** a wallet (§23.1).
              *
              * Everything else on this list is money paid *to* Feriwala, and
-             * crediting a wallet for it would hand back what was just charged —
-             * which is why nothing here credits by default.
+             * crediting a wallet for it would hand back what was just charged.
              */
             PaymentPurpose::WalletDeposit,
             PaymentPurpose::WalletTopUp => $this->creditWallet($payment),
 
-            default => null,
+            /*
+             * Real purposes whose modules are later phases. No route today can
+             * take a payment for one, so reaching this means either a module
+             * landed without wiring its settlement or something reached the
+             * payment table it should not have — and both are worth a person
+             * looking at rather than a silent success.
+             */
+            PaymentPurpose::WholesaleOrder,
+            PaymentPurpose::WebsiteOrder,
+            PaymentPurpose::WebsiteSetup,
+            PaymentPurpose::DomainCharge,
+            PaymentPurpose::HostingCharge,
+            PaymentPurpose::MaintenanceCharge => $this->flagUndeliverable($payment),
         };
+    }
+
+    /**
+     * Confirmed money for something this platform cannot yet deliver.
+     *
+     * The money is real and is recorded as such — nothing is rolled back and no
+     * status is invented. What happens is that it stops being invisible: a
+     * critical log an administrator is watching, and the payment log entry that
+     * a reconciliation sweep will find.
+     */
+    protected function flagUndeliverable(Payment $payment): void
+    {
+        $this->log->channel('payment')->critical('Settled a payment for a module that is not built', [
+            'payment' => $payment->reference,
+            'purpose' => $payment->purpose->value,
+            'business_account' => $payment->business_account_id,
+            'amount_minor' => $payment->amount_minor->minorUnits,
+        ]);
+
+        $this->logs->handle(
+            gateway: (string) $payment->gateway,
+            direction: PaymentLog::OUTBOUND,
+            event: 'settle',
+            payment: $payment,
+            amount: $payment->amount_minor,
+            outcome: 'undeliverable_purpose',
+            context: ['purpose' => $payment->purpose->value],
+        );
     }
 
     /**

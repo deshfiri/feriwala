@@ -46,4 +46,53 @@ enum PaymentPurpose: string
             self::MaintenanceCharge => 'Maintenance',
         };
     }
+
+    /**
+     * Whether the module this payment unlocks has been built.
+     *
+     * §26.3 lists twelve purposes and the platform is being built in phases, so
+     * for a while some of these are real payments with nothing on the other side
+     * yet. Saying which is which out loud is what stops a settled payment for an
+     * unbuilt module looking like a payment that did nothing wrong by accident.
+     *
+     * A settlement for one of these still records everything — the money, the
+     * verification, the receipt — and flags itself for a person rather than
+     * quietly succeeding.
+     */
+    public function isDeliverable(): bool
+    {
+        return match ($this) {
+            // Built, with a consequence wired to settlement.
+            self::Activation,
+            self::PackageRenewal,
+            self::PackageUpgrade,
+            self::PackageDowngrade,
+            self::WalletDeposit,
+            self::WalletTopUp => true,
+
+            /*
+             * Not built yet. Orders (§12–§16), websites (§18–§20) and the
+             * recurring charges that hang off them are later phases, and a
+             * payment cannot be taken for one through any route that exists
+             * today — which is asserted rather than assumed.
+             */
+            self::WholesaleOrder,
+            self::WebsiteOrder,
+            self::WebsiteSetup,
+            self::DomainCharge,
+            self::HostingCharge,
+            self::MaintenanceCharge => false,
+        };
+    }
+
+    /**
+     * Whether settling this puts money **into** the account's wallet (§23.1).
+     *
+     * Two of the twelve do. Everything else is money paid *to* Feriwala, and
+     * crediting a wallet for one of those would hand back what was just charged.
+     */
+    public function creditsWallet(): bool
+    {
+        return $this === self::WalletDeposit || $this === self::WalletTopUp;
+    }
 }
