@@ -89,11 +89,11 @@ class CaptureDepositObligation
              * be spent on services — because locking money away is the stricter
              * choice and nobody has made it.
              */
-            'refundability' => $rule?->refundability ?? DepositRefundability::Full,
+            'refundability' => $rule === null ? DepositRefundability::Full : $rule->refundability,
             'refundable_percent' => $rule?->refundable_percent,
-            'reserved_until_cancellation' => $rule?->reserved_until_cancellation ?? false,
-            'deposit_usable_for_charges' => $rule?->deposit_usable_for_charges ?? true,
-            'withdrawable_after_liabilities' => $rule?->withdrawable_after_liabilities ?? true,
+            'reserved_until_cancellation' => $rule !== null && $rule->reserved_until_cancellation,
+            'deposit_usable_for_charges' => $rule === null || $rule->deposit_usable_for_charges,
+            'withdrawable_after_liabilities' => $rule === null || $rule->withdrawable_after_liabilities,
         ];
 
         if ($this->alreadyHolds($wallet, $figures)) {

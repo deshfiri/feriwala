@@ -272,13 +272,20 @@ class EnforceBalanceRules
                 ->orderByDesc('id')
                 ->first();
 
+            /*
+             * From the captured obligation where there is one: an account is
+             * told what **it** was asked to hold, not what the policy says this
+             * morning.
+             */
+            $required = $obligation === null
+                ? $wallet->reservedObligation()
+                : $obligation->required_deposit_minor->plus($obligation->minimum_balance_minor);
+
             $wallet->businessAccount()->with('owner')->first()?->owner?->notify(
                 new WalletBalanceLow(
                     state: $state,
                     shortfall: $wallet->obligationShortfall(),
-                    required: $obligation?->required_deposit_minor->plus(
-                        $obligation->minimum_balance_minor
-                    ) ?? $wallet->reservedObligation(),
+                    required: $required,
                     graceEndsAt: $wallet->grace_ends_at,
                 ),
             );
