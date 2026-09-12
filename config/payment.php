@@ -31,6 +31,39 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Queue
+    |--------------------------------------------------------------------------
+    |
+    | Where notification settlement runs. A webhook endpoint has to answer
+    | quickly — providers time out and then retry, turning one notification into
+    | several — so verification and settlement happen here instead (§26.4).
+    |
+    | Its own queue rather than the default: a backlog of anything else must not
+    | delay confirming that somebody's money arrived.
+    |
+    */
+
+    'queue' => env('PAYMENT_QUEUE', 'payments'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Notification rate limit
+    |--------------------------------------------------------------------------
+    |
+    | The webhook endpoint is unauthenticated by necessity. Signed providers are
+    | protected by their signature, but the ones that do not sign — which is
+    | documented behaviour for some — would otherwise let anybody drive outbound
+    | verification calls by posting references at us.
+    |
+    | Per gateway and per address, generous enough that a provider retrying a
+    | genuine backlog is never touched.
+    |
+    */
+
+    'webhook_rate_limit' => (int) env('PAYMENT_WEBHOOK_RATE_LIMIT', 120),
+
     'gateways' => [
 
         'sslcommerz' => [

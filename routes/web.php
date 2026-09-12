@@ -427,6 +427,7 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
  * CSRF is exempted in bootstrap/app.php; a gateway cannot carry our token.
  */
 Route::post('webhooks/payment/{gateway}', PaymentWebhookController::class)
+    ->middleware('throttle:payment-webhooks')
     ->name('webhooks.payment');
 
 require __DIR__.'/settings.php';

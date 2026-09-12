@@ -9,12 +9,14 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Http\Controllers\Controller;
+use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Log\LogManager;
+use Throwable;
 
 /**
  * Where the gateway sends the person back to (§26.4).
@@ -36,6 +38,7 @@ class PaymentReturnController extends Controller
 {
     public function __construct(
         protected RecordPaymentLog $logs,
+        protected PaymentGatewayManager $gateways,
     ) {}
 
     /**
@@ -44,7 +47,6 @@ class PaymentReturnController extends Controller
     public function success(
         Request $request,
         SettlePayment $settle,
-        PaymentGatewayManager $gateways,
         LogManager $log,
     ): RedirectResponse {
         $payment = $this->paymentFor($request);
@@ -60,9 +62,9 @@ class PaymentReturnController extends Controller
                 ->with('success', __('payment.return.received'));
         }
 
-        $callback = $gateways->driver((string) $payment->gateway)->handleCallback($request);
+        $callback = $this->callbackFor($payment, $request);
 
-        if ($callback->gatewayReference === null) {
+        if ($callback === null || $callback->gatewayReference === null) {
             // Returned to the success URL without a transaction to check. The
             // IPN is the reliable half; say nothing definite.
             return to_route('checkout.show')->with('info', __('payment.return.checking'));
@@ -157,28 +159,53 @@ class PaymentReturnController extends Controller
     protected function record(Request $request, string $event, ?Payment $payment): void
     {
         $gateway = $payment?->gateway;
+        $gateway = is_string($gateway) && $gateway !== '' ? $gateway : 'unknown';
+
+        $result = $payment === null ? null : $this->callbackFor($payment, $request);
 
         $this->logs->handle(
-            gateway: is_string($gateway) && $gateway !== '' ? $gateway : 'unknown',
+            gateway: $gateway,
             direction: PaymentLog::INBOUND,
             event: $event,
             payment: $payment,
-            reference: $request->input('tran_id'),
-            gatewayReference: $request->input('val_id'),
-            outcome: $request->input('status'),
+
+            // Read through the driver, never from a field name. Every provider
+            // calls its transaction something different and this controller
+            // knows none of them.
+            reference: $result?->reference,
+            gatewayReference: $result?->gatewayReference,
+            outcome: $result?->outcome->value,
             context: $request->all(),
             request: $request,
         );
     }
 
     /**
+     * What the gateway's own driver makes of this request.
+     *
+     * Wrapped because a driver may refuse a malformed return outright, and a
+     * person who has just paid should not meet a 500 on the way back.
+     */
+    protected function callbackFor(Payment $payment, Request $request): ?GatewayResult
+    {
+        try {
+            return $this->gateways->driver((string) $payment->gateway)->handleCallback($request);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * The payment this return is about.
      *
-     * Resolved from the transaction reference the gateway echoes back, and
-     * **scoped to the caller's own account** — so a reference belonging to
+     * **Scoped to the caller's own account**, so a reference belonging to
      * somebody else finds nothing rather than finding their payment (§31.3).
-     * Falls back to this account's latest activation attempt when the gateway
-     * returns without one, which cancel URLs routinely do.
+     *
+     * Which payment that is comes from the account's own open attempt rather
+     * than from anything in the request. Every provider returns with a different
+     * field, several return with nothing identifiable at all, and none of it is
+     * trustworthy — so this asks the question the session can answer instead:
+     * what was this account in the middle of paying?
      */
     protected function paymentFor(Request $request): ?Payment
     {
@@ -194,14 +221,27 @@ class PaymentReturnController extends Controller
             return null;
         }
 
-        $reference = $request->input('tran_id');
+        /*
+         * The most recent payment this account started and has not finished.
+         * A settled one is excluded so a fresh attempt is never confused with
+         * the one before it, and the fallback keeps the old behaviour for an
+         * account whose only payment has already closed — which is what a
+         * cancel URL routinely arrives against.
+         */
+        $open = Payment::query()
+            ->where('business_account_id', $accountId)
+            ->whereIn('status', PaymentStatus::open())
+            ->latest('id')
+            ->first();
 
-        $query = Payment::query()->where('business_account_id', $accountId);
-
-        if (is_string($reference) && $reference !== '') {
-            return $query->where('reference', $reference)->first();
+        if ($open !== null) {
+            return $open;
         }
 
-        return $query->where('purpose', PaymentPurpose::Activation)->latest('id')->first();
+        return Payment::query()
+            ->where('business_account_id', $accountId)
+            ->where('purpose', PaymentPurpose::Activation)
+            ->latest('id')
+            ->first();
     }
 }

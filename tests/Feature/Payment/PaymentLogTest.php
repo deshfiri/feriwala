@@ -218,7 +218,9 @@ describe('what gets written', function () {
 
         $this->post(route('webhooks.payment', 'sslcommerz'), paymentLogSignedIpn($payment->reference));
 
-        $ipn = PaymentLog::query()->where('event', 'ipn')->where('outcome', 'accepted')->firstOrFail();
+        // "queued" since P2-30: the notification is written down and the
+        // verification handed to a job rather than done inside the request.
+        $ipn = PaymentLog::query()->where('event', 'ipn')->where('outcome', 'queued')->firstOrFail();
 
         // The field name survives — it is the value that is the secret.
         expect($ipn->context['verify_sign'])->toBe(PaymentLogRedactor::REDACTED)

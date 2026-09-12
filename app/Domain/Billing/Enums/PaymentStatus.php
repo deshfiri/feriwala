@@ -69,6 +69,20 @@ enum PaymentStatus: string implements TransitionableState
         };
     }
 
+    /**
+     * The statuses a payment somebody is still in the middle of can hold.
+     *
+     * Everything that has not reached an answer yet. Used to find the attempt a
+     * person is returning from, which is a question the session can answer
+     * honestly — unlike anything in the gateway's redirect.
+     *
+     * @return array<int, self>
+     */
+    public static function open(): array
+    {
+        return [self::Draft, self::Initiated, self::Pending];
+    }
+
     public function isTerminal(): bool
     {
         return in_array($this, [

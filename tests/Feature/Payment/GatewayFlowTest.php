@@ -4,6 +4,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\SettlePayment;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Jobs\SettleGatewayNotification;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Package\Enums\UserPackageStatus;
@@ -13,6 +14,7 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
@@ -363,7 +365,18 @@ describe('the IPN', function () {
             ->and($first->refresh()->gateway_reference)->toBe('val-shared');
     });
 
-    it('tells the gateway to retry when verification is unavailable', function () {
+    it('retries on its own when verification is unavailable', function () {
+        /*
+         * The retry is ours now, not the gateway's (P2-30). Asking a provider
+         * to resend by answering 503 makes settlement depend on somebody else's
+         * retry policy, which differs per provider and ends after a few days.
+         *
+         * So the notification is acknowledged, the work is queued, and the job
+         * retries on a schedule we chose — leaving the payment untouched
+         * meanwhile, because a gateway we could not reach has told us nothing.
+         */
+        Queue::fake();
+
         $payment = ($this->start)();
 
         $this->validation = 503;
@@ -371,7 +384,13 @@ describe('the IPN', function () {
         $this->post(
             route('webhooks.payment', 'sslcommerz'),
             gatewayFlowSignedIpn($payment->reference),
-        )->assertStatus(503);
+        )->assertOk();
+
+        Queue::assertPushed(
+            SettleGatewayNotification::class,
+            fn (SettleGatewayNotification $job) => $job->paymentId === $payment->id
+                && $job->gatewayReference === 'val-1',
+        );
 
         expect($payment->refresh()->status)->toBe(PaymentStatus::Initiated);
     });

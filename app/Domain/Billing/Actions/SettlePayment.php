@@ -266,6 +266,35 @@ class SettlePayment
             return false;
         }
 
+        /*
+         * And the same question about the settlement side.
+         *
+         * Several providers carry two identifiers — the one a verification is
+         * addressed to and the one the banking side settled under — and it is
+         * the second that identifies the money. SSLCommerz can issue a fresh
+         * `val_id` for the same `bank_tran_id`, so checking only the first would
+         * let one real transaction pay for two orders while every reference
+         * looked distinct.
+         */
+        $settlement = $result->settlementReference;
+
+        if ($settlement !== null && $settlement !== '') {
+            $settled = Payment::query()
+                ->where('gateway_settlement_reference', $settlement)
+                ->whereKeyNot($payment->id)
+                ->exists();
+
+            if ($settled) {
+                $this->log->channel('payment')->critical('Provider settlement already belongs to another payment', [
+                    'payment' => $payment->reference,
+                    'settlement_reference' => $settlement,
+                    'gateway' => $payment->gateway,
+                ]);
+
+                return false;
+            }
+        }
+
         return true;
     }
 
