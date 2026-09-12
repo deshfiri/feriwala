@@ -90,8 +90,19 @@ it('catches a missing entry through the broken chain', function () {
     $middle = DB::table('ledger_entries')->where('wallet_id', $wallet->id)
         ->orderBy('id')->skip(1)->first();
 
+    /*
+     * Reaching past two guards, because that is what it takes to manufacture
+     * this: the ledger refuses deletion, and the lifecycle event pointing at
+     * the entry refuses to let it go. Both are doing their job — the corruption
+     * being simulated here is one the application cannot cause.
+     */
     DB::statement('ALTER TABLE ledger_entries DISABLE TRIGGER ledger_entries_no_delete');
+    DB::statement('ALTER TABLE wallet_transaction_events DISABLE TRIGGER wallet_transaction_events_no_delete');
+
+    DB::table('wallet_transaction_events')->where('ledger_entry_id', $middle->id)->delete();
     DB::table('ledger_entries')->where('id', $middle->id)->delete();
+
+    DB::statement('ALTER TABLE wallet_transaction_events ENABLE TRIGGER wallet_transaction_events_no_delete');
     DB::statement('ALTER TABLE ledger_entries ENABLE TRIGGER ledger_entries_no_delete');
 
     $problems = collect(app(VerifyLedgerIntegrity::class)->problemsFor($wallet->refresh()))

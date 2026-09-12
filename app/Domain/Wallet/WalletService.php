@@ -10,6 +10,7 @@ use App\Domain\Wallet\Exceptions\WalletOperationRefused;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
 use App\Domain\Wallet\Models\WalletTransaction;
+use App\Domain\Wallet\Models\WalletTransactionEvent;
 use App\Support\Money\Money;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -29,8 +30,14 @@ use Illuminate\Database\UniqueConstraintViolationException;
  *   - **hold** and **reserve** move nothing. They move money *within* the
  *     wallet, out of what can be spent and into a bucket that cannot, and the
  *     total is untouched — so they post no ledger entry, because no value
- *     moved. What they write is a transaction that stands for the claim.
+ *     moved. §23.1 names no reserve and no hold; §23.3 makes them **statuses**
+ *     a transaction sits in, and that is what they write.
  *   - **release** gives a claim back; **capture** turns it into a real debit.
+ *
+ * Every one of those changes appends a {@see WalletTransactionEvent}, in the
+ * same database transaction. That is where the audit trail for bucket movement
+ * lives: `wallet_transactions.status` says where a claim is now and would
+ * otherwise overwrite the evidence that it was ever reserved at all.
  *
  * A held or reserved claim is a {@see WalletTransaction} whose status is the
  * claim's life. Releasing and capturing go through the state machine, which is
@@ -176,11 +183,19 @@ class WalletService
 
                 $locked->forceFill(['total_minor' => $after])->save();
 
-                $this->writeEntry($locked, $transaction, $context, [
+                $entry = $this->writeEntry($locked, $transaction, $context, [
                     'credit_minor' => $isCredit ? $amount : Money::zero($amount->currency),
                     'debit_minor' => $isCredit ? Money::zero($amount->currency) : $amount,
                     'balance_before_minor' => $before,
                     'balance_after_minor' => $after,
+                ]);
+
+                $this->recordEvent($locked, $transaction, $context, [
+                    'from_status' => null,
+                    'to_status' => $transaction->status,
+                    'total_before_minor' => $before,
+                    'total_after_minor' => $after,
+                    'ledger_entry_id' => $entry->id,
                 ]);
 
                 $wallet->setRawAttributes($locked->getAttributes(), sync: true);
@@ -237,9 +252,27 @@ class WalletService
 
                 $transaction = $this->openTransaction($locked, $type, $amount, $context, $direction, $status);
 
+                $bucketBefore = $locked->{$bucket};
+
                 $locked->forceFill([
-                    $bucket => $locked->{$bucket}->plus($amount),
+                    $bucket => $bucketBefore->plus($amount),
                 ])->save();
+
+                /*
+                 * No ledger entry — no value moved (§23.1 names no reserve and
+                 * no hold; §23.3 makes them statuses). The claim is recorded
+                 * here instead, with the bucket it moved and what that bucket
+                 * held on either side of it.
+                 */
+                $this->recordEvent($locked, $transaction, $context, [
+                    'from_status' => null,
+                    'to_status' => $status,
+                    'bucket' => $bucket,
+                    'bucket_before_minor' => $bucketBefore,
+                    'bucket_after_minor' => $locked->{$bucket},
+                    'total_before_minor' => $locked->total_minor,
+                    'total_after_minor' => $locked->total_minor,
+                ]);
 
                 $wallet->setRawAttributes($locked->getAttributes(), sync: true);
 
@@ -284,8 +317,9 @@ class WalletService
             // Read before anything is written: after the update the wallet no
             // longer knows where it started.
             $before = $wallet->total_minor;
+            $bucketBefore = $wallet->{$bucket};
 
-            $changes = [$bucket => $wallet->{$bucket}->minus($amount)];
+            $changes = [$bucket => $bucketBefore->minus($amount)];
 
             if ($capture) {
                 $changes['total_minor'] = $before->minus($amount);
@@ -293,13 +327,17 @@ class WalletService
 
             $wallet->forceFill($changes)->save();
 
+            $from = $locked->status;
+
             $locked->transitionTo($to);
             $locked->save();
+
+            $entry = null;
 
             if ($capture) {
                 // The claim becomes a real movement, and only now does an entry
                 // exist — because only now has value actually left.
-                $this->writeEntry($wallet, $locked, new PostingContext(
+                $entry = $this->writeEntry($wallet, $locked, new PostingContext(
                     source: $locked->source,
                     description: $locked->description,
                     idempotencyKey: $locked->idempotency_key === null
@@ -315,6 +353,27 @@ class WalletService
                     'balance_after_minor' => $wallet->total_minor,
                 ]);
             }
+
+            /*
+             * The other end of the claim, appended rather than overwritten.
+             * `wallet_transactions.status` now says the reservation is gone;
+             * only this says it was ever there, when it ended, and how.
+             */
+            $this->recordEvent($wallet, $locked, new PostingContext(
+                source: $locked->source,
+                description: $locked->description,
+                idempotencyKey: $locked->idempotency_key,
+                actorId: $locked->created_by,
+            ), [
+                'from_status' => $from,
+                'to_status' => $to,
+                'bucket' => $bucket,
+                'bucket_before_minor' => $bucketBefore,
+                'bucket_after_minor' => $wallet->{$bucket},
+                'total_before_minor' => $before,
+                'total_after_minor' => $wallet->total_minor,
+                'ledger_entry_id' => $entry?->id,
+            ]);
 
             $claim->setRawAttributes($locked->getAttributes(), sync: true);
 
@@ -396,6 +455,39 @@ class WalletService
             'created_by' => $context->actorId,
             'approved_by' => $context->approvedBy,
             'idempotency_key' => $context->idempotencyKey,
+        ]);
+    }
+
+    /**
+     * Append what just happened to this transaction (§23.3).
+     *
+     * Written in the same transaction as the change it records, so a rolled-back
+     * posting leaves no event claiming otherwise. There is no idempotency check
+     * here and there does not need to be: the state machine and the unique key
+     * already make each change happen once, and this only ever runs after one
+     * has.
+     *
+     * @param  array<string, mixed>  $state
+     */
+    protected function recordEvent(
+        Wallet $wallet,
+        WalletTransaction $transaction,
+        PostingContext $context,
+        array $state,
+    ): WalletTransactionEvent {
+        return WalletTransactionEvent::create([
+            'wallet_transaction_id' => $transaction->id,
+            'wallet_id' => $wallet->id,
+            'business_account_id' => $wallet->business_account_id,
+            'amount_minor' => $transaction->amount_minor,
+            'currency_code' => $transaction->currency_code,
+            'source' => $context->source,
+            'actor_id' => $context->actorId,
+            'reason' => $context->reason,
+            'idempotency_key' => $context->idempotencyKey,
+            'occurred_at' => now(),
+
+            ...$state,
         ]);
     }
 

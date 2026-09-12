@@ -119,6 +119,21 @@ class WalletTransaction extends Model
     }
 
     /**
+     * Every state this transaction has passed through (§23.3).
+     *
+     * The audit trail for movement that never reaches the ledger, because it
+     * never crossed the wallet's edge: a reservation placed, released or
+     * captured. `status` says where it is now; these say how it got there, and
+     * unlike `status` they cannot be overwritten.
+     *
+     * @return HasMany<WalletTransactionEvent, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(WalletTransactionEvent::class)->orderBy('id');
+    }
+
+    /**
      * Whether the money has actually reached the wallet's spendable balance.
      */
     public function isRealised(): bool

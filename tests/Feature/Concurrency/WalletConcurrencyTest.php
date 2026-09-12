@@ -55,13 +55,18 @@ afterEach(function () {
      * that is allowed to reach past it.
      */
     DB::statement('ALTER TABLE ledger_entries DISABLE TRIGGER ledger_entries_no_delete');
+    DB::statement('ALTER TABLE wallet_transaction_events DISABLE TRIGGER wallet_transaction_events_no_delete');
 
+    // Children first: both tables refuse deletion by design, and a cascade
+    // from the wallet would fire their triggers rather than skip them.
+    DB::table('wallet_transaction_events')->where('wallet_id', $this->wallet->id)->delete();
     DB::table('ledger_entries')->where('wallet_id', $this->wallet->id)->delete();
     DB::table('wallet_transactions')->where('wallet_id', $this->wallet->id)->delete();
     DB::table('wallets')->where('id', $this->wallet->id)->delete();
     DB::table('business_accounts')->where('id', $this->account->id)->delete();
     DB::table('users')->where('id', $this->account->owner_id)->delete();
 
+    DB::statement('ALTER TABLE wallet_transaction_events ENABLE TRIGGER wallet_transaction_events_no_delete');
     DB::statement('ALTER TABLE ledger_entries ENABLE TRIGGER ledger_entries_no_delete');
 });
 
