@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
@@ -418,6 +419,31 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('packages.active');
         Route::post('packages/{package}/archive', [PackageController::class, 'archive'])
             ->name('packages.archive');
+
+        /*
+         * The central product catalogue (§11, §12).
+         *
+         * Every one of these is a platform privilege. §12 is explicit that a
+         * regular user cannot create a product, a category, a brand or a
+         * variation, and a business account holds no platform permission at
+         * all — so a partner reaching any of these meets a 403, not a screen
+         * with its buttons hidden.
+         */
+        Route::get('catalog/categories', [CategoryController::class, 'index'])
+            ->name('catalog.categories.index');
+        Route::post('catalog/categories', [CategoryController::class, 'store'])
+            ->name('catalog.categories.store');
+        Route::patch('catalog/categories/{category}', [CategoryController::class, 'update'])
+            ->name('catalog.categories.update');
+        /*
+         * Switching a range off takes it and its subcategories off every
+         * partner storefront, so it is its own endpoint rather than a field
+         * somebody flips while correcting a typo (§11.3).
+         */
+        Route::patch('catalog/categories/{category}/active', [CategoryController::class, 'toggle'])
+            ->name('catalog.categories.active');
+        Route::delete('catalog/categories/{category}', [CategoryController::class, 'destroy'])
+            ->name('catalog.categories.destroy');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

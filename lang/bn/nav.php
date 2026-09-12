@@ -19,6 +19,7 @@ return [
     'kyc_review' => 'কেওয়াইসি পর্যালোচনা',
     'kyc_requirements' => 'যাচাইকরণের শর্তাবলি',
     'packages' => 'প্যাকেজ',
+    'product_categories' => 'পণ্যের ক্যাটেগরি',
     'activation_approvals' => 'অ্যাক্টিভেশন অনুমোদন',
     'billing_rules' => 'বিলিং নিয়ম',
     'payment_gateways' => 'পেমেন্ট গেটওয়ে',

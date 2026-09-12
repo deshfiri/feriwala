@@ -3,6 +3,7 @@
 namespace App\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -126,12 +127,15 @@ trait HasSlug
             $query->whereKeyNot($this->getKey());
         }
 
-        // Soft-deleted rows still own their slugs — reusing one would resurrect a
-        // dead URL pointing at different content.
-        if (method_exists($this, 'withTrashed')) {
-            $query->withTrashed();
-        }
-
-        return $query->pluck($column);
+        /*
+         * Soft-deleted rows still own their slugs — reusing one would resurrect
+         * a dead URL pointing at different content.
+         *
+         * Dropping the scope rather than calling `withTrashed()`: that method
+         * only exists on models that soft-delete, and this trait is also used by
+         * models that do not. Removing a scope the model never registered is a
+         * no-op, so one line covers both.
+         */
+        return $query->withoutGlobalScope(SoftDeletingScope::class)->pluck($column);
     }
 }

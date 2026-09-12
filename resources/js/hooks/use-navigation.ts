@@ -1,6 +1,7 @@
 import { usePage } from '@inertiajs/react';
 import {
     CreditCard,
+    FolderTree,
     LayoutGrid,
     ListChecks,
     MessageSquare,
@@ -24,6 +25,7 @@ import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
+import { index as productCategories } from '@/routes/admin/catalog/categories';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as packageCatalogue } from '@/routes/admin/packages';
 import { history as kycHistory } from '@/routes/kyc';
@@ -144,6 +146,21 @@ export function useNavigation(): {
                               title: t('nav.packages'),
                               href: packageCatalogue(),
                               icon: PackageIcon,
+                          },
+                      ]
+                    : []),
+                /*
+                 * The central catalogue (§11, §12). Behind `catalog.view`
+                 * rather than a broader admin check: writing the catalogue is
+                 * a platform privilege of its own, and a business account
+                 * holds none of it.
+                 */
+                ...(permissions['catalog.view']
+                    ? [
+                          {
+                              title: t('nav.product_categories'),
+                              href: productCategories(),
+                              icon: FolderTree,
                           },
                       ]
                     : []),

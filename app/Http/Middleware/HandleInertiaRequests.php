@@ -50,6 +50,14 @@ class HandleInertiaRequests extends Middleware
 
         [PermissionModule::Package, PermissionAction::View],
 
+        /*
+         * The central catalogue (§11, §12). Its own permission rather than a
+         * broader admin check: §12 makes catalogue authorship a platform
+         * privilege, and a business account holds none of it — so this ability
+         * is false for every partner and the link never appears.
+         */
+        [PermissionModule::Catalog, PermissionAction::View],
+
         // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
         [PermissionModule::Payment, PermissionAction::View],
 
