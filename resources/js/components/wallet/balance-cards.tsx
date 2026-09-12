@@ -45,6 +45,9 @@ export default function WalletBalanceCards({
     ];
 
     const claims = [
+        // §24.2 lists this beside the deposit, not instead of it: the part that
+        // has to stay, spendable on nothing and withdrawable never.
+        { key: 'minimum_balance', amount: balances.minimum_balance },
         { key: 'reserved', amount: balances.reserved },
         { key: 'pending', amount: balances.pending },
         { key: 'hold', amount: balances.hold },
@@ -66,7 +69,7 @@ export default function WalletBalanceCards({
                 ))}
             </StatCardGrid>
 
-            <StatCardGrid>
+            <StatCardGrid className="lg:grid-cols-5">
                 {claims.map((bucket) => (
                     <StatCard
                         key={bucket.key}

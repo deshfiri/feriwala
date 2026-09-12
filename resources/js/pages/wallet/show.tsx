@@ -1,17 +1,21 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
+import StatusPill from '@/components/status-pill';
+import { Button } from '@/components/ui/button';
 import WalletBalanceCards from '@/components/wallet/balance-cards';
 import WalletStatementTable from '@/components/wallet/statement-table';
 import { useTranslation } from '@/hooks/use-translation';
 import { download, show } from '@/routes/wallet';
+import { create as topUp } from '@/routes/wallet/top-up';
 import { show as movement } from '@/routes/wallet/transactions';
 import type { Paginator } from '@/types';
 import type {
     WalletBalances,
     WalletFilterOptions,
     WalletMovement,
+    WalletRestrictionRow,
     WalletStatementFilters,
 } from '@/types/wallet';
 
@@ -20,6 +24,7 @@ type Props = {
     transactions: Paginator<WalletMovement>;
     filters: WalletStatementFilters;
     options: WalletFilterOptions;
+    restrictions: WalletRestrictionRow[];
 };
 
 /**
@@ -38,8 +43,18 @@ export default function WalletShow({
     transactions: movements,
     filters,
     options,
+    restrictions,
 }: Props) {
-    const { t } = useTranslation();
+    const { t, locale } = useTranslation();
+
+    const when = (value: string | null) =>
+        value === null
+            ? '—'
+            : new Date(value).toLocaleDateString(locale, {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+              });
 
     return (
         <>
@@ -49,13 +64,27 @@ export default function WalletShow({
                 <PageHeader
                     title={t('wallet.title')}
                     description={t('wallet.description')}
+                    actions={
+                        <>
+                            <StatusPill
+                                tone={balances.state_tone}
+                                label={balances.state_label}
+                            />
+
+                            <Button size="sm" asChild>
+                                <Link href={topUp()}>
+                                    {t('wallet.top_up.title')}
+                                </Link>
+                            </Button>
+                        </>
+                    }
                 />
 
-                {!balances.meets_required_deposit && (
+                {!balances.meets_obligation && (
                     /*
                      * Said plainly and in words rather than by colouring a
                      * figure red (§33.9). The person reading it has to know
-                     * what to do about it, and how much.
+                     * what to do about it, how much, and by when.
                      */
                     <div
                         className="border-warning bg-warning-subtle rounded-xl border p-4"
@@ -66,10 +95,59 @@ export default function WalletShow({
                         </p>
                         <p className="text-muted-foreground mt-1 text-sm">
                             {t('wallet.shortfall.description', {
-                                amount: balances.shortfall.formatted,
+                                amount: balances.obligation_shortfall.formatted,
                             })}
                         </p>
+
+                        <p className="text-muted-foreground mt-1 text-sm">
+                            {balances.grace_ends_at === null
+                                ? t('wallet.state.grace_over')
+                                : t('wallet.state.grace_until', {
+                                      date: when(balances.grace_ends_at),
+                                  })}
+                        </p>
+
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            className="mt-3"
+                            asChild
+                        >
+                            <Link href={topUp()}>
+                                {t('wallet.state.top_up_required', {
+                                    amount: balances.obligation_shortfall
+                                        .formatted,
+                                })}
+                            </Link>
+                        </Button>
                     </div>
+                )}
+
+                {restrictions.length > 0 && (
+                    <SectionCard
+                        title={t('wallet.restrictions.title')}
+                        description={t('wallet.restrictions.description')}
+                        tone="destructive"
+                    >
+                        <ul className="space-y-2">
+                            {restrictions.map((restriction) => (
+                                <li
+                                    key={restriction.stage}
+                                    className="flex flex-wrap items-center justify-between gap-2"
+                                >
+                                    <StatusPill
+                                        tone={restriction.stage_tone}
+                                        label={restriction.stage_label}
+                                    />
+                                    <span className="text-muted-foreground text-xs">
+                                        {t('wallet.restrictions.since', {
+                                            date: when(restriction.started_at),
+                                        })}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </SectionCard>
                 )}
 
                 <WalletBalanceCards balances={balances} />

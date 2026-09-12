@@ -6,6 +6,7 @@ use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Wallet\Actions\ExportWalletStatement;
 use App\Domain\Wallet\Models\Wallet;
+use App\Domain\Wallet\Models\WalletRestriction;
 use App\Domain\Wallet\Models\WalletTransaction;
 use App\Domain\Wallet\Queries\WalletStatement;
 use App\Http\Controllers\Controller;
@@ -53,6 +54,24 @@ class WalletController extends Controller
                 ->through(fn (WalletTransaction $transaction) => $this->statement->row($transaction)),
             'filters' => $filters,
             'options' => $this->statement->options(),
+
+            /*
+             * What §24.3 has taken away, said in words rather than left for the
+             * account holder to infer from a balance (§33.9). Only what is
+             * standing: a restriction that was lifted last week is history, and
+             * history belongs on the statement.
+             */
+            'restrictions' => $wallet->restrictions()
+                ->standing()
+                ->get()
+                ->map(fn (WalletRestriction $restriction) => [
+                    'stage' => $restriction->stage->value,
+                    'stage_label' => $restriction->stage->label(),
+                    'stage_tone' => $restriction->stage->tone(),
+                    'started_at' => $restriction->started_at->toIso8601String(),
+                    'reason' => $restriction->reason,
+                ])
+                ->all(),
         ]);
     }
 

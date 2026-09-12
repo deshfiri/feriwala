@@ -397,6 +397,15 @@ class SettlePayment
                 'amount_minor' => $payment->amount_minor->minorUnits,
                 'error' => $throwable->getMessage(),
             ]);
+
+            /*
+             * Written down, not just logged. Confirmed money that reached no
+             * wallet is the one failure here that somebody has to act on, and a
+             * line in a log file is not something an administrator is going to
+             * find. The retry that clears this is idempotent on the payment's
+             * own reference, so acting on it cannot credit twice.
+             */
+            $this->walletCredits->flagUnapplied($payment, $throwable->getMessage());
         }
     }
 

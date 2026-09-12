@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
+use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
 use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
+use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -145,6 +147,20 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          * identifier appears in any of these URLs (§31.3).
          */
         Route::get('wallet', [WalletController::class, 'show'])->name('wallet.show');
+
+        /*
+         * Putting money in (§24, §26.3, P2-19).
+         *
+         * The amount is the only thing the browser sends; everything else — what
+         * it would do, which purpose it is, what it may not be less than — comes
+         * back from the server. Settlement stays where it is: the gateway hands
+         * off to the same return and IPN endpoints the checkout uses, and
+         * SettlePayment remains the only thing that decides a payment was made.
+         */
+        Route::get('wallet/top-up', [WalletTopUpController::class, 'create'])
+            ->name('wallet.top-up.create');
+        Route::post('wallet/top-up', [WalletTopUpController::class, 'store'])
+            ->name('wallet.top-up.store');
 
         // `download` rather than `export`: the generated TypeScript helper takes
         // its name from the last segment, and `export` is a reserved word there.
@@ -322,6 +338,17 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * post money. Each also carries its own permission and a mandatory
          * reason, and neither edits anything — both write new entries.
          */
+        /*
+         * Confirmed money that never reached the wallet it was paid into
+         * (P2-19). Behind the adjustment permission, because moving money into a
+         * wallet by hand is an adjustment in everything but name — and
+         * idempotent on the payment's reference, so pressing it twice cannot pay
+         * anybody twice.
+         */
+        Route::post('payments/{payment}/wallet-credit', [WalletCreditRetryController::class, 'store'])
+            ->middleware(RequirePassword::class)
+            ->name('payments.wallet-credit');
+
         Route::post('wallets/{wallet}/adjustments', [WalletAdjustmentController::class, 'store'])
             ->middleware(RequirePassword::class)
             ->name('wallets.adjustments.store');

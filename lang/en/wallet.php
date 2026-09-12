@@ -18,6 +18,8 @@ return [
         'withdrawable_help' => 'What could leave the wallet, after the deposit you must keep in place.',
         'required_deposit' => 'Required deposit',
         'required_deposit_help' => 'Held against your trading, not spent.',
+        'minimum_balance' => 'Minimum balance',
+        'minimum_balance_help' => 'The part that has to stay: not spendable, not withdrawable.',
         'reserved' => 'Reserved',
         'reserved_help' => 'Set aside against charges that are coming.',
         'pending' => 'Pending',
@@ -54,6 +56,23 @@ return [
         'grace_until' => 'Services continue until :date',
         'grace_over' => 'The grace period has ended',
         'top_up_required' => 'Top up :amount to restore your services',
+    ],
+
+    'top_up' => [
+        'title' => 'Top up your wallet',
+        'description' => 'Add money to your wallet. Your account keeps what it is required to hold; the rest is yours to spend.',
+        'amount' => 'Amount, in minor units',
+        'amount_help' => 'Whole minor units. 2500 is ৳25.00.',
+        'minimum' => 'The least you can top up is :amount.',
+        'suggested' => 'Adding :amount brings you back to the balance your account is required to hold.',
+        'gateway' => 'Pay with',
+        'submit' => 'Continue to payment',
+        'allocation' => 'Of this, :obligation goes towards what your account must hold and :usable is yours to spend.',
+        'errors' => [
+            'not_positive' => 'A top-up has to be for more than nothing.',
+            'below_minimum' => 'The least you can top up is :amount.',
+            'gateway_unavailable' => 'That payment provider is not answering. Try another, or try again shortly.',
+        ],
     ],
 
     'restrictions' => [
@@ -158,6 +177,17 @@ return [
             'reason_help' => 'Why this is being reversed. Recorded in the audit log with your name.',
             'confirm' => 'I understand this posts a permanent reversing entry',
             'submit' => 'Post the reversal',
+        ],
+
+        'credit_retry' => [
+            'action' => 'Credit the wallet',
+            'title' => 'Money that has not reached a wallet',
+            'description' => 'These payments were confirmed by the provider but the credit did not post. Crediting is safe to repeat — it cannot pay twice.',
+            'none' => 'Every confirmed wallet payment has reached its wallet.',
+            'applied' => 'Credited as :reference.',
+            'not_wallet_money' => 'That payment was not a deposit or a top-up, so no wallet credit applies to it.',
+            'not_settled' => 'That payment has not been settled, so there is nothing to credit.',
+            'failed_at' => 'Failed :date',
         ],
 
         'adjusted' => 'Adjustment :reference posted.',

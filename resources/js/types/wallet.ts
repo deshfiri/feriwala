@@ -21,12 +21,38 @@ export interface WalletBalances {
     usable: Money;
     available_for_withdrawal: Money;
     required_deposit: Money;
+    /**
+     * §24.2's reserved minimum balance — a different promise from the deposit.
+     * Neither spendable nor withdrawable.
+     */
+    minimum_balance: Money;
     reserved: Money;
     pending: Money;
     hold: Money;
     cod_receivable: Money;
+    /** §24.4: whether the deposit may cover service charges. */
+    deposit_usable_for_charges: boolean;
     meets_required_deposit: boolean;
+    /** Whether the wallet holds everything §24 asks of it, not just the deposit. */
+    meets_obligation: boolean;
     shortfall: Money;
+    obligation_shortfall: Money;
+    deposit_due_at: string | null;
+    /** §24.3's state, with its own label so no screen infers one. */
+    state: 'healthy' | 'low' | 'critical';
+    state_label: string;
+    state_tone: StatusTone;
+    grace_ends_at: string | null;
+    shortfall_since: string | null;
+}
+
+/** One thing §24.3 has taken away and not yet given back. */
+export interface WalletRestrictionRow {
+    stage: string;
+    stage_label: string;
+    stage_tone: StatusTone;
+    started_at: string | null;
+    reason: string | null;
 }
 
 /**

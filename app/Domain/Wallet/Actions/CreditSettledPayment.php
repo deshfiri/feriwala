@@ -42,6 +42,16 @@ class CreditSettledPayment
     ) {}
 
     /**
+     * Whether this payment is wallet money at all.
+     *
+     * Public so a screen and a retry can ask without attempting the credit.
+     */
+    public function applies(Payment $payment): bool
+    {
+        return $this->typeFor($payment->purpose) !== null;
+    }
+
+    /**
      * Credit the account's wallet for this payment, or do nothing at all.
      *
      * Returns null when the payment was not wallet money, has not settled, or
@@ -79,10 +89,12 @@ class CreditSettledPayment
                 'amount_minor' => $payment->amount_minor->minorUnits,
             ]);
 
+            $this->flagUnapplied($payment, 'This account has no wallet to credit.');
+
             return null;
         }
 
-        return $this->wallet->credit($wallet, $type, $payment->amount_minor, new PostingContext(
+        $transaction = $this->wallet->credit($wallet, $type, $payment->amount_minor, new PostingContext(
             source: 'payment',
             description: $payment->purpose->label().' — '.$payment->reference,
 
@@ -94,6 +106,39 @@ class CreditSettledPayment
             // whichever person happened to click pay (D1, D23).
             paymentId: $payment->id,
         ));
+
+        $this->markApplied($payment);
+
+        return $transaction;
+    }
+
+    /**
+     * Record that confirmed money has not reached a wallet.
+     *
+     * Not a payment status. `Paid` is true — the provider confirmed it — and
+     * `ReconciliationRequired` already means something else: money confirmed
+     * after its checkout had closed. What needs reconciling here is the credit,
+     * so that is what is written down, beside the payment rather than instead of
+     * what the payment says about itself.
+     */
+    public function flagUnapplied(Payment $payment, string $reason): void
+    {
+        $payment->forceFill([
+            'wallet_credit_failed_at' => now(),
+            'wallet_credit_failure_reason' => $reason,
+        ])->save();
+    }
+
+    /**
+     * Clear the flag once the money is where it was paid to go.
+     */
+    protected function markApplied(Payment $payment): void
+    {
+        $payment->forceFill([
+            'wallet_credited_at' => $payment->wallet_credited_at ?? now(),
+            'wallet_credit_failed_at' => null,
+            'wallet_credit_failure_reason' => null,
+        ])->save();
     }
 
     /**
