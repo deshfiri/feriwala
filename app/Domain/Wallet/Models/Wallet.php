@@ -102,6 +102,30 @@ class Wallet extends Model
         return $this->hasMany(LedgerEntry::class)->orderByDesc('id');
     }
 
+    /**
+     * The rule the current obligation was captured from (§24.1).
+     *
+     * Read for what it **authorises** — which of §24.3's graded actions may be
+     * taken — never for its figures. Those were captured; going back to the rule
+     * for them would be the drift capture exists to prevent.
+     *
+     * @return BelongsTo<DepositRule, $this>
+     */
+    public function depositRule(): BelongsTo
+    {
+        return $this->belongsTo(DepositRule::class, 'deposit_rule_id');
+    }
+
+    /**
+     * Everything §24.3 has taken away and not yet given back.
+     *
+     * @return HasMany<WalletRestriction, $this>
+     */
+    public function restrictions(): HasMany
+    {
+        return $this->hasMany(WalletRestriction::class)->orderByDesc('id');
+    }
+
     public function currency(): Currency
     {
         return Currency::from($this->currency_code);

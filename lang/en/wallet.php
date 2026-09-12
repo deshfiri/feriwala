@@ -33,6 +33,42 @@ return [
         'description' => 'Add :amount to bring the deposit back up. Until then some services may be restricted.',
     ],
 
+    /*
+     * §24.3's messages. Every one carries the figure: "your balance is low"
+     * without an amount is a message nobody can act on.
+     */
+    'notice' => [
+        'subject' => 'Your wallet balance needs attention',
+        'body' => 'Your wallet is :shortfall below the :required your account is required to hold.',
+        'grace' => 'Services continue until :date. After that some may be restricted.',
+        'sms' => 'Feriwala: your wallet is :shortfall below the required balance. Top up to keep your services running.',
+        'action' => 'Top up your wallet',
+        'status_note' => 'Your wallet is below the balance your account is required to hold.',
+        'restored_note' => 'Your balance is back above the required amount and your services have been restored.',
+    ],
+
+    'state' => [
+        'healthy' => 'Healthy',
+        'low' => 'Low balance',
+        'critical' => 'Below required balance',
+        'grace_until' => 'Services continue until :date',
+        'grace_over' => 'The grace period has ended',
+        'top_up_required' => 'Top up :amount to restore your services',
+    ],
+
+    'restrictions' => [
+        'title' => 'Active restrictions',
+        'description' => 'What is paused while the balance is below the required amount (§24.3).',
+        'none' => 'Nothing is restricted.',
+        'since' => 'Since :date',
+        'notified' => 'Low balance notice',
+        'services_restricted' => 'Chargeable services restricted',
+        'website_setup_paused' => 'Website setup and renewal paused',
+        'website_disabled' => 'Website disabled',
+        'account_restricted' => 'Account features restricted',
+        'account_disabled' => 'Account temporarily disabled',
+    ],
+
     'statement' => [
         'title' => 'Statement',
         'caption' => 'Wallet movements, newest first',
