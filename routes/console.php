@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
+use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
@@ -139,3 +140,33 @@ Schedule::call(fn () => app(VerifyLedgerIntegrity::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Re-derive every wallet from its ledger and alert on a mismatch (§28.1)');
+
+/*
+ * The §28.1 gateway reconciliation: does every provider agree with us?
+ *
+ * Notifications go missing. A payer closes the tab, an IPN is posted at a server
+ * that was restarting, a webhook endpoint is misconfigured for an afternoon —
+ * and a payment sits open while the money is sitting at the provider. Nothing
+ * else in the system ever goes and asks.
+ *
+ * **Hourly**, unlike the daily sweeps above, because this one is about money
+ * that has already left somebody's account. A day is a long time to hold a
+ * confirmed payment open, and the pass is cheap: it asks only about payments
+ * old enough to have finished, and only of providers that publish a status
+ * lookup.
+ *
+ * Never downgrades anything. A settled payment is checked for a *mismatch* and
+ * the disagreement is reported rather than applied — a stale provider answer
+ * must not be able to un-pay something. A provider that cannot be reached leaves
+ * every payment exactly as it was, including its checked timestamp, so an outage
+ * is retried rather than recorded as a look.
+ *
+ * `onOneServer` because a second copy would double the provider traffic, not the
+ * coverage. Both guards use the isolated Redis lock database (§41).
+ */
+Schedule::call(fn () => app(ReconcileGatewayPayments::class)->handle())
+    ->name('gateway-reconciliation')
+    ->hourly()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Ask each gateway what it thinks happened to our payments (§28.1)');
