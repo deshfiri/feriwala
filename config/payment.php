@@ -1,5 +1,6 @@
 <?php
 
+use App\Integrations\Payment\Gateways\Eps\EpsGateway;
 use App\Integrations\Payment\Gateways\SslCommerz\SslCommerzGateway;
 
 return [
@@ -32,8 +33,14 @@ return [
             'label' => 'SSLCommerz',
         ],
 
+        /*
+         * Configuration foundation only — the driver declares no capabilities
+         * and refuses every operation. EPS issues its integration guide to
+         * merchants on request rather than publishing it, and a payment
+         * protocol is not something to infer. See EpsGateway.
+         */
         'eps' => [
-            'driver' => null,
+            'driver' => EpsGateway::class,
             'enabled' => false,
             'label' => 'EPS',
         ],

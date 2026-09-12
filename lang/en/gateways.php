@@ -46,6 +46,10 @@ return [
     'fields' => [
         'store_id' => 'Store ID',
         'store_password' => 'Store password',
+        'merchant_id' => 'Merchant ID',
+        'username' => 'Username',
+        'password' => 'Password',
+        'hash_key' => 'Hash key',
     ],
 
     'credentials' => [
