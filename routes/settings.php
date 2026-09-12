@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Erp\InvoiceController;
 use App\Http\Controllers\Erp\PackageChangeController;
+use App\Http\Controllers\Erp\ReceiptController;
 use App\Http\Controllers\Erp\RenewalController;
 use App\Http\Controllers\Erp\StaffController;
 use App\Http\Controllers\Erp\SubscriptionController;
@@ -51,6 +52,17 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         ->name('subscription.invoices.index');
     Route::get('settings/invoices/{invoice}', [InvoiceController::class, 'show'])
         ->name('subscription.invoices.show');
+
+    /*
+     * Receipts (§26.4). An invoice says what was owed; a receipt says what was
+     * actually taken, when, and through which provider. Named under the same
+     * prefix for the same reason: an account needs to be able to produce proof
+     * of what it has paid whatever state it is in.
+     */
+    Route::get('settings/receipts', [ReceiptController::class, 'index'])
+        ->name('subscription.receipts.index');
+    Route::get('settings/receipts/{payment}', [ReceiptController::class, 'show'])
+        ->name('subscription.receipts.show');
 
     /*
      * Cancelling a term (§8.2). In the same group as renewal, because an

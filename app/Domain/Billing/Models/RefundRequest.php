@@ -38,6 +38,14 @@ use RuntimeException;
  * @property string $reason
  * @property string|null $decision_note
  * @property CarbonImmutable|null $decided_at
+ * @property string|null $gateway
+ * @property string|null $idempotency_key
+ * @property string|null $gateway_refund_reference
+ * @property CarbonImmutable|null $submitted_at
+ * @property CarbonImmutable|null $processed_at
+ * @property string|null $failure_reason
+ * @property int|null $wallet_transaction_id
+ * @property array<array-key, mixed>|null $evidence
  * @property-read Payment $payment
  * @property-read BusinessAccount $businessAccount
  */

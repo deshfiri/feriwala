@@ -211,6 +211,27 @@ return [
         'tax_included' => 'included in the prices above',
     ],
 
+    'receipts' => [
+        'title' => 'Receipts',
+        'description' => 'Proof of what you have actually paid, and when.',
+        'nav' => 'Receipts',
+        'paid_on' => 'Paid on',
+        'paid' => 'Paid',
+        'method' => 'Paid by',
+        'reference' => 'Payment reference',
+        'gateway_reference' => 'Gateway transaction',
+        'settled_as' => 'Your provider settled this as :amount.',
+        'refunds' => 'Refunded',
+        'refunded' => 'Partly refunded',
+        'refunded_total' => 'Total refunded',
+        'sandbox' => 'Test payment',
+        'sandbox_notice' => 'This was a test payment in a gateway sandbox. No real money moved, and this is not proof of payment.',
+        'print' => 'Print',
+        'back' => 'Back to receipts',
+        'empty' => 'No receipts yet',
+        'empty_help' => 'A receipt appears here as soon as a payment is confirmed.',
+    ],
+
     'features' => [
         'unlimited' => 'Unlimited',
         'yes' => 'Yes',
