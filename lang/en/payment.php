@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'refund' => [
+        'recorded' => 'Refund :reference recorded — :status.',
+    ],
+
     'return' => [
         'received' => 'Payment received. We are reviewing your application.',
         'checking' => 'We are confirming your payment. This page will update shortly.',

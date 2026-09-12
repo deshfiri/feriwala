@@ -263,6 +263,13 @@ enum PlatformRole: string
                 Module::Payment->value => [
                     Action::View, Action::Create, Action::Verify, Action::Export,
                     ...$review, Action::ManageSettings, Action::ManageIntegrations,
+
+                    /*
+                     * Sending money back (§26.3, P2-31). Sensitive, so holding
+                     * it is not enough on its own — a refund still needs a
+                     * confirmed password, two-factor and a reason.
+                     */
+                    Action::ReverseTransaction,
                 ],
                 Module::Ledger->value => [Action::View],
             ],

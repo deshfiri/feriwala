@@ -16,6 +16,7 @@ use Database\Factories\RefundRequestFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use RuntimeException;
 
 /**
  * One refund asked for, and what was decided (D17).
@@ -48,6 +49,26 @@ class RefundRequest extends Model
     protected $guarded = [];
 
     /**
+     * The idempotency key is ours, and knowing it would let somebody collide
+     * with a refund deliberately.
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['idempotency_key'];
+
+    protected static function booted(): void
+    {
+        /*
+         * How much of a payment has been refunded is computed from these rows,
+         * so a row somebody can remove is a way of making refunded money
+         * disappear from the record. Refused here and by a database trigger.
+         */
+        static::deleting(function (): never {
+            throw new RuntimeException('A refund request cannot be deleted.');
+        });
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -58,6 +79,9 @@ class RefundRequest extends Model
             'status' => RefundStatus::class,
             'amount_minor' => MoneyCast::class,
             'decided_at' => 'immutable_datetime',
+            'submitted_at' => 'immutable_datetime',
+            'processed_at' => 'immutable_datetime',
+            'evidence' => 'array',
         ];
     }
 

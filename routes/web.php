@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
+use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
@@ -368,6 +369,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('payments/{payment}/wallet-credit', [WalletCreditRetryController::class, 'store'])
             ->middleware(RequirePassword::class)
             ->name('payments.wallet-credit');
+
+        /*
+         * Sending an approved refund to the gateway (§26.3, P2-31).
+         *
+         * Separate from approving it: D17 makes the refund a decision, and this
+         * is the moment that decision becomes money leaving the platform.
+         * Behind the reversal permission rather than the payment one, because
+         * looking at a payment and undoing it are different jobs.
+         */
+        Route::post('refunds/{refund}/process', [PaymentRefundController::class, 'store'])
+            ->middleware(RequirePassword::class)
+            ->name('refunds.process');
 
         Route::post('wallets/{wallet}/adjustments', [WalletAdjustmentController::class, 'store'])
             ->middleware(RequirePassword::class)
