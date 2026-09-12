@@ -58,6 +58,8 @@ return [
         'merchant_number' => 'Merchant number',
         'merchant_private_key' => 'Merchant private key',
         'nagad_public_key' => 'Nagad public key',
+        'secret_key' => 'Secret key',
+        'webhook_secret' => 'Webhook signing secret',
     ],
 
     'credentials' => [

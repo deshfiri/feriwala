@@ -58,6 +58,8 @@ return [
         'merchant_number' => 'মার্চেন্ট নম্বর',
         'merchant_private_key' => 'মার্চেন্ট প্রাইভেট কী',
         'nagad_public_key' => 'নগদ পাবলিক কী',
+        'secret_key' => 'সিক্রেট কী',
+        'webhook_secret' => 'ওয়েবহুক সাইনিং সিক্রেট',
     ],
 
     'credentials' => [

@@ -5,6 +5,7 @@ use App\Integrations\Payment\Gateways\Bkash\BkashGateway;
 use App\Integrations\Payment\Gateways\Eps\EpsGateway;
 use App\Integrations\Payment\Gateways\Nagad\NagadGateway;
 use App\Integrations\Payment\Gateways\SslCommerz\SslCommerzGateway;
+use App\Integrations\Payment\Gateways\Stripe\StripeGateway;
 use App\Integrations\Payment\Gateways\SurjoPay\SurjoPayGateway;
 
 return [
@@ -78,10 +79,18 @@ return [
             'label' => 'Nagad',
         ],
 
-        // Kept disabled until merchant accounts and supported currency flows
-        // exist — the driver contract is the same either way (D4).
+        /*
+         * Implemented against each provider's published API and **shipped
+         * disabled** until merchant accounts exist (D4, P2-38). Neither can be
+         * switched on regardless: enabling requires complete credentials, and
+         * there are no accounts to issue them.
+         *
+         * Neither accepts BDT here. The base ledger is in taka, version 1
+         * performs no exchange-rate accounting, and a gateway that cannot take
+         * the currency of an amount is never offered for it.
+         */
         'stripe' => [
-            'driver' => null,
+            'driver' => StripeGateway::class,
             'enabled' => false,
             'label' => 'Stripe',
         ],
