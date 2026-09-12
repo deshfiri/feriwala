@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,10 +31,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $currency_code
  * @property Money $total_minor
  * @property Money $required_deposit_minor
+ * @property Money $minimum_balance_minor
  * @property Money $reserved_minor
  * @property Money $pending_minor
  * @property Money $hold_minor
  * @property Money $cod_receivable_minor
+ * @property bool $deposit_usable_for_charges
+ * @property int|null $deposit_rule_id
+ * @property CarbonImmutable|null $obligation_captured_at
+ * @property CarbonImmutable|null $deposit_due_at
  * @property-read BusinessAccount|null $businessAccount
  */
 class Wallet extends Model
@@ -50,6 +56,10 @@ class Wallet extends Model
         return [
             'total_minor' => MoneyCast::class,
             'required_deposit_minor' => MoneyCast::class,
+            'minimum_balance_minor' => MoneyCast::class,
+            'deposit_usable_for_charges' => 'boolean',
+            'obligation_captured_at' => 'immutable_datetime',
+            'deposit_due_at' => 'immutable_datetime',
             'reserved_minor' => MoneyCast::class,
             'pending_minor' => MoneyCast::class,
             'hold_minor' => MoneyCast::class,
@@ -91,13 +101,15 @@ class Wallet extends Model
     /**
      * What the account can spend on services right now (§24.2).
      *
-     * Everything present, less every claim that is not spendable: the minimum
-     * balance and explicit reservations, money frozen under review, and money
-     * credited but not yet cleared.
+     * Everything present, less every claim that is not spendable: explicit
+     * reservations, money frozen under review, money credited but not yet
+     * cleared — and the **minimum balance**, which is by definition the part
+     * that has to stay. §24.2 lists the reserved minimum balance separately from
+     * the deposit precisely because they are different promises.
      *
-     * The required deposit is **not** subtracted here. §24.4 makes a deposit's
-     * usability configurable, and a deposit that may cover charges is spendable
-     * by definition; what it may never do is leave as a withdrawal.
+     * The required deposit is subtracted only when the rule says the deposit may
+     * not cover charges (§24.4). A deposit that is usable for service charges is
+     * spendable by definition; what it may never do is leave as a withdrawal.
      */
     public function usableBalance(): Money
     {
@@ -106,19 +118,57 @@ class Wallet extends Model
                 ->minus($this->reserved_minor)
                 ->minus($this->hold_minor)
                 ->minus($this->pending_minor)
+                ->minus($this->minimum_balance_minor)
+                ->minus($this->depositLockedFromSpending())
         );
     }
 
     /**
      * What the account could actually withdraw (§24.2).
      *
-     * The usable balance less the deposit it has to keep in place. A withdrawal
-     * that emptied the required deposit would leave the account unable to trade
-     * the moment it succeeded.
+     * Everything not spoken for, less **both** standing obligations: the deposit
+     * it must keep and the minimum balance it must maintain. Neither may leave,
+     * whatever §24.4 says about spending them on services — a withdrawal that
+     * emptied either would leave the account unable to trade the moment it
+     * succeeded.
+     *
+     * Never more than the spendable balance, and usually less.
      */
     public function availableForWithdrawal(): Money
     {
-        return $this->floored($this->usableBalance()->minus($this->required_deposit_minor));
+        return $this->floored(
+            $this->total_minor
+                ->minus($this->reserved_minor)
+                ->minus($this->hold_minor)
+                ->minus($this->pending_minor)
+                ->minus($this->minimum_balance_minor)
+                ->minus($this->required_deposit_minor)
+        );
+    }
+
+    /**
+     * The part of the required deposit that cannot be spent either (§24.4).
+     *
+     * Zero when the rule allows the deposit to cover service charges, which is
+     * the default: locking money away on the strength of a choice nobody has
+     * made is the wrong way round.
+     */
+    public function depositLockedFromSpending(): Money
+    {
+        return $this->deposit_usable_for_charges
+            ? Money::zero($this->currency())
+            : $this->required_deposit_minor;
+    }
+
+    /**
+     * Everything the account is standing surety for (§24.1, §24.2).
+     *
+     * The deposit and the minimum balance together — what the wallet has to hold
+     * before any of it is the account's to move.
+     */
+    public function reservedObligation(): Money
+    {
+        return $this->required_deposit_minor->plus($this->minimum_balance_minor);
     }
 
     /**
@@ -130,11 +180,30 @@ class Wallet extends Model
     }
 
     /**
+     * Whether the wallet is holding everything §24 asks of it.
+     *
+     * Both obligations at once, because meeting one and not the other is not
+     * meeting the requirement — it is the condition §24.3 acts on.
+     */
+    public function meetsObligation(): bool
+    {
+        return $this->total_minor->greaterThanOrEqualTo($this->reservedObligation());
+    }
+
+    /**
      * How much the account would have to add to meet its required deposit.
      */
     public function shortfall(): Money
     {
         return $this->floored($this->required_deposit_minor->minus($this->total_minor));
+    }
+
+    /**
+     * How much it would have to add to meet everything §24 asks of it.
+     */
+    public function obligationShortfall(): Money
+    {
+        return $this->floored($this->reservedObligation()->minus($this->total_minor));
     }
 
     /**
@@ -153,12 +222,21 @@ class Wallet extends Model
             'usable' => $this->usableBalance()->jsonSerialize(),
             'available_for_withdrawal' => $this->availableForWithdrawal()->jsonSerialize(),
             'required_deposit' => $this->required_deposit_minor->jsonSerialize(),
+
+            // §24.2 lists this beside the deposit, not instead of it: the part
+            // that has to stay, spendable on nothing and withdrawable never.
+            'minimum_balance' => $this->minimum_balance_minor->jsonSerialize(),
+
             'reserved' => $this->reserved_minor->jsonSerialize(),
             'pending' => $this->pending_minor->jsonSerialize(),
             'hold' => $this->hold_minor->jsonSerialize(),
             'cod_receivable' => $this->cod_receivable_minor->jsonSerialize(),
+            'deposit_usable_for_charges' => $this->deposit_usable_for_charges,
             'meets_required_deposit' => $this->meetsRequiredDeposit(),
+            'meets_obligation' => $this->meetsObligation(),
             'shortfall' => $this->shortfall()->jsonSerialize(),
+            'obligation_shortfall' => $this->obligationShortfall()->jsonSerialize(),
+            'deposit_due_at' => $this->deposit_due_at?->toIso8601String(),
         ];
     }
 

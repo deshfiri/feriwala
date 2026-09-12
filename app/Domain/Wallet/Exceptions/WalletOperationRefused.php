@@ -43,6 +43,22 @@ class WalletOperationRefused extends RuntimeException
         return new self('A wallet movement must be for a positive amount.');
     }
 
+    /**
+     * The account has not deposited what §24 requires of it.
+     *
+     * Distinct from an insufficient balance: the money may well be there and
+     * simply be money the account is required to keep. Saying so in the message
+     * is what stops somebody topping up the difference and being refused again.
+     */
+    public static function depositNotMet(Money $shortfall, Money $required): self
+    {
+        return new self(sprintf(
+            'This account is required to hold %s and is short by %s.',
+            $required->format(),
+            $shortfall->format(),
+        ));
+    }
+
     public static function reasonRequired(LedgerTransactionType $type): self
     {
         return new self(sprintf('A %s must say why.', mb_strtolower($type->label())));

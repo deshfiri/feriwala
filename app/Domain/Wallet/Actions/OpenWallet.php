@@ -46,10 +46,16 @@ class OpenWallet
                  */
                 'total_minor' => 0,
                 'required_deposit_minor' => 0,
+                'minimum_balance_minor' => 0,
                 'reserved_minor' => 0,
                 'pending_minor' => 0,
                 'hold_minor' => 0,
                 'cod_receivable_minor' => 0,
+
+                // §24.4's default until a rule says otherwise: a deposit that
+                // cannot be spent is the stricter reading, and nobody has
+                // chosen it yet.
+                'deposit_usable_for_charges' => true,
             ]);
         } catch (UniqueConstraintViolationException $exception) {
             $wallet = Wallet::query()->where('business_account_id', $account->id)->first();

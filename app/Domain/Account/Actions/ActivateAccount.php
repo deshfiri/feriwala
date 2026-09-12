@@ -11,6 +11,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Wallet\Actions\CaptureDepositObligation;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Notifications\Account\AccountActivated;
 use App\Support\Concurrency\DistributedLock;
@@ -36,6 +37,7 @@ class ActivateAccount
         protected ChangeAccountStatus $changeStatus,
         protected RecordAuditLog $audit,
         protected OpenWallet $wallets,
+        protected CaptureDepositObligation $obligations,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
     ) {}
@@ -116,6 +118,17 @@ class ActivateAccount
              * explaining it.
              */
             $this->wallets->handle($locked);
+
+            /*
+             * And what it is required to hold (§24.1, P2-13).
+             *
+             * Captured here rather than read whenever it is needed: the rule in
+             * force today becomes this account's obligation, and a rule edited
+             * next June must not reach back and change what it agreed to. An
+             * account with no rule applying captures nothing and is held to
+             * nothing, which is also an answer.
+             */
+            $this->obligations->handle($locked, CaptureDepositObligation::ACTIVATION);
 
             // The account has left the approval queue. Clearing the stamp keeps
             // the queue's sort key meaning only "waiting for review".
