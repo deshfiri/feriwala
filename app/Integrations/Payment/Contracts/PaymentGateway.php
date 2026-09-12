@@ -67,6 +67,18 @@ interface PaymentGateway
     public function verify(string $gatewayReference): GatewayResult;
 
     /**
+     * Ask the gateway what became of **our** transaction (§28.1).
+     *
+     * Distinct from {@see verify()}, which is addressed by the provider's own
+     * identifier. Reconciliation frequently has no such identifier — a payer who
+     * closed the tab never sent one back — and "what happened to the transaction
+     * I called X" is the only question that can be asked then.
+     *
+     * Only called when the provider declares {@see GatewayCapability::StatusQuery}.
+     */
+    public function status(string $reference): GatewayResult;
+
+    /**
      * Give money back (§26.3).
      *
      * Only called when the provider declares the matching refund capability.

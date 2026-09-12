@@ -4,6 +4,7 @@ namespace App\Integrations\Payment\Gateways;
 
 use App\Integrations\Payment\Contracts\PaymentGateway;
 use App\Integrations\Payment\Data\GatewayCapability;
+use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\Data\RefundIntent;
 use App\Integrations\Payment\Data\RefundResult;
 use App\Integrations\Payment\Exceptions\GatewayCapabilityMissing;
@@ -85,6 +86,16 @@ abstract class Gateway implements PaymentGateway
     public function supportedCurrencies(): array
     {
         return [Currency::BDT];
+    }
+
+    /**
+     * Status lookup is refused unless the provider offers one.
+     *
+     * @throws GatewayCapabilityMissing
+     */
+    public function status(string $reference): GatewayResult
+    {
+        throw GatewayCapabilityMissing::for($this->name(), GatewayCapability::StatusQuery);
     }
 
     /**

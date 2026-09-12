@@ -201,6 +201,11 @@ class SettlePayment
                 'completed_at' => now(),
                 'settled_currency_code' => $result->amount?->currency->value,
                 'settled_amount_minor' => $result->amount?->minorUnits,
+
+                // Kept now because a refund is addressed to it, and going back
+                // to ask for it later is an extra call that can fail at exactly
+                // the moment somebody is owed their money (§26.3).
+                'gateway_settlement_reference' => $result->settlementReference,
             ])->save();
 
             $payment->setRawAttributes($locked->getAttributes(), sync: true);
@@ -297,6 +302,7 @@ class SettlePayment
                 'gateway_reference' => $gatewayReference,
                 'settled_currency_code' => $result->amount?->currency->value,
                 'settled_amount_minor' => $result->amount?->minorUnits,
+                'gateway_settlement_reference' => $result->settlementReference,
                 'reconciliation_required_at' => now(),
                 'reconciliation_reason' => sprintf(
                     'The gateway confirmed this payment after the checkout was %s. '

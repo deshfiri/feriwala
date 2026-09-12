@@ -32,11 +32,17 @@ readonly class RefundResult
     /**
      * The provider has returned the money.
      *
+     * `amount` is null when the provider does not report one back — several
+     * confirm a refund without restating its value. That is not a problem to
+     * paper over with the requested figure: the caller already holds what it
+     * asked for, and a figure invented here would look like the provider's own
+     * confirmation of it.
+     *
      * @param  array<string, mixed>  $raw
      */
     public static function succeeded(
         string $gatewayRefundReference,
-        Money $amount,
+        ?Money $amount = null,
         array $raw = [],
     ): self {
         return new self(

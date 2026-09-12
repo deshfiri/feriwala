@@ -2,13 +2,17 @@
 
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayOutcome;
+use App\Integrations\Payment\Data\GatewayRefundOutcome;
 use App\Integrations\Payment\Data\PaymentIntent;
+use App\Integrations\Payment\Data\RefundIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\Gateways\SslCommerz\SslCommerzGateway;
 use App\Support\Money\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 const STORE_ID = 'feriwala_test';
 const STORE_PASSWORD = 'test-store-password';
@@ -82,6 +86,25 @@ function signedIpn(array $overrides = []): array
 function ipnRequest(array $payload): Request
 {
     return Request::create('/webhook/sslcommerz', 'POST', $payload);
+}
+
+/**
+ * A refund of a ৳6,000 payment, addressed the way the provider requires.
+ *
+ * `gatewayReference` is the **banking** id here, not the validation id: that is
+ * what the documented refund call takes, and it is what the payment recorded
+ * when it settled.
+ */
+function aRefund(?Money $amount = null): RefundIntent
+{
+    return new RefundIntent(
+        reference: 'PAY-260901-K7M3QX9P',
+        gatewayReference: 'BANK-778899',
+        amount: $amount ?? Money::of(600000),
+        originalAmount: Money::of(600000),
+        reason: 'Duplicate payment',
+        idempotencyKey: 'refund:PAY-260901-K7M3QX9P:1',
+    );
 }
 
 describe('credentials', function () {
@@ -314,5 +337,256 @@ describe('server-side verification', function () {
         Http::fake(['*' => Http::response('', 500)]);
 
         expect(fn () => $this->gateway->verify('VAL1'))->toThrow(GatewayUnavailable::class);
+    });
+
+    it('keeps the banking reference a refund will need', function () {
+        /*
+         * SSLCommerz validates against `val_id` but refunds against
+         * `bank_tran_id`. Taking it now means a refund is one call, not a
+         * lookup that can fail when somebody is already owed their money.
+         */
+        Http::fake([
+            '*' => Http::response([
+                'status' => 'VALID',
+                'tran_id' => 'PAY-260901-K7M3QX9P',
+                'currency_amount' => '6000.00',
+                'currency_type' => 'BDT',
+                'bank_tran_id' => 'BANK-778899',
+            ]),
+        ]);
+
+        expect($this->gateway->verify('VAL123456')->settlementReference)->toBe('BANK-778899');
+    });
+});
+
+describe('status lookup (§28.1)', function () {
+    it('asks about our own transaction id, not the gateway one', function () {
+        // What reconciliation has to work with. A payer who closed the tab
+        // never sent a val_id back, so this is the only question left to ask.
+        Http::fake([
+            '*' => Http::response([
+                'APIConnect' => 'DONE',
+                'no_of_trans_found' => 1,
+                'element' => [[
+                    'status' => 'VALID',
+                    'tran_id' => 'PAY-260901-K7M3QX9P',
+                    'val_id' => 'VAL123456',
+                    'currency_amount' => '6000.00',
+                    'currency_type' => 'BDT',
+                    'bank_tran_id' => 'BANK-778899',
+                ]],
+            ]),
+        ]);
+
+        $result = $this->gateway->status('PAY-260901-K7M3QX9P');
+
+        expect($result->isPaid())->toBeTrue()
+            ->and($result->gatewayReference)->toBe('VAL123456')
+            ->and($result->settlementReference)->toBe('BANK-778899');
+
+        Http::assertSent(fn ($request) => $request['tran_id'] === 'PAY-260901-K7M3QX9P');
+    });
+
+    it('finds the attempt that succeeded, not the last one tried', function () {
+        /*
+         * SSLCommerz lets one transaction id be attempted more than once, and
+         * does not document the order of the array. Reading the last element
+         * would report a paid transaction as failed because the payer pressed
+         * the button again after it had already gone through.
+         */
+        Http::fake([
+            '*' => Http::response([
+                'APIConnect' => 'DONE',
+                'no_of_trans_found' => 2,
+                'element' => [
+                    [
+                        'status' => 'VALID',
+                        'val_id' => 'VAL-GOOD',
+                        'currency_amount' => '6000.00',
+                        'currency_type' => 'BDT',
+                    ],
+                    ['status' => 'FAILED', 'val_id' => 'VAL-BAD'],
+                ],
+            ]),
+        ]);
+
+        $result = $this->gateway->status('PAY-260901-K7M3QX9P');
+
+        expect($result->isPaid())->toBeTrue()
+            ->and($result->gatewayReference)->toBe('VAL-GOOD');
+    });
+
+    it('reports a transaction the gateway has never heard of', function () {
+        Http::fake([
+            '*' => Http::response(['APIConnect' => 'DONE', 'no_of_trans_found' => 0, 'element' => []]),
+        ]);
+
+        $result = $this->gateway->status('PAY-NOTHING');
+
+        expect($result->outcome)->toBe(GatewayOutcome::Failed)
+            ->and($result->errorCode)->toBe('not_found');
+    });
+
+    it('throws rather than concluding anything when the merchant API refuses', function () {
+        /*
+         * "We could not ask" is not "the payment failed". A bad credential or
+         * an inactive merchant account must never be read as an answer about
+         * somebody's money.
+         */
+        Http::fake(['*' => Http::response(['APIConnect' => 'INACTIVE'])]);
+
+        expect(fn () => $this->gateway->status('PAY-1'))
+            ->toThrow(GatewayUnavailable::class, 'INACTIVE');
+    });
+});
+
+describe('refunds (§26.3)', function () {
+    it('refunds against the banking reference, carrying our idempotency key', function () {
+        Http::fake([
+            '*' => Http::response([
+                'APIConnect' => 'DONE',
+                'status' => 'success',
+                'refund_ref_id' => 'REF-001',
+            ]),
+        ]);
+
+        $this->gateway->refund(aRefund());
+
+        Http::assertSent(fn ($request) => $request['bank_tran_id'] === 'BANK-778899'
+            // Sent as the provider's own unique refund id: the same key twice
+            // is the same instruction, not a second one.
+            && $request['refund_trans_id'] === 'refund:PAY-260901-K7M3QX9P:1'
+            && $request['refund_amount'] === '6000.00'
+            && $request['refund_remarks'] === 'Duplicate payment');
+    });
+
+    it('treats an accepted refund as pending, never as money returned', function () {
+        /*
+         * The provider's own vocabulary separates acceptance from settlement.
+         * Reversing our ledger on `success` would give money back that has not
+         * yet left theirs.
+         */
+        Http::fake([
+            '*' => Http::response([
+                'APIConnect' => 'DONE',
+                'status' => 'success',
+                'refund_ref_id' => 'REF-001',
+            ]),
+        ]);
+
+        $result = $this->gateway->refund(aRefund());
+
+        expect($result->isPending())->toBeTrue()
+            ->and($result->isSucceeded())->toBeFalse()
+            ->and($result->outcome->isSettled())->toBeFalse()
+            ->and($result->gatewayRefundReference)->toBe('REF-001');
+    });
+
+    it('sends a partial refund as the same call with a smaller amount', function () {
+        Http::fake([
+            '*' => Http::response([
+                'APIConnect' => 'DONE',
+                'status' => 'processing',
+                'refund_ref_id' => 'REF-002',
+            ]),
+        ]);
+
+        $result = $this->gateway->refund(aRefund(Money::of(150000)));
+
+        expect($result->isPending())->toBeTrue();
+
+        Http::assertSent(fn ($request) => $request['refund_amount'] === '1500.00');
+    });
+
+    it('refuses to hold a refund it can never ask about again', function () {
+        // The refund query takes `refund_ref_id` and nothing else. Accepted
+        // without one is an instruction that can never be followed up.
+        Http::fake(['*' => Http::response(['APIConnect' => 'DONE', 'status' => 'success'])]);
+
+        expect(fn () => $this->gateway->refund(aRefund()))
+            ->toThrow(GatewayUnavailable::class, 'could not be understood');
+    });
+
+    it('reports a refused refund as a result rather than throwing', function () {
+        Http::fake([
+            '*' => Http::response([
+                'APIConnect' => 'DONE',
+                'status' => 'failed',
+                'errorReason' => 'Refund window has closed',
+            ]),
+        ]);
+
+        $result = $this->gateway->refund(aRefund());
+
+        expect($result->outcome)->toBe(GatewayRefundOutcome::Failed)
+            ->and($result->error)->toBe('Refund window has closed');
+    });
+});
+
+describe('refund status', function () {
+    it('treats only refunded as money actually returned', function () {
+        Http::fake([
+            '*' => Http::response([
+                'APIConnect' => 'DONE',
+                'status' => 'refunded',
+                'refunded_on' => '2026-09-12 11:00:00',
+            ]),
+        ]);
+
+        $result = $this->gateway->refundStatus('REF-001');
+
+        expect($result->isSucceeded())->toBeTrue()
+            ->and($result->outcome->isSettled())->toBeTrue()
+            // The provider does not restate the amount, and inventing one here
+            // would read as its confirmation of a figure it never gave.
+            ->and($result->amount)->toBeNull();
+
+        Http::assertSent(fn ($request) => $request['refund_ref_id'] === 'REF-001');
+    });
+
+    it('keeps a refund still in flight out of the ledger', function () {
+        Http::fake(['*' => Http::response(['APIConnect' => 'DONE', 'status' => 'processing'])]);
+
+        $result = $this->gateway->refundStatus('REF-001');
+
+        expect($result->isPending())->toBeTrue()
+            ->and($result->outcome->isSettled())->toBeFalse();
+    });
+
+    it('reports a cancelled refund as failed', function () {
+        Http::fake(['*' => Http::response(['APIConnect' => 'DONE', 'status' => 'cancelled'])]);
+
+        expect($this->gateway->refundStatus('REF-001')->outcome)
+            ->toBe(GatewayRefundOutcome::Failed);
+    });
+});
+
+describe('what this driver will not do', function () {
+    it('declares refunding and status lookup, having been built against the v4 API', function () {
+        expect($this->gateway->capabilities())->toContain(
+            GatewayCapability::StatusQuery,
+            GatewayCapability::RefundFull,
+            GatewayCapability::RefundPartial,
+            GatewayCapability::RefundStatus,
+        );
+    });
+
+    it('never sends a credential anywhere but the provider', function () {
+        /*
+         * The store password is a query parameter on every one of these calls.
+         * What must never happen is it reaching a log line on the way past
+         * (§42).
+         */
+        Http::fake(['*' => Http::response(['APIConnect' => 'INACTIVE'])]);
+
+        Log::shouldReceive('channel')->with('payment')->andReturnSelf();
+        Log::shouldReceive('warning')->once()->withArgs(
+            fn (string $message, array $context) => ! str_contains((string) json_encode($context), STORE_PASSWORD),
+        );
+
+        // Resolved after the facade is swapped: the driver holds its logger by
+        // constructor injection, so one built earlier would keep the real one.
+        expect(fn () => app(SslCommerzGateway::class)->status('PAY-1'))
+            ->toThrow(GatewayUnavailable::class);
     });
 });

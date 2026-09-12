@@ -9,10 +9,18 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\Models\Setting;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Data\GatewayCapability;
+use App\Integrations\Payment\Data\GatewayRedirect;
+use App\Integrations\Payment\Data\GatewayResult;
+use App\Integrations\Payment\Data\PaymentIntent;
+use App\Integrations\Payment\Data\RefundIntent;
 use App\Integrations\Payment\Exceptions\GatewayCapabilityMissing;
+use App\Integrations\Payment\Gateways\Gateway;
+use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Http\Request;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
@@ -343,14 +351,78 @@ describe('what a gateway says it can do', function () {
 
     it('refuses an operation the provider has no endpoint for', function () {
         /*
+         * The guarantee every driver in this batch rests on, tested against a
+         * gateway that declares nothing — the resting state of a provider whose
+         * protocol could not be confirmed against its own documentation.
+         *
          * The alternative to refusing is guessing at somebody else's protocol,
          * and a guess about a refund is a guess about real money.
          */
-        $driver = app(PaymentGatewayManager::class)->driver('sslcommerz');
+        $driver = new class extends Gateway
+        {
+            public function capabilities(): array
+            {
+                return [];
+            }
+
+            public function initiate(PaymentIntent $intent): GatewayRedirect
+            {
+                throw new RuntimeException('Not reached.');
+            }
+
+            public function handleCallback(Request $request): GatewayResult
+            {
+                throw new RuntimeException('Not reached.');
+            }
+
+            public function verifyWebhookSignature(Request $request): bool
+            {
+                return false;
+            }
+
+            public function verify(string $gatewayReference): GatewayResult
+            {
+                throw new RuntimeException('Not reached.');
+            }
+
+            protected function credentials(): GatewayCredentials
+            {
+                return new class(app(SettingsRepository::class)) extends GatewayCredentials
+                {
+                    public function gateway(): string
+                    {
+                        return 'unconfirmed';
+                    }
+
+                    public function requiredKeys(): array
+                    {
+                        return [];
+                    }
+                };
+            }
+        };
 
         expect($driver->supports(GatewayCapability::RefundFull))->toBeFalse()
-            ->and(fn () => $driver->refundStatus('anything'))
-            ->toThrow(GatewayCapabilityMissing::class);
+            ->and(fn () => $driver->refund(new RefundIntent(
+                reference: 'PAY-1',
+                gatewayReference: 'BANK-1',
+                amount: Money::of(100),
+                originalAmount: Money::of(100),
+                reason: 'Test',
+                idempotencyKey: 'refund:PAY-1:1',
+            )))->toThrow(GatewayCapabilityMissing::class)
+            ->and(fn () => $driver->refundStatus('anything'))->toThrow(GatewayCapabilityMissing::class)
+            ->and(fn () => $driver->status('PAY-1'))->toThrow(GatewayCapabilityMissing::class);
+    });
+
+    it('names the gateway and the operation when it refuses', function () {
+        // Reaching this exception means a screen offered a button it should not
+        // have, so it says which one and for whom.
+        $driver = app(PaymentGatewayManager::class)->driver('sslcommerz');
+
+        expect(GatewayCapabilityMissing::for($driver->name(), GatewayCapability::RefundStatus)->getMessage())
+            ->toContain('sslcommerz')
+            ->toContain('refund status');
     });
 
     it('says which fields a provider still needs, never their values', function () {

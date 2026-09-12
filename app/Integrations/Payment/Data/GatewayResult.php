@@ -24,6 +24,15 @@ class GatewayResult
         public readonly ?string $errorCode = null,
         /** @var array<string, mixed> */
         public readonly array $raw = [],
+        /**
+         * The identifier the provider's own settlement side knows this by.
+         *
+         * Separate from `gatewayReference` because several providers have two:
+         * the one that identifies the *verification* and the one the banking
+         * side uses, and it is the second that a refund has to be addressed to.
+         * Kept when the provider gives it, null when it does not.
+         */
+        public readonly ?string $settlementReference = null,
     ) {}
 
     /**
@@ -34,6 +43,7 @@ class GatewayResult
         string $gatewayReference,
         Money $amount,
         array $raw = [],
+        ?string $settlementReference = null,
     ): self {
         return new self(
             outcome: GatewayOutcome::Paid,
@@ -41,6 +51,7 @@ class GatewayResult
             gatewayReference: $gatewayReference,
             amount: $amount,
             raw: $raw,
+            settlementReference: $settlementReference,
         );
     }
 
