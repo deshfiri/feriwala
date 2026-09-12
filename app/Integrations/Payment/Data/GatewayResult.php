@@ -33,6 +33,19 @@ class GatewayResult
          * Kept when the provider gives it, null when it does not.
          */
         public readonly ?string $settlementReference = null,
+
+        /**
+         * What the provider deducted at their end (D4).
+         *
+         * Not the gateway charge billed to the customer — that is a payment
+         * allocation and appears on the invoice. This is the fee the provider
+         * kept, which never appeared on any invoice and is the difference
+         * between what the customer paid and what arrived.
+         *
+         * Null when the provider does not report one, because a zero would
+         * claim they charged nothing.
+         */
+        public readonly ?Money $fee = null,
     ) {}
 
     /**
@@ -44,6 +57,7 @@ class GatewayResult
         Money $amount,
         array $raw = [],
         ?string $settlementReference = null,
+        ?Money $fee = null,
     ): self {
         return new self(
             outcome: GatewayOutcome::Paid,
@@ -52,6 +66,7 @@ class GatewayResult
             amount: $amount,
             raw: $raw,
             settlementReference: $settlementReference,
+            fee: $fee,
         );
     }
 

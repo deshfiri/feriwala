@@ -206,6 +206,15 @@ class SettlePayment
                 // to ask for it later is an extra call that can fail at exactly
                 // the moment somebody is owed their money (§26.3).
                 'gateway_settlement_reference' => $result->settlementReference,
+
+                /*
+                 * What the provider kept, recorded separately and never netted
+                 * off (D4). A figure that mixed the charge and the fee could
+                 * not answer either question: what the customer paid, or what
+                 * the business received.
+                 */
+                'gateway_fee_minor' => $result->fee?->minorUnits,
+                'gateway_fee_currency_code' => $result->fee?->currency->value,
             ])->save();
 
             $payment->setRawAttributes($locked->getAttributes(), sync: true);

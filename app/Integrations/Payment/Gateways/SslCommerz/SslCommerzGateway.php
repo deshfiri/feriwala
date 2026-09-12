@@ -16,6 +16,7 @@ use App\Support\Money\Money;
 use Illuminate\Http\Client\Factory as HttpClient;
 use Illuminate\Http\Request;
 use Illuminate\Log\LogManager;
+use Throwable;
 
 /**
  * SSLCommerz (D7 — the first gateway).
@@ -267,6 +268,8 @@ class SslCommerzGateway extends Gateway
                 // again later is an extra call that can fail at the worst
                 // possible moment.
                 settlementReference: $this->bankTransactionId($body),
+
+                fee: $this->feeFrom($body),
             );
         }
 
@@ -516,6 +519,39 @@ class SslCommerzGateway extends Gateway
         }
 
         return $body;
+    }
+
+    /**
+     * What SSLCommerz kept, derived from what they say lands in the account.
+     *
+     * `store_amount` is documented as "the amount what you will get in your
+     * account after bank charge", so the fee is the difference between it and
+     * the amount charged. Both are in the transaction's own currency.
+     *
+     * Null when SSLCommerz does not report a store amount, because a zero would
+     * claim they charged nothing — and a negative would mean they credited more
+     * than was paid, which is not a fee and is not something to record as one.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    protected function feeFrom(array $body): ?Money
+    {
+        if (! isset($body['store_amount'], $body['currency_amount'], $body['currency_type'])) {
+            return null;
+        }
+
+        try {
+            $currency = Currency::from((string) $body['currency_type']);
+
+            $charged = Money::fromDecimal((string) $body['currency_amount'], $currency);
+            $received = Money::fromDecimal((string) $body['store_amount'], $currency);
+        } catch (Throwable) {
+            return null;
+        }
+
+        $fee = $charged->minus($received);
+
+        return $fee->isPositive() ? $fee : null;
     }
 
     /**
