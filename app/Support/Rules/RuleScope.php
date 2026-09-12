@@ -16,6 +16,8 @@ enum RuleScope: string
     case Category = 'category';
     case Product = 'product';
     case Website = 'website';
+    case Domain = 'domain';
+    case Hosting = 'hosting';
     case User = 'user';
     case Campaign = 'campaign';
 
@@ -27,8 +29,12 @@ enum RuleScope: string
      *  - Global is the fallback everything else overrides.
      *  - Package, then category, then product narrow the subject.
      *  - Website narrows further — it belongs to exactly one account.
+     *  - Domain and hosting narrow further still: they are services *under* a
+     *    website, and §24.1 lets a deposit be set for one of them specifically.
      *  - User beats all of the above, because §27.3 states plainly that a valid
-     *    user-specific withdrawal rule overrides the corresponding default.
+     *    user-specific withdrawal rule overrides the corresponding default. A
+     *    deposit agreed with one business is the same kind of statement, and
+     *    outranks anything set per service.
      *  - Campaign sits highest: a running promotion is a deliberate, time-boxed
      *    decision to override standing terms, and it expires on its own.
      *
@@ -42,6 +48,8 @@ enum RuleScope: string
             self::Category => 20,
             self::Product => 30,
             self::Website => 40,
+            self::Domain => 42,
+            self::Hosting => 44,
             self::User => 50,
             self::Campaign => 60,
         };
@@ -63,6 +71,8 @@ enum RuleScope: string
             self::Category => 'Category-specific',
             self::Product => 'Product-specific',
             self::Website => 'Website-specific',
+            self::Domain => 'Domain-specific',
+            self::Hosting => 'Hosting-specific',
             self::User => 'User-specific',
             self::Campaign => 'Campaign',
         };
