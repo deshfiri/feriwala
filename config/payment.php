@@ -4,6 +4,7 @@ use App\Integrations\Payment\Gateways\AmarPay\AmarPayGateway;
 use App\Integrations\Payment\Gateways\Bkash\BkashGateway;
 use App\Integrations\Payment\Gateways\Eps\EpsGateway;
 use App\Integrations\Payment\Gateways\Nagad\NagadGateway;
+use App\Integrations\Payment\Gateways\PayPal\PayPalGateway;
 use App\Integrations\Payment\Gateways\SslCommerz\SslCommerzGateway;
 use App\Integrations\Payment\Gateways\Stripe\StripeGateway;
 use App\Integrations\Payment\Gateways\SurjoPay\SurjoPayGateway;
@@ -96,7 +97,7 @@ return [
         ],
 
         'paypal' => [
-            'driver' => null,
+            'driver' => PayPalGateway::class,
             'enabled' => false,
             'label' => 'PayPal',
         ],

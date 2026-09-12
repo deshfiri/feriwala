@@ -179,6 +179,7 @@ class PaymentGatewayManager
      *     name: string,
      *     label: string,
      *     is_implemented: bool,
+     *     is_operational: bool,
      *     is_enabled: bool,
      *     is_configured: bool,
      *     is_available: bool,
@@ -204,13 +205,27 @@ class PaymentGatewayManager
 
             $isConfigured = $driver?->isConfigured() ?? false;
 
+            /*
+             * A driver that cannot confirm a payment with its provider cannot
+             * take one (§26.4). That is the state EPS and Nagad rest in: a
+             * class is wired up and their credentials have somewhere to live,
+             * but their protocol could not be confirmed, so they declare
+             * nothing and can do nothing.
+             *
+             * Checked here as well as when enabling, because this is what the
+             * checkout reads. "Switched on" is a decision somebody made once;
+             * this is whether the gateway can actually work today.
+             */
+            $canVerify = $driver?->supports(GatewayCapability::Verify) ?? false;
+
             $catalogue[] = [
                 'name' => $name,
                 'label' => is_string($config['label'] ?? null) ? $config['label'] : $name,
                 'is_implemented' => $isImplemented,
+                'is_operational' => $canVerify,
                 'is_enabled' => $isEnabled,
                 'is_configured' => $isConfigured,
-                'is_available' => $isImplemented && $isEnabled && $isConfigured,
+                'is_available' => $isImplemented && $canVerify && $isEnabled && $isConfigured,
                 'is_sandbox' => $driver?->isSandbox(),
 
                 /*

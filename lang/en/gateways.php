@@ -60,6 +60,9 @@ return [
         'nagad_public_key' => 'Nagad public key',
         'secret_key' => 'Secret key',
         'webhook_secret' => 'Webhook signing secret',
+        'client_id' => 'Client ID',
+        'client_secret' => 'Client secret',
+        'webhook_id' => 'Webhook ID',
     ],
 
     'credentials' => [
@@ -78,7 +81,7 @@ return [
 
     'planned' => [
         'title' => 'Not built yet',
-        'description' => 'These providers are named in the specification but have no driver, so they cannot hold credentials.',
+        'description' => 'These providers have somewhere to keep their credentials, but no confirmed protocol to use them with — their integration documentation is issued to merchants rather than published. They cannot take a payment and cannot be switched on.',
     ],
 
     'sandbox_notice' => 'This gateway is in sandbox mode. No real money moves.',

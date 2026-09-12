@@ -16,6 +16,7 @@ type GatewayRow = {
     name: string;
     label: string;
     is_implemented: boolean;
+    is_operational: boolean;
     is_enabled: boolean;
     is_configured: boolean;
     is_available: boolean;
@@ -51,13 +52,20 @@ type Props = {
 export default function Gateways({ gateways, modes, can }: Props) {
     const { t } = useTranslation();
 
-    const implemented = gateways.filter((gateway) => gateway.is_implemented);
-    const planned = gateways.filter((gateway) => !gateway.is_implemented);
+    /*
+     * "Built" means the driver can actually do something, not that a class is
+     * wired up. EPS and Nagad have both — a place for their credentials and a
+     * driver that declares nothing — because their protocols could not be
+     * confirmed against official documentation. Listing them as ready would be
+     * the screen telling a lie the server already refuses to act on.
+     */
+    const implemented = gateways.filter((gateway) => gateway.is_operational);
+    const planned = gateways.filter((gateway) => !gateway.is_operational);
 
     const state = (
         gateway: GatewayRow,
     ): { tone: StatusTone; label: string } => {
-        if (!gateway.is_implemented) {
+        if (!gateway.is_operational) {
             return {
                 tone: 'neutral',
                 label: t('gateways.state.not_implemented'),

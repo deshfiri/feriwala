@@ -72,16 +72,42 @@ describe('when a gateway is offered', function () {
     });
 
     it('reports every gateway §26 names, not only the working one', function () {
-        // "Why can nobody pay by bKash" is answered by seeing it listed as not
-        // built yet. An empty list answers nothing.
+        // "Why can nobody pay by bKash" is answered by seeing it listed with
+        // what it still needs. An empty list answers nothing.
         $catalogue = app(PaymentGatewayManager::class)->catalogue();
 
         expect($catalogue)->toHaveCount(8);
 
         $bkash = collect($catalogue)->firstWhere('name', 'bkash');
 
-        expect($bkash['is_implemented'])->toBeFalse()
-            ->and($bkash['is_available'])->toBeFalse();
+        expect($bkash['is_implemented'])->toBeTrue()
+            ->and($bkash['is_configured'])->toBeFalse()
+            ->and($bkash['is_available'])->toBeFalse()
+            ->and($bkash['missing_configuration'])->toContain('app_key');
+    });
+
+    it('is never offered by a driver that cannot confirm a payment', function () {
+        /*
+         * EPS and Nagad rest here: a class is wired up and their credentials
+         * have somewhere to live, but their protocol could not be confirmed
+         * against official documentation, so they declare nothing.
+         *
+         * Checked at the catalogue as well as when enabling, because this is
+         * what the checkout reads. "Switched on" is a decision somebody made
+         * once; this is whether the gateway can work at all.
+         */
+        $catalogue = collect(app(PaymentGatewayManager::class)->catalogue());
+
+        foreach (['eps', 'nagad'] as $name) {
+            $entry = $catalogue->firstWhere('name', $name);
+
+            expect($entry['is_implemented'])->toBeTrue()
+                ->and($entry['is_operational'])->toBeFalse()
+                ->and($entry['capabilities'])->toBe([])
+                ->and($entry['is_available'])->toBeFalse();
+        }
+
+        expect($catalogue->firstWhere('name', 'sslcommerz')['is_operational'])->toBeTrue();
     });
 });
 
@@ -222,14 +248,19 @@ describe('the settings screen', function () {
             ->toBeFalse();
     });
 
-    it('refuses to configure a gateway with no driver', function () {
+    it('refuses to hold credentials for a gateway that does not exist', function () {
+        // A settings table is not somewhere to park secrets for a provider
+        // nobody has written a driver for.
         $this->actingAs($this->manager)
             ->put(route('admin.gateways.update'), [
-                'gateway' => 'bkash',
+                'gateway' => 'some-other-provider',
                 'mode' => 'sandbox',
                 'credentials' => ['store_id' => 'nope'],
             ])
             ->assertSessionHasErrors('gateway');
+
+        expect(Setting::query()->where('key', 'like', 'payment.some-other-provider.%')->exists())
+            ->toBeFalse();
     });
 
     it('refuses a mode that is neither sandbox nor live', function () {
