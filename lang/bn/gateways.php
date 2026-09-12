@@ -52,6 +52,9 @@ return [
         'hash_key' => 'হ্যাশ কী',
         'prefix' => 'ট্রানজেকশন প্রিফিক্স',
         'signature_key' => 'সিগনেচার কী',
+        'base_url' => 'বেস URL',
+        'app_key' => 'অ্যাপ কী',
+        'app_secret' => 'অ্যাপ সিক্রেট',
     ],
 
     'credentials' => [

@@ -52,6 +52,9 @@ return [
         'hash_key' => 'Hash key',
         'prefix' => 'Transaction prefix',
         'signature_key' => 'Signature key',
+        'base_url' => 'Base URL',
+        'app_key' => 'App key',
+        'app_secret' => 'App secret',
     ],
 
     'credentials' => [

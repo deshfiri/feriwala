@@ -1,6 +1,7 @@
 <?php
 
 use App\Integrations\Payment\Gateways\AmarPay\AmarPayGateway;
+use App\Integrations\Payment\Gateways\Bkash\BkashGateway;
 use App\Integrations\Payment\Gateways\Eps\EpsGateway;
 use App\Integrations\Payment\Gateways\SslCommerz\SslCommerzGateway;
 use App\Integrations\Payment\Gateways\SurjoPay\SurjoPayGateway;
@@ -60,7 +61,7 @@ return [
         ],
 
         'bkash' => [
-            'driver' => null,
+            'driver' => BkashGateway::class,
             'enabled' => false,
             'label' => 'bKash',
         ],
