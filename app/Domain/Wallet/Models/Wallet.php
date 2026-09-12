@@ -5,6 +5,7 @@ namespace App\Domain\Wallet\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Wallet\Enums\WalletBalanceState;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -40,6 +41,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $deposit_rule_id
  * @property CarbonImmutable|null $obligation_captured_at
  * @property CarbonImmutable|null $deposit_due_at
+ * @property CarbonImmutable|null $shortfall_since
+ * @property CarbonImmutable|null $grace_ends_at
+ * @property WalletBalanceState $balance_state
+ * @property CarbonImmutable|null $balance_checked_at
  * @property-read BusinessAccount|null $businessAccount
  */
 class Wallet extends Model
@@ -60,6 +65,10 @@ class Wallet extends Model
             'deposit_usable_for_charges' => 'boolean',
             'obligation_captured_at' => 'immutable_datetime',
             'deposit_due_at' => 'immutable_datetime',
+            'shortfall_since' => 'immutable_datetime',
+            'grace_ends_at' => 'immutable_datetime',
+            'balance_state' => WalletBalanceState::class,
+            'balance_checked_at' => 'immutable_datetime',
             'reserved_minor' => MoneyCast::class,
             'pending_minor' => MoneyCast::class,
             'hold_minor' => MoneyCast::class,
@@ -237,6 +246,14 @@ class Wallet extends Model
             'shortfall' => $this->shortfall()->jsonSerialize(),
             'obligation_shortfall' => $this->obligationShortfall()->jsonSerialize(),
             'deposit_due_at' => $this->deposit_due_at?->toIso8601String(),
+
+            // §24.3's state, carried with a label so no screen has to infer it
+            // from the figures — or express it in colour alone (§33.9).
+            'state' => $this->balance_state->value,
+            'state_label' => $this->balance_state->label(),
+            'state_tone' => $this->balance_state->tone(),
+            'grace_ends_at' => $this->grace_ends_at?->toIso8601String(),
+            'shortfall_since' => $this->shortfall_since?->toIso8601String(),
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Domain\Wallet\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Wallet\Enums\WalletBalanceState;
 use App\Domain\Wallet\Models\Wallet;
 use App\Support\Money\Currency;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -56,6 +57,9 @@ class OpenWallet
                 // cannot be spent is the stricter reading, and nobody has
                 // chosen it yet.
                 'deposit_usable_for_charges' => true,
+
+                // An empty wallet owes nothing and is short of nothing (§24.3).
+                'balance_state' => WalletBalanceState::Healthy,
             ]);
         } catch (UniqueConstraintViolationException $exception) {
             $wallet = Wallet::query()->where('business_account_id', $account->id)->first();
