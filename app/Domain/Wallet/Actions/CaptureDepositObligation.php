@@ -3,6 +3,7 @@
 namespace App\Domain\Wallet\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Wallet\Enums\DepositRefundability;
 use App\Domain\Wallet\Models\Wallet;
 use App\Domain\Wallet\Models\WalletDepositObligation;
 use App\Domain\Wallet\Queries\ResolveDepositRule;
@@ -79,11 +80,20 @@ class CaptureDepositObligation
             'grace_period_days' => $rule?->grace_period_days,
 
             /*
-             * §24.4. Until P2-18 gives a rule its own answer, a deposit is
-             * spendable on services: the stricter reading would lock money away
-             * on the strength of a choice nobody has made.
+             * §24.4's terms, captured with the figures they came with. A deposit
+             * taken under one set of terms is not governed by a different set
+             * because somebody edited the policy afterwards.
+             *
+             * With no rule at all, the defaults are the reading that assumes the
+             * least: it comes back, it is not held past cancellation, and it may
+             * be spent on services — because locking money away is the stricter
+             * choice and nobody has made it.
              */
-            'deposit_usable_for_charges' => true,
+            'refundability' => $rule?->refundability ?? DepositRefundability::Full,
+            'refundable_percent' => $rule?->refundable_percent,
+            'reserved_until_cancellation' => $rule?->reserved_until_cancellation ?? false,
+            'deposit_usable_for_charges' => $rule?->deposit_usable_for_charges ?? true,
+            'withdrawable_after_liabilities' => $rule?->withdrawable_after_liabilities ?? true,
         ];
 
         if ($this->alreadyHolds($wallet, $figures)) {
@@ -120,6 +130,14 @@ class CaptureDepositObligation
                 'required_deposit_minor' => $figures['required_deposit_minor'],
                 'minimum_balance_minor' => $figures['minimum_balance_minor'],
                 'deposit_usable_for_charges' => $figures['deposit_usable_for_charges'],
+
+                /*
+                 * The only other §24.4 term that changes an answer today. The
+                 * rest govern a refund and a withdrawal, and both of those read
+                 * the obligation the deposit was taken under.
+                 */
+                'deposit_reserved_until_cancellation' => $figures['reserved_until_cancellation'],
+
                 'deposit_rule_id' => $rule?->id,
                 'obligation_captured_at' => $at,
                 'deposit_due_at' => $dueAt,

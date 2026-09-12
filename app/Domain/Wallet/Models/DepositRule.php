@@ -5,6 +5,7 @@ namespace App\Domain\Wallet\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Wallet\Enums\DepositFrequency;
+use App\Domain\Wallet\Enums\DepositRefundability;
 use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\Rules\RuleResolver;
@@ -46,6 +47,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $restricts_account
  * @property bool $disables_account
  * @property bool $restores_automatically
+ * @property DepositRefundability $refundability
+ * @property int|null $refundable_percent
+ * @property bool $reserved_until_cancellation
+ * @property bool $deposit_usable_for_charges
+ * @property bool $withdrawable_after_liabilities
  * @property int $priority
  * @property CarbonImmutable $effective_from
  * @property CarbonImmutable|null $effective_until
@@ -83,6 +89,18 @@ class DepositRule extends Model implements ScopedRule
         'restores_automatically' => true,
         'priority' => 0,
         'is_active' => true,
+
+        /*
+         * §24.4's defaults, and each is the reading that assumes the least. A
+         * deposit comes back unless somebody says otherwise, is not held past
+         * cancellation unless somebody says so, and may be spent on services
+         * because locking money away is the stricter choice and nobody has made
+         * it.
+         */
+        'refundability' => 'full',
+        'reserved_until_cancellation' => false,
+        'deposit_usable_for_charges' => true,
+        'withdrawable_after_liabilities' => true,
     ];
 
     /**
@@ -93,6 +111,10 @@ class DepositRule extends Model implements ScopedRule
         return [
             'scope' => RuleScope::class,
             'frequency' => DepositFrequency::class,
+            'refundability' => DepositRefundability::class,
+            'reserved_until_cancellation' => 'boolean',
+            'deposit_usable_for_charges' => 'boolean',
+            'withdrawable_after_liabilities' => 'boolean',
             'required_initial_deposit_minor' => MoneyCast::class,
             'minimum_balance_minor' => MoneyCast::class,
             'required_top_up_minor' => MoneyCast::class,

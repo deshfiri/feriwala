@@ -4,6 +4,7 @@ namespace App\Domain\Wallet\Models;
 
 use App\Casts\MoneyCast;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Wallet\Enums\DepositRefundability;
 use App\Models\User;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -33,6 +34,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property Money|null $critical_balance_threshold_minor
  * @property int|null $grace_period_days
  * @property bool $deposit_usable_for_charges
+ * @property DepositRefundability $refundability
+ * @property int|null $refundable_percent
+ * @property bool $reserved_until_cancellation
+ * @property bool $withdrawable_after_liabilities
  * @property string $source
  * @property int|null $actor_id
  * @property CarbonImmutable|null $deposit_due_at
@@ -71,6 +76,9 @@ class WalletDepositObligation extends Model
             'low_balance_threshold_minor' => MoneyCast::class,
             'critical_balance_threshold_minor' => MoneyCast::class,
             'deposit_usable_for_charges' => 'boolean',
+            'refundability' => DepositRefundability::class,
+            'reserved_until_cancellation' => 'boolean',
+            'withdrawable_after_liabilities' => 'boolean',
             'deposit_due_at' => 'immutable_datetime',
             'captured_at' => 'immutable_datetime',
         ];

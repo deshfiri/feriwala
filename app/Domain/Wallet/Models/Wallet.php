@@ -63,6 +63,7 @@ class Wallet extends Model
             'required_deposit_minor' => MoneyCast::class,
             'minimum_balance_minor' => MoneyCast::class,
             'deposit_usable_for_charges' => 'boolean',
+            'deposit_reserved_until_cancellation' => 'boolean',
             'obligation_captured_at' => 'immutable_datetime',
             'deposit_due_at' => 'immutable_datetime',
             'shortfall_since' => 'immutable_datetime',
