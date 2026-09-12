@@ -3,6 +3,7 @@
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
+use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
 use Illuminate\Support\Facades\Schedule;
 
@@ -89,6 +90,32 @@ Schedule::call(fn () => app(ExpireUnpaidPayments::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Close unpaid checkouts past their deadline (§9)');
+
+/*
+ * The §24.3 balance check: is every account still holding what it agreed to?
+ *
+ * Balances do not fall below a line by being written to — they fall below it
+ * because a deadline arrived or a grace period ran out while nobody was looking.
+ * So something has to come round and ask.
+ *
+ * Early, and before the reconciliation: an account that paid last night should
+ * have its services back before anything else looks at it.
+ *
+ * `onOneServer` and `withoutOverlapping` are not optional here (§41). This pass
+ * restricts accounts and sends messages; two application servers running it at
+ * once would mean two texts for one shortfall. Idempotent on its own as well —
+ * a live restriction can only exist once per stage, and a stamped grace deadline
+ * is never moved — so a repeat pass finds the work done and writes nothing.
+ */
+Schedule::call(fn () => app(SweepWalletBalances::class)->handle())
+    ->name('wallet-balance-check')
+    ->dailyAt('02:30')
+    // The account holder's day, not the server's: "your grace period ends on
+    // the 30th" has to mean the 30th where they are.
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Check every wallet against what its account must hold (§24.3)');
 
 /*
  * The §28.1 wallet reconciliation: does every balance still add up?
