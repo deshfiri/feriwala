@@ -38,6 +38,34 @@ Landed across `76dc00289eb21836bd4532b939faf7a394f490cc` (implementation),
 `edee7640c1a360095abd5fc622f43db2d223c7c1` (the activation-screen test the first commit needed and
 shipped without, which left main failing for two commits) and `1139e4d` (formatting).
 
+# Pending external dependencies
+
+Things that cannot be finished from inside this repository, because they need a document or a
+credential somebody else controls. The working part ships, **no protocol is guessed**, and the gap is
+recorded here against the task that already owns it. No new task IDs: each of these is the remainder
+of a task that is otherwise complete and green.
+
+P2.C shipped eight gateway drivers as an engineering batch. It is **not** an operationally complete
+eight-provider rollout, and nothing below should be read as one.
+
+| Waiting on                                                                      | Owning task | Current state                                                                                     | What unblocks it                                              |
+| ------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **EPS** merchant integration guide: endpoints, request/response schemas, and how the HMAC-SHA512 signed string is composed | **P2-21**   | Driver ships with **zero capabilities**, refusing every operation, disabled in config and unable to be switched on | The guide from EPS (`integration@eps.com.bd`)                  |
+| **Nagad** Merchant API guide: the exact RSA signing and encryption contract — which fields are signed, in what order, with what padding and digest | **P2-26**   | Driver ships with **zero capabilities**, refusing every operation, disabled in config and unable to be switched on | Merchant registration, then the guide from Nagad               |
+| **bKash** published status-query contract                                        | **P2-25**   | `StatusQuery` **not declared**; `execute` is both the completion and the answer, and reconciliation skips the provider entirely | bKash publishing a payment-status endpoint                     |
+| **bKash** published webhook-signature contract — the canonical string the AWS SNS signature is computed over | **P2-25**   | `WebhookSignature` **not declared**; verification fails closed and notifications carry no authority | bKash documenting the signed payload                          |
+| **aamarPay** published IPN signature contract — algorithm, signed fields, and which field carries the signature | **P2-24**   | `WebhookSignature` **not declared**; verification fails closed                                      | aamarPay documenting the scheme                               |
+| **aamarPay** complete `pay_status` vocabulary                                    | **P2-24**   | Only the documented `Successful` acts; everything else is left **pending** rather than inferred as a failure | aamarPay enumerating the rest                                 |
+| **Real sandbox and live certification, every provider**                          | **P2.C**    | Every exchange in the suite is a recorded HTTP fixture. **Nothing has been run against a real merchant account, in sandbox or live** | Merchant credentials for each provider                        |
+
+Until each row is discharged, the affected capability stays undeclared and the affected driver stays
+disabled. A capability appears only when it has been implemented against that provider's own
+documentation — an absent one is a fact about somebody else's system, not a gap to work around, and
+the application refuses rather than guesses.
+
+**None of this blocks the rest of the project.** SSLCommerz is operational and carries the payment
+path; the remaining providers are configuration foundations waiting on their documents.
+
 ## Where a signed-in person lands
 
 `App\Support\Navigation\HomeRoute` answers it, and **login, registration, two-factor, passkey and email
