@@ -24,6 +24,7 @@ use App\Domain\Package\Models\UserPackage;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -218,10 +219,20 @@ class CheckoutController extends Controller
             }
         }
 
-        $payment->forceFill(['gateway' => $validated['gateway']])->save();
+        $driver = $gateways->driver($validated['gateway']);
+
+        $payment->forceFill([
+            'gateway' => $validated['gateway'],
+            // Stamped now and never recalculated. Sandbox and live is a setting
+            // somebody can change, and a payment that re-read it later would
+            // start claiming it was taken in a mode it never touched (§26.4).
+            'gateway_mode' => $driver->isSandbox()
+                ? GatewayCredentials::SANDBOX
+                : GatewayCredentials::LIVE,
+        ])->save();
 
         try {
-            $redirect = $gateways->driver($validated['gateway'])->initiate(
+            $redirect = $driver->initiate(
                 PaymentIntent::forPayment(
                     $payment,
                     // Three distinct URLs, so the gateway tells us which of the

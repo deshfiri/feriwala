@@ -295,6 +295,11 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::put('gateways', [PaymentGatewayController::class, 'update'])
             ->name('gateways.update');
 
+        // Switching a gateway on is its own action: entering a store password
+        // is preparation, but this is the moment real customers reach it.
+        Route::put('gateways/enabled', [PaymentGatewayController::class, 'toggle'])
+            ->name('gateways.toggle');
+
         /*
          * Payments and their gateway trail (§42, P1-54).
          *

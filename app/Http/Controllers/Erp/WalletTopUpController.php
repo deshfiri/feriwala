@@ -13,6 +13,7 @@ use App\Domain\Wallet\Models\Wallet;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -93,10 +94,19 @@ class WalletTopUpController extends Controller
 
         $payment = $this->payments->handle($account, $plan);
 
-        $payment->forceFill(['gateway' => $validated['gateway']])->save();
+        $driver = $gateways->driver($validated['gateway']);
+
+        $payment->forceFill([
+            'gateway' => $validated['gateway'],
+            // Stamped now and never recalculated, so switching the gateway to
+            // live later cannot reinterpret this top-up as real money (§26.4).
+            'gateway_mode' => $driver->isSandbox()
+                ? GatewayCredentials::SANDBOX
+                : GatewayCredentials::LIVE,
+        ])->save();
 
         try {
-            $redirect = $gateways->driver($validated['gateway'])->initiate(
+            $redirect = $driver->initiate(
                 PaymentIntent::forPayment(
                     $payment,
                     // The same three endpoints the checkout uses: the gateway

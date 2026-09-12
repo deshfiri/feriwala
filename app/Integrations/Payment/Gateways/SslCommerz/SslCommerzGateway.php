@@ -2,11 +2,13 @@
 
 namespace App\Integrations\Payment\Gateways\SslCommerz;
 
-use App\Integrations\Payment\Contracts\PaymentGateway;
+use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayRedirect;
 use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\Gateways\Gateway;
+use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Http\Client\Factory as HttpClient;
@@ -26,7 +28,7 @@ use Illuminate\Log\LogManager;
  * This driver treats 1 and 2 as notifications that something *may* have
  * happened, and always answers "did it?" with 3.
  */
-class SslCommerzGateway implements PaymentGateway
+class SslCommerzGateway extends Gateway
 {
     public const SANDBOX_HOST = 'https://sandbox.sslcommerz.com';
 
@@ -38,19 +40,16 @@ class SslCommerzGateway implements PaymentGateway
         protected SslCommerzCredentials $credentials,
     ) {}
 
-    public function name(): string
+    /**
+     * @return array<int, GatewayCapability>
+     */
+    public function capabilities(): array
     {
-        return 'sslcommerz';
-    }
-
-    public function isSandbox(): bool
-    {
-        return $this->credentials->isSandbox();
-    }
-
-    public function isConfigured(): bool
-    {
-        return $this->credentials->areConfigured();
+        return [
+            GatewayCapability::Initiate,
+            GatewayCapability::Verify,
+            GatewayCapability::WebhookSignature,
+        ];
     }
 
     public function initiate(PaymentIntent $intent): GatewayRedirect
@@ -265,6 +264,11 @@ class SslCommerzGateway implements PaymentGateway
             errorCode: $status !== '' ? $status : null,
             raw: $body,
         );
+    }
+
+    protected function credentials(): GatewayCredentials
+    {
+        return $this->credentials;
     }
 
     protected function host(): string

@@ -8,7 +8,10 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\Models\Setting;
 use App\Domain\Settings\SettingsRepository;
+use App\Integrations\Payment\Data\GatewayCapability;
+use App\Integrations\Payment\Exceptions\GatewayCapabilityMissing;
 use App\Integrations\Payment\PaymentGatewayManager;
+use App\Support\Money\Currency;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -141,8 +144,10 @@ describe('the settings screen', function () {
             ->put(route('admin.gateways.update'), [
                 'gateway' => 'sslcommerz',
                 'mode' => 'sandbox',
-                'store_id' => 'feriwala-store',
-                'store_password' => 'a-real-password',
+                'credentials' => [
+                    'store_id' => 'feriwala-store',
+                    'store_password' => 'a-real-password',
+                ],
             ])
             ->assertRedirect();
 
@@ -165,8 +170,7 @@ describe('the settings screen', function () {
             ->put(route('admin.gateways.update'), [
                 'gateway' => 'sslcommerz',
                 'mode' => 'sandbox',
-                'store_id' => '',
-                'store_password' => '',
+                'credentials' => ['store_id' => '', 'store_password' => ''],
             ]);
 
         expect(app(SettingsRepository::class)->get('payment.sslcommerz.sandbox.store_id'))
@@ -178,8 +182,10 @@ describe('the settings screen', function () {
             ->put(route('admin.gateways.update'), [
                 'gateway' => 'sslcommerz',
                 'mode' => 'sandbox',
-                'store_id' => 'feriwala-store',
-                'store_password' => 'a-real-password',
+                'credentials' => [
+                    'store_id' => 'feriwala-store',
+                    'store_password' => 'a-real-password',
+                ],
             ]);
 
         $entry = AuditLog::query()->where('action', 'payment.gateway_configured')->firstOrFail();
@@ -200,7 +206,7 @@ describe('the settings screen', function () {
             ->put(route('admin.gateways.update'), [
                 'gateway' => 'sslcommerz',
                 'mode' => 'sandbox',
-                'store_id' => 'nope',
+                'credentials' => ['store_id' => 'nope'],
             ])
             ->assertForbidden();
 
@@ -213,13 +219,159 @@ describe('the settings screen', function () {
             ->put(route('admin.gateways.update'), [
                 'gateway' => 'bkash',
                 'mode' => 'sandbox',
-                'store_id' => 'nope',
+                'credentials' => ['store_id' => 'nope'],
             ])
             ->assertSessionHasErrors('gateway');
     });
 
     it('refuses a mode that is neither sandbox nor live', function () {
-        expect(fn () => app(ConfigureGateway::class)->sslCommerz($this->manager, 'production', []))
+        expect(fn () => app(ConfigureGateway::class)->handle($this->manager, 'sslcommerz', 'production', []))
             ->toThrow(InvalidArgumentException::class);
+    });
+
+    it('stores nothing for a key the provider never asked for', function () {
+        /*
+         * The form is generated from what the driver declares it needs. A
+         * settings table is not a place to accept arbitrary named secrets from
+         * whatever somebody chose to post.
+         */
+        $this->actingAs($this->manager)
+            ->put(route('admin.gateways.update'), [
+                'gateway' => 'sslcommerz',
+                'mode' => 'sandbox',
+                'credentials' => ['secret_api_key' => 'not-a-sslcommerz-field'],
+            ]);
+
+        expect(Setting::query()->where('key', 'payment.sslcommerz.sandbox.secret_api_key')->exists())
+            ->toBeFalse();
+    });
+});
+
+describe('switching a gateway on', function () {
+    it('refuses while a required credential is missing', function () {
+        /*
+         * "Enabled" is the promise that somebody can actually pay with it.
+         * Making that promise with half the credentials sends an applicant
+         * through the whole fee breakdown to fail on the last click (§26.4).
+         */
+        $this->actingAs($this->manager)
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => true])
+            ->assertSessionHasErrors('enabled');
+
+        // Refused means nothing was decided: no switch was written, and the
+        // gateway is still not something a payer can be sent to.
+        expect(Setting::query()->where('key', 'payment.sslcommerz.enabled')->exists())->toBeFalse()
+            ->and(app(PaymentGatewayManager::class)->isAvailable('sslcommerz'))->toBeFalse();
+    });
+
+    it('names what is still missing rather than just refusing', function () {
+        // Half-configured: "this gateway is not ready" leaves somebody guessing
+        // which of the fields they did not fill in.
+        app(SettingsRepository::class)->define(
+            'payment.sslcommerz.sandbox.store_id',
+            'payment',
+            SettingType::String,
+            'store',
+            isEncrypted: true,
+        );
+
+        expect(fn () => app(ConfigureGateway::class)->setEnabled($this->manager, 'sslcommerz', true))
+            ->toThrow(RuntimeException::class, 'store password');
+    });
+
+    it('switches on once every credential is present', function () {
+        gatewayTestCredentials();
+
+        $this->actingAs($this->manager)
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => true])
+            ->assertRedirect();
+
+        expect(app(PaymentGatewayManager::class)->isEnabled('sslcommerz'))->toBeTrue()
+            ->and(AuditLog::query()->where('action', 'payment.gateway_enabled')->exists())->toBeTrue();
+    });
+
+    it('switches back off without touching the stored credentials', function () {
+        gatewayTestCredentials();
+
+        $this->actingAs($this->manager)
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => false]);
+
+        expect(app(PaymentGatewayManager::class)->isEnabled('sslcommerz'))->toBeFalse()
+            ->and(app(SettingsRepository::class)->get('payment.sslcommerz.sandbox.store_id'))->toBe('store');
+    });
+
+    it('goes off again when a mode change leaves it uncredentialled', function () {
+        /*
+         * The dangerous shape: enabled, credentialled for sandbox, switched to
+         * live. Left alone it would be an enabled gateway with no live
+         * credentials — and §26.4 is explicit that sandbox credentials must not
+         * end up operating against live endpoints.
+         */
+        gatewayTestCredentials();
+
+        $this->actingAs($this->manager)
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => true]);
+
+        $this->actingAs($this->manager)
+            ->put(route('admin.gateways.update'), [
+                'gateway' => 'sslcommerz',
+                'mode' => 'live',
+                'credentials' => [],
+            ]);
+
+        expect(app(PaymentGatewayManager::class)->isEnabled('sslcommerz'))->toBeFalse()
+            ->and(app(PaymentGatewayManager::class)->isAvailable('sslcommerz'))->toBeFalse();
+    });
+
+    it('is closed to somebody who may not hold the keys', function () {
+        $viewer = testPlatformStaff(PlatformRole::FinanceManager);
+
+        $this->actingAs($viewer)
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => true])
+            ->assertForbidden();
+    });
+});
+
+describe('what a gateway says it can do', function () {
+    it('reports its capabilities and currencies rather than assuming them', function () {
+        $sslcommerz = collect(app(PaymentGatewayManager::class)->catalogue())
+            ->firstWhere('name', 'sslcommerz');
+
+        expect($sslcommerz['capabilities'])->toContain(GatewayCapability::Verify->value)
+            ->and($sslcommerz['currencies'])->toContain(Currency::BDT->value);
+    });
+
+    it('refuses an operation the provider has no endpoint for', function () {
+        /*
+         * The alternative to refusing is guessing at somebody else's protocol,
+         * and a guess about a refund is a guess about real money.
+         */
+        $driver = app(PaymentGatewayManager::class)->driver('sslcommerz');
+
+        expect($driver->supports(GatewayCapability::RefundFull))->toBeFalse()
+            ->and(fn () => $driver->refundStatus('anything'))
+            ->toThrow(GatewayCapabilityMissing::class);
+    });
+
+    it('says which fields a provider still needs, never their values', function () {
+        $sslcommerz = collect(app(PaymentGatewayManager::class)->catalogue())
+            ->firstWhere('name', 'sslcommerz');
+
+        expect($sslcommerz['required_configuration'])->toBe(['store_id', 'store_password'])
+            ->and($sslcommerz['missing_configuration'])->toBe(['store_id', 'store_password']);
+
+        gatewayTestCredentials();
+
+        $refreshed = collect(app(PaymentGatewayManager::class)->catalogue())
+            ->firstWhere('name', 'sslcommerz');
+
+        expect($refreshed['missing_configuration'])->toBe([]);
+    });
+
+    it('offers no gateway for a currency none of them accepts', function () {
+        gatewayTestCredentials();
+
+        expect(app(PaymentGatewayManager::class)->availableFor(Currency::BDT))->toBe(['sslcommerz'])
+            ->and(app(PaymentGatewayManager::class)->availableFor(Currency::USD))->toBe([]);
     });
 });
