@@ -30,6 +30,7 @@ return [
     'payment_gateways' => 'Payment gateways',
     'payments' => 'Payments',
     'wallets' => 'Account wallets',
+    'deposit_rules' => 'Deposit rules',
     'sms' => 'SMS',
     'invoices' => 'Invoices',
 

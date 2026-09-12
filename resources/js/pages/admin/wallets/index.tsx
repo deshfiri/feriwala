@@ -56,19 +56,21 @@ export default function AdminWalletsIndex({
             cell: (row) => <MoneyAmount amount={row.usable} />,
         },
         {
-            key: 'deposit',
-            header: t('wallet.balances.required_deposit'),
-            cell: (row) =>
-                row.meets_required_deposit ? (
-                    <span className="text-muted-foreground text-xs">—</span>
-                ) : (
-                    <StatusPill
-                        tone="warning"
-                        label={t('wallet.admin.below_deposit', {
-                            amount: row.shortfall.formatted,
-                        })}
-                    />
-                ),
+            key: 'state',
+            header: t('wallet.columns.status'),
+            cell: (row) => (
+                <div className="min-w-0 space-y-1">
+                    <StatusPill tone={row.state_tone} label={row.state_label} />
+
+                    {!row.meets_obligation && (
+                        <div className="text-muted-foreground text-xs">
+                            {t('wallet.admin.below_deposit', {
+                                amount: row.obligation_shortfall.formatted,
+                            })}
+                        </div>
+                    )}
+                </div>
+            ),
         },
         {
             key: 'actions',

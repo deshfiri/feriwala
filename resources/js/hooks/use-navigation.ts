@@ -6,6 +6,7 @@ import {
     MessageSquare,
     Package as PackageIcon,
     Receipt,
+    Scale,
     ScrollText,
     Settings,
     ShieldCheck,
@@ -17,6 +18,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as billingRules } from '@/routes/admin/billing';
+import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as paymentLog } from '@/routes/admin/payments';
@@ -198,6 +200,16 @@ export function useNavigation(): {
                               title: t('nav.wallets'),
                               href: accountWallets(),
                               icon: WalletIcon,
+                          },
+                          /*
+                           * Separate from the wallets themselves: reading what
+                           * one business holds and deciding what every business
+                           * must hold are different jobs (§24.1).
+                           */
+                          {
+                              title: t('nav.deposit_rules'),
+                              href: depositRules(),
+                              icon: Scale,
                           },
                       ]
                     : []),

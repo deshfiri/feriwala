@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Wallet\Actions\ExportWalletStatement;
 use App\Domain\Wallet\Models\Wallet;
+use App\Domain\Wallet\Models\WalletDepositObligation;
+use App\Domain\Wallet\Models\WalletRestriction;
 use App\Domain\Wallet\Models\WalletTransaction;
 use App\Domain\Wallet\Policies\WalletPolicy;
 use App\Domain\Wallet\Queries\WalletStatement;
@@ -78,6 +80,27 @@ class WalletController extends Controller
                 ->through(fn (WalletTransaction $row) => $this->statement->row($row, $sensitive)),
             'filters' => $filters,
             'options' => $this->statement->options(),
+
+            /*
+             * The §24 picture beside the money: what this account is held to,
+             * where that came from, and what has been taken away because of it.
+             * An administrator answering "why is this account restricted" should
+             * not have to open three screens.
+             */
+            'obligation' => $this->obligationFor($record),
+            'restrictions' => $record->restrictions()
+                ->standing()
+                ->get()
+                ->map(fn (WalletRestriction $restriction) => [
+                    'stage' => $restriction->stage->value,
+                    'stage_label' => $restriction->stage->label(),
+                    'stage_tone' => $restriction->stage->tone(),
+                    'cause' => $restriction->cause,
+                    'started_at' => $restriction->started_at->toIso8601String(),
+                    'previous_account_status' => $restriction->previous_account_status,
+                ])
+                ->all(),
+
             'can' => [
                 'adjust' => WalletPolicy::canAdjust($actor),
                 'reverse' => WalletPolicy::canReverse($actor),
@@ -149,6 +172,51 @@ class WalletController extends Controller
     }
 
     /**
+     * What this account is currently held to, and where it came from (§24.1).
+     *
+     * The **captured** obligation, not the rule in force this morning. An
+     * administrator looking at a restricted account needs to see the figures it
+     * was actually restricted against.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function obligationFor(Wallet $wallet): ?array
+    {
+        /** @var WalletDepositObligation|null $obligation */
+        $obligation = WalletDepositObligation::query()
+            ->with('rule:id,public_id,scope,scope_id')
+            ->where('wallet_id', $wallet->id)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($obligation === null) {
+            return null;
+        }
+
+        return [
+            'required_deposit' => $obligation->required_deposit_minor->jsonSerialize(),
+            'minimum_balance' => $obligation->minimum_balance_minor->jsonSerialize(),
+            'required_top_up' => $obligation->required_top_up_minor->jsonSerialize(),
+            'low_threshold' => $obligation->low_balance_threshold_minor?->jsonSerialize(),
+            'critical_threshold' => $obligation->critical_balance_threshold_minor?->jsonSerialize(),
+            'grace_period_days' => $obligation->grace_period_days,
+            'refundability' => $obligation->refundability->value,
+            'refundability_label' => $obligation->refundability->label(),
+            'refundable_percent' => $obligation->refundable_percent,
+            'reserved_until_cancellation' => $obligation->reserved_until_cancellation,
+            'deposit_usable_for_charges' => $obligation->deposit_usable_for_charges,
+            'withdrawable_after_liabilities' => $obligation->withdrawable_after_liabilities,
+            'source' => $obligation->source,
+            'captured_at' => $obligation->captured_at->toIso8601String(),
+            'deposit_due_at' => $obligation->deposit_due_at?->toIso8601String(),
+
+            // Which rule it came from, so "why this figure" has an answer.
+            'rule_scope' => $obligation->rule?->scope->label(),
+            'rule_id' => $obligation->rule?->public_id,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function summary(Wallet $wallet): array
@@ -164,7 +232,16 @@ class WalletController extends Controller
             'reserved' => $wallet->reserved_minor->jsonSerialize(),
             'hold' => $wallet->hold_minor->jsonSerialize(),
             'meets_required_deposit' => $wallet->meetsRequiredDeposit(),
+            'meets_obligation' => $wallet->meetsObligation(),
             'shortfall' => $wallet->shortfall()->jsonSerialize(),
+            'obligation_shortfall' => $wallet->obligationShortfall()->jsonSerialize(),
+
+            // §24.3's state, carried with its label so a list never has to
+            // express it in colour alone (§33.9).
+            'state' => $wallet->balance_state->value,
+            'state_label' => $wallet->balance_state->label(),
+            'state_tone' => $wallet->balance_state->tone(),
+            'grace_ends_at' => $wallet->grace_ends_at?->toIso8601String(),
         ];
     }
 

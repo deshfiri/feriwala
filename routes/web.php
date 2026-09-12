@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
@@ -320,6 +321,20 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * holder sees on their own screen — so the two sides of a support call
          * are not looking at different money.
          */
+        /*
+         * What accounts are required to deposit and keep (§24.1, P2-11, P2-12).
+         *
+         * Separate from the wallets themselves, and behind a different
+         * permission: reading what a business holds and deciding what every
+         * business must hold are different jobs.
+         */
+        Route::get('deposit-rules', [DepositRuleController::class, 'index'])
+            ->name('deposit-rules.index');
+        Route::post('deposit-rules', [DepositRuleController::class, 'store'])
+            ->name('deposit-rules.store');
+        Route::post('deposit-rules/{rule}/close', [DepositRuleController::class, 'close'])
+            ->name('deposit-rules.close');
+
         Route::get('wallets', [AdminWalletController::class, 'index'])
             ->name('wallets.index');
         Route::get('wallets/{wallet}', [AdminWalletController::class, 'show'])

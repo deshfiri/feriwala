@@ -138,5 +138,11 @@ export interface WalletSummary {
     reserved: Money;
     hold: Money;
     meets_required_deposit: boolean;
+    meets_obligation: boolean;
     shortfall: Money;
+    obligation_shortfall: Money;
+    state: 'healthy' | 'low' | 'critical';
+    state_label: string;
+    state_tone: StatusTone;
+    grace_ends_at: string | null;
 }

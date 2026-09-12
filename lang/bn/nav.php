@@ -24,6 +24,7 @@ return [
     'payment_gateways' => 'পেমেন্ট গেটওয়ে',
     'payments' => 'পেমেন্ট',
     'wallets' => 'অ্যাকাউন্ট ওয়ালেট',
+    'deposit_rules' => 'জমার নিয়ম',
     'sms' => 'এসএমএস',
     'invoices' => 'চালান',
 
