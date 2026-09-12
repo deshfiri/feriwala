@@ -51,6 +51,7 @@ return [
         'password' => 'পাসওয়ার্ড',
         'hash_key' => 'হ্যাশ কী',
         'prefix' => 'ট্রানজেকশন প্রিফিক্স',
+        'signature_key' => 'সিগনেচার কী',
     ],
 
     'credentials' => [

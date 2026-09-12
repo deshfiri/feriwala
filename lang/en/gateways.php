@@ -51,6 +51,7 @@ return [
         'password' => 'Password',
         'hash_key' => 'Hash key',
         'prefix' => 'Transaction prefix',
+        'signature_key' => 'Signature key',
     ],
 
     'credentials' => [
