@@ -26,7 +26,7 @@ export default function StatusPill({
     return (
         <span
             className={cn(
-                'inline-flex w-fit items-center gap-1.5 rounded-md py-0.5 pr-2 pl-1.5',
+                'inline-flex w-fit items-center gap-1 rounded-full border py-0.5 pr-2 pl-1.5',
                 'text-xs font-medium whitespace-nowrap',
                 statusToneClasses[tone],
                 className,

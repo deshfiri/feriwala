@@ -49,22 +49,23 @@ export default function SectionCard({
         <Card
             className={cn(
                 'gap-0 overflow-hidden py-0',
-                tone === 'destructive' && 'border-danger/40',
+                tone === 'destructive' && 'border-danger/35',
                 className,
             )}
         >
             {hasHeader && (
                 <CardHeader
                     className={cn(
-                        'flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4',
-                        tone === 'destructive' && 'border-b-danger/40',
+                        'flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b px-5 py-4',
+                        tone === 'destructive' &&
+                            'border-b-danger/25 bg-danger-subtle/60',
                     )}
                 >
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0 flex-1 space-y-1">
                         {title && (
                             <Heading
                                 className={cn(
-                                    'text-sm leading-none font-semibold tracking-tight',
+                                    'text-base leading-6 font-semibold tracking-tight',
                                     tone === 'destructive' && 'text-danger',
                                 )}
                             >
@@ -72,24 +73,26 @@ export default function SectionCard({
                             </Heading>
                         )}
                         {description && (
-                            <CardDescription>{description}</CardDescription>
+                            <CardDescription className="text-pretty">
+                                {description}
+                            </CardDescription>
                         )}
                     </div>
 
                     {actions && (
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
                             {actions}
                         </div>
                     )}
                 </CardHeader>
             )}
 
-            <CardContent className={cn('px-5 py-4', contentClassName)}>
+            <CardContent className={cn('px-5 py-5', contentClassName)}>
                 {children}
             </CardContent>
 
             {footer && (
-                <CardFooter className="bg-muted/40 flex flex-wrap justify-end gap-2 border-t px-5 py-3">
+                <CardFooter className="bg-surface-subtle flex flex-wrap justify-end gap-2 border-t px-5 py-3">
                     {footer}
                 </CardFooter>
             )}

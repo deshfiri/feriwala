@@ -43,10 +43,26 @@ direction out in the text; the colour is never the only carrier (§33.9).
 
 ## Radius is a token, not a choice
 
-`--radius` (8px) drives controls. Surfaces are rounder: `rounded-xl` is 16px and
-`rounded-2xl` is 20px, both derived from it in `app.css`. Never pick a radius per screen.
+`--radius` (8px) drives controls. Surfaces are rounder: `rounded-xl` is 12px and
+`rounded-2xl` is 16px, both derived from it in `app.css`. Never pick a radius per screen.
 Alert boxes and dialog fieldsets stay at `rounded-lg` on purpose — they sit _on_ a
-surface, they are not one.
+surface, they are not one. `Notice` follows the same rule through its `inset` prop.
+
+## Reach for the shared control, not its class string
+
+- `DetailList` / `DetailItem` for label-and-value pairs. Not a local `Detail` helper.
+- `Notice` for a shortfall, a reconciliation flag, a returned round — anything stated
+  in words in a tinted box.
+- `NativeSelect` and `Textarea` for native form controls. They match `Input`; a
+  hand-typed `border-input … rounded-lg px-3 py-2` does not.
+- Status hues (`text-warning`, `text-danger`…) are dark enough to be text on their
+  own `-subtle` ground in both themes. Do not reach for a Tailwind palette colour.
+
+## The vendored primitives are skinned by `data-slot`, not edited
+
+`components/ui` is never hand-edited. The few defaults that do not belong to the
+palette — dialog overlay, dialog surface and corner — are corrected at the bottom of
+`app.css` against the `data-slot` each primitive stamps.
 
 ## Anything painted before hydration must track its token
 

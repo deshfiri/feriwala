@@ -51,7 +51,7 @@ export default function FormField({
         [errorId, descriptionId, hintId].filter(Boolean).join(' ') || undefined;
 
     return (
-        <div className={cn('grid gap-1.5', className)}>
+        <div className={cn('grid gap-2', className)}>
             <Label htmlFor={id} className="flex items-center gap-1">
                 {label}
                 {required && (

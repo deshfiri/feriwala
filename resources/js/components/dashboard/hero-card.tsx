@@ -10,7 +10,9 @@ import type { DashboardGreeting, DashboardStanding } from '@/types';
  *
  * Answers two things in the order someone asks them: who am I, and is anything
  * wrong. §33.1 rules out decoration without purpose, so there is no
- * illustration — the space goes to the standing and the action instead.
+ * illustration — the space goes to the standing and the action instead, which
+ * sit on their own footer so the one thing to do next is found in the same
+ * place every visit.
  *
  * `needsAttention` comes from the server rather than being inferred from the
  * tone here. Whether a lapsed package is worth leading the page with is a
@@ -34,19 +36,19 @@ export default function HeroCard({
               });
 
     return (
-        <section className="bg-card border-border flex h-full flex-col justify-between gap-5 rounded-xl border p-6 shadow-sm">
-            <div className="space-y-1.5">
+        <section className="bg-card text-card-foreground flex h-full flex-col overflow-hidden rounded-xl border shadow-sm">
+            <div className="flex-1 space-y-2 p-6">
                 <h1 className="text-2xl font-semibold tracking-tight text-balance">
                     {heading}
                 </h1>
-                <p className="text-muted-foreground text-sm text-balance">
+                <p className="text-muted-foreground max-w-prose text-sm text-balance">
                     {standing.needsAttention
                         ? t('dashboard.hero.needs_attention')
                         : t('dashboard.hero.active')}
                 </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <div className="bg-surface-subtle flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t px-6 py-4">
                 <StatusPill tone={standing.tone} label={standing.label} />
 
                 {/*

@@ -64,7 +64,7 @@ export default function TablePagination<T>({
     return (
         <div
             className={cn(
-                'border-border flex flex-wrap items-center gap-3 border-t px-4 py-2.5',
+                'border-border flex flex-wrap items-center gap-3 border-t px-4 py-3',
                 className,
             )}
         >

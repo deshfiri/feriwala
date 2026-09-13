@@ -9,9 +9,10 @@ import { cn } from '@/lib/utils';
  * pixels is the kind of thing nobody reports and everybody feels. One place sets
  * it now: 16px on a phone, 24px from `sm` up.
  *
- * `width` is about reading distance, not taste. A table wants the whole viewport;
- * a form does not, because a 1600px-wide input is harder to fill in than a narrow
- * one, not easier.
+ * `width` is about reading distance, not taste. A table wants the whole viewport
+ * up to a generous cap — past it, a row is too long for the eye to track back;
+ * a form does not, because a 1600px-wide input is harder to fill in than a
+ * narrow one, not easier.
  */
 export default function PageContainer({
     children,
@@ -26,9 +27,9 @@ export default function PageContainer({
     return (
         <div
             className={cn(
-                'w-full flex-1 p-4 sm:p-6',
+                'mx-auto w-full flex-1 px-4 py-5 sm:px-6 sm:py-6',
                 'space-y-5 sm:space-y-6',
-                width === 'narrow' && 'mx-auto max-w-3xl',
+                width === 'narrow' ? 'max-w-4xl' : 'max-w-[96rem]',
                 className,
             )}
         >
