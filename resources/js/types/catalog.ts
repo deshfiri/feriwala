@@ -60,6 +60,23 @@ export type VariantRow = {
     is_active: boolean;
 };
 
+/**
+ * Quantity pricing for one scope: the whole product (variant_id null) or one
+ * variation. `applies` is false for a band the server no longer charges, because
+ * the base price was cut below it.
+ */
+export type PriceTierScope = {
+    variant_id: string | null;
+    label: string | null;
+    base_price: Money;
+    tiers: {
+        min_quantity: number;
+        unit_price_minor: number;
+        unit_price: Money;
+        applies: boolean;
+    }[];
+};
+
 export type MediaRow = {
     id: string;
     type: 'image' | 'video';

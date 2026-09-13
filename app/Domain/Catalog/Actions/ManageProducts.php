@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
+use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Models\User;
@@ -108,6 +109,7 @@ class ManageProducts
             ]);
 
             ProductMedia::query()->where('product_id', $locked->id)->delete();
+            ProductPriceTier::query()->where('product_id', $locked->id)->delete();
 
             // A variant's value links are part of the variant and go with it.
             ProductVariant::query()->where('product_id', $locked->id)->delete();

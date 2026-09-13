@@ -11,9 +11,11 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductMedia;
+use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
+use App\Domain\Catalog\WholesalePriceResolver;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
 use App\Models\User;
@@ -42,6 +44,7 @@ class ProductController extends Controller
     public function __construct(
         protected ManageProducts $products,
         protected ProductMediaStore $mediaStore,
+        protected WholesalePriceResolver $prices,
     ) {}
 
     public function index(Request $request): Response
@@ -88,6 +91,7 @@ class ProductController extends Controller
             // them on.
             'media' => [],
             'media_limits' => $this->mediaLimits(),
+            'price_tiers' => [],
             'variants' => [],
             'attributes' => [],
         ]);
@@ -118,6 +122,9 @@ class ProductController extends Controller
             'product' => $this->detail($record),
             'options' => $this->options(),
             'can' => $this->abilities($actor),
+
+            // Quantity pricing per scope: the product, then each variation.
+            'price_tiers' => $this->priceTiers($record),
 
             // Images and videos, in the order storefronts show them (§11.1).
             'media' => $record->media()
@@ -269,6 +276,50 @@ class ProductController extends Controller
             'video_max_mb' => $this->megabytes(ProductMediaStore::maxBytesFor(ProductMedia::TYPE_VIDEO)),
             'max_items' => ManageProductMedia::MAX_PER_PRODUCT,
         ];
+    }
+
+    /**
+     * The quantity pricing of the product and of each variation, as the server
+     * resolves it.
+     *
+     * `applies` is false for a band that no longer undercuts its base — a tier
+     * written before the base price was cut. The resolver charges the base for
+     * it, and the screen says so rather than showing a price nobody pays.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function priceTiers(Product $product): array
+    {
+        $scopes = [null, ...$product->variants()->with(['values.attribute', 'product'])->get()->all()];
+
+        return array_map(function (?ProductVariant $variant) use ($product) {
+            $base = $this->prices->basePrice($product, $variant);
+
+            $own = ProductPriceTier::query()
+                ->where('product_id', $product->id)
+                ->where('product_variant_id', $variant?->id)
+                ->orderBy('min_quantity')
+                ->get();
+
+            return [
+                'variant_id' => $variant?->public_id,
+                'label' => $variant === null
+                    ? null
+                    : $variant->values
+                        ->sortBy(fn (ProductAttributeValue $value) => $value->attribute->sort_order)
+                        ->pluck('value')
+                        ->implode(' / '),
+                'base_price' => $base->jsonSerialize(),
+                'tiers' => $own
+                    ->map(fn (ProductPriceTier $tier) => [
+                        'min_quantity' => $tier->min_quantity,
+                        'unit_price_minor' => $tier->unit_price_minor->minorUnits,
+                        'unit_price' => $tier->unit_price_minor->jsonSerialize(),
+                        'applies' => $tier->unit_price_minor->lessThanOrEqualTo($base),
+                    ])
+                    ->all(),
+            ];
+        }, $scopes);
     }
 
     public static function megabytes(int $bytes): string

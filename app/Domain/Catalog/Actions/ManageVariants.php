@@ -7,6 +7,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Models\User;
 use App\Support\Money\Currency;
@@ -120,6 +121,9 @@ class ManageVariants
             }
 
             $this->record($actor, 'catalog.variant_deleted', $variant, before: $this->snapshot($variant));
+
+            // Its own price tiers go with it, named rather than cascaded.
+            ProductPriceTier::query()->where('product_variant_id', $variant->id)->delete();
 
             $variant->delete();
         });

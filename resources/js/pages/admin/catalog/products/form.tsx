@@ -16,11 +16,13 @@ import type {
     CatalogOption,
     MediaLimits,
     MediaRow,
+    PriceTierScope,
     ProductDetail,
     VariantRow,
 } from '@/types';
 import { ProductStatusPill } from './index';
 import MediaSection from './media-section';
+import PriceTiersSection from './price-tiers-section';
 import VariantsSection from './variants-section';
 
 type Props = {
@@ -31,6 +33,7 @@ type Props = {
     attributes: AttributeOption[];
     media: MediaRow[];
     media_limits: MediaLimits;
+    price_tiers: PriceTierScope[];
 };
 
 const selectClass =
@@ -58,6 +61,7 @@ export default function ProductForm({
     attributes,
     media,
     media_limits,
+    price_tiers,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -456,6 +460,14 @@ export default function ProductForm({
                         </fieldset>
                     )}
                 </Form>
+
+                {editing && (
+                    <PriceTiersSection
+                        product={product}
+                        scopes={price_tiers}
+                        canEdit={can.edit}
+                    />
+                )}
 
                 {editing && (
                     <MediaSection

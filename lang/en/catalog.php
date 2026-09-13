@@ -79,6 +79,25 @@ return [
         'no_matches_help' => 'Try a different name, SKU or barcode.',
     ],
 
+    'tiers' => [
+        'title' => 'Quantity pricing',
+        'description' => 'Wholesale price per unit from a quantity upwards. A band runs until the next one starts; below the first, the base price applies.',
+        'scope' => 'Applies to',
+        'whole_product' => 'Whole product',
+        'base' => 'Base price: :amount',
+        'from' => 'From (units)',
+        'unit_price' => 'Unit price (poisha)',
+        'add' => 'Add tier',
+        'remove' => 'Remove tier',
+        'save' => 'Save pricing',
+        'empty' => 'No quantity tiers — the base price applies at every quantity.',
+        'row' => 'From :quantity units',
+        'each' => ':amount each',
+        'no_longer_applies' => 'Above the base price, so the base price is charged instead',
+        'uses_product' => 'No tiers of its own: the whole product’s tiers apply to this variation.',
+        'saved' => 'Quantity pricing saved.',
+    ],
+
     'media' => [
         'title' => 'Images and videos',
         'description' => 'Shown on partner storefronts in this order. The first image is the one listings use.',

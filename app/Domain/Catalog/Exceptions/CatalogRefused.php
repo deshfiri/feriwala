@@ -191,6 +191,32 @@ class CatalogRefused extends RuntimeException
         return new self('That variation belongs to a different product.');
     }
 
+    public static function tierQuantityTooLow(): self
+    {
+        return new self('A quantity tier starts at 2 units or more. One unit is the base price.');
+    }
+
+    public static function tierQuantityRepeated(int $quantity): self
+    {
+        return new self("There are two tiers starting at {$quantity} units. Each band needs its own starting quantity.");
+    }
+
+    /**
+     * A band that charges more per unit than the band before it.
+     */
+    public static function tierPriceRises(int $quantity): self
+    {
+        return new self(
+            "The tier from {$quantity} units costs more per unit than the price below it. "
+            .'Buying more should never cost more per unit.'
+        );
+    }
+
+    public static function tooManyTiers(int $max): self
+    {
+        return new self("A price table holds up to {$max} tiers.");
+    }
+
     protected static function megabytes(int $bytes): string
     {
         return number_format($bytes / 1024 / 1024, 1).' MB';
