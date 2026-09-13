@@ -123,7 +123,13 @@ return [
      * Set this to false if you want to implement custom logic for checking permissions.
      */
 
-    'register_permission_check_method' => true,
+    /*
+     * Off, deliberately: AuthorizationServiceProvider registers the same check
+     * itself, inside one ordered `Gate::before`, so the catalogue refusal for
+     * anybody who trades on the platform (§12) runs first and cannot be
+     * answered `true` by a permission row before it is asked.
+     */
+    'register_permission_check_method' => false,
 
     /*
      * When set to true, Laravel\Octane\Events\OperationTerminated event listener will be registered

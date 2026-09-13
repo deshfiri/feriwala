@@ -7,6 +7,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 
@@ -27,6 +28,8 @@ class ManageAttributes
 
     public function create(User $actor, string $name): ProductAttribute
     {
+        CatalogPolicy::authorize(CatalogPolicy::canCreate($actor), 'You may not create attributes.');
+
         return $this->database->transaction(function () use ($actor, $name) {
             $attribute = ProductAttribute::create([
                 'name' => $name,
@@ -41,6 +44,8 @@ class ManageAttributes
 
     public function rename(User $actor, ProductAttribute $attribute, string $name): ProductAttribute
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not rename attributes.');
+
         $before = ['name' => $attribute->name];
 
         $attribute->forceFill(['name' => $name])->save();
@@ -58,6 +63,8 @@ class ManageAttributes
      */
     public function delete(User $actor, ProductAttribute $attribute): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete attributes.');
+
         $this->database->transaction(function () use ($actor, $attribute) {
             $used = $this->database->table('product_variant_values')
                 ->where('product_attribute_id', $attribute->id)
@@ -81,6 +88,8 @@ class ManageAttributes
 
     public function addValue(User $actor, ProductAttribute $attribute, string $value): ProductAttributeValue
     {
+        CatalogPolicy::authorize(CatalogPolicy::canCreate($actor), 'You may not add attribute values.');
+
         return $this->database->transaction(function () use ($actor, $attribute, $value) {
             $created = ProductAttributeValue::create([
                 'product_attribute_id' => $attribute->id,
@@ -99,6 +108,8 @@ class ManageAttributes
 
     public function renameValue(User $actor, ProductAttributeValue $value, string $text): ProductAttributeValue
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not rename attribute values.');
+
         $before = ['value' => $value->value];
 
         $value->forceFill(['value' => $text])->save();
@@ -113,6 +124,8 @@ class ManageAttributes
      */
     public function deleteValue(User $actor, ProductAttributeValue $value): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete attribute values.');
+
         $this->database->transaction(function () use ($actor, $value) {
             $used = $this->database->table('product_variant_values')
                 ->where('product_attribute_value_id', $value->id)

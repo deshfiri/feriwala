@@ -9,6 +9,8 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Policies\AccountMembershipPolicy;
 use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Account\Policies\UserPolicy;
+use App\Domain\Catalog\Policies\CatalogModelPolicy;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -54,6 +56,15 @@ class AuthorizationServiceProvider extends ServiceProvider
         Gate::policy(User::class, UserPolicy::class);
 
         /*
+         * Every catalogue model answers to one policy (§12), so a check phrased
+         * as a Gate ability, a permission name, or a controller call cannot
+         * reach a different answer.
+         */
+        foreach (CatalogPolicy::MODELS as $model) {
+            Gate::policy($model, CatalogModelPolicy::class);
+        }
+
+        /*
          * Super Admin passes every check without holding permission rows, so
          * the grant cannot drift out of step with the catalogue as modules are
          * added.
@@ -66,7 +77,35 @@ class AuthorizationServiceProvider extends ServiceProvider
          * remove or demote them whatever the caller is permitted to do — an
          * invariant of the account rather than a grant that can be overridden.
          */
-        Gate::before(function (User $user, string $ability) {
+        /*
+         * One ordered hook instead of three independent ones, because the order
+         * is the rule. `config('permission.register_permission_check_method')`
+         * is off so the permission package does not register its own check
+         * ahead of this one.
+         */
+        Gate::before(function (User $user, string $ability, array &$arguments = []) {
+            // The permission package's guard convention: `can('x', 'web')`.
+            if (is_string($arguments[0] ?? null) && ! class_exists($arguments[0])) {
+                $guard = array_shift($arguments);
+            }
+
+            /*
+             * 1. The catalogue, refused to anybody who trades on the platform
+             *    (§12). First, because either check below would otherwise
+             *    answer yes before any policy is asked: a partner who has been
+             *    handed a catalogue permission or a platform role, by mistake or
+             *    on purpose, still does not author the catalogue they sell from.
+             */
+            if (CatalogPolicy::isCatalogueAbility($ability, $arguments) && CatalogPolicy::isBusinessIdentity($user)) {
+                return false;
+            }
+
+            // 2. A permission this person holds — the package's own check, unchanged.
+            if ($user->checkPermissionTo($ability, $guard ?? null)) {
+                return true;
+            }
+
+            // 3. Super Admin, for everything else.
             return $user->hasRole(PlatformRole::SuperAdmin->value) ? true : null;
         });
     }

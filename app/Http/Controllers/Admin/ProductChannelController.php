@@ -37,6 +37,10 @@ class ProductChannelController extends Controller
 
         abort_if($salesChannel === null, 404);
 
+        // Refused before validating: which way the switch goes is only read once
+        // the person may switch a channel at all.
+        abort_unless(CatalogPolicy::canSetChannel($actor, true) || CatalogPolicy::canSetChannel($actor, false), 403);
+
         $validated = $request->validate([
             'enabled' => ['required', 'boolean'],
             'reason' => ['nullable', 'string', 'max:2000'],

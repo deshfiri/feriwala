@@ -13,6 +13,7 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Models\User;
 use App\Support\Money\Currency;
@@ -43,6 +44,9 @@ class ManageProducts
      */
     public function create(User $actor, array $attributes): Product
     {
+        // §12's first sentence, held here as well as at the controller.
+        CatalogPolicy::authorize(CatalogPolicy::canCreate($actor), 'You may not create products.');
+
         return $this->database->transaction(function () use ($actor, $attributes) {
             $product = Product::create([
                 ...$this->fields($attributes),
@@ -61,6 +65,8 @@ class ManageProducts
      */
     public function update(User $actor, Product $product, array $attributes): Product
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not edit products.');
+
         return $this->database->transaction(function () use ($actor, $product, $attributes) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
@@ -92,6 +98,8 @@ class ManageProducts
      */
     public function delete(User $actor, Product $product): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete products.');
+
         $paths = [];
 
         $this->database->transaction(function () use ($actor, $product, &$paths) {

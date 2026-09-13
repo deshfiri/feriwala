@@ -8,6 +8,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Enums\AccountScope;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Package\Models\Package;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -42,6 +43,8 @@ class SetProductEligibility
         AccountScope $accountScope,
         array $accountPublicIds,
     ): Product {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not change who a product is offered to.');
+
         return $this->database->transaction(function () use ($actor, $product, $packageScope, $packagePublicIds, $accountScope, $accountPublicIds) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();

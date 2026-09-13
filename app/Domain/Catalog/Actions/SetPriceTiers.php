@@ -8,6 +8,7 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Models\User;
 use App\Support\Money\Currency;
@@ -48,6 +49,9 @@ class SetPriceTiers
      */
     public function handle(User $actor, Product $product, ?ProductVariant $variant, array $tiers): void
     {
+        // Central wholesale pricing (§12): authoring, and nobody else's to change.
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not change quantity pricing.');
+
         $this->database->transaction(function () use ($actor, $product, $variant, $tiers) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();

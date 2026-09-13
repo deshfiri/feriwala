@@ -7,6 +7,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\CatalogImageStore;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\UploadedFile;
@@ -45,6 +46,9 @@ class ManageBrands
      */
     public function create(User $actor, array $attributes, ?UploadedFile $logo = null): Brand
     {
+        // Before the file is written: a refused caller leaves nothing behind.
+        CatalogPolicy::authorize(CatalogPolicy::canCreate($actor), 'You may not create brands.');
+
         // Written before the transaction opens, because a file write is not
         // something a rollback can undo — and an orphaned image is a great deal
         // cheaper than a row pointing at nothing.
@@ -77,6 +81,8 @@ class ManageBrands
      */
     public function update(User $actor, Brand $brand, array $attributes, ?UploadedFile $logo = null): Brand
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not edit brands.');
+
         $before = $this->snapshot($brand);
         $replaced = $brand->logo_path;
 
@@ -123,6 +129,8 @@ class ManageBrands
      */
     public function setActive(User $actor, Brand $brand, bool $isActive): Brand
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not switch brands on or off.');
+
         $before = $this->snapshot($brand);
 
         $brand->forceFill(['is_active' => $isActive])->save();
@@ -148,6 +156,8 @@ class ManageBrands
      */
     public function delete(User $actor, Brand $brand): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete brands.');
+
         $logoPath = $brand->logo_path;
 
         $this->database->transaction(function () use ($actor, $brand) {
@@ -178,6 +188,8 @@ class ManageBrands
      */
     public function move(User $actor, Brand $brand, int $offset): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not reorder brands.');
+
         $this->database->transaction(function () use ($actor, $brand, $offset) {
             /** @var array<int, int> $order */
             $order = Brand::query()

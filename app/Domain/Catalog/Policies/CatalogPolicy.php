@@ -6,32 +6,66 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Models\Brand;
+use App\Domain\Catalog\Models\Category;
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductAttribute;
+use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\Models\ProductMedia;
+use App\Domain\Catalog\Models\ProductVariant;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 
 /**
  * Who may touch the central catalogue (§11, §12).
  *
  * §12 is the hard requirement this exists for: **a regular user cannot create or
  * add a product**, a category, a brand, or a variation. That is not a UI
- * decision — hiding a button is not enforcement — so every write path asks here,
- * and here asks the platform permission.
+ * decision — hiding a button is not enforcement — so every write path asks here:
+ * the controllers, the form requests, the actions themselves, the model policies
+ * registered for every catalogue model ({@see CatalogModelPolicy}), and the
+ * Gate's own `before` hook. They cannot disagree, because they are all this
+ * class.
  *
- * A business account holder has no platform permissions at all, so every method
- * below answers no for them without needing a special case. The catalogue is
- * Feriwala's, and a partner selects from it rather than adding to it (§10, §12).
+ * Two questions, in this order:
  *
- * Not a model policy: the administration screens list categories and brands
- * before there is a row to ask about, and a model-bound ability has nothing to
- * bind to at that point.
+ *   1. **Is this person a regular user?** Anybody who belongs to a business
+ *      account is, whatever else they hold. Membership is a refusal, not a
+ *      grant — a stray platform permission, or even the Super Admin role, given
+ *      to someone who trades on the platform does not let them author the
+ *      catalogue they sell from, or read the base cost behind it.
+ *   2. **Do they hold the platform permission** for this particular act?
+ *
+ * Not a model policy on its own: the administration screens list categories and
+ * brands before there is a row to ask about. {@see CatalogModelPolicy} wraps it
+ * for `Gate` and route middleware.
  */
 class CatalogPolicy
 {
     /**
+     * Every model whose abilities answer to this policy.
+     *
+     * @var array<int, class-string>
+     */
+    public const MODELS = [
+        Product::class,
+        ProductVariant::class,
+        Category::class,
+        Brand::class,
+        ProductAttribute::class,
+        ProductAttributeValue::class,
+        ProductMedia::class,
+    ];
+
+    /**
      * Whether this person may open the catalogue administration screens.
+     *
+     * Viewing is refused to regular users too: those screens carry the base cost
+     * and internal eligibility decisions a partner is never shown.
      */
     public static function canViewAny(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::View));
+        return self::allows($user, PermissionAction::View);
     }
 
     /**
@@ -42,12 +76,12 @@ class CatalogPolicy
      */
     public static function canCreate(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::Create));
+        return self::allows($user, PermissionAction::Create);
     }
 
     public static function canEdit(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::Edit));
+        return self::allows($user, PermissionAction::Edit);
     }
 
     /**
@@ -68,6 +102,31 @@ class CatalogPolicy
     }
 
     /**
+     * Whether this person holds any permission that writes the catalogue.
+     *
+     * The coarse question, asked before a request is validated wherever the
+     * precise permission depends on what the request says — so a person with no
+     * write permission at all meets a 403, never a list of field errors.
+     */
+    public static function canWriteAny(mixed $user): bool
+    {
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        foreach ([
+            PermissionAction::Create, PermissionAction::Edit, PermissionAction::Delete,
+            PermissionAction::Archive, PermissionAction::Publish, PermissionAction::Unpublish,
+        ] as $action) {
+            if (self::allows($user, $action)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Whether this person may remove a catalogue record outright.
      *
      * Deliberately separate from archiving. Deleting destroys the answer to
@@ -76,12 +135,12 @@ class CatalogPolicy
      */
     public static function canDelete(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::Delete));
+        return self::allows($user, PermissionAction::Delete);
     }
 
     public static function canArchive(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::Archive));
+        return self::allows($user, PermissionAction::Archive);
     }
 
     /**
@@ -93,12 +152,12 @@ class CatalogPolicy
      */
     public static function canPublish(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::Publish));
+        return self::allows($user, PermissionAction::Publish);
     }
 
     public static function canUnpublish(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::Unpublish));
+        return self::allows($user, PermissionAction::Unpublish);
     }
 
     /**
@@ -163,7 +222,64 @@ class CatalogPolicy
 
     public static function canExport(User $user): bool
     {
-        return $user->can(self::permission(PermissionAction::Export));
+        return self::allows($user, PermissionAction::Export);
+    }
+
+    /**
+     * Refuse an action outright unless `$allowed`.
+     *
+     * For the actions: a controller is not the only way in, and a bulk action,
+     * a job or a future API reaches the same class.
+     *
+     * @throws AuthorizationException
+     */
+    public static function authorize(bool $allowed, string $message = 'This catalogue change is not permitted.'): void
+    {
+        if (! $allowed) {
+            throw new AuthorizationException($message);
+        }
+    }
+
+    /**
+     * Whether this person trades on the platform — a regular user in §12's sense.
+     *
+     * Asked of the database every time, deliberately uncached. A static cache
+     * outlives the request that filled it, and a stale "yes" would lock staff
+     * out of the catalogue while a stale "no" would let a partner in. The query
+     * is an indexed `exists`, and it never loads the relation onto the model,
+     * so nothing extra is serialised into the shared `auth.user` prop.
+     */
+    public static function isBusinessIdentity(User $user): bool
+    {
+        return $user->accountMembership()->exists();
+    }
+
+    /**
+     * Whether a Gate check is about the catalogue: a `catalog.*` permission, or
+     * an ability asked of a catalogue model or model class.
+     *
+     * @param  array<int, mixed>  $arguments
+     */
+    public static function isCatalogueAbility(string $ability, array $arguments): bool
+    {
+        if (str_starts_with($ability, PermissionModule::Catalog->value.'.')) {
+            return true;
+        }
+
+        $subject = $arguments[0] ?? null;
+
+        foreach (self::MODELS as $model) {
+            if ($subject === $model || $subject instanceof $model) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected static function allows(User $user, PermissionAction $action): bool
+    {
+        return ! self::isBusinessIdentity($user) && $user->can(self::permission($action));
     }
 
     protected static function permission(PermissionAction $action): string

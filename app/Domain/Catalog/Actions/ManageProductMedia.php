@@ -8,6 +8,7 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -50,6 +51,9 @@ class ManageProductMedia
         ?string $altText = null,
         ?string $variantPublicId = null,
     ): ProductMedia {
+        // Before the file is written: a refused upload leaves nothing on disk.
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not add product media.');
+
         $stored = $this->store->store($file, $product);
 
         try {
@@ -93,6 +97,8 @@ class ManageProductMedia
      */
     public function describe(User $actor, ProductMedia $media, array $attributes): ProductMedia
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not edit product media.');
+
         return $this->database->transaction(function () use ($actor, $media, $attributes) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($media->product_id)->lockForUpdate()->firstOrFail();
@@ -127,6 +133,8 @@ class ManageProductMedia
      */
     public function reorder(User $actor, Product $product, array $publicIds): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not reorder product media.');
+
         $this->database->transaction(function () use ($actor, $product, $publicIds) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
@@ -167,6 +175,8 @@ class ManageProductMedia
 
     public function remove(User $actor, ProductMedia $media): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not remove product media.');
+
         $path = $media->path;
 
         $this->database->transaction(function () use ($actor, $media) {

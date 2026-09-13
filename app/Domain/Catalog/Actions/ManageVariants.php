@@ -10,6 +10,7 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -45,6 +46,9 @@ class ManageVariants
      */
     public function create(User $actor, Product $product, array $attributes): ProductVariant
     {
+        // §12 names "unauthorized Product variations" outright.
+        CatalogPolicy::authorize(CatalogPolicy::canCreate($actor), 'You may not create variations.');
+
         return $this->database->transaction(function () use ($actor, $product, $attributes) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
@@ -93,6 +97,8 @@ class ManageVariants
      */
     public function update(User $actor, ProductVariant $variant, array $attributes): ProductVariant
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not edit variations.');
+
         return $this->database->transaction(function () use ($actor, $variant, $attributes) {
             Product::query()->whereKey($variant->product_id)->lockForUpdate()->firstOrFail();
 
@@ -113,6 +119,8 @@ class ManageVariants
      */
     public function delete(User $actor, ProductVariant $variant): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete variations.');
+
         $this->database->transaction(function () use ($actor, $variant) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($variant->product_id)->lockForUpdate()->firstOrFail();

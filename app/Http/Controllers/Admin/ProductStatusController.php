@@ -35,6 +35,9 @@ class ProductStatusController extends Controller
 
         abort_if(! $actor instanceof User, 403);
 
+        // Nobody without a catalogue write permission is told what the request lacked.
+        abort_unless(CatalogPolicy::canWriteAny($actor), 403);
+
         /** @var Product $record */
         $record = Product::query()->where('public_id', $product)->firstOrFail();
 

@@ -7,6 +7,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\CatalogImageStore;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Category;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\UploadedFile;
@@ -51,6 +52,9 @@ class ManageCategories
      */
     public function create(User $actor, array $attributes, ?UploadedFile $image = null): Category
     {
+        // Before the file is written: a refused caller leaves nothing behind.
+        CatalogPolicy::authorize(CatalogPolicy::canCreate($actor), 'You may not create categories.');
+
         // Written before the transaction opens, because a file write is not
         // something a rollback can undo. An orphaned image is cheaper than a row
         // pointing at nothing, and the catch below clears even that.
@@ -91,6 +95,8 @@ class ManageCategories
      */
     public function update(User $actor, Category $category, array $attributes, ?UploadedFile $image = null): Category
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not edit categories.');
+
         $replaced = $category->image_path;
         $imagePath = $image === null ? null : $this->images->store($image, self::FOLDER);
 
@@ -148,6 +154,8 @@ class ManageCategories
      */
     public function setActive(User $actor, Category $category, bool $isActive): Category
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not switch categories on or off.');
+
         $before = $this->snapshot($category);
 
         $category->forceFill(['is_active' => $isActive])->save();
@@ -173,6 +181,8 @@ class ManageCategories
      */
     public function delete(User $actor, Category $category): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete categories.');
+
         $imagePath = $category->image_path;
 
         $this->database->transaction(function () use ($actor, $category) {
@@ -215,6 +225,8 @@ class ManageCategories
      */
     public function reorder(User $actor, ?Category $parent, array $publicIds): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not reorder categories.');
+
         $this->database->transaction(function () use ($actor, $parent, $publicIds) {
             $siblings = Category::query()
                 ->where('parent_id', $parent?->id)

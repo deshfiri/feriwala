@@ -6,6 +6,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 
@@ -37,6 +38,8 @@ class SetRelatedProducts
      */
     public function handle(User $actor, Product $product, array $publicIds): void
     {
+        CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not change related products.');
+
         $publicIds = array_values(array_unique($publicIds));
 
         if (count($publicIds) > self::MAX_RELATED) {
