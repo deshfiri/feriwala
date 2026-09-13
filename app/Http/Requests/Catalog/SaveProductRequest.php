@@ -7,6 +7,7 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,12 +25,15 @@ class SaveProductRequest extends FormRequest
     public const MAX_MINOR = 1_000_000_000_000;
 
     /**
-     * Authorisation is the controller's, through the policy — one lookup, one
-     * place.
+     * Refused before a single rule runs (§12).
+     *
+     * A person who may not write the catalogue gets a 403, not a list of which
+     * of their fields would have been invalid — the second is an answer, and
+     * they were not entitled to one. The controller asks the policy again.
      */
     public function authorize(): bool
     {
-        return true;
+        return CatalogPolicy::canWrite($this->user(), $this->isMethod('post'));
     }
 
     /**

@@ -1,5 +1,6 @@
-import { Form } from '@inertiajs/react';
+import { Form, router } from '@inertiajs/react';
 import { useState } from 'react';
+import ProductChannelController from '@/actions/App/Http/Controllers/Admin/ProductChannelController';
 import ProductStatusController from '@/actions/App/Http/Controllers/Admin/ProductStatusController';
 import AlertError from '@/components/alert-error';
 import FormField from '@/components/forms/form-field';
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { useTranslation } from '@/hooks/use-translation';
 import type {
+    CatalogAbilities,
     ProductDetail,
     ProductStatusChangeRow,
     ProductTransition,
@@ -25,6 +27,7 @@ type Props = {
     product: ProductDetail;
     transitions: ProductTransition[];
     history: ProductStatusChangeRow[];
+    can: CatalogAbilities;
 };
 
 /**
@@ -36,7 +39,12 @@ type Props = {
  * retires the product asks for a reason, because somebody will later want to
  * know why it stopped being sold.
  */
-export default function StatusPanel({ product, transitions, history }: Props) {
+export default function StatusPanel({
+    product,
+    transitions,
+    history,
+    can,
+}: Props) {
     const { t } = useTranslation();
     const [moving, setMoving] = useState<ProductTransition | null>(null);
 
@@ -89,6 +97,64 @@ export default function StatusPanel({ product, transitions, history }: Props) {
                         {t('catalog.products.lifecycle.no_moves')}
                     </p>
                 )}
+
+                <div className="space-y-2">
+                    <h3 className="text-sm font-medium">
+                        {t('catalog.channels.title')}
+                    </h3>
+                    <p className="text-muted-foreground text-xs">
+                        {t('catalog.channels.description')}
+                    </p>
+                    <ul className="divide-border divide-y rounded-md border">
+                        {product.channels.map((state) => {
+                            const allowed = state.enabled
+                                ? can.disable_channels
+                                : can.enable_channels;
+
+                            return (
+                                <li
+                                    key={state.channel}
+                                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        {t(`catalog.channels.${state.channel}`)}
+                                        <StatusPill
+                                            tone={state.tone}
+                                            label={t(
+                                                `catalog.products.status.${state.status}`,
+                                            )}
+                                        />
+                                    </span>
+                                    {allowed && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                router.patch(
+                                                    ProductChannelController.update.url(
+                                                        {
+                                                            product: product.id,
+                                                            channel:
+                                                                state.channel,
+                                                        },
+                                                    ),
+                                                    { enabled: !state.enabled },
+                                                    { preserveScroll: true },
+                                                )
+                                            }
+                                        >
+                                            {t(
+                                                state.enabled
+                                                    ? 'catalog.channels.disable'
+                                                    : 'catalog.channels.enable',
+                                            )}
+                                        </Button>
+                                    )}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
 
                 {history.length > 0 && (
                     <div className="space-y-2">

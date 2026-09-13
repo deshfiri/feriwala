@@ -10,6 +10,8 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Enums\AccountScope;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Enums\SalesChannel;
+use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Package\Models\Package;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -47,6 +49,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property ProductStatus $status
  * @property PackageScope $package_scope
  * @property AccountScope $account_scope
+ * @property ProductStatus $dropshipping_status
+ * @property ProductStatus $wholesale_status
+ * @property-read bool|null $price_tiers_exists
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
@@ -92,6 +97,8 @@ class Product extends Model
         'status' => 'draft',
         'package_scope' => 'selected',
         'account_scope' => 'any',
+        'dropshipping_status' => 'dropshipping_disabled',
+        'wholesale_status' => 'wholesale_disabled',
     ];
 
     protected $guarded = [];
@@ -112,10 +119,32 @@ class Product extends Model
             'status' => ProductStatus::class,
             'package_scope' => PackageScope::class,
             'account_scope' => AccountScope::class,
+            'dropshipping_status' => ProductStatus::class,
+            'wholesale_status' => ProductStatus::class,
             'published_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * This product's status on one sales channel.
+     */
+    public function channelStatus(SalesChannel $channel): ProductStatus
+    {
+        $status = $this->getAttribute($channel->column());
+
+        return $status instanceof ProductStatus ? $status : $channel->disabled();
+    }
+
+    /**
+     * Whether the product is switched on for this channel. Not the same as being
+     * offered on it — that also needs the product active and the partner
+     * eligible, which {@see ProductEligibility} decides.
+     */
+    public function sellsThrough(SalesChannel $channel): bool
+    {
+        return $this->channelStatus($channel) === $channel->enabled();
     }
 
     /**
@@ -171,6 +200,16 @@ class Product extends Model
     {
         return $this->belongsToMany(BusinessAccount::class, 'product_user_eligibility')
             ->withPivot('created_at');
+    }
+
+    /**
+     * All quantity tiers, the product's own and its variations'.
+     *
+     * @return HasMany<ProductPriceTier, $this>
+     */
+    public function priceTiers(): HasMany
+    {
+        return $this->hasMany(ProductPriceTier::class);
     }
 
     /**

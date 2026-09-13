@@ -5,6 +5,7 @@ namespace App\Http\Requests\Catalog;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -12,12 +13,12 @@ use Illuminate\Validation\Rule;
 class SaveVariantRequest extends FormRequest
 {
     /**
-     * Authorisation is the controller's, through the policy — one lookup, one
-     * place.
+     * Refused before a single rule runs (§12): an unauthorised writer learns
+     * nothing about which fields would have passed. The controller asks again.
      */
     public function authorize(): bool
     {
-        return true;
+        return CatalogPolicy::canWrite($this->user(), $this->isMethod('post'));
     }
 
     protected function prepareForValidation(): void

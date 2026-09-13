@@ -5,6 +5,8 @@ namespace App\Domain\Account\Data;
 use App\Domain\Account\Enums\AccountPermission;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\StaffAllowance;
+use App\Domain\Package\Entitlements;
+use App\Domain\Package\Enums\PackageFeature;
 use App\Models\User;
 
 /**
@@ -32,9 +34,18 @@ readonly class AccountContext
         public bool $isOwner,
         public bool $managesStaff,
         public bool $allowsStaff,
+
+        /*
+         * Whether the account may use each business method right now (§10):
+         * trading, and on a package that includes it. Separate, because a
+         * package may grant one without the other, and the navigation shows
+         * each catalogue only where it would not open onto an empty refusal.
+         */
+        public bool $allowsWholesale = false,
+        public bool $allowsDropshipping = false,
     ) {}
 
-    public static function forUser(User $user, StaffAllowance $allowance): ?self
+    public static function forUser(User $user, StaffAllowance $allowance, ?Entitlements $entitlements = null): ?self
     {
         $account = $user->businessAccount;
         $role = $user->accountRole();
@@ -56,6 +67,10 @@ readonly class AccountContext
             isOwner: $role === AccountRole::Owner,
             managesStaff: $allowsStaff && $role->hasPermission(AccountPermission::InviteStaff),
             allowsStaff: $allowsStaff,
+            allowsWholesale: $entitlements !== null && $account->canTransact()
+                && $entitlements->allows($account, PackageFeature::WholesaleEnabled),
+            allowsDropshipping: $entitlements !== null && $account->canTransact()
+                && $entitlements->allows($account, PackageFeature::DropshippingEnabled),
         );
     }
 }

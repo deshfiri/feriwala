@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Actions\ManageProductMedia;
 use App\Domain\Catalog\Actions\ManageProducts;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
@@ -308,6 +309,14 @@ class ProductController extends Controller
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
             'published_at' => $product->published_at?->toIso8601String(),
+
+            // Each channel separately: they are separate decisions (§11.1).
+            'channels' => array_map(fn (SalesChannel $channel) => [
+                'channel' => $channel->value,
+                'status' => $product->channelStatus($channel)->value,
+                'tone' => $product->channelStatus($channel)->tone(),
+                'enabled' => $product->sellsThrough($channel),
+            ], SalesChannel::cases()),
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
     }
@@ -521,6 +530,8 @@ class ProductController extends Controller
             'create' => CatalogPolicy::canCreate($actor),
             'edit' => CatalogPolicy::canEdit($actor),
             'delete' => CatalogPolicy::canDelete($actor),
+            'enable_channels' => CatalogPolicy::canSetChannel($actor, true),
+            'disable_channels' => CatalogPolicy::canSetChannel($actor, false),
         ];
     }
 

@@ -51,6 +51,23 @@ class CatalogPolicy
     }
 
     /**
+     * Whether this person may submit a catalogue form at all — creating when
+     * `$creating`, editing otherwise.
+     *
+     * What the form requests ask before validating, so a partner is refused
+     * rather than told which fields would have passed. Takes a nullable user
+     * because a form request may be reached without one.
+     */
+    public static function canWrite(mixed $user, bool $creating): bool
+    {
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        return $creating ? self::canCreate($user) : self::canEdit($user);
+    }
+
+    /**
      * Whether this person may remove a catalogue record outright.
      *
      * Deliberately separate from archiving. Deleting destroys the answer to
@@ -103,6 +120,17 @@ class CatalogPolicy
             in_array($from, [ProductStatus::Active, ProductStatus::OutOfStock], true) => self::canUnpublish($user),
             default => self::canEdit($user),
         };
+    }
+
+    /**
+     * Whether this person may switch a sales channel on or off.
+     *
+     * Switching on offers the product to every eligible partner on that channel,
+     * which is publishing; switching off withdraws it, which is unpublishing.
+     */
+    public static function canSetChannel(User $user, bool $enabling): bool
+    {
+        return $enabling ? self::canPublish($user) : self::canUnpublish($user);
     }
 
     public static function canExport(User $user): bool

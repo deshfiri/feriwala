@@ -147,6 +147,7 @@ export default function ProductForm({
                         product={product}
                         transitions={transitions}
                         history={history}
+                        can={can}
                     />
                 )}
 

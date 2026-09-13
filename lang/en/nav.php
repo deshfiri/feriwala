@@ -18,6 +18,8 @@ return [
     'verification' => 'Verification',
     'subscription' => 'Subscription',
     'wallet' => 'Wallet',
+    'wholesale_catalogue' => 'Wholesale catalogue',
+    'dropshipping_catalogue' => 'Dropshipping catalogue',
     'staff' => 'Staff',
     'profile' => 'Profile',
     'security' => 'Security',

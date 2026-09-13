@@ -4,18 +4,19 @@ namespace App\Http\Requests\Catalog;
 
 use App\Domain\Catalog\CatalogImageStore;
 use App\Domain\Catalog\Models\Category;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class SaveCategoryRequest extends FormRequest
 {
     /**
-     * Authorisation is the controller's, through the policy — one lookup, one
-     * place.
+     * Refused before a single rule runs (§12) — and before any uploaded file is
+     * inspected. The controller asks the policy again.
      */
     public function authorize(): bool
     {
-        return true;
+        return CatalogPolicy::canWrite($this->user(), $this->isMethod('post'));
     }
 
     /**

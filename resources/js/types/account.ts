@@ -20,6 +20,10 @@ export interface AccountContext {
     isOwner: boolean;
     managesStaff: boolean;
     allowsStaff: boolean;
+    /** Trading, on a package that includes wholesale purchasing (§10.2). */
+    allowsWholesale: boolean;
+    /** Trading, on a package that includes dropshipping (§10.1). */
+    allowsDropshipping: boolean;
 }
 
 export interface StaffMember {

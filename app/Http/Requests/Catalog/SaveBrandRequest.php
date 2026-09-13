@@ -4,6 +4,7 @@ namespace App\Http\Requests\Catalog;
 
 use App\Domain\Catalog\CatalogImageStore;
 use App\Domain\Catalog\Models\Brand;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -12,12 +13,12 @@ use Illuminate\Validation\Rule;
 class SaveBrandRequest extends FormRequest
 {
     /**
-     * Authorisation is the controller's, through the policy — one lookup, one
-     * place.
+     * Refused before a single rule runs (§12) — and before any uploaded file is
+     * inspected. The controller asks the policy again.
      */
     public function authorize(): bool
     {
-        return true;
+        return CatalogPolicy::canWrite($this->user(), $this->isMethod('post'));
     }
 
     /**

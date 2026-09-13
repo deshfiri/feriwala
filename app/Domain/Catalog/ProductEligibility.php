@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Enums\AccountScope;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Package\Entitlements;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,21 +45,30 @@ class ProductEligibility
 
     public const ACCOUNT_NOT_LISTED = 'account_not_listed';
 
+    public const CHANNEL_DISABLED = 'channel_disabled';
+
+    public const PACKAGE_WITHOUT_CHANNEL = 'package_without_channel';
+
     public function __construct(
         protected Entitlements $entitlements,
     ) {}
 
-    public function isEligible(Product $product, BusinessAccount $account): bool
+    public function isEligible(Product $product, BusinessAccount $account, ?SalesChannel $channel = null): bool
     {
-        return $this->refusals($product, $account) === [];
+        return $this->refusals($product, $account, $channel) === [];
     }
 
     /**
      * Every reason this account may not see this product. Empty means it may.
      *
+     * With a channel, two more conditions: the product is switched on for that
+     * channel, and the account's package includes it (§8.1, §10). Without one,
+     * the answer is about the catalogue in general and says nothing about how
+     * the product may be used.
+     *
      * @return array<int, string>
      */
-    public function refusals(Product $product, BusinessAccount $account): array
+    public function refusals(Product $product, BusinessAccount $account, ?SalesChannel $channel = null): array
     {
         $refusals = [];
 
@@ -88,7 +98,25 @@ class ProductEligibility
             $refusals[] = self::ACCOUNT_NOT_LISTED;
         }
 
+        if ($channel !== null) {
+            if (! $product->sellsThrough($channel)) {
+                $refusals[] = self::CHANNEL_DISABLED;
+            }
+
+            if ($subscription !== null && ! $this->entitlements->allows($account, $channel->facility())) {
+                $refusals[] = self::PACKAGE_WITHOUT_CHANNEL;
+            }
+        }
+
         return $refusals;
+    }
+
+    /**
+     * Whether the account's package lets it use this channel at all.
+     */
+    public function allowsChannel(BusinessAccount $account, SalesChannel $channel): bool
+    {
+        return $account->canTransact() && $this->entitlements->allows($account, $channel->facility());
     }
 
     /**
@@ -100,16 +128,17 @@ class ProductEligibility
      *
      * @return Builder<Product>
      */
-    public function query(BusinessAccount $account): Builder
+    public function query(BusinessAccount $account, ?SalesChannel $channel = null): Builder
     {
         $subscription = $account->canTransact() ? $this->entitlements->activePackage($account) : null;
 
-        if ($subscription === null) {
+        if ($subscription === null || ($channel !== null && ! $this->entitlements->allows($account, $channel->facility()))) {
             return Product::query()->whereRaw('1 = 0');
         }
 
         return Product::query()
             ->where('status', ProductStatus::Active)
+            ->when($channel !== null, fn (Builder $query) => $query->where($channel?->column() ?? 'status', $channel?->enabled()))
             ->where(fn (Builder $query) => $query
                 ->where('package_scope', PackageScope::AllPackages)
                 ->orWhereHas('eligiblePackages', fn (Builder $packages) => $packages->whereKey($subscription->package_id)))

@@ -11,7 +11,9 @@ import {
     ScrollText,
     Settings,
     ShoppingBag,
+    ShoppingCart,
     SlidersHorizontal,
+    Store,
     Tags,
     ShieldCheck,
     UserCheck,
@@ -29,6 +31,8 @@ import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
 import { index as productAttributes } from '@/routes/admin/catalog/attributes';
+import { index as dropshippingCatalogue } from '@/routes/catalog/dropshipping';
+import { index as wholesaleCatalogue } from '@/routes/catalog/wholesale';
 import { index as productBrands } from '@/routes/admin/catalog/brands';
 import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as productCategories } from '@/routes/admin/catalog/categories';
@@ -109,6 +113,31 @@ export function useNavigation(): {
                                         title: t('nav.wallet'),
                                         href: wallet(),
                                         icon: WalletIcon,
+                                    },
+                                ]
+                              : []),
+                          /*
+                           * The central catalogue, one door per business method
+                           * (§10). Separate entries because they are separate
+                           * acts, and each appears only when the account's
+                           * package includes it — the server refuses the rest
+                           * regardless.
+                           */
+                          ...(account?.allowsWholesale
+                              ? [
+                                    {
+                                        title: t('nav.wholesale_catalogue'),
+                                        href: wholesaleCatalogue(),
+                                        icon: ShoppingCart,
+                                    },
+                                ]
+                              : []),
+                          ...(account?.allowsDropshipping
+                              ? [
+                                    {
+                                        title: t('nav.dropshipping_catalogue'),
+                                        href: dropshippingCatalogue(),
+                                        icon: Store,
                                     },
                                 ]
                               : []),

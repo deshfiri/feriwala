@@ -107,6 +107,11 @@ class CatalogRefused extends RuntimeException
         return new self("{$status} is a sales-channel setting, not a lifecycle status.");
     }
 
+    public static function channelUnchanged(string $channel, bool $enable): self
+    {
+        return new self("{$channel} is already switched ".($enable ? 'on' : 'off').' for this product.');
+    }
+
     public static function reasonRequired(string $status): self
     {
         return new self("Say why the product is being moved to {$status}. Somebody will ask.");

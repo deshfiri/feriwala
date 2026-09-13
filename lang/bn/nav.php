@@ -12,6 +12,8 @@ return [
     'verification' => 'যাচাইকরণ',
     'subscription' => 'সাবস্ক্রিপশন',
     'wallet' => 'ওয়ালেট',
+    'wholesale_catalogue' => 'পাইকারি ক্যাটালগ',
+    'dropshipping_catalogue' => 'ড্রপশিপিং ক্যাটালগ',
     'staff' => 'স্টাফ',
     'profile' => 'প্রোফাইল',
     'security' => 'নিরাপত্তা',

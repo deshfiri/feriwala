@@ -74,6 +74,7 @@ export type ProductDetail = {
     status_tone: StatusTone;
     /** The first moment the product went live; never moved afterwards. */
     published_at: string | null;
+    channels: ProductChannelState[];
     updated_at: string;
 };
 
@@ -162,4 +163,54 @@ export type CatalogAbilities = {
     create: boolean;
     edit: boolean;
     delete: boolean;
+    enable_channels?: boolean;
+    disable_channels?: boolean;
+};
+
+export type SalesChannelName = 'dropshipping' | 'wholesale';
+
+/** One sales channel's state on a product, for the administrator. */
+export type ProductChannelState = {
+    channel: SalesChannelName;
+    status: string;
+    tone: StatusTone;
+    enabled: boolean;
+};
+
+/**
+ * A product as a business account browses it. Only one channel's prices are
+ * ever present, and never the base cost.
+ */
+export type BrowseCard = {
+    slug: string;
+    name: string;
+    sku: string;
+    category: string;
+    brand: string | null;
+    image: { url: string; alt: string | null } | null;
+    wholesale_price?: Money;
+    min_order_quantity?: number;
+    has_quantity_pricing?: boolean;
+    suggested_selling_price?: Money | null;
+    minimum_selling_price?: Money | null;
+    maximum_selling_price?: Money | null;
+};
+
+export type BrowseDetail = {
+    slug: string;
+    name: string;
+    sku: string;
+    short_description: string | null;
+    description: string | null;
+    category: string;
+    brand: string | null;
+    media: { type: 'image' | 'video'; url: string; alt: string | null }[];
+    variants: { label: string; sku: string; wholesale_price?: Money }[];
+    wholesale_price?: Money;
+    min_order_quantity?: number;
+    max_order_quantity?: number | null;
+    quantity_pricing?: { min_quantity: number; unit_price: Money }[];
+    suggested_selling_price?: Money | null;
+    minimum_selling_price?: Money | null;
+    maximum_selling_price?: Money | null;
 };

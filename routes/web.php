@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\ProductAttributeController;
+use App\Http\Controllers\Admin\ProductChannelController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductEligibilityController;
 use App\Http\Controllers\Admin\ProductMediaController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
@@ -179,6 +181,23 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wallet.download');
         Route::get('wallet/transactions/{transaction}', [WalletController::class, 'transaction'])
             ->name('wallet.transactions.show');
+
+        /*
+         * The central catalogue for a business account (§10, §12, §13).
+         *
+         * Read-only, and one route set per channel. Dropshipping and wholesale
+         * are separate acts on the same products, each with its own eligibility
+         * query — a product switched on only for wholesale cannot be opened on
+         * the dropshipping route by typing its address. Nothing here writes.
+         */
+        Route::get('catalog/wholesale', [BusinessCatalogController::class, 'wholesale'])
+            ->name('catalog.wholesale.index');
+        Route::get('catalog/wholesale/{product}', [BusinessCatalogController::class, 'showWholesale'])
+            ->name('catalog.wholesale.show');
+        Route::get('catalog/dropshipping', [BusinessCatalogController::class, 'dropshipping'])
+            ->name('catalog.dropshipping.index');
+        Route::get('catalog/dropshipping/{product}', [BusinessCatalogController::class, 'showDropshipping'])
+            ->name('catalog.dropshipping.show');
     });
 });
 
@@ -504,6 +523,11 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::patch('catalog/products/{product}/status', [ProductStatusController::class, 'update'])
             ->name('catalog.products.status.update');
+
+        // Dropshipping and wholesale, one channel per request (§11.1).
+        Route::patch('catalog/products/{product}/channels/{channel}', [ProductChannelController::class, 'update'])
+            ->whereIn('channel', ['dropshipping', 'wholesale'])
+            ->name('catalog.products.channels.update');
 
         // Which packages and accounts may see a product, as one decision (§11.1, §12).
         Route::put('catalog/products/{product}/eligibility', [ProductEligibilityController::class, 'update'])

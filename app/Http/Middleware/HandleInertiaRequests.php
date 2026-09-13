@@ -8,6 +8,7 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Data\AccountContext;
 use App\Domain\Account\StaffAllowance;
 use App\Domain\Notification\Queries\RecentNotifications;
+use App\Domain\Package\Entitlements;
 use App\Models\User;
 use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class HandleInertiaRequests extends Middleware
     public function __construct(
         protected StaffAllowance $allowance,
         protected RecentNotifications $notifications,
+        protected Entitlements $entitlements,
     ) {}
 
     /**
@@ -110,7 +112,7 @@ class HandleInertiaRequests extends Middleware
              */
             'account' => fn () => $user === null
                 ? null
-                : AccountContext::forUser($user, $this->allowance),
+                : AccountContext::forUser($user, $this->allowance, $this->entitlements),
             'locale' => [
                 'current' => App::getLocale(),
                 'direction' => Locale::parse(App::getLocale())->direction(),
