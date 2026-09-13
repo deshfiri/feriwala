@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests\Catalog;
 
+use App\Domain\Catalog\Enums\ItemCondition;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
@@ -107,6 +109,39 @@ class SaveProductRequest extends FormRequest
              */
             'base_cost_minor' => ['required', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
             'wholesale_price_minor' => ['required', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+
+            /*
+             * What partner websites put in the page head (§34.3), bounded to
+             * what a search engine will actually show. Blank falls back to the
+             * product's own name and description.
+             */
+            'meta_title' => ['nullable', 'string', 'max:70'],
+            'meta_description' => ['nullable', 'string', 'max:200'],
+            'meta_keywords' => ['nullable', 'string', 'max:255'],
+
+            // Product schema fields only the catalogue can know.
+            'mpn' => ['nullable', 'string', 'max:70', 'regex:/^[A-Za-z0-9._\-\/ ]+$/'],
+            'item_condition' => ['nullable', Rule::enum(ItemCondition::class)],
+
+            /*
+             * One of this product's own images, by public id. Another product's
+             * image is refused: a sharing card showing the wrong product is
+             * worse than one showing none.
+             */
+            'social_image_id' => [
+                'nullable', 'string',
+                function (string $attribute, mixed $value, Closure $fail) use ($existing): void {
+                    $belongs = $existing !== null && ProductMedia::query()
+                        ->where('product_id', $existing->id)
+                        ->where('public_id', $value)
+                        ->where('type', ProductMedia::TYPE_IMAGE)
+                        ->exists();
+
+                    if (! $belongs) {
+                        $fail(__('catalog.seo.image_not_this_product'));
+                    }
+                },
+            ],
 
             // Order quantities (§14): a blank minimum is one, a blank maximum no limit.
             'min_order_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],

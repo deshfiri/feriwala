@@ -61,6 +61,12 @@ export type ProductDetail = {
     wholesale_price_minor: number;
     base_cost: Money;
     wholesale_price: Money;
+    meta_title: string | null;
+    meta_description: string | null;
+    meta_keywords: string | null;
+    mpn: string | null;
+    item_condition: 'new' | 'refurbished' | 'used';
+    social_image_id: string | null;
     min_order_quantity: number;
     /** Null means no limit. */
     max_order_quantity: number | null;
@@ -110,6 +116,18 @@ export type PriceTierScope = {
         unit_price: Money;
         applies: boolean;
     }[];
+};
+
+/** What a partner website would render, built on the server (§34.3). */
+export type SeoPreview = {
+    metadata: {
+        title: string;
+        description: string | null;
+        keywords: string | null;
+        image: { url: string; alt: string | null } | null;
+    };
+    /** Pretty-printed JSON-LD. */
+    schema: string;
 };
 
 export type RelatedProductRow = {

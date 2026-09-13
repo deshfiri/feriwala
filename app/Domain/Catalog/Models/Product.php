@@ -8,6 +8,7 @@ use App\Concerns\HasSlug;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Enums\AccountScope;
+use App\Domain\Catalog\Enums\ItemCondition;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
@@ -51,6 +52,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property AccountScope $account_scope
  * @property ProductStatus $dropshipping_status
  * @property ProductStatus $wholesale_status
+ * @property string|null $meta_title
+ * @property string|null $meta_description
+ * @property string|null $meta_keywords
+ * @property string|null $mpn
+ * @property ItemCondition $item_condition
+ * @property int|null $social_media_id
+ * @property-read ProductMedia|null $socialImage
  * @property bool $is_featured
  * @property CarbonImmutable|null $featured_at
  * @property-read bool|null $price_tiers_exists
@@ -102,6 +110,7 @@ class Product extends Model
         'dropshipping_status' => 'dropshipping_disabled',
         'wholesale_status' => 'wholesale_disabled',
         'is_featured' => false,
+        'item_condition' => 'new',
     ];
 
     protected $guarded = [];
@@ -126,6 +135,7 @@ class Product extends Model
             'wholesale_status' => ProductStatus::class,
             'is_featured' => 'boolean',
             'featured_at' => 'immutable_datetime',
+            'item_condition' => ItemCondition::class,
             'published_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -205,6 +215,16 @@ class Product extends Model
     {
         return $this->belongsToMany(BusinessAccount::class, 'product_user_eligibility')
             ->withPivot('created_at');
+    }
+
+    /**
+     * The image partner storefronts use when the page is shared (§34.3).
+     *
+     * @return BelongsTo<ProductMedia, $this>
+     */
+    public function socialImage(): BelongsTo
+    {
+        return $this->belongsTo(ProductMedia::class, 'social_media_id');
     }
 
     /**

@@ -24,8 +24,10 @@ import type {
     ProductStatusChangeRow,
     ProductTransition,
     RelatedProductRow,
+    SeoPreview,
     VariantRow,
 } from '@/types';
+import SeoFields from './seo-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
@@ -50,6 +52,7 @@ type Props = {
     account_matches?: AccountMatch[];
     merchandising: MerchandisingState | null;
     related_matches?: RelatedProductRow[];
+    seo_preview: SeoPreview | null;
 };
 
 const selectClass =
@@ -85,6 +88,7 @@ export default function ProductForm({
     account_matches,
     merchandising,
     related_matches,
+    seo_preview,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -597,6 +601,13 @@ export default function ProductForm({
                                     ))}
                                 </div>
                             </SectionCard>
+
+                            <SeoFields
+                                product={product}
+                                media={media}
+                                preview={seo_preview}
+                                errors={errors}
+                            />
 
                             {writable && (
                                 <div className="flex justify-end">

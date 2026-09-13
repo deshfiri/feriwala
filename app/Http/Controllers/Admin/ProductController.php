@@ -19,6 +19,7 @@ use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
+use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
@@ -50,6 +51,7 @@ class ProductController extends Controller
         protected ManageProducts $products,
         protected ProductMediaStore $mediaStore,
         protected WholesalePriceResolver $prices,
+        protected ProductSeo $seo,
     ) {}
 
     public function index(Request $request): Response
@@ -100,6 +102,7 @@ class ProductController extends Controller
             'eligibility' => null,
             'package_options' => [],
             'merchandising' => null,
+            'seo_preview' => null,
             'transitions' => [],
             'history' => [],
             'variants' => [],
@@ -127,6 +130,7 @@ class ProductController extends Controller
         abort_unless(CatalogPolicy::canViewAny($actor), 403);
 
         $record = $this->product($product);
+        $record->loadMissing(['socialImage', 'media', 'brand']);
 
         return Inertia::render('admin/catalog/products/form', [
             'product' => $this->detail($record),
@@ -162,6 +166,21 @@ class ProductController extends Controller
                     'at' => $change->created_at->toIso8601String(),
                 ])
                 ->all(),
+
+            /*
+             * What a partner website would render for this product (§34.3),
+             * built by the same service the storefront API will use. The
+             * schema's price is the suggested selling price, standing in for a
+             * partner's own; with none set, the preview has no offer rather than
+             * an invented one. Paths are relative: the host is the partner's.
+             */
+            'seo_preview' => [
+                'metadata' => $this->seo->metadata($record),
+                'schema' => json_encode(
+                    $this->seo->schema($record, '/products/'.$record->slug, $record->suggested_selling_price_minor),
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+                ),
+            ],
 
             // What it recommends, in order, and whether it is featured (§11.1).
             'merchandising' => [
@@ -320,6 +339,13 @@ class ProductController extends Controller
             'wholesale_price_minor' => $product->wholesale_price_minor->minorUnits,
             'base_cost' => $product->base_cost_minor->jsonSerialize(),
             'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
+
+            'meta_title' => $product->meta_title,
+            'meta_description' => $product->meta_description,
+            'meta_keywords' => $product->meta_keywords,
+            'mpn' => $product->mpn,
+            'item_condition' => $product->item_condition->value,
+            'social_image_id' => $product->socialImage?->public_id,
 
             'min_order_quantity' => $product->min_order_quantity,
             'max_order_quantity' => $product->max_order_quantity,

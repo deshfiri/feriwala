@@ -4,6 +4,7 @@ namespace App\Domain\Catalog\Actions;
 
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Catalog\Enums\ItemCondition;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
@@ -66,7 +67,7 @@ class ManageProducts
 
             $before = $this->snapshot($locked);
 
-            $locked->fill($this->fields($attributes))->save();
+            $locked->fill($this->fields($attributes, $locked))->save();
 
             $this->record($actor, 'catalog.product_updated', $locked, $before, $this->snapshot($locked));
 
@@ -141,14 +142,35 @@ class ManageProducts
      * @param  array<string, mixed>  $attributes
      * @return array<string, mixed>
      */
-    protected function fields(array $attributes): array
+    protected function fields(array $attributes, ?Product $product = null): array
     {
         $fields = [];
 
-        foreach (['name', 'short_description', 'description', 'barcode'] as $field) {
+        foreach ([
+            'name', 'short_description', 'description', 'barcode',
+            'meta_title', 'meta_description', 'meta_keywords', 'mpn',
+        ] as $field) {
             if (array_key_exists($field, $attributes)) {
                 $fields[$field] = $attributes[$field];
             }
+        }
+
+        if (array_key_exists('item_condition', $attributes)) {
+            $fields['item_condition'] = ItemCondition::tryFrom((string) $attributes['item_condition']) ?? ItemCondition::New;
+        }
+
+        /*
+         * The sharing image, by public id. Validation has already confirmed it
+         * is one of this product's images; the query repeats the product check
+         * so a caller that skipped validation cannot point it elsewhere.
+         */
+        if (array_key_exists('social_image_id', $attributes)) {
+            $fields['social_media_id'] = blank($attributes['social_image_id']) || $product === null
+                ? null
+                : ProductMedia::query()
+                    ->where('product_id', $product->id)
+                    ->where('public_id', $attributes['social_image_id'])
+                    ->value('id');
         }
 
         // Upper-case, matching the CHECK on the column: one SKU is one product

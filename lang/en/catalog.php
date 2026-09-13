@@ -131,6 +131,32 @@ return [
         'no_matches_help' => 'Try a different name, SKU or barcode.',
     ],
 
+    'seo' => [
+        'title' => 'Search engines and sharing',
+        'description' => 'What partner websites put in this product page’s head and structured data. Blank fields fall back to the product’s own name and description.',
+        'meta_title' => 'SEO title',
+        'meta_title_help' => 'Up to 70 characters. Blank uses the product name.',
+        'meta_description' => 'SEO description',
+        'meta_description_help' => 'Up to 200 characters. Blank uses the short description, shortened to 160.',
+        'meta_keywords' => 'Keywords',
+        'mpn' => 'Manufacturer part number (MPN)',
+        'mpn_help' => 'Where the manufacturer gives one. The barcode is used as the GTIN.',
+        'item_condition' => 'Condition',
+        'conditions' => [
+            'new' => 'New',
+            'refurbished' => 'Refurbished',
+            'used' => 'Used',
+        ],
+        'social_image' => 'Sharing image',
+        'social_image_first' => 'The first product image',
+        'social_image_help' => 'Shown when the page is shared. Upload images to choose one.',
+        'image_not_this_product' => 'Choose one of this product’s own images.',
+        'preview' => 'Search listing preview',
+        'schema_preview' => 'Product schema preview (JSON-LD)',
+        'schema_preview_help' => 'Built on the server, as a partner website receives it. The price is the suggested selling price standing in for a partner’s own; the wholesale price and base cost are never included. Paths are relative — each website supplies its own domain.',
+        'no_description' => 'No description yet.',
+    ],
+
     'related' => [
         'title' => 'Featured and related products',
         'description' => 'A featured product is listed first on partners’ catalogues. Related products are shown on this product’s page, in this order, to partners who may see them.',
