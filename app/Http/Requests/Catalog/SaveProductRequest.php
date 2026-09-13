@@ -5,10 +5,12 @@ namespace App\Http\Requests\Catalog;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class SaveProductRequest extends FormRequest
 {
@@ -101,6 +103,72 @@ class SaveProductRequest extends FormRequest
              */
             'base_cost_minor' => ['required', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
             'wholesale_price_minor' => ['required', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+
+            // Order quantities (§14): a blank minimum is one, a blank maximum no limit.
+            'min_order_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'max_order_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+
+            // Selling-price guidance for partners (§15.1). Blank is no bound.
+            'suggested_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+            'minimum_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+            'maximum_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+        ];
+    }
+
+    /**
+     * The rules that compare one field with another.
+     *
+     * Written out rather than left to `gte`/`lte`, whose behaviour when the other
+     * field is blank is not what "blank means no bound" needs. Each message is
+     * put on the field an administrator would change.
+     *
+     * @return array<int, Closure>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $data = $validator->getData();
+                $number = fn (string $key): ?int => isset($data[$key]) && is_numeric($data[$key]) ? (int) $data[$key] : null;
+
+                $min = $number('min_order_quantity') ?? 1;
+                $max = $number('max_order_quantity');
+
+                if ($max !== null && $max < $min) {
+                    $validator->errors()->add('max_order_quantity', __('catalog.products.bounds.max_below_min'));
+                }
+
+                /*
+                 * A quantity tier starting above the maximum order quantity is a
+                 * price nobody can ever be charged — refused here, on the
+                 * field that would strand it.
+                 */
+                $product = $this->route('product');
+
+                if ($max !== null && is_string($product)) {
+                    $highestTier = ProductPriceTier::query()
+                        ->whereHas('product', fn ($query) => $query->where('public_id', $product))
+                        ->max('min_quantity');
+
+                    if ($highestTier !== null && (int) $highestTier > $max) {
+                        $validator->errors()->add('max_order_quantity', __('catalog.products.bounds.tier_above_max', [
+                            'quantity' => $highestTier,
+                        ]));
+                    }
+                }
+
+                $suggested = $number('suggested_selling_price_minor');
+                $floor = $number('minimum_selling_price_minor');
+                $ceiling = $number('maximum_selling_price_minor');
+
+                if ($floor !== null && $ceiling !== null && $floor > $ceiling) {
+                    $validator->errors()->add('minimum_selling_price_minor', __('catalog.products.bounds.selling_range'));
+                }
+
+                if ($suggested !== null && (($floor !== null && $suggested < $floor) || ($ceiling !== null && $suggested > $ceiling))) {
+                    $validator->errors()->add('suggested_selling_price_minor', __('catalog.products.bounds.suggested_outside'));
+                }
+            },
         ];
     }
 
@@ -115,6 +183,11 @@ class SaveProductRequest extends FormRequest
             'brand_id' => 'brand',
             'base_cost_minor' => 'base cost',
             'wholesale_price_minor' => 'wholesale price',
+            'min_order_quantity' => 'minimum order quantity',
+            'max_order_quantity' => 'maximum order quantity',
+            'suggested_selling_price_minor' => 'suggested selling price',
+            'minimum_selling_price_minor' => 'minimum selling price',
+            'maximum_selling_price_minor' => 'maximum selling price',
         ];
     }
 }

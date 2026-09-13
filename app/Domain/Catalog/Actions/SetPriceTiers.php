@@ -76,6 +76,11 @@ class SetPriceTiers
                     throw CatalogRefused::tierQuantityTooLow();
                 }
 
+                // A band nobody can ever reach is a price nobody is charged.
+                if ($locked->max_order_quantity !== null && $band['min_quantity'] > $locked->max_order_quantity) {
+                    throw CatalogRefused::tierAboveMaximumOrder($band['min_quantity'], $locked->max_order_quantity);
+                }
+
                 if (isset($seen[$band['min_quantity']])) {
                     throw CatalogRefused::tierQuantityRepeated($band['min_quantity']);
                 }

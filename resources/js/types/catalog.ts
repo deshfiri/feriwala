@@ -40,6 +40,16 @@ export type ProductDetail = {
     wholesale_price_minor: number;
     base_cost: Money;
     wholesale_price: Money;
+    min_order_quantity: number;
+    /** Null means no limit. */
+    max_order_quantity: number | null;
+    /** Selling-price guidance for partners; null means no bound. */
+    suggested_selling_price_minor: number | null;
+    minimum_selling_price_minor: number | null;
+    maximum_selling_price_minor: number | null;
+    suggested_selling_price: Money | null;
+    minimum_selling_price: Money | null;
+    maximum_selling_price: Money | null;
     status: string;
     updated_at: string;
 };

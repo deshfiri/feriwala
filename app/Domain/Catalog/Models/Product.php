@@ -32,6 +32,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $currency_code
  * @property Money $base_cost_minor
  * @property Money $wholesale_price_minor
+ * @property int $min_order_quantity
+ * @property int|null $max_order_quantity
+ * @property Money|null $suggested_selling_price_minor
+ * @property Money|null $minimum_selling_price_minor
+ * @property Money|null $maximum_selling_price_minor
  * @property string $status
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
@@ -64,9 +69,30 @@ class Product extends Model
         return [
             'base_cost_minor' => MoneyCast::class,
             'wholesale_price_minor' => MoneyCast::class,
+            'min_order_quantity' => 'integer',
+            'max_order_quantity' => 'integer',
+            'suggested_selling_price_minor' => MoneyCast::class,
+            'minimum_selling_price_minor' => MoneyCast::class,
+            'maximum_selling_price_minor' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Whether one order may carry this many units (§11.1, §14).
+     *
+     * What the cart asks before it prices anything. A quantity outside the
+     * bounds is refused rather than clamped: silently changing how many units
+     * somebody ordered is changing their order.
+     */
+    public function acceptsQuantity(int $quantity): bool
+    {
+        if ($quantity < $this->min_order_quantity) {
+            return false;
+        }
+
+        return $this->max_order_quantity === null || $quantity <= $this->max_order_quantity;
     }
 
     /**

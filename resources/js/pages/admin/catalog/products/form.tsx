@@ -448,6 +448,121 @@ export default function ProductForm({
                                 </div>
                             </SectionCard>
 
+                            <SectionCard
+                                title={t('catalog.products.sections.bounds')}
+                                description={t(
+                                    'catalog.products.sections.bounds_help',
+                                )}
+                            >
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <FormField
+                                        label={t(
+                                            'catalog.products.fields.min_order_quantity',
+                                        )}
+                                        hint={t(
+                                            'catalog.products.fields.min_order_quantity_help',
+                                        )}
+                                        error={errors.min_order_quantity}
+                                    >
+                                        {(field) => (
+                                            <Input
+                                                {...field}
+                                                name="min_order_quantity"
+                                                type="number"
+                                                inputMode="numeric"
+                                                min={1}
+                                                step={1}
+                                                className="tabular-nums"
+                                                defaultValue={
+                                                    product?.min_order_quantity ??
+                                                    ''
+                                                }
+                                            />
+                                        )}
+                                    </FormField>
+
+                                    <FormField
+                                        label={t(
+                                            'catalog.products.fields.max_order_quantity',
+                                        )}
+                                        hint={t(
+                                            'catalog.products.fields.max_order_quantity_help',
+                                        )}
+                                        error={errors.max_order_quantity}
+                                    >
+                                        {(field) => (
+                                            <Input
+                                                {...field}
+                                                name="max_order_quantity"
+                                                type="number"
+                                                inputMode="numeric"
+                                                min={1}
+                                                step={1}
+                                                className="tabular-nums"
+                                                defaultValue={
+                                                    product?.max_order_quantity ??
+                                                    ''
+                                                }
+                                            />
+                                        )}
+                                    </FormField>
+
+                                    {(
+                                        [
+                                            [
+                                                'suggested_selling_price_minor',
+                                                'suggested_selling_price',
+                                            ],
+                                            [
+                                                'minimum_selling_price_minor',
+                                                'minimum_selling_price',
+                                            ],
+                                            [
+                                                'maximum_selling_price_minor',
+                                                'maximum_selling_price',
+                                            ],
+                                        ] as const
+                                    ).map(([name, rendered]) => (
+                                        <FormField
+                                            key={name}
+                                            label={t(
+                                                `catalog.products.fields.${rendered}`,
+                                            )}
+                                            hint={
+                                                product?.[rendered]
+                                                    ? t(
+                                                          'catalog.products.fields.saved_as',
+                                                          {
+                                                              amount: product[
+                                                                  rendered
+                                                              ].formatted,
+                                                          },
+                                                      )
+                                                    : t(
+                                                          'catalog.products.fields.no_bound',
+                                                      )
+                                            }
+                                            error={errors[name]}
+                                        >
+                                            {(field) => (
+                                                <Input
+                                                    {...field}
+                                                    name={name}
+                                                    type="number"
+                                                    inputMode="numeric"
+                                                    min={0}
+                                                    step={1}
+                                                    className="tabular-nums"
+                                                    defaultValue={
+                                                        product?.[name] ?? ''
+                                                    }
+                                                />
+                                            )}
+                                        </FormField>
+                                    ))}
+                                </div>
+                            </SectionCard>
+
                             {writable && (
                                 <div className="flex justify-end">
                                     <Button type="submit" disabled={processing}>

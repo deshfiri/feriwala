@@ -33,6 +33,8 @@ return [
             'content_help' => 'What partners and their customers read about it.',
             'placement' => 'Placement',
             'placement_help' => 'Where it sits in the catalogue.',
+            'bounds' => 'Order quantities and selling prices',
+            'bounds_help' => 'How many units one wholesale order may carry, and the prices partners are guided to sell at. Blank means no bound; the selling prices are never what Feriwala charges.',
             'pricing' => 'Pricing',
             'pricing_help' => 'Entered in poisha — ৳1 is 100. What was saved is shown beneath each figure, so a misplaced zero is visible.',
         ],
@@ -56,8 +58,23 @@ return [
             'base_cost_help' => 'What Feriwala pays. Never shown to partners, storefronts or business accounts.',
             'wholesale_price' => 'Wholesale price (poisha)',
             'wholesale_price_help' => 'What a business account pays per unit when buying wholesale.',
+            'min_order_quantity' => 'Minimum order quantity',
+            'min_order_quantity_help' => 'The fewest units one order may carry. Blank is one.',
+            'max_order_quantity' => 'Maximum order quantity',
+            'max_order_quantity_help' => 'The most units one order may carry. Blank is no limit.',
+            'suggested_selling_price' => 'Suggested selling price (poisha)',
+            'minimum_selling_price' => 'Minimum selling price (poisha)',
+            'maximum_selling_price' => 'Maximum selling price (poisha)',
+            'no_bound' => 'Blank: no bound',
             'saved_as' => 'Saved as :amount',
             'switched_off' => ':name (switched off)',
+        ],
+
+        'bounds' => [
+            'max_below_min' => 'The maximum order quantity cannot be below the minimum.',
+            'tier_above_max' => 'A quantity tier starts at :quantity units, above this maximum. Lower the tier first.',
+            'selling_range' => 'The minimum selling price cannot be above the maximum.',
+            'suggested_outside' => 'The suggested selling price has to sit between the minimum and the maximum.',
         ],
 
         'status' => [

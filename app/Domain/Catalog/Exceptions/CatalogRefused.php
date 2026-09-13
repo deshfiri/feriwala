@@ -212,6 +212,14 @@ class CatalogRefused extends RuntimeException
         );
     }
 
+    public static function tierAboveMaximumOrder(int $quantity, int $maximum): self
+    {
+        return new self(
+            "The tier from {$quantity} units can never apply: one order carries at most {$maximum}. "
+            .'Lower the tier or raise the maximum order quantity.'
+        );
+    }
+
     public static function tooManyTiers(int $max): self
     {
         return new self("A price table holds up to {$max} tiers.");

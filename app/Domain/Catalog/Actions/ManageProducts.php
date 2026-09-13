@@ -169,6 +169,32 @@ class ManageProducts
             }
         }
 
+        /*
+         * Order quantities (§14). A blank minimum is one unit; a blank maximum
+         * is no limit.
+         */
+        if (array_key_exists('min_order_quantity', $attributes)) {
+            $fields['min_order_quantity'] = blank($attributes['min_order_quantity'])
+                ? 1
+                : (int) $attributes['min_order_quantity'];
+        }
+
+        if (array_key_exists('max_order_quantity', $attributes)) {
+            $fields['max_order_quantity'] = blank($attributes['max_order_quantity'])
+                ? null
+                : (int) $attributes['max_order_quantity'];
+        }
+
+        // Selling-price guidance for partners (§15.1). Blank is no bound, and
+        // never zero — zero is a real price.
+        foreach (['suggested_selling_price_minor', 'minimum_selling_price_minor', 'maximum_selling_price_minor'] as $bound) {
+            if (array_key_exists($bound, $attributes)) {
+                $fields[$bound] = blank($attributes[$bound])
+                    ? null
+                    : Money::of((int) $attributes[$bound], Currency::base());
+            }
+        }
+
         return $fields;
     }
 
@@ -187,6 +213,11 @@ class ManageProducts
             'base_cost_minor' => $product->base_cost_minor->minorUnits,
             'wholesale_price_minor' => $product->wholesale_price_minor->minorUnits,
             'currency_code' => $product->currency_code,
+            'min_order_quantity' => $product->min_order_quantity,
+            'max_order_quantity' => $product->max_order_quantity,
+            'suggested_selling_price_minor' => $product->suggested_selling_price_minor?->minorUnits,
+            'minimum_selling_price_minor' => $product->minimum_selling_price_minor?->minorUnits,
+            'maximum_selling_price_minor' => $product->maximum_selling_price_minor?->minorUnits,
             'status' => $product->status,
         ];
     }

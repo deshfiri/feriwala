@@ -228,6 +228,15 @@ class ProductController extends Controller
             'base_cost' => $product->base_cost_minor->jsonSerialize(),
             'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
 
+            'min_order_quantity' => $product->min_order_quantity,
+            'max_order_quantity' => $product->max_order_quantity,
+            'suggested_selling_price_minor' => $product->suggested_selling_price_minor?->minorUnits,
+            'minimum_selling_price_minor' => $product->minimum_selling_price_minor?->minorUnits,
+            'maximum_selling_price_minor' => $product->maximum_selling_price_minor?->minorUnits,
+            'suggested_selling_price' => $product->suggested_selling_price_minor?->jsonSerialize(),
+            'minimum_selling_price' => $product->minimum_selling_price_minor?->jsonSerialize(),
+            'maximum_selling_price' => $product->maximum_selling_price_minor?->jsonSerialize(),
+
             'status' => $product->status,
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
