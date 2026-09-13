@@ -25,6 +25,7 @@ return [
     'kyc_review' => 'KYC review',
     'kyc_requirements' => 'Verification requirements',
     'packages' => 'Packages',
+    'products' => 'Products',
     'product_categories' => 'Product categories',
     'brands' => 'Brands',
     'activation_approvals' => 'Activation approvals',

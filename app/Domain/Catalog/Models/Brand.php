@@ -7,6 +7,7 @@ use App\Concerns\HasSlug;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One product brand (§11.3).
@@ -25,6 +26,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $sort_order
  * @property bool $is_active
  * @property CarbonImmutable $created_at
+ * @property-read int|null $products_count
  */
 class Brand extends Model
 {
@@ -51,6 +53,14 @@ class Brand extends Model
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * @return HasMany<Product, $this>
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
     }
 
     /**

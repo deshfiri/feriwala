@@ -76,6 +76,20 @@ class CatalogRefused extends RuntimeException
         );
     }
 
+    /**
+     * Only a draft is ever removed outright.
+     *
+     * A product that has been through review or offered to anybody is part of
+     * the record of what the catalogue said, and archiving is what retires it.
+     */
+    public static function productNotDraft(): self
+    {
+        return new self(
+            'Only a draft product can be deleted. Archive it instead — that stops it being offered '
+            .'without erasing what the catalogue said about it.'
+        );
+    }
+
     public static function variantIsReferenced(string $by): self
     {
         return new self(

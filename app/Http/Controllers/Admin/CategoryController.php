@@ -45,6 +45,7 @@ class CategoryController extends Controller
 
         $categories = Category::query()
             ->with('parent')
+            ->withCount('products')
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -180,9 +181,8 @@ class CategoryController extends Controller
 
             'sort_order' => $category->sort_order,
 
-            // Filled in when products exist (P3-3). Present now so the screen
-            // has one shape rather than two.
-            'products_count' => 0,
+            // Products filed directly here — the reason a delete is refused.
+            'products_count' => (int) $category->products_count,
         ];
     }
 

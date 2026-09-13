@@ -40,6 +40,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable $created_at
  * @property-read Category|null $parent
  * @property-read Collection<int, Category> $children
+ * @property-read int|null $products_count
  */
 class Category extends Model
 {
@@ -92,6 +93,18 @@ class Category extends Model
         return $this->hasMany(self::class, 'parent_id')
             ->orderBy('sort_order')
             ->orderBy('id');
+    }
+
+    /**
+     * Products filed directly under this category.
+     *
+     * Not its subcategories' products — {@see descendantIds()} is for that.
+     *
+     * @return HasMany<Product, $this>
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
     }
 
     /**

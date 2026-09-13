@@ -10,6 +10,7 @@ import {
     Scale,
     ScrollText,
     Settings,
+    ShoppingBag,
     Tags,
     ShieldCheck,
     UserCheck,
@@ -27,6 +28,7 @@ import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
 import { index as productBrands } from '@/routes/admin/catalog/brands';
+import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as productCategories } from '@/routes/admin/catalog/categories';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as packageCatalogue } from '@/routes/admin/packages';
@@ -159,6 +161,11 @@ export function useNavigation(): {
                  */
                 ...(permissions['catalog.view']
                     ? [
+                          {
+                              title: t('nav.products'),
+                              href: productCatalogue(),
+                              icon: ShoppingBag,
+                          },
                           {
                               title: t('nav.product_categories'),
                               href: productCategories(),

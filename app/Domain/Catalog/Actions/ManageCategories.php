@@ -26,9 +26,10 @@ use Throwable;
  *     administrators enable/disable for exactly that case, and switching one off
  *     leaves the history of what was sold under it intact.
  *
- * The guard against deleting a category that still holds **products** lands with
- * products themselves (P3-3): the table it would count does not exist yet, and a
- * check written against a table nobody has built is a check nobody has tested.
+ * A category still holding **products** is refused the same way. The foreign key
+ * restricts the delete as well, so a product filed under the category between
+ * this count and the delete is still caught — by the database rather than by a
+ * message.
  */
 class ManageCategories
 {
@@ -179,6 +180,12 @@ class ManageCategories
 
             if ($children > 0) {
                 throw CatalogRefused::categoryHasChildren($children);
+            }
+
+            $products = $category->products()->count();
+
+            if ($products > 0) {
+                throw CatalogRefused::categoryHasProducts($products);
             }
 
             $this->record($actor, 'catalog.category_deleted', $category, before: $this->snapshot($category));

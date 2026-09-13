@@ -21,9 +21,9 @@ use Throwable;
  * new path has been committed. Doing it the other way round is how a brand ends
  * up pointing at a file that was deleted when the save failed.
  *
- * The guard against deleting a brand that is still **on products** lands with
- * products themselves (P3-3), for the same reason it does for categories: a
- * check written against a table nobody has built is a check nobody has tested.
+ * A brand still on **products** is switched off rather than deleted. The foreign
+ * key restricts the delete too, so a product given this brand between the count
+ * and the delete is still refused — by the database rather than by a message.
  */
 class ManageBrands
 {
@@ -151,6 +151,12 @@ class ManageBrands
         $logoPath = $brand->logo_path;
 
         $this->database->transaction(function () use ($actor, $brand) {
+            $products = $brand->products()->count();
+
+            if ($products > 0) {
+                throw CatalogRefused::brandHasProducts($products);
+            }
+
             $this->record($actor, 'catalog.brand_deleted', $brand, before: $this->snapshot($brand));
 
             $brand->delete();

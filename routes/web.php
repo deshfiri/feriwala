@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
+use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
@@ -461,6 +462,23 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.brands.active');
         Route::delete('catalog/brands/{brand}', [BrandController::class, 'destroy'])
             ->name('catalog.brands.destroy');
+
+        /*
+         * Central products (§11.1, §12). The editor is a page of its own, and
+         * every write behind it is a platform privilege a partner never holds.
+         */
+        Route::get('catalog/products', [ProductController::class, 'index'])
+            ->name('catalog.products.index');
+        Route::get('catalog/products/create', [ProductController::class, 'create'])
+            ->name('catalog.products.create');
+        Route::post('catalog/products', [ProductController::class, 'store'])
+            ->name('catalog.products.store');
+        Route::get('catalog/products/{product}/edit', [ProductController::class, 'edit'])
+            ->name('catalog.products.edit');
+        Route::patch('catalog/products/{product}', [ProductController::class, 'update'])
+            ->name('catalog.products.update');
+        Route::delete('catalog/products/{product}', [ProductController::class, 'destroy'])
+            ->name('catalog.products.destroy');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

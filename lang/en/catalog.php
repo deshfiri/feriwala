@@ -4,6 +4,81 @@ return [
     'forbidden_title' => 'The catalogue is not yours to manage',
     'forbidden_description' => 'Products, categories and brands are written by Feriwala. Partners select from the catalogue rather than adding to it.',
 
+    'products' => [
+        'title' => 'Products',
+        'description' => 'The central catalogue. Partners select from it and buy from it; nobody outside Feriwala adds to it.',
+        'caption' => 'Central products',
+        'search' => 'Search by name, SKU or barcode',
+        'back' => 'All products',
+
+        'create' => 'New product',
+        'create_title' => 'New product',
+        'create_description' => 'A product starts as a draft. Nobody outside the panel sees it until it is reviewed and made active.',
+        'edit_description' => 'Changes here are the catalogue’s own record. What was already ordered keeps the figures it was ordered at.',
+        'read_only' => 'You can read this product but not change it.',
+        'save' => 'Save product',
+
+        'columns' => [
+            'product' => 'Product',
+            'category' => 'Category',
+            'brand' => 'Brand',
+            'wholesale_price' => 'Wholesale price',
+            'status' => 'Status',
+        ],
+
+        'sections' => [
+            'identity' => 'Identity',
+            'identity_help' => 'How the product is named, and how a warehouse and a storefront tell it apart.',
+            'content' => 'Description',
+            'content_help' => 'What partners and their customers read about it.',
+            'placement' => 'Placement',
+            'placement_help' => 'Where it sits in the catalogue.',
+            'pricing' => 'Pricing',
+            'pricing_help' => 'Entered in poisha — ৳1 is 100. What was saved is shown beneath each figure, so a misplaced zero is visible.',
+        ],
+
+        'fields' => [
+            'name' => 'Product name',
+            'slug' => 'URL slug',
+            'slug_placeholder' => 'Left blank, one is made from the name',
+            'slug_help' => 'Not changed automatically when the name changes, so storefront links keep working.',
+            'sku' => 'SKU',
+            'sku_help' => 'The central SKU. Letters, digits, dots, dashes and underscores; stored in capitals.',
+            'barcode' => 'Barcode',
+            'barcode_help' => 'Where the product has one. Two products cannot share a barcode.',
+            'short_description' => 'Short description',
+            'description' => 'Full description',
+            'category' => 'Category',
+            'category_placeholder' => 'Choose a category',
+            'brand' => 'Brand',
+            'no_brand' => 'No brand',
+            'base_cost' => 'Base cost (poisha)',
+            'base_cost_help' => 'What Feriwala pays. Never shown to partners, storefronts or business accounts.',
+            'wholesale_price' => 'Wholesale price (poisha)',
+            'wholesale_price_help' => 'What a business account pays per unit when buying wholesale.',
+            'saved_as' => 'Saved as :amount',
+            'switched_off' => ':name (switched off)',
+        ],
+
+        'status' => [
+            'draft' => 'Draft',
+        ],
+
+        'danger_title' => 'Delete this draft',
+        'danger_help' => 'Only a draft can be deleted. Anything further along is archived, so the record of what the catalogue said survives.',
+        'delete' => 'Delete draft',
+        'delete_confirm' => 'Delete this draft product? This cannot be undone.',
+
+        'created' => ':name created as a draft.',
+        'updated' => ':name saved.',
+        'deleted' => 'Draft product deleted.',
+
+        'empty' => 'No products yet',
+        'empty_help' => 'Create the first product to start the central catalogue.',
+        'no_matches' => 'No product matches',
+        'no_matches_help' => 'Try a different name, SKU or barcode.',
+    ],
+
     'categories' => [
         'title' => 'Product categories',
         'description' => 'How the catalogue is arranged, and what partner storefronts show.',

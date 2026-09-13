@@ -59,6 +59,7 @@ class BrandController extends Controller
         $direction = $request->string('direction')->toString() === 'desc' ? 'desc' : 'asc';
 
         $brands = Brand::query()
+            ->withCount('products')
             ->when($search !== '', fn (Builder $query) => $query->where(
                 fn (Builder $inner) => $inner
                     ->where('name', 'ilike', '%'.addcslashes($search, '%_\\').'%')
@@ -180,9 +181,8 @@ class BrandController extends Controller
             'is_active' => $brand->is_active,
             'sort_order' => $brand->sort_order,
 
-            // Filled in when products exist (P3-3). Present now so the screen
-            // has one shape rather than two.
-            'products_count' => 0,
+            // Products carrying this brand — the reason a delete is refused.
+            'products_count' => (int) $brand->products_count,
         ];
     }
 
