@@ -44,6 +44,7 @@ type Props = {
     attributes: AttributeOption[];
     media: MediaRow[];
     media_limits: MediaLimits;
+    variant_builder_max: number;
     price_tiers: PriceTierScope[];
     transitions: ProductTransition[];
     history: ProductStatusChangeRow[];
@@ -80,6 +81,7 @@ export default function ProductForm({
     attributes,
     media,
     media_limits,
+    variant_builder_max,
     price_tiers,
     transitions,
     history,
@@ -649,23 +651,29 @@ export default function ProductForm({
                     />
                 )}
 
+                {/* Anchored, so the list's Media and Variations links land here. */}
                 {editing && (
-                    <MediaSection
-                        product={product}
-                        media={media}
-                        limits={media_limits}
-                        variants={variants}
-                        canEdit={can.edit}
-                    />
+                    <div id="media" className="scroll-mt-20">
+                        <MediaSection
+                            product={product}
+                            media={media}
+                            limits={media_limits}
+                            variants={variants}
+                            canEdit={can.edit}
+                        />
+                    </div>
                 )}
 
                 {editing && (
-                    <VariantsSection
-                        product={product}
-                        variants={variants}
-                        attributes={attributes}
-                        can={can}
-                    />
+                    <div id="variants" className="scroll-mt-20">
+                        <VariantsSection
+                            product={product}
+                            variants={variants}
+                            attributes={attributes}
+                            builderMax={variant_builder_max}
+                            can={can}
+                        />
+                    </div>
                 )}
 
                 {editing && can.delete && product.status === 'draft' && (

@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 /**
  * Related products and featured status (§11.1).
@@ -53,7 +54,9 @@ class ProductMerchandisingController extends Controller
             throw ValidationException::withMessages(['related_ids' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.related.saved'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.related.saved')]);
+
+        return back();
     }
 
     public function featured(Request $request, string $product): RedirectResponse
@@ -66,9 +69,11 @@ class ProductMerchandisingController extends Controller
 
         $this->featured->handle($actor, $this->product($product), (bool) $validated['featured']);
 
-        return back()->with('success', __(
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(
             $validated['featured'] ? 'catalog.related.featured_on' : 'catalog.related.featured_off',
-        ));
+        )]);
+
+        return back();
     }
 
     protected function product(string $publicId): Product

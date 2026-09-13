@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 /**
  * Quantity pricing for a product or one of its variations (§11.1).
@@ -65,6 +66,8 @@ class ProductPriceTierController extends Controller
             throw ValidationException::withMessages(['tiers' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.tiers.saved'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.tiers.saved')]);
+
+        return back();
     }
 }

@@ -106,7 +106,9 @@ class BrandController extends Controller
             throw ValidationException::withMessages(['logo' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.brands.created', ['name' => $brand->name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.brands.created', ['name' => $brand->name])]);
+
+        return back();
     }
 
     public function update(SaveBrandRequest $request, string $brand): RedirectResponse
@@ -126,7 +128,9 @@ class BrandController extends Controller
             throw ValidationException::withMessages(['logo' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.brands.updated', ['name' => $updated->name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.brands.updated', ['name' => $updated->name])]);
+
+        return back();
     }
 
     /**
@@ -145,10 +149,12 @@ class BrandController extends Controller
 
         $updated = $this->brands->setActive($actor, $this->brand($brand), (bool) $validated['is_active']);
 
-        return back()->with('success', __(
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(
             $updated->is_active ? 'catalog.brands.enabled' : 'catalog.brands.disabled',
             ['name' => $updated->name],
-        ));
+        )]);
+
+        return back();
     }
 
     public function destroy(Request $request, string $brand): RedirectResponse
@@ -163,7 +169,9 @@ class BrandController extends Controller
             return back()->withErrors(['brand' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.brands.deleted'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.brands.deleted')]);
+
+        return back();
     }
 
     /**

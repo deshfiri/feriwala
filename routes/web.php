@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\ProductAttributeController;
+use App\Http\Controllers\Admin\ProductBulkController;
 use App\Http\Controllers\Admin\ProductChannelController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductEligibilityController;
@@ -499,6 +500,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.create');
         Route::post('catalog/products', [ProductController::class, 'store'])
             ->name('catalog.products.store');
+
+        // One change to many products, each checked and reported on its own (§11.2).
+        Route::post('catalog/products/bulk', ProductBulkController::class)
+            ->name('catalog.products.bulk');
         Route::get('catalog/products/{product}/edit', [ProductController::class, 'edit'])
             ->name('catalog.products.edit');
         Route::patch('catalog/products/{product}', [ProductController::class, 'update'])
@@ -512,6 +517,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::post('catalog/products/{product}/variants', [ProductVariantController::class, 'store'])
             ->name('catalog.products.variants.store');
+        Route::post('catalog/products/{product}/variants/generate', [ProductVariantController::class, 'generate'])
+            ->name('catalog.products.variants.generate');
         Route::patch('catalog/products/{product}/variants/{variant}', [ProductVariantController::class, 'update'])
             ->name('catalog.products.variants.update');
         Route::delete('catalog/products/{product}/variants/{variant}', [ProductVariantController::class, 'destroy'])

@@ -44,7 +44,43 @@ export type ProductRow = {
     status: string;
     status_tone: StatusTone;
     is_featured: boolean;
+    channels: ProductChannelState[];
+    /** The listing image (position one), or null when there is none. */
+    image_url: string | null;
+    media_count: number;
+    variants_count: number;
     updated_at: string;
+};
+
+/** The product list's filters, as the server accepted them. */
+export type ProductListFilters = {
+    status: string | null;
+    category: string | null;
+    brand: string | null;
+    /** A channel status value, e.g. `wholesale_enabled`. */
+    channel: string | null;
+    featured: 'yes' | 'no' | null;
+};
+
+/** What the bulk bar may offer this person; the server checks each product. */
+export type ProductBulkOptions = {
+    max: number;
+    transitions: { value: string; requires_reason: boolean }[];
+    enable_channels: boolean;
+    disable_channels: boolean;
+    feature: boolean;
+};
+
+/** What one bulk request did, product by product. */
+export type ProductBulkResult = {
+    changed: number;
+    unchanged: number;
+    refused: {
+        id: string;
+        name: string | null;
+        sku: string | null;
+        reason: string;
+    }[];
 };
 
 export type ProductDetail = {

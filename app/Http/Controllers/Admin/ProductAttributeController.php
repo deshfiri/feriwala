@@ -79,7 +79,9 @@ class ProductAttributeController extends Controller
 
         $attribute = $this->attributes->create($actor, $name);
 
-        return back()->with('success', __('catalog.attributes.created', ['name' => $attribute->name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.attributes.created', ['name' => $attribute->name])]);
+
+        return back();
     }
 
     public function update(Request $request, string $attribute): RedirectResponse
@@ -93,7 +95,9 @@ class ProductAttributeController extends Controller
 
         $this->attributes->rename($actor, $record, $name);
 
-        return back()->with('success', __('catalog.attributes.updated', ['name' => $name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.attributes.updated', ['name' => $name])]);
+
+        return back();
     }
 
     public function destroy(Request $request, string $attribute): RedirectResponse
@@ -108,7 +112,9 @@ class ProductAttributeController extends Controller
             return back()->withErrors(['attribute' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.attributes.deleted'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.attributes.deleted')]);
+
+        return back();
     }
 
     public function storeValue(Request $request, string $attribute): RedirectResponse
@@ -122,7 +128,9 @@ class ProductAttributeController extends Controller
 
         $this->attributes->addValue($actor, $record, $text);
 
-        return back()->with('success', __('catalog.attributes.value_added', ['value' => $text]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.attributes.value_added', ['value' => $text])]);
+
+        return back();
     }
 
     public function updateValue(Request $request, string $value): RedirectResponse
@@ -136,7 +144,9 @@ class ProductAttributeController extends Controller
 
         $this->attributes->renameValue($actor, $record, $text);
 
-        return back()->with('success', __('catalog.attributes.value_updated', ['value' => $text]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.attributes.value_updated', ['value' => $text])]);
+
+        return back();
     }
 
     public function destroyValue(Request $request, string $value): RedirectResponse
@@ -151,7 +161,9 @@ class ProductAttributeController extends Controller
             return back()->withErrors(['value' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.attributes.value_deleted'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.attributes.value_deleted')]);
+
+        return back();
     }
 
     /**

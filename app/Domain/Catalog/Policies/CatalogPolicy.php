@@ -123,6 +123,34 @@ class CatalogPolicy
     }
 
     /**
+     * Whether any status a product could be moved from reaches `$to` by a move
+     * this person may make.
+     *
+     * What a bulk action asks before touching a product, and what the list asks
+     * to decide which targets to offer, so the menu and the refusal cannot
+     * disagree. Each product is still checked for its own move.
+     */
+    public static function canMoveAnyProductTo(User $user, ProductStatus $to): bool
+    {
+        foreach (ProductStatus::lifecycle() as $from) {
+            if (in_array($to, $from->transitionsTo(), true) && self::canMoveProduct($user, $from, $to)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether this person holds any permission a bulk action on products uses.
+     */
+    public static function canActInBulk(mixed $user): bool
+    {
+        return $user instanceof User
+            && (self::canEdit($user) || self::canPublish($user) || self::canUnpublish($user) || self::canArchive($user));
+    }
+
+    /**
      * Whether this person may switch a sales channel on or off.
      *
      * Switching on offers the product to every eligible partner on that channel,

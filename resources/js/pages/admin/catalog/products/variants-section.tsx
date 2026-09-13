@@ -1,5 +1,5 @@
 import { Form, Link, router, usePage } from '@inertiajs/react';
-import { Layers, Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Boxes, Layers, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import ProductVariantController from '@/actions/App/Http/Controllers/Admin/ProductVariantController';
 import AlertError from '@/components/alert-error';
@@ -31,6 +31,8 @@ type Props = {
     product: ProductDetail;
     variants: VariantRow[];
     attributes: AttributeOption[];
+    /** The most combinations one build may create, as the server enforces. */
+    builderMax: number;
     can: CatalogAbilities;
 };
 
@@ -48,11 +50,13 @@ export default function VariantsSection({
     product,
     variants,
     attributes,
+    builderMax,
     can,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
 
+    const [building, setBuilding] = useState(false);
     const [adding, setAdding] = useState(false);
     const [editing, setEditing] = useState<VariantRow | null>(null);
 
@@ -101,14 +105,24 @@ export default function VariantsSection({
             description={t('catalog.variants.description')}
             actions={
                 can.create && attributes.length > 0 ? (
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAdding(true)}
-                    >
-                        <Plus className="size-4" aria-hidden="true" />
-                        {t('catalog.variants.add')}
-                    </Button>
+                    <>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setBuilding(true)}
+                        >
+                            <Boxes className="size-4" aria-hidden="true" />
+                            {t('catalog.variants.build')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAdding(true)}
+                        >
+                            <Plus className="size-4" aria-hidden="true" />
+                            {t('catalog.variants.add')}
+                        </Button>
+                    </>
                 ) : undefined
             }
             contentClassName="p-0"
@@ -238,6 +252,17 @@ export default function VariantsSection({
                 </ul>
             )}
 
+            {building && (
+                <BuildDialog
+                    product={product}
+                    variants={variants}
+                    attributes={offered}
+                    locked={usedAttributes !== null}
+                    max={builderMax}
+                    onClose={() => setBuilding(false)}
+                />
+            )}
+
             {(adding || editing !== null) && (
                 <VariantDialog
                     product={product}
@@ -251,6 +276,207 @@ export default function VariantsSection({
                 />
             )}
         </SectionCard>
+    );
+}
+
+/**
+ * The variation builder: tick values, and every combination not already on the
+ * product is created in one request.
+ *
+ * The counts and the preview are a guide worked out from what the page holds;
+ * the server builds the combinations itself, skips the ones that exist, makes
+ * the SKUs, and refuses a build over its limit whatever this dialog showed.
+ */
+function BuildDialog({
+    product,
+    variants,
+    attributes,
+    locked,
+    max,
+    onClose,
+}: {
+    product: ProductDetail;
+    variants: VariantRow[];
+    attributes: AttributeOption[];
+    /** True once existing variations fix which attributes every one uses. */
+    locked: boolean;
+    max: number;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation();
+    const [picked, setPicked] = useState<Set<string>>(() => new Set());
+    const [error, setError] = useState<string | null>(null);
+    const [processing, setProcessing] = useState(false);
+
+    const toggle = (id: string) =>
+        setPicked((current) => {
+            const next = new Set(current);
+
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+
+            return next;
+        });
+
+    const groups = attributes.map((attribute) =>
+        attribute.values.filter((value) => picked.has(value.id)),
+    );
+
+    const missing = locked && groups.some((values) => values.length === 0);
+    const used = groups.filter((values) => values.length > 0);
+
+    const combinations =
+        used.length === 0
+            ? []
+            : used.reduce<string[][]>(
+                  (partials, values) =>
+                      partials.flatMap((partial) =>
+                          values.map((value) => [...partial, value.value]),
+                      ),
+                  [[]],
+              );
+
+    const existing = new Set(variants.map((variant) => variant.label));
+    const labels = combinations.map((combination) => combination.join(' / '));
+    const fresh = labels.filter((label) => !existing.has(label)).length;
+
+    const submit = () =>
+        router.post(
+            ProductVariantController.generate.url(product.id),
+            { values: Array.from(picked) },
+            {
+                preserveScroll: true,
+                onStart: () => setProcessing(true),
+                onFinish: () => setProcessing(false),
+                onError: (errors) => setError(Object.values(errors)[0] ?? null),
+                onSuccess: onClose,
+            },
+        );
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>
+                        {t('catalog.variants.build_title')}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {t('catalog.variants.build_description')}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                    {locked && (
+                        <p className="bg-muted/40 rounded-md border px-3 py-2 text-sm">
+                            {t('catalog.variants.build_locked', {
+                                attributes: attributes
+                                    .map((attribute) => attribute.name)
+                                    .join(', '),
+                            })}
+                        </p>
+                    )}
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {attributes.map((attribute) => (
+                            <fieldset
+                                key={attribute.id}
+                                className="space-y-2 rounded-lg border p-3"
+                            >
+                                <legend className="px-1 text-sm font-medium">
+                                    {attribute.name}
+                                </legend>
+                                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                    {attribute.values.map((value) => (
+                                        <label
+                                            key={value.id}
+                                            className="flex items-center gap-2 text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={picked.has(value.id)}
+                                                onChange={() =>
+                                                    toggle(value.id)
+                                                }
+                                                className="size-4"
+                                            />
+                                            {value.value}
+                                        </label>
+                                    ))}
+                                </div>
+                            </fieldset>
+                        ))}
+                    </div>
+
+                    <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
+                        <div>
+                            {t('catalog.variants.build_combinations', {
+                                count: combinations.length,
+                            })}
+                        </div>
+                        <div>
+                            {t('catalog.variants.build_new', { count: fresh })}
+                        </div>
+                        <div className="text-muted-foreground">
+                            {t('catalog.variants.build_existing', {
+                                count: combinations.length - fresh,
+                            })}
+                        </div>
+                    </dl>
+
+                    {combinations.length > max && (
+                        <AlertError
+                            errors={[
+                                t('catalog.variants.build_limit', { max }),
+                            ]}
+                        />
+                    )}
+
+                    {labels.length > 0 && labels.length <= max && (
+                        <ul className="divide-border max-h-56 divide-y overflow-y-auto rounded-md border text-sm">
+                            {labels.map((label) => (
+                                <li
+                                    key={label}
+                                    className="flex items-center justify-between gap-2 px-3 py-1.5"
+                                >
+                                    <span>{label}</span>
+                                    {existing.has(label) && (
+                                        <StatusPill
+                                            tone="neutral"
+                                            label={t(
+                                                'catalog.variants.build_exists',
+                                            )}
+                                        />
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
+                    {error && <AlertError errors={[error]} />}
+                </div>
+
+                <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={onClose}>
+                        {t('common.actions.cancel')}
+                    </Button>
+                    <Button
+                        type="button"
+                        onClick={submit}
+                        disabled={
+                            processing ||
+                            missing ||
+                            combinations.length === 0 ||
+                            combinations.length > max
+                        }
+                    >
+                        {t('catalog.variants.build_submit')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Catalog\Actions\BulkUpdateProducts;
+use App\Domain\Catalog\Actions\GenerateVariants;
 use App\Domain\Catalog\Actions\ManageProductMedia;
 use App\Domain\Catalog\Actions\ManageProducts;
 use App\Domain\Catalog\Enums\ProductStatus;
@@ -28,6 +30,7 @@ use App\Models\User;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,6 +50,12 @@ class ProductController extends Controller
 {
     public const PER_PAGE = 25;
 
+    /**
+     * Columns the list may sort by. Anything else is ignored rather than passed
+     * to `orderBy`, because a sort parameter is somebody's input.
+     */
+    public const SORTABLE = ['name', 'sku', 'wholesale_price_minor', 'updated_at'];
+
     public function __construct(
         protected ManageProducts $products,
         protected ProductMediaStore $mediaStore,
@@ -60,18 +69,50 @@ class ProductController extends Controller
 
         abort_unless(CatalogPolicy::canViewAny($actor), 403);
 
-        $search = trim($request->string('search')->toString());
-        $pattern = '%'.addcslashes($search, '%_\\').'%';
+        $filters = $this->listFilters($request);
+        $pattern = '%'.addcslashes($filters['search'], '%_\\').'%';
+
+        $sort = $request->string('sort')->toString();
+        $direction = $request->string('direction')->toString() === 'asc' ? 'asc' : 'desc';
+
+        $category = $filters['category'] === null
+            ? null
+            : Category::query()->with('children.children')->where('public_id', $filters['category'])->first();
 
         $products = Product::query()
-            ->with(['category:id,name', 'brand:id,name'])
-            ->when($search !== '', fn (Builder $query) => $query->where(
+            ->with([
+                'category:id,name',
+                'brand:id,name',
+                // The listing image only: position one, and never a video.
+                'media' => fn ($query) => $query->where('type', ProductMedia::TYPE_IMAGE)->where('position', 1),
+            ])
+            ->withCount(['variants', 'media'])
+            ->when($filters['search'] !== '', fn (Builder $query) => $query->where(
                 fn (Builder $inner) => $inner
                     ->where('name', 'ilike', $pattern)
                     ->orWhere('sku', 'ilike', $pattern)
                     ->orWhere('barcode', 'ilike', $pattern),
             ))
-            ->orderByDesc('updated_at')
+            ->when($filters['status'] !== null, fn (Builder $query) => $query->where('status', $filters['status']))
+
+            // A category includes its subcategories, as it does for partners.
+            ->when($filters['category'] !== null, fn (Builder $query) => $query->whereIn('category_id', $category?->descendantIds() ?? []))
+            ->when($filters['brand'] !== null, fn (Builder $query) => $query->whereHas(
+                'brand',
+                fn (Builder $inner) => $inner->where('public_id', $filters['brand']),
+            ))
+            ->when($filters['channel'] !== null, function (Builder $query) use ($filters) {
+                $status = ProductStatus::from((string) $filters['channel']);
+
+                $query->where(SalesChannel::from($status->axis())->column(), $status->value);
+            })
+            ->when($filters['featured'] === 'yes', fn (Builder $query) => $query->where('is_featured', true))
+            ->when($filters['featured'] === 'no', fn (Builder $query) => $query->where('is_featured', false))
+            ->when(
+                in_array($sort, self::SORTABLE, true),
+                fn (Builder $query) => $query->orderBy($sort, $direction),
+                fn (Builder $query) => $query->orderByDesc('updated_at'),
+            )
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString()
@@ -79,8 +120,64 @@ class ProductController extends Controller
 
         return Inertia::render('admin/catalog/products/index', [
             'products' => $products,
+            'filters' => Arr::except($filters, 'search'),
+            'filter_options' => $this->options(),
             'can' => $this->abilities($actor),
+
+            /*
+             * What the bulk bar offers this person (§11.2): only the lifecycle
+             * targets some move they hold a permission for reaches, and the
+             * channel and featuring switches their permissions cover. The server
+             * refuses the rest regardless, per product.
+             */
+            'bulk' => [
+                'max' => BulkUpdateProducts::MAX_PRODUCTS,
+                'transitions' => collect(ProductStatus::lifecycle())
+                    ->filter(fn (ProductStatus $to) => CatalogPolicy::canMoveAnyProductTo($actor, $to))
+                    ->map(fn (ProductStatus $to) => ['value' => $to->value, 'requires_reason' => $to->requiresReason()])
+                    ->values()
+                    ->all(),
+                'enable_channels' => CatalogPolicy::canSetChannel($actor, true),
+                'disable_channels' => CatalogPolicy::canSetChannel($actor, false),
+                'feature' => CatalogPolicy::canPublish($actor),
+            ],
         ]);
+    }
+
+    /**
+     * The list's filters, each held to the values it may take. Anything else is
+     * dropped rather than passed to a query, because a query string is somebody's
+     * input.
+     *
+     * @return array{search: string, status: string|null, category: string|null, brand: string|null, channel: string|null, featured: string|null}
+     */
+    protected function listFilters(Request $request): array
+    {
+        $pick = function (string $key, array $allowed) use ($request): ?string {
+            $value = $request->string($key)->toString();
+
+            return in_array($value, $allowed, true) ? $value : null;
+        };
+
+        $publicId = function (string $key) use ($request): ?string {
+            $value = $request->string($key)->toString();
+
+            return preg_match('/^[0-9A-Za-z]{10,40}$/', $value) === 1 ? $value : null;
+        };
+
+        $channelStatuses = array_values(array_map(
+            fn (ProductStatus $status) => $status->value,
+            array_filter(ProductStatus::cases(), fn (ProductStatus $status) => $status->axis() !== ProductStatus::AXIS_LIFECYCLE),
+        ));
+
+        return [
+            'search' => trim($request->string('search')->toString()),
+            'status' => $pick('status', array_map(fn (ProductStatus $status) => $status->value, ProductStatus::lifecycle())),
+            'category' => $publicId('category'),
+            'brand' => $publicId('brand'),
+            'channel' => $pick('channel', $channelStatuses),
+            'featured' => $pick('featured', ['yes', 'no']),
+        ];
     }
 
     public function create(Request $request): Response
@@ -107,6 +204,7 @@ class ProductController extends Controller
             'history' => [],
             'variants' => [],
             'attributes' => [],
+            'variant_builder_max' => GenerateVariants::MAX_COMBINATIONS,
         ]);
     }
 
@@ -118,9 +216,9 @@ class ProductController extends Controller
 
         $product = $this->products->create($actor, $request->validated());
 
-        return redirect()
-            ->route('admin.catalog.products.edit', $product->public_id)
-            ->with('success', __('catalog.products.created', ['name' => $product->name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.created', ['name' => $product->name])]);
+
+        return redirect()->route('admin.catalog.products.edit', $product->public_id);
     }
 
     public function edit(Request $request, string $product): Response
@@ -251,6 +349,9 @@ class ProductController extends Controller
                 ->map(fn (ProductVariant $variant) => $this->variant($variant))
                 ->all(),
 
+            // The most combinations the variation builder creates at once.
+            'variant_builder_max' => GenerateVariants::MAX_COMBINATIONS,
+
             'attributes' => ProductAttribute::query()
                 ->with('values')
                 ->orderBy('sort_order')
@@ -278,7 +379,9 @@ class ProductController extends Controller
 
         $updated = $this->products->update($actor, $this->product($product), $request->validated());
 
-        return back()->with('success', __('catalog.products.updated', ['name' => $updated->name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.updated', ['name' => $updated->name])]);
+
+        return back();
     }
 
     public function destroy(Request $request, string $product): RedirectResponse
@@ -293,16 +396,22 @@ class ProductController extends Controller
             return back()->withErrors(['product' => $refused->getMessage()]);
         }
 
-        return redirect()
-            ->route('admin.catalog.products.index')
-            ->with('success', __('catalog.products.deleted'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.deleted')]);
+
+        return redirect()->route('admin.catalog.products.index');
     }
 
     /**
+     * One product as the list shows it — its listing image, both channels and
+     * how much hangs off it, so the list answers "which of these is not ready"
+     * without opening each editor.
+     *
      * @return array<string, mixed>
      */
     protected function row(Product $product): array
     {
+        $image = $product->media->first();
+
         return [
             'id' => $product->public_id,
             'name' => $product->name,
@@ -313,6 +422,15 @@ class ProductController extends Controller
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
             'is_featured' => $product->is_featured,
+            'channels' => array_map(fn (SalesChannel $channel) => [
+                'channel' => $channel->value,
+                'status' => $product->channelStatus($channel)->value,
+                'tone' => $product->channelStatus($channel)->tone(),
+                'enabled' => $product->sellsThrough($channel),
+            ], SalesChannel::cases()),
+            'image_url' => $image === null ? null : $this->mediaStore->url($image->path),
+            'media_count' => (int) $product->getAttribute('media_count'),
+            'variants_count' => (int) $product->getAttribute('variants_count'),
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
     }

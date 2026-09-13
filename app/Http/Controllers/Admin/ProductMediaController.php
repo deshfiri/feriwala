@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 /**
  * A product's images and videos (§11.1).
@@ -77,7 +78,9 @@ class ProductMediaController extends Controller
             ]);
         }
 
-        return back()->with('success', __('catalog.media.uploaded'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.media.uploaded')]);
+
+        return back();
     }
 
     public function update(Request $request, string $product, string $media): RedirectResponse
@@ -102,7 +105,9 @@ class ProductMediaController extends Controller
             throw ValidationException::withMessages(['variant_id' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.media.updated'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.media.updated')]);
+
+        return back();
     }
 
     public function reorder(Request $request, string $product): RedirectResponse
@@ -118,7 +123,9 @@ class ProductMediaController extends Controller
 
         $this->media->reorder($actor, $this->product($product), array_values($validated['order']));
 
-        return back()->with('success', __('catalog.media.reordered'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.media.reordered')]);
+
+        return back();
     }
 
     public function destroy(Request $request, string $product, string $media): RedirectResponse
@@ -129,7 +136,9 @@ class ProductMediaController extends Controller
 
         $this->media->remove($actor, $this->mediaOf($this->product($product), $media));
 
-        return back()->with('success', __('catalog.media.deleted'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.media.deleted')]);
+
+        return back();
     }
 
     protected function product(string $publicId): Product

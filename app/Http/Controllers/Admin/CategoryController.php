@@ -82,7 +82,9 @@ class CategoryController extends Controller
             return $this->refuse($refused);
         }
 
-        return back()->with('success', __('catalog.categories.created', ['name' => $category->name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.categories.created', ['name' => $category->name])]);
+
+        return back();
     }
 
     public function update(SaveCategoryRequest $request, string $category): RedirectResponse
@@ -102,7 +104,9 @@ class CategoryController extends Controller
             return $this->refuse($refused);
         }
 
-        return back()->with('success', __('catalog.categories.updated', ['name' => $updated->name]));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.categories.updated', ['name' => $updated->name])]);
+
+        return back();
     }
 
     /**
@@ -127,10 +131,12 @@ class CategoryController extends Controller
             (bool) $validated['is_active'],
         );
 
-        return back()->with('success', __(
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(
             $updated->is_active ? 'catalog.categories.enabled' : 'catalog.categories.disabled',
             ['name' => $updated->name],
-        ));
+        )]);
+
+        return back();
     }
 
     public function destroy(Request $request, string $category): RedirectResponse
@@ -147,7 +153,9 @@ class CategoryController extends Controller
             return back()->withErrors(['category' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.categories.deleted'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.categories.deleted')]);
+
+        return back();
     }
 
     /**

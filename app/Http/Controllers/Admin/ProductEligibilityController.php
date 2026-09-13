@@ -14,6 +14,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 /**
  * Which packages and accounts may see a product (§11.1, §12).
@@ -57,6 +58,8 @@ class ProductEligibilityController extends Controller
             array_values($validated['account_ids'] ?? []),
         );
 
-        return back()->with('success', __('catalog.eligibility.saved'));
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.eligibility.saved')]);
+
+        return back();
     }
 }

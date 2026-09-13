@@ -284,4 +284,18 @@ class CatalogRefused extends RuntimeException
     {
         return new self('A variation needs at least one attribute value.');
     }
+
+    /**
+     * Refused before a single combination is worked out, so a careless pick of
+     * every value of every attribute cannot build thousands of rows.
+     */
+    public static function tooManyCombinations(int $count, int $max): self
+    {
+        return new self("Those values make {$count} combinations. Build up to {$max} at a time.");
+    }
+
+    public static function noFreeSku(string $base): self
+    {
+        return new self("No free SKU could be made from {$base}. Add this variation by hand with an SKU of your choosing.");
+    }
 }

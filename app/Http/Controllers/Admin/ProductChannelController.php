@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 /**
  * Switching dropshipping or wholesale on or off for a product (§11.1).
@@ -54,8 +55,10 @@ class ProductChannelController extends Controller
             throw ValidationException::withMessages(['channel' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __($enable ? 'catalog.channels.enabled' : 'catalog.channels.disabled', [
+        Inertia::flash('toast', ['type' => 'success', 'message' => __($enable ? 'catalog.channels.enabled' : 'catalog.channels.disabled', [
             'channel' => __('catalog.channels.'.$salesChannel->value),
-        ]));
+        ])]);
+
+        return back();
     }
 }

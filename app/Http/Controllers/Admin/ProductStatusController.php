@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 /**
  * Moving a product through its lifecycle (§11.2).
@@ -55,9 +56,11 @@ class ProductStatusController extends Controller
             throw ValidationException::withMessages(['status' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('catalog.products.moved', [
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.moved', [
             'name' => $moved->name,
             'status' => __('catalog.products.status.'.$to->value),
-        ]));
+        ])]);
+
+        return back();
     }
 }
