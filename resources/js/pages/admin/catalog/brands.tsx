@@ -1,5 +1,14 @@
-import { Head, router } from '@inertiajs/react';
-import { Pencil, Plus, Power, Tags, Trash2 } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import {
+    ArrowDown,
+    ArrowUp,
+    Pencil,
+    Plus,
+    Power,
+    ShoppingBag,
+    Tags,
+    Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import BrandController from '@/actions/App/Http/Controllers/Admin/BrandController';
 import DataTable from '@/components/data-table/data-table';
@@ -10,6 +19,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
+import { index as productsIndex } from '@/routes/admin/catalog/products';
 import type { Column, Paginator } from '@/types';
 import BrandDialog from './brand-dialog';
 
@@ -49,17 +59,47 @@ type Props = {
  */
 export default function AdminBrands({ brands, filters, can, limits }: Props) {
     const { t } = useTranslation();
-    const { search, setFilter } = useTableQuery({
+    const { search, setFilter, sort } = useTableQuery({
         only: ['brands', 'filters'],
     });
 
     const [editing, setEditing] = useState<BrandRow | null>(null);
     const [creating, setCreating] = useState(false);
 
-    const toggle = (row: BrandRow) =>
+    const toggle = (row: BrandRow) => {
+        if (
+            row.is_active &&
+            row.products_count > 0 &&
+            !window.confirm(
+                t('catalog.brands.disable_confirm', {
+                    name: row.name,
+                    count: row.products_count,
+                }),
+            )
+        ) {
+            return;
+        }
+
         router.patch(
             BrandController.toggle.url(row.id),
             { is_active: !row.is_active },
+            { preserveScroll: true },
+        );
+    };
+
+    /*
+     * Moving is offered only in the order partners see — no search, filter or
+     * sort — because anything else hides which brand is really the neighbour.
+     * The server moves by the whole order either way.
+     */
+    const inPartnerOrder = search === '' && filters.status === null && !sort;
+    const firstOnPage = brands.data[0]?.id;
+    const lastOnPage = brands.data.at(-1)?.id;
+
+    const move = (row: BrandRow, direction: 'up' | 'down') =>
+        router.patch(
+            BrandController.move.url(row.id),
+            { direction },
             { preserveScroll: true },
         );
 
@@ -103,6 +143,50 @@ export default function AdminBrands({ brands, filters, can, limits }: Props) {
 
     const actions = (row: BrandRow) => (
         <div className="flex flex-wrap items-center justify-end gap-1">
+            <Button variant="ghost" size="sm" asChild>
+                <Link href={productsIndex.url({ query: { brand: row.id } })}>
+                    <ShoppingBag className="size-4" aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">
+                        {t('catalog.brands.view_products')}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums">
+                        {row.products_count}
+                    </span>
+                </Link>
+            </Button>
+            {can.edit && inPartnerOrder && (
+                <>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        disabled={
+                            brands.current_page === 1 && firstOnPage === row.id
+                        }
+                        onClick={() => move(row, 'up')}
+                        aria-label={t('catalog.brands.move_up', {
+                            name: row.name,
+                        })}
+                    >
+                        <ArrowUp className="size-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        disabled={
+                            brands.current_page === brands.last_page &&
+                            lastOnPage === row.id
+                        }
+                        onClick={() => move(row, 'down')}
+                        aria-label={t('catalog.brands.move_down', {
+                            name: row.name,
+                        })}
+                    >
+                        <ArrowDown className="size-4" aria-hidden="true" />
+                    </Button>
+                </>
+            )}
             {can.edit && (
                 <>
                     <Button
@@ -187,7 +271,7 @@ export default function AdminBrands({ brands, filters, can, limits }: Props) {
             <PageContainer>
                 <PageHeader
                     title={t('catalog.brands.title')}
-                    description={t('catalog.brands.description')}
+                    description={`${t('catalog.brands.description')} ${can.edit ? t('catalog.brands.order_help') : ''}`.trim()}
                     actions={
                         can.create ? (
                             <Button onClick={() => setCreating(true)}>

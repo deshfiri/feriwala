@@ -69,6 +69,8 @@ export type ProductBulkOptions = {
     enable_channels: boolean;
     disable_channels: boolean;
     feature: boolean;
+    /** Filing products under a category or brand (§11.3). */
+    assign: boolean;
 };
 
 /** What one bulk request did, product by product. */

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Catalog\Actions\BulkUpdateProducts;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
+use App\Domain\Catalog\Models\Brand;
+use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\BulkProductRequest;
@@ -38,6 +40,8 @@ class ProductBulkController extends Controller
         $result = match ($request->validated('action')) {
             BulkProductRequest::TRANSITION => $this->transition($actor, $products, $request),
             BulkProductRequest::CHANNEL => $this->channel($actor, $products, $request),
+            BulkProductRequest::CATEGORY => $this->category($actor, $products, $request),
+            BulkProductRequest::BRAND => $this->brand($actor, $products, $request),
             default => $this->feature($actor, $products, $request),
         };
 
@@ -82,6 +86,38 @@ class ProductBulkController extends Controller
         abort_unless(CatalogPolicy::canSetChannel($actor, $enable), 403);
 
         return $this->bulk->channel($actor, $products, SalesChannel::from((string) $request->validated('channel')), $enable);
+    }
+
+    /**
+     * Placement is authoring (§11.3): `catalog.edit`.
+     *
+     * @param  array<int, string>  $products
+     * @return array{changed: int, unchanged: int, refused: array<int, array{id: string, name: string|null, sku: string|null, reason: string}>}
+     */
+    protected function category(User $actor, array $products, BulkProductRequest $request): array
+    {
+        abort_unless(CatalogPolicy::canEdit($actor), 403);
+
+        /** @var Category $category */
+        $category = Category::query()->where('public_id', (string) $request->validated('category'))->firstOrFail();
+
+        return $this->bulk->category($actor, $products, $category);
+    }
+
+    /**
+     * @param  array<int, string>  $products
+     * @return array{changed: int, unchanged: int, refused: array<int, array{id: string, name: string|null, sku: string|null, reason: string}>}
+     */
+    protected function brand(User $actor, array $products, BulkProductRequest $request): array
+    {
+        abort_unless(CatalogPolicy::canEdit($actor), 403);
+
+        $publicId = $request->validated('brand');
+
+        /** @var Brand|null $brand */
+        $brand = is_string($publicId) ? Brand::query()->where('public_id', $publicId)->firstOrFail() : null;
+
+        return $this->bulk->brand($actor, $products, $brand);
     }
 
     /**

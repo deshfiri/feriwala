@@ -50,7 +50,9 @@ type Props = {
 type BulkChoice =
     | { action: 'transition'; status: string; requiresReason: boolean }
     | { action: 'channel'; channel: SalesChannelName; enable: boolean }
-    | { action: 'feature'; enable: boolean };
+    | { action: 'feature'; enable: boolean }
+    | { action: 'category' }
+    | { action: 'brand' };
 
 const CHANNELS: SalesChannelName[] = ['dropshipping', 'wholesale'];
 
@@ -92,7 +94,8 @@ export default function AdminProducts({
         bulk.transitions.length > 0 ||
         bulk.enable_channels ||
         bulk.disable_channels ||
-        bulk.feature;
+        bulk.feature ||
+        bulk.assign;
 
     const filtered =
         search !== '' || Object.values(filters).some((value) => value !== null);
@@ -187,6 +190,10 @@ export default function AdminProducts({
                         ? 'catalog.products.bulk.feature'
                         : 'catalog.products.bulk.unfeature',
                 );
+            case 'category':
+                return t('catalog.products.bulk.assign_category');
+            case 'brand':
+                return t('catalog.products.bulk.assign_brand');
         }
     };
 
@@ -514,6 +521,7 @@ export default function AdminProducts({
             {confirming && parsed && (
                 <BulkConfirmDialog
                     choice={parsed}
+                    options={filter_options}
                     label={describe(parsed)}
                     ids={Array.from(selected).map(String)}
                     max={bulk.max}
@@ -570,6 +578,10 @@ function parseChoice(
         return { action, enable: first === '1' };
     }
 
+    if ((action === 'category' || action === 'brand') && bulk.assign) {
+        return { action };
+    }
+
     return null;
 }
 
@@ -618,6 +630,17 @@ function BulkOptions({ bulk }: { bulk: ProductBulkOptions }) {
                 </optgroup>
             )}
 
+            {bulk.assign && (
+                <optgroup label={t('catalog.products.bulk.placement')}>
+                    <option value="category">
+                        {t('catalog.products.bulk.assign_category')}
+                    </option>
+                    <option value="brand">
+                        {t('catalog.products.bulk.assign_brand')}
+                    </option>
+                </optgroup>
+            )}
+
             {bulk.feature && (
                 <optgroup label={t('catalog.products.bulk.featuring')}>
                     <option value="feature:1">
@@ -640,6 +663,7 @@ function BulkOptions({ bulk }: { bulk: ProductBulkOptions }) {
  */
 function BulkConfirmDialog({
     choice,
+    options,
     label,
     ids,
     max,
@@ -647,6 +671,8 @@ function BulkConfirmDialog({
     onDone,
 }: {
     choice: BulkChoice;
+    /** Where products may be filed; switched-off ones are labelled, not hidden. */
+    options: { categories: CatalogOption[]; brands: CatalogOption[] };
     label: string;
     ids: string[];
     max: number;
@@ -655,6 +681,7 @@ function BulkConfirmDialog({
 }) {
     const { t } = useTranslation();
     const [reason, setReason] = useState('');
+    const [target, setTarget] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [processing, setProcessing] = useState(false);
 
@@ -674,6 +701,11 @@ function BulkConfirmDialog({
                     : {}),
                 ...(choice.action === 'feature'
                     ? { enable: choice.enable }
+                    : {}),
+                ...(choice.action === 'category' ? { category: target } : {}),
+                // A blank brand is "no brand", sent as null so it is present.
+                ...(choice.action === 'brand'
+                    ? { brand: target === '' ? null : target }
                     : {}),
             },
             {
@@ -738,6 +770,54 @@ function BulkConfirmDialog({
                         </FormField>
                     )}
 
+                    {(choice.action === 'category' ||
+                        choice.action === 'brand') && (
+                        <FormField
+                            label={t(
+                                choice.action === 'category'
+                                    ? 'catalog.products.bulk.target_category'
+                                    : 'catalog.products.bulk.target_brand',
+                            )}
+                            required={choice.action === 'category'}
+                            error={errors[choice.action]}
+                        >
+                            {(field) => (
+                                <select
+                                    {...field}
+                                    value={target}
+                                    onChange={(event) =>
+                                        setTarget(event.target.value)
+                                    }
+                                    className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                >
+                                    <option value="">
+                                        {t(
+                                            choice.action === 'category'
+                                                ? 'catalog.products.bulk.choose_target'
+                                                : 'catalog.products.bulk.no_brand',
+                                        )}
+                                    </option>
+                                    {(choice.action === 'category'
+                                        ? options.categories
+                                        : options.brands
+                                    ).map((option) => (
+                                        <option
+                                            key={option.value}
+                                            value={option.value}
+                                        >
+                                            {option.is_available
+                                                ? option.label
+                                                : t(
+                                                      'catalog.products.bulk.switched_off',
+                                                      { name: option.label },
+                                                  )}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </FormField>
+                    )}
+
                     {Object.keys(errors).filter((key) => key !== 'reason')
                         .length > 0 && (
                         <AlertError
@@ -760,7 +840,8 @@ function BulkConfirmDialog({
                         onClick={submit}
                         disabled={
                             processing ||
-                            (reasonRequired && reason.trim() === '')
+                            (reasonRequired && reason.trim() === '') ||
+                            (choice.action === 'category' && target === '')
                         }
                     >
                         {t('catalog.products.bulk.apply')}

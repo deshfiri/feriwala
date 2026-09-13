@@ -1,5 +1,14 @@
-import { Head, router } from '@inertiajs/react';
-import { FolderTree, Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import {
+    ArrowDown,
+    ArrowUp,
+    FolderTree,
+    Pencil,
+    Plus,
+    Power,
+    ShoppingBag,
+    Trash2,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import CategoryController from '@/actions/App/Http/Controllers/Admin/CategoryController';
 import PageContainer from '@/components/page-container';
@@ -11,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
+import { index as productsIndex } from '@/routes/admin/catalog/products';
 import type { CatalogImageLimits } from './brands';
 import CategoryDialog from './category-dialog';
 
@@ -31,6 +41,8 @@ export type CategoryRow = {
     is_available: boolean;
     sort_order: number;
     products_count: number;
+    /** Its own products and its subcategories' — what switching it off hides. */
+    products_in_branch: number;
 };
 
 type Props = {
@@ -56,6 +68,9 @@ export default function AdminCategories({ categories, can, limits }: Props) {
     const [editing, setEditing] = useState<CategoryRow | null>(null);
     const [creating, setCreating] = useState(false);
     const [search, setSearch] = useState('');
+
+    // Moving is offered only on the whole tree: a filtered one hides neighbours.
+    const searching = search.trim() !== '';
 
     /*
      * Rendered as a tree rather than a flat list: a category's position is the
@@ -114,12 +129,52 @@ export default function AdminCategories({ categories, can, limits }: Props) {
         return { tone: 'success', label: t('catalog.categories.state_live') };
     };
 
-    const toggle = (row: CategoryRow) =>
+    const toggle = (row: CategoryRow) => {
+        if (
+            row.is_active &&
+            row.products_in_branch > 0 &&
+            !window.confirm(
+                t('catalog.categories.disable_confirm', {
+                    name: row.name,
+                    count: row.products_in_branch,
+                }),
+            )
+        ) {
+            return;
+        }
+
         router.patch(
             CategoryController.toggle.url(row.id),
             { is_active: !row.is_active },
             { preserveScroll: true },
         );
+    };
+
+    /*
+     * Moving sends the branch's whole order, never a single swap, so the server
+     * applies one decision. Siblings are read from the full list rather than
+     * the filtered tree, so a search cannot drop a category out of the order.
+     */
+    const siblingsOf = (category: CategoryRow) =>
+        categories.filter((item) => item.parent_id === category.parent_id);
+
+    const move = (category: CategoryRow, direction: -1 | 1) => {
+        const order = siblingsOf(category).map((item) => item.id);
+        const from = order.indexOf(category.id);
+        const to = from + direction;
+
+        if (from < 0 || to < 0 || to >= order.length) {
+            return;
+        }
+
+        [order[from], order[to]] = [order[to], order[from]];
+
+        router.post(
+            CategoryController.reorder.url(),
+            { parent_id: category.parent_id, order },
+            { preserveScroll: true },
+        );
+    };
 
     const remove = (row: CategoryRow) => {
         if (!window.confirm(t('catalog.categories.delete_confirm'))) {
@@ -181,6 +236,56 @@ export default function AdminCategories({ categories, can, limits }: Props) {
                     tone={state(category).tone}
                     label={state(category).label}
                 />
+
+                {/* Its products, including its subcategories', on the Products screen. */}
+                <Button variant="ghost" size="sm" asChild>
+                    <Link
+                        href={productsIndex.url({
+                            query: { category: category.id },
+                        })}
+                    >
+                        <ShoppingBag className="size-4" aria-hidden="true" />
+                        <span className="sr-only sm:not-sr-only">
+                            {t('catalog.categories.view_products')}
+                        </span>
+                        <span className="text-muted-foreground tabular-nums">
+                            {category.products_in_branch}
+                        </span>
+                    </Link>
+                </Button>
+
+                {can.edit && !searching && (
+                    <>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            disabled={
+                                siblingsOf(category)[0]?.id === category.id
+                            }
+                            onClick={() => move(category, -1)}
+                            aria-label={t('catalog.categories.move_up', {
+                                name: category.name,
+                            })}
+                        >
+                            <ArrowUp className="size-4" aria-hidden="true" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            disabled={
+                                siblingsOf(category).at(-1)?.id === category.id
+                            }
+                            onClick={() => move(category, 1)}
+                            aria-label={t('catalog.categories.move_down', {
+                                name: category.name,
+                            })}
+                        >
+                            <ArrowDown className="size-4" aria-hidden="true" />
+                        </Button>
+                    </>
+                )}
 
                 {can.edit && (
                     <>
@@ -246,13 +351,20 @@ export default function AdminCategories({ categories, can, limits }: Props) {
                     }
                 />
 
-                <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t('catalog.categories.search')}
-                    className="max-w-sm"
-                    aria-label={t('catalog.categories.search')}
-                />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder={t('catalog.categories.search')}
+                        className="max-w-sm"
+                        aria-label={t('catalog.categories.search')}
+                    />
+                    {can.edit && (
+                        <p className="text-muted-foreground text-xs">
+                            {t('catalog.categories.assign_help')}
+                        </p>
+                    )}
+                </div>
 
                 {tree.length === 0 ? (
                     <EmptyState

@@ -5,6 +5,8 @@ namespace App\Http\Requests\Catalog;
 use App\Domain\Catalog\Actions\BulkUpdateProducts;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
+use App\Domain\Catalog\Models\Brand;
+use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -16,6 +18,10 @@ class BulkProductRequest extends FormRequest
     public const CHANNEL = 'channel';
 
     public const FEATURE = 'feature';
+
+    public const CATEGORY = 'category';
+
+    public const BRAND = 'brand';
 
     /**
      * Refused before a rule runs for anybody holding none of the permissions a
@@ -37,7 +43,11 @@ class BulkProductRequest extends FormRequest
             'products' => ['required', 'array', 'min:1', 'max:'.BulkUpdateProducts::MAX_PRODUCTS],
             'products.*' => ['required', 'string', 'max:40', 'distinct'],
 
-            'action' => ['required', 'string', Rule::in([self::TRANSITION, self::CHANNEL, self::FEATURE])],
+            'action' => ['required', 'string', Rule::in([self::TRANSITION, self::CHANNEL, self::FEATURE, self::CATEGORY, self::BRAND])],
+
+            // Assigning products (§11.3), by public id. A null brand removes it.
+            'category' => ['required_if:action,'.self::CATEGORY, 'nullable', 'string', Rule::exists(Category::class, 'public_id')],
+            'brand' => ['present_if:action,'.self::BRAND, 'nullable', 'string', Rule::exists(Brand::class, 'public_id')],
 
             'status' => [
                 'required_if:action,'.self::TRANSITION, 'nullable', 'string',

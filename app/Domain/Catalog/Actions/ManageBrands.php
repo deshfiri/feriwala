@@ -165,6 +165,60 @@ class ManageBrands
         $this->images->delete($logoPath);
     }
 
+    /**
+     * Move a brand up or down the order partners' filters list brands in
+     * (§11.3).
+     *
+     * One step at a time rather than a whole list, because brands are paged
+     * and nobody holds the whole list on one screen. Every brand is locked and
+     * renumbered to a clean 0..n, so two administrators moving brands at once
+     * queue rather than both reading the same neighbours, and positions that
+     * had drifted into duplicates are straightened out by the first move.
+     * Moving the first brand up, or the last down, changes nothing.
+     */
+    public function move(User $actor, Brand $brand, int $offset): void
+    {
+        $this->database->transaction(function () use ($actor, $brand, $offset) {
+            /** @var array<int, int> $order */
+            $order = Brand::query()
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->pluck('sort_order', 'id')
+                ->keys()
+                ->all();
+
+            $from = array_search($brand->id, $order, true);
+
+            if ($from === false) {
+                return;
+            }
+
+            $to = max(0, min(count($order) - 1, $from + $offset));
+
+            if ($to === $from) {
+                return;
+            }
+
+            array_splice($order, $from, 1);
+            array_splice($order, $to, 0, [$brand->id]);
+
+            foreach ($order as $position => $id) {
+                Brand::query()->whereKey($id)->where('sort_order', '!=', $position)->update(['sort_order' => $position]);
+            }
+
+            $this->audit->handle(new AuditEntry(
+                action: 'catalog.brand_moved',
+                actorId: $actor->id,
+                auditableType: Brand::class,
+                auditableId: $brand->id,
+                before: ['position' => $from],
+                after: ['position' => $to],
+                module: 'catalog',
+            ));
+        });
+    }
+
     protected function nextPosition(): int
     {
         return (int) Brand::query()->max('sort_order') + 1;

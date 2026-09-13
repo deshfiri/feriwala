@@ -14,6 +14,7 @@ use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -153,6 +154,24 @@ class BrandController extends Controller
             $updated->is_active ? 'catalog.brands.enabled' : 'catalog.brands.disabled',
             ['name' => $updated->name],
         )]);
+
+        return back();
+    }
+
+    /**
+     * Move a brand one place up or down the order (§11.3).
+     */
+    public function move(Request $request, string $brand): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(CatalogPolicy::canEdit($actor), 403);
+
+        $validated = $request->validate(['direction' => ['required', Rule::in(['up', 'down'])]]);
+
+        $this->brands->move($actor, $this->brand($brand), $validated['direction'] === 'up' ? -1 : 1);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.brands.moved')]);
 
         return back();
     }

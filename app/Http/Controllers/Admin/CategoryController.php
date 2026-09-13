@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,9 +51,23 @@ class CategoryController extends Controller
             ->orderBy('id')
             ->get();
 
+        /*
+         * What switching a category off takes off partners' catalogues: its own
+         * products and its subcategories'. Counted from the rows already loaded,
+         * since the tree is one level of subcategories deep.
+         */
+        $branchCounts = $categories->mapWithKeys(fn (Category $category) => [
+            $category->id => (int) $category->products_count + (int) $categories
+                ->where('parent_id', $category->id)
+                ->sum('products_count'),
+        ]);
+
         return Inertia::render('admin/catalog/categories', [
             'categories' => $categories
-                ->map(fn (Category $category) => $this->summary($category))
+                ->map(fn (Category $category) => [
+                    ...$this->summary($category),
+                    'products_in_branch' => (int) $branchCounts->get($category->id, 0),
+                ])
                 ->values()
                 ->all(),
 
@@ -135,6 +150,34 @@ class CategoryController extends Controller
             $updated->is_active ? 'catalog.categories.enabled' : 'catalog.categories.disabled',
             ['name' => $updated->name],
         )]);
+
+        return back();
+    }
+
+    /**
+     * Put one branch of the tree in a new order (§11.3).
+     *
+     * The whole sibling list in one request — the top-level categories when
+     * `parent_id` is blank — so a reorder is one decision rather than a series
+     * of swaps somebody could read half-way through.
+     */
+    public function reorder(Request $request): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(CatalogPolicy::canEdit($actor), 403);
+
+        $validated = $request->validate([
+            'parent_id' => ['nullable', 'string', Rule::exists(Category::class, 'public_id')],
+            'order' => ['required', 'array', 'min:1', 'max:500'],
+            'order.*' => ['required', 'string', 'distinct', 'max:40'],
+        ]);
+
+        $parent = filled($validated['parent_id'] ?? null) ? $this->category((string) $validated['parent_id']) : null;
+
+        $this->categories->reorder($actor, $parent, array_values($validated['order']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.categories.reordered')]);
 
         return back();
     }

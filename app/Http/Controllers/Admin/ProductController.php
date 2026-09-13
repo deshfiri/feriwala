@@ -140,6 +140,9 @@ class ProductController extends Controller
                 'enable_channels' => CatalogPolicy::canSetChannel($actor, true),
                 'disable_channels' => CatalogPolicy::canSetChannel($actor, false),
                 'feature' => CatalogPolicy::canPublish($actor),
+
+                // Filing products under a category or brand (§11.3).
+                'assign' => CatalogPolicy::canEdit($actor),
             ],
         ]);
     }

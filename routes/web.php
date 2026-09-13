@@ -462,6 +462,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.categories.index');
         Route::post('catalog/categories', [CategoryController::class, 'store'])
             ->name('catalog.categories.store');
+        // A branch's whole order in one request (§11.3).
+        Route::post('catalog/categories/reorder', [CategoryController::class, 'reorder'])
+            ->name('catalog.categories.reorder');
         Route::patch('catalog/categories/{category}', [CategoryController::class, 'update'])
             ->name('catalog.categories.update');
         /*
@@ -487,6 +490,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.brands.update');
         Route::patch('catalog/brands/{brand}/active', [BrandController::class, 'toggle'])
             ->name('catalog.brands.active');
+        Route::patch('catalog/brands/{brand}/position', [BrandController::class, 'move'])
+            ->name('catalog.brands.position');
         Route::delete('catalog/brands/{brand}', [BrandController::class, 'destroy'])
             ->name('catalog.brands.destroy');
 

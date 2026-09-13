@@ -5,6 +5,8 @@ namespace App\Domain\Catalog\Actions;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
+use App\Domain\Catalog\Models\Brand;
+use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Models\User;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
@@ -41,7 +43,38 @@ class BulkUpdateProducts
         protected TransitionProduct $transition,
         protected SetSalesChannel $channels,
         protected SetFeatured $featured,
+        protected AssignProducts $assign,
     ) {}
+
+    /**
+     * File every named product under one category (§11.3).
+     *
+     * @param  array<int, string>  $publicIds
+     * @return array{changed: int, unchanged: int, refused: array<int, array{id: string, name: string|null, sku: string|null, reason: string}>}
+     */
+    public function category(User $actor, array $publicIds, Category $category): array
+    {
+        return $this->each(
+            $publicIds,
+            fn (Product $product) => $product->category_id === $category->id,
+            fn (Product $product) => $this->assign->toCategory($actor, $product, $category),
+        );
+    }
+
+    /**
+     * Give every named product one brand, or no brand (§11.3).
+     *
+     * @param  array<int, string>  $publicIds
+     * @return array{changed: int, unchanged: int, refused: array<int, array{id: string, name: string|null, sku: string|null, reason: string}>}
+     */
+    public function brand(User $actor, array $publicIds, ?Brand $brand): array
+    {
+        return $this->each(
+            $publicIds,
+            fn (Product $product) => $product->brand_id === $brand?->id,
+            fn (Product $product) => $this->assign->toBrand($actor, $product, $brand),
+        );
+    }
 
     /**
      * @param  array<int, string>  $publicIds

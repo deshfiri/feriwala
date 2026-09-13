@@ -205,6 +205,12 @@ class ManageCategories
      * one decision: applying it as a series of single moves leaves the branch
      * in intermediate orders that somebody could read between writes.
      *
+     * The branch is locked, and positions come out a clean 0..n. An id that is
+     * not a sibling here — a category that has moved or gone — is ignored, and a
+     * sibling the list did not mention (added since the screen loaded) keeps its
+     * place after the ones it did, so a stale screen can reorder but never drop
+     * a category out of the sequence or give two the same position.
+     *
      * @param  array<int, string>  $publicIds  siblings, in the order wanted
      */
     public function reorder(User $actor, ?Category $parent, array $publicIds): void
@@ -212,29 +218,40 @@ class ManageCategories
         $this->database->transaction(function () use ($actor, $parent, $publicIds) {
             $siblings = Category::query()
                 ->where('parent_id', $parent?->id)
-                ->whereIn('public_id', $publicIds)
-                ->get()
-                ->keyBy('public_id');
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
 
-            $position = 0;
+            $wanted = array_values(array_unique($publicIds));
+            $byPublicId = $siblings->keyBy('public_id');
+            $order = [];
 
-            foreach ($publicIds as $publicId) {
-                $sibling = $siblings->get($publicId);
+            foreach ($wanted as $publicId) {
+                $sibling = $byPublicId->get($publicId);
 
-                if ($sibling === null) {
-                    // Silently skipped: an id for a category that has moved or
-                    // gone is a stale screen, not something to fail the whole
-                    // reorder over.
-                    continue;
+                if ($sibling !== null) {
+                    $order[] = $sibling;
                 }
+            }
 
-                $sibling->forceFill(['sort_order' => $position++])->save();
+            foreach ($siblings as $sibling) {
+                if (! in_array($sibling->public_id, $wanted, true)) {
+                    $order[] = $sibling;
+                }
+            }
+
+            foreach ($order as $position => $sibling) {
+                if ($sibling->sort_order !== $position) {
+                    $sibling->forceFill(['sort_order' => $position])->save();
+                }
             }
 
             $this->audit->handle(new AuditEntry(
                 action: 'catalog.categories_reordered',
                 actorId: $actor->id,
-                after: ['parent' => $parent?->public_id, 'order' => $publicIds],
+                before: ['parent' => $parent?->public_id, 'order' => $siblings->pluck('public_id')->all()],
+                after: ['parent' => $parent?->public_id, 'order' => array_map(fn (Category $category) => $category->public_id, $order)],
                 module: 'catalog',
             ));
         });

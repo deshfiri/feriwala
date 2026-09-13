@@ -7,6 +7,7 @@ use App\Domain\Catalog\Enums\AccountScope;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
+use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Package\Entitlements;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +22,10 @@ use Illuminate\Database\Eloquent\Builder;
  * A product is eligible for an account when every one of these holds:
  *
  *   - it is **Active** — nothing else is offered to anybody (§11.2);
+ *   - its **category is available and its brand, if any, is switched on** —
+ *     switching a range off (§11.3) takes its products off every partner's
+ *     catalogue without rewriting a single product, so switching it back on
+ *     restores exactly what was there;
  *   - the account **can transact** — a suspended or unactivated account sees
  *     nothing, whatever its package says;
  *   - the account has an **entitling package** — read through
@@ -49,6 +54,10 @@ class ProductEligibility
 
     public const PACKAGE_WITHOUT_CHANNEL = 'package_without_channel';
 
+    public const CATEGORY_SWITCHED_OFF = 'category_switched_off';
+
+    public const BRAND_SWITCHED_OFF = 'brand_switched_off';
+
     public function __construct(
         protected Entitlements $entitlements,
     ) {}
@@ -74,6 +83,14 @@ class ProductEligibility
 
         if (! $product->status->isSellable()) {
             $refusals[] = self::NOT_ACTIVE;
+        }
+
+        if (! $product->category->isAvailable()) {
+            $refusals[] = self::CATEGORY_SWITCHED_OFF;
+        }
+
+        if ($product->brand !== null && ! $product->brand->is_active) {
+            $refusals[] = self::BRAND_SWITCHED_OFF;
         }
 
         if (! $account->canTransact()) {
@@ -138,6 +155,21 @@ class ProductEligibility
 
         return Product::query()
             ->where('status', ProductStatus::Active)
+
+            /*
+             * The category and, when it has one, its parent are both switched
+             * on. One level of parent is the whole tree: categories go
+             * {@see Category::MAX_DEPTH} deep, and the tests hold this to
+             * `isAvailable()`.
+             */
+            ->whereHas('category', fn (Builder $categories) => $categories
+                ->where('is_active', true)
+                ->where(fn (Builder $inner) => $inner
+                    ->whereNull('parent_id')
+                    ->orWhereHas('parent', fn (Builder $parent) => $parent->where('is_active', true))))
+            ->where(fn (Builder $query) => $query
+                ->whereNull('brand_id')
+                ->orWhereHas('brand', fn (Builder $brands) => $brands->where('is_active', true)))
             ->when($channel !== null, fn (Builder $query) => $query->where($channel?->column() ?? 'status', $channel?->enabled()))
             ->where(fn (Builder $query) => $query
                 ->where('package_scope', PackageScope::AllPackages)
