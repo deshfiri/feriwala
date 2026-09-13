@@ -5,6 +5,8 @@ namespace App\Http\Requests\Catalog;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductVariant;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -65,11 +67,23 @@ class SaveProductRequest extends FormRequest
             'sku' => [
                 'required', 'string', 'max:64', 'regex:/^[A-Z0-9][A-Z0-9._-]*$/',
                 Rule::unique(Product::class, 'sku')->ignore($existing?->id),
+
+                // One namespace with variants; the database trigger holds it too.
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    if (ProductVariant::query()->where('sku', $value)->exists()) {
+                        $fail(__('catalog.variants.sku_used_by_variant'));
+                    }
+                },
             ],
 
             'barcode' => [
                 'nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9-]+$/',
                 Rule::unique(Product::class, 'barcode')->ignore($existing?->id),
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    if (ProductVariant::query()->where('barcode', $value)->exists()) {
+                        $fail(__('catalog.variants.barcode_used_by_variant'));
+                    }
+                },
             ],
 
             'short_description' => ['nullable', 'string', 'max:500'],

@@ -22,6 +22,7 @@ return [
     'products' => 'পণ্য',
     'product_categories' => 'পণ্যের ক্যাটেগরি',
     'brands' => 'ব্র্যান্ড',
+    'attributes' => 'অ্যাট্রিবিউট',
     'activation_approvals' => 'অ্যাক্টিভেশন অনুমোদন',
     'billing_rules' => 'বিলিং নিয়ম',
     'payment_gateways' => 'পেমেন্ট গেটওয়ে',

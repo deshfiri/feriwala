@@ -15,7 +15,9 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
+use App\Http\Controllers\Admin\ProductAttributeController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
@@ -479,6 +481,32 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.update');
         Route::delete('catalog/products/{product}', [ProductController::class, 'destroy'])
             ->name('catalog.products.destroy');
+
+        /*
+         * Variations, always addressed through their product (§11.1, §12), and
+         * the shared attributes they are built from.
+         */
+        Route::post('catalog/products/{product}/variants', [ProductVariantController::class, 'store'])
+            ->name('catalog.products.variants.store');
+        Route::patch('catalog/products/{product}/variants/{variant}', [ProductVariantController::class, 'update'])
+            ->name('catalog.products.variants.update');
+        Route::delete('catalog/products/{product}/variants/{variant}', [ProductVariantController::class, 'destroy'])
+            ->name('catalog.products.variants.destroy');
+
+        Route::get('catalog/attributes', [ProductAttributeController::class, 'index'])
+            ->name('catalog.attributes.index');
+        Route::post('catalog/attributes', [ProductAttributeController::class, 'store'])
+            ->name('catalog.attributes.store');
+        Route::patch('catalog/attributes/{attribute}', [ProductAttributeController::class, 'update'])
+            ->name('catalog.attributes.update');
+        Route::delete('catalog/attributes/{attribute}', [ProductAttributeController::class, 'destroy'])
+            ->name('catalog.attributes.destroy');
+        Route::post('catalog/attributes/{attribute}/values', [ProductAttributeController::class, 'storeValue'])
+            ->name('catalog.attributes.values.store');
+        Route::patch('catalog/attribute-values/{value}', [ProductAttributeController::class, 'updateValue'])
+            ->name('catalog.attribute-values.update');
+        Route::delete('catalog/attribute-values/{value}', [ProductAttributeController::class, 'destroyValue'])
+            ->name('catalog.attribute-values.destroy');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

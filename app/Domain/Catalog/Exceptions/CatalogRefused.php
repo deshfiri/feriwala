@@ -120,6 +120,42 @@ class CatalogRefused extends RuntimeException
         ));
     }
 
+    public static function variantNotDraft(): self
+    {
+        return new self(
+            'A variation can only be deleted while its product is a draft. Switch it off instead — '
+            .'that stops it being offered without erasing what the catalogue said about it.'
+        );
+    }
+
+    /**
+     * Two values of one attribute on one variant — a shirt that is both M and L.
+     */
+    public static function attributeRepeated(string $attribute): self
+    {
+        return new self("A variation takes one value of {$attribute}, not several.");
+    }
+
+    /**
+     * A variant whose attributes differ from its siblings'.
+     *
+     * A product sold by Size and Colour cannot also have a variant chosen by
+     * Material alone: a storefront would have no way to offer it.
+     */
+    public static function inconsistentAttributes(string $expected): self
+    {
+        return new self("Every variation of this product is chosen by {$expected}. Pick one value of each.");
+    }
+
+    public static function attributeInUse(int $count): self
+    {
+        return new self(sprintf(
+            'This is used by %d variation%s. Remove those first; a value in use cannot be taken away from under them.',
+            $count,
+            $count === 1 ? '' : 's',
+        ));
+    }
+
     public static function duplicateCombination(): self
     {
         return new self('A variation with that combination of attributes already exists on this product.');

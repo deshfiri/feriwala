@@ -10,13 +10,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import { index } from '@/routes/admin/catalog/products';
-import type { CatalogAbilities, CatalogOption, ProductDetail } from '@/types';
+import type {
+    AttributeOption,
+    CatalogAbilities,
+    CatalogOption,
+    ProductDetail,
+    VariantRow,
+} from '@/types';
 import { ProductStatusPill } from './index';
+import VariantsSection from './variants-section';
 
 type Props = {
     product: ProductDetail | null;
     options: { categories: CatalogOption[]; brands: CatalogOption[] };
     can: CatalogAbilities;
+    variants: VariantRow[];
+    attributes: AttributeOption[];
 };
 
 const selectClass =
@@ -36,7 +45,13 @@ const textareaClass =
  * accepts, and the saved figure is shown beneath each field in the server's own
  * formatting so a misplaced zero is visible before anybody buys at it.
  */
-export default function ProductForm({ product, options, can }: Props) {
+export default function ProductForm({
+    product,
+    options,
+    can,
+    variants,
+    attributes,
+}: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
 
@@ -434,6 +449,15 @@ export default function ProductForm({ product, options, can }: Props) {
                         </fieldset>
                     )}
                 </Form>
+
+                {editing && (
+                    <VariantsSection
+                        product={product}
+                        variants={variants}
+                        attributes={attributes}
+                        can={can}
+                    />
+                )}
 
                 {editing && can.delete && product.status === 'draft' && (
                     <SectionCard

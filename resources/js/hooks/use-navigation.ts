@@ -11,6 +11,7 @@ import {
     ScrollText,
     Settings,
     ShoppingBag,
+    SlidersHorizontal,
     Tags,
     ShieldCheck,
     UserCheck,
@@ -27,6 +28,7 @@ import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
+import { index as productAttributes } from '@/routes/admin/catalog/attributes';
 import { index as productBrands } from '@/routes/admin/catalog/brands';
 import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as productCategories } from '@/routes/admin/catalog/categories';
@@ -175,6 +177,11 @@ export function useNavigation(): {
                               title: t('nav.brands'),
                               href: productBrands(),
                               icon: Tags,
+                          },
+                          {
+                              title: t('nav.attributes'),
+                              href: productAttributes(),
+                              icon: SlidersHorizontal,
                           },
                       ]
                     : []),

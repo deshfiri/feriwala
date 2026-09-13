@@ -7,8 +7,10 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One product in the central catalogue (§11.1).
@@ -35,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable $updated_at
  * @property-read Category $category
  * @property-read Brand|null $brand
+ * @property-read Collection<int, ProductVariant> $variants
  */
 class Product extends Model
 {
@@ -79,5 +82,15 @@ class Product extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    /**
+     * @return HasMany<ProductVariant, $this>
+     */
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 }

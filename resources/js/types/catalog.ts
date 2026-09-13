@@ -44,6 +44,36 @@ export type ProductDetail = {
     updated_at: string;
 };
 
+export type VariantRow = {
+    id: string;
+    sku: string;
+    barcode: string | null;
+    /** The combination in attribute order, e.g. "M / Navy". */
+    label: string;
+    values: { attribute: string; value: string }[];
+    /** The override only; null means the product's figure applies. */
+    wholesale_price_minor: number | null;
+    base_cost_minor: number | null;
+    /** The price that applies, override or not, rendered by the server. */
+    wholesale_price: Money;
+    overrides_price: boolean;
+    is_active: boolean;
+};
+
+export type AttributeOption = {
+    id: string;
+    name: string;
+    values: { id: string; value: string }[];
+};
+
+export type AttributeRow = {
+    id: string;
+    name: string;
+    /** How many variations carry any of this attribute's values. */
+    uses: number;
+    values: { id: string; value: string; uses: number }[];
+};
+
 export type CatalogAbilities = {
     create: boolean;
     edit: boolean;

@@ -28,6 +28,7 @@ return [
     'products' => 'Products',
     'product_categories' => 'Product categories',
     'brands' => 'Brands',
+    'attributes' => 'Attributes',
     'activation_approvals' => 'Activation approvals',
     'billing_rules' => 'Billing rules',
     'payment_gateways' => 'Payment gateways',

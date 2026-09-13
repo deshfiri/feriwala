@@ -7,6 +7,9 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductAttribute;
+use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
@@ -76,6 +79,10 @@ class ProductController extends Controller
             'product' => null,
             'options' => $this->options(),
             'can' => $this->abilities($actor),
+
+            // Variations are added once the product exists to hang them on.
+            'variants' => [],
+            'attributes' => [],
         ]);
     }
 
@@ -98,10 +105,36 @@ class ProductController extends Controller
 
         abort_unless(CatalogPolicy::canViewAny($actor), 403);
 
+        $record = $this->product($product);
+
         return Inertia::render('admin/catalog/products/form', [
-            'product' => $this->detail($this->product($product)),
+            'product' => $this->detail($record),
             'options' => $this->options(),
             'can' => $this->abilities($actor),
+
+            // Variations beside the product they belong to (§11.1).
+            'variants' => $record->variants()
+                ->with(['values.attribute', 'product'])
+                ->get()
+                ->map(fn (ProductVariant $variant) => $this->variant($variant))
+                ->all(),
+
+            'attributes' => ProductAttribute::query()
+                ->with('values')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (ProductAttribute $attribute) => [
+                    'id' => $attribute->public_id,
+                    'name' => $attribute->name,
+                    'values' => $attribute->values
+                        ->map(fn (ProductAttributeValue $value) => [
+                            'id' => $value->public_id,
+                            'value' => $value->value,
+                        ])
+                        ->all(),
+                ])
+                ->all(),
         ]);
     }
 
@@ -175,6 +208,39 @@ class ProductController extends Controller
 
             'status' => $product->status,
             'updated_at' => $product->updated_at->toIso8601String(),
+        ];
+    }
+
+    /**
+     * One variation as the editor shows it.
+     *
+     * The effective price is the server's answer to "what does this variant
+     * sell at", so the page never decides whether an override applies.
+     *
+     * @return array<string, mixed>
+     */
+    protected function variant(ProductVariant $variant): array
+    {
+        $values = $variant->values
+            ->sortBy(fn (ProductAttributeValue $value) => [$value->attribute->sort_order, $value->attribute->name])
+            ->values();
+
+        return [
+            'id' => $variant->public_id,
+            'sku' => $variant->sku,
+            'barcode' => $variant->barcode,
+            'label' => $values->pluck('value')->implode(' / '),
+            'values' => $values
+                ->map(fn (ProductAttributeValue $value) => [
+                    'attribute' => $value->attribute->name,
+                    'value' => $value->value,
+                ])
+                ->all(),
+            'wholesale_price_minor' => $variant->wholesale_price_minor?->minorUnits,
+            'base_cost_minor' => $variant->base_cost_minor?->minorUnits,
+            'wholesale_price' => $variant->effectiveWholesalePrice()->jsonSerialize(),
+            'overrides_price' => $variant->wholesale_price_minor !== null,
+            'is_active' => $variant->is_active,
         ];
     }
 
