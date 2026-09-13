@@ -125,23 +125,28 @@ export default function GlobalSearch() {
 
     return (
         <>
+            {/*
+             * A field-shaped button from `md` up, so it reads as search at a
+             * glance; a square icon button on a phone, where the width is
+             * needed for the page.
+             */}
             <button
                 type="button"
                 onClick={() => setIsOpen(true)}
                 aria-label={t('nav.search.open')}
                 className={cn(
-                    'text-muted-foreground border-border bg-background flex h-9 items-center gap-2 rounded-lg border px-3',
-                    'hover:border-brand-border hover:text-foreground transition-colors',
-                    'md:w-64 lg:w-80',
+                    'text-muted-foreground bg-card flex h-9 w-9 items-center justify-center gap-2 rounded-lg border shadow-xs',
+                    'hover:border-input hover:text-foreground transition-colors',
+                    'md:w-56 md:justify-start md:px-3 lg:w-72',
                 )}
             >
                 <Search aria-hidden="true" className="size-4 shrink-0" />
-                <span className="hidden flex-1 text-left text-sm md:inline">
+                <span className="hidden flex-1 truncate text-left text-sm md:inline">
                     {t('nav.search.placeholder')}
                 </span>
                 <kbd
                     aria-hidden="true"
-                    className="bg-muted text-muted-foreground hidden rounded px-1.5 py-0.5 text-[10px] font-medium md:inline"
+                    className="bg-surface-subtle text-muted-foreground text-2xs hidden rounded border px-1.5 font-sans font-medium md:inline"
                 >
                     {isAppleDevice ? '⌘K' : 'Ctrl K'}
                 </kbd>
@@ -171,65 +176,82 @@ export default function GlobalSearch() {
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder={t('nav.search.placeholder')}
                             aria-label={t('nav.search.title')}
-                            className="placeholder:text-muted-foreground h-12 flex-1 bg-transparent text-sm outline-hidden"
+                            className="placeholder:text-muted-foreground h-13 flex-1 bg-transparent text-sm outline-hidden"
                         />
                     </div>
 
-                    <div className="max-h-80 overflow-y-auto p-2">
+                    <div className="max-h-80 scrollbar-thin overflow-y-auto p-2">
                         {results.length === 0 ? (
-                            <p className="text-muted-foreground px-3 py-6 text-center text-sm">
+                            <p className="text-muted-foreground px-3 py-8 text-center text-sm">
                                 {t('nav.search.no_results', { query })}
                             </p>
                         ) : (
                             <ul
                                 role="listbox"
                                 aria-label={t('nav.search.title')}
+                                className="space-y-0.5"
                             >
-                                {results.map(({ item, group }, index) => (
-                                    <li key={`${group}-${item.title}`}>
-                                        <button
-                                            type="button"
-                                            role="option"
-                                            aria-selected={
-                                                index === highlighted
-                                            }
-                                            onClick={() => visit(item)}
-                                            onMouseEnter={() =>
-                                                setHighlighted(index)
-                                            }
-                                            className={cn(
-                                                'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm',
-                                                index === highlighted
-                                                    ? 'bg-brand-subtle text-brand'
-                                                    : 'text-foreground',
-                                            )}
-                                        >
-                                            {item.icon && (
-                                                <item.icon
-                                                    aria-hidden="true"
-                                                    className="size-4 shrink-0"
-                                                />
-                                            )}
-                                            <span className="flex-1 truncate">
-                                                {item.title}
-                                            </span>
-                                            <span className="text-muted-foreground truncate text-xs">
-                                                {group}
-                                            </span>
-                                            {index === highlighted && (
-                                                <CornerDownLeft
-                                                    aria-hidden="true"
-                                                    className="size-3.5 shrink-0"
-                                                />
-                                            )}
-                                        </button>
-                                    </li>
-                                ))}
+                                {results.map(({ item, group }, index) => {
+                                    const isHighlighted = index === highlighted;
+
+                                    return (
+                                        <li key={`${group}-${item.title}`}>
+                                            <button
+                                                type="button"
+                                                role="option"
+                                                aria-selected={isHighlighted}
+                                                onClick={() => visit(item)}
+                                                onMouseEnter={() =>
+                                                    setHighlighted(index)
+                                                }
+                                                className={cn(
+                                                    'flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
+                                                    isHighlighted
+                                                        ? 'bg-brand-subtle text-brand'
+                                                        : 'text-foreground',
+                                                )}
+                                            >
+                                                {item.icon && (
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={cn(
+                                                            'bg-card flex size-7 shrink-0 items-center justify-center rounded-md border',
+                                                            isHighlighted
+                                                                ? 'border-brand-border text-brand'
+                                                                : 'text-muted-foreground',
+                                                        )}
+                                                    >
+                                                        <item.icon className="size-3.5" />
+                                                    </span>
+                                                )}
+                                                <span className="flex-1 truncate font-medium">
+                                                    {item.title}
+                                                </span>
+                                                <span
+                                                    className={cn(
+                                                        'truncate text-xs',
+                                                        isHighlighted
+                                                            ? 'text-brand/80'
+                                                            : 'text-muted-foreground',
+                                                    )}
+                                                >
+                                                    {group}
+                                                </span>
+                                                {isHighlighted && (
+                                                    <CornerDownLeft
+                                                        aria-hidden="true"
+                                                        className="size-3.5 shrink-0"
+                                                    />
+                                                )}
+                                            </button>
+                                        </li>
+                                    );
+                                })}
                             </ul>
                         )}
                     </div>
 
-                    <p className="text-muted-foreground border-border border-t px-4 py-2 text-xs">
+                    <p className="text-muted-foreground bg-surface-subtle border-border border-t px-4 py-2.5 text-xs">
                         {t('nav.search.hint')}
                     </p>
                 </DialogContent>

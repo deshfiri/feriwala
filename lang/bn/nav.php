@@ -39,6 +39,11 @@ return [
         'hint' => 'অ্যারো কী দিয়ে চলুন, এন্টার দিয়ে খুলুন, Esc দিয়ে বন্ধ করুন।',
     ],
 
+    'account_menu' => [
+        'settings' => 'সেটিংস',
+        'log_out' => 'লগ আউট',
+    ],
+
     'notifications' => [
         'title' => 'বিজ্ঞপ্তি',
         'unread' => ':count টি অপঠিত',

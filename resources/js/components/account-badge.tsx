@@ -11,11 +11,15 @@ import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
  * showing is *which* account — an invited staff member wants to see whose
  * business they are inside, and their own role in it.
  *
+ * Collapsed to icons, the name moves into the rail's tooltip rather than
+ * disappearing. On a phone the rail is a drawer at full width, so the name
+ * always shows there whatever the desktop rail was left as.
+ *
  * Nothing renders for platform staff, who have no account at all.
  */
 export function AccountBadge({ inHeader = false }: { inHeader?: boolean }) {
     const { account } = usePage().props;
-    const { state } = useSidebar();
+    const { state, isMobile } = useSidebar();
 
     if (!account) {
         return null;
@@ -36,15 +40,18 @@ export function AccountBadge({ inHeader = false }: { inHeader?: boolean }) {
     return (
         <SidebarMenuButton
             size="lg"
+            tooltip={{ children: `${account.name} · ${account.roleLabel}` }}
             // Not a button in behaviour: there is nowhere for it to go.
-            className="cursor-default hover:bg-transparent active:bg-transparent"
+            className="bg-surface-subtle hover:bg-surface-subtle active:bg-surface-subtle h-12 cursor-default gap-2.5 rounded-lg border px-2 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent"
         >
-            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <Building2 className="size-4" />
+            <div className="bg-brand-subtle text-brand flex aspect-square size-8 shrink-0 items-center justify-center rounded-md">
+                <Building2 aria-hidden="true" className="size-4" />
             </div>
-            {state === 'expanded' ? (
+            {state === 'expanded' || isMobile ? (
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{account.name}</span>
+                    <span className="text-foreground truncate font-semibold">
+                        {account.name}
+                    </span>
                     <span className="text-muted-foreground truncate text-xs">
                         {account.roleLabel}
                     </span>

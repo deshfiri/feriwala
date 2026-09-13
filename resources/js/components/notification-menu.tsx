@@ -35,7 +35,7 @@ export default function NotificationMenu() {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="relative size-9"
+                    className="text-muted-foreground hover:text-foreground relative size-9"
                     aria-label={
                         hasUnread
                             ? t('nav.notifications.unread', {
@@ -48,19 +48,23 @@ export default function NotificationMenu() {
                     {hasUnread && (
                         <span
                             aria-hidden="true"
-                            className="bg-brand ring-background absolute top-1.5 right-1.5 size-2 rounded-full ring-2"
+                            className="bg-brand ring-background absolute top-2 right-2 size-2 rounded-full ring-2"
                         />
                     )}
                 </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" className="w-80 p-0">
+            <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                className="w-80 overflow-hidden rounded-xl p-0"
+            >
                 <div className="border-border flex items-center justify-between gap-2 border-b px-4 py-3">
                     <p className="text-sm font-semibold">
                         {t('nav.notifications.title')}
                     </p>
                     {hasUnread && (
-                        <span className="bg-brand-subtle text-brand shrink-0 rounded px-1.5 py-0.5 text-xs font-medium">
+                        <span className="bg-brand-subtle text-brand shrink-0 rounded-full px-2 py-0.5 text-xs font-medium">
                             {t('nav.notifications.unread', {
                                 count: unreadCount,
                             })}
@@ -70,10 +74,12 @@ export default function NotificationMenu() {
 
                 {notifications.length === 0 ? (
                     <div className="flex flex-col items-center gap-1.5 px-6 py-8 text-center">
-                        <BellOff
+                        <span
                             aria-hidden="true"
-                            className="text-muted-foreground mb-1 size-5"
-                        />
+                            className="bg-surface-subtle text-muted-foreground mb-2 flex size-10 items-center justify-center rounded-xl border"
+                        >
+                            <BellOff className="size-4" />
+                        </span>
                         <p className="text-sm font-medium">
                             {t('nav.notifications.empty_title')}
                         </p>
@@ -82,7 +88,7 @@ export default function NotificationMenu() {
                         </p>
                     </div>
                 ) : (
-                    <ul className="max-h-96 overflow-y-auto">
+                    <ul className="max-h-96 scrollbar-thin overflow-y-auto">
                         {notifications.map((notification) => (
                             <li
                                 key={notification.id}
@@ -154,7 +160,7 @@ function NotificationRow({
     return (
         <Link
             href={notification.href}
-            className="hover:bg-accent block px-4 py-3 transition-colors"
+            className="hover:bg-surface-hover block px-4 py-3 transition-colors"
         >
             {body}
         </Link>
