@@ -31,15 +31,32 @@ function lookup(tree: TranslationTree, key: string): string | undefined {
 /**
  * Substitute `:name` style placeholders, matching Laravel's own syntax so a
  * line reads the same in PHP and in TSX.
+ *
+ * One pass, longest placeholder first. Replacing one token at a time let `:to`
+ * match inside `:total`, so "Showing :from–:to of :total" rendered as
+ * "Showing 1–25 of 25tal". A single pass also means a substituted value that
+ * happens to contain `:something` is never substituted again. Laravel's
+ * translator does the same.
  */
 function interpolate(
     line: string,
     replacements: Record<string, string | number>,
 ): string {
-    return Object.entries(replacements).reduce(
-        (result, [token, value]) =>
-            result.replaceAll(`:${token}`, String(value)),
-        line,
+    const tokens = Object.keys(replacements).sort(
+        (a, b) => b.length - a.length,
+    );
+
+    if (tokens.length === 0) {
+        return line;
+    }
+
+    const pattern = new RegExp(
+        `:(${tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`,
+        'g',
+    );
+
+    return line.replace(pattern, (_match, token: string) =>
+        String(replacements[token]),
     );
 }
 
