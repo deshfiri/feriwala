@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
+import type { CatalogImageLimits } from './brands';
 import type { CategoryRow } from './categories';
 
 type Props = {
@@ -21,6 +22,7 @@ type Props = {
     category: CategoryRow | null;
     /** Candidates for the parent field — a category cannot parent itself. */
     parents: CategoryRow[];
+    limits: CatalogImageLimits;
 };
 
 /**
@@ -36,6 +38,7 @@ export default function CategoryDialog({
     onClose,
     category,
     parents,
+    limits,
 }: Props) {
     const { t } = useTranslation();
 
@@ -143,6 +146,53 @@ export default function CategoryDialog({
                                         className="border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
                                     />
                                     <InputError message={errors.description} />
+                                </div>
+
+                                {/*
+                                    The tile partner storefronts render. The
+                                    formats and size come from the server so the
+                                    help text cannot promise what the upload
+                                    check refuses.
+                                */}
+                                <div className="grid gap-2 sm:col-span-2">
+                                    <Label htmlFor="category-image">
+                                        {t('catalog.categories.image')}
+                                    </Label>
+                                    {category?.image_url && (
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <img
+                                                src={category.image_url}
+                                                alt={
+                                                    category.image_alt ??
+                                                    category.name
+                                                }
+                                                className="bg-muted size-14 rounded-md border object-cover"
+                                            />
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    name="remove_image"
+                                                    value="1"
+                                                    className="size-4"
+                                                />
+                                                {t(
+                                                    'catalog.categories.remove_image',
+                                                )}
+                                            </label>
+                                        </div>
+                                    )}
+                                    <Input
+                                        id="category-image"
+                                        name="image"
+                                        type="file"
+                                        accept={limits.image_types.join(',')}
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('catalog.categories.image_help', {
+                                            size: limits.image_max_kb,
+                                        })}
+                                    </p>
+                                    <InputError message={errors.image} />
                                 </div>
                             </div>
 

@@ -83,6 +83,29 @@ class CatalogRefused extends RuntimeException
         );
     }
 
+    /**
+     * An upload whose bytes are not one of the formats a storefront renders.
+     *
+     * The type is read from the file itself, not from what the browser claimed,
+     * so this message describes what was actually sent.
+     */
+    public static function imageTypeNotAccepted(string $mime): self
+    {
+        return new self(sprintf(
+            'A %s cannot be used as a catalogue image. Accepted formats: JPEG, PNG and WebP.',
+            $mime === '' ? 'file of that type' : $mime,
+        ));
+    }
+
+    public static function imageTooLarge(int $bytes, int $maxBytes): self
+    {
+        return new self(sprintf(
+            'That image is %d KB. Catalogue images go up to %d KB.',
+            (int) round($bytes / 1024),
+            (int) round($maxBytes / 1024),
+        ));
+    }
+
     public static function duplicateCombination(): self
     {
         return new self('A variation with that combination of attributes already exists on this product.');

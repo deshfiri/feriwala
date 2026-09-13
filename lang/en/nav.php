@@ -26,6 +26,7 @@ return [
     'kyc_requirements' => 'Verification requirements',
     'packages' => 'Packages',
     'product_categories' => 'Product categories',
+    'brands' => 'Brands',
     'activation_approvals' => 'Activation approvals',
     'billing_rules' => 'Billing rules',
     'payment_gateways' => 'Payment gateways',

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
@@ -444,6 +445,22 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.categories.active');
         Route::delete('catalog/categories/{category}', [CategoryController::class, 'destroy'])
             ->name('catalog.categories.destroy');
+
+        /*
+         * Brands (§11.3). The same shape as categories without the tree. The
+         * update route is PATCH, and the form reaches it as a POST carrying
+         * `_method`, because a browser cannot send a file with PATCH.
+         */
+        Route::get('catalog/brands', [BrandController::class, 'index'])
+            ->name('catalog.brands.index');
+        Route::post('catalog/brands', [BrandController::class, 'store'])
+            ->name('catalog.brands.store');
+        Route::patch('catalog/brands/{brand}', [BrandController::class, 'update'])
+            ->name('catalog.brands.update');
+        Route::patch('catalog/brands/{brand}/active', [BrandController::class, 'toggle'])
+            ->name('catalog.brands.active');
+        Route::delete('catalog/brands/{brand}', [BrandController::class, 'destroy'])
+            ->name('catalog.brands.destroy');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

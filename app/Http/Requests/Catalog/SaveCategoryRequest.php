@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Catalog;
 
+use App\Domain\Catalog\CatalogImageStore;
 use App\Domain\Catalog\Models\Category;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -53,6 +54,23 @@ class SaveCategoryRequest extends FormRequest
             ],
 
             'description' => ['nullable', 'string', 'max:5000'],
+
+            /*
+             * The category tile partner storefronts render (§11.3).
+             *
+             * `mimetypes` rather than `mimes`: the first reads the file's own
+             * bytes, the second trusts the extension somebody typed. The size
+             * and the accepted list are {@see CatalogImageStore}'s, stated here
+             * so the person gets a message against the field rather than a
+             * refusal after the form closes — the store checks them again,
+             * because that is the check a future caller cannot skip.
+             */
+            'image' => [
+                'nullable', 'file',
+                'mimetypes:'.implode(',', CatalogImageStore::ACCEPTED_MIME_TYPES),
+                'max:'.(int) (CatalogImageStore::MAX_BYTES / 1024),
+            ],
+            'remove_image' => ['boolean'],
 
             'image_alt' => ['nullable', 'string', 'max:255'],
 

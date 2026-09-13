@@ -7,6 +7,8 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Category;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
@@ -25,7 +27,7 @@ beforeEach(function () {
     $this->manager = testPlatformStaff(PlatformRole::ProductManager);
 });
 
-function aCategory(array $attributes = []): Category
+function catalogCategory(array $attributes = []): Category
 {
     return Category::create([
         'name' => 'Electronics',
@@ -102,7 +104,7 @@ describe('validation and database constraints', function () {
     });
 
     it('refuses a slug another category already holds', function () {
-        aCategory(['name' => 'Electronics', 'slug' => 'electronics']);
+        catalogCategory(['name' => 'Electronics', 'slug' => 'electronics']);
 
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.categories.store'), [
@@ -133,7 +135,7 @@ describe('validation and database constraints', function () {
     it('holds the slug unique in the database, not only in validation', function () {
         // Validation catches the ordinary case; the index is what holds when
         // two requests arrive together and both pass it.
-        aCategory(['name' => 'Electronics', 'slug' => 'electronics']);
+        catalogCategory(['name' => 'Electronics', 'slug' => 'electronics']);
 
         expect(fn () => Category::create(['name' => 'Other', 'slug' => 'electronics']))
             ->toThrow(UniqueConstraintViolationException::class);
@@ -142,7 +144,7 @@ describe('validation and database constraints', function () {
 
 describe('the tree stays a tree', function () {
     it('allows a subcategory', function () {
-        $parent = aCategory(['name' => 'Electronics']);
+        $parent = catalogCategory(['name' => 'Electronics']);
 
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.categories.store'), [
@@ -163,8 +165,8 @@ describe('the tree stays a tree', function () {
          * hierarchy — and a tree nobody bounded is one that cannot be rendered
          * in a menu or reasoned about in a filter.
          */
-        $parent = aCategory(['name' => 'Electronics']);
-        $child = aCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
+        $parent = catalogCategory(['name' => 'Electronics']);
+        $child = catalogCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
 
         expect(fn () => app(ManageCategories::class)->create($this->manager, [
             'name' => 'Smartphones',
@@ -174,7 +176,7 @@ describe('the tree stays a tree', function () {
 
     it('refuses to move a category inside itself', function () {
         // A cycle makes every walk of the tree run until it exhausts memory.
-        $category = aCategory(['name' => 'Electronics']);
+        $category = catalogCategory(['name' => 'Electronics']);
 
         expect(fn () => app(ManageCategories::class)->update($this->manager, $category, [
             'parent_id' => $category->public_id,
@@ -182,8 +184,8 @@ describe('the tree stays a tree', function () {
     });
 
     it('refuses to move a category inside its own subcategory', function () {
-        $parent = aCategory(['name' => 'Electronics']);
-        $child = aCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
+        $parent = catalogCategory(['name' => 'Electronics']);
+        $child = catalogCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
 
         expect(fn () => app(ManageCategories::class)->update($this->manager, $parent, [
             'parent_id' => $child->public_id,
@@ -193,11 +195,11 @@ describe('the tree stays a tree', function () {
     it('refuses to move a category with children to the deepest level', function () {
         // Its children would end up one level below the cap, which is the same
         // violation one step removed.
-        $electronics = aCategory(['name' => 'Electronics']);
-        aCategory(['name' => 'Phones', 'parent_id' => $electronics->id]);
+        $electronics = catalogCategory(['name' => 'Electronics']);
+        catalogCategory(['name' => 'Phones', 'parent_id' => $electronics->id]);
 
-        $other = aCategory(['name' => 'Home']);
-        $otherChild = aCategory(['name' => 'Kitchen', 'parent_id' => $other->id]);
+        $other = catalogCategory(['name' => 'Home']);
+        $otherChild = catalogCategory(['name' => 'Kitchen', 'parent_id' => $other->id]);
 
         expect(fn () => app(ManageCategories::class)->update($this->manager, $electronics, [
             'parent_id' => $otherChild->public_id,
@@ -207,7 +209,7 @@ describe('the tree stays a tree', function () {
 
 describe('switching a category off rather than deleting it (§11.3)', function () {
     it('switches one off without touching its products or history', function () {
-        $category = aCategory(['name' => 'Electronics']);
+        $category = catalogCategory(['name' => 'Electronics']);
 
         $this->actingAs($this->manager)
             ->patch(route('admin.catalog.categories.active', $category->public_id), [
@@ -225,8 +227,8 @@ describe('switching a category off rather than deleting it (§11.3)', function (
          * storefronts, which is the opposite of what the administrator asked
          * for.
          */
-        $parent = aCategory(['name' => 'Electronics']);
-        $child = aCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
+        $parent = catalogCategory(['name' => 'Electronics']);
+        $child = catalogCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
 
         app(ManageCategories::class)->setActive($this->manager, $parent, false);
 
@@ -235,7 +237,7 @@ describe('switching a category off rather than deleting it (§11.3)', function (
     });
 
     it('removes an empty category', function () {
-        $category = aCategory(['name' => 'Electronics']);
+        $category = catalogCategory(['name' => 'Electronics']);
 
         $this->actingAs($this->manager)
             ->delete(route('admin.catalog.categories.destroy', $category->public_id))
@@ -246,8 +248,8 @@ describe('switching a category off rather than deleting it (§11.3)', function (
     });
 
     it('refuses to remove a category that still has subcategories', function () {
-        $parent = aCategory(['name' => 'Electronics']);
-        aCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
+        $parent = catalogCategory(['name' => 'Electronics']);
+        catalogCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
 
         $this->actingAs($this->manager)
             ->delete(route('admin.catalog.categories.destroy', $parent->public_id))
@@ -261,8 +263,8 @@ describe('the screen', function () {
     it('lists disabled categories alongside live ones', function () {
         // "Why has that range stopped showing" is answered by seeing it
         // switched off. A list that hides it answers nothing.
-        aCategory(['name' => 'Electronics']);
-        aCategory(['name' => 'Retired', 'is_active' => false]);
+        catalogCategory(['name' => 'Electronics']);
+        catalogCategory(['name' => 'Retired', 'is_active' => false]);
 
         $this->actingAs($this->manager)
             ->get(route('admin.catalog.categories.index'))
@@ -289,8 +291,8 @@ describe('the screen', function () {
     });
 
     it('reports whether a category is actually reachable', function () {
-        $parent = aCategory(['name' => 'Electronics', 'is_active' => false]);
-        aCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
+        $parent = catalogCategory(['name' => 'Electronics', 'is_active' => false]);
+        catalogCategory(['name' => 'Phones', 'parent_id' => $parent->id]);
 
         $this->actingAs($this->manager)
             ->get(route('admin.catalog.categories.index'))
@@ -299,6 +301,109 @@ describe('the screen', function () {
                 ->where('categories.1.is_active', true)
                 ->where('categories.1.is_available', false),
             );
+    });
+});
+
+describe('the category image and slug', function () {
+    beforeEach(fn () => Storage::fake('public'));
+
+    it('stores an uploaded tile and sends its address to the screen', function () {
+        $this->actingAs($this->manager)
+            ->post(route('admin.catalog.categories.store'), [
+                'name' => 'Electronics',
+                'image' => UploadedFile::fake()->image('tile.png', 300, 300),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $category = Category::query()->firstOrFail();
+
+        expect($category->image_path)->toStartWith('catalog/categories/')
+            ->and($category->image_path)->toEndWith('.png');
+
+        Storage::disk('public')->assertExists((string) $category->image_path);
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.catalog.categories.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('categories.0.image_url', fn (string $url) => str_contains($url, (string) $category->image_path))
+                ->where('limits.image_max_kb', 2048),
+            );
+    });
+
+    it('refuses a file that is not an image, and writes nothing', function () {
+        $this->actingAs($this->manager)
+            ->post(route('admin.catalog.categories.store'), [
+                'name' => 'Electronics',
+                'image' => UploadedFile::fake()->create('brochure.pdf', 50, 'application/pdf'),
+            ])
+            ->assertSessionHasErrors('image');
+
+        expect(Category::query()->count())->toBe(0)
+            ->and(Storage::disk('public')->allFiles())->toBe([]);
+    });
+
+    it('keeps the old tile when a move is refused, and discards the new one', function () {
+        /*
+         * The file is written before the transaction, because a rollback cannot
+         * unwrite it. What has to hold is the other half: the category still
+         * points at a file that exists, and the upload nobody will reference is
+         * gone.
+         */
+        $electronics = app(ManageCategories::class)->create(
+            $this->manager,
+            ['name' => 'Electronics'],
+            UploadedFile::fake()->image('old.png'),
+        );
+        catalogCategory(['name' => 'Phones', 'parent_id' => $electronics->id]);
+
+        $home = catalogCategory(['name' => 'Home']);
+        $kitchen = catalogCategory(['name' => 'Kitchen', 'parent_id' => $home->id]);
+
+        $original = (string) $electronics->image_path;
+
+        expect(fn () => app(ManageCategories::class)->update(
+            $this->manager,
+            $electronics,
+            ['parent_id' => $kitchen->public_id],
+            UploadedFile::fake()->image('new.png'),
+        ))->toThrow(CatalogRefused::class);
+
+        expect($electronics->refresh()->image_path)->toBe($original);
+
+        Storage::disk('public')->assertExists($original);
+        expect(Storage::disk('public')->allFiles())->toBe([$original]);
+    });
+
+    it('replaces a tile and removes the one it replaced', function () {
+        $category = app(ManageCategories::class)->create(
+            $this->manager,
+            ['name' => 'Electronics'],
+            UploadedFile::fake()->image('old.png'),
+        );
+
+        $old = (string) $category->image_path;
+
+        $updated = app(ManageCategories::class)->update(
+            $this->manager,
+            $category,
+            ['name' => 'Electronics'],
+            UploadedFile::fake()->image('new.png'),
+        );
+
+        Storage::disk('public')->assertMissing($old);
+        Storage::disk('public')->assertExists((string) $updated->image_path);
+    });
+
+    it('takes a slug the administrator typed', function () {
+        $this->actingAs($this->manager)
+            ->post(route('admin.catalog.categories.store'), [
+                'name' => 'Consumer electronics',
+                'slug' => 'gadgets',
+            ])
+            ->assertSessionHasNoErrors();
+
+        expect(Category::query()->firstOrFail()->slug)->toBe('gadgets');
     });
 });
 

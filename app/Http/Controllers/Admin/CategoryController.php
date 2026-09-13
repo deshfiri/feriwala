@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\ManageCategories;
+use App\Domain\Catalog\CatalogImageStore;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Policies\CatalogPolicy;
@@ -11,6 +12,7 @@ use App\Http\Requests\Catalog\SaveCategoryRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,6 +34,7 @@ class CategoryController extends Controller
 {
     public function __construct(
         protected ManageCategories $categories,
+        protected CatalogImageStore $images,
     ) {}
 
     public function index(Request $request): Response
@@ -57,6 +60,12 @@ class CategoryController extends Controller
                 'edit' => CatalogPolicy::canEdit($actor),
                 'delete' => CatalogPolicy::canDelete($actor),
             ],
+
+            // Stated to the form so the help text cannot drift from the check.
+            'limits' => [
+                'image_max_kb' => (int) (CatalogImageStore::MAX_BYTES / 1024),
+                'image_types' => CatalogImageStore::ACCEPTED_MIME_TYPES,
+            ],
         ]);
     }
 
@@ -67,7 +76,7 @@ class CategoryController extends Controller
         abort_unless(CatalogPolicy::canCreate($actor), 403);
 
         try {
-            $category = $this->categories->create($actor, $request->validated());
+            $category = $this->categories->create($actor, $this->attributes($request), $request->file('image'));
         } catch (CatalogRefused $refused) {
             return $this->refuse($refused);
         }
@@ -82,7 +91,12 @@ class CategoryController extends Controller
         abort_unless(CatalogPolicy::canEdit($actor), 403);
 
         try {
-            $updated = $this->categories->update($actor, $this->category($category), $request->validated());
+            $updated = $this->categories->update(
+                $actor,
+                $this->category($category),
+                $this->attributes($request),
+                $request->file('image'),
+            );
         } catch (CatalogRefused $refused) {
             return $this->refuse($refused);
         }
@@ -149,6 +163,7 @@ class CategoryController extends Controller
             'depth' => $category->depth(),
             'description' => $category->description,
 
+            'image_url' => $this->images->url($category->image_path),
             'image_alt' => $category->image_alt,
             'meta_title' => $category->meta_title,
             'meta_description' => $category->meta_description,
@@ -177,6 +192,23 @@ class CategoryController extends Controller
         $category = Category::query()->where('public_id', $publicId)->firstOrFail();
 
         return $category;
+    }
+
+    /**
+     * The validated fields, with the file left to its own argument.
+     *
+     * `remove_image` is read through `boolean()` because a multipart form sends
+     * it as the string "1", and the action compares it strictly — a loose
+     * truthiness check is how "0" ends up deleting somebody's image.
+     *
+     * @return array<string, mixed>
+     */
+    protected function attributes(SaveCategoryRequest $request): array
+    {
+        return [
+            ...Arr::except($request->validated(), ['image']),
+            'remove_image' => $request->boolean('remove_image'),
+        ];
     }
 
     protected function refuse(CatalogRefused $refused): RedirectResponse

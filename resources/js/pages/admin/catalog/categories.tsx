@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
+import type { CatalogImageLimits } from './brands';
 import CategoryDialog from './category-dialog';
 
 export type CategoryRow = {
@@ -21,6 +22,7 @@ export type CategoryRow = {
     parent_name: string | null;
     depth: number;
     description: string | null;
+    image_url: string | null;
     image_alt: string | null;
     meta_title: string | null;
     meta_description: string | null;
@@ -34,6 +36,7 @@ export type CategoryRow = {
 type Props = {
     categories: CategoryRow[];
     can: { create: boolean; edit: boolean; delete: boolean };
+    limits: CatalogImageLimits;
 };
 
 /**
@@ -47,7 +50,7 @@ type Props = {
  * own switch is on, because that is what customers actually see — and a screen
  * that showed it as live would be lying about the storefront.
  */
-export default function AdminCategories({ categories, can }: Props) {
+export default function AdminCategories({ categories, can, limits }: Props) {
     const { t } = useTranslation();
 
     const [editing, setEditing] = useState<CategoryRow | null>(null);
@@ -289,6 +292,7 @@ export default function AdminCategories({ categories, can }: Props) {
                 }}
                 category={editing}
                 parents={parentCandidates}
+                limits={limits}
             />
         </>
     );

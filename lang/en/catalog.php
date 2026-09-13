@@ -23,6 +23,9 @@ return [
         'meta_keywords' => 'Keywords',
         'image_alt' => 'Image alt text',
         'image_alt_help' => 'Describes the category image for screen readers and for search.',
+        'image' => 'Category image',
+        'image_help' => 'JPEG, PNG or WebP, up to :size KB. Shown as the category tile on partner storefronts.',
+        'remove_image' => 'Remove the current image',
 
         'create' => 'New category',
         'create_title' => 'New category',
@@ -48,5 +51,58 @@ return [
         'empty_help' => 'Add the first one to start arranging the catalogue.',
         'no_matches' => 'Nothing matches that',
         'no_matches_help' => 'Try a different name or slug.',
+    ],
+
+    'brands' => [
+        'title' => 'Brands',
+        'description' => 'Who makes what the catalogue sells. Partners browse and filter by these.',
+        'caption' => 'Product brands',
+
+        'name' => 'Name',
+        'name_taken' => 'A brand with that name already exists, whatever the capitals.',
+        'slug' => 'URL slug',
+        'slug_placeholder' => 'Left blank, one is made from the name',
+        'slug_help' => 'Storefront links carry this. It is not changed automatically when the name changes, so existing links keep working.',
+        'field_description' => 'Description',
+
+        'logo' => 'Logo',
+        'logo_help' => 'JPEG, PNG or WebP, up to :size KB.',
+        'remove_logo' => 'Remove the current logo',
+        'logo_alt' => 'Logo alt text',
+        'logo_alt_help' => 'Describes the logo for screen readers and for search.',
+        'no_logo' => 'No logo',
+
+        'create' => 'New brand',
+        'create_title' => 'New brand',
+        'edit_title' => 'Edit brand',
+        'dialog_description' => 'A brand says who made a product, not where it sits in the catalogue.',
+
+        'search' => 'Search by name or slug',
+        'filter_status' => 'Status',
+        'filter_all' => 'All statuses',
+
+        'columns' => [
+            'brand' => 'Brand',
+            'slug' => 'Slug',
+            'status' => 'Status',
+        ],
+
+        'state_live' => 'Live',
+        'state_off' => 'Switched off',
+        'enable' => 'Switch on',
+        'disable' => 'Switch off',
+        'products_count' => ':count products',
+
+        'created' => ':name added.',
+        'updated' => ':name saved.',
+        'enabled' => ':name is live again.',
+        'disabled' => ':name is switched off.',
+        'deleted' => 'Brand removed.',
+        'delete_confirm' => 'Remove this brand? Its logo is removed with it. Switch it off instead to keep it on record.',
+
+        'empty' => 'No brands yet',
+        'empty_help' => 'Add the first brand so products can be assigned to it.',
+        'no_matches' => 'No brand matches',
+        'no_matches_help' => 'Try a different name, or clear the status filter.',
     ],
 ];
