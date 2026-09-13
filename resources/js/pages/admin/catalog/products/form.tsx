@@ -14,10 +14,13 @@ import type {
     AttributeOption,
     CatalogAbilities,
     CatalogOption,
+    MediaLimits,
+    MediaRow,
     ProductDetail,
     VariantRow,
 } from '@/types';
 import { ProductStatusPill } from './index';
+import MediaSection from './media-section';
 import VariantsSection from './variants-section';
 
 type Props = {
@@ -26,6 +29,8 @@ type Props = {
     can: CatalogAbilities;
     variants: VariantRow[];
     attributes: AttributeOption[];
+    media: MediaRow[];
+    media_limits: MediaLimits;
 };
 
 const selectClass =
@@ -51,6 +56,8 @@ export default function ProductForm({
     can,
     variants,
     attributes,
+    media,
+    media_limits,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -449,6 +456,16 @@ export default function ProductForm({
                         </fieldset>
                     )}
                 </Form>
+
+                {editing && (
+                    <MediaSection
+                        product={product}
+                        media={media}
+                        limits={media_limits}
+                        variants={variants}
+                        canEdit={can.edit}
+                    />
+                )}
 
                 {editing && (
                     <VariantsSection

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Catalog\Actions\ManageProductMedia;
 use App\Domain\Catalog\Actions\ManageProducts;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
@@ -9,8 +10,10 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Catalog\ProductMediaStore;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
 use App\Models\User;
@@ -38,6 +41,7 @@ class ProductController extends Controller
 
     public function __construct(
         protected ManageProducts $products,
+        protected ProductMediaStore $mediaStore,
     ) {}
 
     public function index(Request $request): Response
@@ -80,7 +84,10 @@ class ProductController extends Controller
             'options' => $this->options(),
             'can' => $this->abilities($actor),
 
-            // Variations are added once the product exists to hang them on.
+            // Media and variations are added once the product exists to hang
+            // them on.
+            'media' => [],
+            'media_limits' => $this->mediaLimits(),
             'variants' => [],
             'attributes' => [],
         ]);
@@ -111,6 +118,14 @@ class ProductController extends Controller
             'product' => $this->detail($record),
             'options' => $this->options(),
             'can' => $this->abilities($actor),
+
+            // Images and videos, in the order storefronts show them (§11.1).
+            'media' => $record->media()
+                ->with('variant.values.attribute')
+                ->get()
+                ->map(fn (ProductMedia $media) => $this->mediaRow($media))
+                ->all(),
+            'media_limits' => $this->mediaLimits(),
 
             // Variations beside the product they belong to (§11.1).
             'variants' => $record->variants()
@@ -209,6 +224,56 @@ class ProductController extends Controller
             'status' => $product->status,
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
+    }
+
+    /**
+     * One image or video as the editor shows it — the storefront contract's
+     * url, alt, position and type, plus what an administrator needs beside it.
+     *
+     * @return array<string, mixed>
+     */
+    protected function mediaRow(ProductMedia $media): array
+    {
+        return [
+            'id' => $media->public_id,
+            'type' => $media->type,
+            'url' => $this->mediaStore->url($media->path),
+            'alt_text' => $media->alt_text,
+            'position' => $media->position,
+            'mime_type' => $media->mime_type,
+            'size_bytes' => $media->size_bytes,
+            'width' => $media->width,
+            'height' => $media->height,
+            'variant_id' => $media->variant?->public_id,
+            'variant_label' => $media->variant?->values
+                ->sortBy(fn (ProductAttributeValue $value) => $value->attribute->sort_order)
+                ->pluck('value')
+                ->implode(' / '),
+        ];
+    }
+
+    /**
+     * The limits the upload form states — the same figures the server enforces,
+     * never above what PHP accepts.
+     *
+     * @return array<string, mixed>
+     */
+    protected function mediaLimits(): array
+    {
+        return [
+            'image_types' => ProductMediaStore::IMAGE_TYPES,
+            'video_types' => ProductMediaStore::VIDEO_TYPES,
+            // Strings, already formatted: "2", "2.5". A float in a prop comes
+            // back from JSON as whatever it happens to round-trip to.
+            'image_max_mb' => $this->megabytes(ProductMediaStore::maxBytesFor(ProductMedia::TYPE_IMAGE)),
+            'video_max_mb' => $this->megabytes(ProductMediaStore::maxBytesFor(ProductMedia::TYPE_VIDEO)),
+            'max_items' => ManageProductMedia::MAX_PER_PRODUCT,
+        ];
+    }
+
+    public static function megabytes(int $bytes): string
+    {
+        return rtrim(rtrim(number_format($bytes / 1024 / 1024, 1, '.', ''), '0'), '.');
     }
 
     /**

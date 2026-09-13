@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Category $category
  * @property-read Brand|null $brand
  * @property-read Collection<int, ProductVariant> $variants
+ * @property-read Collection<int, ProductMedia> $media
  */
 class Product extends Model
 {
@@ -82,6 +83,18 @@ class Product extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    /**
+     * Images and videos, in the order a storefront shows them.
+     *
+     * @return HasMany<ProductMedia, $this>
+     */
+    public function media(): HasMany
+    {
+        return $this->hasMany(ProductMedia::class)
+            ->orderBy('position')
+            ->orderBy('id');
     }
 
     /**

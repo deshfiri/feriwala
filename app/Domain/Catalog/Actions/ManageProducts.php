@@ -8,6 +8,9 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductMedia;
+use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\ProductMediaStore;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -28,6 +31,7 @@ class ManageProducts
 {
     public function __construct(
         protected RecordAuditLog $audit,
+        protected ProductMediaStore $mediaStore,
         protected DatabaseManager $database,
     ) {}
 
@@ -76,11 +80,18 @@ class ManageProducts
      * delete dangerous, and none of them can exist for a product that was never
      * offered.
      *
+     * A draft's own variations and media are removed with it, **explicitly**:
+     * the foreign keys restrict rather than cascade, so nothing disappears
+     * without this method naming it, and the audit entry lists what went. The
+     * media files are deleted only after the removal commits.
+     *
      * @throws CatalogRefused
      */
     public function delete(User $actor, Product $product): void
     {
-        $this->database->transaction(function () use ($actor, $product) {
+        $paths = [];
+
+        $this->database->transaction(function () use ($actor, $product, &$paths) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
 
@@ -88,10 +99,25 @@ class ManageProducts
                 throw CatalogRefused::productNotDraft();
             }
 
-            $this->record($actor, 'catalog.product_deleted', $locked, before: $this->snapshot($locked));
+            $paths = ProductMedia::query()->where('product_id', $locked->id)->pluck('path')->all();
+
+            $this->record($actor, 'catalog.product_deleted', $locked, before: [
+                ...$this->snapshot($locked),
+                'variants' => ProductVariant::query()->where('product_id', $locked->id)->pluck('sku')->all(),
+                'media' => $paths,
+            ]);
+
+            ProductMedia::query()->where('product_id', $locked->id)->delete();
+
+            // A variant's value links are part of the variant and go with it.
+            ProductVariant::query()->where('product_id', $locked->id)->delete();
 
             $locked->delete();
         });
+
+        foreach ($paths as $path) {
+            $this->mediaStore->delete($path);
+        }
     }
 
     /**

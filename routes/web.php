@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\ProductAttributeController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
@@ -492,6 +493,16 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.variants.update');
         Route::delete('catalog/products/{product}/variants/{variant}', [ProductVariantController::class, 'destroy'])
             ->name('catalog.products.variants.destroy');
+
+        // Images and videos, addressed through their product (§11.1).
+        Route::post('catalog/products/{product}/media', [ProductMediaController::class, 'store'])
+            ->name('catalog.products.media.store');
+        Route::post('catalog/products/{product}/media/reorder', [ProductMediaController::class, 'reorder'])
+            ->name('catalog.products.media.reorder');
+        Route::patch('catalog/products/{product}/media/{media}', [ProductMediaController::class, 'update'])
+            ->name('catalog.products.media.update');
+        Route::delete('catalog/products/{product}/media/{media}', [ProductMediaController::class, 'destroy'])
+            ->name('catalog.products.media.destroy');
 
         Route::get('catalog/attributes', [ProductAttributeController::class, 'index'])
             ->name('catalog.attributes.index');

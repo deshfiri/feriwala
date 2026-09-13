@@ -60,6 +60,30 @@ export type VariantRow = {
     is_active: boolean;
 };
 
+export type MediaRow = {
+    id: string;
+    type: 'image' | 'video';
+    url: string;
+    alt_text: string | null;
+    position: number;
+    mime_type: string;
+    size_bytes: number;
+    width: number | null;
+    height: number | null;
+    variant_id: string | null;
+    variant_label: string | null;
+};
+
+/** What the server will accept — never above PHP's own upload limit. */
+export type MediaLimits = {
+    image_types: string[];
+    video_types: string[];
+    /** Formatted by the server, e.g. "2" or "2.5". */
+    image_max_mb: string;
+    video_max_mb: string;
+    max_items: number;
+};
+
 export type AttributeOption = {
     id: string;
     name: string;

@@ -156,6 +156,46 @@ class CatalogRefused extends RuntimeException
         ));
     }
 
+    /**
+     * An upload whose bytes are neither an accepted image nor an accepted video.
+     */
+    public static function mediaTypeNotAccepted(string $mime): self
+    {
+        return new self(sprintf(
+            'A %s cannot be used as product media. Images: JPEG, PNG or WebP. Videos: MP4 or WebM.',
+            $mime === '' ? 'file of that type' : $mime,
+        ));
+    }
+
+    public static function mediaTooLarge(string $type, int $bytes, int $maxBytes): self
+    {
+        return new self(sprintf(
+            'That %s is %s. Product %ss go up to %s.',
+            $type,
+            self::megabytes($bytes),
+            $type,
+            self::megabytes($maxBytes),
+        ));
+    }
+
+    public static function tooMuchMedia(int $max): self
+    {
+        return new self("A product holds up to {$max} images and videos. Remove one before adding another.");
+    }
+
+    /**
+     * A variation named for a picture that belongs to a different product.
+     */
+    public static function variantOfAnotherProduct(): self
+    {
+        return new self('That variation belongs to a different product.');
+    }
+
+    protected static function megabytes(int $bytes): string
+    {
+        return number_format($bytes / 1024 / 1024, 1).' MB';
+    }
+
     public static function duplicateCombination(): self
     {
         return new self('A variation with that combination of attributes already exists on this product.');
