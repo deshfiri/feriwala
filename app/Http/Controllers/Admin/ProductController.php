@@ -99,6 +99,7 @@ class ProductController extends Controller
             'price_tiers' => [],
             'eligibility' => null,
             'package_options' => [],
+            'merchandising' => null,
             'transitions' => [],
             'history' => [],
             'variants' => [],
@@ -161,6 +162,28 @@ class ProductController extends Controller
                     'at' => $change->created_at->toIso8601String(),
                 ])
                 ->all(),
+
+            // What it recommends, in order, and whether it is featured (§11.1).
+            'merchandising' => [
+                'is_featured' => $record->is_featured,
+                'featured_at' => $record->featured_at?->toIso8601String(),
+                'related' => $record->relatedProducts()
+                    ->get(['products.public_id', 'products.name', 'products.sku', 'products.status'])
+                    ->map(fn (Product $related) => [
+                        'id' => $related->public_id,
+                        'name' => $related->name,
+                        'sku' => $related->sku,
+                        'status' => $related->status->value,
+                        'status_tone' => $related->status->tone(),
+                    ])
+                    ->all(),
+            ],
+
+            /*
+             * Products to add as related, evaluated only when the editor asks by
+             * partial reload, and never the product itself.
+             */
+            'related_matches' => Inertia::optional(fn () => $this->relatedMatches($request, $record)),
 
             // Who may see it: by package, and optionally by account (§11.1).
             'eligibility' => [
@@ -270,6 +293,7 @@ class ProductController extends Controller
             'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
+            'is_featured' => $product->is_featured,
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
     }
@@ -411,6 +435,36 @@ class ProductController extends Controller
     }
 
     /**
+     * Up to ten other products whose name or SKU matches the search.
+     *
+     * @return array<int, array{id: string, name: string, sku: string, status: string}>
+     */
+    protected function relatedMatches(Request $request, Product $product): array
+    {
+        $search = trim($request->string('related_search')->toString());
+
+        if (mb_strlen($search) < 2) {
+            return [];
+        }
+
+        $pattern = '%'.addcslashes($search, '%_\\').'%';
+
+        return Product::query()
+            ->whereKeyNot($product->id)
+            ->where(fn (Builder $query) => $query->where('name', 'ilike', $pattern)->orWhere('sku', 'ilike', $pattern))
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['public_id', 'name', 'sku', 'status'])
+            ->map(fn (Product $match) => [
+                'id' => $match->public_id,
+                'name' => $match->name,
+                'sku' => $match->sku,
+                'status' => $match->status->value,
+            ])
+            ->all();
+    }
+
+    /**
      * Up to ten business accounts whose name matches the search.
      *
      * @return array<int, array{id: string, name: string, status: string}>
@@ -530,6 +584,7 @@ class ProductController extends Controller
             'create' => CatalogPolicy::canCreate($actor),
             'edit' => CatalogPolicy::canEdit($actor),
             'delete' => CatalogPolicy::canDelete($actor),
+            'publish' => CatalogPolicy::canPublish($actor),
             'enable_channels' => CatalogPolicy::canSetChannel($actor, true),
             'disable_channels' => CatalogPolicy::canSetChannel($actor, false),
         ];

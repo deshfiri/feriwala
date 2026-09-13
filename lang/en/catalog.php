@@ -131,6 +131,31 @@ return [
         'no_matches_help' => 'Try a different name, SKU or barcode.',
     ],
 
+    'related' => [
+        'title' => 'Featured and related products',
+        'description' => 'A featured product is listed first on partners’ catalogues. Related products are shown on this product’s page, in this order, to partners who may see them.',
+        'featured' => 'Featured',
+        'not_featured' => 'Not featured',
+        'feature' => 'Feature this product',
+        'unfeature' => 'Stop featuring',
+        'featured_since' => 'Featured since :date',
+        'related' => 'Related products',
+        'none' => 'No related products yet.',
+        'find' => 'Find a product by name or SKU',
+        'search' => 'Search',
+        'add' => 'Add',
+        'remove' => 'Remove',
+        'move_up' => 'Move up',
+        'move_down' => 'Move down',
+        'no_matches' => 'No other product matches that.',
+        'save' => 'Save related products',
+        'saved' => 'Related products saved.',
+        'featured_on' => 'Product featured.',
+        'featured_off' => 'Product no longer featured.',
+        'not_itself' => 'A product cannot be related to itself.',
+        'limit' => 'Up to :max related products.',
+    ],
+
     'channels' => [
         'title' => 'Sales channels',
         'description' => 'Dropshipping and wholesale are switched on separately. A channel that is on offers the product to eligible partners on it once the product is active. Switching on needs the publish permission; switching off, the unpublish permission.',
@@ -185,6 +210,8 @@ return [
         'minimum' => 'Minimum',
         'maximum' => 'Maximum',
         'not_set' => 'Not set',
+        'featured' => 'Featured',
+        'related' => 'Related products',
     ],
 
     'eligibility' => [

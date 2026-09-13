@@ -6,6 +6,7 @@ import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import PermissionDeniedState from '@/components/states/permission-denied-state';
+import StatusPill from '@/components/status-pill';
 import { Input } from '@/components/ui/input';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
@@ -178,7 +179,7 @@ export default function BrowseCatalogue({
     );
 }
 
-function ProductCard({
+export function ProductCard({
     channel,
     product,
 }: {
@@ -213,6 +214,12 @@ function ProductCard({
             </div>
 
             <div className="min-w-0 space-y-0.5">
+                {product.is_featured && (
+                    <StatusPill
+                        tone="info"
+                        label={t('catalog.browse.featured')}
+                    />
+                )}
                 <p className="line-clamp-2 font-medium">{product.name}</p>
                 <p className="text-muted-foreground truncate text-xs">
                     {product.category}

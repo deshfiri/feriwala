@@ -120,6 +120,12 @@ class ManageProducts
             $locked->eligiblePackages()->detach();
             $locked->eligibleAccounts()->detach();
 
+            // Its recommendations, and every other product's recommendation of it.
+            $this->database->table('product_related')
+                ->where('product_id', $locked->id)
+                ->orWhere('related_product_id', $locked->id)
+                ->delete();
+
             // A variant's value links are part of the variant and go with it.
             ProductVariant::query()->where('product_id', $locked->id)->delete();
 

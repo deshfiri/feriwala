@@ -17,13 +17,16 @@ import type {
     CatalogOption,
     MediaLimits,
     MediaRow,
+    MerchandisingState,
     PriceTierScope,
     ProductDetail,
     ProductEligibilityState,
     ProductStatusChangeRow,
     ProductTransition,
+    RelatedProductRow,
     VariantRow,
 } from '@/types';
+import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
 import { ProductStatusPill } from './index';
@@ -45,6 +48,8 @@ type Props = {
     eligibility: ProductEligibilityState | null;
     package_options: CatalogOption[];
     account_matches?: AccountMatch[];
+    merchandising: MerchandisingState | null;
+    related_matches?: RelatedProductRow[];
 };
 
 const selectClass =
@@ -78,6 +83,8 @@ export default function ProductForm({
     eligibility,
     package_options,
     account_matches,
+    merchandising,
+    related_matches,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -603,6 +610,15 @@ export default function ProductForm({
                         </fieldset>
                     )}
                 </Form>
+
+                {editing && merchandising && (
+                    <MerchandisingSection
+                        product={product}
+                        merchandising={merchandising}
+                        relatedMatches={related_matches}
+                        can={can}
+                    />
+                )}
 
                 {editing && eligibility && (
                     <EligibilitySection

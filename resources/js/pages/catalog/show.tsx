@@ -8,11 +8,14 @@ import SectionCard from '@/components/section-card';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as dropshippingIndex } from '@/routes/catalog/dropshipping';
 import { index as wholesaleIndex } from '@/routes/catalog/wholesale';
-import type { BrowseDetail, SalesChannelName } from '@/types';
+import type { BrowseCard, BrowseDetail, SalesChannelName } from '@/types';
+import { ProductCard } from './browse';
 
 type Props = {
     channel: SalesChannelName;
     product: BrowseDetail;
+    /** Only the recommendations this account may itself open on this channel. */
+    related: BrowseCard[];
 };
 
 /**
@@ -23,7 +26,7 @@ type Props = {
  * quantity pricing is resolved at each band's starting quantity before it
  * arrives, so a band the base price has since undercut shows what is charged.
  */
-export default function CatalogueProduct({ channel, product }: Props) {
+export default function CatalogueProduct({ channel, product, related }: Props) {
     const { t } = useTranslation();
     const [active, setActive] = useState(0);
 
@@ -148,6 +151,27 @@ export default function CatalogueProduct({ channel, product }: Props) {
                                             amount={variant.wholesale_price}
                                         />
                                     )}
+                                </li>
+                            ))}
+                        </ul>
+                    </SectionCard>
+                )}
+
+                {related.length > 0 && (
+                    <SectionCard
+                        title={t('catalog.browse.related')}
+                        contentClassName="p-0"
+                    >
+                        <ul className="grid gap-px sm:grid-cols-2 lg:grid-cols-4">
+                            {related.map((item) => (
+                                <li
+                                    key={item.slug}
+                                    className="border-border border-b sm:border-r"
+                                >
+                                    <ProductCard
+                                        channel={channel}
+                                        product={item}
+                                    />
                                 </li>
                             ))}
                         </ul>

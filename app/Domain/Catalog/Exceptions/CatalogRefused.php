@@ -107,6 +107,16 @@ class CatalogRefused extends RuntimeException
         return new self("{$status} is a sales-channel setting, not a lifecycle status.");
     }
 
+    public static function relatedToItself(): self
+    {
+        return new self('A product cannot be related to itself.');
+    }
+
+    public static function tooManyRelated(int $max): self
+    {
+        return new self("A product recommends up to {$max} related products.");
+    }
+
     public static function channelUnchanged(string $channel, bool $enable): self
     {
         return new self("{$channel} is already switched ".($enable ? 'on' : 'off').' for this product.');

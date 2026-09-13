@@ -51,6 +51,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property AccountScope $account_scope
  * @property ProductStatus $dropshipping_status
  * @property ProductStatus $wholesale_status
+ * @property bool $is_featured
+ * @property CarbonImmutable|null $featured_at
  * @property-read bool|null $price_tiers_exists
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable $created_at
@@ -99,6 +101,7 @@ class Product extends Model
         'account_scope' => 'any',
         'dropshipping_status' => 'dropshipping_disabled',
         'wholesale_status' => 'wholesale_disabled',
+        'is_featured' => false,
     ];
 
     protected $guarded = [];
@@ -121,6 +124,8 @@ class Product extends Model
             'account_scope' => AccountScope::class,
             'dropshipping_status' => ProductStatus::class,
             'wholesale_status' => ProductStatus::class,
+            'is_featured' => 'boolean',
+            'featured_at' => 'immutable_datetime',
             'published_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -200,6 +205,18 @@ class Product extends Model
     {
         return $this->belongsToMany(BusinessAccount::class, 'product_user_eligibility')
             ->withPivot('created_at');
+    }
+
+    /**
+     * The products this one recommends, in the order they are shown.
+     *
+     * @return BelongsToMany<Product, $this>
+     */
+    public function relatedProducts(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'product_related', 'product_id', 'related_product_id')
+            ->withPivot('position')
+            ->orderByPivot('position');
     }
 
     /**

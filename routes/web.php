@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\ProductChannelController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductEligibilityController;
 use App\Http\Controllers\Admin\ProductMediaController;
+use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
@@ -523,6 +524,12 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::patch('catalog/products/{product}/status', [ProductStatusController::class, 'update'])
             ->name('catalog.products.status.update');
+
+        // What a product recommends, and whether it is featured (§11.1).
+        Route::put('catalog/products/{product}/related', [ProductMerchandisingController::class, 'related'])
+            ->name('catalog.products.related.update');
+        Route::patch('catalog/products/{product}/featured', [ProductMerchandisingController::class, 'featured'])
+            ->name('catalog.products.featured.update');
 
         // Dropshipping and wholesale, one channel per request (§11.1).
         Route::patch('catalog/products/{product}/channels/{channel}', [ProductChannelController::class, 'update'])

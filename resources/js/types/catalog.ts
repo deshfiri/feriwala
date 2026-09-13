@@ -43,6 +43,7 @@ export type ProductRow = {
     wholesale_price: Money;
     status: string;
     status_tone: StatusTone;
+    is_featured: boolean;
     updated_at: string;
 };
 
@@ -111,6 +112,20 @@ export type PriceTierScope = {
     }[];
 };
 
+export type RelatedProductRow = {
+    id: string;
+    name: string;
+    sku: string;
+    status: string;
+    status_tone?: StatusTone;
+};
+
+export type MerchandisingState = {
+    is_featured: boolean;
+    featured_at: string | null;
+    related: RelatedProductRow[];
+};
+
 /** Who may see a product: by package, and optionally by named account. */
 export type ProductEligibilityState = {
     package_scope: 'all' | 'selected';
@@ -163,6 +178,7 @@ export type CatalogAbilities = {
     create: boolean;
     edit: boolean;
     delete: boolean;
+    publish?: boolean;
     enable_channels?: boolean;
     disable_channels?: boolean;
 };
@@ -187,6 +203,7 @@ export type BrowseCard = {
     sku: string;
     category: string;
     brand: string | null;
+    is_featured: boolean;
     image: { url: string; alt: string | null } | null;
     wholesale_price?: Money;
     min_order_quantity?: number;

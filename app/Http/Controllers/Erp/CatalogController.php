@@ -101,6 +101,9 @@ class CatalogController extends Controller
             // buyer means by choosing it.
             ->when($category !== null, fn (Builder $query) => $query->whereIn('category_id', $category?->descendantIds() ?? []))
             ->when($brand !== null, fn (Builder $query) => $query->where('brand_id', $brand?->id))
+            // Featured first (§11.1), newest featured first among them.
+            ->orderByDesc('is_featured')
+            ->orderByDesc('featured_at')
             ->orderBy('name')
             ->orderBy('id')
             ->paginate(self::PER_PAGE)
@@ -205,9 +208,30 @@ class CatalogController extends Controller
             $detail += $this->sellingGuidance($product);
         }
 
+        /*
+         * Related products the account may itself see on this channel — the
+         * same eligibility query, restricted to this product's recommendations,
+         * so a recommendation never leaks a product the account could not open.
+         */
+        $relatedIds = $product->relatedProducts()->pluck('products.id')->all();
+        $positions = array_flip($relatedIds);
+
+        $related = $relatedIds === []
+            ? []
+            : $this->eligibility->query($account, $channel)
+                ->whereIn('id', $relatedIds)
+                ->with(['category:id,name', 'brand:id,name', 'media' => fn ($query) => $query->where('type', ProductMedia::TYPE_IMAGE)])
+                ->withExists('priceTiers')
+                ->get()
+                ->sortBy(fn (Product $related) => $positions[$related->id] ?? PHP_INT_MAX)
+                ->map(fn (Product $related) => $this->card($related, $channel))
+                ->values()
+                ->all();
+
         return Inertia::render('catalog/show', [
             'channel' => $channel->value,
             'product' => $detail,
+            'related' => $related,
         ]);
     }
 
@@ -224,6 +248,7 @@ class CatalogController extends Controller
             'sku' => $product->sku,
             'category' => $product->category->name,
             'brand' => $product->brand?->name,
+            'is_featured' => $product->is_featured,
             'image' => $image === null ? null : [
                 'url' => $this->media->url($image->path),
                 'alt' => $image->alt_text,
