@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\ProductAttributeController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductEligibilityController;
 use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
@@ -503,6 +504,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::patch('catalog/products/{product}/status', [ProductStatusController::class, 'update'])
             ->name('catalog.products.status.update');
+
+        // Which packages and accounts may see a product, as one decision (§11.1, §12).
+        Route::put('catalog/products/{product}/eligibility', [ProductEligibilityController::class, 'update'])
+            ->name('catalog.products.eligibility.update');
 
         // Quantity pricing, replaced as a whole table per scope (§11.1).
         Route::put('catalog/products/{product}/price-tiers', [ProductPriceTierController::class, 'update'])

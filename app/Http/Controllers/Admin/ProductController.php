@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Actions\ManageProductMedia;
 use App\Domain\Catalog\Actions\ManageProducts;
 use App\Domain\Catalog\Enums\ProductStatus;
@@ -18,6 +19,7 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\WholesalePriceResolver;
+use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
 use App\Models\User;
@@ -94,6 +96,8 @@ class ProductController extends Controller
             'media' => [],
             'media_limits' => $this->mediaLimits(),
             'price_tiers' => [],
+            'eligibility' => null,
+            'package_options' => [],
             'transitions' => [],
             'history' => [],
             'variants' => [],
@@ -156,6 +160,35 @@ class ProductController extends Controller
                     'at' => $change->created_at->toIso8601String(),
                 ])
                 ->all(),
+
+            // Who may see it: by package, and optionally by account (§11.1).
+            'eligibility' => [
+                'package_scope' => $record->package_scope->value,
+                'package_ids' => $record->eligiblePackages()->pluck('packages.public_id')->all(),
+                'account_scope' => $record->account_scope->value,
+                'accounts' => $record->eligibleAccounts()
+                    ->orderBy('business_accounts.name')
+                    ->get(['business_accounts.public_id', 'business_accounts.name'])
+                    ->map(fn (BusinessAccount $account) => ['id' => $account->public_id, 'name' => $account->name])
+                    ->all(),
+            ],
+            'package_options' => Package::query()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['public_id', 'name', 'is_active'])
+                ->map(fn (Package $package) => [
+                    'value' => $package->public_id,
+                    'label' => $package->name,
+                    'is_available' => $package->is_active,
+                ])
+                ->all(),
+
+            /*
+             * Account search for the allow-list, evaluated only when the editor
+             * asks for it by partial reload — never on an ordinary page load,
+             * and never more than a handful of names.
+             */
+            'account_matches' => Inertia::optional(fn () => $this->accountMatches($request)),
 
             // Quantity pricing per scope: the product, then each variation.
             'price_tiers' => $this->priceTiers($record),
@@ -366,6 +399,32 @@ class ProductController extends Controller
                     ->all(),
             ];
         }, $scopes);
+    }
+
+    /**
+     * Up to ten business accounts whose name matches the search.
+     *
+     * @return array<int, array{id: string, name: string, status: string}>
+     */
+    protected function accountMatches(Request $request): array
+    {
+        $search = trim($request->string('account_search')->toString());
+
+        if (mb_strlen($search) < 2) {
+            return [];
+        }
+
+        return BusinessAccount::query()
+            ->where('name', 'ilike', '%'.addcslashes($search, '%_\\').'%')
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['public_id', 'name', 'status'])
+            ->map(fn (BusinessAccount $account) => [
+                'id' => $account->public_id,
+                'name' => $account->name,
+                'status' => $account->status->value,
+            ])
+            ->all();
     }
 
     public static function megabytes(int $bytes): string

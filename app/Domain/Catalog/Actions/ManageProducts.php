@@ -117,6 +117,8 @@ class ManageProducts
 
             ProductMedia::query()->where('product_id', $locked->id)->delete();
             ProductPriceTier::query()->where('product_id', $locked->id)->delete();
+            $locked->eligiblePackages()->detach();
+            $locked->eligibleAccounts()->detach();
 
             // A variant's value links are part of the variant and go with it.
             ProductVariant::query()->where('product_id', $locked->id)->delete();

@@ -110,6 +110,16 @@ export type PriceTierScope = {
     }[];
 };
 
+/** Who may see a product: by package, and optionally by named account. */
+export type ProductEligibilityState = {
+    package_scope: 'all' | 'selected';
+    package_ids: string[];
+    account_scope: 'any' | 'selected';
+    accounts: { id: string; name: string }[];
+};
+
+export type AccountMatch = { id: string; name: string; status: string };
+
 export type MediaRow = {
     id: string;
     type: 'image' | 'video';

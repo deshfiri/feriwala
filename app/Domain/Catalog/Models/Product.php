@@ -6,12 +6,17 @@ use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
 use App\Concerns\HasStateMachine;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Catalog\Enums\AccountScope;
+use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Package\Models\Package;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -40,6 +45,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Money|null $minimum_selling_price_minor
  * @property Money|null $maximum_selling_price_minor
  * @property ProductStatus $status
+ * @property PackageScope $package_scope
+ * @property AccountScope $account_scope
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
@@ -67,6 +74,26 @@ class Product extends Model
      */
     use HasStateMachine;
 
+    /**
+     * The column defaults, stated on the model as well as in the table.
+     *
+     * A product created in this request is otherwise missing every attribute
+     * the database filled in, and a rule that reads one — eligibility asking for
+     * `package_scope` — sees null and answers as if the rule were absent. The
+     * least permissive defaults have to hold in memory, not only after a reload.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'currency_code' => 'BDT',
+        'base_cost_minor' => 0,
+        'wholesale_price_minor' => 0,
+        'min_order_quantity' => 1,
+        'status' => 'draft',
+        'package_scope' => 'selected',
+        'account_scope' => 'any',
+    ];
+
     protected $guarded = [];
 
     /**
@@ -83,6 +110,8 @@ class Product extends Model
             'minimum_selling_price_minor' => MoneyCast::class,
             'maximum_selling_price_minor' => MoneyCast::class,
             'status' => ProductStatus::class,
+            'package_scope' => PackageScope::class,
+            'account_scope' => AccountScope::class,
             'published_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -119,6 +148,29 @@ class Product extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    /**
+     * The packages this product is offered to, when its scope is "selected".
+     *
+     * @return BelongsToMany<Package, $this>
+     */
+    public function eligiblePackages(): BelongsToMany
+    {
+        return $this->belongsToMany(Package::class, 'product_package_eligibility')
+            ->withPivot('created_at');
+    }
+
+    /**
+     * The business accounts this product is restricted to, when its account
+     * scope is "selected".
+     *
+     * @return BelongsToMany<BusinessAccount, $this>
+     */
+    public function eligibleAccounts(): BelongsToMany
+    {
+        return $this->belongsToMany(BusinessAccount::class, 'product_user_eligibility')
+            ->withPivot('created_at');
     }
 
     /**

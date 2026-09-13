@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import { index } from '@/routes/admin/catalog/products';
 import type {
+    AccountMatch,
     AttributeOption,
     CatalogAbilities,
     CatalogOption,
@@ -18,10 +19,12 @@ import type {
     MediaRow,
     PriceTierScope,
     ProductDetail,
+    ProductEligibilityState,
     ProductStatusChangeRow,
     ProductTransition,
     VariantRow,
 } from '@/types';
+import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
 import { ProductStatusPill } from './index';
 import MediaSection from './media-section';
@@ -39,6 +42,9 @@ type Props = {
     price_tiers: PriceTierScope[];
     transitions: ProductTransition[];
     history: ProductStatusChangeRow[];
+    eligibility: ProductEligibilityState | null;
+    package_options: CatalogOption[];
+    account_matches?: AccountMatch[];
 };
 
 const selectClass =
@@ -69,6 +75,9 @@ export default function ProductForm({
     price_tiers,
     transitions,
     history,
+    eligibility,
+    package_options,
+    account_matches,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -593,6 +602,16 @@ export default function ProductForm({
                         </fieldset>
                     )}
                 </Form>
+
+                {editing && eligibility && (
+                    <EligibilitySection
+                        product={product}
+                        eligibility={eligibility}
+                        packageOptions={package_options}
+                        accountMatches={account_matches}
+                        canEdit={can.edit}
+                    />
+                )}
 
                 {editing && (
                     <PriceTiersSection
