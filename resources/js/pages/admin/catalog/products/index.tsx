@@ -9,6 +9,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
+import type { StatusTone } from '@/lib/status';
 import { create, edit } from '@/routes/admin/catalog/products';
 import type { CatalogAbilities, Column, Paginator, ProductRow } from '@/types';
 
@@ -67,7 +68,9 @@ export default function AdminProducts({ products, can }: Props) {
         {
             key: 'status',
             header: t('catalog.products.columns.status'),
-            cell: (row) => <ProductStatusPill status={row.status} />,
+            cell: (row) => (
+                <ProductStatusPill status={row.status} tone={row.status_tone} />
+            ),
         },
     ];
 
@@ -120,7 +123,10 @@ export default function AdminProducts({ products, can }: Props) {
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1">
                                 <MoneyAmount amount={row.wholesale_price} />
-                                <ProductStatusPill status={row.status} />
+                                <ProductStatusPill
+                                    status={row.status}
+                                    tone={row.status_tone}
+                                />
                             </div>
                         </div>
                     )}
@@ -148,12 +154,18 @@ export default function AdminProducts({ products, can }: Props) {
 /**
  * A product's status, always in words (§33.9).
  */
-export function ProductStatusPill({ status }: { status: string }) {
+export function ProductStatusPill({
+    status,
+    tone,
+}: {
+    status: string;
+    tone: StatusTone;
+}) {
     const { t } = useTranslation();
 
     return (
         <StatusPill
-            tone="neutral"
+            tone={tone}
             label={t(`catalog.products.status.${status}`)}
         />
     );

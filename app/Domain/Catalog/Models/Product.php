@@ -5,6 +5,8 @@ namespace App\Domain\Catalog\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
+use App\Concerns\HasStateMachine;
+use App\Domain\Catalog\Enums\ProductStatus;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -37,7 +39,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Money|null $suggested_selling_price_minor
  * @property Money|null $minimum_selling_price_minor
  * @property Money|null $maximum_selling_price_minor
- * @property string $status
+ * @property ProductStatus $status
+ * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read Category $category
@@ -57,7 +60,12 @@ class Product extends Model
         HasPublicId::getRouteKeyName insteadof HasSlug;
     }
 
-    public const STATUS_DRAFT = 'draft';
+    /*
+     * `status` moves only through `transitionTo()`, which checks the move against
+     * {@see ProductStatus}. The column's CHECK keeps it to the seven lifecycle
+     * statuses whatever writes it.
+     */
+    use HasStateMachine;
 
     protected $guarded = [];
 
@@ -74,6 +82,8 @@ class Product extends Model
             'suggested_selling_price_minor' => MoneyCast::class,
             'minimum_selling_price_minor' => MoneyCast::class,
             'maximum_selling_price_minor' => MoneyCast::class,
+            'status' => ProductStatus::class,
+            'published_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -109,6 +119,16 @@ class Product extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    /**
+     * Every status move, newest first.
+     *
+     * @return HasMany<ProductStatusChange, $this>
+     */
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(ProductStatusChange::class)->orderByDesc('id');
     }
 
     /**

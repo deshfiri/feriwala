@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ProductAttributeController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
+use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
@@ -494,6 +495,14 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.variants.update');
         Route::delete('catalog/products/{product}/variants/{variant}', [ProductVariantController::class, 'destroy'])
             ->name('catalog.products.variants.destroy');
+
+        /*
+         * The lifecycle (§11.2). One endpoint whose permission depends on the
+         * move: publishing, archiving and taking off sale are separate
+         * privileges, checked by the controller and again by the action.
+         */
+        Route::patch('catalog/products/{product}/status', [ProductStatusController::class, 'update'])
+            ->name('catalog.products.status.update');
 
         // Quantity pricing, replaced as a whole table per scope (§11.1).
         Route::put('catalog/products/{product}/price-tiers', [ProductPriceTierController::class, 'update'])

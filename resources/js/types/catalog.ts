@@ -1,4 +1,23 @@
 import type { Money } from '@/lib/money';
+import type { StatusTone } from '@/lib/status';
+
+/** A lifecycle move this person may make from the product's current status. */
+export type ProductTransition = {
+    value: string;
+    tone: StatusTone;
+    requires_reason: boolean;
+};
+
+/** One recorded status move, newest first. */
+export type ProductStatusChangeRow = {
+    id: number;
+    from: string | null;
+    to: string;
+    to_tone: StatusTone;
+    actor: string | null;
+    reason: string | null;
+    at: string;
+};
 
 /**
  * Central catalogue shapes, as the administration screens receive them (§11).
@@ -23,6 +42,7 @@ export type ProductRow = {
     brand: string | null;
     wholesale_price: Money;
     status: string;
+    status_tone: StatusTone;
     updated_at: string;
 };
 
@@ -51,6 +71,9 @@ export type ProductDetail = {
     minimum_selling_price: Money | null;
     maximum_selling_price: Money | null;
     status: string;
+    status_tone: StatusTone;
+    /** The first moment the product went live; never moved afterwards. */
+    published_at: string | null;
     updated_at: string;
 };
 

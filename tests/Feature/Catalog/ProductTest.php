@@ -2,6 +2,7 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
@@ -124,7 +125,7 @@ describe('only the platform writes products (§12)', function () {
         $response->assertRedirect(route('admin.catalog.products.edit', $product->public_id));
 
         expect($product->sku)->toBe('FW-RC-28')
-            ->and($product->status)->toBe('draft')
+            ->and($product->status)->toBe(ProductStatus::Draft)
             ->and($product->currency_code)->toBe('BDT')
             ->and($product->category_id)->toBe($this->category->id)
             ->and($product->brand_id)->toBe($this->brand->id)

@@ -79,7 +79,42 @@ return [
 
         'status' => [
             'draft' => 'Draft',
+            'pending_review' => 'Pending review',
+            'active' => 'Active',
+            'inactive' => 'Inactive',
+            'out_of_stock' => 'Out of stock',
+            'discontinued' => 'Discontinued',
+            'archived' => 'Archived',
+            'dropshipping_enabled' => 'Dropshipping enabled',
+            'dropshipping_disabled' => 'Dropshipping disabled',
+            'wholesale_enabled' => 'Wholesale enabled',
+            'wholesale_disabled' => 'Wholesale disabled',
         ],
+
+        // Named by where the product goes, so one label reads right from any status.
+        'transitions' => [
+            'draft' => 'Return to draft',
+            'pending_review' => 'Submit for review',
+            'active' => 'Activate',
+            'inactive' => 'Deactivate',
+            'out_of_stock' => 'Mark out of stock',
+            'discontinued' => 'Discontinue',
+            'archived' => 'Archive',
+        ],
+
+        'lifecycle' => [
+            'title' => 'Lifecycle',
+            'description' => 'Nothing reaches a partner until it is reviewed and made active. Activating, archiving and taking a product off sale are separate permissions.',
+            'current' => 'Current status',
+            'first_published' => 'First went live :date',
+            'no_moves' => 'You have no lifecycle moves available from this status.',
+            'history' => 'Status history',
+            'system' => 'System',
+            'reason' => 'Reason',
+            'confirm' => 'Move :name to :status?',
+        ],
+
+        'moved' => ':name is now :status.',
 
         'danger_title' => 'Delete this draft',
         'danger_help' => 'Only a draft can be deleted. Anything further along is archived, so the record of what the catalogue said survives.',

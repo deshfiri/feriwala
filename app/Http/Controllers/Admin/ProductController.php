@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\ManageProductMedia;
 use App\Domain\Catalog\Actions\ManageProducts;
+use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
@@ -12,6 +13,7 @@ use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
+use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
@@ -92,6 +94,8 @@ class ProductController extends Controller
             'media' => [],
             'media_limits' => $this->mediaLimits(),
             'price_tiers' => [],
+            'transitions' => [],
+            'history' => [],
             'variants' => [],
             'attributes' => [],
         ]);
@@ -122,6 +126,36 @@ class ProductController extends Controller
             'product' => $this->detail($record),
             'options' => $this->options(),
             'can' => $this->abilities($actor),
+
+            /*
+             * The lifecycle moves this person may make from here (§11.2). Only
+             * those: offering a button the server will refuse teaches people
+             * the screen lies. The server still checks every one.
+             */
+            'transitions' => collect($record->status->transitionsTo())
+                ->filter(fn (ProductStatus $to) => CatalogPolicy::canMoveProduct($actor, $record->status, $to))
+                ->map(fn (ProductStatus $to) => [
+                    'value' => $to->value,
+                    'tone' => $to->tone(),
+                    'requires_reason' => $to->requiresReason(),
+                ])
+                ->values()
+                ->all(),
+
+            'history' => $record->statusHistory()
+                ->with('actor:id,name')
+                ->limit(20)
+                ->get()
+                ->map(fn (ProductStatusChange $change) => [
+                    'id' => $change->id,
+                    'from' => $change->from_status?->value,
+                    'to' => $change->to_status->value,
+                    'to_tone' => $change->to_status->tone(),
+                    'actor' => $change->actor?->name,
+                    'reason' => $change->reason,
+                    'at' => $change->created_at->toIso8601String(),
+                ])
+                ->all(),
 
             // Quantity pricing per scope: the product, then each variation.
             'price_tiers' => $this->priceTiers($record),
@@ -200,7 +234,8 @@ class ProductController extends Controller
             'category' => $product->category->name,
             'brand' => $product->brand?->name,
             'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
-            'status' => $product->status,
+            'status' => $product->status->value,
+            'status_tone' => $product->status->tone(),
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
     }
@@ -237,7 +272,9 @@ class ProductController extends Controller
             'minimum_selling_price' => $product->minimum_selling_price_minor?->jsonSerialize(),
             'maximum_selling_price' => $product->maximum_selling_price_minor?->jsonSerialize(),
 
-            'status' => $product->status,
+            'status' => $product->status->value,
+            'status_tone' => $product->status->tone(),
+            'published_at' => $product->published_at?->toIso8601String(),
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
     }

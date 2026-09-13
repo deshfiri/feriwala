@@ -4,6 +4,7 @@ namespace App\Domain\Catalog\Actions;
 
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
@@ -45,7 +46,7 @@ class ManageProducts
             $product = Product::create([
                 ...$this->fields($attributes),
                 'currency_code' => Currency::base()->value,
-                'status' => Product::STATUS_DRAFT,
+                'status' => ProductStatus::Draft,
             ]);
 
             $this->record($actor, 'catalog.product_created', $product, after: $this->snapshot($product));
@@ -96,8 +97,14 @@ class ManageProducts
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->status !== Product::STATUS_DRAFT) {
+            if ($locked->status !== ProductStatus::Draft) {
                 throw CatalogRefused::productNotDraft();
+            }
+
+            // A draft sent back from review has a history, and the history
+            // is append-only: it is archived, not deleted.
+            if ($locked->statusHistory()->exists()) {
+                throw CatalogRefused::productHasHistory();
             }
 
             $paths = ProductMedia::query()->where('product_id', $locked->id)->pluck('path')->all();
@@ -218,7 +225,7 @@ class ManageProducts
             'suggested_selling_price_minor' => $product->suggested_selling_price_minor?->minorUnits,
             'minimum_selling_price_minor' => $product->minimum_selling_price_minor?->minorUnits,
             'maximum_selling_price_minor' => $product->maximum_selling_price_minor?->minorUnits,
-            'status' => $product->status,
+            'status' => $product->status->value,
         ];
     }
 

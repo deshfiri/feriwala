@@ -90,6 +90,36 @@ class CatalogRefused extends RuntimeException
         );
     }
 
+    /**
+     * A product that has moved through its lifecycle even once is part of the
+     * record, and its history cannot be deleted from under it.
+     */
+    public static function productHasHistory(): self
+    {
+        return new self(
+            'This draft has already been through review, and its status history stays on record. '
+            .'Archive it instead of deleting it.'
+        );
+    }
+
+    public static function notLifecycleStatus(string $status): self
+    {
+        return new self("{$status} is a sales-channel setting, not a lifecycle status.");
+    }
+
+    public static function reasonRequired(string $status): self
+    {
+        return new self("Say why the product is being moved to {$status}. Somebody will ask.");
+    }
+
+    /**
+     * @param  array<int, string>  $missing
+     */
+    public static function cannotActivate(array $missing): self
+    {
+        return new self('This product cannot be activated yet: '.implode('; ', $missing).'.');
+    }
+
     public static function variantIsReferenced(string $by): self
     {
         return new self(

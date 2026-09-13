@@ -5,6 +5,7 @@ namespace App\Domain\Catalog\Policies;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Catalog\Enums\ProductStatus;
 use App\Models\User;
 
 /**
@@ -81,6 +82,27 @@ class CatalogPolicy
     public static function canUnpublish(User $user): bool
     {
         return $user->can(self::permission(PermissionAction::Unpublish));
+    }
+
+    /**
+     * Whether this person may make this particular lifecycle move (§11.2, §12).
+     *
+     * The permission follows what the move does, not which button was pressed:
+     *
+     *   - to Active is putting it in front of partners — `publish`;
+     *   - to Archived is retiring the record — `archive`;
+     *   - away from Active or Out of Stock is taking it off sale — `unpublish`;
+     *   - everything else (submitting for review, sending back, discontinuing an
+     *     inactive product) is authoring — `edit`.
+     */
+    public static function canMoveProduct(User $user, ProductStatus $from, ProductStatus $to): bool
+    {
+        return match (true) {
+            $to === ProductStatus::Active => self::canPublish($user),
+            $to === ProductStatus::Archived => self::canArchive($user),
+            in_array($from, [ProductStatus::Active, ProductStatus::OutOfStock], true) => self::canUnpublish($user),
+            default => self::canEdit($user),
+        };
     }
 
     public static function canExport(User $user): bool

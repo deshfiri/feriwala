@@ -4,6 +4,7 @@ namespace App\Domain\Catalog\Actions;
 
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
@@ -116,7 +117,7 @@ class ManageVariants
             /** @var Product $locked */
             $locked = Product::query()->whereKey($variant->product_id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->status !== Product::STATUS_DRAFT) {
+            if ($locked->status !== ProductStatus::Draft) {
                 throw CatalogRefused::variantNotDraft();
             }
 

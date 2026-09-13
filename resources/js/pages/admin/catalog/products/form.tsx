@@ -18,8 +18,11 @@ import type {
     MediaRow,
     PriceTierScope,
     ProductDetail,
+    ProductStatusChangeRow,
+    ProductTransition,
     VariantRow,
 } from '@/types';
+import StatusPanel from './status-panel';
 import { ProductStatusPill } from './index';
 import MediaSection from './media-section';
 import PriceTiersSection from './price-tiers-section';
@@ -34,6 +37,8 @@ type Props = {
     media: MediaRow[];
     media_limits: MediaLimits;
     price_tiers: PriceTierScope[];
+    transitions: ProductTransition[];
+    history: ProductStatusChangeRow[];
 };
 
 const selectClass =
@@ -62,6 +67,8 @@ export default function ProductForm({
     media,
     media_limits,
     price_tiers,
+    transitions,
+    history,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -118,10 +125,21 @@ export default function ProductForm({
                     }
                     actions={
                         editing ? (
-                            <ProductStatusPill status={product.status} />
+                            <ProductStatusPill
+                                status={product.status}
+                                tone={product.status_tone}
+                            />
                         ) : undefined
                     }
                 />
+
+                {editing && (
+                    <StatusPanel
+                        product={product}
+                        transitions={transitions}
+                        history={history}
+                    />
+                )}
 
                 <Form
                     {...(editing
