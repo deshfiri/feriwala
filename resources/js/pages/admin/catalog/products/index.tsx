@@ -511,7 +511,9 @@ export default function AdminProducts({
                             description={t(
                                 filtered
                                     ? 'catalog.products.no_matches_help'
-                                    : 'catalog.products.empty_help',
+                                    : can.create
+                                      ? 'catalog.products.empty_help'
+                                      : 'catalog.products.empty_help_read_only',
                             )}
                         />
                     }

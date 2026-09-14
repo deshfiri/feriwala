@@ -342,7 +342,9 @@ export default function AdminBrands({ brands, filters, can, limits }: Props) {
                             description={t(
                                 filtered
                                     ? 'catalog.brands.no_matches_help'
-                                    : 'catalog.brands.empty_help',
+                                    : can.create
+                                      ? 'catalog.brands.empty_help'
+                                      : 'catalog.brands.empty_help_read_only',
                             )}
                         />
                     }

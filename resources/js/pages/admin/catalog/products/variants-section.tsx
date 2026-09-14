@@ -137,7 +137,11 @@ export default function VariantsSection({
                 <EmptyState
                     icon={Layers}
                     title={t('catalog.variants.no_attributes')}
-                    description={t('catalog.variants.no_attributes_help')}
+                    description={t(
+                        can.create
+                            ? 'catalog.variants.no_attributes_help'
+                            : 'catalog.variants.no_attributes_help_read_only',
+                    )}
                     action={
                         <Button variant="outline" size="sm" asChild>
                             <Link href={attributesIndex()}>
@@ -150,7 +154,11 @@ export default function VariantsSection({
                 <EmptyState
                     icon={Layers}
                     title={t('catalog.variants.empty')}
-                    description={t('catalog.variants.empty_help')}
+                    description={t(
+                        can.create
+                            ? 'catalog.variants.empty_help'
+                            : 'catalog.variants.empty_help_read_only',
+                    )}
                 />
             ) : (
                 <ul className="divide-border divide-y">

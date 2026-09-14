@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Http\Middleware\ApplyConfiguredSessionLifetime;
 use App\Http\Middleware\EnsureAccountIsEntitled;
 use App\Http\Middleware\EnsureBusinessAccountIsActivated;
@@ -10,11 +11,14 @@ use App\Http\Middleware\PreventSearchIndexing;
 use App\Http\Middleware\RequireTwoFactorForSensitiveRoles;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\TrackAuthenticatedSession;
+use App\Models\User;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -96,4 +100,29 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        /*
+         * A refusal on catalogue administration is a page in the application's
+         * own shell (P3-16, §12), telling a partner that the catalogue is
+         * Feriwala's to write and a member of staff that it is not part of their
+         * role. Only for that route set: every other refusal, and every JSON
+         * caller, keeps the response it already had.
+         */
+        $exceptions->respond(function (Response $response, Throwable $exception, Request $request) {
+            $user = $request->user();
+
+            if ($response->getStatusCode() !== Response::HTTP_FORBIDDEN
+                || ! $user instanceof User
+                || ! $request->routeIs('admin.catalog.*')
+                || $request->is('api/*')
+                || $request->expectsJson()) {
+                return $response;
+            }
+
+            return Inertia::render('catalog/forbidden', [
+                'audience' => CatalogPolicy::isBusinessIdentity($user) ? 'business' : 'staff',
+            ])
+                ->toResponse($request)
+                ->setStatusCode(Response::HTTP_FORBIDDEN);
+        });
     })->create();

@@ -3,6 +3,9 @@
 return [
     'forbidden_title' => 'The catalogue is not yours to manage',
     'forbidden_description' => 'Products, categories and brands are written by Feriwala. Partners select from the catalogue rather than adding to it.',
+    'forbidden_staff_title' => 'The product catalogue is not part of your role',
+    'forbidden_staff_description' => 'Your role does not include the central catalogue. An administrator can grant catalogue permissions if you need them.',
+    'forbidden_back' => 'Back to the dashboard',
 
     'products' => [
         'title' => 'Products',
@@ -188,6 +191,7 @@ return [
 
         'empty' => 'No products yet',
         'empty_help' => 'Create the first product to start the central catalogue.',
+        'empty_help_read_only' => 'Products appear here once someone with catalogue authoring permission creates them.',
         'no_matches' => 'No product matches',
         'no_matches_help' => 'Try a different name, SKU or barcode, or clear the filters.',
     ],
@@ -367,6 +371,7 @@ return [
         'deleted' => 'File removed.',
         'empty' => 'No images or videos yet',
         'empty_help' => 'Upload the first image — storefronts use it in listings.',
+        'empty_help_read_only' => 'No images or videos have been added to this product.',
         'limit_reached' => 'This product holds :max files, the most it can.',
     ],
 
@@ -400,6 +405,7 @@ return [
         'value_deleted' => 'Value removed.',
         'empty' => 'No attributes yet',
         'empty_help' => 'Add Size, Colour or Material before building variations.',
+        'empty_help_read_only' => 'Attributes appear here once someone with catalogue authoring permission adds them.',
     ],
 
     'variants' => [
@@ -435,6 +441,8 @@ return [
         'empty_help' => 'A product without variations is sold as it is. Add one for each combination it comes in.',
         'no_attributes' => 'No attributes to build from',
         'no_attributes_help' => 'Variations are built from shared attributes such as Size or Colour.',
+        'empty_help_read_only' => 'This product is sold as it is, without variations.',
+        'no_attributes_help_read_only' => 'No shared attributes exist yet, so this product has no variations.',
         'manage_attributes' => 'Manage attributes',
 
         'build' => 'Build variations',
@@ -502,6 +510,7 @@ return [
 
         'empty' => 'No categories yet',
         'empty_help' => 'Add the first one to start arranging the catalogue.',
+        'empty_help_read_only' => 'Categories appear here once someone with catalogue authoring permission adds them.',
         'no_matches' => 'Nothing matches that',
         'no_matches_help' => 'Try a different name or slug.',
     ],
@@ -561,6 +570,7 @@ return [
 
         'empty' => 'No brands yet',
         'empty_help' => 'Add the first brand so products can be assigned to it.',
+        'empty_help_read_only' => 'Brands appear here once someone with catalogue authoring permission adds them.',
         'no_matches' => 'No brand matches',
         'no_matches_help' => 'Try a different name, or clear the status filter.',
     ],

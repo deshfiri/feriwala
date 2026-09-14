@@ -100,7 +100,11 @@ export default function MediaSection({
                     <EmptyState
                         icon={ImagePlus}
                         title={t('catalog.media.empty')}
-                        description={t('catalog.media.empty_help')}
+                        description={t(
+                            canEdit
+                                ? 'catalog.media.empty_help'
+                                : 'catalog.media.empty_help_read_only',
+                        )}
                     />
                 ) : (
                     <ol className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

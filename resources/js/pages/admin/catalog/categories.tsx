@@ -14,7 +14,6 @@ import CategoryController from '@/actions/App/Http/Controllers/Admin/CategoryCon
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
-import PermissionDeniedState from '@/components/states/permission-denied-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -185,20 +184,6 @@ export default function AdminCategories({ categories, can, limits }: Props) {
             preserveScroll: true,
         });
     };
-
-    if (!can.create && categories.length === 0) {
-        return (
-            <>
-                <Head title={t('catalog.categories.title')} />
-                <PageContainer>
-                    <PermissionDeniedState
-                        title={t('catalog.forbidden_title')}
-                        description={t('catalog.forbidden_description')}
-                    />
-                </PageContainer>
-            </>
-        );
-    }
 
     const row = (category: CategoryRow, isChild: boolean) => (
         <li
@@ -376,7 +361,9 @@ export default function AdminCategories({ categories, can, limits }: Props) {
                         )}
                         description={t(
                             categories.length === 0
-                                ? 'catalog.categories.empty_help'
+                                ? can.create
+                                    ? 'catalog.categories.empty_help'
+                                    : 'catalog.categories.empty_help_read_only'
                                 : 'catalog.categories.no_matches_help',
                         )}
                     />

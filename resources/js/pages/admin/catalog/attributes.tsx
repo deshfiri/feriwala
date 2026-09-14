@@ -93,7 +93,11 @@ export default function AdminAttributes({ attributes, can }: Props) {
                     <EmptyState
                         icon={SlidersHorizontal}
                         title={t('catalog.attributes.empty')}
-                        description={t('catalog.attributes.empty_help')}
+                        description={t(
+                            can.create
+                                ? 'catalog.attributes.empty_help'
+                                : 'catalog.attributes.empty_help_read_only',
+                        )}
                     />
                 ) : (
                     <ul className="bg-card divide-border divide-y rounded-xl border">
