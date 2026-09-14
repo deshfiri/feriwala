@@ -245,6 +245,10 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::put('wholesale/checkout/addresses/{type}', [WholesaleCheckoutController::class, 'updateAddress'])
             ->whereIn('type', ['billing', 'shipping'])
             ->name('wholesale.checkout.addresses.update');
+        Route::post('wholesale/checkout/confirmation', [WholesaleCheckoutController::class, 'confirm'])
+            ->name('wholesale.checkout.confirmation.store');
+        Route::delete('wholesale/checkout/confirmation', [WholesaleCheckoutController::class, 'withdrawConfirmation'])
+            ->name('wholesale.checkout.confirmation.destroy');
     });
 });
 

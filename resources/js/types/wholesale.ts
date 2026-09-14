@@ -92,7 +92,23 @@ export type CheckoutAddress = {
 
 export type CheckoutAddressType = 'billing' | 'shipping';
 
+export type CheckoutPaymentMethod = { name: string; label: string };
+
+/**
+ * A confirmation on the cart. `stale` means the checkout priced now is no longer
+ * the one confirmed, or its payment method can no longer take the payment.
+ */
+export type CheckoutConfirmation = {
+    status: 'confirmed' | 'stale';
+    payment_method: CheckoutPaymentMethod;
+    confirmed_at: string;
+    total: Money;
+};
+
 export type CheckoutSummary = {
+    fingerprint: string;
+    payment_methods: CheckoutPaymentMethod[];
+    confirmation: CheckoutConfirmation | null;
     lines: CheckoutLine[];
     subtotal: Money;
     coupon: CheckoutCoupon | null;

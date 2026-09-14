@@ -9,6 +9,7 @@ use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Wholesale\Actions\ApplyCheckoutCoupon;
+use App\Domain\Wholesale\Actions\ConfirmCheckout;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
 use App\Domain\Wholesale\Data\CartLineQuote;
@@ -16,7 +17,10 @@ use App\Domain\Wholesale\Exceptions\CheckoutRefused;
 use App\Domain\Wholesale\Models\Cart;
 use App\Domain\Wholesale\Queries\PriceCheckout;
 use App\Http\Controllers\Controller;
+use App\Integrations\Payment\PaymentGatewayManager;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -42,6 +46,7 @@ class WholesaleCheckoutController extends Controller
         protected OpenCart $carts,
         protected PriceCheckout $checkout,
         protected ProductEligibility $eligibility,
+        protected PaymentGatewayManager $gateways,
     ) {}
 
     public function show(Request $request): Response|RedirectResponse
@@ -61,8 +66,17 @@ class WholesaleCheckoutController extends Controller
             return redirect()->route('wholesale.cart.show');
         }
 
+        $methods = $this->gateways->availableFor($quote->total->currency);
+        $fingerprint = $quote->fingerprint();
+
         return Inertia::render('wholesale/checkout', [
             'checkout' => [
+                'fingerprint' => $fingerprint,
+                'payment_methods' => array_map(fn (string $name) => [
+                    'name' => $name,
+                    'label' => $this->gatewayLabel($name),
+                ], $methods),
+                'confirmation' => $this->confirmation($cart, $fingerprint, $methods),
                 'lines' => array_map(fn (CartLineQuote $line) => $this->line($line), $quote->cart->lines),
                 'subtotal' => $quote->cart->subtotal->jsonSerialize(),
                 'coupon' => $cart->coupon_code === null ? null : [
@@ -167,6 +181,84 @@ class WholesaleCheckoutController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __("wholesale.checkout.address.saved_{$addressType->value}")]);
 
         return back();
+    }
+
+    /**
+     * Confirm the order summary with a payment method (P4-8).
+     *
+     * Only the method and the fingerprint of the summary on the page are read; a
+     * total, discount or tax sent alongside is ignored.
+     */
+    public function confirm(Request $request, ConfirmCheckout $confirm): RedirectResponse
+    {
+        $account = $this->businessAccountFor($request);
+
+        abort_unless($this->eligibility->allowsChannel($account, SalesChannel::Wholesale), 403);
+
+        $validated = $request->validate([
+            'payment_method' => ['required', 'string', 'max:32'],
+            'fingerprint' => ['required', 'string', 'size:64'],
+        ]);
+
+        try {
+            $confirm->handle($this->person($request), $account, $validated['payment_method'], $validated['fingerprint']);
+        } catch (CheckoutRefused $refused) {
+            throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('wholesale.checkout.confirmation.confirmed_toast')]);
+
+        return back();
+    }
+
+    public function withdrawConfirmation(Request $request, ConfirmCheckout $confirm): RedirectResponse
+    {
+        $account = $this->businessAccountFor($request);
+
+        $confirm->withdraw($this->person($request), $account);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('wholesale.checkout.confirmation.withdrawn_toast')]);
+
+        return back();
+    }
+
+    /**
+     * The confirmation on the cart, and whether it still stands: the summary
+     * priced now has the fingerprint it was given, and its payment method can
+     * still take the payment.
+     *
+     * @param  array<int, string>  $methods
+     * @return array<string, mixed>|null
+     */
+    protected function confirmation(Cart $cart, string $fingerprint, array $methods): ?array
+    {
+        if ($cart->confirmed_at === null
+            || $cart->payment_method === null
+            || $cart->confirmed_total_minor === null
+            || $cart->confirmed_currency_code === null) {
+            return null;
+        }
+
+        $stands = $cart->confirmed_fingerprint !== null
+            && hash_equals($cart->confirmed_fingerprint, $fingerprint)
+            && in_array($cart->payment_method, $methods, true);
+
+        return [
+            'status' => $stands ? 'confirmed' : 'stale',
+            'payment_method' => [
+                'name' => $cart->payment_method,
+                'label' => $this->gatewayLabel($cart->payment_method),
+            ],
+            'confirmed_at' => $cart->confirmed_at->toIso8601String(),
+            'total' => Money::of($cart->confirmed_total_minor, Currency::from($cart->confirmed_currency_code))->jsonSerialize(),
+        ];
+    }
+
+    protected function gatewayLabel(string $name): string
+    {
+        $label = config("payment.gateways.{$name}.label");
+
+        return is_string($label) && $label !== '' ? $label : $name;
     }
 
     /**

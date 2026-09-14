@@ -18,11 +18,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * working in; it holds intent — which units, how many — and no price, total or
  * charge. Every figure is worked out on the server whenever the cart is shown.
  *
+ * A checkout confirmation (P4-8) keeps the payment method chosen and a
+ * fingerprint of the checkout the person agreed to. It stands only while the
+ * checkout priced now has the same fingerprint.
+ *
  * @property int $id
  * @property string $public_id
  * @property int $user_id
  * @property int $business_account_id
  * @property string|null $coupon_code
+ * @property string|null $payment_method
+ * @property CarbonImmutable|null $confirmed_at
+ * @property string|null $confirmed_fingerprint
+ * @property int|null $confirmed_total_minor
+ * @property string|null $confirmed_currency_code
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read User $user
@@ -41,6 +50,8 @@ class Cart extends Model
     protected function casts(): array
     {
         return [
+            'confirmed_at' => 'immutable_datetime',
+            'confirmed_total_minor' => 'integer',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

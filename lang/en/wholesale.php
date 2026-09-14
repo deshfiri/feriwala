@@ -73,6 +73,26 @@ return [
         'tax_breakdown' => 'Tax breakdown',
         'addresses_needed' => 'Add a billing and a shipping address to continue.',
 
+        'payment' => [
+            'title' => 'Payment method',
+            'legend' => 'How would you like to pay?',
+            'none' => 'No payment method is available right now. Please contact support.',
+        ],
+
+        'confirmation' => [
+            'title' => 'Confirm your order',
+            'help' => 'Check the items, addresses and total, then confirm. Feriwala works every figure out again before anything is charged.',
+            'confirm' => 'Confirm order summary',
+            'confirmed' => 'Confirmed',
+            'confirmed_detail' => 'Confirmed on :at to pay :amount by :method.',
+            'confirmed_next' => 'Payment for wholesale orders is not open yet. Your confirmed summary is checked again before any payment is taken.',
+            'change' => 'Change order',
+            'stale' => 'Needs confirming again',
+            'stale_detail' => 'Your order has changed since you confirmed it for :amount. Review it and confirm again.',
+            'confirmed_toast' => 'Order summary confirmed.',
+            'withdrawn_toast' => 'Confirmation withdrawn. You can change your order.',
+        ],
+
         'address' => [
             'billing' => 'Billing address',
             'shipping' => 'Shipping address',
@@ -116,5 +136,8 @@ return [
         'insufficient_stock' => 'Only :available units are available to order right now.',
         'cart_full' => 'A cart holds up to :max products. Remove one first.',
         'cart_not_ready' => 'Your cart needs attention before checkout.',
+        'addresses_missing' => 'Add a billing and a shipping address before confirming.',
+        'payment_method_unavailable' => 'Choose one of the payment methods offered.',
+        'checkout_changed' => 'Your order changed while this page was open. Review the updated summary and confirm again.',
     ],
 ];

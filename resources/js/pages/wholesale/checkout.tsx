@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import { cn } from '@/lib/utils';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { show } from '@/routes/wholesale/checkout';
 import type {
@@ -309,10 +310,170 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                 {t('wholesale.checkout.addresses_needed')}
                             </p>
                         )}
+
+                        <ConfirmationPanel checkout={checkout} />
                     </div>
                 </div>
             </PageContainer>
         </>
+    );
+}
+
+/**
+ * Payment method and checkout confirmation (P4-8).
+ *
+ * Sends the chosen method and the fingerprint of the summary on this page, never
+ * a figure. If the order has changed since, the server refuses and the page shows
+ * the new summary to confirm instead.
+ */
+function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
+    const { t, locale } = useTranslation();
+    const confirmation = checkout.confirmation;
+    const methods = checkout.payment_methods;
+    const previous = confirmation?.payment_method.name;
+    const [method, setMethod] = useState(
+        methods.some((option) => option.name === previous)
+            ? (previous ?? '')
+            : (methods[0]?.name ?? ''),
+    );
+
+    if (confirmation?.status === 'confirmed') {
+        return (
+            <SectionCard title={t('wholesale.checkout.confirmation.title')}>
+                <div className="space-y-3">
+                    <StatusPill
+                        tone="success"
+                        label={t('wholesale.checkout.confirmation.confirmed')}
+                    />
+                    <p className="text-sm">
+                        {t('wholesale.checkout.confirmation.confirmed_detail', {
+                            at: new Date(
+                                confirmation.confirmed_at,
+                            ).toLocaleString(locale),
+                            amount: confirmation.total.formatted,
+                            method: confirmation.payment_method.label,
+                        })}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                        {t('wholesale.checkout.confirmation.confirmed_next')}
+                    </p>
+                    <Form
+                        {...WholesaleCheckoutController.withdrawConfirmation.form()}
+                        options={{ preserveScroll: true }}
+                    >
+                        {({ processing }) => (
+                            <Button
+                                type="submit"
+                                variant="outline"
+                                className="w-full"
+                                disabled={processing}
+                            >
+                                {processing && <Spinner />}
+                                {t('wholesale.checkout.confirmation.change')}
+                            </Button>
+                        )}
+                    </Form>
+                </div>
+            </SectionCard>
+        );
+    }
+
+    return (
+        <SectionCard
+            title={t('wholesale.checkout.confirmation.title')}
+            description={t('wholesale.checkout.confirmation.help')}
+        >
+            {confirmation?.status === 'stale' && (
+                <div
+                    role="status"
+                    className="border-warning bg-warning-subtle mb-4 space-y-2 rounded-lg border p-3 text-sm"
+                >
+                    <StatusPill
+                        tone="warning"
+                        label={t('wholesale.checkout.confirmation.stale')}
+                    />
+                    <p>
+                        {t('wholesale.checkout.confirmation.stale_detail', {
+                            amount: confirmation.total.formatted,
+                        })}
+                    </p>
+                </div>
+            )}
+
+            <Form
+                {...WholesaleCheckoutController.confirm.form()}
+                options={{ preserveScroll: true }}
+                className="space-y-4"
+            >
+                {({ errors, processing }) => (
+                    <>
+                        <input
+                            type="hidden"
+                            name="fingerprint"
+                            value={checkout.fingerprint}
+                        />
+
+                        <fieldset className="space-y-2">
+                            <legend className="mb-2 text-sm font-medium">
+                                {t('wholesale.checkout.payment.legend')}
+                            </legend>
+
+                            {methods.map((option) => (
+                                <label
+                                    key={option.name}
+                                    className={cn(
+                                        'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm',
+                                        method === option.name
+                                            ? 'border-brand bg-brand-subtle'
+                                            : 'border-input hover:bg-muted',
+                                    )}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="payment_method"
+                                        value={option.name}
+                                        checked={method === option.name}
+                                        onChange={() => setMethod(option.name)}
+                                        className="accent-brand"
+                                    />
+                                    <span className="font-medium">
+                                        {option.label}
+                                    </span>
+                                </label>
+                            ))}
+
+                            {methods.length === 0 && (
+                                <p className="text-danger text-sm">
+                                    {t('wholesale.checkout.payment.none')}
+                                </p>
+                            )}
+                        </fieldset>
+
+                        <InputError
+                            message={
+                                errors.payment_method ??
+                                errors.fingerprint ??
+                                errors.addresses ??
+                                errors.cart
+                            }
+                        />
+
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={
+                                processing ||
+                                methods.length === 0 ||
+                                !checkout.ready_to_confirm
+                            }
+                        >
+                            {processing && <Spinner />}
+                            {t('wholesale.checkout.confirmation.confirm')}
+                        </Button>
+                    </>
+                )}
+            </Form>
+        </SectionCard>
     );
 }
 

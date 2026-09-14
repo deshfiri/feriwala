@@ -26,4 +26,26 @@ class CheckoutRefused extends RuntimeException
     {
         return new self(__('wholesale.refused.cart_not_ready'), 'cart');
     }
+
+    public static function addressesMissing(): self
+    {
+        return new self(__('wholesale.refused.addresses_missing'), 'addresses');
+    }
+
+    /**
+     * Only a gateway that is switched on, configured and takes this currency is a
+     * way to pay.
+     */
+    public static function paymentMethodUnavailable(): self
+    {
+        return new self(__('wholesale.refused.payment_method_unavailable'), 'payment_method');
+    }
+
+    /**
+     * What the person agreed to is no longer what the server prices now.
+     */
+    public static function changed(): self
+    {
+        return new self(__('wholesale.refused.checkout_changed'), 'fingerprint');
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Domain\Wholesale\Data;
 use App\Domain\Account\Models\UserAddress;
 use App\Domain\Billing\Data\CouponOutcome;
 use App\Domain\Tax\Data\TaxBreakdown;
+use App\Domain\Tax\Data\TaxCharge;
 use App\Support\Money\Money;
 
 /**
@@ -28,6 +29,52 @@ readonly class CheckoutQuote
         public ?UserAddress $billingAddress = null,
         public ?UserAddress $shippingAddress = null,
     ) {}
+
+    /**
+     * A digest of everything this checkout would charge and where it would go
+     * (P4-8).
+     *
+     * Two quotes with the same fingerprint bill the same units at the same prices,
+     * with the same discount, delivery charge and tax, to the same addresses. A
+     * confirmation is held against it, so any later change — to the cart, a price,
+     * a charge, a coupon or an address — shows as a confirmation that no longer
+     * stands.
+     */
+    public function fingerprint(): string
+    {
+        $lines = [];
+
+        foreach ($this->cart->lines as $line) {
+            $lines[] = [
+                'line' => $line->item->public_id,
+                'product' => $line->item->product_id,
+                'variant' => $line->item->product_variant_id,
+                'quantity' => $line->item->quantity,
+                'unit_price' => $line->unitPrice?->minorUnits,
+                'line_total' => $line->lineTotal?->minorUnits,
+                'problems' => $line->problems,
+            ];
+        }
+
+        return hash('sha256', json_encode([
+            'currency' => $this->total->currency->value,
+            'lines' => $lines,
+            'subtotal' => $this->cart->subtotal->minorUnits,
+            'coupon' => $this->coupon !== null && $this->coupon->isAccepted ? $this->coupon->coupon?->code : null,
+            'discount' => $this->discount->minorUnits,
+            'delivery' => $this->delivery->minorUnits,
+            'tax' => array_map(fn (TaxCharge $charge) => [
+                $charge->code,
+                $charge->rateBasisPoints,
+                $charge->mode->value,
+                $charge->net->minorUnits,
+                $charge->tax->minorUnits,
+            ], $this->tax->charges),
+            'total' => $this->total->minorUnits,
+            'billing' => $this->billingAddress?->toSnapshot(),
+            'shipping' => $this->shippingAddress?->toSnapshot(),
+        ], JSON_THROW_ON_ERROR));
+    }
 
     public function hasAddresses(): bool
     {
