@@ -32,6 +32,8 @@ return [
         'prices_changed_title' => 'Some prices have changed',
         'prices_changed_help' => 'The cart shows today’s prices. Accept them to continue.',
         'accept_prices' => 'Accept new prices',
+        'checkout' => 'Proceed to checkout',
+        'checkout_blocked' => 'Fix the products that need attention, and accept any new prices, to continue.',
 
         'problems_title' => 'Some products need attention',
         'problems_help' => 'Change the quantity or remove the product. A product with a problem is left out of the subtotal until then.',
@@ -45,6 +47,27 @@ return [
         'updated' => 'Cart updated.',
         'removed' => ':name removed from your cart.',
         'prices_accepted' => 'New prices accepted.',
+    ],
+
+    'checkout' => [
+        'title' => 'Wholesale checkout',
+        'description' => 'Review your order. Every figure is worked out again by Feriwala each time this page opens.',
+        'back_to_cart' => 'Back to cart',
+        'cart_not_ready' => 'Your cart needs attention before checkout.',
+        'items' => 'Order items',
+        'quantity_each' => ':quantity × :amount',
+        'coupon' => 'Coupon',
+        'coupon_code' => 'Coupon code',
+        'apply' => 'Apply',
+        'remove_coupon' => 'Remove coupon',
+        'coupon_applied' => ':code applied.',
+        'coupon_removed' => 'Coupon removed.',
+        'coupon_accepted' => ':code takes :amount off.',
+        'coupon_no_longer_applies' => ':code no longer applies. :reason',
+        'summary' => 'Order summary',
+        'subtotal' => 'Subtotal',
+        'discount' => 'Discount',
+        'total' => 'Total',
     ],
 
     'problems' => [
@@ -64,5 +87,6 @@ return [
         'above_maximum' => 'Order at most :max units of this product in one order.',
         'insufficient_stock' => 'Only :available units are available to order right now.',
         'cart_full' => 'A cart holds up to :max products. Remove one first.',
+        'cart_not_ready' => 'Your cart needs attention before checkout.',
     ],
 ];

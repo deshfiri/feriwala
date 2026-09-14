@@ -4,7 +4,9 @@ namespace App\Domain\Billing;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Data\CouponOutcome;
+use App\Domain\Billing\Enums\CouponScope;
 use App\Domain\Billing\Models\Coupon;
+use App\Domain\Package\Entitlements;
 use App\Domain\Package\Models\Package;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -31,6 +33,7 @@ class CouponValidator
 {
     public function __construct(
         protected FeeRuleResolver $fees,
+        protected Entitlements $entitlements,
     ) {}
 
     /**
@@ -66,6 +69,11 @@ class CouponValidator
             );
         }
 
+        // A wholesale code comes off goods, never off what an account paid to join.
+        if ($coupon->applies_to === CouponScope::WholesaleOrder) {
+            return CouponOutcome::refused('billing.coupons.refused.wholesale_only', $coupon);
+        }
+
         if ($coupon->package_id !== null && $coupon->package_id !== $package->id) {
             return CouponOutcome::refused('billing.coupons.refused.other_package', $coupon);
         }
@@ -82,7 +90,77 @@ class CouponValidator
             return CouponOutcome::refused('billing.coupons.refused.nothing_to_discount', $coupon);
         }
 
-        $spend = $registrationFee->plus($packageFee);
+        return $this->limitRefusal($coupon, $account, $registrationFee->plus($packageFee))
+            ?? CouponOutcome::accepted($coupon, $coupon->discountOn($base));
+    }
+
+    /**
+     * Whether a coupon applies to an ERP wholesale checkout, and what it is worth
+     * (§14, P4-6).
+     *
+     * The same engine and the same order of checks as an activation quote, against
+     * the one base a wholesale code comes off: the goods subtotal the server has
+     * just priced. A code restricted to a package applies only while the account
+     * is on that package — read through {@see Entitlements}, so a lapsed
+     * subscription stops qualifying on the day it lapses.
+     *
+     * Reads only, like {@see validate()}: checking a code on every checkout render
+     * never spends it.
+     */
+    public function validateForWholesale(
+        ?string $code,
+        BusinessAccount $account,
+        Money $subtotal,
+        ?CarbonImmutable $at = null,
+    ): CouponOutcome {
+        $at ??= CarbonImmutable::now();
+
+        if ($code === null || trim($code) === '') {
+            return CouponOutcome::refused('billing.coupons.refused.missing');
+        }
+
+        $coupon = Coupon::query()->withCode($code)->first();
+
+        if ($coupon === null) {
+            return CouponOutcome::refused('billing.coupons.refused.unknown');
+        }
+
+        if (! $coupon->isOpen($at)) {
+            return CouponOutcome::refused(
+                $coupon->effective_from->gt($at)
+                    ? 'billing.coupons.refused.not_started'
+                    : 'billing.coupons.refused.expired',
+                $coupon,
+            );
+        }
+
+        if ($coupon->applies_to !== CouponScope::WholesaleOrder) {
+            return CouponOutcome::refused('billing.coupons.refused.not_for_wholesale', $coupon);
+        }
+
+        if ($coupon->package_id !== null
+            && $this->entitlements->activePackage($account)?->package_id !== $coupon->package_id) {
+            return CouponOutcome::refused('billing.coupons.refused.other_package', $coupon);
+        }
+
+        if ($coupon->currency_code !== $subtotal->currency->value) {
+            return CouponOutcome::refused('billing.coupons.refused.currency', $coupon);
+        }
+
+        if (! $subtotal->isPositive()) {
+            return CouponOutcome::refused('billing.coupons.refused.nothing_to_discount', $coupon);
+        }
+
+        return $this->limitRefusal($coupon, $account, $subtotal)
+            ?? CouponOutcome::accepted($coupon, $coupon->discountOn($subtotal));
+    }
+
+    /**
+     * The minimum spend and the usage limits, shared by every purchase a coupon
+     * can come off. Null when none of them stands in the way.
+     */
+    protected function limitRefusal(Coupon $coupon, BusinessAccount $account, Money $spend): ?CouponOutcome
+    {
         $minimum = $coupon->minimum_spend_minor;
 
         if ($minimum !== null && $minimum->isPositive() && $spend->lessThan($minimum)) {
@@ -100,7 +178,7 @@ class CouponValidator
             return CouponOutcome::refused('billing.coupons.refused.already_used', $coupon);
         }
 
-        return CouponOutcome::accepted($coupon, $coupon->discountOn($base));
+        return null;
     }
 
     /**

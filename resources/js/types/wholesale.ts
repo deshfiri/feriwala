@@ -44,3 +44,32 @@ export type CartSummary = {
     has_price_changes: boolean;
     ready_for_checkout: boolean;
 };
+
+/** One line on the checkout summary, priced by the server on this request. */
+export type CheckoutLine = {
+    id: string;
+    name: string;
+    sku: string;
+    variant: string | null;
+    quantity: number;
+    unit_price: Money;
+    line_total: Money;
+};
+
+/** The code somebody entered, and whether it applies today and why not. */
+export type CheckoutCoupon = {
+    entered: string;
+    accepted: boolean;
+    code: string | null;
+    name: string | null;
+    discount: Money | null;
+    reason: string | null;
+};
+
+export type CheckoutSummary = {
+    lines: CheckoutLine[];
+    subtotal: Money;
+    coupon: CheckoutCoupon | null;
+    discount: Money;
+    total: Money;
+};

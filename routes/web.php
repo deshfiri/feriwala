@@ -49,6 +49,7 @@ use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WholesaleCartController;
+use App\Http\Controllers\Erp\WholesaleCheckoutController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -233,6 +234,14 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wholesale.cart.items.destroy');
         Route::post('wholesale/cart/prices', [WholesaleCartController::class, 'acceptPrices'])
             ->name('wholesale.cart.prices.accept');
+
+        // Wholesale checkout (§14, P4-6), over the person's own cart.
+        Route::get('wholesale/checkout', [WholesaleCheckoutController::class, 'show'])
+            ->name('wholesale.checkout.show');
+        Route::put('wholesale/checkout/coupon', [WholesaleCheckoutController::class, 'applyCoupon'])
+            ->name('wholesale.checkout.coupon.apply');
+        Route::delete('wholesale/checkout/coupon', [WholesaleCheckoutController::class, 'removeCoupon'])
+            ->name('wholesale.checkout.coupon.remove');
     });
 });
 

@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $public_id
  * @property int $user_id
  * @property int $business_account_id
+ * @property string|null $coupon_code
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read User $user

@@ -20,12 +20,22 @@ enum CouponScope: string
 
     case PackageFee = 'package_fee';
 
+    /**
+     * The goods subtotal of an ERP wholesale checkout (§14, P4-6).
+     *
+     * A scope of its own rather than folded into "all fees": a wholesale discount
+     * comes off what the account buys, not off what it paid to join, and a code
+     * meant for one must never quietly discount the other.
+     */
+    case WholesaleOrder = 'wholesale_order';
+
     public function label(): string
     {
         return match ($this) {
             self::Fees => 'All fees',
             self::RegistrationFee => 'Registration fee only',
             self::PackageFee => 'Package fee only',
+            self::WholesaleOrder => 'Wholesale orders',
         };
     }
 
@@ -40,6 +50,8 @@ enum CouponScope: string
             self::Fees => [AllocationType::RegistrationFee, AllocationType::PackageFee],
             self::RegistrationFee => [AllocationType::RegistrationFee],
             self::PackageFee => [AllocationType::PackageFee],
+            // A wholesale discount comes off goods, not off any activation fee.
+            self::WholesaleOrder => [],
         };
     }
 }

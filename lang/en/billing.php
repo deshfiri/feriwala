@@ -82,6 +82,8 @@ return [
             'minimum_spend' => 'Your total is below the minimum for that code.',
             'exhausted' => 'That code has been fully used.',
             'already_used' => 'You have already used that code.',
+            'not_for_wholesale' => 'That code is not for wholesale orders.',
+            'wholesale_only' => 'That code is for wholesale orders only.',
         ],
     ],
 

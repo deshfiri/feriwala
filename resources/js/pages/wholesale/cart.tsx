@@ -17,6 +17,7 @@ import {
     show as wholesaleProduct,
 } from '@/routes/catalog/wholesale';
 import { show } from '@/routes/wholesale/cart';
+import { show as checkoutShow } from '@/routes/wholesale/checkout';
 import type { CartLine, CartProblem, CartSummary } from '@/types/wholesale';
 
 type Props = {
@@ -177,6 +178,31 @@ export default function WholesaleCart({ facility_allowed, cart }: Props) {
                             <p className="text-muted-foreground mt-3 text-xs">
                                 {t('wholesale.cart.subtotal_help')}
                             </p>
+
+                            <div className="mt-4 space-y-2">
+                                {cart.ready_for_checkout ? (
+                                    <Button asChild className="w-full">
+                                        <Link href={checkoutShow()}>
+                                            {t('wholesale.cart.checkout')}
+                                        </Link>
+                                    </Button>
+                                ) : (
+                                    <>
+                                        <Button
+                                            type="button"
+                                            className="w-full"
+                                            disabled
+                                        >
+                                            {t('wholesale.cart.checkout')}
+                                        </Button>
+                                        <p className="text-muted-foreground text-xs">
+                                            {t(
+                                                'wholesale.cart.checkout_blocked',
+                                            )}
+                                        </p>
+                                    </>
+                                )}
+                            </div>
                         </SectionCard>
                     </div>
                 )}
