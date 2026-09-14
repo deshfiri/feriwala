@@ -23,6 +23,38 @@ return [
         'out_of_stock' => 'স্টক শেষ',
     ],
 
+    'movement_types' => [
+        'adjustment' => 'সমন্বয়',
+        'reservation' => 'সংরক্ষিত',
+        'reservation_released' => 'সংরক্ষণ ছেড়ে দেওয়া হয়েছে',
+        'reservation_expired' => 'সংরক্ষণের মেয়াদ শেষ',
+        'reservation_committed' => 'সংরক্ষণ নিশ্চিত',
+    ],
+
+    'item' => [
+        'back' => 'সব স্টক',
+        'held_in' => ':product · :warehouse (:code)-এ রাখা',
+        'figures' => 'হিসাব',
+        'figures_description' => 'এই গুদামে এই SKU-এর প্রতিটি ইউনিট এখন কোথায় আছে।',
+        'history' => 'চলাচলের ইতিহাস',
+        'history_description' => 'এই হিসাবের প্রতিটি পরিবর্তন, নতুনটি আগে, প্রতিটি ঘরের আগে ও পরের সংখ্যাসহ। এখানে কিছুই কখনো সম্পাদনা বা মুছে ফেলা হয় না।',
+        'history_caption' => 'এই গুদামে এই SKU-এর স্টক চলাচল',
+        'columns' => [
+            'when' => 'কখন',
+            'type' => 'কেন',
+            'movement' => 'চলাচল',
+            'change' => 'আগে → পরে',
+            'reason' => 'কারণ',
+            'actor' => 'যিনি করেছেন',
+        ],
+        'arrived' => ':to-এ :quantity',
+        'left' => ':from থেকে :quantity',
+        'moved' => ':from থেকে :to-এ :quantity',
+        'system' => 'সিস্টেম',
+        'empty' => 'এখনো কোনো চলাচল নেই',
+        'empty_help' => 'এই SKU এখানে শূন্য দিয়ে রাখা আছে। স্টক সমন্বয় বা সংরক্ষণ হলে প্রথম চলাচল দেখা যাবে।',
+    ],
+
     'stock' => [
         'title' => 'স্টক',
         'description' => 'প্রতিটি গুদাম ও SKU অনুযায়ী কেন্দ্রীয় স্টক। প্রতিটি ওয়েবসাইট এই হিসাব থেকেই বিক্রি করে।',
@@ -99,5 +131,6 @@ return [
         'choose_variation' => 'এই পণ্যের ভ্যারিয়েশন আছে। স্টক প্রতিটি ভ্যারিয়েশন অনুযায়ী রাখা হয়, তাই একটি বেছে নিন।',
         'variation_not_of_product' => 'ভ্যারিয়েশনটি অন্য একটি পণ্যের।',
         'already_tracked' => 'SKU-টি এই গুদামে আগে থেকেই রাখা আছে।',
+        'insufficient' => ':bucket-এ আছে :held, চাওয়া :requested-এর চেয়ে কম। কিছুই পরিবর্তন হয়নি।',
     ],
 ];

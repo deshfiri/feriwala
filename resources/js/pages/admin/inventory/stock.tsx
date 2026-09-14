@@ -9,7 +9,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
-import { index } from '@/routes/admin/inventory/stock';
+import { index, show } from '@/routes/admin/inventory/stock';
 import { index as warehousesIndex } from '@/routes/admin/inventory/warehouses';
 import type { Column, Paginator } from '@/types';
 import {
@@ -70,9 +70,12 @@ export default function AdminStock({
             header: t('inventory.stock.columns.sku'),
             cell: (row) => (
                 <div className="min-w-0">
-                    <div className="truncate font-mono text-sm font-medium">
+                    <Link
+                        href={show(row.id)}
+                        className="block truncate font-mono text-sm font-medium underline-offset-4 hover:underline"
+                    >
                         {row.sku}
-                    </div>
+                    </Link>
                     <div className="text-muted-foreground truncate text-xs">
                         {row.product.name}
                     </div>

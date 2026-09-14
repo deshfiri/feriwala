@@ -23,6 +23,38 @@ return [
         'out_of_stock' => 'Out of stock',
     ],
 
+    'movement_types' => [
+        'adjustment' => 'Adjustment',
+        'reservation' => 'Reserved',
+        'reservation_released' => 'Reservation released',
+        'reservation_expired' => 'Reservation expired',
+        'reservation_committed' => 'Reservation committed',
+    ],
+
+    'item' => [
+        'back' => 'All stock',
+        'held_in' => ':product · held in :warehouse (:code)',
+        'figures' => 'Figures',
+        'figures_description' => 'Where every unit of this SKU in this warehouse is right now.',
+        'history' => 'Movement history',
+        'history_description' => 'Every change to these figures, newest first, with each bucket before and after. Nothing here is ever edited or removed.',
+        'history_caption' => 'Stock movements for this SKU in this warehouse',
+        'columns' => [
+            'when' => 'When',
+            'type' => 'Why',
+            'movement' => 'Movement',
+            'change' => 'Before → after',
+            'reason' => 'Reason',
+            'actor' => 'By',
+        ],
+        'arrived' => ':quantity into :to',
+        'left' => ':quantity out of :from',
+        'moved' => ':quantity from :from to :to',
+        'system' => 'System',
+        'empty' => 'No movements yet',
+        'empty_help' => 'This SKU is held here at zero. The first movement appears when stock is adjusted or reserved.',
+    ],
+
     'stock' => [
         'title' => 'Stock',
         'description' => 'Central stock per warehouse and SKU. Every website sells from these figures.',
@@ -99,5 +131,6 @@ return [
         'choose_variation' => 'This product has variations. Stock is held per variation, so choose one.',
         'variation_not_of_product' => 'That variation belongs to a different product.',
         'already_tracked' => 'That SKU is already held in this warehouse.',
+        'insufficient' => ':bucket holds :held, fewer than the :requested asked for. Nothing was changed.',
     ],
 ];

@@ -605,6 +605,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.stock.index');
         Route::post('inventory/stock', [StockController::class, 'store'])
             ->name('inventory.stock.store');
+        Route::get('inventory/stock/{item}', [StockController::class, 'show'])
+            ->name('inventory.stock.show');
 
         Route::get('inventory/warehouses', [WarehouseController::class, 'index'])
             ->name('inventory.warehouses.index');

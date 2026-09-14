@@ -7,6 +7,7 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Actions\TrackStock;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Inventory\Models\StockMovement;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Http\Controllers\Controller;
@@ -73,6 +74,50 @@ class StockController extends Controller
             'can' => [
                 'track' => InventoryPolicy::canEdit($actor),
             ],
+        ]);
+    }
+
+    /**
+     * One SKU in one warehouse: its figures, and every movement that made them
+     * (P3-23).
+     */
+    public function show(Request $request, string $item): Response
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(InventoryPolicy::canViewAny($actor), 403);
+
+        /** @var StockItem $record */
+        $record = StockItem::query()
+            ->with([
+                'warehouse:id,public_id,code,name,is_active',
+                'product:id,public_id,name,sku',
+                'variant:id,public_id,product_id,sku',
+            ])
+            ->where('public_id', $item)
+            ->firstOrFail();
+
+        return Inertia::render('admin/inventory/stock-item', [
+            'item' => $this->row($record),
+            'movements' => StockMovement::query()
+                ->with('actor:id,name')
+                ->where('stock_item_id', $record->id)
+                ->orderByDesc('id')
+                ->paginate(self::PER_PAGE)
+                ->withQueryString()
+                ->through(fn (StockMovement $movement) => [
+                    'id' => $movement->public_id,
+                    'type' => $movement->type->value,
+                    'type_label' => __('inventory.movement_types.'.$movement->type->value),
+                    'from' => $movement->from_bucket?->value,
+                    'to' => $movement->to_bucket?->value,
+                    'quantity' => $movement->quantity,
+                    'before' => $movement->before,
+                    'after' => $movement->after,
+                    'reason' => $movement->reason,
+                    'actor' => $movement->actor?->name,
+                    'occurred_at' => $movement->occurred_at->toIso8601String(),
+                ]),
         ]);
     }
 

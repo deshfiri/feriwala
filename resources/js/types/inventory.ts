@@ -40,6 +40,21 @@ export type StockRow = {
     updated_at: string;
 };
 
+/** One movement of stock, with every bucket's figure before and after. */
+export type StockMovementRow = {
+    id: string;
+    type: string;
+    type_label: string;
+    from: StockBucket | null;
+    to: StockBucket | null;
+    quantity: number;
+    before: StockBuckets;
+    after: StockBuckets;
+    reason: string | null;
+    actor: string | null;
+    occurred_at: string;
+};
+
 /** A stockable unit found for the hold dialog: a product, or one variation. */
 export type StockUnit = {
     product: string;

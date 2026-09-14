@@ -9,6 +9,7 @@ use App\Domain\Inventory\Enums\StockBucket;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One stockable unit held in one warehouse (§19).
@@ -79,6 +80,14 @@ class StockItem extends Model
     public function variant(): BelongsTo
     {
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
+    /**
+     * @return HasMany<StockMovement, $this>
+     */
+    public function movements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
     }
 
     /**

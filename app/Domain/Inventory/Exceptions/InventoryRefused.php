@@ -2,6 +2,7 @@
 
 namespace App\Domain\Inventory\Exceptions;
 
+use App\Domain\Inventory\Enums\StockBucket;
 use RuntimeException;
 
 /**
@@ -41,5 +42,18 @@ class InventoryRefused extends RuntimeException
     public static function alreadyTracked(): self
     {
         return new self(__('inventory.refused.already_tracked'));
+    }
+
+    /**
+     * A bucket holds fewer units than were asked of it (§19: overselling
+     * prevention). Read under the row lock, so the figure is the true one.
+     */
+    public static function insufficient(StockBucket $bucket, int $held, int $requested): self
+    {
+        return new self(__('inventory.refused.insufficient', [
+            'bucket' => __('inventory.buckets.'.$bucket->value),
+            'held' => $held,
+            'requested' => $requested,
+        ]));
     }
 }
