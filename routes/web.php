@@ -242,6 +242,9 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wholesale.checkout.coupon.apply');
         Route::delete('wholesale/checkout/coupon', [WholesaleCheckoutController::class, 'removeCoupon'])
             ->name('wholesale.checkout.coupon.remove');
+        Route::put('wholesale/checkout/addresses/{type}', [WholesaleCheckoutController::class, 'updateAddress'])
+            ->whereIn('type', ['billing', 'shipping'])
+            ->name('wholesale.checkout.addresses.update');
     });
 });
 

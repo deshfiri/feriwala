@@ -9,6 +9,7 @@ use App\Domain\Settings\SettingsRepository;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -75,6 +76,38 @@ class FeeRuleResolver
         }
 
         return $this->legacyFee($currency);
+    }
+
+    /**
+     * The delivery charge on an ERP wholesale checkout (§14, P4-7).
+     *
+     * A rule for the account's package wins, then the global rule, then zero —
+     * there is no legacy setting to fall back on, and no amount is assumed. A rule
+     * priced in another currency is not converted: it charges nothing and says so,
+     * the way a tax rule naming a withdrawn code does.
+     */
+    public function wholesaleDelivery(?Package $package, Currency $currency, ?CarbonImmutable $at = null): Money
+    {
+        $at ??= CarbonImmutable::now();
+
+        $rule = ($package !== null ? $this->ruleFor(FeeType::WholesaleDelivery, $package->id, $at) : null)
+            ?? $this->ruleFor(FeeType::WholesaleDelivery, null, $at);
+
+        if ($rule === null) {
+            return Money::zero($currency);
+        }
+
+        if ($rule->amount_minor->currency !== $currency) {
+            Log::warning('Wholesale delivery rule is priced in another currency.', [
+                'fee_rule' => $rule->id,
+                'rule_currency' => $rule->amount_minor->currency->value,
+                'currency' => $currency->value,
+            ]);
+
+            return Money::zero($currency);
+        }
+
+        return $rule->amount_minor;
     }
 
     /**

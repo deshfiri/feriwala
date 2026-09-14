@@ -47,6 +47,33 @@ class TaxRuleResolver
     }
 
     /**
+     * The rule for goods, walking outward through named targets (D19, P4-7).
+     *
+     * A sale of goods has more than one level to ask: the product itself, then its
+     * category, then each category above that, then the catch-all. The first
+     * target with a match wins outright, exactly as {@see resolve()} does for a
+     * single scope, so a zero-rated product never picks up its category's rate
+     * and a subcategory inherits its parent's rule only when it has none of its
+     * own.
+     *
+     * @param  array<int, array{0: TaxScope, 1: string}>  $targets  most specific first
+     */
+    public function resolveFirst(array $targets, ?CarbonImmutable $at = null): ?TaxRule
+    {
+        $at ??= CarbonImmutable::now();
+
+        foreach ($targets as [$scope, $value]) {
+            $match = $this->bestMatch($scope, $value, $at);
+
+            if ($match !== null) {
+                return $match;
+            }
+        }
+
+        return $this->bestMatch(TaxScope::Everything, null, $at);
+    }
+
+    /**
      * The rate a code is worth at a given moment.
      *
      * Resolved by date rather than by row id: a rule names a code, and the code

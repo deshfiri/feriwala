@@ -9,6 +9,7 @@ use App\Domain\Tax\Enums\TaxMode;
 use App\Domain\Tax\Enums\TaxScope;
 use App\Domain\Tax\Models\TaxExemption;
 use App\Domain\Tax\Models\TaxRate;
+use App\Domain\Tax\Models\TaxRule;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
@@ -77,8 +78,51 @@ class TaxEngine
 
         $scopeValue ??= $feeType?->value;
 
-        $rule = $this->rules->resolve($scope, $scopeValue, $at);
+        return $this->chargeUnder($this->rules->resolve($scope, $scopeValue, $at), $amount, $at);
+    }
 
+    /**
+     * Tax on goods sold (§14, P4-7).
+     *
+     * Resolved against the product first, then its categories nearest first, then
+     * the catch-all — the most specific match winning, as for every other charge.
+     * A product rule names the product's SKU and a category rule the category's
+     * slug, both matched without regard to case.
+     *
+     * @param  array<int, string>  $categorySlugs  nearest first
+     */
+    public function chargeGoods(
+        Money $amount,
+        string $productSku,
+        array $categorySlugs = [],
+        ?BusinessAccount $account = null,
+        ?CarbonImmutable $at = null,
+    ): TaxCharge {
+        $at ??= CarbonImmutable::now();
+
+        if ($amount->isZero()) {
+            return TaxCharge::none($amount);
+        }
+
+        if ($account !== null && $this->isExempt($account, $at)) {
+            return TaxCharge::none($amount);
+        }
+
+        $targets = [[TaxScope::Product, $productSku]];
+
+        foreach ($categorySlugs as $slug) {
+            $targets[] = [TaxScope::Category, $slug];
+        }
+
+        return $this->chargeUnder($this->rules->resolveFirst($targets, $at), $amount, $at);
+    }
+
+    /**
+     * The charge a resolved rule makes on an amount: its rate on the date, applied
+     * in its mode — or nothing, when no rule matched or its code has no rate.
+     */
+    protected function chargeUnder(?TaxRule $rule, Money $amount, CarbonImmutable $at): TaxCharge
+    {
         if ($rule === null) {
             return TaxCharge::none($amount);
         }

@@ -20,10 +20,21 @@ enum FeeType: string
      */
     case Registration = 'registration';
 
+    /**
+     * Charged on an ERP wholesale checkout for delivering the order (§14, P4-7).
+     *
+     * One amount per order, priced by rule like the registration fee: a rule for
+     * the account's package wins over the global one, and with neither the charge
+     * is zero. What a courier charges per shipment belongs to courier management
+     * (§21), not here.
+     */
+    case WholesaleDelivery = 'wholesale_delivery';
+
     public function label(): string
     {
         return match ($this) {
             self::Registration => 'Registration fee',
+            self::WholesaleDelivery => 'Wholesale delivery charge',
         };
     }
 }

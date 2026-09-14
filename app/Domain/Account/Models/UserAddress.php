@@ -4,6 +4,7 @@ namespace App\Domain\Account\Models;
 
 use App\Domain\Account\Enums\AddressType;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -30,6 +31,19 @@ class UserAddress extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The address of one kind a person uses now: their default, else the latest.
+     *
+     * @param  Builder<UserAddress>  $query
+     */
+    public function scopeCurrentFor(Builder $query, int $userId, AddressType $type): void
+    {
+        $query->where('user_id', $userId)
+            ->where('type', $type->value)
+            ->orderByDesc('is_default')
+            ->orderByDesc('id');
     }
 
     /**

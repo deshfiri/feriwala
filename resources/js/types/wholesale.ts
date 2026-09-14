@@ -66,10 +66,41 @@ export type CheckoutCoupon = {
     reason: string | null;
 };
 
+/** Tax at one rate on this checkout, as the server's tax engine charged it. */
+export type CheckoutTaxLine = {
+    code: string;
+    label: string;
+    rate_basis_points: number;
+    mode: 'exclusive' | 'inclusive';
+    net: Money;
+    tax: Money;
+    gross: Money;
+};
+
+/** An address as the order would keep it. No identifier is ever sent. */
+export type CheckoutAddress = {
+    contact_name: string | null;
+    contact_mobile: string | null;
+    line_1: string | null;
+    line_2: string | null;
+    area: string | null;
+    city: string | null;
+    district: string | null;
+    postcode: string | null;
+    country: string | null;
+};
+
+export type CheckoutAddressType = 'billing' | 'shipping';
+
 export type CheckoutSummary = {
     lines: CheckoutLine[];
     subtotal: Money;
     coupon: CheckoutCoupon | null;
     discount: Money;
+    delivery: Money;
+    tax: CheckoutTaxLine[];
+    tax_added: Money;
     total: Money;
+    addresses: Record<CheckoutAddressType, CheckoutAddress | null>;
+    ready_to_confirm: boolean;
 };
