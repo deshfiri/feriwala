@@ -3,6 +3,7 @@ import {
     Boxes,
     CreditCard,
     FolderTree,
+    Globe,
     LayoutGrid,
     ListChecks,
     Lock,
@@ -31,6 +32,7 @@ import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
+import { index as stockAvailability } from '@/routes/admin/inventory/availability';
 import { index as stockReservations } from '@/routes/admin/inventory/reservations';
 import { index as stockLevels } from '@/routes/admin/inventory/stock';
 import { index as warehouses } from '@/routes/admin/inventory/warehouses';
@@ -243,6 +245,11 @@ export function useNavigation(): {
                               title: t('nav.reservations'),
                               href: stockReservations(),
                               icon: Lock,
+                          },
+                          {
+                              title: t('nav.availability'),
+                              href: stockAvailability(),
+                              icon: Globe,
                           },
                       ]
                     : []),

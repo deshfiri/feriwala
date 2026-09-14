@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
+use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
@@ -611,6 +612,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.stock.show');
         Route::post('inventory/stock/{item}/adjustments', [StockAdjustmentController::class, 'store'])
             ->name('inventory.stock.adjustments.store');
+
+        // What every website is told about stock (§19.1, contract §5.2).
+        Route::get('inventory/availability', [AvailabilityController::class, 'index'])
+            ->name('inventory.availability.index');
 
         /*
          * Stock reservations (contract §6.1.2). Reading is `inventory.view`;

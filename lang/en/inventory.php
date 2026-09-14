@@ -111,6 +111,26 @@ return [
         'no_matches_help' => 'Try a different name or SKU, or clear the filters.',
     ],
 
+    'availability' => [
+        'title' => 'Website availability',
+        'description' => 'Every website sells from central stock, so each SKU has one availability and every website receives the same one: the units available across active warehouses. Reserved, processing and damaged stock never count.',
+        'caption' => 'Products and the availability every website receives for each of their SKUs',
+        'search' => 'Search by product name or SKU',
+        'filter_state' => 'Stock state',
+        'all_states' => 'Any stock state',
+        'columns' => [
+            'product' => 'Product',
+            'units' => 'Available per SKU',
+        ],
+        'units_available' => ':count available',
+        'preview' => 'What every website receives',
+        'advisory' => 'Advisory at browse time. The binding check is the reservation made when an order is submitted.',
+        'empty' => 'No products yet',
+        'empty_help' => 'Availability appears here once the catalogue has products.',
+        'no_matches' => 'No product matches',
+        'no_matches_help' => 'Try a different name or SKU, or clear the filter.',
+    ],
+
     'reservations' => [
         'title' => 'Reservations',
         'description' => 'Stock set aside for orders not yet confirmed. Online payments hold stock for minutes, cash on delivery for a confirmation window; the scheduler gives back whatever runs out.',

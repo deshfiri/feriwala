@@ -36,6 +36,7 @@ return [
     'stock' => 'স্টক',
     'warehouses' => 'গুদাম',
     'reservations' => 'সংরক্ষণ',
+    'availability' => 'ওয়েবসাইটে প্রাপ্যতা',
     'invoices' => 'চালান',
 
     'search' => [
