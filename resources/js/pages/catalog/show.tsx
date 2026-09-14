@@ -5,6 +5,7 @@ import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
+import StatusPill from '@/components/status-pill';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as dropshippingIndex } from '@/routes/catalog/dropshipping';
 import { index as wholesaleIndex } from '@/routes/catalog/wholesale';
@@ -138,19 +139,51 @@ export default function CatalogueProduct({ channel, product, related }: Props) {
                             {product.variants.map((variant) => (
                                 <li
                                     key={variant.sku}
-                                    className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+                                    className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm"
                                 >
-                                    <span>
-                                        {variant.label}
-                                        <span className="text-muted-foreground ml-2 font-mono text-xs">
-                                            {variant.sku}
+                                    <div className="min-w-0 space-y-1">
+                                        <span>
+                                            {variant.label}
+                                            <span className="text-muted-foreground ml-2 font-mono text-xs">
+                                                {variant.sku}
+                                            </span>
                                         </span>
-                                    </span>
-                                    {variant.wholesale_price && (
-                                        <MoneyAmount
-                                            amount={variant.wholesale_price}
-                                        />
-                                    )}
+                                        {variant.quantity_pricing &&
+                                            variant.quantity_pricing.length >
+                                                0 && (
+                                                <p className="text-muted-foreground text-xs">
+                                                    {variant.quantity_pricing
+                                                        .map((band) =>
+                                                            t(
+                                                                'catalog.browse.band',
+                                                                {
+                                                                    count: band.min_quantity,
+                                                                    amount: band
+                                                                        .unit_price
+                                                                        .formatted,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .join(' · ')}
+                                                </p>
+                                            )}
+                                    </div>
+                                    <div className="space-y-1 text-right">
+                                        {variant.wholesale_price && (
+                                            <MoneyAmount
+                                                amount={variant.wholesale_price}
+                                            />
+                                        )}
+                                        {channel === 'wholesale' &&
+                                            variant.in_stock !== undefined && (
+                                                <StockLine
+                                                    inStock={variant.in_stock}
+                                                    available={
+                                                        variant.available ?? 0
+                                                    }
+                                                />
+                                            )}
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -208,6 +241,29 @@ function WholesaleTerms({ product }: { product: BrowseDetail }) {
                     </div>
                 )}
 
+                {product.in_stock !== undefined && (
+                    <div>
+                        <p className="text-muted-foreground mb-1 text-xs">
+                            {t('catalog.browse.stock')}
+                        </p>
+                        {product.available === null ? (
+                            <StatusPill
+                                tone={product.in_stock ? 'success' : 'warning'}
+                                label={t(
+                                    product.in_stock
+                                        ? 'catalog.browse.in_stock'
+                                        : 'catalog.browse.out_of_stock',
+                                )}
+                            />
+                        ) : (
+                            <StockLine
+                                inStock={product.in_stock}
+                                available={product.available ?? 0}
+                            />
+                        )}
+                    </div>
+                )}
+
                 <div>
                     <p className="text-muted-foreground text-xs">
                         {t('catalog.browse.order_quantity')}
@@ -254,6 +310,37 @@ function WholesaleTerms({ product }: { product: BrowseDetail }) {
                     )}
             </div>
         </SectionCard>
+    );
+}
+
+/** In stock with how many this account can order, or out of stock — in words. */
+function StockLine({
+    inStock,
+    available,
+}: {
+    inStock: boolean;
+    available: number;
+}) {
+    const { t } = useTranslation();
+
+    return (
+        <span className="inline-flex flex-wrap items-center justify-end gap-2">
+            <StatusPill
+                tone={inStock ? 'success' : 'warning'}
+                label={t(
+                    inStock
+                        ? 'catalog.browse.in_stock'
+                        : 'catalog.browse.out_of_stock',
+                )}
+            />
+            {inStock && (
+                <span className="text-muted-foreground text-xs tabular-nums">
+                    {t('catalog.browse.available_to_order', {
+                        count: available,
+                    })}
+                </span>
+            )}
+        </span>
     );
 }
 

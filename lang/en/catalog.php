@@ -267,6 +267,8 @@ return [
         'out_of_stock' => 'Out of stock',
         'price_min' => 'Lowest price (৳)',
         'price_max' => 'Highest price (৳)',
+        'available_to_order' => ':count available to order',
+        'band' => 'from :count units :amount each',
         'wholesale_title' => 'Wholesale catalogue',
         'wholesale_description' => 'Products your account can buy in bulk. Prices are per unit, and larger quantities can cost less per unit.',
         'dropshipping_title' => 'Dropshipping catalogue',

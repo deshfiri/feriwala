@@ -187,6 +187,9 @@ class CatalogController extends Controller
 
         abort_if($product === null, 404);
 
+        $wholesale = $channel === SalesChannel::Wholesale;
+        $available = $wholesale ? $this->orderableUnits($product, $account) : [];
+
         $detail = [
             'slug' => $product->slug,
             'name' => $product->name,
@@ -212,15 +215,22 @@ class CatalogController extends Controller
                         ->pluck('value')
                         ->implode(' / '),
                     'sku' => $variant->sku,
-                    ...($channel === SalesChannel::Wholesale
-                        ? ['wholesale_price' => $variant->effectiveWholesalePrice()->jsonSerialize()]
+                    ...($wholesale
+                        ? [
+                            'wholesale_price' => $variant->effectiveWholesalePrice()->jsonSerialize(),
+                            'in_stock' => ($available[$variant->sku] ?? 0) > 0,
+                            'available' => $available[$variant->sku] ?? 0,
+                            'quantity_pricing' => $this->quantityPricing($product, $variant),
+                        ]
                         : []),
                 ])
                 ->values()
                 ->all(),
         ];
 
-        if ($channel === SalesChannel::Wholesale) {
+        if ($wholesale) {
+            $hasVariants = $product->variants->isNotEmpty();
+
             $detail += [
                 'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
                 'min_order_quantity' => $product->min_order_quantity,
@@ -229,13 +239,12 @@ class CatalogController extends Controller
                 // Resolved by the server at each band's starting quantity, so
                 // a band the base price has since undercut shows what is
                 // actually charged.
-                'quantity_pricing' => $this->prices->tiersFor($product, null)
-                    ->map(fn (ProductPriceTier $tier) => [
-                        'min_quantity' => $tier->min_quantity,
-                        'unit_price' => $this->prices->unitPrice($product, null, $tier->min_quantity)->jsonSerialize(),
-                    ])
-                    ->values()
-                    ->all(),
+                'quantity_pricing' => $this->quantityPricing($product, null),
+
+                // What this account can order now (P4-2): the product itself, or
+                // any of its active variations — each variation carries its own.
+                'in_stock' => collect($available)->contains(fn (int $units) => $units > 0),
+                'available' => $hasVariants ? null : ($available[$product->sku] ?? 0),
             ];
         } else {
             $detail += $this->sellingGuidance($product);
@@ -249,23 +258,70 @@ class CatalogController extends Controller
         $relatedIds = $product->relatedProducts()->pluck('products.id')->all();
         $positions = array_flip($relatedIds);
 
-        $related = $relatedIds === []
-            ? []
+        /** @var Collection<int, Product> $relatedProducts */
+        $relatedProducts = $relatedIds === []
+            ? collect()
             : $this->eligibility->query($account, $channel)
                 ->whereIn('id', $relatedIds)
                 ->with(['category:id,name', 'brand:id,name', 'media' => fn ($query) => $query->where('type', ProductMedia::TYPE_IMAGE)])
                 ->withExists('priceTiers')
                 ->get()
                 ->sortBy(fn (Product $related) => $positions[$related->id] ?? PHP_INT_MAX)
-                ->map(fn (Product $related) => $this->card($related, $channel))
-                ->values()
-                ->all();
+                ->values();
+
+        $relatedStock = $wholesale ? $this->stockStates($relatedProducts, $account) : [];
+
+        $related = $relatedProducts
+            ->map(fn (Product $related) => $this->card($related, $channel, $relatedStock[$related->id] ?? null))
+            ->all();
 
         return Inertia::render('catalog/show', [
             'channel' => $channel->value,
             'product' => $detail,
             'related' => $related,
         ]);
+    }
+
+    /**
+     * How many of each stockable unit this account can order, keyed by SKU
+     * (P4-2): the product itself when it has no variations, otherwise its active
+     * variations. Read through {@see StockAvailability}, so the figure is stock in
+     * active warehouses plus what is allocated to this account, and nobody
+     * else's allocation.
+     *
+     * @return array<string, int>
+     */
+    protected function orderableUnits(Product $product, BusinessAccount $account): array
+    {
+        $units = $product->variants->isEmpty()
+            ? [['sku' => $product->sku, 'product_id' => $product->id, 'variant_id' => null]]
+            : $product->variants
+                ->where('is_active', true)
+                ->map(fn (ProductVariant $variant) => ['sku' => $variant->sku, 'product_id' => $product->id, 'variant_id' => $variant->id])
+                ->values()
+                ->all();
+
+        return array_map(
+            fn (array $answer) => $answer['quantity'],
+            $this->stock->forUnits($units, $account),
+        );
+    }
+
+    /**
+     * Quantity bands for the product or one variation, each resolved by the
+     * server at its starting quantity.
+     *
+     * @return array<int, array{min_quantity: int, unit_price: array<string, mixed>}>
+     */
+    protected function quantityPricing(Product $product, ?ProductVariant $variant): array
+    {
+        return $this->prices->tiersFor($product, $variant)
+            ->map(fn (ProductPriceTier $tier) => [
+                'min_quantity' => $tier->min_quantity,
+                'unit_price' => $this->prices->unitPrice($product, $variant, $tier->min_quantity)->jsonSerialize(),
+            ])
+            ->values()
+            ->all();
     }
 
     /**

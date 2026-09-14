@@ -280,11 +280,22 @@ export type BrowseDetail = {
     category: string;
     brand: string | null;
     media: { type: 'image' | 'video'; url: string; alt: string | null }[];
-    variants: { label: string; sku: string; wholesale_price?: Money }[];
+    variants: {
+        label: string;
+        sku: string;
+        wholesale_price?: Money;
+        /** Wholesale only: what this account can order of this variation (P4-2). */
+        in_stock?: boolean;
+        available?: number;
+        quantity_pricing?: { min_quantity: number; unit_price: Money }[];
+    }[];
     wholesale_price?: Money;
     min_order_quantity?: number;
     max_order_quantity?: number | null;
     quantity_pricing?: { min_quantity: number; unit_price: Money }[];
+    /** Wholesale only: any unit orderable now; `available` is null when variations carry their own. */
+    in_stock?: boolean;
+    available?: number | null;
     suggested_selling_price?: Money | null;
     minimum_selling_price?: Money | null;
     maximum_selling_price?: Money | null;
