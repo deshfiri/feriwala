@@ -6,6 +6,7 @@ import {
     ListChecks,
     MessageSquare,
     Package as PackageIcon,
+    Palette,
     Receipt,
     Scale,
     ScrollText,
@@ -23,6 +24,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
 import { index as activationQueue } from '@/routes/admin/activations';
+import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
@@ -288,6 +290,16 @@ export function useNavigation(): {
                               title: t('nav.sms'),
                               href: smsSettings(),
                               icon: MessageSquare,
+                          },
+                      ]
+                    : []),
+                // The platform's logo and browser icon.
+                ...(permissions['system.manage_settings']
+                    ? [
+                          {
+                              title: t('nav.branding'),
+                              href: brandingSettings(),
+                              icon: Palette,
                           },
                       ]
                     : []),

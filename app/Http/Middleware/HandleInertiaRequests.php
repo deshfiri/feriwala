@@ -9,6 +9,7 @@ use App\Domain\Account\Data\AccountContext;
 use App\Domain\Account\StaffAllowance;
 use App\Domain\Notification\Queries\RecentNotifications;
 use App\Domain\Package\Entitlements;
+use App\Domain\Settings\Branding;
 use App\Models\User;
 use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class HandleInertiaRequests extends Middleware
         protected StaffAllowance $allowance,
         protected RecentNotifications $notifications,
         protected Entitlements $entitlements,
+        protected Branding $branding,
     ) {}
 
     /**
@@ -71,6 +73,9 @@ class HandleInertiaRequests extends Middleware
         // `payment.view`: reconciling what a gateway sent and reading what a
         // business holds are different jobs.
         [PermissionModule::Wallet, PermissionAction::View],
+
+        // The platform's logo and browser icon.
+        [PermissionModule::System, PermissionAction::ManageSettings],
     ];
 
     /**
@@ -97,6 +102,14 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+
+            /*
+             * The brand images, as addresses a browser can load — the one
+             * contract every layout and the document head read, for guests and
+             * signed-in people alike. Never a storage path.
+             */
+            'branding' => fn () => $this->branding->toArray(),
+
             'auth' => [
                 'user' => $user,
             ],

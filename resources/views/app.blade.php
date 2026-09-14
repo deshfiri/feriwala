@@ -38,8 +38,6 @@
             }
         </style>
 
-        <link rel="icon" href="/favicon.ico" sizes="any">
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
         @fonts
@@ -48,6 +46,17 @@
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         <x-inertia::head>
             <title>{{ config('app.name', 'Laravel') }}</title>
+
+            {{--
+                One browser icon, from the shared branding contract. Inside the
+                head slot because this is the fallback for when SSR is not
+                running: with SSR, the rendered head carries the same keyed link,
+                and rendering both would put two icons on the page. `data-inertia`
+                lets the client-side <Head> adopt this element by its `favicon`
+                key, so navigating never stacks a second link beside it.
+            --}}
+            @php($branding = $page['props']['branding'] ?? [])
+            <link rel="icon" href="{{ $branding['favicon_url'] ?? '/favicon.svg' }}" type="{{ $branding['favicon_type'] ?? 'image/svg+xml' }}" data-inertia="favicon">
         </x-inertia::head>
     </head>
     <body class="font-sans antialiased">

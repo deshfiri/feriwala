@@ -38,6 +38,7 @@ return [
     'wallets' => 'Account wallets',
     'deposit_rules' => 'Deposit rules',
     'sms' => 'SMS',
+    'branding' => 'Branding',
     'invoices' => 'Invoices',
 
     'search' => [

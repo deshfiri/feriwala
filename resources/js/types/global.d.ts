@@ -1,5 +1,6 @@
 import type { Auth } from '@/types/auth';
 import type { AccountContext } from '@/types/account';
+import type { Branding } from '@/types/branding';
 import type { HeaderNotification } from '@/types/notification';
 
 declare module 'react' {
@@ -12,6 +13,8 @@ declare module '@inertiajs/core' {
     export interface InertiaConfig {
         sharedPageProps: {
             name: string;
+            /** The logo and browser icon every layout and the document head use. */
+            branding: Branding;
             auth: Auth;
             sidebarOpen: boolean;
             /**

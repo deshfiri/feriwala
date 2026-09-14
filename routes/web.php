@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
+use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
@@ -349,6 +350,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('sms', [SmsController::class, 'index'])->name('sms.index');
         Route::put('sms', [SmsController::class, 'update'])->name('sms.update');
+
+        /*
+         * The platform's logo and browser icon, behind `system.manage_settings`.
+         * Uploads are POST because a browser cannot send a file with PUT.
+         */
+        Route::get('settings/branding', [BrandingController::class, 'edit'])->name('branding.edit');
+        Route::post('settings/branding/{asset}', [BrandingController::class, 'update'])
+            ->whereIn('asset', ['logo', 'favicon'])
+            ->name('branding.update');
+        Route::delete('settings/branding/{asset}', [BrandingController::class, 'destroy'])
+            ->whereIn('asset', ['logo', 'favicon'])
+            ->name('branding.destroy');
 
         /*
          * Account wallets and their ledgers (§23, §33.7, P2-8).
