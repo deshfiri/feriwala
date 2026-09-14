@@ -91,6 +91,14 @@ class StockItem extends Model
     }
 
     /**
+     * @return HasMany<StockReservation, $this>
+     */
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(StockReservation::class);
+    }
+
+    /**
      * The SKU this item holds: the variation's, or the product's own.
      */
     public function sku(): string

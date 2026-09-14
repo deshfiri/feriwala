@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, History, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, History, Lock, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import DataTable from '@/components/data-table/data-table';
 import PageContainer from '@/components/page-container';
@@ -16,6 +16,7 @@ import {
     type AdjustmentKindOption,
     type StockBucket,
     type StockMovementRow,
+    type StockReservationRow,
     type StockRow,
 } from '@/types/inventory';
 import AdjustStockDialog from './adjust-stock-dialog';
@@ -23,6 +24,7 @@ import AdjustStockDialog from './adjust-stock-dialog';
 type Props = {
     item: StockRow;
     movements: Paginator<StockMovementRow>;
+    reservations: StockReservationRow[];
     adjustment_kinds: AdjustmentKindOption[];
     can: { adjust: boolean };
 };
@@ -39,6 +41,7 @@ type Props = {
 export default function AdminStockItem({
     item,
     movements,
+    reservations,
     adjustment_kinds,
     can,
 }: Props) {
@@ -198,6 +201,72 @@ export default function AdminStockItem({
                             </div>
                         ))}
                     </dl>
+                </SectionCard>
+
+                <SectionCard
+                    title={t('inventory.item.reservations')}
+                    description={t('inventory.item.reservations_description')}
+                    contentClassName={
+                        reservations.length > 0 ? 'p-0' : undefined
+                    }
+                >
+                    {reservations.length === 0 ? (
+                        <EmptyState
+                            icon={Lock}
+                            title={t('inventory.item.reservations_empty')}
+                            description={t(
+                                'inventory.item.reservations_empty_help',
+                            )}
+                        />
+                    ) : (
+                        <ul className="divide-border divide-y">
+                            {reservations.map((reservation) => (
+                                <li
+                                    key={reservation.id}
+                                    className="flex flex-wrap items-start justify-between gap-3 px-5 py-3"
+                                >
+                                    <div className="min-w-0 space-y-1">
+                                        <div className="truncate font-mono text-sm">
+                                            {reservation.reference}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">
+                                            {t(
+                                                'inventory.item.reservation_units',
+                                                {
+                                                    count: reservation.quantity,
+                                                    kind: reservation.kind_label,
+                                                },
+                                            )}
+                                        </div>
+                                        {reservation.release_reason && (
+                                            <div className="text-muted-foreground text-xs">
+                                                {reservation.release_reason}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1 text-right">
+                                        <StatusPill
+                                            tone={reservation.status_tone}
+                                            label={reservation.status_label}
+                                        />
+                                        <div className="text-muted-foreground text-xs">
+                                            {reservation.ended_at === null
+                                                ? t('inventory.item.expires', {
+                                                      time: new Date(
+                                                          reservation.expires_at,
+                                                      ).toLocaleString(locale),
+                                                  })
+                                                : t('inventory.item.ended', {
+                                                      time: new Date(
+                                                          reservation.ended_at,
+                                                      ).toLocaleString(locale),
+                                                  })}
+                                        </div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </SectionCard>
 
                 <section className="space-y-3">

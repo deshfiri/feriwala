@@ -1,3 +1,5 @@
+import type { StatusTone } from '@/lib/status';
+
 /**
  * Central stock, as the inventory screens receive it (§19).
  *
@@ -53,6 +55,21 @@ export type StockMovementRow = {
     reason: string | null;
     actor: string | null;
     occurred_at: string;
+};
+
+/** Units set aside for an order, and how that ended if it has. */
+export type StockReservationRow = {
+    id: string;
+    reference: string;
+    kind: 'online_payment' | 'cod';
+    kind_label: string;
+    status: 'active' | 'committed' | 'released' | 'expired';
+    status_label: string;
+    status_tone: StatusTone;
+    quantity: number;
+    expires_at: string;
+    ended_at: string | null;
+    release_reason: string | null;
 };
 
 /** A change a person may make by hand, and the buckets it moves between. */

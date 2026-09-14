@@ -3,6 +3,7 @@
 namespace App\Domain\Inventory\Exceptions;
 
 use App\Domain\Inventory\Enums\StockBucket;
+use App\Domain\Inventory\Enums\StockReservationStatus;
 use RuntimeException;
 
 /**
@@ -42,6 +43,35 @@ class InventoryRefused extends RuntimeException
     public static function alreadyTracked(): self
     {
         return new self(__('inventory.refused.already_tracked'));
+    }
+
+    /**
+     * No active warehouse holds the whole quantity of a SKU (§19: out-of-stock
+     * protection). A reservation is never split, and never oversells.
+     */
+    public static function outOfStock(string $sku, int $requested, int $available): self
+    {
+        return new self(__('inventory.refused.out_of_stock', [
+            'sku' => $sku,
+            'requested' => $requested,
+            'available' => $available,
+        ]));
+    }
+
+    public static function reservationEnded(StockReservationStatus $status): self
+    {
+        return new self(__('inventory.refused.reservation_ended', [
+            'status' => __('inventory.reservation_statuses.'.$status->value),
+        ]));
+    }
+
+    /**
+     * A reference already reserved something different. A retry must be the same
+     * request; anything else is a second order borrowing the first one's name.
+     */
+    public static function referenceInUse(string $reference): self
+    {
+        return new self(__('inventory.refused.reference_in_use', ['reference' => $reference]));
     }
 
     /**

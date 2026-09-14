@@ -9,6 +9,7 @@ use App\Domain\Inventory\Enums\StockAdjustmentKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Http\Controllers\Controller;
@@ -119,6 +120,28 @@ class StockController extends Controller
                     'actor' => $movement->actor?->name,
                     'occurred_at' => $movement->occurred_at->toIso8601String(),
                 ]),
+
+            // What the reserved bucket is holding, and for which orders (P3-25).
+            // Active reservations first, then the most recent that ended.
+            'reservations' => $record->reservations()
+                ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get()
+                ->map(fn (StockReservation $reservation) => [
+                    'id' => $reservation->public_id,
+                    'reference' => $reservation->reference,
+                    'kind' => $reservation->kind->value,
+                    'kind_label' => __('inventory.reservation_kinds.'.$reservation->kind->value),
+                    'status' => $reservation->status->value,
+                    'status_label' => __('inventory.reservation_statuses.'.$reservation->status->value),
+                    'status_tone' => $reservation->status->tone(),
+                    'quantity' => $reservation->quantity,
+                    'expires_at' => $reservation->expires_at->toIso8601String(),
+                    'ended_at' => ($reservation->committed_at ?? $reservation->released_at)?->toIso8601String(),
+                    'release_reason' => $reservation->release_reason,
+                ])
+                ->all(),
 
             // What a person may do to this stock by hand, and exactly which
             // buckets each kind moves between (P3-24).

@@ -23,6 +23,18 @@ return [
         'out_of_stock' => 'Out of stock',
     ],
 
+    'reservation_statuses' => [
+        'active' => 'Active',
+        'committed' => 'Committed',
+        'released' => 'Released',
+        'expired' => 'Expired',
+    ],
+
+    'reservation_kinds' => [
+        'online_payment' => 'Online payment',
+        'cod' => 'Cash on delivery',
+    ],
+
     'movement_types' => [
         'adjustment' => 'Adjustment',
         'reservation' => 'Reserved',
@@ -53,6 +65,14 @@ return [
         'system' => 'System',
         'empty' => 'No movements yet',
         'empty_help' => 'This SKU is held here at zero. The first movement appears when stock is adjusted or reserved.',
+
+        'reservations' => 'Reservations',
+        'reservations_description' => 'Units set aside for orders not yet confirmed. Each ends once: committed to the order, released, or expired.',
+        'reservations_empty' => 'Nothing reserved here',
+        'reservations_empty_help' => 'Reservations appear when an order sets this stock aside.',
+        'reservation_units' => ':count units · :kind',
+        'expires' => 'Expires :time',
+        'ended' => 'Ended :time',
     ],
 
     'stock' => [
@@ -157,5 +177,8 @@ return [
         'variation_not_of_product' => 'That variation belongs to a different product.',
         'already_tracked' => 'That SKU is already held in this warehouse.',
         'insufficient' => ':bucket holds :held, fewer than the :requested asked for. Nothing was changed.',
+        'out_of_stock' => 'No active warehouse holds :requested of :sku. :available available across warehouses. Nothing was reserved.',
+        'reservation_ended' => 'This reservation has already ended: :status.',
+        'reference_in_use' => 'The reference :reference already reserved different stock.',
     ],
 ];

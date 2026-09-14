@@ -23,6 +23,18 @@ return [
         'out_of_stock' => 'স্টক শেষ',
     ],
 
+    'reservation_statuses' => [
+        'active' => 'সক্রিয়',
+        'committed' => 'নিশ্চিত',
+        'released' => 'ছেড়ে দেওয়া',
+        'expired' => 'মেয়াদ শেষ',
+    ],
+
+    'reservation_kinds' => [
+        'online_payment' => 'অনলাইন পেমেন্ট',
+        'cod' => 'ক্যাশ অন ডেলিভারি',
+    ],
+
     'movement_types' => [
         'adjustment' => 'সমন্বয়',
         'reservation' => 'সংরক্ষিত',
@@ -53,6 +65,14 @@ return [
         'system' => 'সিস্টেম',
         'empty' => 'এখনো কোনো চলাচল নেই',
         'empty_help' => 'এই SKU এখানে শূন্য দিয়ে রাখা আছে। স্টক সমন্বয় বা সংরক্ষণ হলে প্রথম চলাচল দেখা যাবে।',
+
+        'reservations' => 'সংরক্ষণ',
+        'reservations_description' => 'এখনো নিশ্চিত না হওয়া অর্ডারের জন্য আলাদা করে রাখা ইউনিট। প্রতিটি একবারই শেষ হয়: অর্ডারে নিশ্চিত, ছেড়ে দেওয়া, বা মেয়াদ শেষ।',
+        'reservations_empty' => 'এখানে কিছু সংরক্ষিত নেই',
+        'reservations_empty_help' => 'কোনো অর্ডার এই স্টক আলাদা করে রাখলে সংরক্ষণ দেখা যাবে।',
+        'reservation_units' => ':countটি ইউনিট · :kind',
+        'expires' => 'মেয়াদ শেষ :time',
+        'ended' => 'শেষ হয়েছে :time',
     ],
 
     'stock' => [
@@ -157,5 +177,8 @@ return [
         'variation_not_of_product' => 'ভ্যারিয়েশনটি অন্য একটি পণ্যের।',
         'already_tracked' => 'SKU-টি এই গুদামে আগে থেকেই রাখা আছে।',
         'insufficient' => ':bucket-এ আছে :held, চাওয়া :requested-এর চেয়ে কম। কিছুই পরিবর্তন হয়নি।',
+        'out_of_stock' => 'কোনো সক্রিয় গুদামে :sku-এর :requestedটি নেই। সব গুদাম মিলিয়ে প্রাপ্য :available। কিছুই সংরক্ষিত হয়নি।',
+        'reservation_ended' => 'এই সংরক্ষণ আগেই শেষ হয়েছে: :status।',
+        'reference_in_use' => ':reference রেফারেন্সটি আগেই অন্য স্টক সংরক্ষণ করেছে।',
     ],
 ];
