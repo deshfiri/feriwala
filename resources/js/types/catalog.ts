@@ -264,6 +264,8 @@ export type BrowseCard = {
     wholesale_price?: Money;
     min_order_quantity?: number;
     has_quantity_pricing?: boolean;
+    /** Wholesale only: stock this account can order, as a yes or no (P4-1). */
+    in_stock?: boolean;
     suggested_selling_price?: Money | null;
     minimum_selling_price?: Money | null;
     maximum_selling_price?: Money | null;

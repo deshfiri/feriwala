@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { ImageOff, Search, ShoppingCart, Store } from 'lucide-react';
+import { useState } from 'react';
 import TablePagination from '@/components/data-table/table-pagination';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -23,9 +24,19 @@ type Props = {
     channel: SalesChannelName;
     facility_allowed: boolean;
     products: Paginator<BrowseCard>;
-    filters: { search: string; category: string | null; brand: string | null };
+    filters: {
+        search: string;
+        category: string | null;
+        brand: string | null;
+        stock?: 'in_stock' | 'out_of_stock' | null;
+        price_min?: string | null;
+        price_max?: string | null;
+    };
     options: { categories: SelectOption[]; brands: SelectOption[] };
 };
+
+const priceClass =
+    'border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-36';
 
 const selectClass =
     'border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-56';
@@ -52,10 +63,21 @@ export default function BrowseCatalogue({
     });
 
     const title = t(`catalog.browse.${channel}_title`);
+    const wholesale = channel === 'wholesale';
+    const [priceMin, setPriceMin] = useState(filters.price_min ?? '');
+    const [priceMax, setPriceMax] = useState(filters.price_max ?? '');
     const filtered =
         filters.search !== '' ||
         filters.category !== null ||
-        filters.brand !== null;
+        filters.brand !== null ||
+        Boolean(filters.stock) ||
+        Boolean(filters.price_min) ||
+        Boolean(filters.price_max);
+
+    // The server decides whether a bound is a sensible amount; a mistyped one
+    // comes back cleared.
+    const applyPrice = (key: 'price_min' | 'price_max', value: string) =>
+        setFilter(key, value.trim() === '' ? undefined : value.trim());
 
     if (!facility_allowed) {
         return (
@@ -137,6 +159,66 @@ export default function BrowseCatalogue({
                             </option>
                         ))}
                     </select>
+
+                    {wholesale && (
+                        <>
+                            <select
+                                aria-label={t('catalog.browse.stock')}
+                                value={filters.stock ?? ''}
+                                onChange={(event) =>
+                                    setFilter(
+                                        'stock',
+                                        event.target.value || undefined,
+                                    )
+                                }
+                                className={selectClass}
+                            >
+                                <option value="">
+                                    {t('catalog.browse.all_stock')}
+                                </option>
+                                <option value="in_stock">
+                                    {t('catalog.browse.in_stock')}
+                                </option>
+                                <option value="out_of_stock">
+                                    {t('catalog.browse.out_of_stock')}
+                                </option>
+                            </select>
+
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                value={priceMin}
+                                onChange={(event) =>
+                                    setPriceMin(event.target.value)
+                                }
+                                onBlur={() => applyPrice('price_min', priceMin)}
+                                onKeyDown={(event) =>
+                                    event.key === 'Enter' &&
+                                    applyPrice('price_min', priceMin)
+                                }
+                                placeholder={t('catalog.browse.price_min')}
+                                aria-label={t('catalog.browse.price_min')}
+                                className={priceClass}
+                            />
+
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                value={priceMax}
+                                onChange={(event) =>
+                                    setPriceMax(event.target.value)
+                                }
+                                onBlur={() => applyPrice('price_max', priceMax)}
+                                onKeyDown={(event) =>
+                                    event.key === 'Enter' &&
+                                    applyPrice('price_max', priceMax)
+                                }
+                                placeholder={t('catalog.browse.price_max')}
+                                aria-label={t('catalog.browse.price_max')}
+                                className={priceClass}
+                            />
+                        </>
+                    )}
                 </div>
 
                 {products.data.length === 0 ? (
@@ -230,6 +312,14 @@ export function ProductCard({
             <div className="mt-auto space-y-1 text-sm">
                 {channel === 'wholesale' && product.wholesale_price ? (
                     <>
+                        <StatusPill
+                            tone={product.in_stock ? 'success' : 'warning'}
+                            label={t(
+                                product.in_stock
+                                    ? 'catalog.browse.in_stock'
+                                    : 'catalog.browse.out_of_stock',
+                            )}
+                        />
                         <p>
                             <MoneyAmount
                                 amount={product.wholesale_price}

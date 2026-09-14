@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
@@ -14,9 +15,13 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\WholesalePriceResolver;
+use App\Domain\Inventory\Queries\StockAvailability;
 use App\Http\Controllers\Controller;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -46,10 +51,14 @@ class CatalogController extends Controller
 
     public const PER_PAGE = 24;
 
+    /** @var array<int, string> */
+    public const STOCK_FILTERS = ['in_stock', 'out_of_stock'];
+
     public function __construct(
         protected ProductEligibility $eligibility,
         protected ProductMediaStore $media,
         protected WholesalePriceResolver $prices,
+        protected StockAvailability $stock,
     ) {}
 
     public function wholesale(Request $request): Response
@@ -87,7 +96,22 @@ class CatalogController extends Controller
             ? Brand::query()->where('public_id', $request->string('brand')->toString())->first()
             : null;
 
-        $products = $this->eligibility->query($account, $channel)
+        // Stock and price are wholesale filters (§13): a dropshipping partner does
+        // not buy the stock and is not charged the wholesale price.
+        $wholesale = $channel === SalesChannel::Wholesale;
+        $stock = $wholesale && in_array($request->string('stock')->toString(), self::STOCK_FILTERS, true)
+            ? $request->string('stock')->toString()
+            : null;
+        $priceMin = $wholesale ? $this->priceFilter($request, 'price_min') : null;
+        $priceMax = $wholesale ? $this->priceFilter($request, 'price_max') : null;
+
+        $query = $this->eligibility->query($account, $channel);
+
+        if ($stock !== null) {
+            $query = $this->stock->whereProductStock($query, $account, $stock === 'in_stock');
+        }
+
+        $products = $query
             ->with([
                 'category:id,name',
                 'brand:id,name',
@@ -101,14 +125,20 @@ class CatalogController extends Controller
             // buyer means by choosing it.
             ->when($category !== null, fn (Builder $query) => $query->whereIn('category_id', $category?->descendantIds() ?? []))
             ->when($brand !== null, fn (Builder $query) => $query->where('brand_id', $brand?->id))
+            // The product's own wholesale price, the figure the card shows.
+            ->when($priceMin !== null, fn (Builder $query) => $query->where('wholesale_price_minor', '>=', $priceMin))
+            ->when($priceMax !== null, fn (Builder $query) => $query->where('wholesale_price_minor', '<=', $priceMax))
             // Featured first (§11.1), newest featured first among them.
             ->orderByDesc('is_featured')
             ->orderByDesc('featured_at')
             ->orderBy('name')
             ->orderBy('id')
             ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (Product $product) => $this->card($product, $channel));
+            ->withQueryString();
+
+        $stockStates = $wholesale ? $this->stockStates($products->getCollection(), $account) : [];
+
+        $products->through(fn (Product $product) => $this->card($product, $channel, $stockStates[$product->id] ?? null));
 
         return Inertia::render('catalog/browse', [
             'channel' => $channel->value,
@@ -118,6 +148,9 @@ class CatalogController extends Controller
                 'search' => $search,
                 'category' => $category?->public_id,
                 'brand' => $brand?->public_id,
+                'stock' => $stock,
+                'price_min' => $priceMin === null ? null : Money::of($priceMin, Currency::BDT)->toDecimal(),
+                'price_max' => $priceMax === null ? null : Money::of($priceMax, Currency::BDT)->toDecimal(),
             ],
             'options' => [
                 'categories' => Category::query()
@@ -236,9 +269,74 @@ class CatalogController extends Controller
     }
 
     /**
+     * A wholesale price bound typed in taka, as minor units — or null when it is
+     * missing or not a sensible amount, so a mistyped bound narrows nothing.
+     */
+    protected function priceFilter(Request $request, string $key): ?int
+    {
+        $value = trim($request->string($key)->toString());
+
+        if ($value === '' || ! preg_match('/^\d{1,9}(\.\d{1,2})?$/', $value)) {
+            return null;
+        }
+
+        return (int) round(((float) $value) * 100);
+    }
+
+    /**
+     * Whether each product has stock this account can order, keyed by product id
+     * (P4-1). Read through {@see StockAvailability}, the only place availability
+     * is worked out: the product itself when it has no variations, otherwise its
+     * active variations, counting this account's own allocation and nobody
+     * else's. Only the yes-or-no leaves here — never a quantity, a warehouse or an
+     * allocation.
+     *
+     * @param  Collection<int, Product>  $products
+     * @return array<int, bool>
+     */
+    protected function stockStates(Collection $products, BusinessAccount $account): array
+    {
+        if ($products->isEmpty()) {
+            return [];
+        }
+
+        $variants = ProductVariant::query()
+            ->whereIn('product_id', $products->pluck('id')->all())
+            ->get(['id', 'product_id', 'sku', 'is_active'])
+            ->groupBy('product_id');
+
+        $units = [];
+        $skusByProduct = [];
+
+        foreach ($products as $product) {
+            /** @var Collection<int, ProductVariant> $own */
+            $own = $variants->get($product->id, collect());
+
+            $stockable = $own->isEmpty()
+                ? [['sku' => $product->sku, 'product_id' => $product->id, 'variant_id' => null]]
+                : $own->where('is_active', true)
+                    ->map(fn (ProductVariant $variant) => ['sku' => $variant->sku, 'product_id' => $product->id, 'variant_id' => $variant->id])
+                    ->values()
+                    ->all();
+
+            $skusByProduct[$product->id] = array_column($stockable, 'sku');
+            array_push($units, ...$stockable);
+        }
+
+        $answers = $this->stock->forUnits($units, $account);
+        $states = [];
+
+        foreach ($skusByProduct as $productId => $skus) {
+            $states[$productId] = collect($skus)->contains(fn (string $sku) => ($answers[$sku]['quantity'] ?? 0) > 0);
+        }
+
+        return $states;
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    protected function card(Product $product, SalesChannel $channel): array
+    protected function card(Product $product, SalesChannel $channel, ?bool $inStock = null): array
     {
         $image = $product->media->first();
 
@@ -258,6 +356,7 @@ class CatalogController extends Controller
                     'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
                     'min_order_quantity' => $product->min_order_quantity,
                     'has_quantity_pricing' => (bool) $product->price_tiers_exists,
+                    'in_stock' => $inStock ?? false,
                 ]
                 : $this->sellingGuidance($product)),
         ];

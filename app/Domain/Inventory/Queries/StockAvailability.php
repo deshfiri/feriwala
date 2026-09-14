@@ -5,6 +5,8 @@ namespace App\Domain\Inventory\Queries;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Models\Product;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -120,6 +122,39 @@ class StockAvailability
                 ->where('stock_items.available', '>', 0)
                 ->orWhere('stock_items.allocated', '>', 0))
             ->exists();
+    }
+
+    /**
+     * Narrow a product query to products with — or without — stock this account
+     * can order (P4-1).
+     *
+     * The same figure {@see forUnits()} reports, stated as SQL so a catalogue
+     * filter pages in the database: a stockable unit counts when its item sits in
+     * an active warehouse, belongs to the product itself or to one of its active
+     * variations, and holds available units or units allocated to this account.
+     * Another account's allocation never counts.
+     *
+     * @param  EloquentBuilder<Product>  $products
+     * @return EloquentBuilder<Product>
+     */
+    public function whereProductStock(EloquentBuilder $products, ?BusinessAccount $account, bool $inStock): EloquentBuilder
+    {
+        $exists = fn (QueryBuilder $query) => $query
+            ->selectRaw('1')
+            ->from('stock_items')
+            ->join('warehouses', 'warehouses.id', '=', 'stock_items.warehouse_id')
+            ->leftJoin('product_variants', 'product_variants.id', '=', 'stock_items.product_variant_id')
+            ->leftJoin('stock_allocations', fn ($join) => $join
+                ->on('stock_allocations.stock_item_id', '=', 'stock_items.id')
+                ->where('stock_allocations.business_account_id', '=', $account->id ?? 0))
+            ->whereColumn('stock_items.product_id', 'products.id')
+            ->where('warehouses.is_active', true)
+            ->where(fn (QueryBuilder $unit) => $unit
+                ->whereNull('stock_items.product_variant_id')
+                ->orWhere('product_variants.is_active', true))
+            ->whereRaw('stock_items.available + COALESCE(stock_allocations.quantity, 0) > 0');
+
+        return $inStock ? $products->whereExists($exists) : $products->whereNotExists($exists);
     }
 
     /**
