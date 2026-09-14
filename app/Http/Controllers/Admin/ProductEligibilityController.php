@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Actions\SetProductEligibility;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Enums\AccountScope;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Models\Product;
@@ -47,7 +48,10 @@ class ProductEligibilityController extends Controller
             'account_scope' => ['required', Rule::enum(AccountScope::class)],
             'account_ids' => ['nullable', 'array', 'max:500'],
             'account_ids.*' => ['string', 'distinct', Rule::exists(BusinessAccount::class, 'public_id')],
-        ]);
+
+            // The two scopes are this endpoint's; no other central field is (§12).
+            ...CentralProductFields::rules(['package_scope', 'account_scope'], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         $this->eligibility->handle(
             $actor,

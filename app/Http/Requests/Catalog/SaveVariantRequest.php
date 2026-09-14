@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Catalog;
 
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductVariant;
@@ -81,7 +82,18 @@ class SaveVariantRequest extends FormRequest
             'base_cost_minor' => ['nullable', 'integer', 'min:0', 'max:'.SaveProductRequest::MAX_MINOR],
 
             'is_active' => ['boolean'],
+
+            // Its own SKU and figures only; never its product, combination key or stock (§12).
+            ...CentralProductFields::rules(SaveProductRequest::OWNED, $this->all()),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return CentralProductFields::messages($this->all());
     }
 
     /**

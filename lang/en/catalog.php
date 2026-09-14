@@ -574,4 +574,10 @@ return [
         'no_matches' => 'No brand matches',
         'no_matches_help' => 'Try a different name, or clear the status filter.',
     ],
+
+    // Central fields refused where a request does not own them (§12).
+    'restrictions' => [
+        'not_here' => 'The :attribute cannot be changed through this request.',
+        'stock' => 'Stock is held by inventory and cannot be changed through the catalogue.',
+    ],
 ];

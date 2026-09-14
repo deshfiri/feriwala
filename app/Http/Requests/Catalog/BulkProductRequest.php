@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Catalog;
 
 use App\Domain\Catalog\Actions\BulkUpdateProducts;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Brand;
@@ -65,6 +66,17 @@ class BulkProductRequest extends FormRequest
             'channel' => ['required_if:action,'.self::CHANNEL, 'nullable', 'string', Rule::enum(SalesChannel::class)],
 
             'enable' => ['required_if:action,'.self::CHANNEL.','.self::FEATURE, 'boolean'],
+
+            // A lifecycle move is the only central field a bulk action sets (§12).
+            ...CentralProductFields::rules(['status'], $this->all()),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return CentralProductFields::messages($this->all());
     }
 }

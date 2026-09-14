@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\ManageProductMedia;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
@@ -65,7 +66,8 @@ class ProductMediaController extends Controller
             ],
             'alt_text' => ['nullable', 'string', 'max:255'],
             'variant_id' => ['nullable', 'string', Rule::exists(ProductVariant::class, 'public_id')],
-        ]);
+            ...CentralProductFields::rules([], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         /** @var UploadedFile $file */
         $file = $request->file('file');
@@ -94,7 +96,8 @@ class ProductMediaController extends Controller
         $validated = $request->validate([
             'alt_text' => ['nullable', 'string', 'max:255'],
             'variant_id' => ['nullable', 'string', Rule::exists(ProductVariant::class, 'public_id')],
-        ]);
+            ...CentralProductFields::rules([], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         try {
             $this->media->describe($actor, $record, [
@@ -119,7 +122,8 @@ class ProductMediaController extends Controller
         $validated = $request->validate([
             'order' => ['required', 'array', 'max:'.ManageProductMedia::MAX_PER_PRODUCT],
             'order.*' => ['string', 'distinct'],
-        ]);
+            ...CentralProductFields::rules([], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         $this->media->reorder($actor, $this->product($product), array_values($validated['order']));
 

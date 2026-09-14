@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\SetPriceTiers;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
@@ -45,7 +46,10 @@ class ProductPriceTierController extends Controller
             'tiers' => ['nullable', 'array', 'max:'.SetPriceTiers::MAX_TIERS],
             'tiers.*.min_quantity' => ['required', 'integer', 'min:2', 'max:1000000', 'distinct'],
             'tiers.*.unit_price_minor' => ['required', 'integer', 'min:0', 'max:'.SaveProductRequest::MAX_MINOR],
-        ], [], [
+
+            // The bands are this endpoint's; the base figures belong to the product form (§12).
+            ...CentralProductFields::rules(['tiers'], $request->all()),
+        ], CentralProductFields::messages($request->all()), [
             'tiers.*.min_quantity' => 'starting quantity',
             'tiers.*.unit_price_minor' => 'unit price',
         ]);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\TransitionProduct;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
@@ -47,7 +48,10 @@ class ProductStatusController extends Controller
                 ProductStatus::lifecycle(),
             ))],
             'reason' => ['nullable', 'string', 'max:2000'],
-        ]);
+
+            // The lifecycle is this endpoint's; no other central field is (§12).
+            ...CentralProductFields::rules(['status'], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         $to = ProductStatus::from($validated['status']);
 

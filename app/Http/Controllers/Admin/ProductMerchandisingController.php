@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\SetFeatured;
 use App\Domain\Catalog\Actions\SetRelatedProducts;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Policies\CatalogPolicy;
@@ -44,8 +45,10 @@ class ProductMerchandisingController extends Controller
                 Rule::exists(Product::class, 'public_id'),
                 Rule::notIn([$record->public_id]),
             ],
+            ...CentralProductFields::rules([], $request->all()),
         ], [
             'related_ids.*.not_in' => __('catalog.related.not_itself'),
+            ...CentralProductFields::messages($request->all()),
         ]);
 
         try {
@@ -65,7 +68,10 @@ class ProductMerchandisingController extends Controller
 
         abort_unless(CatalogPolicy::canPublish($actor), 403);
 
-        $validated = $request->validate(['featured' => ['required', 'boolean']]);
+        $validated = $request->validate([
+            'featured' => ['required', 'boolean'],
+            ...CentralProductFields::rules([], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         $this->featured->handle($actor, $this->product($product), (bool) $validated['featured']);
 

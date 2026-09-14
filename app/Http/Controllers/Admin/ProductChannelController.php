@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\SetSalesChannel;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
@@ -44,7 +45,10 @@ class ProductChannelController extends Controller
         $validated = $request->validate([
             'enabled' => ['required', 'boolean'],
             'reason' => ['nullable', 'string', 'max:2000'],
-        ]);
+
+            // The channel is in the address; its status column is never posted (§12).
+            ...CentralProductFields::rules([], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         $enable = (bool) $validated['enabled'];
 

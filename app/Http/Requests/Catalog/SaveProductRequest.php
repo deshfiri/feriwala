@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Catalog;
 
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Enums\ItemCondition;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
@@ -25,6 +26,13 @@ class SaveProductRequest extends FormRequest
      * database overflow.
      */
     public const MAX_MINOR = 1_000_000_000_000;
+
+    /**
+     * The protected central fields this form owns (§12).
+     *
+     * @var array<int, string>
+     */
+    public const OWNED = ['sku', 'barcode', 'wholesale_price_minor', 'base_cost_minor'];
 
     /**
      * Refused before a single rule runs (§12).
@@ -151,7 +159,23 @@ class SaveProductRequest extends FormRequest
             'suggested_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
             'minimum_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
             'maximum_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+
+            /*
+             * The SKU and both figures are this form's to set; the lifecycle,
+             * channels, eligibility, quantity pricing, stock and the identifiers
+             * the system assigns are not, and are refused rather than ignored
+             * (§12).
+             */
+            ...CentralProductFields::rules(self::OWNED, $this->all()),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return CentralProductFields::messages($this->all());
     }
 
     /**

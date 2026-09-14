@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Actions\GenerateVariants;
 use App\Domain\Catalog\Actions\ManageVariants;
+use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
@@ -67,7 +68,8 @@ class ProductVariantController extends Controller
         $validated = $request->validate([
             'values' => ['required', 'array', 'min:1', 'max:60'],
             'values.*' => ['required', 'string', 'distinct', Rule::exists(ProductAttributeValue::class, 'public_id')],
-        ]);
+            ...CentralProductFields::rules([], $request->all()),
+        ], CentralProductFields::messages($request->all()));
 
         try {
             $built = $this->generator->handle($actor, $this->product($product), $validated['values']);
