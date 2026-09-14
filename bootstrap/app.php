@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Http\Middleware\ApplyConfiguredSessionLifetime;
 use App\Http\Middleware\EnsureAccountIsEntitled;
 use App\Http\Middleware\EnsureBusinessAccountIsActivated;
@@ -102,28 +103,39 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         /*
-         * A refusal on catalogue administration is a page in the application's
-         * own shell (P3-16, §12), telling a partner that the catalogue is
-         * Feriwala's to write, a member of staff who may view it that changing it
-         * is what their role lacks, and anybody else that it is not part of their
-         * role. Only for that route set: every other refusal, and every JSON
-         * caller, keeps the response it already had.
+         * A refusal on catalogue or inventory administration is a page in the
+         * application's own shell (P3-16, §12, §19), telling a partner that the
+         * catalogue and its stock are Feriwala's, a member of staff who may view
+         * them that changing them is what their role lacks, and anybody else
+         * that they are not part of their role. Only for those route sets: every
+         * other refusal, and every JSON caller, keeps the response it already had.
          */
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request) {
             $user = $request->user();
 
             if ($response->getStatusCode() !== Response::HTTP_FORBIDDEN
                 || ! $user instanceof User
-                || ! $request->routeIs('admin.catalog.*')
                 || $request->is('api/*')
                 || $request->expectsJson()) {
                 return $response;
             }
 
-            return Inertia::render('catalog/forbidden', [
+            $refusal = match (true) {
+                $request->routeIs('admin.catalog.*') => ['catalog/forbidden', fn () => CatalogPolicy::canViewAny($user)],
+                $request->routeIs('admin.inventory.*') => ['inventory/forbidden', fn () => InventoryPolicy::canViewAny($user)],
+                default => null,
+            };
+
+            if ($refusal === null) {
+                return $response;
+            }
+
+            [$component, $mayView] = $refusal;
+
+            return Inertia::render($component, [
                 'audience' => match (true) {
                     CatalogPolicy::isBusinessIdentity($user) => 'business',
-                    CatalogPolicy::canViewAny($user) => 'viewer',
+                    $mayView() => 'viewer',
                     default => 'staff',
                 },
             ])

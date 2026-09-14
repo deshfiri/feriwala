@@ -27,9 +27,11 @@ use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
+use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
@@ -593,6 +595,25 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.attribute-values.update');
         Route::delete('catalog/attribute-values/{value}', [ProductAttributeController::class, 'destroyValue'])
             ->name('catalog.attribute-values.destroy');
+
+        /*
+         * Central stock (§19). Reading is `inventory.view`; holding stock and
+         * changing it by hand is `inventory.edit`. A partner holds neither, and
+         * the Gate refuses them even if handed one (§19).
+         */
+        Route::get('inventory/stock', [StockController::class, 'index'])
+            ->name('inventory.stock.index');
+        Route::post('inventory/stock', [StockController::class, 'store'])
+            ->name('inventory.stock.store');
+
+        Route::get('inventory/warehouses', [WarehouseController::class, 'index'])
+            ->name('inventory.warehouses.index');
+        Route::post('inventory/warehouses', [WarehouseController::class, 'store'])
+            ->name('inventory.warehouses.store');
+        Route::patch('inventory/warehouses/{warehouse}', [WarehouseController::class, 'update'])
+            ->name('inventory.warehouses.update');
+        Route::patch('inventory/warehouses/{warehouse}/default', [WarehouseController::class, 'makeDefault'])
+            ->name('inventory.warehouses.default');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

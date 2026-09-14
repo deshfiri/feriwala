@@ -39,6 +39,8 @@ return [
     'deposit_rules' => 'Deposit rules',
     'sms' => 'SMS',
     'branding' => 'Branding',
+    'stock' => 'Stock',
+    'warehouses' => 'Warehouses',
     'invoices' => 'Invoices',
 
     'search' => [

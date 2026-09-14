@@ -33,6 +33,8 @@ return [
     'deposit_rules' => 'জমার নিয়ম',
     'sms' => 'এসএমএস',
     'branding' => 'ব্র্যান্ডিং',
+    'stock' => 'স্টক',
+    'warehouses' => 'গুদাম',
     'invoices' => 'চালান',
 
     'search' => [

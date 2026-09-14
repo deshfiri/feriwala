@@ -11,6 +11,7 @@ use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Account\Policies\UserPolicy;
 use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -90,13 +91,15 @@ class AuthorizationServiceProvider extends ServiceProvider
             }
 
             /*
-             * 1. The catalogue, refused to anybody who trades on the platform
-             *    (§12). First, because either check below would otherwise
+             * 1. The catalogue and the central stock it counts, refused to
+             *    anybody who trades on the platform (§12, §19). First, because
+             *    either check below would otherwise
              *    answer yes before any policy is asked: a partner who has been
              *    handed a catalogue permission or a platform role, by mistake or
              *    on purpose, still does not author the catalogue they sell from.
              */
-            if (CatalogPolicy::isCatalogueAbility($ability, $arguments) && CatalogPolicy::isBusinessIdentity($user)) {
+            if ((CatalogPolicy::isCatalogueAbility($ability, $arguments) || InventoryPolicy::isInventoryAbility($ability, $arguments))
+                && CatalogPolicy::isBusinessIdentity($user)) {
                 return false;
             }
 

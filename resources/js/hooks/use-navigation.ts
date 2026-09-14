@@ -1,5 +1,6 @@
 import { usePage } from '@inertiajs/react';
 import {
+    Boxes,
     CreditCard,
     FolderTree,
     LayoutGrid,
@@ -20,6 +21,7 @@ import {
     UserCheck,
     Users,
     Wallet as WalletIcon,
+    Warehouse,
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
@@ -28,6 +30,8 @@ import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
+import { index as stockLevels } from '@/routes/admin/inventory/stock';
+import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
@@ -213,6 +217,25 @@ export function useNavigation(): {
                               title: t('nav.attributes'),
                               href: productAttributes(),
                               icon: SlidersHorizontal,
+                          },
+                      ]
+                    : []),
+                /*
+                 * Central stock and where it is held (§19). Its own
+                 * permission: counting stock is not writing the catalogue,
+                 * and a partner holds neither.
+                 */
+                ...(permissions['inventory.view']
+                    ? [
+                          {
+                              title: t('nav.stock'),
+                              href: stockLevels(),
+                              icon: Boxes,
+                          },
+                          {
+                              title: t('nav.warehouses'),
+                              href: warehouses(),
+                              icon: Warehouse,
                           },
                       ]
                     : []),

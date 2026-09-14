@@ -62,6 +62,10 @@ class HandleInertiaRequests extends Middleware
          */
         [PermissionModule::Catalog, PermissionAction::View],
 
+        // Central stock and the warehouses holding it (§19). Its own permission:
+        // counting stock is not writing the catalogue, and a partner holds neither.
+        [PermissionModule::Inventory, PermissionAction::View],
+
         // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
         [PermissionModule::Payment, PermissionAction::View],
 
