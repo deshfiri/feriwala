@@ -43,6 +43,8 @@ return [
     'warehouses' => 'Warehouses',
     'reservations' => 'Reservations',
     'availability' => 'Website availability',
+    'allocations' => 'Stock allocations',
+    'allocated_stock' => 'Allocated stock',
     'invoices' => 'Invoices',
 
     'search' => [

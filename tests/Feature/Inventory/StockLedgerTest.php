@@ -55,7 +55,7 @@ describe('moving stock', function () {
         $writtenOff = stockLedgerMove(StockBucket::Damaged, null, 1);
 
         expect($this->item->refresh()->buckets())->toBe([
-            'available' => 8, 'reserved' => 0, 'processing' => 0, 'sold' => 0, 'returned' => 0, 'damaged' => 1,
+            'available' => 8, 'reserved' => 0, 'processing' => 0, 'sold' => 0, 'returned' => 0, 'damaged' => 1, 'allocated' => 0,
         ])
             ->and($arrived->before['available'])->toBe(0)
             ->and($arrived->after['available'])->toBe(10)

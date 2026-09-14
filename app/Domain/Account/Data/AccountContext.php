@@ -5,6 +5,7 @@ namespace App\Domain\Account\Data;
 use App\Domain\Account\Enums\AccountPermission;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\StaffAllowance;
+use App\Domain\Inventory\Models\StockAllocation;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Models\User;
@@ -43,6 +44,13 @@ readonly class AccountContext
          */
         public bool $allowsWholesale = false,
         public bool $allowsDropshipping = false,
+
+        /*
+         * Whether central stock is set aside for this account right now
+         * (§19, P3-30). The navigation shows the allocated-stock page only then,
+         * rather than a door onto an empty list for every account.
+         */
+        public bool $holdsAllocatedStock = false,
     ) {}
 
     public static function forUser(User $user, StaffAllowance $allowance, ?Entitlements $entitlements = null): ?self
@@ -71,6 +79,13 @@ readonly class AccountContext
                 && $entitlements->allows($account, PackageFeature::WholesaleEnabled),
             allowsDropshipping: $entitlements !== null && $account->canTransact()
                 && $entitlements->allows($account, PackageFeature::DropshippingEnabled),
+            // The same rows the allocated-stock page shows: units still set aside,
+            // in a warehouse that is switched on.
+            holdsAllocatedStock: StockAllocation::query()
+                ->where('business_account_id', $account->id)
+                ->where('quantity', '>', 0)
+                ->whereHas('item.warehouse', fn ($query) => $query->where('is_active', true))
+                ->exists(),
         );
     }
 }

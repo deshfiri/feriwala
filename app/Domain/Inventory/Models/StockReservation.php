@@ -4,6 +4,7 @@ namespace App\Domain\Inventory\Models;
 
 use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Models\User;
@@ -31,10 +32,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $released_at
  * @property string|null $release_reason
  * @property int|null $overridden_by
+ * @property int|null $business_account_id
+ * @property int|null $stock_allocation_id
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read StockItem $item
  * @property-read User|null $overrider
+ * @property-read BusinessAccount|null $account
+ * @property-read StockAllocation|null $allocation
  */
 class StockReservation extends Model
 {
@@ -73,6 +78,26 @@ class StockReservation extends Model
     public function overrider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'overridden_by');
+    }
+
+    /**
+     * The account whose order this is, when it came from one (P3-30).
+     *
+     * @return BelongsTo<BusinessAccount, $this>
+     */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(BusinessAccount::class, 'business_account_id')->withTrashed();
+    }
+
+    /**
+     * The allocation it drew on, when it did not draw on shared stock (P3-30).
+     *
+     * @return BelongsTo<StockAllocation, $this>
+     */
+    public function allocation(): BelongsTo
+    {
+        return $this->belongsTo(StockAllocation::class, 'stock_allocation_id');
     }
 
     /**

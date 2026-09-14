@@ -2,6 +2,7 @@
 
 namespace App\Domain\Inventory\Queries;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Models\Product;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,11 @@ use Illuminate\Support\Facades\DB;
  *
  * The figure is advisory at browse time; the binding check is the reservation
  * at order submission (P3-25), which is transactional.
+ *
+ * **User-allocated stock (P3-30)** has left the available bucket, so it is in no
+ * website's shared figure. Asked on behalf of a business account, the answer adds
+ * that account's own allocation — and only that account's: another account's
+ * allocation is exactly the "other websites' allocation" the contract keeps out.
  */
 class StockAvailability
 {
@@ -36,9 +42,10 @@ class StockAvailability
      * SKU is omitted — its variations are reported instead.
      *
      * @param  array<array-key, mixed>  $skus  as a caller sent them; anything not a string is ignored
+     * @param  BusinessAccount|null  $account  whose own allocated stock counts too (P3-30)
      * @return array<string, array{sku: string, in_stock: bool, quantity: int, updated_at: string|null}>
      */
-    public function forSkus(array $skus): array
+    public function forSkus(array $skus, ?BusinessAccount $account = null): array
     {
         $skus = array_values(array_unique(array_filter(array_map(
             fn (mixed $sku) => is_string($sku) ? mb_strtoupper(trim($sku)) : null,
@@ -65,7 +72,7 @@ class StockAvailability
             'sku' => (string) $unit->sku,
             'product_id' => (int) $unit->product_id,
             'variant_id' => $unit->variant_id === null ? null : (int) $unit->variant_id,
-        ])->all());
+        ])->all(), $account);
     }
 
     /**
@@ -73,7 +80,7 @@ class StockAvailability
      *
      * @return array<int, array{sku: string, in_stock: bool, quantity: int, updated_at: string|null}>
      */
-    public function forProduct(Product $product): array
+    public function forProduct(Product $product, ?BusinessAccount $account = null): array
     {
         $variants = $product->variants()->get(['id', 'product_id', 'sku']);
 
@@ -85,7 +92,7 @@ class StockAvailability
                 'variant_id' => $variant->id,
             ])->all();
 
-        return array_values($this->forUnits($units));
+        return array_values($this->forUnits($units, $account));
     }
 
     /**
@@ -98,7 +105,10 @@ class StockAvailability
     }
 
     /**
-     * Whether any stockable unit of the product has central stock available.
+     * Whether any stockable unit of the product has central stock somebody can
+     * order: available to anyone, or allocated to an account (P3-30) — stock set
+     * aside for one partner is still stock that partner can sell, so the product
+     * stays on sale while it lasts.
      */
     public function productHasStock(Product $product): bool
     {
@@ -106,7 +116,9 @@ class StockAvailability
             ->join('warehouses', 'warehouses.id', '=', 'stock_items.warehouse_id')
             ->where('warehouses.is_active', true)
             ->where('stock_items.product_id', $product->id)
-            ->where('stock_items.available', '>', 0)
+            ->where(fn ($query) => $query
+                ->where('stock_items.available', '>', 0)
+                ->orWhere('stock_items.allocated', '>', 0))
             ->exists();
     }
 
@@ -114,9 +126,10 @@ class StockAvailability
      * Availability for stockable units already identified, in one query.
      *
      * @param  array<int, array{sku: string, product_id: int, variant_id: int|null}>  $units
+     * @param  BusinessAccount|null  $account  whose own allocated stock counts too (P3-30)
      * @return array<string, array{sku: string, in_stock: bool, quantity: int, updated_at: string|null}>
      */
-    public function forUnits(array $units): array
+    public function forUnits(array $units, ?BusinessAccount $account = null): array
     {
         if ($units === []) {
             return [];
@@ -126,13 +139,17 @@ class StockAvailability
 
         $totals = DB::table('stock_items')
             ->join('warehouses', 'warehouses.id', '=', 'stock_items.warehouse_id')
+            // Only the asking account's allocation joins; with no account, none does.
+            ->leftJoin('stock_allocations', fn ($join) => $join
+                ->on('stock_allocations.stock_item_id', '=', 'stock_items.id')
+                ->where('stock_allocations.business_account_id', '=', $account->id ?? 0))
             ->where('warehouses.is_active', true)
             ->whereIn('stock_items.product_id', $productIds)
             ->groupBy('stock_items.product_id', 'stock_items.product_variant_id')
             ->select([
                 'stock_items.product_id',
                 'stock_items.product_variant_id',
-                DB::raw('SUM(stock_items.available) as quantity'),
+                DB::raw('SUM(stock_items.available) + COALESCE(SUM(stock_allocations.quantity), 0) as quantity'),
                 DB::raw('MAX(stock_items.updated_at) as updated_at'),
             ])
             ->get()

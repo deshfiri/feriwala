@@ -80,6 +80,27 @@ class InventoryRefused extends RuntimeException
     }
 
     /**
+     * Stock is only set aside for an account that can trade: allocating to one
+     * that cannot would take units away from everyone for nobody (P3-30).
+     */
+    public static function accountCannotHoldStock(string $account): self
+    {
+        return new self(__('inventory.refused.account_cannot_hold_stock', ['account' => $account]));
+    }
+
+    /**
+     * An account's allocation holds fewer units than were asked of it. Read under
+     * the item's row lock, so the figure is the true one (P3-30).
+     */
+    public static function allocationInsufficient(int $held, int $requested): self
+    {
+        return new self(__('inventory.refused.allocation_insufficient', [
+            'held' => $held,
+            'requested' => $requested,
+        ]));
+    }
+
+    /**
      * A bucket holds fewer units than were asked of it (§19: overselling
      * prevention). Read under the row lock, so the figure is the true one.
      */

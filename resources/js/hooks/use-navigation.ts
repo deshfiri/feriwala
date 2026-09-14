@@ -9,6 +9,7 @@ import {
     Lock,
     MessageSquare,
     Package as PackageIcon,
+    PackageCheck,
     Palette,
     Receipt,
     Scale,
@@ -32,6 +33,8 @@ import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
+import { index as allocatedStock } from '@/routes/allocated-stock';
+import { index as stockAllocations } from '@/routes/admin/inventory/allocations';
 import { index as stockAvailability } from '@/routes/admin/inventory/availability';
 import { index as stockReservations } from '@/routes/admin/inventory/reservations';
 import { index as stockLevels } from '@/routes/admin/inventory/stock';
@@ -151,6 +154,20 @@ export function useNavigation(): {
                                     },
                                 ]
                               : []),
+                          /*
+                           * Central stock set aside for this business (§19,
+                           * P3-30). Only while it holds some, rather than a
+                           * door onto an empty list for every account.
+                           */
+                          ...(account?.holdsAllocatedStock
+                              ? [
+                                    {
+                                        title: t('nav.allocated_stock'),
+                                        href: allocatedStock(),
+                                        icon: PackageCheck,
+                                    },
+                                ]
+                              : []),
                           // A package with no staff facility shows no Staff door at all,
                           // rather than one that opens onto a refusal.
                           ...(account?.managesStaff
@@ -250,6 +267,11 @@ export function useNavigation(): {
                               title: t('nav.availability'),
                               href: stockAvailability(),
                               icon: Globe,
+                          },
+                          {
+                              title: t('nav.allocations'),
+                              href: stockAllocations(),
+                              icon: PackageCheck,
                           },
                       ]
                     : []),

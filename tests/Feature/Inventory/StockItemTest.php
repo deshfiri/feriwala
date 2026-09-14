@@ -55,7 +55,7 @@ describe('holding a SKU in a warehouse', function () {
 
         expect($item->product_id)->toBe($this->kettle->id)
             ->and($item->product_variant_id)->toBeNull()
-            ->and($item->buckets())->toBe(['available' => 0, 'reserved' => 0, 'processing' => 0, 'sold' => 0, 'returned' => 0, 'damaged' => 0])
+            ->and($item->buckets())->toBe(['available' => 0, 'reserved' => 0, 'processing' => 0, 'sold' => 0, 'returned' => 0, 'damaged' => 0, 'allocated' => 0])
             ->and(AuditLog::query()->where('action', 'inventory.stock_tracked')->exists())->toBeTrue();
     });
 

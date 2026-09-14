@@ -104,3 +104,58 @@ describe('catalogue navigation', () => {
         ADMIN_CATALOGUE.forEach((title) => expect(titles).not.toContain(title));
     });
 });
+
+/**
+ * Allocated stock (§19, P3-30): staff who may view inventory find every
+ * allocation; an account finds its own only while it holds some.
+ */
+describe('allocated stock navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives staff who may view inventory the allocations list', () => {
+        renderFor({ permissions: { 'inventory.view': true }, account: null });
+
+        expect(titles).toContain('nav.allocations');
+        expect(titles).not.toContain('nav.allocated_stock');
+    });
+
+    it('shows an account its allocated stock only while it holds some', () => {
+        const account = {
+            status: 'active',
+            allowsWholesale: true,
+            allowsDropshipping: false,
+            managesStaff: false,
+        };
+
+        renderFor({
+            permissions: {},
+            account: { ...account, holdsAllocatedStock: true },
+        });
+        expect(titles).toContain('nav.allocated_stock');
+        expect(titles).not.toContain('nav.allocations');
+
+        act(() => root.unmount());
+        root = createRoot(document.createElement('div'));
+
+        renderFor({
+            permissions: {},
+            account: { ...account, holdsAllocatedStock: false },
+        });
+        expect(titles).not.toContain('nav.allocated_stock');
+    });
+});

@@ -15,8 +15,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * One stockable unit held in one warehouse (§19).
  *
  * The unit is the product itself when it has no variations, or one variation
- * when it does. The six figures are the buckets a unit can be in; nothing but
- * the stock service writes them (P3-23), and none can go below zero.
+ * when it does. The seven figures are the buckets a unit can be in — the six of
+ * P3-22 and, since P3-30, stock allocated to a business account; nothing but the
+ * stock service writes them (P3-23), and none can go below zero.
  *
  * @property int $id
  * @property string $public_id
@@ -29,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $sold
  * @property int $returned
  * @property int $damaged
+ * @property int $allocated
  * @property int|null $low_stock_threshold
  * @property CarbonImmutable|null $low_stock_alerted_at
  * @property CarbonImmutable $created_at
@@ -55,6 +57,7 @@ class StockItem extends Model
             'sold' => 'integer',
             'returned' => 'integer',
             'damaged' => 'integer',
+            'allocated' => 'integer',
             'low_stock_threshold' => 'integer',
             'low_stock_alerted_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
@@ -100,6 +103,16 @@ class StockItem extends Model
     public function reservations(): HasMany
     {
         return $this->hasMany(StockReservation::class);
+    }
+
+    /**
+     * Who this stock is set aside for (P3-30).
+     *
+     * @return HasMany<StockAllocation, $this>
+     */
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(StockAllocation::class);
     }
 
     /**

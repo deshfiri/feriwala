@@ -24,6 +24,8 @@ export interface AccountContext {
     allowsWholesale: boolean;
     /** Trading, on a package that includes dropshipping (§10.1). */
     allowsDropshipping: boolean;
+    /** Central stock is set aside for this account right now (§19, P3-30). */
+    holdsAllocatedStock: boolean;
 }
 
 export interface StaffMember {

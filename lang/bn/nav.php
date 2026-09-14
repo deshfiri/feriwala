@@ -37,6 +37,8 @@ return [
     'warehouses' => 'গুদাম',
     'reservations' => 'সংরক্ষণ',
     'availability' => 'ওয়েবসাইটে প্রাপ্যতা',
+    'allocations' => 'স্টক বরাদ্দ',
+    'allocated_stock' => 'বরাদ্দকৃত স্টক',
     'invoices' => 'চালান',
 
     'search' => [

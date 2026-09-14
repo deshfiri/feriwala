@@ -2,6 +2,7 @@
 
 namespace App\Domain\Inventory;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Data\MovementContext;
@@ -10,6 +11,7 @@ use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
+use App\Domain\Inventory\Models\StockAllocation;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Support\Concurrency\DistributedLock;
@@ -47,6 +49,14 @@ use InvalidArgumentException;
  * the rest in priority order, skipping any switched off, taking the first that
  * holds the whole quantity. Reassignment and manual override of the warehouse
  * belong to fulfilment (P6-32).
+ *
+ * **User-allocated stock (P3-30).** An order placed for a business account first
+ * draws on stock allocated to that account — in the same warehouse order — and
+ * only then on shared available stock; never on another account's allocation,
+ * and never partly from each, because a reservation is never split. A
+ * reservation that drew on an allocation remembers it, and releasing or expiring
+ * it gives the units back to that allocation rather than to everyone. Lock order
+ * matches the allocation service: the stock item, then the allocation.
  */
 class StockReservations
 {
@@ -60,6 +70,9 @@ class StockReservations
     /**
      * Hold `$quantity` units of one SKU for the order named by `$reference`.
      *
+     * `$account` is the business account the order is for, when it is for one:
+     * its allocated stock is drawn on first (P3-30).
+     *
      * @throws InventoryRefused when no active warehouse holds the whole quantity, or
      *                          the reference already reserved something else
      * @throws LockTimeout
@@ -70,6 +83,7 @@ class StockReservations
         int $quantity,
         ReservationKind $kind,
         string $reference,
+        ?BusinessAccount $account = null,
     ): StockReservation {
         if ($quantity <= 0) {
             throw new InvalidArgumentException('A reservation holds at least one unit.');
@@ -81,14 +95,14 @@ class StockReservations
 
         // Fast path, and the reason a retry costs nothing.
         if ($existing = $this->find($reference)) {
-            return $this->sameReservation($existing, $product, $variant, $quantity, $kind);
+            return $this->sameReservation($existing, $product, $variant, $quantity, $kind, $account);
         }
 
         $key = 'inventory:reserve:'.$product->id.':'.($variant->id ?? 'product');
 
-        return $this->locks->run($key, function () use ($product, $variant, $quantity, $kind, $reference) {
+        return $this->locks->run($key, function () use ($product, $variant, $quantity, $kind, $reference, $account) {
             if ($existing = $this->find($reference)) {
-                return $this->sameReservation($existing, $product, $variant, $quantity, $kind);
+                return $this->sameReservation($existing, $product, $variant, $quantity, $kind, $account);
             }
 
             $items = StockItem::query()
@@ -103,17 +117,22 @@ class StockReservations
                     $item->warehouse->id,
                 ]);
 
-            foreach ($items as $item) {
-                if ($item->available < $quantity) {
-                    continue;
-                }
+            // What the ordering account has set aside, per item. Nobody else's.
+            $allocations = $account === null
+                ? collect()
+                : StockAllocation::query()
+                    ->where('business_account_id', $account->id)
+                    ->whereIn('stock_item_id', $items->pluck('id'))
+                    ->get()
+                    ->keyBy('stock_item_id');
 
+            $attempt = function (StockItem $item, ?StockAllocation $allocation) use ($product, $variant, $quantity, $kind, $reference, $account): ?StockReservation {
                 try {
-                    return $this->hold($item, $quantity, $kind, $reference);
+                    return $this->hold($item, $quantity, $kind, $reference, $account, $allocation);
                 } catch (InventoryRefused) {
-                    // Taken between the read above and the ledger's row lock;
-                    // the next warehouse in order may still hold enough.
-                    continue;
+                    // Taken between the read above and the row lock; the next
+                    // warehouse in order may still hold enough.
+                    return null;
                 } catch (UniqueConstraintViolationException $exception) {
                     $existing = $this->find($reference);
 
@@ -121,14 +140,32 @@ class StockReservations
                         throw $exception;
                     }
 
-                    return $this->sameReservation($existing, $product, $variant, $quantity, $kind);
+                    return $this->sameReservation($existing, $product, $variant, $quantity, $kind, $account);
+                }
+            };
+
+            // The account's own allocation first, in warehouse order…
+            foreach ($items as $item) {
+                /** @var StockAllocation|null $allocation */
+                $allocation = $allocations->get($item->id);
+
+                if ($allocation !== null && $allocation->quantity >= $quantity
+                    && ($reservation = $attempt($item, $allocation)) !== null) {
+                    return $reservation;
+                }
+            }
+
+            // …then stock anyone may buy.
+            foreach ($items as $item) {
+                if ($item->available >= $quantity && ($reservation = $attempt($item, null)) !== null) {
+                    return $reservation;
                 }
             }
 
             throw InventoryRefused::outOfStock(
                 $variant !== null ? $variant->sku : $product->sku,
                 $quantity,
-                (int) $items->sum('available'),
+                (int) $items->sum('available') + (int) $allocations->sum('quantity'),
             );
         });
     }
@@ -163,15 +200,39 @@ class StockReservations
         return $this->end($reservation, StockReservationStatus::Expired);
     }
 
-    protected function hold(StockItem $item, int $quantity, ReservationKind $kind, string $reference): StockReservation
-    {
-        return $this->database->transaction(function () use ($item, $quantity, $kind, $reference) {
+    /**
+     * @throws InventoryRefused when the bucket or allocation no longer holds enough
+     * @throws UniqueConstraintViolationException when the reference was reserved by a racing request
+     */
+    protected function hold(
+        StockItem $item,
+        int $quantity,
+        ReservationKind $kind,
+        string $reference,
+        ?BusinessAccount $account = null,
+        ?StockAllocation $allocation = null,
+    ): StockReservation {
+        return $this->database->transaction(function () use ($item, $quantity, $kind, $reference, $account, $allocation) {
+            $lockedAllocation = null;
+
+            if ($allocation !== null) {
+                // The item, then the allocation — the order every allocation path uses.
+                StockItem::query()->lockForUpdate()->findOrFail($item->id);
+
+                /** @var StockAllocation $lockedAllocation */
+                $lockedAllocation = StockAllocation::query()->lockForUpdate()->findOrFail($allocation->id);
+
+                if ($lockedAllocation->quantity < $quantity) {
+                    throw InventoryRefused::allocationInsufficient($lockedAllocation->quantity, $quantity);
+                }
+            }
+
             // The reservation's id first, so its movement can name it.
             $id = (int) $this->database->scalar("SELECT nextval(pg_get_serial_sequence('stock_reservations', 'id'))");
 
             $this->ledger->move(
                 $item,
-                StockBucket::Available,
+                $lockedAllocation !== null ? StockBucket::Allocated : StockBucket::Available,
                 StockBucket::Reserved,
                 $quantity,
                 StockMovementType::Reservation,
@@ -182,6 +243,8 @@ class StockReservations
                 ),
             );
 
+            $lockedAllocation?->forceFill(['quantity' => $lockedAllocation->quantity - $quantity])->save();
+
             return StockReservation::create([
                 'id' => $id,
                 'stock_item_id' => $item->id,
@@ -190,6 +253,8 @@ class StockReservations
                 'status' => StockReservationStatus::Active,
                 'reference' => $reference,
                 'expires_at' => $this->windows->expiryFor($kind),
+                'business_account_id' => $account?->id,
+                'stock_allocation_id' => $lockedAllocation?->id,
             ]);
         });
     }
@@ -222,13 +287,25 @@ class StockReservations
                     throw InventoryRefused::notYetExpired();
                 }
 
+                // Units drawn from an account's allocation go back to it, not to
+                // everyone — unless the order went ahead (P3-30).
+                $returnsToAllocation = $to !== StockReservationStatus::Committed && $locked->stock_allocation_id !== null;
+
                 /** @var StockItem $item */
-                $item = StockItem::query()->findOrFail($locked->stock_item_id);
+                $item = StockItem::query()->lockForUpdate()->findOrFail($locked->stock_item_id);
+
+                $allocation = $returnsToAllocation
+                    ? StockAllocation::query()->lockForUpdate()->findOrFail($locked->stock_allocation_id)
+                    : null;
 
                 $this->ledger->move(
                     $item,
                     StockBucket::Reserved,
-                    $to === StockReservationStatus::Committed ? StockBucket::Processing : StockBucket::Available,
+                    match (true) {
+                        $to === StockReservationStatus::Committed => StockBucket::Processing,
+                        $returnsToAllocation => StockBucket::Allocated,
+                        default => StockBucket::Available,
+                    },
                     $locked->quantity,
                     match ($to) {
                         StockReservationStatus::Committed => StockMovementType::ReservationCommitted,
@@ -242,6 +319,8 @@ class StockReservations
                         sourceId: $locked->id,
                     ),
                 );
+
+                $allocation?->forceFill(['quantity' => $allocation->quantity + $locked->quantity])->save();
 
                 $locked->transitionTo($to);
                 $locked->forceFill($to === StockReservationStatus::Committed
@@ -268,13 +347,15 @@ class StockReservations
         ?ProductVariant $variant,
         int $quantity,
         ReservationKind $kind,
+        ?BusinessAccount $account = null,
     ): StockReservation {
         $item = $existing->item;
 
         if ($item->product_id !== $product->id
             || $item->product_variant_id !== $variant?->id
             || $existing->quantity !== $quantity
-            || $existing->kind !== $kind) {
+            || $existing->kind !== $kind
+            || $existing->business_account_id !== $account?->id) {
             throw InventoryRefused::referenceInUse($existing->reference);
         }
 

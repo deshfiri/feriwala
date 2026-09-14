@@ -12,6 +12,7 @@ export const STOCK_BUCKETS = [
     'sold',
     'returned',
     'damaged',
+    'allocated',
 ] as const;
 
 export type StockBucket = (typeof STOCK_BUCKETS)[number];
@@ -80,6 +81,33 @@ export type AdjustmentKindOption = {
     label: string;
     from: StockBucket | null;
     to: StockBucket | null;
+};
+
+/** Stock set aside for one business account on one stock item (P3-30). */
+export type StockAllocationRow = {
+    id: string;
+    account: { id: string; name: string; can_trade: boolean };
+    quantity: number;
+    updated_at: string;
+};
+
+/** An allocation in the list across every stock item. */
+export type StockAllocationListRow = StockAllocationRow & {
+    sku: string;
+    product: string;
+    item_id: string;
+    warehouse: { code: string; name: string; is_active: boolean };
+};
+
+/** A business account that can trade, offered in the allocate dialog. */
+export type AccountOption = { id: string; name: string };
+
+/** One SKU allocated to the reader's own business, without warehouse detail. */
+export type OwnAllocationRow = {
+    sku: string;
+    product: string;
+    quantity: number;
+    updated_at: string;
 };
 
 /** A stockable unit found for the hold dialog: a product, or one variation. */

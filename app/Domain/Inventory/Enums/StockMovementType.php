@@ -26,6 +26,12 @@ enum StockMovementType: string
     /** A reservation turned into stock committed to a confirmed order (P3-25). */
     case ReservationCommitted = 'reservation_committed';
 
+    /** Available stock set aside for one business account (P3-30). */
+    case Allocation = 'allocation';
+
+    /** Allocated stock given back to everyone (P3-30). */
+    case AllocationReleased = 'allocation_released';
+
     public function label(): string
     {
         return match ($this) {
@@ -34,6 +40,8 @@ enum StockMovementType: string
             self::ReservationReleased => 'Reservation released',
             self::ReservationExpired => 'Reservation expired',
             self::ReservationCommitted => 'Reservation committed',
+            self::Allocation => 'Allocated',
+            self::AllocationReleased => 'Allocation released',
         };
     }
 }

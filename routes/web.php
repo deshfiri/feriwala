@@ -30,12 +30,14 @@ use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
+use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Erp\AllocatedStockController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
@@ -206,6 +208,13 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('catalog.dropshipping.index');
         Route::get('catalog/dropshipping/{product}', [BusinessCatalogController::class, 'showDropshipping'])
             ->name('catalog.dropshipping.show');
+
+        /*
+         * Central stock set aside for this account (§19, P3-30). Read-only and
+         * self-scoped through the membership: no account identifier in the URL.
+         */
+        Route::get('allocated-stock', [AllocatedStockController::class, 'index'])
+            ->name('allocated-stock.index');
     });
 });
 
@@ -632,6 +641,17 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.reservations.release');
         Route::patch('inventory/reservations/{reservation}/expiry', [ReservationController::class, 'extend'])
             ->name('inventory.reservations.extend');
+
+        /*
+         * Stock set aside for business accounts (§19, P3-30). Reading is
+         * `inventory.view`; allocating and releasing are `inventory.approve`.
+         */
+        Route::get('inventory/allocations', [StockAllocationController::class, 'index'])
+            ->name('inventory.allocations.index');
+        Route::post('inventory/stock/{item}/allocations', [StockAllocationController::class, 'store'])
+            ->name('inventory.stock.allocations.store');
+        Route::post('inventory/allocations/{allocation}/release', [StockAllocationController::class, 'release'])
+            ->name('inventory.allocations.release');
 
         Route::get('inventory/warehouses', [WarehouseController::class, 'index'])
             ->name('inventory.warehouses.index');

@@ -4,7 +4,9 @@ import {
     BellRing,
     History,
     Lock,
+    PackageCheck,
     SlidersHorizontal,
+    Unlock,
 } from 'lucide-react';
 import { useState } from 'react';
 import StockController from '@/actions/App/Http/Controllers/Admin/StockController';
@@ -24,13 +26,17 @@ import { index } from '@/routes/admin/inventory/stock';
 import type { Column, Paginator } from '@/types';
 import {
     STOCK_BUCKETS,
+    type AccountOption,
     type AdjustmentKindOption,
+    type StockAllocationRow,
     type StockBucket,
     type StockMovementRow,
     type StockReservationRow,
     type StockRow,
 } from '@/types/inventory';
 import AdjustStockDialog from './adjust-stock-dialog';
+import AllocateStockDialog from './allocate-stock-dialog';
+import ReleaseAllocationDialog from './release-allocation-dialog';
 import StockStatePill from './stock-state-pill';
 
 type Props = {
@@ -38,7 +44,9 @@ type Props = {
     movements: Paginator<StockMovementRow>;
     reservations: StockReservationRow[];
     adjustment_kinds: AdjustmentKindOption[];
-    can: { adjust: boolean };
+    allocations: StockAllocationRow[];
+    accounts?: AccountOption[];
+    can: { adjust: boolean; allocate: boolean };
 };
 
 /**
@@ -55,10 +63,14 @@ export default function AdminStockItem({
     movements,
     reservations,
     adjustment_kinds,
+    allocations,
+    accounts,
     can,
 }: Props) {
     const { t, locale } = useTranslation();
     const [adjusting, setAdjusting] = useState(false);
+    const [allocating, setAllocating] = useState(false);
+    const [releasing, setReleasing] = useState<StockAllocationRow | null>(null);
 
     const bucketLabel = (bucket: StockBucket | null) =>
         bucket === null ? '' : t(`inventory.buckets.${bucket}`);
@@ -271,6 +283,97 @@ export default function AdminStockItem({
                 </SectionCard>
 
                 <SectionCard
+                    title={t('inventory.allocations.item_title')}
+                    description={t('inventory.allocations.item_description')}
+                    actions={
+                        can.allocate ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setAllocating(true)}
+                            >
+                                <PackageCheck
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                                {t('inventory.allocations.allocate')}
+                            </Button>
+                        ) : undefined
+                    }
+                    contentClassName={
+                        allocations.length > 0 ? 'p-0' : undefined
+                    }
+                >
+                    {allocations.length === 0 ? (
+                        <EmptyState
+                            icon={PackageCheck}
+                            title={t('inventory.allocations.item_empty')}
+                            description={t(
+                                'inventory.allocations.item_empty_help',
+                            )}
+                        />
+                    ) : (
+                        <ul className="divide-border divide-y">
+                            {allocations.map((allocation) => (
+                                <li
+                                    key={allocation.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                                >
+                                    <div className="min-w-0 space-y-1">
+                                        <div className="truncate text-sm font-medium">
+                                            {allocation.account.name}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">
+                                            {t(
+                                                'inventory.allocations.changed',
+                                                {
+                                                    time: new Date(
+                                                        allocation.updated_at,
+                                                    ).toLocaleString(locale),
+                                                },
+                                            )}
+                                        </div>
+                                        {!allocation.account.can_trade && (
+                                            <StatusPill
+                                                tone="warning"
+                                                label={t(
+                                                    'inventory.allocations.account_cannot_trade',
+                                                )}
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm font-semibold tabular-nums">
+                                            {t('inventory.allocations.units', {
+                                                count: allocation.quantity,
+                                            })}
+                                        </span>
+                                        {can.allocate &&
+                                            allocation.quantity > 0 && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        setReleasing(allocation)
+                                                    }
+                                                >
+                                                    <Unlock
+                                                        className="size-4"
+                                                        aria-hidden="true"
+                                                    />
+                                                    {t(
+                                                        'inventory.allocations.release',
+                                                    )}
+                                                </Button>
+                                            )}
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </SectionCard>
+
+                <SectionCard
                     title={t('inventory.item.reservations')}
                     description={t('inventory.item.reservations_description')}
                     contentClassName={
@@ -390,6 +493,24 @@ export default function AdminStockItem({
                     />
                 </section>
             </PageContainer>
+
+            {can.allocate && (
+                <>
+                    <AllocateStockDialog
+                        itemId={item.id}
+                        sku={item.sku}
+                        available={item.buckets.available}
+                        accounts={accounts}
+                        open={allocating}
+                        onClose={() => setAllocating(false)}
+                    />
+                    <ReleaseAllocationDialog
+                        allocation={releasing}
+                        sku={item.sku}
+                        onClose={() => setReleasing(null)}
+                    />
+                </>
+            )}
 
             {can.adjust && (
                 <AdjustStockDialog

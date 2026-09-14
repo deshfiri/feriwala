@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Actions\SetLowStockThreshold;
 use App\Domain\Inventory\Actions\TrackStock;
 use App\Domain\Inventory\Enums\StockAdjustmentKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
+use App\Domain\Inventory\Models\StockAllocation;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockMovement;
 use App\Domain\Inventory\Models\StockReservation;
@@ -153,8 +156,24 @@ class StockController extends Controller
                 'to' => $kind->destination()?->value,
             ], StockAdjustmentKind::cases()),
 
+            // Who this stock is set aside for (P3-30): accounts still holding
+            // units first, then those emptied most recently.
+            'allocations' => $record->allocations()
+                ->with('account:id,public_id,name,status')
+                ->orderByRaw('CASE WHEN quantity > 0 THEN 0 ELSE 1 END')
+                ->orderByDesc('updated_at')
+                ->limit(50)
+                ->get()
+                ->map(fn (StockAllocation $allocation) => StockAllocationController::row($allocation))
+                ->all(),
+
+            // The account search behind "Allocate to an account", loaded only by
+            // partial reload, and only accounts that can trade.
+            'accounts' => Inertia::optional(fn () => $this->accountMatches($request)),
+
             'can' => [
                 'adjust' => InventoryPolicy::canEdit($actor),
+                'allocate' => InventoryPolicy::canApprove($actor),
             ],
         ]);
     }
@@ -342,6 +361,35 @@ class StockController extends Controller
             ]);
 
         return $products->concat($variants)->values()->all();
+    }
+
+    /**
+     * Business accounts that can trade and match a search by name — the only
+     * accounts stock can be set aside for (P3-30).
+     *
+     * @return array<int, array{id: string, name: string}>
+     */
+    protected function accountMatches(Request $request): array
+    {
+        $term = trim($request->string('account_search')->toString());
+
+        if (mb_strlen($term) < 2) {
+            return [];
+        }
+
+        $trading = array_values(array_map(
+            fn (AccountStatus $status) => $status->value,
+            array_filter(AccountStatus::cases(), fn (AccountStatus $status) => $status->canTransact()),
+        ));
+
+        return BusinessAccount::query()
+            ->whereIn('status', $trading)
+            ->where('name', 'ilike', '%'.addcslashes(mb_substr($term, 0, 100), '%_\\').'%')
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['id', 'public_id', 'name'])
+            ->map(fn (BusinessAccount $account) => ['id' => $account->public_id, 'name' => $account->name])
+            ->all();
     }
 
     protected function actor(Request $request): User

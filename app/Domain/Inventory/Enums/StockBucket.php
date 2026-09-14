@@ -11,7 +11,10 @@ namespace App\Domain\Inventory\Enums;
  */
 enum StockBucket: string
 {
-    /** On the shelf and free to be sold. The only bucket a reservation takes from. */
+    /**
+     * On the shelf and free to be sold to anyone. A reservation takes from here,
+     * or from the ordering account's own allocation.
+     */
     case Available = 'available';
 
     /** Spoken for by an order that is not yet confirmed (§19.1). */
@@ -29,6 +32,12 @@ enum StockBucket: string
     /** Held but not sellable. */
     case Damaged = 'damaged';
 
+    /**
+     * Set aside for one business account (§19: user-allocated stock, P3-30).
+     * Out of everyone else's reach; only that account's orders draw on it.
+     */
+    case Allocated = 'allocated';
+
     public function label(): string
     {
         return match ($this) {
@@ -38,6 +47,7 @@ enum StockBucket: string
             self::Sold => 'Sold',
             self::Returned => 'Returned',
             self::Damaged => 'Damaged',
+            self::Allocated => 'Allocated',
         };
     }
 
