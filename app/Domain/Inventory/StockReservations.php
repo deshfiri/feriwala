@@ -216,6 +216,12 @@ class StockReservations
                     throw InventoryRefused::reservationEnded($locked->status);
                 }
 
+                // Re-read under the lock: an override may have moved the expiry
+                // after the sweep chose this reservation (P3-26).
+                if ($to === StockReservationStatus::Expired && $locked->expires_at->isFuture()) {
+                    throw InventoryRefused::notYetExpired();
+                }
+
                 /** @var StockItem $item */
                 $item = StockItem::query()->findOrFail($locked->stock_item_id);
 

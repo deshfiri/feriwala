@@ -2,6 +2,7 @@
 
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
+use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
@@ -170,3 +171,24 @@ Schedule::call(fn () => app(ReconcileGatewayPayments::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Ask each gateway what it thinks happened to our payments (§28.1)');
+
+/*
+ * The contract §6.1.2 expiry pass: give back stock held by reservations whose
+ * window has run out.
+ *
+ * **Every minute**, because the shortest window is fifteen minutes: an hourly
+ * pass would hold an unpaid online order's stock for up to seventy-five, and the
+ * contract is explicit that expiry is the scheduler's job, not something that
+ * happens lazily when somebody next reads the figure.
+ *
+ * `onOneServer` and `withoutOverlapping` for the same reasons as the sweeps
+ * above (§41), and the pass is idempotent on its own as well: each reservation is
+ * re-read under its own lock and expired only if it is still active and due, so
+ * a second copy finds nothing left to do.
+ */
+Schedule::call(fn () => app(ReleaseExpiredReservations::class)->handle())
+    ->name('stock-reservation-expiry')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Release stock reservations whose window has run out (§19.1)');

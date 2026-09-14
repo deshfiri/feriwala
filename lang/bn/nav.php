@@ -35,6 +35,7 @@ return [
     'branding' => 'ব্র্যান্ডিং',
     'stock' => 'স্টক',
     'warehouses' => 'গুদাম',
+    'reservations' => 'সংরক্ষণ',
     'invoices' => 'চালান',
 
     'search' => [

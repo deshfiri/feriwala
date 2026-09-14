@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockController;
@@ -610,6 +611,19 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.stock.show');
         Route::post('inventory/stock/{item}/adjustments', [StockAdjustmentController::class, 'store'])
             ->name('inventory.stock.adjustments.store');
+
+        /*
+         * Stock reservations (contract §6.1.2). Reading is `inventory.view`;
+         * overriding one and changing how long they last is `inventory.approve`.
+         */
+        Route::get('inventory/reservations', [ReservationController::class, 'index'])
+            ->name('inventory.reservations.index');
+        Route::put('inventory/reservations/windows', [ReservationController::class, 'windows'])
+            ->name('inventory.reservations.windows');
+        Route::post('inventory/reservations/{reservation}/release', [ReservationController::class, 'release'])
+            ->name('inventory.reservations.release');
+        Route::patch('inventory/reservations/{reservation}/expiry', [ReservationController::class, 'extend'])
+            ->name('inventory.reservations.extend');
 
         Route::get('inventory/warehouses', [WarehouseController::class, 'index'])
             ->name('inventory.warehouses.index');

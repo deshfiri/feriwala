@@ -58,6 +58,11 @@ class InventoryRefused extends RuntimeException
         ]));
     }
 
+    public static function notYetExpired(): self
+    {
+        return new self(__('inventory.refused.not_yet_expired'));
+    }
+
     public static function reservationEnded(StockReservationStatus $status): self
     {
         return new self(__('inventory.refused.reservation_ended', [

@@ -5,6 +5,7 @@ import {
     FolderTree,
     LayoutGrid,
     ListChecks,
+    Lock,
     MessageSquare,
     Package as PackageIcon,
     Palette,
@@ -30,6 +31,7 @@ import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
+import { index as stockReservations } from '@/routes/admin/inventory/reservations';
 import { index as stockLevels } from '@/routes/admin/inventory/stock';
 import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
@@ -236,6 +238,11 @@ export function useNavigation(): {
                               title: t('nav.warehouses'),
                               href: warehouses(),
                               icon: Warehouse,
+                          },
+                          {
+                              title: t('nav.reservations'),
+                              href: stockReservations(),
+                              icon: Lock,
                           },
                       ]
                     : []),

@@ -41,6 +41,7 @@ return [
     'branding' => 'Branding',
     'stock' => 'Stock',
     'warehouses' => 'Warehouses',
+    'reservations' => 'Reservations',
     'invoices' => 'Invoices',
 
     'search' => [
