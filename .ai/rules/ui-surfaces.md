@@ -64,3 +64,6 @@ looking at. "System" is not a third palette; it is a standing instruction to fol
 `prefers-color-scheme`, including when the device flips at sunset. The preference is
 stored in `localStorage` _and_ a cookie, and the cookie is exempt from encryption in
 `bootstrap/app.php` because the hook writes it from JavaScript.
+
+## Page breadcrumb titles are hard-coded English — fix app-wide on the UI-upgrade branch
+Admin pages set `Page.layout = { breadcrumbs: [{ title: 'Stock', ... }] }` with literal English strings (15+ pages: inventory, KYC, payments, wallets, activations), so the header breadcrumb stays English in Bangla. Known app-wide debt, recorded 2026-09-14 for `ui/ultra-modern-saas`: translate breadcrumbs in one pass there (e.g. resolve a lang key in the layout). Do not patch it piecemeal inside feature tasks; new pages follow the existing pattern until that pass lands.
