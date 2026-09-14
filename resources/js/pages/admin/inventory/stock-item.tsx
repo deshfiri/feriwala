@@ -211,7 +211,7 @@ export default function AdminStockItem({
                         <Form
                             {...StockController.threshold.form(item.id)}
                             options={{ preserveScroll: true }}
-                            className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_auto] sm:items-start"
+                            className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_auto] sm:items-start sm:justify-start"
                         >
                             {({ errors, processing }) => (
                                 <>
