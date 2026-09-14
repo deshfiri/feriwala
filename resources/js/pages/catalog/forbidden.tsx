@@ -6,12 +6,30 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
 
+type Audience = 'business' | 'viewer' | 'staff';
+
 type Props = {
     /**
      * Who was refused: a partner, who selects from the catalogue rather than
-     * writing it, or a member of staff whose role does not include it.
+     * writing it; a member of staff who may view the catalogue but not change
+     * it; or a member of staff whose role does not include it at all.
      */
-    audience: 'business' | 'staff';
+    audience: Audience;
+};
+
+const LINES: Record<Audience, { title: string; description: string }> = {
+    business: {
+        title: 'catalog.forbidden_title',
+        description: 'catalog.forbidden_description',
+    },
+    viewer: {
+        title: 'catalog.forbidden_viewer_title',
+        description: 'catalog.forbidden_viewer_description',
+    },
+    staff: {
+        title: 'catalog.forbidden_staff_title',
+        description: 'catalog.forbidden_staff_description',
+    },
 };
 
 /**
@@ -25,11 +43,8 @@ type Props = {
  */
 export default function CatalogForbidden({ audience }: Props) {
     const { t } = useTranslation();
-    const business = audience === 'business';
-
-    const title = t(
-        business ? 'catalog.forbidden_title' : 'catalog.forbidden_staff_title',
-    );
+    const lines = LINES[audience];
+    const title = t(lines.title);
 
     return (
         <>
@@ -38,11 +53,7 @@ export default function CatalogForbidden({ audience }: Props) {
             <PageContainer width="narrow">
                 <PermissionDeniedState
                     title={title}
-                    description={t(
-                        business
-                            ? 'catalog.forbidden_description'
-                            : 'catalog.forbidden_staff_description',
-                    )}
+                    description={t(lines.description)}
                 />
 
                 <div className="flex justify-center">

@@ -67,6 +67,22 @@ describe('a refused person is shown the catalogue refusal page', function () {
             );
     });
 
+    it('tells staff who may view the catalogue that changing it is what their role lacks', function () {
+        $viewer = testPlatformStaff(PlatformRole::InventoryManager);
+
+        foreach ([
+            route('admin.catalog.products.create'),
+            route('admin.catalog.products.store'),
+        ] as $index => $url) {
+            ($index === 0 ? $this->actingAs($viewer)->get($url) : $this->actingAs($viewer)->post($url, ['name' => 'Mine']))
+                ->assertForbidden()
+                ->assertInertia(fn (Assert $page) => $page
+                    ->component('catalog/forbidden')
+                    ->where('audience', 'viewer'),
+                );
+        }
+    });
+
     it('answers an API caller with JSON, never a page', function () {
         $this->actingAs(testBusinessAccount(AccountStatus::Active)->owner)
             ->getJson(route('admin.catalog.products.index'))

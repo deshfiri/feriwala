@@ -104,7 +104,8 @@ return Application::configure(basePath: dirname(__DIR__))
         /*
          * A refusal on catalogue administration is a page in the application's
          * own shell (P3-16, §12), telling a partner that the catalogue is
-         * Feriwala's to write and a member of staff that it is not part of their
+         * Feriwala's to write, a member of staff who may view it that changing it
+         * is what their role lacks, and anybody else that it is not part of their
          * role. Only for that route set: every other refusal, and every JSON
          * caller, keeps the response it already had.
          */
@@ -120,7 +121,11 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return Inertia::render('catalog/forbidden', [
-                'audience' => CatalogPolicy::isBusinessIdentity($user) ? 'business' : 'staff',
+                'audience' => match (true) {
+                    CatalogPolicy::isBusinessIdentity($user) => 'business',
+                    CatalogPolicy::canViewAny($user) => 'viewer',
+                    default => 'staff',
+                },
             ])
                 ->toResponse($request)
                 ->setStatusCode(Response::HTTP_FORBIDDEN);

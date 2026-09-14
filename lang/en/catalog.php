@@ -3,6 +3,8 @@
 return [
     'forbidden_title' => 'The catalogue is not yours to manage',
     'forbidden_description' => 'Products, categories and brands are written by Feriwala. Partners select from the catalogue rather than adding to it.',
+    'forbidden_viewer_title' => 'Your role can view the catalogue, not change it',
+    'forbidden_viewer_description' => 'Creating and changing products, categories and brands needs catalogue authoring permission. An administrator can grant it if you need it.',
     'forbidden_staff_title' => 'The product catalogue is not part of your role',
     'forbidden_staff_description' => 'Your role does not include the central catalogue. An administrator can grant catalogue permissions if you need them.',
     'forbidden_back' => 'Back to the dashboard',
