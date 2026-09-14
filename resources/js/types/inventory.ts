@@ -55,6 +55,14 @@ export type StockMovementRow = {
     occurred_at: string;
 };
 
+/** A change a person may make by hand, and the buckets it moves between. */
+export type AdjustmentKindOption = {
+    value: string;
+    label: string;
+    from: StockBucket | null;
+    to: StockBucket | null;
+};
+
 /** A stockable unit found for the hold dialog: a product, or one variation. */
 export type StockUnit = {
     product: string;

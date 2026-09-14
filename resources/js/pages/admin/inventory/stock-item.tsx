@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, History } from 'lucide-react';
+import { ArrowLeft, History, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import DataTable from '@/components/data-table/data-table';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -12,14 +13,18 @@ import { index } from '@/routes/admin/inventory/stock';
 import type { Column, Paginator } from '@/types';
 import {
     STOCK_BUCKETS,
+    type AdjustmentKindOption,
     type StockBucket,
     type StockMovementRow,
     type StockRow,
 } from '@/types/inventory';
+import AdjustStockDialog from './adjust-stock-dialog';
 
 type Props = {
     item: StockRow;
     movements: Paginator<StockMovementRow>;
+    adjustment_kinds: AdjustmentKindOption[];
+    can: { adjust: boolean };
 };
 
 /**
@@ -31,8 +36,14 @@ type Props = {
  * here that would suggest otherwise. Each row names the buckets that changed and
  * what they held on either side, so a figure can be traced back to its cause.
  */
-export default function AdminStockItem({ item, movements }: Props) {
+export default function AdminStockItem({
+    item,
+    movements,
+    adjustment_kinds,
+    can,
+}: Props) {
     const { t, locale } = useTranslation();
+    const [adjusting, setAdjusting] = useState(false);
 
     const bucketLabel = (bucket: StockBucket | null) =>
         bucket === null ? '' : t(`inventory.buckets.${bucket}`);
@@ -135,15 +146,26 @@ export default function AdminStockItem({ item, movements }: Props) {
                         code: item.warehouse.code,
                     })}
                     actions={
-                        <Button variant="outline" asChild>
-                            <Link href={index()}>
-                                <ArrowLeft
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                {t('inventory.item.back')}
-                            </Link>
-                        </Button>
+                        <>
+                            <Button variant="outline" asChild>
+                                <Link href={index()}>
+                                    <ArrowLeft
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    {t('inventory.item.back')}
+                                </Link>
+                            </Button>
+                            {can.adjust && (
+                                <Button onClick={() => setAdjusting(true)}>
+                                    <SlidersHorizontal
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    {t('inventory.adjustments.open')}
+                                </Button>
+                            )}
+                        </>
                     }
                 />
 
@@ -232,6 +254,16 @@ export default function AdminStockItem({ item, movements }: Props) {
                     />
                 </section>
             </PageContainer>
+
+            {can.adjust && (
+                <AdjustStockDialog
+                    itemId={item.id}
+                    buckets={item.buckets}
+                    kinds={adjustment_kinds}
+                    open={adjusting}
+                    onClose={() => setAdjusting(false)}
+                />
+            )}
         </>
     );
 }

@@ -91,6 +91,31 @@ return [
         'no_matches_help' => 'Try a different name or SKU, or clear the filters.',
     ],
 
+    'adjustments' => [
+        'open' => 'Adjust stock',
+        'title' => 'Adjust stock by hand',
+        'description' => 'Record stock received, lost, damaged, repaired or inspected. The change is written to the movement history and the audit log with your name and reason.',
+        'kind' => 'What happened',
+        'kinds' => [
+            'receive' => 'Receive stock',
+            'remove' => 'Remove available stock',
+            'damage' => 'Mark available stock damaged',
+            'repair' => 'Return repaired stock to available',
+            'write_off_damaged' => 'Write off damaged stock',
+            'restock_return' => 'Restock an inspected return',
+            'reject_return' => 'Reject an inspected return as damaged',
+        ],
+        'moves_into' => 'Adds to :to.',
+        'moves_out_of' => 'Takes out of :from, leaving central stock.',
+        'moves_between' => 'Moves from :from to :to.',
+        'holds' => ':bucket holds :count.',
+        'quantity' => 'Units',
+        'reason' => 'Reason',
+        'reason_help' => 'At least 10 characters — a delivery note, a count sheet, what was found. It is kept with the change for good.',
+        'submit' => 'Record adjustment',
+        'saved' => 'Stock adjusted and recorded.',
+    ],
+
     'warehouses' => [
         'title' => 'Warehouses',
         'description' => 'Where central stock is held. The default warehouse is tried first, then the rest in priority order.',

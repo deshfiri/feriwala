@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Actions\TrackStock;
+use App\Domain\Inventory\Enums\StockAdjustmentKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockMovement;
@@ -118,6 +119,19 @@ class StockController extends Controller
                     'actor' => $movement->actor?->name,
                     'occurred_at' => $movement->occurred_at->toIso8601String(),
                 ]),
+
+            // What a person may do to this stock by hand, and exactly which
+            // buckets each kind moves between (P3-24).
+            'adjustment_kinds' => array_map(fn (StockAdjustmentKind $kind) => [
+                'value' => $kind->value,
+                'label' => __('inventory.adjustments.kinds.'.$kind->value),
+                'from' => $kind->source()?->value,
+                'to' => $kind->destination()?->value,
+            ], StockAdjustmentKind::cases()),
+
+            'can' => [
+                'adjust' => InventoryPolicy::canEdit($actor),
+            ],
         ]);
     }
 

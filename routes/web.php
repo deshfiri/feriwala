@@ -27,6 +27,7 @@ use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
@@ -607,6 +608,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.stock.store');
         Route::get('inventory/stock/{item}', [StockController::class, 'show'])
             ->name('inventory.stock.show');
+        Route::post('inventory/stock/{item}/adjustments', [StockAdjustmentController::class, 'store'])
+            ->name('inventory.stock.adjustments.store');
 
         Route::get('inventory/warehouses', [WarehouseController::class, 'index'])
             ->name('inventory.warehouses.index');
