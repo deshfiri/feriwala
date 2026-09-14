@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Domain\Wholesale\Models;
+
+use App\Concerns\HasPublicId;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+/**
+ * One person's ERP wholesale cart (§14, P4-3).
+ *
+ * Reached only through the signed-in user and the business account they are
+ * working in; it holds intent — which units, how many — and no price, total or
+ * charge. Every figure is worked out on the server whenever the cart is shown.
+ *
+ * @property int $id
+ * @property string $public_id
+ * @property int $user_id
+ * @property int $business_account_id
+ * @property CarbonImmutable $created_at
+ * @property CarbonImmutable $updated_at
+ * @property-read User $user
+ * @property-read BusinessAccount $account
+ * @property-read Collection<int, CartItem> $items
+ */
+class Cart extends Model
+{
+    use HasPublicId;
+
+    protected $guarded = [];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'immutable_datetime',
+            'updated_at' => 'immutable_datetime',
+        ];
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsTo<BusinessAccount, $this>
+     */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(BusinessAccount::class, 'business_account_id');
+    }
+
+    /**
+     * @return HasMany<CartItem, $this>
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(CartItem::class)->orderBy('id');
+    }
+}
