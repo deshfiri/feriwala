@@ -579,5 +579,7 @@ return [
     'restrictions' => [
         'not_here' => 'The :attribute cannot be changed through this request.',
         'stock' => 'Stock is held by inventory and cannot be changed through the catalogue.',
+        'batch' => 'Products are added to the catalogue one at a time, through the product form.',
+        'file' => 'Files are not accepted here. Images and videos are added through the product\'s media.',
     ],
 ];

@@ -2,6 +2,9 @@
 
 namespace App\Domain\Catalog;
 
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+
 /**
  * The central product fields §12 puts beyond a request's reach unless that
  * request is the one that owns them.
@@ -70,25 +73,43 @@ final class CentralProductFields
     public const STOCK_KEY_PATTERN = '/stock/i';
 
     /**
-     * The rules for one endpoint: every protected field it does not own, and
-     * every stock key the request carries, refused when present.
+     * A list of products in one request (§12 "Import external Products").
      *
-     * @param  array<int, string>  $owned  the protected fields this endpoint legitimately accepts
-     * @param  array<array-key, mixed>  $input  the request's input
+     * Only a bulk action, which acts on products that already exist, carries
+     * one. Products enter the catalogue one at a time, through the form that
+     * asks for everything a product needs — never as a batch posted anywhere.
+     *
+     * @var array<int, string>
+     */
+    public const BATCH = ['products'];
+
+    /**
+     * The rules for one endpoint: every protected field it does not own, and
+     * every stock key, list of products and uploaded file the request carries
+     * without owning it, refused when present.
+     *
+     * An uploaded file is refused under any name the endpoint does not own, so a
+     * spreadsheet posted to the product form is an error rather than an attachment
+     * nobody reads (§12 "Upload an unauthorized Product").
+     *
+     * @param  array<int, string>  $owned  the protected fields, lists and file inputs this endpoint legitimately accepts
+     * @param  array<array-key, mixed>  $input  the request's input, files included
      * @return array<string, array<int, string>>
      */
     public static function rules(array $owned, array $input): array
     {
         $rules = [];
 
-        foreach (self::protected() as $field) {
+        foreach ([...self::protected(), ...self::BATCH] as $field) {
             if (! in_array($field, $owned, true)) {
                 $rules[$field] = ['missing'];
             }
         }
 
-        foreach (self::stockKeys($input) as $key) {
-            $rules[self::ruleKey($key)] = ['missing'];
+        foreach ([...self::stockKeys($input), ...self::fileKeys($input)] as $key) {
+            if (! in_array($key, $owned, true)) {
+                $rules[self::ruleKey($key)] = ['missing'];
+            }
         }
 
         return $rules;
@@ -108,11 +129,34 @@ final class CentralProductFields
             $messages["{$field}.missing"] = __('catalog.restrictions.not_here');
         }
 
+        foreach (self::BATCH as $field) {
+            $messages["{$field}.missing"] = __('catalog.restrictions.batch');
+        }
+
         foreach (self::stockKeys($input) as $key) {
             $messages[self::ruleKey($key).'.missing'] = __('catalog.restrictions.stock');
         }
 
+        foreach (self::fileKeys($input) as $key) {
+            $messages[self::ruleKey($key).'.missing'] = __('catalog.restrictions.file');
+        }
+
         return $messages;
+    }
+
+    /**
+     * The top-level input keys that carry an uploaded file, alone or in a list.
+     *
+     * @param  array<array-key, mixed>  $input
+     * @return array<int, string>
+     */
+    public static function fileKeys(array $input): array
+    {
+        return array_values(array_filter(
+            array_keys($input),
+            fn (int|string $key) => is_string($key)
+                && collect(Arr::flatten([$input[$key]]))->contains(fn (mixed $item) => $item instanceof UploadedFile),
+        ));
     }
 
     /**

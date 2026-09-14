@@ -66,7 +66,9 @@ class ProductMediaController extends Controller
             ],
             'alt_text' => ['nullable', 'string', 'max:255'],
             'variant_id' => ['nullable', 'string', Rule::exists(ProductVariant::class, 'public_id')],
-            ...CentralProductFields::rules([], $request->all()),
+
+            // The one file input a product endpoint owns (§12).
+            ...CentralProductFields::rules(['file'], $request->all()),
         ], CentralProductFields::messages($request->all()));
 
         /** @var UploadedFile $file */

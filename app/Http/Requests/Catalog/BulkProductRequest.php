@@ -67,8 +67,9 @@ class BulkProductRequest extends FormRequest
 
             'enable' => ['required_if:action,'.self::CHANNEL.','.self::FEATURE, 'boolean'],
 
-            // A lifecycle move is the only central field a bulk action sets (§12).
-            ...CentralProductFields::rules(['status'], $this->all()),
+            // A lifecycle move is the only central field a bulk action sets, and
+            // its list names products that already exist (§12).
+            ...CentralProductFields::rules(['status', 'products'], $this->all()),
         ];
     }
 
