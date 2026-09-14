@@ -16,12 +16,26 @@ class RespondToStockChange
 {
     public function __construct(
         protected SyncProductStockStatus $status,
+        protected CheckLowStock $lowStock,
     ) {}
 
-    public function handle(int $productId): void
+    /**
+     * @param  int|null  $stockItemId  the item whose figures moved, when one did
+     */
+    public function handle(int $productId, ?int $stockItemId = null): void
     {
         try {
             $this->status->handle($productId);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        if ($stockItemId === null) {
+            return;
+        }
+
+        try {
+            $this->lowStock->handle($stockItemId);
         } catch (Throwable $exception) {
             report($exception);
         }

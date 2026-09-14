@@ -76,7 +76,7 @@ class RecentNotifications
             id: $notification->id,
             title: $this->line($event, 'title') ?? $event,
             description: $this->description($event, $data),
-            href: $this->href($event),
+            href: $this->href($event, $data),
             createdAt: $notification->created_at?->diffForHumans(),
             createdAtIso: $notification->created_at?->toIso8601String(),
             readAt: $notification->read_at?->toIso8601String(),
@@ -130,10 +130,18 @@ class RecentNotifications
      * Null is a legitimate answer — "your account was activated" is news, not a
      * task, and a row that looks clickable but goes nowhere is worse than plain
      * text.
+     *
+     * @param  array<string, mixed>  $data
      */
-    protected function href(string $event): ?string
+    protected function href(string $event, array $data = []): ?string
     {
         return match ($event) {
+            // Straight to the stock in question, where it can be adjusted (§19).
+            'inventory.stock_low',
+            'inventory.stock_out' => is_string($data['stock_item'] ?? null)
+                ? route('admin.inventory.stock.show', $data['stock_item'])
+                : route('admin.inventory.stock.index'),
+
             'kyc.deadline_approaching',
             'kyc.deadline_missed',
             'kyc.update_requested',

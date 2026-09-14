@@ -39,6 +39,8 @@ export type StockRow = {
     variant_id: string | null;
     warehouse: WarehouseOption;
     buckets: StockBuckets;
+    low_stock_threshold: number | null;
+    is_low: boolean;
     updated_at: string;
 };
 

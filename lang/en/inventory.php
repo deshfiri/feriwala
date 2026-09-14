@@ -20,7 +20,26 @@ return [
 
     'states' => [
         'in_stock' => 'In stock',
+        'low_stock' => 'Low stock',
         'out_of_stock' => 'Out of stock',
+    ],
+
+    'thresholds' => [
+        'title' => 'Low-stock alert',
+        'description' => 'Inventory staff are told once when this SKU in this warehouse falls to this many available, and again only after it has recovered. Leave it empty for no alert.',
+        'label' => 'Alert at or below',
+        'none' => 'No alert set',
+        'current' => 'Alerts at :count or fewer available',
+        'save' => 'Save alert',
+        'saved' => 'Low-stock alert saved.',
+    ],
+
+    'alerts' => [
+        'low_subject' => 'Stock running low: :sku',
+        'low_body' => ':warehouse holds :available of :sku available, at or below its threshold of :threshold.',
+        'out_subject' => 'Stock has run out: :sku',
+        'out_body' => ':warehouse has no :sku available (threshold :threshold). While no warehouse holds any, it is not offered to partners.',
+        'action' => 'Open the stock',
     ],
 
     'reservation_statuses' => [

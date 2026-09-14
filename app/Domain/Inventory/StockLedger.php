@@ -116,12 +116,14 @@ class StockLedger
                 $item->setRawAttributes($locked->getAttributes(), sync: true);
 
                 // What is available changed: once it has committed, see whether
-                // the product should come off sale or go back on (P3-28).
+                // the product should come off sale or go back on (P3-28), and
+                // whether this SKU has fallen to its low-stock threshold (P3-29).
                 if ($from === StockBucket::Available || $to === StockBucket::Available) {
                     $productId = $locked->product_id;
+                    $itemId = $locked->id;
 
                     $this->database->connection()->afterCommit(
-                        fn () => app(RespondToStockChange::class)->handle($productId),
+                        fn () => app(RespondToStockChange::class)->handle($productId, $itemId),
                     );
                 }
 

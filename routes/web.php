@@ -612,6 +612,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.stock.show');
         Route::post('inventory/stock/{item}/adjustments', [StockAdjustmentController::class, 'store'])
             ->name('inventory.stock.adjustments.store');
+        // When a SKU in a warehouse counts as running low (P3-29).
+        Route::patch('inventory/stock/{item}/threshold', [StockController::class, 'threshold'])
+            ->name('inventory.stock.threshold');
 
         // What every website is told about stock (§19.1, contract §5.2).
         Route::get('inventory/availability', [AvailabilityController::class, 'index'])

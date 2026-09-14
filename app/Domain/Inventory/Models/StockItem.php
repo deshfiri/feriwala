@@ -29,6 +29,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $sold
  * @property int $returned
  * @property int $damaged
+ * @property int|null $low_stock_threshold
+ * @property CarbonImmutable|null $low_stock_alerted_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read Warehouse $warehouse
@@ -53,6 +55,8 @@ class StockItem extends Model
             'sold' => 'integer',
             'returned' => 'integer',
             'damaged' => 'integer',
+            'low_stock_threshold' => 'integer',
+            'low_stock_alerted_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -96,6 +100,15 @@ class StockItem extends Model
     public function reservations(): HasMany
     {
         return $this->hasMany(StockReservation::class);
+    }
+
+    /**
+     * Whether somebody asked to be told about this stock, and it has fallen to
+     * that point (P3-29).
+     */
+    public function isLow(): bool
+    {
+        return $this->low_stock_threshold !== null && $this->available <= $this->low_stock_threshold;
     }
 
     /**

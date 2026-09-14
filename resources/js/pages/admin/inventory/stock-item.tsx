@@ -1,13 +1,24 @@
-import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, History, Lock, SlidersHorizontal } from 'lucide-react';
+import { Form, Head, Link } from '@inertiajs/react';
+import {
+    ArrowLeft,
+    BellRing,
+    History,
+    Lock,
+    SlidersHorizontal,
+} from 'lucide-react';
 import { useState } from 'react';
+import StockController from '@/actions/App/Http/Controllers/Admin/StockController';
 import DataTable from '@/components/data-table/data-table';
+import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { index } from '@/routes/admin/inventory/stock';
 import type { Column, Paginator } from '@/types';
@@ -20,6 +31,7 @@ import {
     type StockRow,
 } from '@/types/inventory';
 import AdjustStockDialog from './adjust-stock-dialog';
+import StockStatePill from './stock-state-pill';
 
 type Props = {
     item: StockRow;
@@ -175,19 +187,7 @@ export default function AdminStockItem({
                 <SectionCard
                     title={t('inventory.item.figures')}
                     description={t('inventory.item.figures_description')}
-                    actions={
-                        item.buckets.available > 0 ? (
-                            <StatusPill
-                                tone="success"
-                                label={t('inventory.states.in_stock')}
-                            />
-                        ) : (
-                            <StatusPill
-                                tone="warning"
-                                label={t('inventory.states.out_of_stock')}
-                            />
-                        )
-                    }
+                    actions={<StockStatePill row={item} />}
                 >
                     <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
                         {STOCK_BUCKETS.map((bucket) => (
@@ -201,6 +201,73 @@ export default function AdminStockItem({
                             </div>
                         ))}
                     </dl>
+                </SectionCard>
+
+                <SectionCard
+                    title={t('inventory.thresholds.title')}
+                    description={t('inventory.thresholds.description')}
+                >
+                    {can.adjust ? (
+                        <Form
+                            {...StockController.threshold.form(item.id)}
+                            options={{ preserveScroll: true }}
+                            className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_auto] sm:items-start"
+                        >
+                            {({ errors, processing }) => (
+                                <>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="low-stock-threshold">
+                                            {t('inventory.thresholds.label')}
+                                        </Label>
+                                        <Input
+                                            id="low-stock-threshold"
+                                            name="low_stock_threshold"
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={0}
+                                            step={1}
+                                            defaultValue={
+                                                item.low_stock_threshold ?? ''
+                                            }
+                                            aria-invalid={
+                                                errors.low_stock_threshold
+                                                    ? true
+                                                    : undefined
+                                            }
+                                        />
+                                        <InputError
+                                            message={errors.low_stock_threshold}
+                                        />
+                                    </div>
+
+                                    <Button
+                                        type="submit"
+                                        variant="outline"
+                                        disabled={processing}
+                                        className="sm:mt-6"
+                                    >
+                                        {processing ? (
+                                            <Spinner />
+                                        ) : (
+                                            <BellRing
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                        {t('inventory.thresholds.save')}
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                    ) : (
+                        <p className="text-sm">
+                            {item.low_stock_threshold === null
+                                ? t('inventory.thresholds.none')
+                                : t('inventory.thresholds.current', {
+                                      count: item.low_stock_threshold,
+                                  })}
+                        </p>
+                    )}
                 </SectionCard>
 
                 <SectionCard

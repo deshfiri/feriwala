@@ -7,6 +7,7 @@ import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import StockStatePill from './stock-state-pill';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { index, show } from '@/routes/admin/inventory/stock';
@@ -54,15 +55,7 @@ export default function AdminStock({
         filters.search || filters.warehouse || filters.state,
     );
 
-    const statePill = (row: StockRow) =>
-        row.buckets.available > 0 ? (
-            <StatusPill tone="success" label={t('inventory.states.in_stock')} />
-        ) : (
-            <StatusPill
-                tone="warning"
-                label={t('inventory.states.out_of_stock')}
-            />
-        );
+    const statePill = (row: StockRow) => <StockStatePill row={row} />;
 
     const columns: Column<StockRow>[] = [
         {
@@ -221,6 +214,9 @@ export default function AdminStock({
                                 </option>
                                 <option value="in_stock">
                                     {t('inventory.states.in_stock')}
+                                </option>
+                                <option value="low_stock">
+                                    {t('inventory.states.low_stock')}
                                 </option>
                                 <option value="out_of_stock">
                                     {t('inventory.states.out_of_stock')}

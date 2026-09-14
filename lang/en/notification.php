@@ -69,5 +69,15 @@ return [
             'title' => 'Your password was changed',
             'description' => 'If you did not change it, contact support immediately.',
         ],
+
+        'inventory.stock_low' => [
+            'title' => 'Stock is running low',
+            'description' => 'A SKU has fallen to its low-stock threshold in a warehouse.',
+        ],
+
+        'inventory.stock_out' => [
+            'title' => 'Stock has run out',
+            'description' => 'A SKU has no stock available in a warehouse.',
+        ],
     ],
 ];

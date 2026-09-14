@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Inventory\Actions\SetLowStockThreshold;
 use App\Domain\Inventory\Actions\TrackStock;
 use App\Domain\Inventory\Enums\StockAdjustmentKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
@@ -36,7 +37,7 @@ class StockController extends Controller
     public const PER_PAGE = 25;
 
     /** @var array<int, string> */
-    public const STATES = ['in_stock', 'out_of_stock'];
+    public const STATES = ['in_stock', 'low_stock', 'out_of_stock'];
 
     /** @var array<int, string> */
     public const SORTS = ['available', 'updated_at'];
@@ -195,6 +196,31 @@ class StockController extends Controller
     }
 
     /**
+     * When this SKU in this warehouse counts as running low (P3-29).
+     */
+    public function threshold(Request $request, string $item, SetLowStockThreshold $thresholds): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(InventoryPolicy::canEdit($actor), 403);
+
+        /** @var StockItem $record */
+        $record = StockItem::query()->where('public_id', $item)->firstOrFail();
+
+        $validated = $request->validate([
+            'low_stock_threshold' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+        ]);
+
+        $threshold = $validated['low_stock_threshold'] ?? null;
+
+        $thresholds->handle($actor, $record, $threshold === null ? null : (int) $threshold);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('inventory.thresholds.saved')]);
+
+        return back();
+    }
+
+    /**
      * @return array{search: string|null, warehouse: string|null, state: string|null, sort: string|null, direction: string}
      */
     protected function filters(Request $request): array
@@ -236,6 +262,9 @@ class StockController extends Controller
                 ->whereHas('warehouse', fn (Builder $warehouse) => $warehouse->where('public_id', $filters['warehouse'])))
             ->when($filters['state'] === 'in_stock', fn (Builder $query) => $query->where('available', '>', 0))
             ->when($filters['state'] === 'out_of_stock', fn (Builder $query) => $query->where('available', 0))
+            ->when($filters['state'] === 'low_stock', fn (Builder $query) => $query
+                ->whereNotNull('low_stock_threshold')
+                ->whereColumn('available', '<=', 'low_stock_threshold'))
             ->when(
                 $filters['sort'] !== null,
                 fn (Builder $query) => $query->orderBy((string) $filters['sort'], $filters['direction'] === 'desc' ? 'desc' : 'asc'),
@@ -263,6 +292,8 @@ class StockController extends Controller
                 'is_active' => $item->warehouse->is_active,
             ],
             'buckets' => $item->buckets(),
+            'low_stock_threshold' => $item->low_stock_threshold,
+            'is_low' => $item->isLow(),
             'updated_at' => $item->updated_at->toIso8601String(),
         ];
     }
