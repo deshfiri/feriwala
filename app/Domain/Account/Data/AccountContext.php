@@ -8,6 +8,7 @@ use App\Domain\Account\StaffAllowance;
 use App\Domain\Inventory\Models\StockAllocation;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Wholesale\Models\CartItem;
 use App\Models\User;
 
 /**
@@ -51,6 +52,13 @@ readonly class AccountContext
          * rather than a door onto an empty list for every account.
          */
         public bool $holdsAllocatedStock = false,
+
+        /*
+         * How many products this person has in their wholesale cart (§14,
+         * P4-4), for the navigation. Counted only when the account may buy
+         * wholesale at all.
+         */
+        public int $wholesaleCartLines = 0,
     ) {}
 
     public static function forUser(User $user, StaffAllowance $allowance, ?Entitlements $entitlements = null): ?self
@@ -65,6 +73,8 @@ readonly class AccountContext
         }
 
         $allowsStaff = $allowance->allowsStaff($account);
+        $allowsWholesale = $entitlements !== null && $account->canTransact()
+            && $entitlements->allows($account, PackageFeature::WholesaleEnabled);
 
         return new self(
             id: $account->public_id,
@@ -75,8 +85,7 @@ readonly class AccountContext
             isOwner: $role === AccountRole::Owner,
             managesStaff: $allowsStaff && $role->hasPermission(AccountPermission::InviteStaff),
             allowsStaff: $allowsStaff,
-            allowsWholesale: $entitlements !== null && $account->canTransact()
-                && $entitlements->allows($account, PackageFeature::WholesaleEnabled),
+            allowsWholesale: $allowsWholesale,
             allowsDropshipping: $entitlements !== null && $account->canTransact()
                 && $entitlements->allows($account, PackageFeature::DropshippingEnabled),
             // The same rows the allocated-stock page shows: units still set aside,
@@ -86,6 +95,13 @@ readonly class AccountContext
                 ->where('quantity', '>', 0)
                 ->whereHas('item.warehouse', fn ($query) => $query->where('is_active', true))
                 ->exists(),
+            wholesaleCartLines: $allowsWholesale
+                ? CartItem::query()
+                    ->whereHas('cart', fn ($query) => $query
+                        ->where('user_id', $user->id)
+                        ->where('business_account_id', $account->id))
+                    ->count()
+                : 0,
         );
     }
 }

@@ -1,14 +1,21 @@
-import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, ImageOff } from 'lucide-react';
+import { Form, Head, Link } from '@inertiajs/react';
+import { ArrowLeft, ImageOff, ShoppingBasket } from 'lucide-react';
 import { useState } from 'react';
+import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
+import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as dropshippingIndex } from '@/routes/catalog/dropshipping';
 import { index as wholesaleIndex } from '@/routes/catalog/wholesale';
+import { show as cartShow } from '@/routes/wholesale/cart';
 import type { BrowseCard, BrowseDetail, SalesChannelName } from '@/types';
 import { ProductCard } from './browse';
 
@@ -126,7 +133,10 @@ export default function CatalogueProduct({ channel, product, related }: Props) {
                         )}
 
                         {channel === 'wholesale' ? (
-                            <WholesaleTerms product={product} />
+                            <>
+                                <WholesaleTerms product={product} />
+                                <AddToCart product={product} />
+                            </>
                         ) : (
                             <SellingGuidance product={product} />
                         )}
@@ -309,6 +319,114 @@ function WholesaleTerms({ product }: { product: BrowseDetail }) {
                         </div>
                     )}
             </div>
+        </SectionCard>
+    );
+}
+
+/**
+ * Put this product in the wholesale cart (§14, P4-4).
+ *
+ * Sends only which product, which variation and how many. The server checks the
+ * quantity rules and stock again and prices the line itself; the numbers shown
+ * here are guidance, not what is charged.
+ */
+function AddToCart({ product }: { product: BrowseDetail }) {
+    const { t } = useTranslation();
+    const min = product.min_order_quantity ?? 1;
+    const hasVariants = product.variants.length > 0;
+
+    return (
+        <SectionCard title={t('wholesale.cart.add')}>
+            <Form
+                {...WholesaleCartController.store.form()}
+                options={{ preserveScroll: true }}
+                className="space-y-3"
+            >
+                {({ errors, processing }) => (
+                    <>
+                        <input
+                            type="hidden"
+                            name="product"
+                            value={product.slug}
+                        />
+
+                        {hasVariants && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="cart-variant">
+                                    {t('wholesale.cart.variation')}
+                                </Label>
+                                <select
+                                    id="cart-variant"
+                                    name="variant"
+                                    required
+                                    defaultValue=""
+                                    className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                >
+                                    <option value="" disabled>
+                                        {t('wholesale.cart.choose_variation')}
+                                    </option>
+                                    {product.variants.map((variant) => (
+                                        <option
+                                            key={variant.sku}
+                                            value={variant.sku}
+                                        >
+                                            {variant.label || variant.sku}
+                                            {variant.in_stock
+                                                ? ''
+                                                : ` — ${t('catalog.browse.out_of_stock')}`}
+                                        </option>
+                                    ))}
+                                </select>
+                                <InputError message={errors.variant} />
+                            </div>
+                        )}
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="cart-quantity">
+                                {t('wholesale.cart.add_quantity')}
+                            </Label>
+                            <Input
+                                id="cart-quantity"
+                                name="quantity"
+                                type="number"
+                                inputMode="numeric"
+                                min={min}
+                                max={product.max_order_quantity ?? undefined}
+                                step={1}
+                                defaultValue={min}
+                                required
+                                className="sm:w-40"
+                            />
+                            <InputError
+                                message={errors.quantity ?? errors.product}
+                            />
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                            <Button
+                                type="submit"
+                                disabled={processing || !product.in_stock}
+                            >
+                                {processing ? (
+                                    <Spinner />
+                                ) : (
+                                    <ShoppingBasket
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                {t('wholesale.cart.add')}
+                            </Button>
+                            <Link
+                                href={cartShow()}
+                                className="text-sm underline-offset-4 hover:underline"
+                            >
+                                {t('wholesale.cart.view_cart')}
+                            </Link>
+                        </div>
+                    </>
+                )}
+            </Form>
         </SectionCard>
     );
 }

@@ -1,0 +1,68 @@
+<?php
+
+return [
+    'cart' => [
+        'title' => 'Wholesale cart',
+        'description' => 'What you intend to buy. Prices, stock and quantity rules are checked again every time this page opens.',
+        'caption' => 'Products in your wholesale cart',
+        'browse' => 'Wholesale catalogue',
+        'empty' => 'Your cart is empty',
+        'empty_help' => 'Add products from the wholesale catalogue to start an order.',
+        'not_included_title' => 'Not included in your package',
+        'not_included' => 'Your package does not include wholesale purchasing.',
+
+        'variation' => 'Variation',
+        'quantity' => 'Quantity',
+        'update' => 'Update',
+        'remove' => 'Remove :name',
+        'unit_price' => 'Unit price',
+        'line_total' => 'Line total',
+        'each' => ':amount each',
+        'quantity_price' => 'Quantity price — base price :amount',
+        'order_between' => 'Order :min to :max units',
+        'order_at_least' => 'Order at least :min units',
+        'available' => ':count available to order',
+
+        'summary' => 'Summary',
+        'lines' => 'Products: :count',
+        'subtotal' => 'Subtotal',
+        'subtotal_help' => 'Before any discount, delivery charge and tax. Lines with a problem are not counted.',
+
+        'price_changed' => 'Price changed from :from to :to each',
+        'prices_changed_title' => 'Some prices have changed',
+        'prices_changed_help' => 'The cart shows today’s prices. Accept them to continue.',
+        'accept_prices' => 'Accept new prices',
+
+        'problems_title' => 'Some products need attention',
+        'problems_help' => 'Change the quantity or remove the product. A product with a problem is left out of the subtotal until then.',
+
+        'add' => 'Add to cart',
+        'add_quantity' => 'Quantity to order',
+        'choose_variation' => 'Choose a variation',
+        'view_cart' => 'View cart',
+
+        'added' => ':name is in your cart.',
+        'updated' => 'Cart updated.',
+        'removed' => ':name removed from your cart.',
+        'prices_accepted' => 'New prices accepted.',
+    ],
+
+    'problems' => [
+        'unavailable' => 'No longer available to your account.',
+        'choose_variation' => 'Choose a variation of this product.',
+        'variation_unavailable' => 'This variation is no longer offered.',
+        'below_minimum' => 'Below the minimum order of :min units.',
+        'above_maximum' => 'Above the maximum of :max units in one order.',
+        'insufficient_stock' => 'Only :available available to order.',
+    ],
+
+    'refused' => [
+        'unavailable' => 'This product is not available to your account for wholesale.',
+        'choose_variation' => 'Choose a variation of this product.',
+        'variation_unavailable' => 'That variation is not available.',
+        'below_minimum' => 'Order at least :min units of this product.',
+        'above_maximum' => 'Order at most :max units of this product in one order.',
+        'insufficient_stock' => 'Only :available units are available to order right now.',
+        'cart_full' => 'A cart holds up to :max products. Remove one first.',
+    ],
+];

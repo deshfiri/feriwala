@@ -48,6 +48,7 @@ use App\Http\Controllers\Erp\PaymentReturnController;
 use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
+use App\Http\Controllers\Erp\WholesaleCartController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -215,6 +216,23 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          */
         Route::get('allocated-stock', [AllocatedStockController::class, 'index'])
             ->name('allocated-stock.index');
+
+        /*
+         * The ERP wholesale cart (§14, P4-4, P4-5). Self-scoped through the
+         * signed-in person: no cart identifier in any URL, and a line is found
+         * only inside the requester's own cart. Every figure is priced again on
+         * the server; nothing the browser sends is charged.
+         */
+        Route::get('wholesale/cart', [WholesaleCartController::class, 'show'])
+            ->name('wholesale.cart.show');
+        Route::post('wholesale/cart/items', [WholesaleCartController::class, 'store'])
+            ->name('wholesale.cart.items.store');
+        Route::patch('wholesale/cart/items/{item}', [WholesaleCartController::class, 'update'])
+            ->name('wholesale.cart.items.update');
+        Route::delete('wholesale/cart/items/{item}', [WholesaleCartController::class, 'destroy'])
+            ->name('wholesale.cart.items.destroy');
+        Route::post('wholesale/cart/prices', [WholesaleCartController::class, 'acceptPrices'])
+            ->name('wholesale.cart.prices.accept');
     });
 });
 

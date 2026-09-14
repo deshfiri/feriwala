@@ -19,6 +19,7 @@ return [
     'subscription' => 'Subscription',
     'wallet' => 'Wallet',
     'wholesale_catalogue' => 'Wholesale catalogue',
+    'wholesale_cart' => 'Wholesale cart',
     'dropshipping_catalogue' => 'Dropshipping catalogue',
     'staff' => 'Staff',
     'profile' => 'Profile',

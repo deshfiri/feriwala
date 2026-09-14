@@ -26,6 +26,8 @@ export interface AccountContext {
     allowsDropshipping: boolean;
     /** Central stock is set aside for this account right now (§19, P3-30). */
     holdsAllocatedStock: boolean;
+    /** Products in this person's wholesale cart (§14, P4-4). */
+    wholesaleCartLines: number;
 }
 
 export interface StaffMember {

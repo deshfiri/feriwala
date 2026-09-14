@@ -16,6 +16,7 @@ import {
     ScrollText,
     Settings,
     ShoppingBag,
+    ShoppingBasket,
     ShoppingCart,
     SlidersHorizontal,
     Store,
@@ -57,6 +58,7 @@ import { edit as securitySettings } from '@/routes/security';
 import { index as staffDirectory } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
 import { show as wallet } from '@/routes/wallet';
+import { show as wholesaleCart } from '@/routes/wholesale/cart';
 import type { NavGroup } from '@/types';
 
 /**
@@ -142,6 +144,20 @@ export function useNavigation(): {
                                         title: t('nav.wholesale_catalogue'),
                                         href: wholesaleCatalogue(),
                                         icon: ShoppingCart,
+                                    },
+                                    /*
+                                     * The person's own wholesale cart (§14),
+                                     * with how many products are in it, said in
+                                     * the title rather than by a badge alone.
+                                     */
+                                    {
+                                        title:
+                                            (account?.wholesaleCartLines ?? 0) >
+                                            0
+                                                ? `${t('nav.wholesale_cart')} (${account?.wholesaleCartLines})`
+                                                : t('nav.wholesale_cart'),
+                                        href: wholesaleCart(),
+                                        icon: ShoppingBasket,
                                     },
                                 ]
                               : []),

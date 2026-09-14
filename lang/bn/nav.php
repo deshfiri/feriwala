@@ -13,6 +13,7 @@ return [
     'subscription' => 'সাবস্ক্রিপশন',
     'wallet' => 'ওয়ালেট',
     'wholesale_catalogue' => 'পাইকারি ক্যাটালগ',
+    'wholesale_cart' => 'পাইকারি কার্ট',
     'dropshipping_catalogue' => 'ড্রপশিপিং ক্যাটালগ',
     'staff' => 'স্টাফ',
     'profile' => 'প্রোফাইল',

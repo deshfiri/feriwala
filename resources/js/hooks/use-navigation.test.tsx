@@ -106,6 +106,68 @@ describe('catalogue navigation', () => {
 });
 
 /**
+ * The wholesale cart (§14, P4-4): a door for an account that may buy wholesale,
+ * with the count in words, and none for anybody else.
+ */
+describe('wholesale cart navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('offers the cart, with its count, to an account that may buy wholesale', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: false,
+                managesStaff: false,
+                wholesaleCartLines: 3,
+            },
+        });
+
+        expect(titles).toContain('nav.wholesale_cart (3)');
+    });
+
+    it('offers no cart where wholesale is not included, nor to platform staff', () => {
+        renderFor({
+            permissions: { 'catalog.view': true },
+            account: {
+                status: 'active',
+                allowsWholesale: false,
+                allowsDropshipping: true,
+                managesStaff: false,
+                wholesaleCartLines: 0,
+            },
+        });
+        expect(
+            titles.some((title) => title.startsWith('nav.wholesale_cart')),
+        ).toBe(false);
+
+        act(() => root.unmount());
+        root = createRoot(document.createElement('div'));
+
+        renderFor({ permissions: { 'catalog.view': true }, account: null });
+        expect(
+            titles.some((title) => title.startsWith('nav.wholesale_cart')),
+        ).toBe(false);
+    });
+});
+
+/**
  * Allocated stock (§19, P3-30): staff who may view inventory find every
  * allocation; an account finds its own only while it holds some.
  */
