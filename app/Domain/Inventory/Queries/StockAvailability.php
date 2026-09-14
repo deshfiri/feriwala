@@ -89,6 +89,15 @@ class StockAvailability
     }
 
     /**
+     * Whether any of the product's stock is held anywhere — whether it has been
+     * brought into inventory at all.
+     */
+    public function productIsTracked(Product $product): bool
+    {
+        return DB::table('stock_items')->where('product_id', $product->id)->exists();
+    }
+
+    /**
      * Whether any stockable unit of the product has central stock available.
      */
     public function productHasStock(Product $product): bool

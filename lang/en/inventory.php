@@ -35,6 +35,11 @@ return [
         'cod' => 'Cash on delivery',
     ],
 
+    'status_sync' => [
+        'ran_out' => 'Taken off sale automatically: no central stock is available.',
+        'restocked' => 'Back on sale automatically: central stock is available again.',
+    ],
+
     'movement_types' => [
         'adjustment' => 'Adjustment',
         'reservation' => 'Reserved',

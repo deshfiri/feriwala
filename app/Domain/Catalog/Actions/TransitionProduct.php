@@ -9,6 +9,7 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Inventory\Actions\RespondToStockChange;
 use App\Models\User;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -89,6 +90,19 @@ class TransitionProduct
                 'actor_id' => $actor->id,
                 'reason' => $reason,
             ]);
+
+            /*
+             * A product put on sale with none of its tracked stock available
+             * comes straight back off it once this commits (§19: out-of-stock
+             * protection). A product whose stock is not tracked is left alone.
+             */
+            if ($to === ProductStatus::Active) {
+                $productId = $locked->id;
+
+                $this->database->connection()->afterCommit(
+                    fn () => app(RespondToStockChange::class)->handle($productId),
+                );
+            }
 
             $this->audit->handle(new AuditEntry(
                 action: 'catalog.product_status_changed',

@@ -32,6 +32,18 @@ class Warehouse extends Model
     protected $guarded = [];
 
     /**
+     * The database's own defaults, so a warehouse created in code knows it is
+     * active without being read back first.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_active' => true,
+        'is_default' => false,
+        'priority' => 0,
+    ];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

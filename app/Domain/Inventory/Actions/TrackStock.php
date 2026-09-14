@@ -82,6 +82,9 @@ class TrackStock
                     module: 'inventory',
                 ));
 
+                // A product first brought into inventory at zero has none to sell (P3-28).
+                DB::afterCommit(fn () => app(RespondToStockChange::class)->handle($product->id));
+
                 return $item;
             });
         } catch (UniqueConstraintViolationException) {

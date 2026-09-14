@@ -2,6 +2,7 @@
 
 namespace App\Domain\Inventory;
 
+use App\Domain\Inventory\Actions\RespondToStockChange;
 use App\Domain\Inventory\Data\MovementContext;
 use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Enums\StockMovementType;
@@ -113,6 +114,16 @@ class StockLedger
                 ]);
 
                 $item->setRawAttributes($locked->getAttributes(), sync: true);
+
+                // What is available changed: once it has committed, see whether
+                // the product should come off sale or go back on (P3-28).
+                if ($from === StockBucket::Available || $to === StockBucket::Available) {
+                    $productId = $locked->product_id;
+
+                    $this->database->connection()->afterCommit(
+                        fn () => app(RespondToStockChange::class)->handle($productId),
+                    );
+                }
 
                 return $movement;
             });

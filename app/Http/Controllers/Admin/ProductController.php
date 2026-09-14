@@ -23,6 +23,7 @@ use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
+use App\Domain\Inventory\Actions\SyncProductStockStatus;
 use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
@@ -263,7 +264,12 @@ class ProductController extends Controller
                     'to' => $change->to_status->value,
                     'to_tone' => $change->to_status->tone(),
                     'actor' => $change->actor?->name,
-                    'reason' => $change->reason,
+
+                    // A move the system made carries a translation key rather
+                    // than somebody's words, so it reads in this reader's language.
+                    'reason' => $change->actor_id === null && in_array($change->reason, [SyncProductStockStatus::RAN_OUT, SyncProductStockStatus::RESTOCKED], true)
+                        ? __($change->reason)
+                        : $change->reason,
                     'at' => $change->created_at->toIso8601String(),
                 ])
                 ->all(),

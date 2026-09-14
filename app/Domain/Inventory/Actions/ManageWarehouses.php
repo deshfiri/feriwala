@@ -88,6 +88,14 @@ class ManageWarehouses
 
             $this->record($actor, 'inventory.warehouse_updated', $locked, $before, $this->snapshot($locked));
 
+            // A warehouse switched off or on changes what every product it holds
+            // has available, without a single stock movement (P3-28).
+            if ($before['is_active'] !== $locked->is_active) {
+                foreach ($locked->stockItems()->distinct()->pluck('product_id') as $productId) {
+                    DB::afterCommit(fn () => app(RespondToStockChange::class)->handle((int) $productId));
+                }
+            }
+
             $warehouse->setRawAttributes($locked->getAttributes(), sync: true);
 
             return $locked;
