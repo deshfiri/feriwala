@@ -111,7 +111,7 @@ return [
             'city' => 'City',
             'district' => 'District (optional)',
             'postcode' => 'Postcode (optional)',
-            'mobile_invalid' => 'Enter the mobile number in digits, such as 01712345678.',
+            'mobile_invalid' => 'Enter the mobile number in digits only.',
             'billing_first' => 'Add a billing address first.',
             'saved_billing' => 'Billing address saved.',
             'saved_shipping' => 'Shipping address saved.',
