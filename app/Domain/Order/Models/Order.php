@@ -6,17 +6,21 @@ use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
+use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderFulfillmentStatus;
+use App\Domain\Order\Enums\OrderNotificationStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Wholesale\Models\Cart;
 use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
+use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Collection;
@@ -78,11 +82,12 @@ use LogicException;
  * @property-read Cart|null $cart
  * @property-read Payment|null $payment
  * @property-read Collection<int, OrderItem> $items
+ * @property-read Collection<int, OrderStatusChange> $statusHistory
  */
 class Order extends Model
 {
     /** @use HasFactory<OrderFactory> */
-    use HasFactory, HasPublicId, HasReference, HasStateMachine;
+    use HasFactory, HasPublicId, HasReference, HasStateMachine, RecordsStatusHistory;
 
     protected $guarded = [];
 
@@ -173,5 +178,54 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class)->orderBy('line_number');
+    }
+
+    /**
+     * Every recorded status change, oldest first (§18.3).
+     *
+     * @return HasMany<OrderStatusChange, $this>
+     */
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(OrderStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * Move the order along the transition map and record why, in one transaction.
+     *
+     * The caller has already decided the move is allowed for this order and
+     * locked it; this refuses a move the map does not have and writes the move
+     * and its history together.
+     */
+    public function moveTo(
+        OrderStatus $to,
+        StatusChange $change,
+        OrderStatusChangeSource $source,
+        OrderNotificationStatus $notification = OrderNotificationStatus::NotRequired,
+    ): OrderStatusChange {
+        /** @var OrderStatusChange $entry */
+        $entry = $this->transitionWithHistory($to, $change, [
+            'source' => $source,
+            'notification_status' => $notification,
+        ]);
+
+        return $entry;
+    }
+
+    /**
+     * Record the status an order was created in.
+     */
+    public function recordPlacement(
+        StatusChange $change,
+        OrderStatusChangeSource $source,
+        OrderNotificationStatus $notification = OrderNotificationStatus::NotRequired,
+    ): OrderStatusChange {
+        /** @var OrderStatusChange $entry */
+        $entry = $this->recordStatusChange(null, $this->status, $change, [
+            'source' => $source,
+            'notification_status' => $notification,
+        ]);
+
+        return $entry;
     }
 }

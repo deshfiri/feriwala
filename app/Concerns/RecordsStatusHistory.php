@@ -38,7 +38,7 @@ trait RecordsStatusHistory
     /**
      * The rows recording this model's status changes.
      *
-     * @return HasMany<Model, $this>
+     * @return HasMany<covariant Model, $this>
      */
     abstract public function statusHistory(): HasMany;
 
