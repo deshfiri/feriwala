@@ -52,6 +52,7 @@ use App\Support\Concurrency\DistributedLock;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -88,9 +89,14 @@ beforeEach(function () {
     // answers now: a second Http::fake() would be merged and silently ignored. An
     // object, so a helper can change the answer through test().
     $this->validation = new ArrayObject(['status' => 'VALID', 'currency_amount' => '20000.00', 'currency_type' => 'BDT']);
+    $this->gateway = new ArrayObject(['reachable' => true]);
 
     Http::fake(function (ClientRequest $request) {
         if (str_contains($request->url(), 'gwprocess')) {
+            if (! $this->gateway['reachable']) {
+                throw new ConnectionException('Connection refused');
+            }
+
             return Http::response(['status' => 'SUCCESS', 'GatewayPageURL' => 'https://pay.test/go', 'sessionkey' => 'session-1']);
         }
 
@@ -597,6 +603,31 @@ describe('paying (P4-9, P4-11)', function () {
         expect($order->refresh()->status)->toBe(OrderStatus::Cancelled)
             ->and($order->payment?->status)->toBe(PaymentStatus::Failed)
             ->and(Invoice::query()->count())->toBe(0);
+    });
+
+    it('keeps the order and offers payment again when the gateway cannot be reached', function () {
+        $this->gateway['reachable'] = false;
+
+        wholesaleOrderPlace()->assertSessionHasNoErrors();
+
+        $order = Order::query()->sole();
+
+        expect($order->status)->toBe(OrderStatus::PaymentPending)
+            ->and($order->payment?->status)->toBe(PaymentStatus::Draft)
+            ->and($this->stock->refresh()->reserved)->toBe(10)
+            ->and(PaymentLog::query()->where('event', 'initiate')->where('outcome', 'unavailable')->count())->toBe(1);
+
+        $this->get(route('wholesale.orders.show', $order->public_id))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('can.pay', true)->where('order.payment.window_open', true));
+
+        // Once it answers again, the same payment goes to the gateway.
+        $this->gateway['reachable'] = true;
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id))->assertRedirect('https://pay.test/go');
+
+        expect(Payment::query()->count())->toBe(1)
+            ->and($order->refresh()->payment?->status)->toBe(PaymentStatus::Initiated);
     });
 
     it('continues to payment for the same payment while the window is open', function () {

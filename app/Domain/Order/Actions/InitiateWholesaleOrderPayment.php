@@ -14,6 +14,7 @@ use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Concurrency\DistributedLock;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use LogicException;
 
@@ -94,7 +95,13 @@ class InitiateWholesaleOrderPayment
                     ipnUrl: route('webhooks.payment', $gateway),
                 ),
             );
-        } catch (GatewayUnavailable $exception) {
+        } catch (GatewayUnavailable|ConnectionException $exception) {
+            /*
+             * Refused or unreachable, it is the same answer to the buyer: the
+             * order is placed and can be paid again while its window is open.
+             * An unreachable gateway is not allowed to become a server error
+             * on a page that has already taken the order.
+             */
             $this->logs->handle(
                 gateway: $gateway,
                 direction: PaymentLog::OUTBOUND,
@@ -106,7 +113,9 @@ class InitiateWholesaleOrderPayment
                 request: $request,
             );
 
-            throw $exception;
+            throw $exception instanceof GatewayUnavailable
+                ? $exception
+                : GatewayUnavailable::forGateway($gateway, 'the gateway could not be reached');
         }
 
         $this->logs->handle(
