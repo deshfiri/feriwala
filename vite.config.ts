@@ -39,6 +39,11 @@ export default defineConfig({
             ],
         },
     },
+    test: {
+        // React Testing Library's matchers and per-test cleanup (P0-56). Each
+        // test file still names its own environment.
+        setupFiles: ['./resources/js/test/setup.ts'],
+    },
     lint: {
         ignorePatterns: [
             'vendor/**',
