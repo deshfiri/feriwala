@@ -160,7 +160,7 @@ return [
         'checking' => 'We are confirming your payment. This page shows the result once it is confirmed.',
         'reconciling' => 'Your payment arrived after this order was closed. Our team will contact you.',
         'payment_failed' => 'The payment did not go through. The order was cancelled and its stock released.',
-        'payment_cancelled' => 'The payment was cancelled. The order was cancelled and its stock released.',
+        'payment_not_completed' => 'The payment was not completed. Your order is still waiting for payment: continue to payment, or cancel the order.',
         'cancelled' => 'Order cancelled. The stock held for it was released.',
         'gateway_unavailable' => 'We could not reach the payment gateway. Your order is saved; try continuing to payment again.',
     ],

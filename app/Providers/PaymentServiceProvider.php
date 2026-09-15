@@ -39,5 +39,15 @@ class PaymentServiceProvider extends ServiceProvider
             return Limit::perMinute((int) config('payment.webhook_rate_limit', 120))
                 ->by((is_string($gateway) ? $gateway : 'unknown').'|'.$request->ip());
         });
+
+        /*
+         * Browsers posted back by a gateway. Keyed by address only: the request
+         * has no session or signed-in person to key it by, and a real payer comes
+         * back once or twice, not dozens of times a minute.
+         */
+        RateLimiter::for('payment-returns', function (Request $request) {
+            return Limit::perMinute((int) config('payment.return_rate_limit', 30))
+                ->by('return|'.$request->ip());
+        });
     }
 }

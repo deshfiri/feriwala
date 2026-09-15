@@ -274,24 +274,44 @@ describe('coming back from the gateway', function () {
 });
 
 describe('cancelling and failing', function () {
-    it('closes the attempt when somebody backs out at the gateway', function () {
+    it('leaves the attempt open when somebody backs out at the gateway', function () {
+        // A cancel address is a claim anybody can send a signed-in person to.
+        // The gateway, the deadline or the reconciliation sweep closes it.
         $payment = ($this->start)();
 
         $this->actingAs($this->applicant)
             ->get(route('checkout.cancelled', ['tran_id' => $payment->reference]))
             ->assertRedirect(route('checkout.show'));
 
-        expect($payment->refresh()->status)->toBe(PaymentStatus::Cancelled)
-            ->and($payment->cancelled_at)->not->toBeNull();
+        expect($payment->refresh()->status)->toBe(PaymentStatus::Initiated)
+            ->and($payment->cancelled_at)->toBeNull();
     });
 
-    it('records a failure the gateway reported', function () {
+    it('does not close the attempt on a failure address the gateway has not confirmed', function () {
         $payment = ($this->start)();
 
         $this->actingAs($this->applicant)
             ->get(route('checkout.failed', ['tran_id' => $payment->reference]));
 
-        expect($payment->refresh()->status)->toBe(PaymentStatus::Failed);
+        expect($payment->refresh()->status)->toBe(PaymentStatus::Initiated);
+    });
+
+    it('activates on a verified payment made after backing out at the gateway once', function () {
+        /*
+         * The payment is keyed to the subscription, so paying again after a
+         * cancelled return reuses the same payment. If the return had closed it,
+         * the money from the second attempt would land on a closed payment.
+         */
+        $payment = ($this->start)();
+
+        $this->actingAs($this->applicant)->get(route('checkout.cancelled', ['tran_id' => $payment->reference]));
+
+        $this->actingAs($this->applicant)->post(route('checkout.pay'), ['gateway' => 'sslcommerz']);
+
+        $this->post(route('webhooks.payment', 'sslcommerz'), gatewayFlowSignedIpn($payment->reference));
+
+        expect(Payment::query()->count())->toBe(1)
+            ->and($payment->refresh()->status)->toBe(PaymentStatus::Paid);
     });
 
     it('never lets a failure redirect undo money that arrived', function () {

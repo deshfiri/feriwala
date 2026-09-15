@@ -9,7 +9,7 @@ return [
         'received' => 'Payment received. We are reviewing your application.',
         'checking' => 'We are confirming your payment. This page will update shortly.',
         'failed' => 'Your payment was not completed. You can try again.',
-        'cancelled' => 'You cancelled the payment. Nothing has been charged.',
+        'cancelled' => 'The payment was not completed at the gateway. You can try again.',
         'reconciling' => 'A payment reached us after this checkout expired. Our team is checking it — please do not pay again.',
     ],
 

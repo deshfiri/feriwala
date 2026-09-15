@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Erp;
 
 use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\SettlePayment;
+use App\Domain\Billing\Actions\VerifyGatewayReturn;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
@@ -30,9 +31,13 @@ use Throwable;
  * This exists for the person, not for the money. The IPN is what settles a
  * payment reliably; a browser closes mid-redirect and often does. So success
  * attempts a verification for a quick answer and treats a failure to *get* one
- * as "we are checking" rather than "it failed". Cancel and fail never verify
- * anything at all — there is nothing to confirm, and a redirect claiming failure
- * must not be able to close a payment that actually succeeded.
+ * as "we are checking" rather than "it failed". Cancel and fail change nothing
+ * on the browser's word — a redirect claiming failure must not be able to close
+ * a payment, succeeded or not.
+ *
+ * These are the **GET** pages, inside the session. A gateway that posts the
+ * person back reaches {@see GatewayReturnController} first, which
+ * sends them here.
  */
 class PaymentReturnController extends Controller
 {
@@ -104,9 +109,9 @@ class PaymentReturnController extends Controller
     /**
      * The person backed out at the gateway.
      */
-    public function cancelled(Request $request): RedirectResponse
+    public function cancelled(Request $request, VerifyGatewayReturn $verify): RedirectResponse
     {
-        $this->recordAbandonment($request, PaymentStatus::Cancelled, 'cancel');
+        $this->acknowledge($request, 'cancel', $verify);
 
         return to_route('checkout.show')->with('info', __('payment.return.cancelled'));
     }
@@ -114,38 +119,36 @@ class PaymentReturnController extends Controller
     /**
      * The gateway says it did not go through.
      */
-    public function failed(Request $request): RedirectResponse
+    public function failed(Request $request, VerifyGatewayReturn $verify): RedirectResponse
     {
-        $this->recordAbandonment($request, PaymentStatus::Failed, 'fail');
+        $this->acknowledge($request, 'fail', $verify);
 
         return to_route('checkout.show')->with('error', __('payment.return.failed'));
     }
 
     /**
-     * Close a payment the gateway says never happened.
+     * Note a cancelled or failed return — and change nothing on its word.
      *
-     * The browser is trusted for this and only this: it can close an attempt
-     * nobody paid for, and it can never open one. A settled payment is left
-     * alone entirely — a forged failure redirect must not be able to undo money
-     * that arrived, and if the gateway is wrong the IPN still corrects it into
-     * reconciliation rather than into activation.
+     * A cancel or failure address is only a claim, and one anybody can send a
+     * signed-in person to. So it closes nothing: the attempt stays open for the
+     * gateway to confirm, the payment's own deadline, or the reconciliation
+     * sweep to settle. Closing it here also broke the next attempt, which reuses
+     * the same payment and would have taken real money onto a closed one.
+     *
+     * When the return carries something that can be checked, the gateway is
+     * asked — and its answer, not this request, decides.
      */
-    protected function recordAbandonment(Request $request, PaymentStatus $to, string $event): void
+    protected function acknowledge(Request $request, string $event, VerifyGatewayReturn $verify): void
     {
         $payment = $this->paymentFor($request);
 
         $this->record($request, $event, $payment);
 
-        if ($payment === null || ! $payment->canTransitionTo($to)) {
-            return;
+        $result = $payment === null ? null : $this->callbackFor($payment, $request);
+
+        if ($payment !== null && $result !== null) {
+            $verify->handle($payment, $request, $result, $event);
         }
-
-        $payment->transitionTo($to);
-
-        $payment->forceFill($to === PaymentStatus::Cancelled
-            ? ['cancelled_at' => now()]
-            : ['failed_at' => now(), 'failure_reason' => __('payment.return.failed')])
-            ->save();
     }
 
     /**

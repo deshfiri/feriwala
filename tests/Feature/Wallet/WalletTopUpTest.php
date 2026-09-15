@@ -188,6 +188,44 @@ describe('starting one', function () {
     });
 });
 
+describe('when the gateway posts the payer back', function () {
+    it('credits the wallet once the gateway confirms, with no session or form token, and writes no cookie', function () {
+        topUpRule();
+
+        $answers = new ArrayObject(['status' => 'VALID', 'currency_amount' => '5000.00', 'currency_type' => 'BDT']);
+
+        Http::fake(fn ($request) => str_contains($request->url(), 'gwprocess')
+            ? Http::response(['status' => 'SUCCESS', 'GatewayPageURL' => 'https://sandbox.example/redirect'])
+            : Http::response($answers->getArrayCopy()));
+
+        $this->actingAs($this->account->owner)
+            ->post(route('wallet.top-up.store'), ['amount_minor' => 500000, 'gateway' => 'sslcommerz'])
+            ->assertRedirect('https://sandbox.example/redirect');
+
+        $payment = Payment::query()->firstOrFail();
+        $answers['tran_id'] = $payment->reference;
+
+        $fields = ['tran_id' => $payment->reference, 'val_id' => 'VAL-TOPUP', 'status' => 'VALID'];
+        $signed = [...$fields, 'store_passwd' => md5('pass')];
+        ksort($signed);
+        $pairs = array_map(fn (string $key, string $value) => $key.'='.$value, array_keys($signed), $signed);
+
+        $this->app['auth']->forgetGuards();
+
+        $response = $this->post(route('checkout.return'), $fields + [
+            'verify_key' => 'tran_id,val_id,status',
+            'verify_sign' => md5(implode('&', $pairs)),
+        ]);
+
+        $response->assertStatus(303)->assertRedirect(route('checkout.return'));
+
+        expect($response->headers->getCookies())->toBe([])
+            ->and($payment->refresh()->status->value)->toBe('paid')
+            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(500000)
+            ->and(LedgerEntry::query()->count())->toBe(1);
+    });
+});
+
 describe('when it settles', function () {
     it('credits the wallet exactly once', function () {
         topUpRule();

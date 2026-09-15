@@ -5,14 +5,14 @@ namespace App\Http\Controllers\Erp;
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\SettlePayment;
+use App\Domain\Billing\Actions\VerifyGatewayReturn;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
-use App\Domain\Order\Actions\CancelUnpaidWholesaleOrder;
 use App\Domain\Order\Enums\OrderStatus;
-use App\Domain\Order\Enums\WholesaleCancellation;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\WholesaleOrderTracking;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Webhook\GatewayReturnController;
 use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
@@ -34,12 +34,14 @@ use Throwable;
  *   - **Success** asks the gateway, through the one settlement path, and then
  *     reads the order as it now stands: paid, held for review, under
  *     reconciliation, or still being confirmed by the IPN.
- *   - **Failed** and **cancelled** close only a payment nobody paid for — the
- *     order is cancelled and its stock given back. A settled payment is left
- *     alone, and a gateway that was wrong is corrected by the IPN into
- *     reconciliation, never into a paid order.
+ *   - **Failed** and **cancelled** change nothing. The order keeps waiting — for
+ *     the gateway to confirm what happened, for its payment window to close, or
+ *     for the buyer to cancel it with the order page's own button — and the
+ *     gateway is asked only when the return carries something it can check.
  *
- * Every screen lands on the order, so the person always sees where it stands.
+ * These are the **GET** pages, inside the session; a gateway that posts the
+ * person back reaches {@see GatewayReturnController} first. Every screen lands on
+ * the order, so the person always sees where it stands.
  */
 class WholesaleOrderPaymentReturnController extends Controller
 {
@@ -62,7 +64,7 @@ class WholesaleOrderPaymentReturnController extends Controller
             $callback = $this->callbackFor($payment, $request);
 
             if ($callback === null || $callback->gatewayReference === null) {
-                return $this->toOrder($record, 'info', 'orders.flash.checking');
+                return $this->toOrder($record->refresh(), 'info', $this->standing($record));
             }
 
             try {
@@ -80,51 +82,56 @@ class WholesaleOrderPaymentReturnController extends Controller
         }
 
         $record->refresh();
-        $status = $payment?->refresh()->status;
 
-        return match (true) {
-            $record->status === OrderStatus::Paid => $this->toOrder($record, 'success', 'orders.flash.paid'),
-            $record->status === OrderStatus::OnHold => $this->toOrder($record, 'warning', 'orders.flash.held'),
-            $status?->needsReconciliation() ?? false => $this->toOrder($record, 'info', 'orders.flash.reconciling'),
-            $status?->isSettled() ?? false => $this->toOrder($record, 'info', 'orders.flash.checking'),
-            $record->status === OrderStatus::PaymentPending => $this->toOrder($record, 'info', 'orders.flash.checking'),
-            default => $this->toOrder($record, 'error', 'orders.flash.payment_failed'),
-        };
+        return $this->toOrder($record, $record->status === OrderStatus::Paid ? 'success' : 'info', $this->standing($record));
     }
 
-    public function cancelled(Request $request, string $order, CancelUnpaidWholesaleOrder $cancel): RedirectResponse
+    public function cancelled(Request $request, string $order, VerifyGatewayReturn $verify): RedirectResponse
     {
-        return $this->abandon($request, $order, $cancel, WholesaleCancellation::PaymentCancelled, 'cancel', 'orders.flash.payment_cancelled');
+        return $this->acknowledge($request, $order, $verify, 'cancel');
     }
 
-    public function failed(Request $request, string $order, CancelUnpaidWholesaleOrder $cancel): RedirectResponse
+    public function failed(Request $request, string $order, VerifyGatewayReturn $verify): RedirectResponse
     {
-        return $this->abandon($request, $order, $cancel, WholesaleCancellation::PaymentFailed, 'fail', 'orders.flash.payment_failed');
+        return $this->acknowledge($request, $order, $verify, 'fail');
     }
 
-    protected function abandon(
-        Request $request,
-        string $order,
-        CancelUnpaidWholesaleOrder $cancel,
-        WholesaleCancellation $why,
-        string $event,
-        string $message,
-    ): RedirectResponse {
+    protected function acknowledge(Request $request, string $order, VerifyGatewayReturn $verify, string $event): RedirectResponse
+    {
         $record = $this->orderFor($request, $order);
+        $payment = $record->payment;
 
-        $this->record($request, $event, $record, $record->payment);
+        $this->record($request, $event, $record, $payment);
 
-        try {
-            $cancel->handle($record, $why);
-        } catch (LockTimeout) {
-            // Settlement has the payment. Whatever it decides is what the order shows.
+        $result = $payment === null ? null : $this->callbackFor($payment, $request);
+
+        if ($payment !== null && $result !== null) {
+            $verify->handle($payment, $request, $result, $event);
         }
 
         $record->refresh();
 
-        return $record->status === OrderStatus::Cancelled
-            ? $this->toOrder($record, 'info', $message)
-            : $this->toOrder($record, 'info', 'orders.flash.checking');
+        return $this->toOrder(
+            $record,
+            'info',
+            $record->status === OrderStatus::PaymentPending ? 'orders.flash.payment_not_completed' : $this->standing($record),
+        );
+    }
+
+    /**
+     * What to tell the person about the order as it stands now.
+     */
+    protected function standing(Order $order): string
+    {
+        $payment = $order->payment()->first();
+
+        return match (true) {
+            $order->status === OrderStatus::Paid => 'orders.flash.paid',
+            $order->status === OrderStatus::OnHold => 'orders.flash.held',
+            $payment?->status->needsReconciliation() ?? false => 'orders.flash.reconciling',
+            $order->status === OrderStatus::PaymentPending => 'orders.flash.checking',
+            default => 'orders.flash.payment_failed',
+        };
     }
 
     protected function toOrder(Order $order, string $type, string $message): RedirectResponse

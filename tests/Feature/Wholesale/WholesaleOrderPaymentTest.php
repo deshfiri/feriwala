@@ -645,34 +645,92 @@ describe('paying (P4-9, P4-11)', function () {
 });
 
 describe('failed, cancelled and expired payments (P4-10)', function () {
-    it('cancels the order and gives its stock back when the gateway sends the person back failed', function () {
+    it('keeps the order waiting and its stock held when the person comes back from a failed or cancelled payment', function () {
+        // A failure or cancel address is only a claim, and one anybody can send a
+        // signed-in buyer to. It cancels nothing; the buyer, the gateway's
+        // confirmed answer or the payment window does.
         $order = wholesaleOrderPlaced();
 
         $this->get(route('wholesale.orders.payment.failed', $order->public_id))
             ->assertRedirect(route('wholesale.orders.show', $order->public_id));
+        $this->get(route('wholesale.orders.payment.cancelled', $order->public_id))
+            ->assertRedirect(route('wholesale.orders.show', $order->public_id));
+
+        expect($order->refresh()->status)->toBe(OrderStatus::PaymentPending)
+            ->and($order->payment?->status)->toBe(PaymentStatus::Initiated)
+            ->and($this->stock->refresh()->reserved)->toBe(10)
+            ->and(Http::recorded(fn (ClientRequest $request) => str_contains($request->url(), 'validationserverAPI')))->toHaveCount(0);
+
+        $this->get(route('wholesale.orders.show', $order->public_id))
+            ->assertInertia(fn (Assert $page) => $page->where('can.pay', true)->where('can.cancel', true));
+    });
+
+    it('cancels the order and gives its stock back when the buyer cancels it after backing out at the gateway', function () {
+        $order = wholesaleOrderPlaced();
+
+        $this->get(route('wholesale.orders.payment.cancelled', $order->public_id));
+        $this->post(route('wholesale.orders.cancellation.store', $order->public_id))->assertSessionHasNoErrors();
 
         $order->refresh();
 
         expect($order->status)->toBe(OrderStatus::Cancelled)
-            ->and($order->cancelled_at)->not->toBeNull()
-            ->and($order->payment?->status)->toBe(PaymentStatus::Failed)
+            ->and($order->payment?->status)->toBe(PaymentStatus::Cancelled)
             ->and($order->items()->sole()->stockReservation?->status)->toBe(StockReservationStatus::Released)
             ->and($this->stock->refresh()->available)->toBe(50)
-            ->and($this->stock->reserved)->toBe(0)
             // The lines stay for another try; the confirmation does not.
             ->and(wholesaleOrderCartOf()->items()->count())->toBe(1)
             ->and(wholesaleOrderCartOf()->confirmed_at)->toBeNull();
     });
 
-    it('cancels the order and gives its stock back when the person cancels at the gateway', function () {
+    it('cancels the order when the gateway itself confirms a signed failure', function () {
         $order = wholesaleOrderPlaced();
+        $this->validation['status'] = 'FAILED';
 
-        $this->get(route('wholesale.orders.payment.cancelled', $order->public_id));
+        $this->get(route('wholesale.orders.payment.failed', ['order' => $order->public_id, ...wholesaleOrderIpn((string) $order->payment?->reference)]));
 
         expect($order->refresh()->status)->toBe(OrderStatus::Cancelled)
-            ->and($order->payment?->status)->toBe(PaymentStatus::Cancelled)
-            ->and($order->statusHistory->last()?->public_note)->toBe('orders.notes.cancelled_payment_cancelled')
+            ->and($order->payment?->status)->toBe(PaymentStatus::Failed)
             ->and($this->stock->refresh()->available)->toBe(50);
+    });
+
+    it('settles when the gateway posts the buyer back, with no session or form token, and writes no cookie', function () {
+        $order = wholesaleOrderPlaced();
+        $this->app['auth']->forgetGuards();
+
+        $response = $this->post(route('wholesale.orders.payment.return', $order->public_id), wholesaleOrderIpn((string) $order->payment?->reference));
+
+        $response->assertStatus(303)->assertRedirect(route('wholesale.orders.payment.return', $order->public_id));
+
+        expect($response->headers->getCookies())->toBe([])
+            ->and($order->refresh()->status)->toBe(OrderStatus::Paid)
+            ->and(Invoice::query()->count())->toBe(1);
+    });
+
+    it('ignores a posted return with a broken signature or naming another payment', function () {
+        $order = wholesaleOrderPlaced();
+        $this->app['auth']->forgetGuards();
+
+        $forged = wholesaleOrderIpn((string) $order->payment?->reference);
+        $forged['verify_sign'] = str_repeat('0', 32);
+
+        $this->post(route('wholesale.orders.payment.return', $order->public_id), $forged)->assertStatus(303);
+
+        // Somebody else's genuinely signed transaction, posted at this order's address.
+        $theirs = Payment::create([
+            'business_account_id' => $this->rahim->id,
+            'purpose' => PaymentPurpose::WalletTopUp,
+            'status' => PaymentStatus::Initiated,
+            'amount_minor' => 2000000,
+            'currency_code' => 'BDT',
+            'gateway' => 'sslcommerz',
+        ]);
+
+        $this->post(route('wholesale.orders.payment.return', $order->public_id), wholesaleOrderIpn($theirs->reference))->assertStatus(303);
+
+        expect($order->refresh()->status)->toBe(OrderStatus::PaymentPending)
+            ->and($theirs->refresh()->status)->toBe(PaymentStatus::Initiated)
+            ->and(Http::recorded(fn (ClientRequest $request) => str_contains($request->url(), 'validationserverAPI')))->toHaveCount(0)
+            ->and(PaymentLog::query()->where('event', 'return')->where('outcome', 'refused_signature')->count())->toBe(1);
     });
 
     it('gives a coupon\'s held use back with the cancelled order', function () {
@@ -691,7 +749,7 @@ describe('failed, cancelled and expired payments (P4-10)', function () {
         $this->validation['currency_amount'] = '19500.00';
 
         $order = wholesaleOrderPlaced();
-        $this->get(route('wholesale.orders.payment.cancelled', $order->public_id));
+        $this->post(route('wholesale.orders.cancellation.store', $order->public_id))->assertSessionHasNoErrors();
 
         expect(CouponRedemption::query()->where('payment_id', $order->payment_id)->sole()->status)->toBe(RedemptionStatus::Released);
     });

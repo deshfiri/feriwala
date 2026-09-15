@@ -54,6 +54,7 @@ use App\Http\Controllers\Erp\WholesaleCheckoutController;
 use App\Http\Controllers\Erp\WholesaleOrderController;
 use App\Http\Controllers\Erp\WholesaleOrderPaymentReturnController;
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\Webhook\GatewayReturnController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
@@ -144,13 +145,15 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          * away and leave us reading a status field out of the browser.
          *
          * None of them settles anything on its own: the IPN is the reliable
-         * half, and these exist for the person watching the screen.
+         * half, and these exist for the person watching the screen. GET only,
+         * inside the session: a gateway that posts the person back reaches the
+         * stateless receiver at the same address first (see the end of this file).
          */
-        Route::match(['get', 'post'], 'checkout/return', [PaymentReturnController::class, 'success'])
+        Route::get('checkout/return', [PaymentReturnController::class, 'success'])
             ->name('checkout.return');
-        Route::match(['get', 'post'], 'checkout/cancelled', [PaymentReturnController::class, 'cancelled'])
+        Route::get('checkout/cancelled', [PaymentReturnController::class, 'cancelled'])
             ->name('checkout.cancelled');
-        Route::match(['get', 'post'], 'checkout/failed', [PaymentReturnController::class, 'failed'])
+        Route::get('checkout/failed', [PaymentReturnController::class, 'failed'])
             ->name('checkout.failed');
 
         /*
@@ -266,12 +269,13 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wholesale.orders.cancellation.store');
 
         // Where the gateway sends the person back to, naming the order (§26.4).
-        // None of them settles anything on the browser's word.
-        Route::match(['get', 'post'], 'wholesale/orders/{order}/payment/return', [WholesaleOrderPaymentReturnController::class, 'success'])
+        // None of them settles anything on the browser's word. GET only; a
+        // posted return reaches the stateless receiver first.
+        Route::get('wholesale/orders/{order}/payment/return', [WholesaleOrderPaymentReturnController::class, 'success'])
             ->name('wholesale.orders.payment.return');
-        Route::match(['get', 'post'], 'wholesale/orders/{order}/payment/cancelled', [WholesaleOrderPaymentReturnController::class, 'cancelled'])
+        Route::get('wholesale/orders/{order}/payment/cancelled', [WholesaleOrderPaymentReturnController::class, 'cancelled'])
             ->name('wholesale.orders.payment.cancelled');
-        Route::match(['get', 'post'], 'wholesale/orders/{order}/payment/failed', [WholesaleOrderPaymentReturnController::class, 'failed'])
+        Route::get('wholesale/orders/{order}/payment/failed', [WholesaleOrderPaymentReturnController::class, 'failed'])
             ->name('wholesale.orders.payment.failed');
     });
 });
@@ -754,5 +758,33 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
 Route::post('webhooks/payment/{gateway}', PaymentWebhookController::class)
     ->middleware('throttle:payment-webhooks')
     ->name('webhooks.payment');
+
+/*
+ * A gateway posting the payer's browser back (§26.4, §36).
+ *
+ * SSLCommerz and aamarPay return the person with a form POST from their own
+ * site, which carries neither the `SameSite=Lax` session cookie nor a CSRF token.
+ * These exact POST routes — and nothing else — therefore run **without the web
+ * middleware group**: no session, no cookies written, no CSRF check. They settle
+ * nothing; a return is verified with the gateway only on a valid signature or an
+ * identifier we already hold, and the browser is sent on with a 303 to the
+ * signed-in GET page at the same address.
+ */
+Route::withoutMiddleware('web')
+    ->middleware('throttle:payment-returns')
+    ->group(function () {
+        Route::post('checkout/return', [GatewayReturnController::class, 'checkoutReturn'])
+            ->name('checkout.return.receive');
+        Route::post('checkout/cancelled', [GatewayReturnController::class, 'checkoutCancelled'])
+            ->name('checkout.cancelled.receive');
+        Route::post('checkout/failed', [GatewayReturnController::class, 'checkoutFailed'])
+            ->name('checkout.failed.receive');
+        Route::post('wholesale/orders/{order}/payment/return', [GatewayReturnController::class, 'orderReturn'])
+            ->name('wholesale.orders.payment.return.receive');
+        Route::post('wholesale/orders/{order}/payment/cancelled', [GatewayReturnController::class, 'orderCancelled'])
+            ->name('wholesale.orders.payment.cancelled.receive');
+        Route::post('wholesale/orders/{order}/payment/failed', [GatewayReturnController::class, 'orderFailed'])
+            ->name('wholesale.orders.payment.failed.receive');
+    });
 
 require __DIR__.'/settings.php';
