@@ -79,7 +79,7 @@ class ConfirmCheckout
                 'confirmed_at' => CarbonImmutable::now(),
                 'confirmed_fingerprint' => $fingerprint,
                 'confirmed_total_minor' => $quote->total->minorUnits,
-                'confirmed_currency_code' => $quote->total->currency->value,
+                'currency_code' => $quote->total->currency->value,
             ])->save();
 
             return $cart;
@@ -97,7 +97,6 @@ class ConfirmCheckout
                 'confirmed_at' => null,
                 'confirmed_fingerprint' => null,
                 'confirmed_total_minor' => null,
-                'confirmed_currency_code' => null,
             ])->save();
         });
     }

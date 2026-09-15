@@ -27,11 +27,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $user_id
  * @property int $business_account_id
  * @property string|null $coupon_code
+ * @property string $currency_code
  * @property string|null $payment_method
  * @property CarbonImmutable|null $confirmed_at
  * @property string|null $confirmed_fingerprint
  * @property int|null $confirmed_total_minor
- * @property string|null $confirmed_currency_code
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read User $user

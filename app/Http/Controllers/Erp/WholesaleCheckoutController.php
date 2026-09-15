@@ -234,8 +234,7 @@ class WholesaleCheckoutController extends Controller
     {
         if ($cart->confirmed_at === null
             || $cart->payment_method === null
-            || $cart->confirmed_total_minor === null
-            || $cart->confirmed_currency_code === null) {
+            || $cart->confirmed_total_minor === null) {
             return null;
         }
 
@@ -250,7 +249,7 @@ class WholesaleCheckoutController extends Controller
                 'label' => $this->gatewayLabel($cart->payment_method),
             ],
             'confirmed_at' => $cart->confirmed_at->toIso8601String(),
-            'total' => Money::of($cart->confirmed_total_minor, Currency::from($cart->confirmed_currency_code))->jsonSerialize(),
+            'total' => Money::of($cart->confirmed_total_minor, Currency::from($cart->currency_code))->jsonSerialize(),
         ];
     }
 

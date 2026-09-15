@@ -186,7 +186,7 @@ describe('confirming', function () {
             ->and($cart->confirmed_at)->not->toBeNull()
             ->and($cart->confirmed_fingerprint)->toBe($fingerprint)
             ->and($cart->confirmed_total_minor)->toBe(2000000)
-            ->and($cart->confirmed_currency_code)->toBe('BDT');
+            ->and($cart->currency_code)->toBe('BDT');
 
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
@@ -229,14 +229,14 @@ describe('confirming', function () {
             'total' => 1,
             'confirmed_total_minor' => 1,
             'confirmed_at' => '2020-01-01 00:00:00',
-            'confirmed_currency_code' => 'USD',
+            'currency_code' => 'USD',
             'discount' => 1999999,
         ])->assertSessionHasNoErrors();
 
         $cart = wholesaleConfirmCart();
 
         expect($cart->confirmed_total_minor)->toBe(2000000)
-            ->and($cart->confirmed_currency_code)->toBe('BDT')
+            ->and($cart->currency_code)->toBe('BDT')
             ->and($cart->confirmed_at?->isAfter(now()->subMinute()))->toBeTrue();
     });
 
