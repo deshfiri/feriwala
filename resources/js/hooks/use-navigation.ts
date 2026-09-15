@@ -1,6 +1,7 @@
 import { usePage } from '@inertiajs/react';
 import {
     Boxes,
+    ClipboardList,
     CreditCard,
     FolderTree,
     Globe,
@@ -59,6 +60,7 @@ import { index as staffDirectory } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
 import { show as wallet } from '@/routes/wallet';
 import { show as wholesaleCart } from '@/routes/wholesale/cart';
+import { index as wholesaleOrders } from '@/routes/wholesale/orders';
 import type { NavGroup } from '@/types';
 
 /**
@@ -158,6 +160,21 @@ export function useNavigation(): {
                                                 : t('nav.wholesale_cart'),
                                         href: wholesaleCart(),
                                         icon: ShoppingBasket,
+                                    },
+                                ]
+                              : []),
+                          /*
+                           * The account's own wholesale orders (§10.2, P4-12).
+                           * Still here after the package stops including
+                           * wholesale, while there are orders to follow.
+                           */
+                          ...(account?.allowsWholesale ||
+                          account?.hasWholesaleOrders
+                              ? [
+                                    {
+                                        title: t('nav.wholesale_orders'),
+                                        href: wholesaleOrders(),
+                                        icon: ClipboardList,
                                     },
                                 ]
                               : []),

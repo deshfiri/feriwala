@@ -20,6 +20,7 @@ return [
     'wallet' => 'Wallet',
     'wholesale_catalogue' => 'Wholesale catalogue',
     'wholesale_cart' => 'Wholesale cart',
+    'wholesale_orders' => 'Wholesale orders',
     'dropshipping_catalogue' => 'Dropshipping catalogue',
     'staff' => 'Staff',
     'profile' => 'Profile',

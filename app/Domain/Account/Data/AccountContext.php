@@ -6,6 +6,8 @@ use App\Domain\Account\Enums\AccountPermission;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\StaffAllowance;
 use App\Domain\Inventory\Models\StockAllocation;
+use App\Domain\Order\Enums\OrderSource;
+use App\Domain\Order\Models\Order;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Wholesale\Models\CartItem;
@@ -59,6 +61,13 @@ readonly class AccountContext
          * wholesale at all.
          */
         public int $wholesaleCartLines = 0,
+
+        /*
+         * Whether the account has any wholesale order to follow (§10.2, P4-12).
+         * The orders door stays open once there is one, even after the package
+         * stops including wholesale — an order somebody paid for is theirs.
+         */
+        public bool $hasWholesaleOrders = false,
     ) {}
 
     public static function forUser(User $user, StaffAllowance $allowance, ?Entitlements $entitlements = null): ?self
@@ -102,6 +111,10 @@ readonly class AccountContext
                         ->where('business_account_id', $account->id))
                     ->count()
                 : 0,
+            hasWholesaleOrders: Order::query()
+                ->where('business_account_id', $account->id)
+                ->where('source', OrderSource::ErpWholesale)
+                ->exists(),
         );
     }
 }

@@ -168,6 +168,81 @@ describe('wholesale cart navigation', () => {
 });
 
 /**
+ * Wholesale orders (§10.2, P4-12): a door for an account that may buy
+ * wholesale, kept while it has orders to follow, and none for platform staff.
+ */
+describe('wholesale order navigation', () => {
+    let root: Root;
+
+    const account = {
+        status: 'active',
+        allowsDropshipping: false,
+        managesStaff: false,
+        wholesaleCartLines: 0,
+    };
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('offers the orders to an account that may buy wholesale', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                ...account,
+                allowsWholesale: true,
+                hasWholesaleOrders: false,
+            },
+        });
+
+        expect(titles).toContain('nav.wholesale_orders');
+    });
+
+    it('keeps the orders door while there are orders to follow, after wholesale is no longer included', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                ...account,
+                allowsWholesale: false,
+                hasWholesaleOrders: true,
+            },
+        });
+
+        expect(titles).toContain('nav.wholesale_orders');
+        expect(titles).not.toContain('nav.wholesale_cart');
+    });
+
+    it('offers no orders door to an account with neither, nor to platform staff', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                ...account,
+                allowsWholesale: false,
+                hasWholesaleOrders: false,
+            },
+        });
+        expect(titles).not.toContain('nav.wholesale_orders');
+
+        act(() => root.unmount());
+        root = createRoot(document.createElement('div'));
+
+        renderFor({ permissions: { 'order.view': true }, account: null });
+        expect(titles).not.toContain('nav.wholesale_orders');
+    });
+});
+
+/**
  * Allocated stock (§19, P3-30): staff who may view inventory find every
  * allocation; an account finds its own only while it holds some.
  */

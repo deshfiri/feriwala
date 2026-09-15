@@ -50,6 +50,7 @@ use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WholesaleCartController;
 use App\Http\Controllers\Erp\WholesaleCheckoutController;
+use App\Http\Controllers\Erp\WholesaleOrderController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -249,6 +250,12 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wholesale.checkout.confirmation.store');
         Route::delete('wholesale/checkout/confirmation', [WholesaleCheckoutController::class, 'withdrawConfirmation'])
             ->name('wholesale.checkout.confirmation.destroy');
+
+        // The account's own wholesale orders (§10.2, P4-12).
+        Route::get('wholesale/orders', [WholesaleOrderController::class, 'index'])
+            ->name('wholesale.orders.index');
+        Route::get('wholesale/orders/{order}', [WholesaleOrderController::class, 'show'])
+            ->name('wholesale.orders.show');
     });
 });
 

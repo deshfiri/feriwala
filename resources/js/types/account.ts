@@ -28,6 +28,8 @@ export interface AccountContext {
     holdsAllocatedStock: boolean;
     /** Products in this person's wholesale cart (§14, P4-4). */
     wholesaleCartLines: number;
+    /** The account has wholesale orders to follow (§10.2, P4-12). */
+    hasWholesaleOrders: boolean;
 }
 
 export interface StaffMember {
