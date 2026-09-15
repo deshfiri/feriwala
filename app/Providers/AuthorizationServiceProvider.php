@@ -18,6 +18,8 @@ use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Policies\KycDocumentPolicy;
 use App\Domain\Kyc\Policies\KycDocumentTypePolicy;
 use App\Domain\Kyc\Policies\KycSubmissionPolicy;
+use App\Domain\Order\Models\Order;
+use App\Domain\Order\Policies\OrderPolicy;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Policies\PackagePolicy;
 use App\Models\User;
@@ -65,6 +67,10 @@ class AuthorizationServiceProvider extends ServiceProvider
             Gate::policy($model, CatalogModelPolicy::class);
         }
 
+        // An order is seen by the account that placed it and by staff who may
+        // see orders (§18.4, §18.5).
+        Gate::policy(Order::class, OrderPolicy::class);
+
         /*
          * Super Admin passes every check without holding permission rows, so
          * the grant cannot drift out of step with the catalogue as modules are
@@ -100,6 +106,16 @@ class AuthorizationServiceProvider extends ServiceProvider
              */
             if ((CatalogPolicy::isCatalogueAbility($ability, $arguments) || InventoryPolicy::isInventoryAbility($ability, $arguments))
                 && CatalogPolicy::isBusinessIdentity($user)) {
+                return false;
+            }
+
+            /*
+             * 1b. Platform order administration, refused the same way (§18.5,
+             *     §31.3). An account sees its own orders through the order
+             *     policy; `order.view` would be every account's orders, and a
+             *     partner handed it must not read another business's sales.
+             */
+            if (OrderPolicy::isOrderAdministrationAbility($ability) && CatalogPolicy::isBusinessIdentity($user)) {
                 return false;
             }
 
