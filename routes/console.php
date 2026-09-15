@@ -4,6 +4,7 @@ use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
+use App\Domain\Order\Actions\ExpireUnpaidWholesaleOrders;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
@@ -192,3 +193,21 @@ Schedule::call(fn () => app(ReleaseExpiredReservations::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Release stock reservations whose window has run out (§19.1)');
+
+/*
+ * ERP wholesale orders still waiting for payment (§14, §19.1, P4-10).
+ *
+ * Beside the reservation sweep and **every minute** for the same reason: an
+ * unpaid order's stock is held against a fifteen-minute window. Confirms an order
+ * whose payment settled without it, and cancels — giving the stock back — an
+ * order whose payment failed, was cancelled or ran out of time.
+ *
+ * `onOneServer` and `withoutOverlapping` as above (§41). Idempotent on its own:
+ * each order is re-read under its payment's settlement lock and its row lock.
+ */
+Schedule::call(fn () => app(ExpireUnpaidWholesaleOrders::class)->handle())
+    ->name('wholesale-order-payment-sweep')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Confirm or cancel wholesale orders waiting for payment (§14, §19.1)');

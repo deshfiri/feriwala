@@ -33,6 +33,7 @@ return [
     'product_categories' => 'Product categories',
     'brands' => 'Brands',
     'attributes' => 'Attributes',
+    'orders' => 'Orders',
     'activation_approvals' => 'Activation approvals',
     'billing_rules' => 'Billing rules',
     'payment_gateways' => 'Payment gateways',

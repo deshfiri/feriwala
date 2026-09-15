@@ -201,6 +201,7 @@ return [
         'unpaid' => 'Awaiting payment',
         'paid_on' => 'Paid :date',
         'reference' => 'Payment reference',
+        'order' => 'Wholesale order',
         'subtotal' => 'Subtotal',
         'view' => 'View',
         'back' => 'Back to invoices',

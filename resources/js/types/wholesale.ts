@@ -1,4 +1,5 @@
 import type { Money } from '@/lib/money';
+import type { IntendedResaleChannel } from '@/types/orders';
 
 /**
  * The ERP wholesale cart, exactly as the server prices it (§14).
@@ -119,4 +120,7 @@ export type CheckoutSummary = {
     total: Money;
     addresses: Record<CheckoutAddressType, CheckoutAddress | null>;
     ready_to_confirm: boolean;
+    /** An order from this cart already waiting for payment (P4-9). */
+    pending_order: { id: string; reference: string } | null;
+    resale_channels: IntendedResaleChannel[];
 };

@@ -22,6 +22,22 @@ vi.mock('@inertiajs/react', async () => {
                 { href: typeof href === 'string' ? href : href.url, ...rest },
                 children as never,
             ),
+        Form: ({
+            action,
+            children,
+        }: {
+            action: string;
+            children: (state: {
+                errors: Record<string, string>;
+                processing: boolean;
+            }) => unknown;
+        }) =>
+            createElement(
+                'form',
+                { action, method: 'post' },
+                children({ errors: {}, processing: false }) as never,
+            ),
+        useForm: () => ({ post: vi.fn(), processing: false, errors: {} }),
         usePage: () => ({ props: { translations: {} } }),
     };
 });
@@ -74,11 +90,13 @@ function order(
         },
         coupon_code: null,
         customer_note: null,
+        intended_resale_channel: null,
         addresses: { billing: null, shipping: null },
         payment: {
             reference: 'PAY-260915-TEST0001',
             gateway: 'SSLCommerz',
             expires_at: '2026-09-15T10:15:00+06:00',
+            window_open: true,
         },
         stock: { state: 'held', held_until: '2026-09-15T10:15:00+06:00' },
         timeline: [
@@ -124,6 +142,79 @@ describe('wholesale order page', () => {
         expect(screen.getByRole('status')).toHaveTextContent(
             'orders.states.awaiting_lapsed',
         );
+    });
+
+    it('says the time to pay has run out when the server says the window closed', () => {
+        // The stock may not have been released yet; the server's answer wins
+        // over a held-until time the browser's clock would have to judge.
+        render(
+            <WholesaleOrder
+                order={order({
+                    payment: {
+                        reference: 'PAY-260915-TEST0001',
+                        gateway: 'SSLCommerz',
+                        expires_at: '2026-09-15T10:14:00+06:00',
+                        window_open: false,
+                    },
+                })}
+            />,
+        );
+
+        const state = screen.getByRole('status');
+
+        expect(state).toHaveTextContent('orders.states.awaiting_lapsed');
+        expect(state).not.toHaveTextContent('orders.states.awaiting_held');
+    });
+
+    it('offers to continue to payment and to cancel when the server allows both', () => {
+        render(
+            <WholesaleOrder
+                order={order()}
+                can={{ pay: true, cancel: true }}
+            />,
+        );
+
+        const pay = screen.getByRole('button', { name: 'orders.actions.pay' });
+
+        expect(pay.closest('form')).toHaveAttribute(
+            'action',
+            expect.stringContaining('/wholesale/orders/01ORDER/payment'),
+        );
+        expect(
+            screen.getByRole('button', { name: 'orders.actions.cancel' }),
+        ).toBeInTheDocument();
+    });
+
+    it('offers no payment or cancellation the server does not allow', () => {
+        render(
+            <WholesaleOrder
+                order={order({
+                    status: 'paid',
+                    payment_state: 'paid',
+                    paid_at: '2026-09-15T10:05:00+06:00',
+                })}
+                can={{ pay: false, cancel: false }}
+            />,
+        );
+
+        expect(
+            screen.queryByRole('button', { name: 'orders.actions.pay' }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('button', { name: 'orders.actions.cancel' }),
+        ).not.toBeInTheDocument();
+    });
+
+    it('shows the resale channel the buyer gave, for reporting', () => {
+        render(
+            <WholesaleOrder
+                order={order({ intended_resale_channel: 'marketplace' })}
+            />,
+        );
+
+        expect(
+            screen.getByText('orders.resale.channels.marketplace'),
+        ).toBeInTheDocument();
     });
 
     it('says the payment is being confirmed', () => {

@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Queries;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Order\Enums\OrderPaymentState;
 use App\Domain\Order\Enums\OrderSource;
@@ -112,6 +113,7 @@ class WholesaleOrderTracking
             ],
             'coupon_code' => $order->coupon_code,
             'customer_note' => $order->customer_note,
+            'intended_resale_channel' => $order->intended_resale_channel?->value,
             'addresses' => [
                 'billing' => $order->billing_address,
                 'shipping' => $order->shipping_address,
@@ -120,12 +122,16 @@ class WholesaleOrderTracking
                 'reference' => $payment->reference,
                 'gateway' => $this->gatewayLabel($payment->gateway),
                 'expires_at' => $payment->expires_at?->toIso8601String(),
+                // Decided here, not by the browser's clock.
+                'window_open' => in_array($payment->status, PaymentStatus::open(), true)
+                    && $payment->expires_at !== null
+                    && $payment->expires_at->isFuture(),
             ],
             'stock' => $this->stock($order),
             'timeline' => $order->statusHistory->map(fn (OrderStatusChange $change) => [
                 'status' => $change->new_status->value,
                 'at' => $change->changed_at->toIso8601String(),
-                'note' => $change->public_note,
+                'note' => $this->publicNote($change->public_note),
             ])->all(),
             'invoice' => $invoice === null ? null : [
                 'id' => $invoice->public_id,
@@ -160,10 +166,30 @@ class WholesaleOrderTracking
             default => 'attention',
         };
 
+        // Held for payment until the payment window closes, which is a little
+        // before the reservations themselves run out.
+        $deadline = $order->payment === null ? null : $order->payment->expires_at;
+        $until = $deadline ?? $reservations->min('expires_at');
+
         return [
             'state' => $state,
-            'held_until' => $state === 'held' ? $reservations->min('expires_at')?->toIso8601String() : null,
+            'held_until' => $state === 'held' ? $until?->toIso8601String() : null,
         ];
+    }
+
+    /**
+     * A note the platform wrote is kept as a translation key and read in the
+     * viewer's language; a note a person wrote is shown as they wrote it.
+     */
+    protected function publicNote(?string $note): ?string
+    {
+        if ($note === null || ! str_starts_with($note, 'orders.notes.')) {
+            return $note;
+        }
+
+        $translated = __($note);
+
+        return is_string($translated) ? $translated : $note;
     }
 
     protected function gatewayLabel(?string $gateway): ?string

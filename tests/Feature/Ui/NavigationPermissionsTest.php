@@ -130,6 +130,38 @@ it('sends a wallet manager the wallet ability and not the payment one', function
         ->and($permissions['payment.view'])->toBeFalse();
 });
 
+it('sends an order manager the order ability and not the payment one', function () {
+    // Reviewing every order is its own job (§18.4), and the Orders link reads it.
+    $permissions = navPermissionsFor(
+        testPlatformStaff(PlatformRole::OrderManager),
+        'admin.orders.index',
+    );
+
+    expect($permissions['order.view'])->toBeTrue()
+        ->and($permissions['payment.view'])->toBeFalse();
+});
+
+it('sends a business owner no order administration, whose own orders have their own door', function () {
+    $account = testBusinessAccount(AccountStatus::Active);
+
+    $response = test()->actingAs($account->owner)->get(route('wholesale.orders.index'));
+
+    $response->assertOk();
+
+    expect($response->viewData('page')['props']['permissions']['order.view'])->toBeFalse();
+});
+
+it('gives the order review screen real content with no orders to show', function () {
+    $this->actingAs(testPlatformStaff(PlatformRole::OrderManager))
+        ->get(route('admin.orders.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/orders/index')
+            ->has('orders.data', 0)
+            ->has('statuses'),
+        );
+});
+
 it('gives an activated account the status its wallet link is gated on', function () {
     /*
      * The member's Wallet link appears when `account.status` is active, because

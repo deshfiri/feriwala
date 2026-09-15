@@ -66,6 +66,10 @@ class HandleInertiaRequests extends Middleware
         // counting stock is not writing the catalogue, and a partner holds neither.
         [PermissionModule::Inventory, PermissionAction::View],
 
+        // Every order, for the staff who review them (§18.4). A partner follows
+        // their own orders on their own page and holds none of this.
+        [PermissionModule::Order, PermissionAction::View],
+
         // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
         [PermissionModule::Payment, PermissionAction::View],
 

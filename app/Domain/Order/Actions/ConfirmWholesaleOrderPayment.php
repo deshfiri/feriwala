@@ -1,0 +1,212 @@
+<?php
+
+namespace App\Domain\Order\Actions;
+
+use App\Domain\Billing\Actions\IssueInvoice;
+use App\Domain\Billing\Actions\RecordPaymentLog;
+use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Inventory\Enums\StockReservationStatus;
+use App\Domain\Inventory\Exceptions\InventoryRefused;
+use App\Domain\Inventory\StockReservations;
+use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Enums\OrderStatusChangeSource;
+use App\Domain\Order\Exceptions\OrderStockUnconfirmable;
+use App\Domain\Order\Models\Order;
+use App\Domain\Wholesale\Actions\CloseOrderedCart;
+use App\Support\Concurrency\Exceptions\LockTimeout;
+use App\Support\StatusHistory\StatusChange;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\DatabaseManager;
+use Illuminate\Log\LogManager;
+
+/**
+ * What a settled wholesale payment does to its order (§14, §19.1, P4-9–P4-11).
+ *
+ * Run by settlement once the payment is paid, and again by the sweep for any
+ * order a settlement left waiting. In one transaction, with the order and then
+ * its payment locked:
+ *
+ *   - every line's reservation must be the one placed for it, still holding its
+ *     units — and each is committed to the order;
+ *   - the order moves along the transition map to `paid`, recorded with a note
+ *     for the buyer;
+ *   - the invoice is issued from the payment's own components (P4-11);
+ *   - the cart it was bought from is emptied.
+ *
+ * **The same order, once.** An order no longer waiting for payment is answered
+ * as it stands, so a repeated callback commits nothing, issues nothing and moves
+ * nothing again.
+ *
+ * **Held, not paid, when the stock is not there.** If a reservation is missing,
+ * does not match its line, has already ended or cannot be committed, everything
+ * above rolls back and the order moves to `on_hold` instead, with the reason for
+ * staff and a critical alert: the money is real and the stock has to be found or
+ * the payment refunded by a person. No invoice is issued for a held order.
+ */
+class ConfirmWholesaleOrderPayment
+{
+    public function __construct(
+        protected StockReservations $reservations,
+        protected IssueInvoice $invoices,
+        protected CloseOrderedCart $carts,
+        protected RecordPaymentLog $logs,
+        protected DatabaseManager $database,
+        protected LogManager $log,
+    ) {}
+
+    public function handle(Payment $payment): ?Order
+    {
+        $order = Order::query()->where('payment_id', $payment->id)->first();
+
+        if ($order === null) {
+            $this->log->channel('payment')->critical('Settled a wholesale payment with no order', [
+                'payment' => $payment->reference,
+                'business_account' => $payment->business_account_id,
+                'amount_minor' => $payment->amount_minor->minorUnits,
+            ]);
+
+            $this->record($payment, 'order_missing');
+
+            return null;
+        }
+
+        try {
+            $this->database->transaction(fn () => $this->confirm($order, $payment));
+        } catch (OrderStockUnconfirmable|InventoryRefused|LockTimeout $problem) {
+            $this->hold($order, $payment, $problem->getMessage());
+        }
+
+        return $order->refresh();
+    }
+
+    protected function confirm(Order $order, Payment $payment): void
+    {
+        /** @var Order $locked */
+        $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+        if ($locked->status !== OrderStatus::PaymentPending) {
+            return;
+        }
+
+        /** @var Payment $settled */
+        $settled = Payment::query()->lockForUpdate()->findOrFail($payment->id);
+
+        if (! $settled->status->isSettled()) {
+            return;
+        }
+
+        $items = $locked->items()->with('stockReservation')->get();
+
+        if ($items->isEmpty()) {
+            throw new OrderStockUnconfirmable('The order has no lines to commit stock for.');
+        }
+
+        foreach ($items as $item) {
+            $reservation = $item->stockReservation;
+
+            if ($reservation === null) {
+                throw new OrderStockUnconfirmable(sprintf('Line %d has no stock reservation.', $item->line_number));
+            }
+
+            if ($reservation->reference !== $locked->reference.'-L'.$item->line_number
+                || $reservation->quantity !== $item->quantity) {
+                throw new OrderStockUnconfirmable(sprintf('Line %d\'s reservation %s does not match the line.', $item->line_number, $reservation->reference));
+            }
+
+            if ($reservation->status !== StockReservationStatus::Active) {
+                throw new OrderStockUnconfirmable(sprintf('Line %d\'s reservation %s is already %s.', $item->line_number, $reservation->reference, $reservation->status->value));
+            }
+        }
+
+        foreach ($items as $item) {
+            if ($item->stockReservation !== null) {
+                $this->reservations->commit($item->stockReservation);
+            }
+        }
+
+        $locked->forceFill(['paid_at' => $settled->completed_at ?? CarbonImmutable::now()]);
+
+        $locked->moveTo(
+            OrderStatus::Paid,
+            StatusChange::bySystem('The payment settled and the stock was committed.', 'orders.notes.paid'),
+            OrderStatusChangeSource::PaymentGateway,
+        );
+
+        // Only now: an invoice is a record of a sale this order has become (P4-11).
+        $this->invoices->handle($settled);
+
+        $this->carts->afterPayment($locked);
+
+        $order->setRawAttributes($locked->getAttributes(), sync: true);
+    }
+
+    /**
+     * Record a settled order whose stock could not be committed, for a person to resolve.
+     */
+    protected function hold(Order $order, Payment $payment, string $problem): void
+    {
+        $reason = 'The payment settled, but the stock held for this order could not be committed.';
+
+        $held = $this->database->transaction(function () use ($order, $payment, $problem, $reason) {
+            /** @var Order $locked */
+            $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($locked->status !== OrderStatus::PaymentPending) {
+                return false;
+            }
+
+            /** @var Payment $settled */
+            $settled = Payment::query()->lockForUpdate()->findOrFail($payment->id);
+
+            if (! $settled->status->isSettled()) {
+                return false;
+            }
+
+            $locked->forceFill([
+                'held_at' => CarbonImmutable::now(),
+                'hold_reason' => $reason.' '.$problem,
+            ]);
+
+            $locked->moveTo(
+                OrderStatus::OnHold,
+                new StatusChange(reason: $reason, internalNote: $problem, publicNote: 'orders.notes.held'),
+                OrderStatusChangeSource::PaymentGateway,
+            );
+
+            $this->carts->afterPayment($locked);
+
+            return true;
+        });
+
+        if (! $held) {
+            return;
+        }
+
+        $this->log->channel('payment')->critical('Settled wholesale order held: stock could not be committed', [
+            'order' => $order->reference,
+            'payment' => $payment->reference,
+            'business_account' => $payment->business_account_id,
+            'amount_minor' => $payment->amount_minor->minorUnits,
+            'problem' => $problem,
+        ]);
+
+        $this->record($payment, 'order_held', ['order' => $order->reference, 'problem' => $problem]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    protected function record(Payment $payment, string $outcome, array $context = []): void
+    {
+        $this->logs->handle(
+            gateway: is_string($payment->gateway) && $payment->gateway !== '' ? $payment->gateway : 'unknown',
+            direction: PaymentLog::OUTBOUND,
+            event: 'settle',
+            payment: $payment,
+            amount: $payment->amount_minor,
+            outcome: $outcome,
+            context: $context,
+        );
+    }
+}

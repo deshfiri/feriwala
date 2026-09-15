@@ -3,7 +3,7 @@
 namespace App\Domain\Billing\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
-use App\Domain\Billing\Data\ActivationQuote;
+use App\Domain\Billing\Data\PaymentQuote;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
@@ -35,7 +35,7 @@ class RecordPaymentFromQuote
 
     public function handle(
         BusinessAccount $account,
-        ActivationQuote $quote,
+        PaymentQuote $quote,
         PaymentPurpose $purpose,
         ?string $idempotencyKey = null,
         ?Model $payable = null,
@@ -62,7 +62,7 @@ class RecordPaymentFromQuote
 
     protected function create(
         BusinessAccount $account,
-        ActivationQuote $quote,
+        PaymentQuote $quote,
         PaymentPurpose $purpose,
         ?string $idempotencyKey,
         ?Model $payable,
@@ -73,7 +73,7 @@ class RecordPaymentFromQuote
             'status' => PaymentStatus::Draft,
             'amount_minor' => $quote->total(),
             'revenue_minor' => $quote->revenue(),
-            'currency_code' => $quote->currency->value,
+            'currency_code' => $quote->paymentCurrency()->value,
             'idempotency_key' => $idempotencyKey,
 
             /*
@@ -91,7 +91,7 @@ class RecordPaymentFromQuote
 
         $payment->save();
 
-        foreach ($quote->lines as $index => $line) {
+        foreach ($quote->paymentLines() as $index => $line) {
             $payment->allocations()->create([
                 'type' => $line->type,
                 'amount_minor' => $line->amount,
@@ -127,8 +127,14 @@ class RecordPaymentFromQuote
          * Issuing is not granting: whether the money arrived stays the
          * payment's business, and nothing in the subscription lifecycle reads
          * an invoice.
+         *
+         * A wholesale order is the exception: its invoice is issued once the
+         * payment has settled and the order is paid (P4-11), so an order nobody
+         * paid for never carries one.
          */
-        $this->invoices->handle($payment);
+        if ($purpose->issuesInvoiceWhenRecorded()) {
+            $this->invoices->handle($payment);
+        }
 
         return $payment;
     }

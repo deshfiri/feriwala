@@ -67,22 +67,36 @@ enum PaymentPurpose: string
             self::PackageRenewal,
             self::PackageUpgrade,
             self::PackageDowngrade,
+            // Settling confirms the ERP wholesale order it pays for (P4-9).
+            self::WholesaleOrder,
             self::WalletDeposit,
             self::WalletTopUp => true,
 
             /*
-             * Not built yet. Orders (§12–§16), websites (§18–§20) and the
-             * recurring charges that hang off them are later phases, and a
+             * Not built yet. Website orders (§16–§17), websites (§18–§20) and
+             * the recurring charges that hang off them are later phases, and a
              * payment cannot be taken for one through any route that exists
              * today — which is asserted rather than assumed.
              */
-            self::WholesaleOrder,
             self::WebsiteOrder,
             self::WebsiteSetup,
             self::DomainCharge,
             self::HostingCharge,
             self::MaintenanceCharge => false,
         };
+    }
+
+    /**
+     * Whether the invoice is issued when the payment is recorded (§8.2).
+     *
+     * An activation, renewal or top-up invoice is what somebody is asked to pay,
+     * so it exists before the money does. A wholesale order's invoice is a record
+     * of a sale, issued once the payment has settled and the order is paid
+     * (P4-11) — an order nobody paid for never carries one.
+     */
+    public function issuesInvoiceWhenRecorded(): bool
+    {
+        return $this !== self::WholesaleOrder;
     }
 
     /**

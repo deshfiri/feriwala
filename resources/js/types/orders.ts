@@ -50,6 +50,21 @@ export type OrderPaymentState =
 
 export type OrderStockState = 'held' | 'committed' | 'released' | 'attention';
 
+/** Reporting only (D21, P4-14): never read by pricing, stock or eligibility. */
+export type IntendedResaleChannel =
+    | 'own_website'
+    | 'social_media'
+    | 'marketplace'
+    | 'physical_shop'
+    | 'wholesale'
+    | 'other';
+
+/** What the signed-in person may do to this order now, decided by the server. */
+export type WholesaleOrderAbilities = {
+    pay: boolean;
+    cancel: boolean;
+};
+
 export type WholesaleOrderSummary = {
     id: string;
     reference: string;
@@ -89,6 +104,7 @@ export type WholesaleOrderDetail = WholesaleOrderSummary & {
     };
     coupon_code: string | null;
     customer_note: string | null;
+    intended_resale_channel: IntendedResaleChannel | null;
     addresses: {
         billing: CheckoutAddress | null;
         shipping: CheckoutAddress | null;
@@ -97,6 +113,7 @@ export type WholesaleOrderDetail = WholesaleOrderSummary & {
         reference: string;
         gateway: string | null;
         expires_at: string | null;
+        window_open: boolean;
     } | null;
     stock: { state: OrderStockState; held_until: string | null };
     timeline: { status: OrderStatusValue; at: string; note: string | null }[];

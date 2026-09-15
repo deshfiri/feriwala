@@ -1,24 +1,32 @@
-import { Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, useForm } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowLeft,
     CheckCircle2,
     Clock,
+    CreditCard,
     FileText,
     XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import WholesaleOrderController from '@/actions/App/Http/Controllers/Erp/WholesaleOrderController';
+import ConfirmDialog from '@/components/forms/confirm-dialog';
+import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { show as invoiceShow } from '@/routes/subscription/invoices';
 import { index } from '@/routes/wholesale/orders';
-import type { WholesaleOrderDetail } from '@/types/orders';
+import type {
+    WholesaleOrderAbilities,
+    WholesaleOrderDetail,
+} from '@/types/orders';
 import type { CheckoutAddress } from '@/types/wholesale';
 
 type Props = {
@@ -26,14 +34,18 @@ type Props = {
 };
 
 /**
- * One wholesale order, followed by the account that placed it (§10.2, P4-12).
+ * One wholesale order, followed by the account that placed it (§10.2, P4-9–P4-12).
  *
  * The first thing on the page is where the order stands and what, if anything,
  * the buyer can expect next — waiting for payment with the stock held, the
  * payment being confirmed, paid, held for review, or cancelled — in words, not
- * colour alone. Everything below it is the order as it was recorded.
+ * colour alone, with the actions the server allows now. Everything below it is
+ * the order as it was recorded.
  */
-export default function WholesaleOrder({ order }: Props) {
+export default function WholesaleOrder({
+    order,
+    can = { pay: false, cancel: false },
+}: Props & { can?: WholesaleOrderAbilities }) {
     const { t, locale } = useTranslation();
     const title = t('orders.order_title', { reference: order.reference });
     const placed = [
@@ -72,6 +84,10 @@ export default function WholesaleOrder({ order }: Props) {
                 />
 
                 <OrderState order={order} />
+
+                {(can.pay || can.cancel) && (
+                    <OrderActions order={order} can={can} />
+                )}
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                     <div className="min-w-0 space-y-6">
@@ -139,6 +155,16 @@ export default function WholesaleOrder({ order }: Props) {
                             </SectionCard>
                         )}
 
+                        {order.intended_resale_channel && (
+                            <SectionCard title={t('orders.resale.section')}>
+                                <p className="text-sm">
+                                    {t(
+                                        `orders.resale.channels.${order.intended_resale_channel}`,
+                                    )}
+                                </p>
+                            </SectionCard>
+                        )}
+
                         <Timeline order={order} />
                     </div>
 
@@ -172,14 +198,18 @@ function OrderState({ order }: Props) {
                 gateway: order.payment?.gateway ?? '',
             });
         } else {
-            tone = order.stock.state === 'held' ? 'info' : 'warning';
+            const held =
+                order.stock.state === 'held' &&
+                order.stock.held_until !== null &&
+                order.payment?.window_open !== false;
+
+            tone = held ? 'info' : 'warning';
             heading = t('orders.states.awaiting_title');
-            body =
-                order.stock.state === 'held' && order.stock.held_until
-                    ? t('orders.states.awaiting_held', {
-                          time: at(order.stock.held_until),
-                      })
-                    : t('orders.states.awaiting_lapsed');
+            body = held
+                ? t('orders.states.awaiting_held', {
+                      time: at(order.stock.held_until),
+                  })
+                : t('orders.states.awaiting_lapsed');
         }
     } else if (order.status === 'on_hold') {
         tone = 'warning';
@@ -226,6 +256,73 @@ function OrderState({ order }: Props) {
                 <p className="font-medium">{heading}</p>
                 <p className="text-muted-foreground text-sm">{body}</p>
             </div>
+        </div>
+    );
+}
+
+/**
+ * Continue to payment, or cancel before paying — only what the server allows now.
+ *
+ * Paying sends nothing but the order: the amount and gateway were fixed when it
+ * was placed. Cancelling asks first, because it gives the held stock back.
+ */
+function OrderActions({
+    order,
+    can,
+}: Props & { can: WholesaleOrderAbilities }) {
+    const { t } = useTranslation();
+    const cancelForm = useForm({});
+    // The refusal comes back under the order, not under a field of this empty form.
+    const cancelErrors: Partial<Record<string, string>> = cancelForm.errors;
+
+    return (
+        <div className="flex flex-wrap items-start gap-3">
+            {can.pay && (
+                <Form {...WholesaleOrderController.pay.form(order.id)}>
+                    {({ errors, processing }) => (
+                        <div className="space-y-1">
+                            <Button type="submit" disabled={processing}>
+                                {processing ? (
+                                    <Spinner />
+                                ) : (
+                                    <CreditCard
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                {processing
+                                    ? t('orders.actions.paying')
+                                    : t('orders.actions.pay')}
+                            </Button>
+                            <InputError message={errors.order} />
+                        </div>
+                    )}
+                </Form>
+            )}
+
+            {can.cancel && (
+                <div className="space-y-1">
+                    <ConfirmDialog
+                        trigger={
+                            <Button type="button" variant="outline">
+                                {t('orders.actions.cancel')}
+                            </Button>
+                        }
+                        title={t('orders.actions.cancel')}
+                        summary={t('orders.actions.cancel_confirm')}
+                        confirmLabel={t('orders.actions.cancel')}
+                        destructive
+                        processing={cancelForm.processing}
+                        onConfirm={() =>
+                            cancelForm.post(
+                                WholesaleOrderController.cancel.url(order.id),
+                                { preserveScroll: true },
+                            )
+                        }
+                    />
+                    <InputError message={cancelErrors.order} />
+                </div>
+            )}
         </div>
     );
 }

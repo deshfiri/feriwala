@@ -5,11 +5,14 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as invoiceIndex } from '@/routes/subscription/invoices';
+import { show as orderShow } from '@/routes/wholesale/orders';
 import type { Money } from '@/lib/money';
 import type { InvoiceRow } from './invoices';
 
 type Props = {
     invoice: InvoiceRow & {
+        /** The wholesale order this invoice records the sale of (P4-11). */
+        order?: { id: string; reference: string } | null;
         subtotal: Money;
         lines: {
             type: string;
@@ -83,6 +86,22 @@ export default function Invoice({ invoice }: Props) {
                                     </dt>
                                     <dd className="font-mono text-xs">
                                         {invoice.payment_reference}
+                                    </dd>
+                                </div>
+                            )}
+
+                            {invoice.order && (
+                                <div>
+                                    <dt className="text-muted-foreground text-xs">
+                                        {t('package.invoices.order')}
+                                    </dt>
+                                    <dd>
+                                        <Link
+                                            href={orderShow(invoice.order.id)}
+                                            className="font-mono text-xs underline underline-offset-4"
+                                        >
+                                            {invoice.order.reference}
+                                        </Link>
                                     </dd>
                                 </div>
                             )}

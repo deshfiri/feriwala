@@ -6,6 +6,7 @@ use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\InvoiceLine;
 use App\Domain\Billing\Models\PaymentTaxLine;
+use App\Domain\Order\Models\Order;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -63,11 +64,19 @@ class InvoiceController extends Controller
         $record = Invoice::query()
             ->where('business_account_id', $account->id)
             ->where('public_id', $invoice)
-            ->with(['lines', 'payment.taxLines'])
+            ->with(['lines', 'payment.taxLines', 'payment.payable'])
             ->firstOrFail();
+
+        $order = $record->payment?->payable;
 
         return Inertia::render('settings/invoice', [
             'invoice' => array_merge($this->summary($record), [
+                // The wholesale order this invoice records the sale of (P4-11).
+                // Already scoped: the invoice is this account's, and so is its order.
+                'order' => $order instanceof Order && $order->business_account_id === $account->id ? [
+                    'id' => $order->public_id,
+                    'reference' => $order->reference,
+                ] : null,
                 'subtotal' => $record->subtotal_minor->jsonSerialize(),
                 'lines' => $record->lines
                     ->map(fn (InvoiceLine $line) => [

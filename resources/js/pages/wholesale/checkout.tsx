@@ -1,7 +1,8 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, MapPin, TicketPercent } from 'lucide-react';
+import { ArrowLeft, CreditCard, MapPin, TicketPercent } from 'lucide-react';
 import { useState } from 'react';
 import WholesaleCheckoutController from '@/actions/App/Http/Controllers/Erp/WholesaleCheckoutController';
+import WholesaleOrderController from '@/actions/App/Http/Controllers/Erp/WholesaleOrderController';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -16,6 +17,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { show } from '@/routes/wholesale/checkout';
+import { show as orderShow } from '@/routes/wholesale/orders';
 import type {
     CheckoutAddress,
     CheckoutAddressType,
@@ -311,7 +313,18 @@ export default function WholesaleCheckout({ checkout }: Props) {
                             </p>
                         )}
 
+                        {checkout.pending_order && (
+                            <PendingOrderNotice
+                                order={checkout.pending_order}
+                            />
+                        )}
+
                         <ConfirmationPanel checkout={checkout} />
+
+                        {checkout.confirmation?.status === 'confirmed' &&
+                            !checkout.pending_order && (
+                                <PayPanel checkout={checkout} />
+                            )}
                     </div>
                 </div>
             </PageContainer>
@@ -353,9 +366,6 @@ function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
                             amount: confirmation.total.formatted,
                             method: confirmation.payment_method.label,
                         })}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                        {t('wholesale.checkout.confirmation.confirmed_next')}
                     </p>
                     <Form
                         {...WholesaleCheckoutController.withdrawConfirmation.form()}
@@ -474,6 +484,148 @@ function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
                 )}
             </Form>
         </SectionCard>
+    );
+}
+
+const controlClass =
+    'border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
+
+/**
+ * Pay for the confirmed summary, which places the order (P4-9, P4-14).
+ *
+ * Sends the fingerprint of the summary on this page, an optional note and an
+ * optional resale channel — never a figure. The server prices the order again,
+ * reserves its stock and sends the person to the gateway; if anything changed, it
+ * refuses and says why here.
+ */
+function PayPanel({ checkout }: { checkout: CheckoutSummary }) {
+    const { t } = useTranslation();
+    const total = checkout.confirmation?.total.formatted ?? '';
+    const gateway = checkout.confirmation?.payment_method.label ?? '';
+
+    return (
+        <SectionCard title={t('orders.pay.title')}>
+            <Form
+                {...WholesaleOrderController.store.form()}
+                className="space-y-4"
+            >
+                {({ errors, processing }) => (
+                    <>
+                        <input
+                            type="hidden"
+                            name="fingerprint"
+                            value={checkout.fingerprint}
+                        />
+
+                        <p className="text-sm">
+                            {t('orders.pay.body', { total, gateway })}
+                        </p>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="order-note">
+                                {t('orders.pay.note')}
+                            </Label>
+                            <textarea
+                                id="order-note"
+                                name="customer_note"
+                                rows={3}
+                                maxLength={1000}
+                                className={controlClass}
+                            />
+                            <InputError message={errors.customer_note} />
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="order-resale-channel">
+                                {t('orders.resale.label')}
+                            </Label>
+                            <select
+                                id="order-resale-channel"
+                                name="intended_resale_channel"
+                                defaultValue=""
+                                className={controlClass}
+                            >
+                                <option value="">
+                                    {t('orders.resale.none')}
+                                </option>
+                                {checkout.resale_channels.map((channel) => (
+                                    <option key={channel} value={channel}>
+                                        {t(`orders.resale.channels.${channel}`)}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-muted-foreground text-xs">
+                                {t('orders.resale.help')}
+                            </p>
+                            <InputError
+                                message={errors.intended_resale_channel}
+                            />
+                        </div>
+
+                        <InputError
+                            message={
+                                errors.stock ??
+                                errors.fingerprint ??
+                                errors.confirmation ??
+                                errors.coupon ??
+                                errors.order ??
+                                errors.cart ??
+                                errors.addresses ??
+                                errors.payment_method
+                            }
+                        />
+
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={processing}
+                        >
+                            {processing ? (
+                                <Spinner />
+                            ) : (
+                                <CreditCard
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                            )}
+                            {processing
+                                ? t('orders.pay.submitting')
+                                : t('orders.pay.submit', { total })}
+                        </Button>
+                    </>
+                )}
+            </Form>
+        </SectionCard>
+    );
+}
+
+/**
+ * An order from this cart is already waiting for payment: the way to it, instead
+ * of a second way to pay.
+ */
+function PendingOrderNotice({
+    order,
+}: {
+    order: NonNullable<CheckoutSummary['pending_order']>;
+}) {
+    const { t } = useTranslation();
+
+    return (
+        <div
+            role="status"
+            className="border-warning bg-warning-subtle space-y-2 rounded-lg border p-3 text-sm"
+        >
+            <p className="font-medium">{t('orders.pay.pending_title')}</p>
+            <p>
+                {t('orders.pay.pending_body', { reference: order.reference })}
+            </p>
+            <Link
+                href={orderShow(order.id)}
+                className="font-medium underline underline-offset-4"
+            >
+                {t('orders.pay.pending_link', { reference: order.reference })}
+            </Link>
+        </div>
     );
 }
 

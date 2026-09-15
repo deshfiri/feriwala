@@ -8,6 +8,8 @@ use App\Domain\Account\Models\UserAddress;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\ProductEligibility;
+use App\Domain\Order\Actions\PlaceWholesaleOrder;
+use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Wholesale\Actions\ApplyCheckoutCoupon;
 use App\Domain\Wholesale\Actions\ConfirmCheckout;
 use App\Domain\Wholesale\Actions\OpenCart;
@@ -49,7 +51,7 @@ class WholesaleCheckoutController extends Controller
         protected PaymentGatewayManager $gateways,
     ) {}
 
-    public function show(Request $request): Response|RedirectResponse
+    public function show(Request $request, PlaceWholesaleOrder $orders): Response|RedirectResponse
     {
         $account = $this->businessAccountFor($request);
 
@@ -68,6 +70,7 @@ class WholesaleCheckoutController extends Controller
 
         $methods = $this->gateways->availableFor($quote->total->currency);
         $fingerprint = $quote->fingerprint();
+        $pending = $orders->awaitingPaymentFor($cart);
 
         return Inertia::render('wholesale/checkout', [
             'checkout' => [
@@ -93,6 +96,12 @@ class WholesaleCheckoutController extends Controller
                     'shipping' => $quote->shippingAddress?->toSnapshot(),
                 ],
                 'ready_to_confirm' => $quote->isReadyToConfirm(),
+                // An order from this cart already waiting for payment (P4-9).
+                'pending_order' => $pending === null ? null : [
+                    'id' => $pending->public_id,
+                    'reference' => $pending->reference,
+                ],
+                'resale_channels' => IntendedResaleChannel::values(),
             ],
         ]);
     }

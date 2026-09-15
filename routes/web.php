@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
+use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
@@ -51,6 +52,7 @@ use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WholesaleCartController;
 use App\Http\Controllers\Erp\WholesaleCheckoutController;
 use App\Http\Controllers\Erp\WholesaleOrderController;
+use App\Http\Controllers\Erp\WholesaleOrderPaymentReturnController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -251,11 +253,26 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::delete('wholesale/checkout/confirmation', [WholesaleCheckoutController::class, 'withdrawConfirmation'])
             ->name('wholesale.checkout.confirmation.destroy');
 
-        // The account's own wholesale orders (§10.2, P4-12).
+        // The account's own wholesale orders (§10.2, P4-9–P4-12).
         Route::get('wholesale/orders', [WholesaleOrderController::class, 'index'])
             ->name('wholesale.orders.index');
+        Route::post('wholesale/orders', [WholesaleOrderController::class, 'store'])
+            ->name('wholesale.orders.store');
         Route::get('wholesale/orders/{order}', [WholesaleOrderController::class, 'show'])
             ->name('wholesale.orders.show');
+        Route::post('wholesale/orders/{order}/payment', [WholesaleOrderController::class, 'pay'])
+            ->name('wholesale.orders.payment.store');
+        Route::post('wholesale/orders/{order}/cancellation', [WholesaleOrderController::class, 'cancel'])
+            ->name('wholesale.orders.cancellation.store');
+
+        // Where the gateway sends the person back to, naming the order (§26.4).
+        // None of them settles anything on the browser's word.
+        Route::match(['get', 'post'], 'wholesale/orders/{order}/payment/return', [WholesaleOrderPaymentReturnController::class, 'success'])
+            ->name('wholesale.orders.payment.return');
+        Route::match(['get', 'post'], 'wholesale/orders/{order}/payment/cancelled', [WholesaleOrderPaymentReturnController::class, 'cancelled'])
+            ->name('wholesale.orders.payment.cancelled');
+        Route::match(['get', 'post'], 'wholesale/orders/{order}/payment/failed', [WholesaleOrderPaymentReturnController::class, 'failed'])
+            ->name('wholesale.orders.payment.failed');
     });
 });
 
@@ -669,6 +686,17 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         // What every website is told about stock (§19.1, contract §5.2).
         Route::get('inventory/availability', [AvailabilityController::class, 'index'])
             ->name('inventory.availability.index');
+
+        /*
+         * Orders (§18.4, §18.5). Reading every order is `order.view`; cancelling
+         * one nobody has paid for is `order.edit`, with a reason, audited.
+         */
+        Route::get('orders', [OrderController::class, 'index'])
+            ->name('orders.index');
+        Route::get('orders/{order}', [OrderController::class, 'show'])
+            ->name('orders.show');
+        Route::post('orders/{order}/cancellation', [OrderController::class, 'cancel'])
+            ->name('orders.cancellation.store');
 
         /*
          * Stock reservations (contract §6.1.2). Reading is `inventory.view`;

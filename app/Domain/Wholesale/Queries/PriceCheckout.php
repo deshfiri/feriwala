@@ -13,6 +13,8 @@ use App\Domain\Package\Entitlements;
 use App\Domain\Tax\Data\TaxBreakdown;
 use App\Domain\Tax\Enums\TaxScope;
 use App\Domain\Tax\TaxEngine;
+use App\Domain\Wholesale\Data\CartLineQuote;
+use App\Domain\Wholesale\Data\CheckoutLineCharge;
 use App\Domain\Wholesale\Data\CheckoutQuote;
 use App\Domain\Wholesale\Models\Cart;
 use App\Support\Money\Money;
@@ -66,12 +68,12 @@ class PriceCheckout
             ? $coupon->discount
             : Money::zero($currency);
 
-        /** @var array<int, array{0: Product, 1: Money}> $sold */
+        /** @var array<int, array{0: CartLineQuote, 1: Money}> $sold */
         $sold = [];
 
         foreach ($goods->lines as $line) {
             if ($line->isPurchasable() && $line->lineTotal !== null) {
-                $sold[] = [$line->item->product, $line->lineTotal];
+                $sold[] = [$line, $line->lineTotal];
             }
         }
 
@@ -80,27 +82,34 @@ class PriceCheckout
             : $this->fees->wholesaleDelivery($this->entitlements->activePackage($account)?->package, $currency, $at);
 
         $charges = [];
+        $lineCharges = [];
         $shares = $this->shareDiscount($discount, array_map(fn (array $line) => $line[1], $sold));
 
-        foreach ($sold as $index => [$product, $lineTotal]) {
+        foreach ($sold as $index => [$line, $lineTotal]) {
+            $product = $line->item->product;
             $net = $lineTotal->minus($shares[$index]);
 
-            $charges[] = $this->tax->chargeGoods(
+            $charge = $this->tax->chargeGoods(
                 amount: $net->isNegative() ? Money::zero($currency) : $net,
                 productSku: $product->sku,
                 categorySlugs: $this->categorySlugs($product),
                 account: $account,
                 at: $at,
             );
+
+            $charges[] = $charge;
+            $lineCharges[] = new CheckoutLineCharge($line, $shares[$index], $charge);
         }
 
-        $charges[] = $this->tax->charge(
+        $deliveryTax = $this->tax->charge(
             amount: $delivery,
             account: $account,
             at: $at,
             scope: TaxScope::Fee,
             scopeValue: FeeType::WholesaleDelivery->value,
         );
+
+        $charges[] = $deliveryTax;
 
         $tax = TaxBreakdown::of($charges, $currency);
 
@@ -113,6 +122,8 @@ class PriceCheckout
             total: $goods->subtotal->minus($discount)->plus($delivery)->plus($tax->addedTotal()),
             billingAddress: $cart === null ? null : UserAddress::query()->currentFor($cart->user_id, AddressType::Billing)->first(),
             shippingAddress: $cart === null ? null : UserAddress::query()->currentFor($cart->user_id, AddressType::Shipping)->first(),
+            lineCharges: $lineCharges,
+            deliveryTax: $deliveryTax,
         );
     }
 

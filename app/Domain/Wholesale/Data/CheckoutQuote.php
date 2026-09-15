@@ -19,6 +19,9 @@ use App\Support\Money\Money;
  */
 readonly class CheckoutQuote
 {
+    /**
+     * @param  array<int, CheckoutLineCharge>  $lineCharges  each purchasable line's discount share and tax, in cart order
+     */
     public function __construct(
         public CartQuote $cart,
         public ?CouponOutcome $coupon,
@@ -28,6 +31,8 @@ readonly class CheckoutQuote
         public Money $total,
         public ?UserAddress $billingAddress = null,
         public ?UserAddress $shippingAddress = null,
+        public array $lineCharges = [],
+        public ?TaxCharge $deliveryTax = null,
     ) {}
 
     /**

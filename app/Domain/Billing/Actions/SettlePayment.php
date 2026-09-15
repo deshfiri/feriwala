@@ -7,6 +7,9 @@ use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Order\Actions\CancelUnpaidWholesaleOrder;
+use App\Domain\Order\Actions\ConfirmWholesaleOrderPayment;
+use App\Domain\Order\Enums\WholesaleCancellation;
 use App\Domain\Package\Actions\ActivatePackageChange;
 use App\Domain\Package\Actions\ActivateRenewal;
 use App\Domain\Package\Models\UserPackage;
@@ -44,6 +47,8 @@ class SettlePayment
         protected ActivatePackageChange $packageChanges,
         protected SettleCouponRedemption $couponRedemptions,
         protected CreditSettledPayment $walletCredits,
+        protected ConfirmWholesaleOrderPayment $wholesaleOrders,
+        protected CancelUnpaidWholesaleOrder $unpaidWholesaleOrders,
         protected RecordPaymentLog $logs,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
@@ -77,6 +82,18 @@ class SettlePayment
                 gatewayReference: (string) $payment->gateway_reference,
                 amount: $payment->amount_minor,
             );
+        }
+
+        /*
+         * A wholesale order's payment window is also its stock's (§19.1, P4-10).
+         *
+         * Past it, the order is cancelled and its stock given back before the
+         * gateway is asked anything — so a success that arrives late finds a
+         * closed payment and goes to reconciliation below, rather than paying
+         * for stock that is no longer held.
+         */
+        if ($this->closeOverdueWholesaleOrder($payment)) {
+            $payment->refresh();
         }
 
         /*
@@ -425,6 +442,10 @@ class SettlePayment
             PaymentPurpose::WalletDeposit,
             PaymentPurpose::WalletTopUp => $this->creditWallet($payment),
 
+            // The ERP wholesale order this pays for: stock committed and paid,
+            // or held for review when the stock is not there (P4-9).
+            PaymentPurpose::WholesaleOrder => $this->confirmWholesaleOrder($payment),
+
             /*
              * Real purposes whose modules are later phases. No route today can
              * take a payment for one, so reaching this means either a module
@@ -432,7 +453,6 @@ class SettlePayment
              * payment table it should not have — and both are worth a person
              * looking at rather than a silent success.
              */
-            PaymentPurpose::WholesaleOrder,
             PaymentPurpose::WebsiteOrder,
             PaymentPurpose::WebsiteSetup,
             PaymentPurpose::DomainCharge,
@@ -467,6 +487,54 @@ class SettlePayment
             outcome: 'undeliverable_purpose',
             context: ['purpose' => $payment->purpose->value],
         );
+    }
+
+    /**
+     * Confirm the wholesale order a settled payment paid for.
+     *
+     * Wrapped like every other consequence: the money arrived either way. An
+     * order left waiting is picked up by the wholesale order sweep, which runs
+     * the same idempotent confirmation.
+     */
+    protected function confirmWholesaleOrder(Payment $payment): void
+    {
+        try {
+            $this->wholesaleOrders->handle($payment);
+        } catch (Throwable $throwable) {
+            $this->log->channel('payment')->critical('Could not confirm a settled wholesale order', [
+                'payment' => $payment->reference,
+                'business_account' => $payment->business_account_id,
+                'amount_minor' => $payment->amount_minor->minorUnits,
+                'error' => $throwable->getMessage(),
+            ]);
+
+            $this->logs->handle(
+                gateway: (string) $payment->gateway,
+                direction: PaymentLog::OUTBOUND,
+                event: 'settle',
+                payment: $payment,
+                amount: $payment->amount_minor,
+                outcome: 'order_unconfirmed',
+                context: ['error' => $throwable->getMessage()],
+            );
+        }
+    }
+
+    /**
+     * Cancel an unpaid wholesale order whose payment window has closed.
+     *
+     * Runs inside the settlement lock this class already holds.
+     */
+    protected function closeOverdueWholesaleOrder(Payment $payment): bool
+    {
+        if ($payment->purpose !== PaymentPurpose::WholesaleOrder
+            || ! in_array($payment->status, PaymentStatus::open(), true)
+            || $payment->expires_at === null
+            || $payment->expires_at->isFuture()) {
+            return false;
+        }
+
+        return $this->unpaidWholesaleOrders->forPaymentWithinSettlement($payment, WholesaleCancellation::PaymentExpired);
     }
 
     /**
@@ -616,5 +684,21 @@ class SettlePayment
          * fewer promotion than the administrator granted.
          */
         $this->couponRedemptions->release($payment);
+
+        /*
+         * And a wholesale order waiting on it is cancelled with its stock given
+         * back now, rather than on the sweep's next pass (P4-10). The sweep
+         * still catches it if this cannot finish.
+         */
+        if ($payment->purpose === PaymentPurpose::WholesaleOrder) {
+            try {
+                $this->unpaidWholesaleOrders->forPaymentWithinSettlement($payment, WholesaleCancellation::PaymentFailed);
+            } catch (Throwable $throwable) {
+                $this->log->channel('payment')->error('Could not cancel a wholesale order after its payment failed', [
+                    'payment' => $payment->reference,
+                    'error' => $throwable->getMessage(),
+                ]);
+            }
+        }
     }
 }

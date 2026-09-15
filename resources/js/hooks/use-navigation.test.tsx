@@ -243,6 +243,56 @@ describe('wholesale order navigation', () => {
 });
 
 /**
+ * Order review (§18.4): staff who may view orders find every order; a partner
+ * finds only their own wholesale orders, never the platform's review.
+ */
+describe('order review navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives staff who may view orders the order review', () => {
+        renderFor({ permissions: { 'order.view': true }, account: null });
+
+        expect(titles).toContain('nav.orders');
+    });
+
+    it('gives a partner their own orders and not the review, nor staff without the permission', () => {
+        renderFor({
+            permissions: { 'order.view': false },
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: false,
+                managesStaff: false,
+                hasWholesaleOrders: true,
+            },
+        });
+        expect(titles).toContain('nav.wholesale_orders');
+        expect(titles).not.toContain('nav.orders');
+
+        act(() => root.unmount());
+        root = createRoot(document.createElement('div'));
+
+        renderFor({ permissions: { 'inventory.view': true }, account: null });
+        expect(titles).not.toContain('nav.orders');
+    });
+});
+
+/**
  * Allocated stock (§19, P3-30): staff who may view inventory find every
  * allocation; an account finds its own only while it holds some.
  */

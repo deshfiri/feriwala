@@ -19,7 +19,7 @@ use App\Support\Money\Money;
  * allocations, so what was quoted is exactly what is stored, invoiced, reported,
  * and refunded against (§5.1, §9).
  */
-class ActivationQuote
+class ActivationQuote implements PaymentQuote
 {
     /**
      * @param  array<int, QuoteLine>  $lines
@@ -33,6 +33,19 @@ class ActivationQuote
         public readonly Currency $currency,
         public readonly ?TaxBreakdown $tax = null,
     ) {}
+
+    /**
+     * @return array<int, QuoteLine>
+     */
+    public function paymentLines(): array
+    {
+        return $this->lines;
+    }
+
+    public function paymentCurrency(): Currency
+    {
+        return $this->currency;
+    }
 
     /**
      * The per-rate tax detail, empty rather than null when nothing was charged.

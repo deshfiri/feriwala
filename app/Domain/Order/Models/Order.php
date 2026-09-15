@@ -9,6 +9,7 @@ use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderFulfillmentStatus;
@@ -69,6 +70,7 @@ use LogicException;
  * @property OrderCourierStatus $courier_status
  * @property OrderDeliveryStatus $delivery_status
  * @property string|null $customer_note
+ * @property IntendedResaleChannel|null $intended_resale_channel
  * @property CarbonImmutable $placed_at
  * @property CarbonImmutable|null $paid_at
  * @property CarbonImmutable|null $cancelled_at
@@ -102,6 +104,7 @@ class Order extends Model
             'fulfillment_status' => OrderFulfillmentStatus::class,
             'courier_status' => OrderCourierStatus::class,
             'delivery_status' => OrderDeliveryStatus::class,
+            'intended_resale_channel' => IntendedResaleChannel::class,
             'customer' => 'array',
             'billing_address' => 'array',
             'shipping_address' => 'array',

@@ -24,6 +24,13 @@ enum AllocationType: string
     case DomainCharge = 'domain_charge';
     case HostingCharge = 'hosting_charge';
     case MaintenanceCharge = 'maintenance_charge';
+
+    /** Goods bought on an ERP wholesale order, one component per line (§14, P4-9). */
+    case WholesaleGoods = 'wholesale_goods';
+
+    /** Delivering an ERP wholesale order (§14, P4-7). */
+    case DeliveryCharge = 'delivery_charge';
+
     case Discount = 'discount';
     case Tax = 'tax';
     case GatewayCharge = 'gateway_charge';
@@ -39,6 +46,8 @@ enum AllocationType: string
             self::DomainCharge => 'Domain',
             self::HostingCharge => 'Hosting',
             self::MaintenanceCharge => 'Maintenance',
+            self::WholesaleGoods => 'Wholesale goods',
+            self::DeliveryCharge => 'Delivery charge',
             self::Discount => 'Discount',
             self::Tax => 'VAT',
             self::GatewayCharge => 'Payment charge',
@@ -87,7 +96,10 @@ enum AllocationType: string
             self::WebsiteSetup,
             self::DomainCharge,
             self::HostingCharge,
-            self::MaintenanceCharge => true,
+            self::MaintenanceCharge,
+            // Taxed per line and on delivery through the tax engine's own resolution (P4-7).
+            self::WholesaleGoods,
+            self::DeliveryCharge => true,
             default => false,
         };
     }

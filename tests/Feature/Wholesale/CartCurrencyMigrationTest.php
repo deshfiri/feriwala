@@ -97,9 +97,10 @@ function cartCurrencyMigrateToP48(): array
     $files = cartCurrencyMigrationFiles();
 
     // The P4-8 schema is every migration up to and including P4-8's own; the one
-    // under test must be the only migration after it, or this is not that schema.
+    // under test must be the next migration after it, or this is not that schema.
+    // Later migrations are never run here.
     $after = array_keys(array_filter($files, fn (string $name) => strcmp($name, CART_CURRENCY_P4_8_MIGRATION) > 0, ARRAY_FILTER_USE_KEY));
-    expect($after)->toBe([CART_CURRENCY_MIGRATION]);
+    expect($after[0] ?? null)->toBe(CART_CURRENCY_MIGRATION);
 
     cartCurrencyMigrate(array_filter($files, fn (string $name) => strcmp($name, CART_CURRENCY_P4_8_MIGRATION) <= 0, ARRAY_FILTER_USE_KEY));
 

@@ -42,6 +42,7 @@ import { index as stockReservations } from '@/routes/admin/inventory/reservation
 import { index as stockLevels } from '@/routes/admin/inventory/stock';
 import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
+import { index as adminOrders } from '@/routes/admin/orders';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
@@ -305,6 +306,20 @@ export function useNavigation(): {
                               title: t('nav.allocations'),
                               href: stockAllocations(),
                               icon: PackageCheck,
+                          },
+                      ]
+                    : []),
+                /*
+                 * Every order, for the staff who review them (§18.4). Not the
+                 * partner's own orders door above: that one needs an account,
+                 * this one needs `order.view`, and neither implies the other.
+                 */
+                ...(permissions['order.view']
+                    ? [
+                          {
+                              title: t('nav.orders'),
+                              href: adminOrders(),
+                              icon: ClipboardList,
                           },
                       ]
                     : []),
