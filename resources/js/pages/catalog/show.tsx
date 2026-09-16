@@ -2,6 +2,7 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft, ImageOff, ShoppingBasket } from 'lucide-react';
 import { useState } from 'react';
 import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
+import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -16,6 +17,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { index as dropshippingIndex } from '@/routes/catalog/dropshipping';
 import { index as wholesaleIndex } from '@/routes/catalog/wholesale';
 import { show as cartShow } from '@/routes/wholesale/cart';
+import { index as websiteProducts } from '@/routes/websites/products';
 import type { BrowseCard, BrowseDetail, SalesChannelName } from '@/types';
 import { ProductCard } from './browse';
 
@@ -24,6 +26,14 @@ type Props = {
     product: BrowseDetail;
     /** Only the recommendations this account may itself open on this channel. */
     related: BrowseCard[];
+    /**
+     * The account's open storefronts, and whether each already sells this
+     * (§15, P5-1). Empty on the wholesale screen and for an account with no
+     * website.
+     */
+    websites?: { id: string; name: string; selected: boolean }[];
+    /** The product's public identifier, for choosing it for a storefront. */
+    product_id?: string;
 };
 
 /**
@@ -34,7 +44,13 @@ type Props = {
  * quantity pricing is resolved at each band's starting quantity before it
  * arrives, so a band the base price has since undercut shows what is charged.
  */
-export default function CatalogueProduct({ channel, product, related }: Props) {
+export default function CatalogueProduct({
+    channel,
+    product,
+    related,
+    websites = [],
+    product_id: productId,
+}: Props) {
     const { t } = useTranslation();
     const [active, setActive] = useState(0);
 
@@ -61,6 +77,92 @@ export default function CatalogueProduct({ channel, product, related }: Props) {
                     title={product.name}
                     description={`${product.category}${product.brand ? ` · ${product.brand}` : ''}`}
                 />
+
+                {channel === 'dropshipping' &&
+                    productId &&
+                    websites.length > 0 && (
+                        <SectionCard
+                            title={t('catalog.websites.title')}
+                            description={t('catalog.websites.description')}
+                        >
+                            <ul className="divide-border divide-y">
+                                {websites.map((website) => (
+                                    <li
+                                        key={website.id}
+                                        className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-medium">
+                                                {website.name}
+                                            </div>
+                                            {website.selected && (
+                                                <div className="text-muted-foreground text-xs">
+                                                    {t(
+                                                        'catalog.websites.already',
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {website.selected ? (
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                asChild
+                                            >
+                                                <Link
+                                                    href={websiteProducts(
+                                                        website.id,
+                                                    )}
+                                                >
+                                                    {t(
+                                                        'catalog.websites.manage',
+                                                    )}
+                                                </Link>
+                                            </Button>
+                                        ) : (
+                                            <Form
+                                                {...WebsiteProductController.store.form(
+                                                    website.id,
+                                                )}
+                                                options={{
+                                                    preserveScroll: true,
+                                                }}
+                                                transform={(data) => ({
+                                                    ...data,
+                                                    product: productId,
+                                                })}
+                                            >
+                                                {({ processing, errors }) => (
+                                                    <div className="space-y-1">
+                                                        <Button
+                                                            type="submit"
+                                                            size="sm"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            {processing && (
+                                                                <Spinner />
+                                                            )}
+                                                            {t(
+                                                                'catalog.websites.add',
+                                                            )}
+                                                        </Button>
+                                                        <InputError
+                                                            message={
+                                                                errors.product
+                                                            }
+                                                        />
+                                                    </div>
+                                                )}
+                                            </Form>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        </SectionCard>
+                    )}
 
                 <div className="grid gap-6 lg:grid-cols-2">
                     <div className="space-y-3">

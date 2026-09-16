@@ -16,6 +16,8 @@ use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteProduct;
 use App\Http\Controllers\Controller;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -279,7 +281,57 @@ class CatalogController extends Controller
             'channel' => $channel->value,
             'product' => $detail,
             'related' => $related,
+
+            /*
+             * The storefronts this product could be sold on (§15, P5-1, P5-2).
+             *
+             * Dropshipping only, because a website sells dropshipped goods;
+             * and only the shops that are still open, each saying whether it
+             * already sells this. Selecting is a separate, checked act — this
+             * is what makes the door reachable from where a partner is already
+             * standing.
+             */
+            'websites' => $channel === SalesChannel::Dropshipping
+                ? $this->websitesFor($account, $product)
+                : [],
+
+            // What the selection endpoint is told. The product's public
+            // identifier, never its key (§34.2).
+            'product_id' => $product->public_id,
         ]);
+    }
+
+    /**
+     * This account's open storefronts, and whether each already sells it.
+     *
+     * @return array<int, array{id: string, name: string, selected: bool}>
+     */
+    protected function websitesFor(BusinessAccount $account, Product $product): array
+    {
+        $websites = Website::query()
+            ->forAccount($account)
+            ->open()
+            ->orderBy('name')
+            ->get(['id', 'public_id', 'name']);
+
+        if ($websites->isEmpty()) {
+            return [];
+        }
+
+        $selected = WebsiteProduct::query()
+            ->whereIn('website_id', $websites->pluck('id'))
+            ->where('product_id', $product->id)
+            ->pluck('website_id')
+            ->all();
+
+        return $websites
+            ->map(fn (Website $website) => [
+                'id' => $website->public_id,
+                'name' => $website->name,
+                'selected' => in_array($website->id, $selected, true),
+            ])
+            ->values()
+            ->all();
     }
 
     /**

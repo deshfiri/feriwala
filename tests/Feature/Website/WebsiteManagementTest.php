@@ -8,6 +8,7 @@ use App\Domain\Website\Models\Website;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Managing a storefront from the ERP (§16.3, P5-12, P5-14).
@@ -157,15 +158,33 @@ describe('products through website management', function () {
      * both halves: no website route creates a product, and the catalogue's own
      * create endpoint refuses a partner outright (§12).
      */
-    it('has no route under website management that creates one', function () {
-        $paths = collect(app('router')->getRoutes()->getRoutes())
-            ->map(fn ($route) => $route->uri())
-            ->filter(fn (string $uri) => str_starts_with($uri, 'websites/'))
-            ->values();
+    it('creates none from the selection endpoint, whatever is sent to it', function () {
+        $before = Product::query()->count();
 
-        expect($paths)->not->toBeEmpty()
-            ->and($paths->filter(fn (string $uri) => str_contains($uri, 'products'))->all())
-            ->toBe([]);
+        // The only product route under website management *selects* one that
+        // already exists. A full product payload posted at it creates nothing:
+        // the fields are not even read, and an identifier that names no
+        // eligible product is a 404.
+        $this->actingAs($this->account->owner)
+            ->from(route('websites.products.index', $this->website->public_id))
+            ->post(route('websites.products.store', $this->website->public_id), [
+                'product' => 'MY-OWN-PRODUCT-PAYLOAD-01',
+                'name' => 'My own product',
+                'sku' => 'MINE-0001',
+                'wholesale_price_minor' => 100,
+            ])
+            ->assertSessionHasErrors('product');
+
+        $this->actingAs($this->account->owner)
+            ->post(route('websites.products.store', $this->website->public_id), [
+                'product' => (string) Str::ulid(),
+                'name' => 'My own product',
+                'sku' => 'MINE-0001',
+            ])
+            ->assertStatus(404);
+
+        expect(Product::query()->count())->toBe($before)
+            ->and(Product::query()->where('name', 'My own product')->exists())->toBeFalse();
     });
 
     it('refuses a partner the catalogue\'s own create endpoint', function () {

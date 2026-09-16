@@ -65,6 +65,7 @@ import { show as wholesaleCart } from '@/routes/wholesale/cart';
 import { index as wholesaleOrders } from '@/routes/wholesale/orders';
 import { index as websites } from '@/routes/websites';
 import { index as adminWebsites } from '@/routes/admin/websites';
+import { index as websitePricing } from '@/routes/admin/website-pricing';
 import type { NavGroup } from '@/types';
 
 /**
@@ -352,6 +353,20 @@ export function useNavigation(): {
                               title: t('nav.partner_websites'),
                               href: adminWebsites(),
                               icon: MonitorSmartphone,
+                          },
+                      ]
+                    : []),
+                /*
+                 * What partners may charge for what they sell (§15.1). Behind
+                 * its own permission: reading a storefront and pricing the
+                 * whole platform's selling bounds are different jobs.
+                 */
+                ...(permissions['website.manage_settings']
+                    ? [
+                          {
+                              title: t('nav.website_pricing'),
+                              href: websitePricing(),
+                              icon: Scale,
                           },
                       ]
                     : []),

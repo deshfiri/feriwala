@@ -30,6 +30,7 @@ return [
     'attributes' => 'অ্যাট্রিবিউট',
     'orders' => 'অর্ডার',
     'partner_websites' => 'পার্টনার ওয়েবসাইট',
+    'website_pricing' => 'ওয়েবসাইট মূল্য',
     'activation_approvals' => 'অ্যাক্টিভেশন অনুমোদন',
     'billing_rules' => 'বিলিং নিয়ম',
     'payment_gateways' => 'পেমেন্ট গেটওয়ে',

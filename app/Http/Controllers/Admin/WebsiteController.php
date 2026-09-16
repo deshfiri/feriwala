@@ -55,14 +55,8 @@ class WebsiteController extends Controller
         $websites = $this->overview->paginate($filters);
 
         return Inertia::render('admin/websites/index', [
-            'websites' => [
-                'data' => $websites->getCollection()
-                    ->map(fn (Website $website) => $this->overview->summary($website))
-                    ->all(),
-                'current_page' => $websites->currentPage(),
-                'last_page' => $websites->lastPage(),
-                'total' => $websites->total(),
-            ],
+            // The whole paginator, so the table has its range and page size.
+            'websites' => $websites->through(fn (Website $website) => $this->overview->summary($website)),
             'filters' => $filters,
             'statuses' => array_map(fn (WebsiteStatus $status) => [
                 'value' => $status->value,

@@ -132,3 +132,59 @@ export type WebsiteWallet = {
     available: Money | null;
     currency: string;
 };
+
+/**
+ * What a partner may charge for one product, and what they may change (§15.1).
+ *
+ * Sent so the screen can show the bounds and disable what is locked. The server
+ * checks all of it again on every save — this is a convenience, never the rule.
+ */
+export type WebsitePricingTerms = {
+    allows_user_pricing: boolean;
+    minimum: Money | null;
+    maximum: Money | null;
+    suggested: Money | null;
+    max_margin_percent: number | null;
+    margin_ceiling: Money | null;
+    locked_fields: string[];
+};
+
+/**
+ * One central product, selected for one storefront (§15).
+ */
+export type WebsiteSelection = {
+    id: string;
+    product: {
+        id: string;
+        name: string;
+        sku: string;
+        image: string | null;
+    };
+    status: string;
+    status_label: string;
+    sync_status: string;
+    sync_label: string;
+    last_synced_at: string | null;
+    sync_error: string | null;
+    price: Money | null;
+    promotional_price: Money | null;
+    promo_title: string | null;
+    marketing_description: string | null;
+    is_featured: boolean;
+    display_order: number;
+    category: { id: string; name: string } | null;
+    terms: WebsitePricingTerms;
+    published_at: string | null;
+};
+
+/**
+ * A storefront's own arrangement of what it sells (§15).
+ */
+export type WebsiteCategoryRow = {
+    id: string;
+    name: string;
+    slug: string;
+    position: number;
+    is_active: boolean;
+    products_count: number;
+};

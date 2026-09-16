@@ -38,6 +38,7 @@ use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
+use App\Http\Controllers\Admin\WebsitePricingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\AllocatedStockController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
@@ -50,7 +51,9 @@ use App\Http\Controllers\Erp\PaymentReturnController;
 use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
+use App\Http\Controllers\Erp\WebsiteCategoryController;
 use App\Http\Controllers\Erp\WebsiteController;
+use App\Http\Controllers\Erp\WebsiteProductController;
 use App\Http\Controllers\Erp\WebsiteSettingsController;
 use App\Http\Controllers\Erp\WholesaleCartController;
 use App\Http\Controllers\Erp\WholesaleCheckoutController;
@@ -316,6 +319,37 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::delete('websites/{website}/settings/{asset}', [WebsiteSettingsController::class, 'destroyImage'])
             ->whereIn('asset', ['logo', 'banner'])
             ->name('websites.settings.image.destroy');
+
+        /*
+         * What one storefront sells (§15, §15.1, P5-1–P5-7).
+         *
+         * **Selection, never authorship.** Every product here already exists in
+         * the central catalogue; `store` records that this shop sells one of
+         * them and creates nothing (§12, §16.3). Prices are checked against the
+         * administrator's bounds on the server, every time.
+         */
+        Route::get('websites/{website}/products', [WebsiteProductController::class, 'index'])
+            ->name('websites.products.index');
+        Route::post('websites/{website}/products', [WebsiteProductController::class, 'store'])
+            ->name('websites.products.store');
+        Route::patch('websites/{website}/products/{selection}', [WebsiteProductController::class, 'update'])
+            ->name('websites.products.update');
+        Route::put('websites/{website}/products/{selection}/publication', [WebsiteProductController::class, 'updatePublication'])
+            ->name('websites.products.publication.update');
+        Route::delete('websites/{website}/products/{selection}', [WebsiteProductController::class, 'destroy'])
+            ->name('websites.products.destroy');
+
+        // The shop's own arrangement of what it sells (§15, P5-4).
+        Route::get('websites/{website}/categories', [WebsiteCategoryController::class, 'index'])
+            ->name('websites.categories.index');
+        Route::post('websites/{website}/categories', [WebsiteCategoryController::class, 'store'])
+            ->name('websites.categories.store');
+        Route::post('websites/{website}/categories/order', [WebsiteCategoryController::class, 'reorder'])
+            ->name('websites.categories.reorder');
+        Route::patch('websites/{website}/categories/{category}', [WebsiteCategoryController::class, 'update'])
+            ->name('websites.categories.update');
+        Route::delete('websites/{website}/categories/{category}', [WebsiteCategoryController::class, 'destroy'])
+            ->name('websites.categories.destroy');
 
         // Where the gateway sends the person back to, naming the order (§26.4).
         // None of them settles anything on the browser's word. GET only; a
@@ -800,6 +834,19 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('websites.domains.store');
         Route::post('websites/{website}/hostings', [AdminWebsiteController::class, 'storeHosting'])
             ->name('websites.hostings.store');
+
+        /*
+         * What partners may charge for what they sell (§15.1, P5-5). Behind
+         * `website.manage_settings`: deciding the bounds for every partner is
+         * not the same job as administering one storefront. Rules are opened
+         * and closed, never edited.
+         */
+        Route::get('website-pricing', [WebsitePricingController::class, 'index'])
+            ->name('website-pricing.index');
+        Route::post('website-pricing', [WebsitePricingController::class, 'store'])
+            ->name('website-pricing.store');
+        Route::delete('website-pricing/{rule}', [WebsitePricingController::class, 'close'])
+            ->name('website-pricing.close');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

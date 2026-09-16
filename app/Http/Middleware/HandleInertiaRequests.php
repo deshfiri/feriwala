@@ -74,6 +74,11 @@ class HandleInertiaRequests extends Middleware
         // A partner runs their own on their own pages and holds none of this.
         [PermissionModule::Website, PermissionAction::View],
 
+        // What every partner may charge for what they sell (§15.1). Its own
+        // permission: setting the bounds for the platform is not the same job
+        // as administering one storefront.
+        [PermissionModule::Website, PermissionAction::ManageSettings],
+
         // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
         [PermissionModule::Payment, PermissionAction::View],
 

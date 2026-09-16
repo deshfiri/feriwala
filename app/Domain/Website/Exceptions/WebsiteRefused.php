@@ -2,6 +2,7 @@
 
 namespace App\Domain\Website\Exceptions;
 
+use App\Domain\Website\Data\WebsitePricingTerms;
 use RuntimeException;
 
 /**
@@ -91,5 +92,71 @@ class WebsiteRefused extends RuntimeException
     public static function notEditable(): self
     {
         return new self(__('website.refused.not_editable'), 'website');
+    }
+
+    /** The account may not sell this product on this channel (§12, §15). */
+    public static function productNotEligible(): self
+    {
+        return new self(__('website.refused.product_not_eligible'), 'product');
+    }
+
+    /** Choosing the same product twice is the same choice. */
+    public static function alreadySelected(): self
+    {
+        return new self(__('website.refused.already_selected'), 'product');
+    }
+
+    /** Nothing goes on sale at a price nobody set (§15.1). */
+    public static function priceRequired(): self
+    {
+        return new self(__('website.refused.price_required'), 'price');
+    }
+
+    /** The package's published-product limit is used up (§8.1). */
+    public static function publishLimitReached(int $limit): self
+    {
+        return new self(__('website.refused.publish_limit', ['limit' => $limit]), 'product');
+    }
+
+    /**
+     * The price is outside what the administrator allows (§15.1).
+     *
+     * The reason names which bound was crossed, and the message carries the
+     * bound itself: "too low" without the floor is not something a partner can
+     * act on.
+     */
+    public static function priceRefused(string $reason, WebsitePricingTerms $terms): self
+    {
+        return new self(__('website.refused.price.'.$reason, [
+            'minimum' => $terms->minimum?->toDecimal() ?? '—',
+            'maximum' => $terms->maximum?->toDecimal() ?? '—',
+            'ceiling' => $terms->marginCeiling()?->toDecimal() ?? '—',
+        ]), 'price');
+    }
+
+    /** A promotion that is not a reduction is a price rise wearing a badge. */
+    public static function promotionNotAReduction(): self
+    {
+        return new self(__('website.refused.promotion_not_a_reduction'), 'promotional_price');
+    }
+
+    /** The administrator holds this setting for this product (§15.1). */
+    public static function fieldLocked(string $field): self
+    {
+        return new self(__('website.refused.field_locked', [
+            'field' => __('website.fields.'.$field),
+        ]), $field);
+    }
+
+    /** A category belongs to one storefront, and this is not one of its own. */
+    public static function categoryNotFound(): self
+    {
+        return new self(__('website.refused.category_not_found'), 'website_category_id');
+    }
+
+    /** Two categories on one storefront cannot share an address. */
+    public static function categoryNameTaken(): self
+    {
+        return new self(__('website.refused.category_name_taken'), 'name');
     }
 }

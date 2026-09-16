@@ -260,6 +260,17 @@ return [
         'disabled' => ':channel switched off.',
     ],
 
+    /*
+     * Choosing a product for one of your own storefronts (§15, P5-1).
+     */
+    'websites' => [
+        'title' => 'Sell this on your website',
+        'description' => 'Adding it selects this product for your storefront. You set the price on the website’s own product screen, within the allowed range.',
+        'add' => 'Add to this website',
+        'already' => 'Already on this website',
+        'manage' => 'Manage',
+    ],
+
     'browse' => [
         'stock' => 'Stock',
         'all_stock' => 'Any stock',
