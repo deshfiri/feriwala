@@ -37,6 +37,7 @@ use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
+use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\AllocatedStockController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\Erp\PaymentReturnController;
 use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
+use App\Http\Controllers\Erp\WebsiteController;
 use App\Http\Controllers\Erp\WholesaleCartController;
 use App\Http\Controllers\Erp\WholesaleCheckoutController;
 use App\Http\Controllers\Erp\WholesaleOrderController;
@@ -267,6 +269,33 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wholesale.orders.payment.store');
         Route::post('wholesale/orders/{order}/cancellation', [WholesaleOrderController::class, 'cancel'])
             ->name('wholesale.orders.cancellation.store');
+
+        /*
+         * The account's own dedicated websites (§16, P5-8–P5-11, P5-15).
+         *
+         * Self-scoped through the membership: no account identifier in any of
+         * these URLs, and a website is found among this account's or not at
+         * all. Every charge is priced on the server and paid from the wallet;
+         * the browser names which charge, never how much.
+         */
+        Route::get('websites', [WebsiteController::class, 'index'])
+            ->name('websites.index');
+        Route::get('websites/create', [WebsiteController::class, 'create'])
+            ->name('websites.create');
+        Route::post('websites', [WebsiteController::class, 'store'])
+            ->name('websites.store');
+        Route::get('websites/{website}', [WebsiteController::class, 'show'])
+            ->name('websites.show');
+        Route::post('websites/{website}/charges/{charge}/payment', [WebsiteController::class, 'payCharge'])
+            ->name('websites.charges.pay');
+        Route::post('websites/{website}/domains/{domain}/renewal', [WebsiteController::class, 'renewDomain'])
+            ->name('websites.domains.renew');
+        Route::post('websites/{website}/hostings/{hosting}/renewal', [WebsiteController::class, 'renewHosting'])
+            ->name('websites.hostings.renew');
+
+        // The one §16.4 state a partner chooses for themselves (P5-15).
+        Route::put('websites/{website}/maintenance', [WebsiteController::class, 'updateMaintenance'])
+            ->name('websites.maintenance.update');
 
         // Where the gateway sends the person back to, naming the order (§26.4).
         // None of them settles anything on the browser's word. GET only; a
@@ -734,6 +763,23 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.warehouses.update');
         Route::patch('inventory/warehouses/{warehouse}/default', [WarehouseController::class, 'makeDefault'])
             ->name('inventory.warehouses.default');
+
+        /*
+         * Partner websites (§16.3, §16.4, P5-9, P5-11). Reading is
+         * `website.view`; moving one through its lifecycle and recording what
+         * was provisioned by hand (D9) is `website.edit`. A partner holds
+         * neither — they run their own storefront on their own pages.
+         */
+        Route::get('websites', [AdminWebsiteController::class, 'index'])
+            ->name('websites.index');
+        Route::get('websites/{website}', [AdminWebsiteController::class, 'show'])
+            ->name('websites.show');
+        Route::post('websites/{website}/status', [AdminWebsiteController::class, 'updateStatus'])
+            ->name('websites.status.store');
+        Route::post('websites/{website}/domains', [AdminWebsiteController::class, 'storeDomain'])
+            ->name('websites.domains.store');
+        Route::post('websites/{website}/hostings', [AdminWebsiteController::class, 'storeHosting'])
+            ->name('websites.hostings.store');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

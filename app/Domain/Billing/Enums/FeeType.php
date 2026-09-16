@@ -30,11 +30,30 @@ enum FeeType: string
      */
     case WholesaleDelivery = 'wholesale_delivery';
 
+    /**
+     * What a dedicated website costs to build, to keep a domain for, to host,
+     * and to have worked on afterwards (§16.2, §24, P5-10).
+     *
+     * Priced by rule like every other fee, so a plan can include a website at a
+     * different setup charge without a second pricing mechanism. Each is
+     * charged to the account's wallet when it falls due; none of them is a
+     * package feature, because a package says *whether* a website is included,
+     * not what it costs.
+     */
+    case WebsiteSetup = 'website_setup';
+    case WebsiteDomain = 'website_domain';
+    case WebsiteHosting = 'website_hosting';
+    case WebsiteMaintenance = 'website_maintenance';
+
     public function label(): string
     {
         return match ($this) {
             self::Registration => 'Registration fee',
             self::WholesaleDelivery => 'Wholesale delivery charge',
+            self::WebsiteSetup => 'Website setup charge',
+            self::WebsiteDomain => 'Domain charge',
+            self::WebsiteHosting => 'Hosting charge',
+            self::WebsiteMaintenance => 'Website maintenance charge',
         };
     }
 }

@@ -79,5 +79,15 @@ return [
             'title' => 'Stock has run out',
             'description' => 'A SKU has no stock available in a warehouse.',
         ],
+
+        'website.status_changed' => [
+            'title' => 'Your website has changed state',
+            'description' => 'Open the website to see where it stands and what it is waiting for.',
+        ],
+
+        'website.renewal_due' => [
+            'title' => 'A website renewal is due',
+            'description' => 'A domain or hosting term is running out. Renew it to keep the shop reachable.',
+        ],
     ],
 ];

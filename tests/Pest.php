@@ -4,8 +4,10 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -13,7 +15,14 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Wallet\Actions\OpenWallet;
+use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\LedgerTransactionType;
+use App\Domain\Wallet\Models\Wallet;
+use App\Domain\Wallet\WalletService;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -63,6 +72,7 @@ pest()->group('product-restrictions')->in('Feature/ProductRestrictions');
 pest()->group('inventory')->in('Feature/Inventory');
 pest()->group('wholesale')->in('Feature/Wholesale');
 pest()->group('dropshipping')->in('Feature/Dropshipping');
+pest()->group('website')->in('Feature/Website');
 pest()->group('website-api')->in('Feature/WebsiteApi');
 pest()->group('orders')->in('Feature/Orders');
 pest()->group('fulfillment')->in('Feature/Fulfillment');
@@ -212,6 +222,106 @@ function testPlatformStaff(PlatformRole $role): User
  * so a package that has lapsed stops granting staff without anything else being
  * told about it.
  */
+/**
+ * An active account on a package granting the features it is handed (§8.1, §16).
+ *
+ * Built the same way as the staff fixture and for the same reason: the
+ * entitlement is read from a real subscription, so a package that lapses stops
+ * granting a website without anything else being told about it.
+ *
+ * Every feature is written as a row, including the limits — a **missing** row
+ * is zero, not unlimited, and a website fixture that relied on absence would be
+ * testing the default rather than the package.
+ *
+ * @param  array<string, int|string|null>  $features  keyed by PackageFeature value; null means unlimited
+ */
+function testAccountWithPackageFeatures(array $features, ?AccountStatus $status = null): BusinessAccount
+{
+    $account = $status === null
+        ? BusinessAccount::factory()->create()
+        : BusinessAccount::factory()->onboarding($status)->create();
+
+    $package = Package::create([
+        'slug' => 'features-'.Str::lower(Str::random(8)),
+        'name' => 'Test package',
+        'fee_minor' => 500000,
+        'currency_code' => 'BDT',
+        'is_active' => true,
+        'is_public' => true,
+    ]);
+
+    foreach ($features as $feature => $value) {
+        $package->features()->create([
+            'feature' => $feature,
+            'value' => $value === null ? null : (string) $value,
+        ]);
+    }
+
+    $userPackage = UserPackage::create([
+        'business_account_id' => $account->id,
+        'package_id' => $package->id,
+        'status' => UserPackageStatus::Active,
+        'started_at' => now()->subDay(),
+        'expires_at' => now()->addYear(),
+        'paid_fee_minor' => 500000,
+        'currency_code' => 'BDT',
+    ]);
+
+    $account->forceFill(['current_user_package_id' => $userPackage->id])->save();
+
+    return $account->refresh();
+}
+
+/**
+ * An active account whose package includes `$limit` dedicated websites (§16).
+ *
+ * Here rather than in one website test file because Pest loads every test into
+ * one global namespace: a helper defined in one file and called from another
+ * works only while both happen to be loaded.
+ *
+ * @param  array<string, string|null>  $extra  further package features
+ */
+function websiteTestAccount(?int $limit = 1, bool $entitled = true, array $extra = []): BusinessAccount
+{
+    return testAccountWithPackageFeatures([
+        PackageFeature::DedicatedWebsite->value => $entitled ? '1' : '0',
+        PackageFeature::WebsiteLimit->value => $limit === null ? null : (string) $limit,
+        ...$extra,
+    ], AccountStatus::Active);
+}
+
+/**
+ * What Feriwala charges for one of the website services, from today.
+ */
+function websiteTestFee(FeeType $type, int $minorUnits): FeeRule
+{
+    return FeeRule::create([
+        'fee_type' => $type->value,
+        'amount_minor' => $minorUnits,
+        'currency_code' => 'BDT',
+        'effective_from' => now()->subDay(),
+    ]);
+}
+
+/**
+ * An open wallet holding `$credit` for the account.
+ */
+function websiteTestWallet(BusinessAccount $account, int $credit): Wallet
+{
+    $wallet = app(OpenWallet::class)->handle($account);
+
+    if ($credit > 0) {
+        app(WalletService::class)->credit(
+            $wallet,
+            LedgerTransactionType::TopUpCredit,
+            Money::of($credit, Currency::BDT),
+            new PostingContext(source: 'test', description: 'Opening'),
+        );
+    }
+
+    return $wallet->refresh();
+}
+
 function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = null): BusinessAccount
 {
     $account = $status === null

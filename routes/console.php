@@ -8,6 +8,7 @@ use App\Domain\Order\Actions\ExpireUnpaidWholesaleOrders;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
+use App\Domain\Website\Actions\SweepWebsiteLifecycle;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -211,3 +212,28 @@ Schedule::call(fn () => app(ExpireUnpaidWholesaleOrders::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Confirm or cancel wholesale orders waiting for payment (§14, §19.1)');
+
+/*
+ * The §16.4 website clock: grace, expiry, low balance, renewals (P5-11, P5-15).
+ *
+ * Nothing in §16.4 happens because somebody clicked something — a package
+ * lapses, a balance falls below what was agreed, a domain reaches its last
+ * month. Daily, and **after** the subscription sweep at 01:30: a term that
+ * expired overnight should already have expired before this asks whether the
+ * package still entitles a website.
+ *
+ * `onOneServer` and `withoutOverlapping` are not optional (§41). This pass
+ * takes storefronts down and sends renewal warnings; two application servers
+ * running it at once would mean two messages for one expiry. Idempotent on its
+ * own as well: every move goes through the status map under a row lock, and the
+ * reminder stage stored on each service is what stops a second message.
+ */
+Schedule::call(fn () => app(SweepWebsiteLifecycle::class)->handle())
+    ->name('website-lifecycle-sweep')
+    ->dailyAt('02:15')
+    // The partner's day, not the server's: "your domain expires on the 30th"
+    // has to mean the 30th where they are.
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Move websites through grace, expiry, renewal and low balance (§16.4, §24.3)');

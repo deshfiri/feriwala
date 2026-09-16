@@ -10,6 +10,8 @@ use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Website\Enums\WebsiteStatus;
+use App\Domain\Website\Models\Website;
 use App\Domain\Wholesale\Models\CartItem;
 use App\Models\User;
 
@@ -68,6 +70,15 @@ readonly class AccountContext
          * stops including wholesale — an order somebody paid for is theirs.
          */
         public bool $hasWholesaleOrders = false,
+
+        /*
+         * Whether the package includes a dedicated website (§16, P5-8), and
+         * whether the account already has one open. Either opens the door: a
+         * partner whose package stopped including websites still has a shop to
+         * look at, and a status to act on.
+         */
+        public bool $allowsWebsites = false,
+        public bool $hasWebsites = false,
     ) {}
 
     public static function forUser(User $user, StaffAllowance $allowance, ?Entitlements $entitlements = null): ?self
@@ -114,6 +125,12 @@ readonly class AccountContext
             hasWholesaleOrders: Order::query()
                 ->where('business_account_id', $account->id)
                 ->where('source', OrderSource::ErpWholesale)
+                ->exists(),
+            allowsWebsites: $entitlements !== null && $account->canTransact()
+                && $entitlements->allows($account, PackageFeature::DedicatedWebsite),
+            hasWebsites: Website::query()
+                ->where('business_account_id', $account->id)
+                ->where('status', '!=', WebsiteStatus::Closed->value)
                 ->exists(),
         );
     }

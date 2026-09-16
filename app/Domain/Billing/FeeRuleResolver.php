@@ -111,6 +111,43 @@ class FeeRuleResolver
     }
 
     /**
+     * What one of the website charges costs for a package, on a date (§16.2, P5-10).
+     *
+     * The same outward walk as every other fee — the account's package first,
+     * then the global rule, then zero. Zero is a real answer: a plan that
+     * includes hosting charges nothing for it, and a platform that has priced
+     * nothing must under-charge visibly rather than invent a figure.
+     *
+     * A rule priced in another currency charges nothing and says so, as the
+     * wholesale delivery rule does: converting would apply a rate nobody agreed
+     * to somebody's money (D4).
+     */
+    public function websiteCharge(FeeType $type, ?Package $package, Currency $currency, ?CarbonImmutable $at = null): Money
+    {
+        $at ??= CarbonImmutable::now();
+
+        $rule = ($package !== null ? $this->ruleFor($type, $package->id, $at) : null)
+            ?? $this->ruleFor($type, null, $at);
+
+        if ($rule === null) {
+            return Money::zero($currency);
+        }
+
+        if ($rule->amount_minor->currency !== $currency) {
+            Log::warning('Website charge rule is priced in another currency.', [
+                'fee_rule' => $rule->id,
+                'fee_type' => $type->value,
+                'rule_currency' => $rule->amount_minor->currency->value,
+                'currency' => $currency->value,
+            ]);
+
+            return Money::zero($currency);
+        }
+
+        return $rule->amount_minor;
+    }
+
+    /**
      * The rule in force for one fee at one level of specificity.
      *
      * The latest window wins where two overlap. Overlap is a misconfiguration

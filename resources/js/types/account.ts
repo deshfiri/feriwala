@@ -30,6 +30,10 @@ export interface AccountContext {
     wholesaleCartLines: number;
     /** The account has wholesale orders to follow (§10.2, P4-12). */
     hasWholesaleOrders: boolean;
+    /** Trading, on a package that includes a dedicated website (§16, P5-8). */
+    allowsWebsites: boolean;
+    /** The account has a website that is not closed (§16.4). */
+    hasWebsites: boolean;
 }
 
 export interface StaffMember {

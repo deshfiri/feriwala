@@ -9,6 +9,7 @@ import {
     ListChecks,
     Lock,
     MessageSquare,
+    MonitorSmartphone,
     Package as PackageIcon,
     PackageCheck,
     Palette,
@@ -62,6 +63,8 @@ import { show as subscription } from '@/routes/subscription';
 import { show as wallet } from '@/routes/wallet';
 import { show as wholesaleCart } from '@/routes/wholesale/cart';
 import { index as wholesaleOrders } from '@/routes/wholesale/orders';
+import { index as websites } from '@/routes/websites';
+import { index as adminWebsites } from '@/routes/admin/websites';
 import type { NavGroup } from '@/types';
 
 /**
@@ -185,6 +188,21 @@ export function useNavigation(): {
                                         title: t('nav.dropshipping_catalogue'),
                                         href: dropshippingCatalogue(),
                                         icon: Store,
+                                    },
+                                ]
+                              : []),
+                          /*
+                           * The account's own storefronts (§16, P5-8). Still
+                           * here once the package stops including one, while a
+                           * website is open: its owner has a status to act on
+                           * and charges that may still be due.
+                           */
+                          ...(account?.allowsWebsites || account?.hasWebsites
+                              ? [
+                                    {
+                                        title: t('nav.websites'),
+                                        href: websites(),
+                                        icon: Globe,
                                     },
                                 ]
                               : []),
@@ -320,6 +338,20 @@ export function useNavigation(): {
                               title: t('nav.orders'),
                               href: adminOrders(),
                               icon: ClipboardList,
+                          },
+                      ]
+                    : []),
+                /*
+                 * Every partner storefront (§16.3). Not the partner's own
+                 * websites door above: that one needs an account, this one
+                 * needs `website.view`, and neither implies the other.
+                 */
+                ...(permissions['website.view']
+                    ? [
+                          {
+                              title: t('nav.partner_websites'),
+                              href: adminWebsites(),
+                              icon: MonitorSmartphone,
                           },
                       ]
                     : []),

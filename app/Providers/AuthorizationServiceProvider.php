@@ -22,6 +22,8 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Policies\OrderPolicy;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Policies\PackagePolicy;
+use App\Domain\Website\Models\Website;
+use App\Domain\Website\Policies\WebsitePolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -71,6 +73,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // see orders (§18.4, §18.5).
         Gate::policy(Order::class, OrderPolicy::class);
 
+        // A dedicated website is run by the account that owns it and
+        // administered by staff who may administer websites (§16.3).
+        Gate::policy(Website::class, WebsitePolicy::class);
+
         /*
          * Super Admin passes every check without holding permission rows, so
          * the grant cannot drift out of step with the catalogue as modules are
@@ -116,6 +122,17 @@ class AuthorizationServiceProvider extends ServiceProvider
              *     partner handed it must not read another business's sales.
              */
             if (OrderPolicy::isOrderAdministrationAbility($ability) && CatalogPolicy::isBusinessIdentity($user)) {
+                return false;
+            }
+
+            /*
+             * 1c. Platform website administration, the same (§16.3, §17.3).
+             *     A partner runs their own storefront through the website
+             *     policy; `website.view` would be every partner's storefront,
+             *     and one handed it must not read another's credentials,
+             *     customers or sales.
+             */
+            if (WebsitePolicy::isWebsiteAdministrationAbility($ability) && CatalogPolicy::isBusinessIdentity($user)) {
                 return false;
             }
 

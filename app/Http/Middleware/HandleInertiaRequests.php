@@ -70,6 +70,10 @@ class HandleInertiaRequests extends Middleware
         // their own orders on their own page and holds none of this.
         [PermissionModule::Order, PermissionAction::View],
 
+        // Every partner storefront, for the staff who administer them (§16.3).
+        // A partner runs their own on their own pages and holds none of this.
+        [PermissionModule::Website, PermissionAction::View],
+
         // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
         [PermissionModule::Payment, PermissionAction::View],
 
