@@ -9,6 +9,7 @@ use App\Domain\Website\Models\WebsiteCharge;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteHosting;
 use App\Domain\Website\Models\WebsiteStatusChange;
+use App\Domain\Website\WebsiteImageStore;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -33,6 +34,10 @@ use Illuminate\Pagination\LengthAwarePaginator;
  */
 class WebsiteOverview
 {
+    public function __construct(
+        protected WebsiteImageStore $images,
+    ) {}
+
     /**
      * One account's own websites, newest first.
      *
@@ -122,8 +127,9 @@ class WebsiteOverview
             'theme' => $website->theme->value,
             'primary_color' => $website->primary_color,
             'secondary_color' => $website->secondary_color,
-            'logo_url' => null,
-            'banner_url' => null,
+            // Addresses a browser can load, never storage paths.
+            'logo_url' => $this->images->url($website->logo_path),
+            'banner_url' => $this->images->url($website->banner_path),
             'contact' => [
                 'email' => $website->contact_email,
                 'phone' => $website->contact_phone,

@@ -75,4 +75,21 @@ class WebsiteRefused extends RuntimeException
     {
         return new self(__('website.refused.busy'), 'website');
     }
+
+    /** Not a picture a browser renders without a plugin (§16.3, P5-12). */
+    public static function imageTypeNotAccepted(): self
+    {
+        return new self(__('website.refused.image_type'), 'image');
+    }
+
+    public static function imageTooLarge(): self
+    {
+        return new self(__('website.refused.image_too_large'), 'image');
+    }
+
+    /** A closed storefront is not edited; it is finished with. */
+    public static function notEditable(): self
+    {
+        return new self(__('website.refused.not_editable'), 'website');
+    }
 }

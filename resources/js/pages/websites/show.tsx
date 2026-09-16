@@ -1,5 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Settings } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
@@ -19,6 +19,7 @@ import {
     websiteStatusTone,
 } from '@/lib/website';
 import { index } from '@/routes/websites';
+import { edit as settings } from '@/routes/websites/settings';
 import type {
     WebsiteDetail,
     WebsiteDomainRow,
@@ -86,12 +87,23 @@ export default function WebsiteShow({ website, wallet, can }: Props) {
                     title={website.name}
                     description={website.host}
                     actions={
-                        <Button variant="ghost" size="sm" asChild>
-                            <Link href={index()}>
-                                <ArrowLeft aria-hidden="true" />
-                                {t('website.title')}
-                            </Link>
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {can.manage && (
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={settings(website.id)}>
+                                        <Settings aria-hidden="true" />
+                                        {t('website.settings.title')}
+                                    </Link>
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" size="sm" asChild>
+                                <Link href={index()}>
+                                    <ArrowLeft aria-hidden="true" />
+                                    {t('website.title')}
+                                </Link>
+                            </Button>
+                        </div>
                     }
                 />
 

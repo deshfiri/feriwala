@@ -51,6 +51,7 @@ use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WebsiteController;
+use App\Http\Controllers\Erp\WebsiteSettingsController;
 use App\Http\Controllers\Erp\WholesaleCartController;
 use App\Http\Controllers\Erp\WholesaleCheckoutController;
 use App\Http\Controllers\Erp\WholesaleOrderController;
@@ -296,6 +297,25 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // The one §16.4 state a partner chooses for themselves (P5-15).
         Route::put('websites/{website}/maintenance', [WebsiteController::class, 'updateMaintenance'])
             ->name('websites.maintenance.update');
+
+        /*
+         * Managing the storefront itself (§16.3, P5-12, P5-14).
+         *
+         * Exactly what §16.3 lists: information, branding, contact details and
+         * the theme. **No route here creates a product** — §16.3 forbids it,
+         * and the surface simply does not exist. Uploads are POST because a
+         * browser cannot send a file with PUT.
+         */
+        Route::get('websites/{website}/settings', [WebsiteSettingsController::class, 'edit'])
+            ->name('websites.settings.edit');
+        Route::put('websites/{website}/settings', [WebsiteSettingsController::class, 'update'])
+            ->name('websites.settings.update');
+        Route::post('websites/{website}/settings/{asset}', [WebsiteSettingsController::class, 'updateImage'])
+            ->whereIn('asset', ['logo', 'banner'])
+            ->name('websites.settings.image.update');
+        Route::delete('websites/{website}/settings/{asset}', [WebsiteSettingsController::class, 'destroyImage'])
+            ->whereIn('asset', ['logo', 'banner'])
+            ->name('websites.settings.image.destroy');
 
         // Where the gateway sends the person back to, naming the order (§26.4).
         // None of them settles anything on the browser's word. GET only; a

@@ -102,6 +102,37 @@ return [
         'no_history' => 'Nothing has happened to this website yet.',
     ],
 
+    'themes' => [
+        'classic' => 'Classic',
+        'modern' => 'Modern',
+        'minimal' => 'Minimal',
+    ],
+
+    'settings' => [
+        'title' => 'Website settings',
+        'subtitle' => 'Your shop’s name, look and contact details.',
+        'information' => 'Information',
+        'tagline' => 'Tagline',
+        'about' => 'About the shop',
+        'theme' => 'Theme',
+        'primary' => 'Primary colour',
+        'secondary' => 'Accent colour',
+        'contact_email' => 'Contact email',
+        'contact_phone' => 'Contact phone',
+        'contact_address' => 'Contact address',
+        'save' => 'Save settings',
+        'logo' => 'Logo',
+        'logo_alt' => 'The logo for :website',
+        'banner' => 'Banner',
+        'banner_alt' => 'The banner for :website',
+        'image_hint' => 'JPEG, PNG or WebP, up to :size MB.',
+        'choose_file' => 'Choose an image',
+        'upload' => 'Upload',
+        'remove' => 'Remove',
+        'products_title' => 'Products',
+        'products_body' => 'Products come from the Feriwala catalogue. Choose the ones your shop sells from the dropshipping catalogue — new products are not created here.',
+    ],
+
     'admin' => [
         'search' => 'Search by name or address',
         'status_filter' => 'Status',
@@ -138,6 +169,9 @@ return [
         'status_changed' => 'The website has been moved.',
         'domain_recorded' => 'The domain registration has been recorded.',
         'hosting_recorded' => 'The hosting term has been recorded.',
+        'settings_saved' => 'Your website settings have been saved.',
+        'image_saved' => 'The image has been uploaded.',
+        'image_removed' => 'The image has been removed.',
     ],
 
     'refused' => [
@@ -151,6 +185,9 @@ return [
         'closed' => 'This website is closed.',
         'nothing_to_renew' => 'There is nothing to renew.',
         'busy' => 'Someone else is working on this website. Try again in a moment.',
+        'image_type' => 'That file is not a JPEG, PNG or WebP image.',
+        'image_too_large' => 'That image is too large.',
+        'not_editable' => 'This website is closed and cannot be changed.',
     ],
 
     'notes' => [
