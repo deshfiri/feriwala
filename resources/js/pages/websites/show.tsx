@@ -1,5 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, PackageSearch, Settings } from 'lucide-react';
+import { ArrowLeft, KeyRound, PackageSearch, Settings } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
@@ -19,6 +19,7 @@ import {
     websiteStatusTone,
 } from '@/lib/website';
 import { index } from '@/routes/websites';
+import { show as integration } from '@/routes/websites/integration';
 import { index as products } from '@/routes/websites/products';
 import { edit as settings } from '@/routes/websites/settings';
 import type {
@@ -102,6 +103,13 @@ export default function WebsiteShow({ website, wallet, can }: Props) {
                                         <Link href={settings(website.id)}>
                                             <Settings aria-hidden="true" />
                                             {t('website.settings.title')}
+                                        </Link>
+                                    </Button>
+
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href={integration(website.id)}>
+                                            <KeyRound aria-hidden="true" />
+                                            {t('website.integration.title')}
                                         </Link>
                                     </Button>
                                 </>

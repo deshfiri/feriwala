@@ -154,6 +154,12 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.category_not_found'), 'website_category_id');
     }
 
+    /** A revoked credential is finished with; issue a new one. */
+    public static function credentialRevoked(): self
+    {
+        return new self(__('website.refused.credential_revoked'), 'credential');
+    }
+
     /** Two categories on one storefront cannot share an address. */
     public static function categoryNameTaken(): self
     {

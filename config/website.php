@@ -70,4 +70,34 @@ return [
 
     'term_months' => 12,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Storefront API (contract §3, §4.6)
+    |--------------------------------------------------------------------------
+    |
+    | `clock_skew_seconds` and `nonce_ttl_seconds` are the contract's own
+    | figures and are frozen with it (§3.2): changing them changes what a
+    | storefront has to do, so they are here to be read, not tuned.
+    |
+    | Rate limits are per credential, per minute, and are the contract's
+    | defaults; a website may be given its own (§4.6).
+    |
+    | `rotation_grace_minutes` is how long a rotated secret keeps verifying,
+    | so a storefront has time to redeploy with the new one.
+    |
+    */
+
+    'api' => [
+        'clock_skew_seconds' => 300,
+        'nonce_ttl_seconds' => 600,
+        'rotation_grace_minutes' => (int) env('STOREFRONT_ROTATION_GRACE_MINUTES', 1440),
+        'default_page_size' => 50,
+        'max_page_size' => 200,
+        'rate_limits' => [
+            'read' => 600,
+            'write' => 120,
+            'other' => 300,
+        ],
+    ],
+
 ];

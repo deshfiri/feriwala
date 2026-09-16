@@ -9,6 +9,11 @@ use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Catalog\Enums\AccountScope;
+use App\Domain\Catalog\Enums\PackageScope;
+use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Models\Category;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Enums\PackageFeature;
@@ -20,11 +25,18 @@ use App\Domain\Wallet\Data\PostingContext;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\Wallet;
 use App\Domain\Wallet\WalletService;
+use App\Domain\Website\Actions\ManageWebsiteCredentials;
+use App\Domain\Website\Api\RequestSignature;
+use App\Domain\Website\Enums\CredentialScope;
+use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteCredential;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 /*
@@ -320,6 +332,116 @@ function websiteTestWallet(BusinessAccount $account, int $credit): Wallet
     }
 
     return $wallet->refresh();
+}
+
+/**
+ * An active dropshipping product in an available category, offered to every
+ * package and account, with selling bounds of 2,000–4,000 taka and 2,500
+ * suggested (§11.1).
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function websiteTestProduct(array $attributes = []): Product
+{
+    $category = Category::query()->where('is_active', true)->whereNull('parent_id')->first()
+        ?? Category::create([
+            'name' => 'Clothing',
+            'slug' => 'clothing-'.Str::lower(Str::random(6)),
+            'is_active' => true,
+        ]);
+
+    return Product::create([
+        'name' => 'Cotton panjabi',
+        'slug' => 'cotton-panjabi-'.Str::lower(Str::random(6)),
+        'sku' => 'FW-'.Str::upper(Str::random(6)),
+        'category_id' => $category->id,
+        'brand_id' => null,
+        'status' => ProductStatus::Active,
+        'currency_code' => 'BDT',
+        'wholesale_price_minor' => 150000,
+        'minimum_selling_price_minor' => 200000,
+        'maximum_selling_price_minor' => 400000,
+        'suggested_selling_price_minor' => 250000,
+        'dropshipping_status' => ProductStatus::DropshippingEnabled,
+        'wholesale_status' => ProductStatus::WholesaleEnabled,
+        'package_scope' => PackageScope::AllPackages,
+        'account_scope' => AccountScope::AnyAccount,
+        ...$attributes,
+    ]);
+}
+
+/**
+ * A storefront API call, signed the way the contract says (contract §3.2).
+ *
+ * Over HTTPS, because plain HTTP is refused. Every part of the signature can be
+ * overridden, so a test about a bad timestamp or a replayed nonce changes only
+ * that part and nothing else.
+ *
+ * @param  array<string, mixed>  $query
+ * @param  array{timestamp?: string, nonce?: string, secret?: string, key_id?: string, authorization?: string|null, https?: bool}  $overrides
+ * @return TestResponse<Response>
+ */
+function storefrontCall(
+    WebsiteCredential $credential,
+    string $secret,
+    string $path,
+    array $query = [],
+    string $method = 'GET',
+    string $body = '',
+    array $overrides = [],
+): TestResponse {
+    $timestamp = $overrides['timestamp'] ?? (string) now()->getTimestamp();
+    $nonce = $overrides['nonce'] ?? (string) Str::uuid();
+    $fullPath = '/api/storefront/v1/'.ltrim($path, '/');
+    $rawQuery = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+
+    $signature = RequestSignature::sign(
+        $overrides['secret'] ?? $secret,
+        RequestSignature::canonical($method, $fullPath, $rawQuery, $timestamp, $nonce, $body),
+    );
+
+    $headers = [
+        'X-Feriwala-Timestamp' => $timestamp,
+        'X-Feriwala-Nonce' => $nonce,
+        'Accept' => 'application/json',
+    ];
+
+    $authorization = array_key_exists('authorization', $overrides)
+        ? $overrides['authorization']
+        : RequestSignature::authorization($overrides['key_id'] ?? $credential->key_id, $signature);
+
+    if ($authorization !== null) {
+        $headers['Authorization'] = $authorization;
+    }
+
+    $scheme = ($overrides['https'] ?? true) ? 'https' : 'http';
+    $url = $scheme.'://localhost'.$fullPath.($rawQuery === '' ? '' : '?'.$rawQuery);
+
+    $server = [];
+
+    foreach ($headers as $name => $value) {
+        $server['HTTP_'.strtoupper(str_replace('-', '_', $name))] = $value;
+    }
+
+    return test()->call($method, $url, [], [], [], $server, $body === '' ? null : $body);
+}
+
+/**
+ * A credential for a website, with its plaintext secret.
+ *
+ * @param  array<int, CredentialScope>  $scopes
+ * @return array{0: WebsiteCredential, 1: string}
+ */
+function storefrontCredential(Website $website, array $scopes = []): array
+{
+    $issued = app(ManageWebsiteCredentials::class)->issue(
+        $website,
+        $website->businessAccount->owner,
+        'Storefront',
+        $scopes === [] ? [CredentialScope::CatalogRead, CredentialScope::InventoryRead] : $scopes,
+    );
+
+    return [$issued->credential, $issued->secret];
 }
 
 function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = null): BusinessAccount

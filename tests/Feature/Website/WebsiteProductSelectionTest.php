@@ -1,10 +1,7 @@
 <?php
 
 use App\Domain\Access\Enums\PlatformRole;
-use App\Domain\Catalog\Enums\AccountScope;
-use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
-use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Website\Enums\WebsiteProductStatus;
@@ -14,7 +11,6 @@ use App\Domain\Website\Models\WebsiteCategory;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Domain\Website\Models\WebsiteProductPriceRule;
 use Database\Seeders\RolesAndPermissionsSeeder;
-use Illuminate\Support\Str;
 
 /**
  * Choosing what a storefront sells, pricing it, and putting it on sale
@@ -23,38 +19,6 @@ use Illuminate\Support\Str;
  * The three things a browser must never decide: whether the account may sell
  * this product at all, what it may charge, and how many it may have on sale.
  */
-
-/**
- * An active dropshipping product in an available category.
- */
-function websiteTestProduct(array $attributes = []): Product
-{
-    $category = Category::query()->firstOr(fn () => Category::create([
-        'name' => 'Clothing',
-        'slug' => 'clothing-'.Str::lower(Str::random(6)),
-        'is_active' => true,
-    ]));
-
-    return Product::create([
-        'name' => 'Cotton panjabi',
-        'slug' => 'cotton-panjabi-'.Str::lower(Str::random(6)),
-        'sku' => 'FW-'.Str::upper(Str::random(6)),
-        'category_id' => $category->id,
-        'brand_id' => null,
-        'status' => ProductStatus::Active,
-        'currency_code' => 'BDT',
-        'wholesale_price_minor' => 150000,
-        'minimum_selling_price_minor' => 200000,
-        'maximum_selling_price_minor' => 400000,
-        'suggested_selling_price_minor' => 250000,
-        'dropshipping_status' => ProductStatus::DropshippingEnabled,
-        'wholesale_status' => ProductStatus::WholesaleEnabled,
-        'package_scope' => PackageScope::AllPackages,
-        'account_scope' => AccountScope::AnyAccount,
-        ...$attributes,
-    ]);
-}
-
 beforeEach(function () {
     $this->account = websiteTestAccount(extra: [
         PackageFeature::ProductPublishLimit->value => '2',

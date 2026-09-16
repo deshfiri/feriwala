@@ -53,6 +53,7 @@ use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WebsiteCategoryController;
 use App\Http\Controllers\Erp\WebsiteController;
+use App\Http\Controllers\Erp\WebsiteIntegrationController;
 use App\Http\Controllers\Erp\WebsiteProductController;
 use App\Http\Controllers\Erp\WebsiteSettingsController;
 use App\Http\Controllers\Erp\WholesaleCartController;
@@ -338,6 +339,19 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('websites.products.publication.update');
         Route::delete('websites/{website}/products/{selection}', [WebsiteProductController::class, 'destroy'])
             ->name('websites.products.destroy');
+
+        /*
+         * Connecting the storefront (§17.3, contract §3, P5-17, P5-27, P5-28).
+         * A secret is shown once, as flash data, in the response that made it.
+         */
+        Route::get('websites/{website}/integration', [WebsiteIntegrationController::class, 'show'])
+            ->name('websites.integration.show');
+        Route::post('websites/{website}/credentials', [WebsiteIntegrationController::class, 'storeCredential'])
+            ->name('websites.credentials.store');
+        Route::post('websites/{website}/credentials/{credential}/rotation', [WebsiteIntegrationController::class, 'rotateCredential'])
+            ->name('websites.credentials.rotate');
+        Route::post('websites/{website}/credentials/{credential}/revocation', [WebsiteIntegrationController::class, 'revokeCredential'])
+            ->name('websites.credentials.revoke');
 
         // The shop's own arrangement of what it sells (§15, P5-4).
         Route::get('websites/{website}/categories', [WebsiteCategoryController::class, 'index'])
