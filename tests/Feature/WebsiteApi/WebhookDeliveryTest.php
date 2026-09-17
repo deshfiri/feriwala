@@ -2,6 +2,8 @@
 
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Audit\Models\AuditLog;
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Website\Actions\DispatchDueWebhookRetries;
 use App\Domain\Website\Actions\ManageWebhookEndpoint;
@@ -436,6 +438,30 @@ describe('synchronisation', function () {
             ->and($selection->refresh()->sync_status)->toBe(WebsiteSyncStatus::Synced);
     });
 
+    it('counts a new image as the product changing', function () {
+        webhookTestEndpoint($this->website);
+        $selection = webhookTestSelection($this->website);
+
+        WebsiteProduct::query()->whereKey($selection->id)->toBase()->update([
+            'sync_status' => WebsiteSyncStatus::Synced->value,
+            'last_synced_at' => now()->subHour(),
+        ]);
+        $selection->product->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+
+        ProductMedia::create([
+            'product_id' => $selection->product_id,
+            'type' => ProductMedia::TYPE_IMAGE,
+            'disk' => 'public',
+            'path' => 'products/front.jpg',
+            'mime_type' => 'image/jpeg',
+            'size_bytes' => 1024,
+            'position' => 1,
+        ]);
+
+        expect($selection->product->refresh()->updated_at->isAfter(now()->subMinute()))->toBeTrue()
+            ->and(app(SyncWebsiteCatalogue::class)->sweep())->toBe(1);
+    });
+
     it('marks what a storefront read as synchronised without making it look changed', function () {
         [$credential, $secret] = storefrontCredential($this->website);
         $selection = webhookTestSelection($this->website);
@@ -452,9 +478,10 @@ describe('synchronisation', function () {
             ->and($this->website->refresh()->last_synced_at)->not->toBeNull();
     });
 
-    it('synchronises everything on request, once a minute', function () {
+    it('synchronises everything on request, once a minute, writing nothing to the catalogue', function () {
         webhookTestEndpoint($this->website);
-        webhookTestSelection($this->website);
+        $product = webhookTestSelection($this->website)->product;
+        $catalogue = [Product::query()->count(), $product->refresh()->getAttributes()];
 
         $this->actingAs($this->account->owner)
             ->post(route('websites.sync.store', $this->website->public_id))
@@ -471,6 +498,7 @@ describe('synchronisation', function () {
             ->post(route('websites.sync.store', $this->website->public_id))
             ->assertSessionHasErrors('sync');
 
-        expect(WebhookDelivery::query()->count())->toBe($sent);
+        expect(WebhookDelivery::query()->count())->toBe($sent)
+            ->and([Product::query()->count(), $product->refresh()->getAttributes()])->toBe($catalogue);
     });
 });

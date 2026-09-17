@@ -40,6 +40,14 @@ class ProductMedia extends Model
     protected $guarded = [];
 
     /**
+     * A new, changed or removed image is the product changing: storefronts
+     * find what to re-read by the product's `updated_at` (contract §5.1, P5-22).
+     *
+     * @var list<string>
+     */
+    protected $touches = ['product'];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

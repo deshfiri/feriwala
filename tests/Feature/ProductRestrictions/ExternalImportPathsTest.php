@@ -5,6 +5,7 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Http\Controllers\Erp\WebsiteIntegrationController;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Routing\Route as RoutingRoute;
@@ -82,7 +83,16 @@ describe('nothing outside a signed-in form writes the catalogue', function () {
     });
 
     it('has no route that imports, syncs, feeds or scrapes into anything', function () {
+        /*
+         * The one exception is outbound: a partner telling their own storefront
+         * about the products they already sell (§17.2 manual sync, P5-25). It
+         * reads the catalogue and writes only delivery records, which
+         * WebhookDeliveryTest proves; named with the controller it must stay on.
+         */
+        $outbound = ['websites.sync.store' => WebsiteIntegrationController::class];
+
         $importRoutes = collect(Route::getRoutes()->getRoutes())
+            ->reject(fn (RoutingRoute $route) => ($outbound[(string) $route->getName()] ?? null) === $route->getControllerClass())
             ->filter(fn (RoutingRoute $route) => array_diff($route->methods(), ['GET', 'HEAD', 'OPTIONS']) !== [])
             ->filter(fn (RoutingRoute $route) => preg_match('/import|sync|feed|scrape|crawl/i', $route->uri().' '.$route->getName()) === 1)
             ->map(fn (RoutingRoute $route) => $route->uri())

@@ -10,6 +10,10 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteCategory;
+use App\Domain\Website\Models\WebsiteProduct;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ProductAttributeController;
@@ -22,6 +26,8 @@ use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Erp\WebsiteCategoryController;
+use App\Http\Controllers\Erp\WebsiteProductController;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Routing\Route as RoutingRoute;
@@ -64,6 +70,31 @@ function catalogueApiControllers(): array
         ProductAttributeController::class,
         CategoryController::class,
         BrandController::class,
+    ];
+}
+
+/**
+ * Website routes whose addresses say "products" or "categories" but which write
+ * only a partner's own website copy: a selection of a central product, or the
+ * website's own arrangement of its selections (P5-2, P5-4, P5-14).
+ *
+ * Named one by one with the controller each must stay on, so a new route, or
+ * one of these pointed somewhere else, still trips the check below. What they
+ * write is proved beside it: the catalogue is exactly as it was afterwards.
+ *
+ * @return array<string, class-string>
+ */
+function catalogueApiWebsiteCopyRoutes(): array
+{
+    return [
+        'websites.products.store' => WebsiteProductController::class,
+        'websites.products.update' => WebsiteProductController::class,
+        'websites.products.publication.update' => WebsiteProductController::class,
+        'websites.products.destroy' => WebsiteProductController::class,
+        'websites.categories.store' => WebsiteCategoryController::class,
+        'websites.categories.reorder' => WebsiteCategoryController::class,
+        'websites.categories.update' => WebsiteCategoryController::class,
+        'websites.categories.destroy' => WebsiteCategoryController::class,
     ];
 }
 
@@ -240,6 +271,8 @@ describe('no way into the catalogue except the administration', function () {
 
         $elsewhere = collect(Route::getRoutes()->getRoutes())
             ->reject(fn (RoutingRoute $route) => in_array($route->getControllerClass(), $catalogueControllers, true))
+            ->reject(fn (RoutingRoute $route) => ! str_starts_with($route->uri(), 'api/')
+                && (catalogueApiWebsiteCopyRoutes()[(string) $route->getName()] ?? null) === $route->getControllerClass())
             ->filter(fn (RoutingRoute $route) => catalogueApiWriteMethods($route) !== [])
             ->filter(fn (RoutingRoute $route) => str_starts_with($route->uri(), 'api/')
                 || preg_match('/(^|\/)(catalog|catalogue|products?|categories|brands|attributes|variants)(\/|$)/', $route->uri()) === 1)
@@ -248,6 +281,45 @@ describe('no way into the catalogue except the administration', function () {
             ->all();
 
         expect($elsewhere)->toBe([]);
+    });
+
+    it('leaves the catalogue exactly as it was when a partner arranges their website', function () {
+        $account = websiteTestAccount(extra: [
+            PackageFeature::DropshippingEnabled->value => '1',
+            PackageFeature::ProductPublishLimit->value => null,
+        ]);
+        $website = Website::factory()->forAccount($account)->active()->create();
+        $product = websiteTestProduct();
+        $before = catalogueApiFingerprint();
+
+        $this->actingAs($account->owner);
+
+        // A full product payload at the selection endpoint selects; it creates nothing.
+        $this->post(route('websites.products.store', $website->public_id), [
+            'product' => $product->public_id,
+            'name' => 'My own product',
+            'sku' => 'MINE-0001',
+            'wholesale_price_minor' => 100,
+        ])->assertSessionHasNoErrors();
+
+        $selection = WebsiteProduct::query()->where('website_id', $website->id)->firstOrFail();
+        $pair = [$website->public_id, $selection->public_id];
+
+        $this->patch(route('websites.products.update', $pair), ['price' => 260000, 'marketing_description' => 'Eid favourite'])->assertSessionHasNoErrors();
+        $this->put(route('websites.products.publication.update', $pair), ['published' => true])->assertSessionHasNoErrors();
+        $this->put(route('websites.products.publication.update', $pair), ['published' => false])->assertSessionHasNoErrors();
+
+        $this->post(route('websites.categories.store', $website->public_id), ['name' => 'Eid'])->assertSessionHasNoErrors();
+        $category = WebsiteCategory::query()->where('website_id', $website->id)->firstOrFail();
+        $categoryPair = [$website->public_id, $category->public_id];
+
+        $this->patch(route('websites.categories.update', $categoryPair), ['name' => 'Eid sale'])->assertSessionHasNoErrors();
+        $this->post(route('websites.categories.reorder', $website->public_id), ['order' => [$category->public_id]])->assertSessionHasNoErrors();
+        $this->delete(route('websites.categories.destroy', $categoryPair))->assertSessionHasNoErrors();
+        $this->delete(route('websites.products.destroy', $pair))->assertSessionHasNoErrors();
+
+        expect(WebsiteProduct::query()->count())->toBe(0)
+            ->and(catalogueApiFingerprint())->toBe($before);
     });
 
     it('keeps a partner\'s two catalogues read-only', function () {
