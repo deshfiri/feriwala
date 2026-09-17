@@ -353,6 +353,19 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::post('websites/{website}/credentials/{credential}/revocation', [WebsiteIntegrationController::class, 'revokeCredential'])
             ->name('websites.credentials.revoke');
 
+        // Where the storefront is told things, and what it was told (contract
+        // §7, P5-20, P5-22, P5-25, P5-26). One endpoint per website in v1.
+        Route::put('websites/{website}/webhook', [WebsiteIntegrationController::class, 'storeWebhook'])
+            ->name('websites.webhook.store');
+        Route::post('websites/{website}/webhook/rotation', [WebsiteIntegrationController::class, 'rotateWebhook'])
+            ->name('websites.webhook.rotate');
+        Route::delete('websites/{website}/webhook', [WebsiteIntegrationController::class, 'disableWebhook'])
+            ->name('websites.webhook.disable');
+        Route::post('websites/{website}/deliveries/{delivery}/retry', [WebsiteIntegrationController::class, 'retryDelivery'])
+            ->name('websites.deliveries.retry');
+        Route::post('websites/{website}/sync', [WebsiteIntegrationController::class, 'syncNow'])
+            ->name('websites.sync.store');
+
         // The shop's own arrangement of what it sells (§15, P5-4).
         Route::get('websites/{website}/categories', [WebsiteCategoryController::class, 'index'])
             ->name('websites.categories.index');

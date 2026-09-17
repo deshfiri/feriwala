@@ -42,15 +42,56 @@ export type ApiCallRow = {
     created_at: string;
 };
 
+export type WebhookRow = {
+    url: string;
+    secret_hint: string;
+    is_active: boolean;
+    rotated_at: string | null;
+    previous_secret_expires_at: string | null;
+};
+
+export type DeliveryRow = {
+    event_id: string;
+    event_type: string;
+    state: string;
+    attempt: number;
+    response_status: number | null;
+    last_error: string | null;
+    next_retry_at: string | null;
+    delivered_at: string | null;
+    created_at: string;
+};
+
+export type FailureRow = {
+    id: string;
+    event_id: string | null;
+    event_type: string | null;
+    error: string;
+    attempts: number;
+    retry_count: number;
+    failed_at: string;
+};
+
 type Props = {
     website: WebsiteDetail;
     credentials: CredentialRow[];
     scopes: { value: string; label: string; default: boolean }[];
     recent_calls: ApiCallRow[];
     api_base: string;
+    webhook?: WebhookRow | null;
+    deliveries?: DeliveryRow[];
+    failures?: FailureRow[];
 };
 
 type Issued = { key_id: string; secret: string };
+
+const deliveryTones: Record<string, 'success' | 'warning' | 'danger' | 'info'> =
+    {
+        delivered: 'success',
+        pending: 'info',
+        retrying: 'warning',
+        failed: 'danger',
+    };
 
 /**
  * Connecting a storefront to the ERP (§17.3, contract §3, P5-17, P5-27, P5-28).
@@ -65,18 +106,27 @@ export default function WebsiteIntegration({
     scopes,
     recent_calls: recentCalls,
     api_base: apiBase,
+    webhook = null,
+    deliveries = [],
+    failures = [],
 }: Props) {
     const { t, locale } = useTranslation();
     const [issued, setIssued] = useState<Issued | null>(null);
+    const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
 
     useEffect(
         () =>
             router.on('flash', (event) => {
                 const flash = (event as CustomEvent).detail?.flash;
                 const credential = flash?.credential as Issued | undefined;
+                const signing = flash?.webhook_secret as string | undefined;
 
                 if (credential?.secret) {
                     setIssued(credential);
+                }
+
+                if (signing) {
+                    setWebhookSecret(signing);
                 }
             }),
         [],
@@ -369,6 +419,307 @@ export default function WebsiteIntegration({
                                 </li>
                             ))}
                         </ul>
+                    )}
+                </SectionCard>
+
+                <SectionCard
+                    title={t('website.integration.webhook_title')}
+                    description={t('website.integration.webhook_hint')}
+                >
+                    {webhookSecret && (
+                        <div
+                            className="border-warning bg-warning-subtle mb-4 space-y-2 rounded-xl border p-4"
+                            role="alert"
+                        >
+                            <p className="text-sm font-medium">
+                                {t('website.integration.secret_once')}
+                            </p>
+                            <p className="font-mono text-sm break-all">
+                                {webhookSecret}
+                            </p>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setWebhookSecret(null)}
+                            >
+                                {t('website.integration.stored_it')}
+                            </Button>
+                        </div>
+                    )}
+
+                    {webhook && (
+                        <div className="mb-4 space-y-1 text-sm">
+                            <div className="font-mono break-all">
+                                {webhook.url}
+                            </div>
+                            <div className="text-muted-foreground text-xs">
+                                {t('website.integration.secret')}: …
+                                {webhook.secret_hint}
+                            </div>
+                            <StatusPill
+                                tone={webhook.is_active ? 'success' : 'neutral'}
+                                label={
+                                    webhook.is_active
+                                        ? t('website.integration.active')
+                                        : t('website.integration.disabled')
+                                }
+                            />
+                            {webhook.previous_secret_expires_at && (
+                                <div className="text-muted-foreground text-xs">
+                                    {t('website.integration.grace_until', {
+                                        date: when(
+                                            webhook.previous_secret_expires_at,
+                                        ),
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <Form
+                        {...WebsiteIntegrationController.storeWebhook.form(
+                            website.id,
+                        )}
+                        options={{ preserveScroll: true }}
+                        className="flex flex-wrap items-end gap-2"
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="grid min-w-0 flex-1 gap-1">
+                                    <Label htmlFor="webhook-url">
+                                        {t('website.integration.webhook_url')}
+                                    </Label>
+                                    <Input
+                                        id="webhook-url"
+                                        name="url"
+                                        type="url"
+                                        placeholder="https://"
+                                        defaultValue={webhook?.url ?? ''}
+                                        maxLength={500}
+                                        required
+                                    />
+                                    <InputError message={errors.url} />
+                                </div>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={processing}
+                                >
+                                    {processing && <Spinner />}
+                                    {t('website.integration.webhook_save')}
+                                </Button>
+                            </>
+                        )}
+                    </Form>
+
+                    {webhook && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <Form
+                                {...WebsiteIntegrationController.rotateWebhook.form(
+                                    website.id,
+                                )}
+                                options={{ preserveScroll: true }}
+                            >
+                                {({ processing }) => (
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={processing}
+                                    >
+                                        {t('website.integration.rotate')}
+                                    </Button>
+                                )}
+                            </Form>
+
+                            {webhook.is_active && (
+                                <Form
+                                    {...WebsiteIntegrationController.disableWebhook.form(
+                                        website.id,
+                                    )}
+                                    options={{ preserveScroll: true }}
+                                >
+                                    {({ processing }) => (
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            variant="ghost"
+                                            disabled={processing}
+                                        >
+                                            {t('website.integration.disable')}
+                                        </Button>
+                                    )}
+                                </Form>
+                            )}
+
+                            <Form
+                                {...WebsiteIntegrationController.syncNow.form(
+                                    website.id,
+                                )}
+                                options={{ preserveScroll: true }}
+                            >
+                                {({ processing, errors }) => (
+                                    <div className="space-y-1">
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            disabled={processing}
+                                        >
+                                            {processing && <Spinner />}
+                                            {t('website.integration.sync_now')}
+                                        </Button>
+                                        <InputError message={errors.sync} />
+                                    </div>
+                                )}
+                            </Form>
+                        </div>
+                    )}
+                </SectionCard>
+
+                <SectionCard
+                    title={t('website.integration.failures_title')}
+                    description={t('website.integration.failures_hint')}
+                >
+                    {failures.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                            {t('website.integration.no_failures')}
+                        </p>
+                    ) : (
+                        <ul className="divide-border divide-y">
+                            {failures.map((failure) => (
+                                <li
+                                    key={failure.id}
+                                    className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                                >
+                                    <div className="min-w-0 space-y-1 text-xs">
+                                        <div className="font-mono text-sm">
+                                            {failure.event_type}
+                                        </div>
+                                        <div className="text-muted-foreground break-all">
+                                            {failure.error}
+                                        </div>
+                                        <div className="text-muted-foreground">
+                                            {t(
+                                                'website.integration.failed_after',
+                                                {
+                                                    attempts: String(
+                                                        failure.attempts,
+                                                    ),
+                                                    date: when(
+                                                        failure.failed_at,
+                                                    ),
+                                                },
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {failure.event_id && (
+                                        <Form
+                                            {...WebsiteIntegrationController.retryDelivery.form(
+                                                {
+                                                    website: website.id,
+                                                    delivery: failure.event_id,
+                                                },
+                                            )}
+                                            options={{ preserveScroll: true }}
+                                        >
+                                            {({ processing, errors }) => (
+                                                <div className="space-y-1">
+                                                    <Button
+                                                        type="submit"
+                                                        size="sm"
+                                                        disabled={processing}
+                                                    >
+                                                        {processing && (
+                                                            <Spinner />
+                                                        )}
+                                                        {t(
+                                                            'website.integration.retry',
+                                                        )}
+                                                    </Button>
+                                                    <InputError
+                                                        message={
+                                                            errors.delivery
+                                                        }
+                                                    />
+                                                </div>
+                                            )}
+                                        </Form>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </SectionCard>
+
+                <SectionCard title={t('website.integration.deliveries_title')}>
+                    {deliveries.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                            {t('website.integration.no_deliveries')}
+                        </p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="text-muted-foreground">
+                                    <tr>
+                                        <th className="py-2 pr-3 font-medium">
+                                            {t('website.integration.when')}
+                                        </th>
+                                        <th className="py-2 pr-3 font-medium">
+                                            {t('website.integration.event')}
+                                        </th>
+                                        <th className="py-2 pr-3 font-medium">
+                                            {t('website.integration.status')}
+                                        </th>
+                                        <th className="py-2 font-medium">
+                                            {t('website.integration.attempts')}
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-border divide-y">
+                                    {deliveries.map((delivery) => (
+                                        <tr key={delivery.event_id}>
+                                            <td className="py-2 pr-3 whitespace-nowrap">
+                                                {when(delivery.created_at)}
+                                            </td>
+                                            <td className="py-2 pr-3 font-mono">
+                                                {delivery.event_type}
+                                            </td>
+                                            <td className="py-2 pr-3">
+                                                <StatusPill
+                                                    tone={
+                                                        deliveryTones[
+                                                            delivery.state
+                                                        ] ?? 'neutral'
+                                                    }
+                                                    label={t(
+                                                        `website.integration.delivery_states.${delivery.state}`,
+                                                    )}
+                                                />
+                                                {delivery.next_retry_at && (
+                                                    <div className="text-muted-foreground mt-1">
+                                                        {t(
+                                                            'website.integration.next_retry',
+                                                            {
+                                                                date: when(
+                                                                    delivery.next_retry_at,
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="py-2">
+                                                {delivery.attempt}
+                                                {delivery.response_status
+                                                    ? ` · ${delivery.response_status}`
+                                                    : ''}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </SectionCard>
 

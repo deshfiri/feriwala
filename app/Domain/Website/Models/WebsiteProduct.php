@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property WebsiteSyncStatus $sync_status
  * @property CarbonImmutable|null $last_synced_at
  * @property string|null $sync_error
+ * @property array<int, array{sku: string, in_stock: bool, quantity: int}>|null $synced_availability
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable|null $unpublished_at
  * @property int|null $created_by
@@ -74,6 +75,7 @@ class WebsiteProduct extends Model
             'price_minor' => MoneyCast::class,
             'promotional_price_minor' => MoneyCast::class,
             'last_synced_at' => 'immutable_datetime',
+            'synced_availability' => 'array',
             'published_at' => 'immutable_datetime',
             'unpublished_at' => 'immutable_datetime',
         ];

@@ -3,7 +3,13 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { WebsiteDetail } from '@/types/website';
-import type { ApiCallRow, CredentialRow } from './integration';
+import type {
+    ApiCallRow,
+    CredentialRow,
+    DeliveryRow,
+    FailureRow,
+    WebhookRow,
+} from './integration';
 
 const listeners: ((event: Event) => void)[] = [];
 
@@ -232,5 +238,147 @@ describe('connecting a storefront', () => {
         ).toHaveLength(1);
         expect(screen.getByText('Leaked in a screenshot.')).toBeInTheDocument();
         expect(screen.getByText(/invalid_signature/)).toBeInTheDocument();
+    });
+});
+
+const webhook: WebhookRow = {
+    url: 'https://nasrin.example.com/feriwala/webhooks',
+    secret_hint: '9f3c',
+    is_active: true,
+    rotated_at: null,
+    previous_secret_expires_at: null,
+};
+
+const failure: FailureRow = {
+    id: '01FAILURE',
+    event_id: '01EVENTFAILED',
+    event_type: 'product.updated',
+    error: 'The storefront answered 500.',
+    attempts: 9,
+    retry_count: 0,
+    failed_at: '2026-09-16T12:00:00+06:00',
+};
+
+const delivery: DeliveryRow = {
+    event_id: '01EVENTRETRY',
+    event_type: 'inventory.updated',
+    state: 'retrying',
+    attempt: 2,
+    response_status: 503,
+    last_error: 'The storefront answered 503.',
+    next_retry_at: '2026-09-16T12:05:00+06:00',
+    delivered_at: null,
+    created_at: '2026-09-16T12:00:00+06:00',
+};
+
+describe('telling a storefront what changed', () => {
+    it('shows the webhook by its address and hint, with its deliveries and failures', () => {
+        render(
+            <WebsiteIntegration
+                website={website}
+                credentials={[]}
+                scopes={scopes}
+                recent_calls={[]}
+                api_base="https://erp.test/api/storefront/v1"
+                webhook={webhook}
+                deliveries={[delivery]}
+                failures={[failure]}
+            />,
+        );
+
+        expect(
+            screen.getByDisplayValue(
+                'https://nasrin.example.com/feriwala/webhooks',
+            ),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/9f3c/)).toBeInTheDocument();
+        expect(
+            screen.getByText('website.integration.delivery_states.retrying'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('The storefront answered 500.'),
+        ).toBeInTheDocument();
+
+        // A failure is retried by its event identifier, so the storefront
+        // recognises the same event.
+        const retry = screen.getByRole('button', {
+            name: 'website.integration.retry',
+        });
+        expect(retry.closest('form')?.getAttribute('action')).toContain(
+            '/deliveries/01EVENTFAILED/retry',
+        );
+
+        expect(
+            screen.getByRole('button', {
+                name: 'website.integration.sync_now',
+            }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole('button', { name: 'website.integration.disable' }),
+        ).toBeInTheDocument();
+    });
+
+    it('offers only the address form before a webhook exists', () => {
+        render(
+            <WebsiteIntegration
+                website={website}
+                credentials={[]}
+                scopes={scopes}
+                recent_calls={[]}
+                api_base="https://erp.test/api/storefront/v1"
+            />,
+        );
+
+        expect(
+            screen.getByRole('button', {
+                name: 'website.integration.webhook_save',
+            }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole('button', {
+                name: 'website.integration.sync_now',
+            }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByText('website.integration.no_failures'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('website.integration.no_deliveries'),
+        ).toBeInTheDocument();
+    });
+
+    it('shows a new signing secret once, from the flash, until it is dismissed', () => {
+        listeners.length = 0;
+
+        render(
+            <WebsiteIntegration
+                website={website}
+                credentials={[]}
+                scopes={scopes}
+                recent_calls={[]}
+                api_base="https://erp.test/api/storefront/v1"
+                webhook={webhook}
+            />,
+        );
+
+        act(() => {
+            listeners.forEach((listener) =>
+                listener(
+                    new CustomEvent('flash', {
+                        detail: { flash: { webhook_secret: 'b'.repeat(64) } },
+                    }),
+                ),
+            );
+        });
+
+        expect(screen.getByText('b'.repeat(64))).toBeInTheDocument();
+
+        act(() => {
+            screen
+                .getByRole('button', { name: 'website.integration.stored_it' })
+                .click();
+        });
+
+        expect(screen.queryByText('b'.repeat(64))).not.toBeInTheDocument();
     });
 });

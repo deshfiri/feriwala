@@ -4,6 +4,7 @@ namespace App\Domain\Website\Actions;
 
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Website\Enums\WebhookEvent;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
 use App\Domain\Website\Exceptions\WebsiteRefused;
@@ -36,6 +37,7 @@ class MoveWebsiteStatus
     public function __construct(
         protected DatabaseManager $database,
         protected RecordAuditLog $audit,
+        protected PublishWebsiteEvent $publish,
     ) {}
 
     /**
@@ -52,7 +54,7 @@ class MoveWebsiteStatus
     ): Website {
         $change ??= StatusChange::bySystem();
 
-        $moved = $this->database->transaction(function () use ($website, $to, $source, $change, $attributes) {
+        $result = $this->database->transaction(function () use ($website, $to, $source, $change, $attributes) {
             /** @var Website $locked */
             $locked = Website::query()->lockForUpdate()->findOrFail($website->id);
 
@@ -64,6 +66,10 @@ class MoveWebsiteStatus
                 throw WebsiteRefused::statusDoesNotAllow();
             }
 
+            // Read before the move: after it, the model no longer knows where
+            // it started.
+            $previous = $locked->status;
+
             if ($attributes !== []) {
                 $locked->forceFill($attributes);
             }
@@ -72,12 +78,14 @@ class MoveWebsiteStatus
 
             $website->setRawAttributes($locked->getAttributes(), sync: true);
 
-            return $locked;
+            return [$locked, $previous];
         });
 
-        if ($moved === null) {
+        if ($result === null) {
             return $website;
         }
+
+        [$moved, $previous] = $result;
 
         $this->audit->handle(new AuditEntry(
             action: 'website.status_changed',
@@ -85,7 +93,7 @@ class MoveWebsiteStatus
             actorType: $change->actorId === null ? 'system' : 'user',
             auditableType: Website::class,
             auditableId: $moved->id,
-            before: ['status' => $moved->getOriginal('status')],
+            before: ['status' => $previous->value],
             after: ['status' => $to->value, 'source' => $source->value],
             reason: $change->reason,
             note: $change->internalNote,
@@ -94,8 +102,31 @@ class MoveWebsiteStatus
         ));
 
         $this->tell($moved, $to, $change->publicNote);
+        $this->announce($moved, $previous, $to);
 
         return $website;
+    }
+
+    /**
+     * Tell the storefront itself when it stops or starts being served
+     * (contract §7.1 `website.suspended`, `website.restored`).
+     */
+    protected function announce(Website $website, WebsiteStatus $previous, WebsiteStatus $to): void
+    {
+        $wasLive = $previous->isLive() || $previous === WebsiteStatus::Maintenance;
+        $isLive = $to->isLive() || $to === WebsiteStatus::Maintenance;
+
+        if ($wasLive === $isLive) {
+            return;
+        }
+
+        $this->publish->handle(
+            $website,
+            $isLive ? WebhookEvent::WebsiteRestored : WebhookEvent::WebsiteSuspended,
+            ['status' => $to->value],
+            'website_status',
+            $website->id,
+        );
     }
 
     /**

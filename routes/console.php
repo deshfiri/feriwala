@@ -8,7 +8,10 @@ use App\Domain\Order\Actions\ExpireUnpaidWholesaleOrders;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
+use App\Domain\Website\Actions\DispatchDueWebhookRetries;
 use App\Domain\Website\Actions\SweepWebsiteLifecycle;
+use App\Domain\Website\Actions\SyncWebsiteCatalogue;
+use App\Domain\Website\Actions\SyncWebsiteInventory;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -237,3 +240,45 @@ Schedule::call(fn () => app(SweepWebsiteLifecycle::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Move websites through grace, expiry, renewal and low balance (§16.4, §24.3)');
+
+/*
+ * Webhook retries that have come due (contract §7.3, P5-26).
+ *
+ * Every minute, because the first retry is ten seconds after a failure and the
+ * schedule lives in the delivery record rather than in delayed queue jobs — a
+ * worker restarting mid-backoff loses nothing. Idempotent: each attempt re-reads
+ * its delivery under a row lock and sends nothing that is already finished.
+ */
+Schedule::call(fn () => app(DispatchDueWebhookRetries::class)->handle())
+    ->name('website-webhook-retries')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Queue webhook deliveries whose next attempt is due (contract §7.3)');
+
+/*
+ * Near-real-time stock for storefronts (§17.2, P5-22, P5-25).
+ *
+ * Every five minutes: stock moves for reasons no website action announces, so
+ * this compares each published product's availability with what its storefront
+ * was last told and sends only the change.
+ */
+Schedule::call(fn () => app(SyncWebsiteInventory::class)->handle())
+    ->name('website-inventory-sync')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Tell storefronts about stock that changed (contract §7.1)');
+
+/*
+ * Scheduled catalogue reconciliation (§17.2, P5-22, P5-25).
+ *
+ * Every fifteen minutes: catches what no partner action announced — Feriwala
+ * changing a product centrally, a selection whose last event never went out.
+ */
+Schedule::call(fn () => app(SyncWebsiteCatalogue::class)->sweep())
+    ->name('website-catalogue-sync')
+    ->everyFifteenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Re-announce storefront products that are out of date (§17.2)');

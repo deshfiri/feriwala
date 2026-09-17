@@ -100,4 +100,22 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Webhooks (contract §7.3)
+    |--------------------------------------------------------------------------
+    |
+    | The first attempt, then a retry after each of these delays, in seconds:
+    | 10s, 30s, 2m, 10m, 30m, 2h, 6h, 12h. After the last the delivery is
+    | failed and waits in the failed-sync queue for a person. These are the
+    | contract's figures and are frozen with it.
+    |
+    */
+
+    'webhooks' => [
+        'queue' => env('WEBSITE_WEBHOOK_QUEUE', 'webhooks'),
+        'timeout_seconds' => 10,
+        'backoff' => [10, 30, 120, 600, 1800, 7200, 21600, 43200],
+    ],
+
 ];

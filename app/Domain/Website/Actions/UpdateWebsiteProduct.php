@@ -6,6 +6,8 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Package\Entitlements;
 use App\Domain\Website\Data\WebsitePricingTerms;
+use App\Domain\Website\Enums\WebhookEvent;
+use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\WebsiteCategory;
@@ -40,6 +42,7 @@ class UpdateWebsiteProduct
         protected ResolveWebsitePriceRule $pricing,
         protected Entitlements $entitlements,
         protected RecordAuditLog $audit,
+        protected SyncWebsiteProduct $sync,
     ) {}
 
     /**
@@ -113,6 +116,17 @@ class UpdateWebsiteProduct
             accountId: $selection->business_account_id,
             module: 'website',
         ));
+
+        // Only a product on sale is worth telling the storefront about; one
+        // that is merely selected is not on the shop to be out of date.
+        if ($selection->status === WebsiteProductStatus::Published) {
+            $priceChanged = array_key_exists('price_minor', $changes) || array_key_exists('promotional_price_minor', $changes);
+
+            $this->sync->handle(
+                $selection,
+                $priceChanged ? WebhookEvent::ProductPriceChanged : WebhookEvent::ProductUpdated,
+            );
+        }
 
         return $selection;
     }

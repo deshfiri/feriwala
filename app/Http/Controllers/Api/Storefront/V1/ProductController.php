@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Storefront\V1;
 
 use App\Domain\Website\Api\StorefrontError;
 use App\Domain\Website\Api\StorefrontProductPayload;
+use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
 use Carbon\CarbonImmutable;
@@ -33,6 +34,7 @@ class ProductController extends StorefrontController
     public function index(Request $request): JsonResponse
     {
         $website = $this->website($request);
+        $started = CarbonImmutable::now();
 
         $since = null;
 
@@ -57,12 +59,16 @@ class ProductController extends StorefrontController
             ->orderBy('website_products.id')
             ->cursorPaginate($this->limit($request));
 
-        return new JsonResponse($this->envelope(
+        $items = collect($page->items());
+
+        $response = new JsonResponse($this->envelope(
             $page,
-            collect($page->items())
-                ->map(fn (WebsiteProduct $selection) => $this->payload->for($selection, $website))
-                ->all(),
+            $items->map(fn (WebsiteProduct $selection) => $this->payload->for($selection, $website))->all(),
         ));
+
+        $this->noteRead($website, $items->pluck('id')->all(), $started);
+
+        return $response;
     }
 
     public function show(Request $request, string $product): JsonResponse
@@ -80,7 +86,43 @@ class ProductController extends StorefrontController
             return StorefrontError::respond($request, 404, 'not_found', 'No such product on this website.');
         }
 
-        return new JsonResponse($this->payload->for($selection, $website));
+        $started = CarbonImmutable::now();
+        $response = new JsonResponse($this->payload->for($selection, $website));
+
+        $this->noteRead($website, [$selection->id], $started);
+
+        return $response;
+    }
+
+    /**
+     * The storefront has now read these, so its copy is current (§16.2, P5-7, P5-28).
+     *
+     * The pull half of synchronisation: a storefront with no webhook endpoint
+     * keeps itself current by reading, and the partner's screen should say so.
+     * Only a selection that has not changed since this request began is marked,
+     * so an edit made while the response was being built stays pending.
+     *
+     * @param  array<int, int>  $ids
+     */
+    protected function noteRead(Website $website, array $ids, CarbonImmutable $started): void
+    {
+        if ($ids === []) {
+            return;
+        }
+
+        WebsiteProduct::query()
+            ->whereIn('id', $ids)
+            ->where('updated_at', '<=', $started)
+            ->where('sync_status', '!=', WebsiteSyncStatus::Synced->value)
+            // Not an edit: `updated_at` stays what `updated_since` compares.
+            ->toBase()
+            ->update([
+                'sync_status' => WebsiteSyncStatus::Synced->value,
+                'last_synced_at' => $started,
+                'sync_error' => null,
+            ]);
+
+        Website::query()->whereKey($website->id)->update(['last_synced_at' => $started]);
     }
 
     /**

@@ -154,6 +154,18 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.category_not_found'), 'website_category_id');
     }
 
+    /** A webhook must go to a public HTTPS address (contract §3.3, §7.2). */
+    public static function webhookAddressRefused(): self
+    {
+        return new self(__('website.refused.webhook_address'), 'url');
+    }
+
+    /** A delivery that is not in the failed queue has nothing to retry. */
+    public static function nothingToRetry(): self
+    {
+        return new self(__('website.refused.nothing_to_retry'), 'delivery');
+    }
+
     /** A revoked credential is finished with; issue a new one. */
     public static function credentialRevoked(): self
     {

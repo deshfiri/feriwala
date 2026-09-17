@@ -25,6 +25,7 @@ class ManageWebsiteCategories
 {
     public function __construct(
         protected DatabaseManager $database,
+        protected SyncWebsiteCatalogue $catalogue,
     ) {}
 
     /**
@@ -42,7 +43,7 @@ class ManageWebsiteCategories
 
         try {
             // Its own savepoint, so a clash rolls back only itself.
-            return $this->database->transaction(fn () => WebsiteCategory::create([
+            $category = $this->database->transaction(fn () => WebsiteCategory::create([
                 'website_id' => $website->id,
                 'name' => $name,
                 'slug' => $this->slugFor($website, $name),
@@ -51,6 +52,10 @@ class ManageWebsiteCategories
         } catch (UniqueConstraintViolationException) {
             throw WebsiteRefused::categoryNameTaken();
         }
+
+        $this->catalogue->categories($website);
+
+        return $category;
     }
 
     /**
@@ -69,6 +74,9 @@ class ManageWebsiteCategories
         }
 
         $category->save();
+
+        $category->loadMissing('website');
+        $this->catalogue->categories($category->website);
 
         return $category;
     }
@@ -92,6 +100,8 @@ class ManageWebsiteCategories
                     ->update(['position' => $position + 1]);
             }
         });
+
+        $this->catalogue->categories($website);
     }
 
     /**
@@ -99,6 +109,9 @@ class ManageWebsiteCategories
      */
     public function delete(WebsiteCategory $category): void
     {
+        $category->loadMissing('website');
+        $website = $category->website;
+
         $this->database->transaction(function () use ($category) {
             WebsiteProduct::query()
                 ->where('website_category_id', $category->id)
@@ -106,6 +119,8 @@ class ManageWebsiteCategories
 
             $category->delete();
         });
+
+        $this->catalogue->categories($website);
     }
 
     protected function slugFor(Website $website, string $name): string

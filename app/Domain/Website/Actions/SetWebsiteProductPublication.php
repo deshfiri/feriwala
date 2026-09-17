@@ -8,6 +8,7 @@ use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Website\Enums\WebhookEvent;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Exceptions\WebsiteRefused;
@@ -50,6 +51,7 @@ class SetWebsiteProductPublication
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
+        protected SyncWebsiteProduct $sync,
     ) {}
 
     /**
@@ -111,6 +113,9 @@ class SetWebsiteProductPublication
             waitSeconds: self::LOCK_WAIT,
         );
 
+        // Real time (§17.2): the storefront hears about it as it happens.
+        $this->sync->handle($published, WebhookEvent::ProductPublished);
+
         return $published;
     }
 
@@ -127,6 +132,8 @@ class SetWebsiteProductPublication
         ])->save();
 
         $this->record($selection, $actor, 'website.product_unpublished');
+
+        $this->sync->handle($selection, WebhookEvent::ProductUnpublished);
 
         return $selection;
     }
