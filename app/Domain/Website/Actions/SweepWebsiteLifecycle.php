@@ -8,6 +8,7 @@ use App\Domain\Wallet\DepositGuard;
 use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
+use App\Domain\Website\Enums\WebsiteStatusReason;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteHosting;
@@ -113,8 +114,8 @@ class SweepWebsiteLifecycle
                 WebsiteStatus::GracePeriod,
                 WebsiteStatusChangeSource::Scheduler,
                 new StatusChange(
-                    reason: 'package_lapsed',
-                    publicNote: __('website.notes.grace_period'),
+                    reason: WebsiteStatusReason::PackageLapsed->value,
+                    publicNote: WebsiteStatusReason::PackageLapsed->note(),
                 ),
                 ['grace_ends_at' => $now->addDays((int) config('website.grace_days', 7))],
             );
@@ -132,8 +133,8 @@ class SweepWebsiteLifecycle
                 WebsiteStatus::PackageExpired,
                 WebsiteStatusChangeSource::Scheduler,
                 new StatusChange(
-                    reason: 'grace_ended',
-                    publicNote: __('website.notes.package_expired'),
+                    reason: WebsiteStatusReason::GraceEnded->value,
+                    publicNote: WebsiteStatusReason::GraceEnded->note(),
                 ),
             );
 
@@ -156,7 +157,7 @@ class SweepWebsiteLifecycle
             $website,
             WebsiteStatus::Active,
             WebsiteStatusChangeSource::Scheduler,
-            new StatusChange(reason: 'package_restored', publicNote: __('website.notes.restored')),
+            new StatusChange(reason: WebsiteStatusReason::PackageRestored->value, publicNote: WebsiteStatusReason::PackageRestored->note()),
             ['grace_ends_at' => null],
         );
 
@@ -183,7 +184,7 @@ class SweepWebsiteLifecycle
                 $website,
                 WebsiteStatus::LowWalletBalance,
                 WebsiteStatusChangeSource::Scheduler,
-                new StatusChange(reason: 'balance_below_minimum', publicNote: __('website.notes.low_balance')),
+                new StatusChange(reason: WebsiteStatusReason::BalanceBelowMinimum->value, publicNote: WebsiteStatusReason::BalanceBelowMinimum->note()),
             );
 
             $counts['low_balance']++;
@@ -196,7 +197,7 @@ class SweepWebsiteLifecycle
                 $website,
                 WebsiteStatus::Active,
                 WebsiteStatusChangeSource::Scheduler,
-                new StatusChange(reason: 'balance_restored', publicNote: __('website.notes.restored')),
+                new StatusChange(reason: WebsiteStatusReason::BalanceRestored->value, publicNote: WebsiteStatusReason::BalanceRestored->note()),
             );
 
             $counts['restored']++;
@@ -255,8 +256,8 @@ class SweepWebsiteLifecycle
                     WebsiteStatus::TemporarilyDisabled,
                     WebsiteStatusChangeSource::Scheduler,
                     new StatusChange(
-                        reason: $kind.'_expired',
-                        publicNote: __('website.notes.'.$kind.'_expired'),
+                        reason: WebsiteStatusReason::from($kind.'_expired')->value,
+                        publicNote: WebsiteStatusReason::from($kind.'_expired')->note(),
                     ),
                 );
 
@@ -278,8 +279,8 @@ class SweepWebsiteLifecycle
                 $pending,
                 WebsiteStatusChangeSource::Scheduler,
                 new StatusChange(
-                    reason: $kind.'_renewal_due',
-                    publicNote: __('website.notes.'.$kind.'_renewal_due'),
+                    reason: WebsiteStatusReason::from($kind.'_renewal_due')->value,
+                    publicNote: WebsiteStatusReason::from($kind.'_renewal_due')->note(),
                 ),
             );
 

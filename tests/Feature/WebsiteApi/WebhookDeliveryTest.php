@@ -5,6 +5,7 @@ use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Website\Actions\AttemptWebhookDelivery;
 use App\Domain\Website\Actions\DispatchDueWebhookRetries;
 use App\Domain\Website\Actions\ManageWebhookEndpoint;
 use App\Domain\Website\Actions\PublishWebsiteEvent;
@@ -44,10 +45,13 @@ beforeEach(function () {
 
     $this->website = Website::factory()->forAccount($this->account)->active()->create();
 
-    // What the fake storefront answers; a test changes it to make it fail.
+    // What the fake storefront answers; a test changes it to make it fail, or
+    // to 'unreachable' for a connection that never opens.
     $this->answer = 200;
 
-    Http::fake(fn () => Http::response('ok', $this->answer));
+    Http::fake(fn (HttpRequest $request) => $this->answer === 'unreachable'
+        ? Http::failedConnection('cURL error 7: Failed to connect to shop.example.com port 443 via 10.20.30.40 after 0 ms')($request)
+        : Http::response('ok', $this->answer));
 });
 
 /**
@@ -296,6 +300,33 @@ describe('delivery', function () {
 
         // Failed is finished: the scheduler leaves it for a person.
         expect(app(DispatchDueWebhookRetries::class)->handle())->toBe(0);
+    });
+
+    it('tells the partner why a delivery failed, in their language, and nothing about the platform\'s network', function () {
+        webhookTestEndpoint($this->website);
+        $this->answer = 'unreachable';
+
+        webhookTestExhaust(app(SyncWebsiteProduct::class)->handle(webhookTestSelection($this->website), WebhookEvent::ProductUpdated));
+
+        $owner = $this->account->owner;
+        $owner->forceFill(['locale' => 'bn'])->save();
+
+        $page = $this->actingAs($owner)
+            ->get(route('websites.integration.show', $this->website->public_id))
+            ->viewData('page');
+
+        expect($page['props']['failures'][0]['error'])->toBe(trans('website.integration.errors.unreachable', [], 'bn'))
+            ->and(json_encode($page['props']))->not->toContain('10.20.30.40')
+            // The transport's own words stay where support can read them.
+            ->and(WebhookLog::query()->latest('id')->value('error'))->toContain('10.20.30.40');
+    });
+
+    it('describes each way a delivery can fail', function () {
+        expect(AttemptWebhookDelivery::describe(503, 'The storefront answered 503.'))->toBe(__('website.integration.errors.answered', ['status' => 503]))
+            ->and(AttemptWebhookDelivery::describe(null, 'cURL error 28: Operation timed out after 10001 milliseconds'))->toBe(__('website.integration.errors.timed_out'))
+            ->and(AttemptWebhookDelivery::describe(null, AttemptWebhookDelivery::NO_ENDPOINT))->toBe(__('website.integration.errors.no_endpoint'))
+            ->and(AttemptWebhookDelivery::describe(null, 'cURL error 6: Could not resolve host'))->toBe(__('website.integration.errors.unreachable'))
+            ->and(AttemptWebhookDelivery::describe(200, null))->toBeNull();
     });
 
     it('queues nothing without an active endpoint or for a website not being served', function () {

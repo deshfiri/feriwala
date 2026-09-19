@@ -41,6 +41,8 @@ use Throwable;
  */
 class AttemptWebhookDelivery
 {
+    public const NO_ENDPOINT = 'No active webhook endpoint.';
+
     public function __construct(
         protected HttpFactory $http,
         protected PaymentLogRedactor $redactor,
@@ -95,7 +97,7 @@ class AttemptWebhookDelivery
         ];
 
         if ($endpoint === null) {
-            $error = 'No active webhook endpoint.';
+            $error = self::NO_ENDPOINT;
         } else {
             try {
                 $response = $this->http
@@ -139,6 +141,25 @@ class AttemptWebhookDelivery
             : $this->notDelivered($delivery, $status, $error ?? 'The storefront answered '.$status.'.');
 
         $this->recomputeHealth($delivery->website_id);
+    }
+
+    /**
+     * Why a delivery did not land, as the partner reads it.
+     *
+     * The recorded error is the transport's own message — which host, which
+     * proxy, which address it tried — and stays in the webhook log for support.
+     * The partner is told what happened in their language, and nothing about
+     * the platform's network.
+     */
+    public static function describe(?int $status, ?string $error): ?string
+    {
+        return match (true) {
+            $status !== null && ($status < 200 || $status >= 300) => (string) __('website.integration.errors.answered', ['status' => $status]),
+            $error === null => null,
+            $error === self::NO_ENDPOINT => (string) __('website.integration.errors.no_endpoint'),
+            str_contains($error, 'cURL error 28') || stripos($error, 'timed out') !== false => (string) __('website.integration.errors.timed_out'),
+            default => (string) __('website.integration.errors.unreachable'),
+        };
     }
 
     protected function delivered(WebhookDelivery $delivery, int $status): void

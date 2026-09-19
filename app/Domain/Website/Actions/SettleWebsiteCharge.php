@@ -11,6 +11,7 @@ use App\Domain\Wallet\WalletService;
 use App\Domain\Website\Enums\WebsiteChargeStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
+use App\Domain\Website\Enums\WebsiteStatusReason;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCharge;
@@ -175,8 +176,8 @@ class SettleWebsiteCharge
             WebsiteStatusChangeSource::Billing,
             new StatusChange(
                 actorId: $actor?->id,
-                reason: 'charges_settled',
-                publicNote: __('website.notes.charges_settled'),
+                reason: WebsiteStatusReason::ChargesSettled->value,
+                publicNote: WebsiteStatusReason::ChargesSettled->note(),
             ),
         );
     }
@@ -195,8 +196,8 @@ class SettleWebsiteCharge
             WebsiteStatus::DepositPending,
             WebsiteStatusChangeSource::Billing,
             new StatusChange(
-                reason: 'insufficient_balance',
-                publicNote: __('website.notes.deposit_pending'),
+                reason: WebsiteStatusReason::InsufficientBalance->value,
+                publicNote: WebsiteStatusReason::InsufficientBalance->note(),
             ),
         );
     }

@@ -263,6 +263,12 @@ return [
             'retrying' => 'Retrying',
             'failed' => 'Failed',
         ],
+        'errors' => [
+            'answered' => 'Your storefront answered with status :status.',
+            'timed_out' => 'Your storefront did not answer in time.',
+            'unreachable' => 'Your storefront could not be reached.',
+            'no_endpoint' => 'No webhook address was switched on.',
+        ],
         'scopes' => [
             'catalog:read' => 'Read the catalogue',
             'inventory:read' => 'Read stock availability',
@@ -411,6 +417,22 @@ return [
         'domain_renewal_due' => 'Your domain registration is running out.',
         'hosting_renewal_due' => 'Your hosting term is running out.',
         'renewed' => 'Renewed, and your shop is live again.',
+    ],
+
+    // Why the platform moved a website itself, as staff read it.
+    'reasons' => [
+        'charges_settled' => 'Every charge was paid from the wallet.',
+        'insufficient_balance' => 'The wallet could not cover the charges.',
+        'renewed' => 'A renewal was paid.',
+        'package_lapsed' => 'The package stopped including a website.',
+        'grace_ended' => 'The grace period ended.',
+        'package_restored' => 'The package includes a website again.',
+        'balance_below_minimum' => 'The wallet fell below the balance the account must hold.',
+        'balance_restored' => 'The wallet is back above the balance the account must hold.',
+        'domain_expired' => 'The domain registration expired.',
+        'hosting_expired' => 'The hosting term expired.',
+        'domain_renewal_due' => 'The domain registration is due for renewal.',
+        'hosting_renewal_due' => 'The hosting term is due for renewal.',
     ],
 
     'notifications' => [

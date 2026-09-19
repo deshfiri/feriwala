@@ -9,6 +9,7 @@ use App\Domain\Website\Enums\WebsiteChargeType;
 use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
+use App\Domain\Website\Enums\WebsiteStatusReason;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCharge;
@@ -165,8 +166,8 @@ class RenewWebsiteService
             WebsiteStatusChangeSource::Billing,
             new StatusChange(
                 actorId: $actor->id,
-                reason: 'renewed',
-                publicNote: __('website.notes.renewed'),
+                reason: WebsiteStatusReason::Renewed->value,
+                publicNote: WebsiteStatusReason::Renewed->note(),
             ),
         );
     }

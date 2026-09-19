@@ -1,15 +1,19 @@
 <?php
 
+use App\Domain\Website\Actions\MoveWebsiteStatus;
 use App\Domain\Website\Enums\WebsiteChargeStatus;
 use App\Domain\Website\Enums\WebsiteChargeType;
 use App\Domain\Website\Enums\WebsiteConnectionHealth;
 use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
+use App\Domain\Website\Enums\WebsiteStatusReason;
 use App\Domain\Website\Enums\WebsiteTheme;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCharge;
 use App\Domain\Website\Models\WebsiteDomain;
+use App\Domain\Website\Queries\WebsiteOverview;
+use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\QueryException;
 
@@ -22,6 +26,47 @@ use Illuminate\Database\QueryException;
  * tests are the other half of that bargain: they fail the day an enum gains a
  * case the column will not accept.
  */
+describe('the history, in the reader\'s language', function () {
+    it('tells a platform move in the language being read, and a person\'s as they wrote it', function () {
+        $website = Website::factory()->create();
+        $staff = User::factory()->create();
+        $move = app(MoveWebsiteStatus::class);
+
+        // Written while the platform ran in English.
+        app()->setLocale('en');
+        $move->handle($website, WebsiteStatus::Development, WebsiteStatusChangeSource::Billing, new StatusChange(
+            reason: WebsiteStatusReason::ChargesSettled->value,
+            publicNote: WebsiteStatusReason::ChargesSettled->note(),
+        ));
+        $move->handle($website->refresh(), WebsiteStatus::Active, WebsiteStatusChangeSource::Staff, new StatusChange(
+            actorId: $staff->id,
+            reason: 'Storefront built and checked for launch.',
+            publicNote: 'Your shop is open.',
+        ));
+
+        app()->setLocale('bn');
+        $overview = app(WebsiteOverview::class);
+        $partner = collect($overview->detail($website->refresh())['history'])->keyBy('new_status');
+        $platform = collect($overview->detail($website, forStaff: true)['history'])->keyBy('new_status');
+
+        expect($partner['development']['note'])->toBe(__('website.notes.charges_settled'))
+            ->and($partner['development']['note'])->not->toBe('Your charges are paid and the build has started.')
+            ->and($partner['development']['reason'])->toBeNull()
+            ->and($platform['development']['reason'])->toBe(__('website.reasons.charges_settled'))
+            ->and($platform['active']['reason'])->toBe('Storefront built and checked for launch.')
+            ->and($partner['active']['note'])->toBe('Your shop is open.');
+    });
+
+    it('has every platform reason in both languages', function (string $locale) {
+        app()->setLocale($locale);
+
+        foreach (WebsiteStatusReason::cases() as $reason) {
+            expect($reason->label())->not->toStartWith('website.')
+                ->and($reason->note())->not->toStartWith('website.');
+        }
+    })->with(['en', 'bn']);
+});
+
 describe('every status the enum names', function () {
     it('is a value the column accepts', function () {
         $website = Website::factory()->create();

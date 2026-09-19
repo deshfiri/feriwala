@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Website\Actions\AttemptWebhookDelivery;
 use App\Domain\Website\Actions\ManageWebhookEndpoint;
 use App\Domain\Website\Actions\ManageWebsiteCredentials;
 use App\Domain\Website\Actions\RetryWebhookDelivery;
@@ -115,7 +116,7 @@ class WebsiteIntegrationController extends Controller
                     'state' => $delivery->state->value,
                     'attempt' => $delivery->attempt,
                     'response_status' => $delivery->response_status,
-                    'last_error' => $delivery->last_error,
+                    'last_error' => AttemptWebhookDelivery::describe($delivery->response_status, $delivery->last_error),
                     'next_retry_at' => $delivery->next_retry_at?->toIso8601String(),
                     'delivered_at' => $delivery->delivered_at?->toIso8601String(),
                     'created_at' => $delivery->created_at->toIso8601String(),
@@ -133,7 +134,7 @@ class WebsiteIntegrationController extends Controller
                     'id' => $failure->public_id,
                     'event_id' => $failure->delivery?->event_id,
                     'event_type' => $failure->delivery?->event_type->value,
-                    'error' => $failure->error,
+                    'error' => (string) AttemptWebhookDelivery::describe($failure->delivery?->response_status, $failure->error),
                     'attempts' => $failure->attempts,
                     'retry_count' => $failure->retry_count,
                     'failed_at' => $failure->failed_at->toIso8601String(),

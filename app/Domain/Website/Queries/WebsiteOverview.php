@@ -4,6 +4,8 @@ namespace App\Domain\Website\Queries;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Website\Enums\WebsiteChargeStatus;
+use App\Domain\Website\Enums\WebsiteStatusChangeSource;
+use App\Domain\Website\Enums\WebsiteStatusReason;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCharge;
 use App\Domain\Website\Models\WebsiteDomain;
@@ -222,12 +224,15 @@ class WebsiteOverview
                     'new_status' => $change->new_status->value,
                     'new_status_label' => __('website.statuses.'.$change->new_status->value),
                     'changed_at' => $change->changed_at->toIso8601String(),
-                    'note' => $change->public_note,
+
+                    // A move the platform made itself is told in the reader's
+                    // language; what a person wrote is shown as they wrote it.
+                    'note' => $this->reasonFor($change)?->note() ?? $change->public_note,
 
                     // Who decided, why, and what they wrote about it stays on
                     // the platform (§7.2, §16.4).
                     'source' => $forStaff ? $change->source->value : null,
-                    'reason' => $forStaff ? $change->reason : null,
+                    'reason' => $forStaff ? ($this->reasonFor($change)?->label() ?? $change->reason) : null,
                     'internal_note' => $forStaff ? $change->internal_note : null,
                     'changed_by' => $forStaff ? $change->changedBy?->name : null,
                 ])
@@ -243,6 +248,18 @@ class WebsiteOverview
      * lookup, so another account's identifier is a 404 rather than a refusal
      * that confirms the website exists.
      */
+    /**
+     * The platform's own reason for a move, when it was the platform that made it.
+     */
+    protected function reasonFor(WebsiteStatusChange $change): ?WebsiteStatusReason
+    {
+        if ($change->source === WebsiteStatusChangeSource::Staff || $change->reason === null) {
+            return null;
+        }
+
+        return WebsiteStatusReason::tryFrom($change->reason);
+    }
+
     public function findForAccount(BusinessAccount $account, string $publicId): ?Website
     {
         /** @var Website|null $website */
