@@ -11,6 +11,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Referral\Actions\CalculateReferralCommissions;
 use App\Domain\Wallet\Actions\CaptureDepositObligation;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Notifications\Account\AccountActivated;
@@ -40,6 +41,7 @@ class ActivateAccount
         protected CaptureDepositObligation $obligations,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
+        protected CalculateReferralCommissions $referralCommissions,
     ) {}
 
     /**
@@ -129,6 +131,16 @@ class ActivateAccount
              * nothing, which is also an answer.
              */
             $this->obligations->handle($locked, CaptureDepositObligation::ACTIVATION);
+
+            /*
+             * The multi-level referral trigger (D24): activation after the
+             * verified combined payment. Written here, in the activation's own
+             * transaction, as an event and its commissions — the outbox — so
+             * an activation that rolls back leaves no commission behind, and
+             * one that commits cannot be paid for twice. Nothing reaches a
+             * wallet until after the commit.
+             */
+            $this->referralCommissions->forActivation($locked);
 
             // The account has left the approval queue. Clearing the stamp keeps
             // the queue's sort key meaning only "waiting for review".

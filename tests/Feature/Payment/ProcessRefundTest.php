@@ -14,6 +14,11 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Billing\Queries\RefundableAmount;
+use App\Domain\Referral\Actions\AttachReferrer;
+use App\Domain\Referral\Actions\CalculateReferralCommissions;
+use App\Domain\Referral\Enums\CommissionStatus;
+use App\Domain\Referral\Enums\ReversalCause;
+use App\Domain\Referral\Models\ReferralCommission;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Wallet\Data\PostingContext;
@@ -300,6 +305,33 @@ describe('provider confirmation before any reversal', function () {
         expect($settled->status)->toBe(RefundStatus::Processed)
             ->and($settled->processed_at)->not->toBeNull()
             ->and($this->payment->refresh()->status)->toBe(PaymentStatus::Refunded);
+    });
+
+    it('takes back the referral commissions a refunded activation paid, once the money went back (D24)', function () {
+        [$referrer] = referralTestChain(1);
+        app(AttachReferrer::class)->atRegistration($this->account, $referrer, null);
+        $this->payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'amount_minor' => 100000, 'currency_code' => 'BDT']);
+        $this->payment->allocations()->create(['type' => AllocationType::PackageFee, 'amount_minor' => 500000, 'currency_code' => 'BDT']);
+
+        referralTestSwitchOn();
+        referralTestPlan([['percentage', '10']]);
+        app(CalculateReferralCommissions::class)->forActivation($this->account);
+
+        $commission = ReferralCommission::query()->firstOrFail();
+
+        expect($commission->status)->toBe(CommissionStatus::Paid);
+
+        refundAnswers([refundAcceptance(), refundSettled()]);
+        $refund = processRefund(approvedRefund($this->payment));
+
+        // Accepted is not enough: nothing is taken back yet.
+        expect($commission->refresh()->status)->toBe(CommissionStatus::Paid);
+
+        app(SettleRefund::class)->handle($refund);
+
+        expect($commission->refresh()->status)->toBe(CommissionStatus::Reversed)
+            ->and($commission->reversal_cause)->toBe(ReversalCause::Refund)
+            ->and(Wallet::query()->where('business_account_id', $referrer->id)->firstOrFail()->total_minor->minorUnits)->toBe(0);
     });
 
     it('leaves an in-flight refund exactly where it was', function () {

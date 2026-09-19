@@ -6,6 +6,7 @@ use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Order\Actions\ExpireUnpaidWholesaleOrders;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
+use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
 use App\Domain\Website\Actions\DispatchDueWebhookRetries;
@@ -282,3 +283,16 @@ Schedule::call(fn () => app(SyncWebsiteCatalogue::class)->sweep())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Re-announce storefront products that are out of date (§17.2)');
+
+/*
+ * The referral commission outbox (D24, P7-43). Pays commissions whose holding
+ * period has passed and retries reversals a wallet could not carry. Each row
+ * is re-read under a lock and posted with its own idempotency key, so this
+ * running beside the post-activation job pays nothing twice.
+ */
+Schedule::call(fn () => app(ReleaseDueReferralCommissions::class)->handle())
+    ->name('referral-commission-release')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Pay due referral commissions and retry owed reversals (D24)');

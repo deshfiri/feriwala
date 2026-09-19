@@ -1,9 +1,11 @@
 <?php
 
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Account\Actions\ActivateAccount;
 use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
@@ -20,6 +22,7 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Referral\Actions\AttachReferrer;
 use App\Domain\Referral\Actions\OpenReferralPlan;
 use App\Domain\Referral\Data\ReferralPlanDraft;
 use App\Domain\Referral\Data\RewardRule;
@@ -27,6 +30,7 @@ use App\Domain\Referral\Enums\CommissionBase;
 use App\Domain\Referral\Enums\ReferralTrigger;
 use App\Domain\Referral\Enums\RewardType;
 use App\Domain\Referral\Models\ReferralPlan;
+use App\Domain\Referral\ReferralSettings;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
@@ -531,4 +535,80 @@ function referralTestPlan(array $levels, array $overrides = []): ReferralPlan
     ];
 
     return app(OpenReferralPlan::class)->handle(new ReferralPlanDraft(...$draft), User::factory()->create());
+}
+
+/**
+ * `$count` active accounts, each referred by the one before: `[0]` is the top.
+ *
+ * @return list<BusinessAccount>
+ */
+function referralTestChain(int $count): array
+{
+    $accounts = [];
+
+    for ($i = 0; $i < $count; $i++) {
+        $account = testBusinessAccount(AccountStatus::Active);
+
+        if ($i > 0) {
+            app(AttachReferrer::class)->atRegistration($account, $accounts[$i - 1], null);
+        }
+
+        $accounts[] = $account;
+    }
+
+    return $accounts;
+}
+
+/**
+ * The multi-level programme switched on, as an administrator would (D24).
+ */
+function referralTestSwitchOn(): void
+{
+    app(ReferralSettings::class)->switchTo(true, User::factory()->create(), 'Switched on for a test.');
+}
+
+/**
+ * An account ready for activation under `$referrer`, its verified activation
+ * payment itemised as a registration fee, a package fee and an optional
+ * discount, and — when a package is named — a subscription waiting for it.
+ */
+function referralTestNewcomer(?BusinessAccount $referrer, ?Package $package = null, int $registration = 150000, int $packageFee = 500000, int $discount = 0): BusinessAccount
+{
+    $account = testAccountReadyForActivation();
+
+    if ($referrer !== null) {
+        app(AttachReferrer::class)->atRegistration($account, $referrer, null);
+    }
+
+    if ($package !== null) {
+        UserPackage::create([
+            'business_account_id' => $account->id,
+            'package_id' => $package->id,
+            'status' => UserPackageStatus::PendingPayment,
+            'paid_fee_minor' => $packageFee,
+            'currency_code' => 'BDT',
+        ]);
+    }
+
+    $payment = Payment::query()
+        ->where('business_account_id', $account->id)
+        ->where('purpose', PaymentPurpose::Activation)
+        ->firstOrFail();
+
+    $payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'amount_minor' => $registration, 'currency_code' => 'BDT']);
+    $payment->allocations()->create(['type' => AllocationType::PackageFee, 'amount_minor' => $packageFee, 'currency_code' => 'BDT']);
+
+    if ($discount > 0) {
+        $payment->allocations()->create(['type' => AllocationType::Discount, 'amount_minor' => $discount, 'currency_code' => 'BDT']);
+    }
+
+    return $account;
+}
+
+/**
+ * Activate through the real approval, as an administrator does.
+ */
+function referralTestActivate(BusinessAccount $account): BusinessAccount
+{
+    return app(ActivateAccount::class)->handle($account, User::factory()->create()->id);
 }

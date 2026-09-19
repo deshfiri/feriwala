@@ -2,7 +2,6 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
-use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Referral\Actions\AttachReferrer;
 use App\Domain\Referral\Enums\ReferralAttachment;
@@ -24,28 +23,6 @@ use Illuminate\Support\Facades\DB;
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 });
-
-/**
- * `$count` active accounts, each referred by the one before: `[0]` is the top.
- *
- * @return list<BusinessAccount>
- */
-function referralTestChain(int $count): array
-{
-    $accounts = [];
-
-    for ($i = 0; $i < $count; $i++) {
-        $account = testBusinessAccount(AccountStatus::Active);
-
-        if ($i > 0) {
-            app(AttachReferrer::class)->atRegistration($account, $accounts[$i - 1], null);
-        }
-
-        $accounts[] = $account;
-    }
-
-    return $accounts;
-}
 
 it('makes the business behind the typed code the new business\'s direct referrer', function () {
     $referrer = testBusinessAccount(AccountStatus::Active);

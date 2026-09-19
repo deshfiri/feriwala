@@ -16,6 +16,7 @@ use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Billing\Queries\RefundableAmount;
+use App\Domain\Referral\Actions\ReverseQualifyingEvent;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\RefundIntent;
 use App\Integrations\Payment\Data\RefundResult;
@@ -64,6 +65,7 @@ class ProcessRefund
         protected PaymentLogRedactor $redactor,
         protected DatabaseManager $database,
         protected LogManager $log,
+        protected ReverseQualifyingEvent $referralReversal,
     ) {}
 
     /**
@@ -329,6 +331,9 @@ class ProcessRefund
          * this twice posts once.
          */
         $this->reversal->handle($payment, $processed);
+
+        // A refunded qualifying payment pays no referral commission (§25.5, D24).
+        $this->referralReversal->forRefund($payment, $processed);
 
         $this->settleStatus($payment);
 
