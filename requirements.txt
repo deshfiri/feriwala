@@ -1104,16 +1104,19 @@ Non-refundable
 Reserved until Package cancellation
 Usable for service charges
 Withdrawable after all liabilities are settled
-25. Direct Referral System
-The system will include a Direct Single-Level Referral Program.
-It will not operate as an MLM or Multi-Level Referral System.
+25. Referral and Multi-Level Commission System
+(Amended 2026-09-19 by written approval of the Project Owner — see requirements/04-decisions.md D24.
+This supersedes the earlier Direct Single-Level Referral requirement.)
+The system will include an Admin-configurable Multi-Level Referral and Commission System.
+Every Account has at most one direct Referrer. Commission may be paid to ancestors up to an
+Admin-configured maximum depth, with a separate rule for every level.
 25.1 Unlimited Direct Referrals
 Every Active user will receive:
 Unique Referral Code
 Unique Referral Link
 Registration URL
 A user can directly refer an unlimited number of people.
-No second-level, third-level or downline commission will exist.
+Commission beyond the direct Referrer is paid only as the active Multi-Level Plan configures it.
 25.2 Referral Qualification
 A Referral may qualify after the referred user:
 Registers
@@ -1150,12 +1153,26 @@ Start date
 Expiry date
 Reversal rule
 Active or inactive status
+25.4.1 Multi-Level Commission Configuration
+The Admin can configure:
+Whether Multi-Level commission is enabled (global switch)
+Maximum payable chain depth
+A separate commission rule for every level: fixed or percentage, optional cap, enabled or disabled
+Package-specific plans, resolving before the global default
+The commission-triggering event (initially: Account activation after verified combined Payment)
+The commission base
+Whether the newly activated user receives a joining reward
+Qualification requirements for each level, and the Account and Package states that qualify
+Effective dates for rule changes; a plan version is opened and closed, never edited
+A missing or ineligible ancestor is skipped at its own level; deeper ancestors never shift level.
+Every reward is an immutable, idempotent ledger entry and is reversed only by a compensating entry.
 25.5 Referral Fraud Prevention
 The system must prevent:
 Self-referral
+Circular referral chains and an Account becoming its own ancestor
 Duplicate rewards
 Duplicate Account abuse
-Multi-level commission
+Commission beyond the configured maximum depth or the commission base
 Referral replacement after qualification
 Rewards from failed Payments
 Rewards from cancelled Payments
@@ -2054,7 +2071,9 @@ Referral qualification
 Referrer reward
 New user reward
 Referral reversal
+Multi-level commission traversal, calculation and reversal
 Self-referral prevention
+Circular referral chain prevention
 Wallet credit and debit
 Reserved balance protection
 Wallet top-up
@@ -2102,7 +2121,7 @@ Users can only access their own operational and Financial Data.
 Every Active Account will have a Wallet and immutable Financial Ledger.
 The Admin may configure required deposits and minimum Wallet balances.
 Low Wallet balance may restrict Account or Website services.
-The Direct Referral System will remain Single-Level and will not be MLM.
+The Referral System supports Admin-configurable Multi-Level commission (amended 2026-09-19, D24).
 Active users can refer an unlimited number of people directly.
 Both Referrer and new user may receive configurable rewards.
 The Admin can configure Default Withdrawal Rules.
@@ -2135,7 +2154,7 @@ Commission Management
 Advanced Wallet and Money Management
 Required Deposit and Minimum Balance Management
 Immutable Financial Ledger
-Direct Single-Level Referral System
+Admin-configurable Multi-Level Referral and Commission System (amended 2026-09-19, D24)
 Unlimited Direct Referrals
 Rewards for Referrer and new user
 EPS

@@ -70,8 +70,11 @@ This is the highest-risk area in the project and I am treating it as such.
   cycle with couriers (§28).
 - Commission is earned on dropshipping sales, is rule-driven with priority resolution (global <
   package < user < product < category < campaign), and **reverses on cancel/return/refund** (§22).
-- Referral is **single-level only, unlimited width, explicitly not MLM** (§25). Both referrer and
-  new user can be rewarded. Fraud prevention is a listed requirement, not an afterthought.
+- Referral is an **admin-configurable multi-level commission system** (§25, amended 2026-09-19 by
+  D24, superseding the earlier single-level rule): one direct referrer per account, unlimited width,
+  commission to ancestors up to a configured depth with a rule per level, **switched off by
+  default**. The new user's joining reward is the referral reward (D14). Fraud prevention — no
+  self-referral, no cycles, no duplicate reward — is a listed requirement, not an afterthought.
 - Withdrawals have **default rules and per-user overrides**, where a valid user-specific rule
   overrides the corresponding default (§27.2, §27.3). Every override change is itself audited with
   before/after values.

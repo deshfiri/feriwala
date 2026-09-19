@@ -182,13 +182,17 @@ All writes: transaction + `SELECT … FOR UPDATE` on `stock_items`.
 
 | Table                   | Notes                                                                                                                                                                                                     |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `referral_plans`        | referrer reward, new-user reward, fixed/percentage, base, eligible package, minimum qualifying payment, KYC requirement, activation requirement, holding period, max reward, dates, reversal rule, active |
-| `referrals`             | referrer, referred user, code used, qualified_at, status, plan applied                                                                                                                                    |
-| `referral_rewards`      | beneficiary (referrer or new user), amount, status, released_at, ledger link                                                                                                                              |
-| `referral_fraud_checks` | self-referral, duplicate account, duplicate reward signals                                                                                                                                                |
+| `account_referrals`          | referred business account (unique), direct referrer account, code used, how it was attached, locked_at once a qualifying event exists (D24)                                                          |
+| `referral_plans`             | versioned, opened and closed never edited: optional package, trigger, commission base, maximum depth, joining reward, holding period, qualifying account states, minimum qualifying payment, dates |
+| `referral_plan_levels`       | one per level up to the version's depth: fixed (minor units) or percentage (basis points), cap, enabled, required packages, minimum active direct referrals                                        |
+| `referral_qualifying_events` | one per trigger and subject, ever (e.g. one activation per account): source account, payment, plan version, commission base, chain snapshot                                                        |
+| `referral_commissions`       | the outbox: beneficiary, source, event, level (0 = joining reward), rule snapshot, base, rate or amount, amount, status, available_at, wallet transaction, reversal                                |
+| `referral_fraud_checks`      | duplicate account signals (still to come)                                                                                                                                                           |
 
-Hard constraints: unique `(referred_user_id)` — a user is referred once, ever; referrer cannot
-equal referred; unique `(referral_id, beneficiary_type)` on rewards to block duplicates.
+Hard constraints: unique `(referred_account_id)` — an account is referred once, ever; referrer never
+equals referred and never descends from it (trigger, serialised); unique `(qualifying_event_id,
+beneficiary_account_id, level)` on commissions; a paid commission carries its wallet transaction;
+amounts are non-negative and never exceed the base (D24).
 
 ## Withdrawal (§27)
 

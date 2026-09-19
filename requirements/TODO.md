@@ -672,18 +672,25 @@ sized accordingly rather than as one line item under provisioning.
 - [ ] **P7-40** **Retail margin as a commission calculation base** — derived from the permitted selling price, settled through Feriwala, credited to the wallet. One earnings engine, several calculation bases (D12)
 - [ ] **P7-41** Ledger types `referee_reward_credit` / `referrer_reward_credit`; **no independent joining bonus** (D14)
 
-## P7.B Referral (§25)
+## P7.B Referral (§25, amended by D24 — multi-level)
+
+> **2026-09-19 — requirement change (D24).** The single-level, "not MLM" referral rule is superseded
+> by an admin-configurable multi-level commission system. P7-11, P7-12, P7-17 and P7-19 are restated
+> below; P7-42–P7-44 are added for the multi-level work.
 
 - [ ] **P7-10** Unique referral code + referral link + registration URL per active user (§25.1)
-- [ ] **P7-11** `referrals` — single level only, unlimited width, **no downline logic anywhere** (§25.1)
-- [ ] **P7-12** `referral_plans` with the full §25.4 configuration set
+- [ ] **P7-11** `account_referrals` — one direct referrer per business account, unlimited width, no self-referral and **no cycle**, enforced in the application and the database; referrer locked once a qualifying event exists (§25.1, D24)
+- [ ] **P7-12** `referral_plans` + `referral_plan_levels` — versioned plans with the full §25.4 and §25.4.1 configuration set: global switch, maximum depth, per-level fixed/percentage rules, package-specific plans, trigger, base, joining reward, qualification, effective dates (D24)
 - [ ] **P7-13** Qualification engine: registration, KYC submitted, package selected, combined payment complete, deposits met, KYC approved, account activated, holding period elapsed, plan conditions met (§25.2)
 - [ ] **P7-14** Rewards for **both** referrer and new user; fixed / percentage / package-based / plan-based / campaign-based (§25.3)
 - [ ] **P7-15** Reward release to wallet after holding period (§25.4)
 - [ ] **P7-16** Reversal rules on failed/cancelled/refunded/reversed/fraudulent payments (§25.5)
-- [ ] **P7-17** Fraud prevention: self-referral block, duplicate reward block, duplicate account signals, no multi-level, no referrer replacement after qualification (§25.5)
-- [ ] **P7-18** Referral dashboard: code, link, referred users, qualification state, rewards
-- [ ] **P7-19** Tests: unlimited direct referrals, qualification, both rewards, reversal, self-referral prevention, duplicate reward prevention (§43)
+- [ ] **P7-17** Fraud prevention: self-referral block, circular-chain block, duplicate reward block, duplicate account signals, no referrer replacement after qualification (§25.5, D24)
+- [ ] **P7-18** Referral dashboard: code, link, direct referrals, qualification state, own earnings with level — self-scoped, no downline beyond level 1 (D24)
+- [ ] **P7-19** Tests: unlimited direct referrals, N-level traversal, fixed and percentage levels, package plans and fallback, disabled and missing levels without shifting, depth, qualification, both rewards, reversal, self-referral and cycle prevention, duplicate reward prevention, concurrency (§43, D24)
+- [ ] **P7-42** N-level commission engine: qualifying event recorded once, ancestors resolved to the plan's depth, each level decided independently, integer rounding down, caps and base limit, rule snapshot per commission (D24)
+- [ ] **P7-43** Commission ledger path: commissions written as an outbox in the qualifying transaction, released idempotently to the wallet after the holding period, reversed only by compensating entries on refund or by an authorised person, owed reversals retried (D24)
+- [ ] **P7-44** Admin referral screens: MLM configuration and plan versions, package overrides, qualification, effective dates, commission history with filters, referral-chain inspection, referrer attachment before lock, reversal — each change audited (D24)
 
 ## P7.C Withdrawal (§27)
 
@@ -892,15 +899,21 @@ increment by hand; a progress table that has drifted is worse than none.
 | P4 Wholesale                                    | 14      | 14      | 0       |
 | P5 Dropship, Websites & Storefront              | 50      | 24      | 1       |
 | P6 OMS, Fulfillment, Courier                    | 33      | 5       | 6       |
-| P7 Commission, Referral, Withdrawal, Settlement | 41      | 0       | 0       |
+| P7 Commission, Referral, Withdrawal, Settlement | 44      | 0       | 0       |
 | P8 Notifications & SMS                          | 18      | 0       | 0       |
 | P9 Reports                                      | 23      | 0       | 0       |
 | P10 CMS & SEO                                   | 20      | 0       | 0       |
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
-| **Total**                                       | **457** | **217** | **19**  |
+| **Total**                                       | **460** | **217** | **19**  |
 
 ### Revision log
+
+- **2026-09-19** — **Requirement change, D24**: the referral system becomes an admin-configurable
+  multi-level commission system, approved in writing by the Project Owner and superseding the
+  single-level, "not MLM" wording in §25, §44 and §45 (`requirements.txt`, `00-understanding`,
+  `02-data-model`, `03-roadmap` and `04-decisions` amended; D14 unchanged). P7-11, P7-12, P7-17,
+  P7-18 and P7-19 restated; **P7-42, P7-43 and P7-44 added**. Total 457 → 460.
 
 - **2026-09-19** — Phase 5 batch: **P5-1–P5-12, P5-14, P5-15, P5-17–P5-20, P5-22, P5-25–P5-29** done;
   **P5-30** started (product sync tests only). Left for later, by dependency: P5-13 and P5-21, P5-23,

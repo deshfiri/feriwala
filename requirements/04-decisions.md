@@ -383,6 +383,82 @@ staff member holding the panel.
 `BusinessAccount` internally, however the UI labels it. `Account` alone reads as "the thing I log
 into", which is the confusion the split exists to end.
 
+## D24 — Multi-level referral commission (2026-09-19) 🔒
+
+**Approved in writing by the Project Owner on 2026-09-19** as the change-control approval that §45
+and the rule below require. **Supersedes** every statement that the referral system is single-level
+or not MLM: §25's opening, §25.1's "no second-level, third-level or downline commission", the
+"multi-level commission" item of §25.5, §44's "will remain Single-Level and will not be MLM", and
+§45's "Direct Single-Level Referral System". Everything else in §25 stands, and **D14 stands**: the
+joining reward is the new user's referral reward, never an independent bonus.
+
+### The hierarchy
+
+- Referral is a relation between **business accounts** (D23). Each account has **at most one direct
+  referrer**, captured at registration from the owner's referral code. No separate MLM account and
+  no second account system: the existing account is the node.
+- No self-referral, no cycle, no account as its own ancestor — refused in the application **and**
+  by the database, which serialises every hierarchy write and walks the chain before accepting it.
+- A referrer is never changed silently. Before any qualifying event or commission it may be
+  attached or changed by an authorised person, with a reason, audited; after one, never.
+
+### Configuration
+
+- A global switch, **off by default**, and **plan versions** that are opened and closed, never
+  edited: a plan version names an optional package (package-specific beats the global default),
+  its effective dates, the triggering event, the commission base, the joining reward, a holding
+  period, the account states that qualify, a **maximum payable depth**, and a rule for **every
+  level up to it**. Depth and rewards are data, not code; changing either is a new version.
+- Each level is **fixed** (minor units) or **percentage** (basis points of the commission base),
+  may carry a cap, may be switched off, and may require the beneficiary to hold one of a set of
+  packages or a minimum number of active direct referrals.
+
+### Calculation
+
+- **Trigger (initial):** successful **account activation after the verified combined activation
+  payment** — the §25.2 qualification path ends there. The event is recorded once per account ever,
+  so a retry, a duplicate callback or a second activation cannot pay again. The design keeps the
+  trigger an enum so order-based commissions can be added later.
+- **Commission base:** declared on the plan version — the package fee, the registration fee, or both
+  — taken from the activation payment's own allocations, net of discount and excluding tax and
+  deposits.
+- Ancestors are resolved from level 1 to the plan's depth. **Each level is decided on its own**: an
+  ancestor who is missing, suspended, unqualified or on a switched-off level is recorded as skipped
+  with the reason, and the ancestors above it **keep their own level** — nothing shifts.
+- Integer arithmetic only. A percentage reward is `floor(base × basis points ÷ 10 000)`: rounding is
+  always down to the poisha, so the platform never pays a fraction it did not have. A level never
+  exceeds its cap or the base, and the whole chain, joining reward included, never exceeds the base;
+  a level that would is reduced to what remains and marked capped.
+
+### Money
+
+- Every calculated reward is a `referral_commissions` row written **in the activation's own
+  transaction** — the outbox — holding the beneficiary, source account, event, level, the plan
+  version and a **snapshot of the level rule**, the base, the rate or fixed amount, currency and
+  amount. It is paid to the wallet through `WalletService` with an idempotency key of its own, when
+  its holding period has passed and the beneficiary still qualifies to be paid.
+- Reversal is only ever a compensating `referral_reward_reversal` entry: on a settled refund of the
+  qualifying payment, or by an authorised person with a reason. A reward not yet paid is cancelled
+  with no ledger entry. A reversal the wallet cannot cover is recorded as owed and retried, never
+  taken into a negative balance.
+- Level rewards post as `referral_reward_credit`; the new user's joining reward as
+  `joining_reward_credit`.
+
+### Visibility
+
+- Staff: separate permissions to **view** the configuration (`referral.view_settings`), **edit** it
+  (`referral.manage_settings`), view platform-wide referral and commission records
+  (`referral.view`), and reverse (`referral.reverse_transaction`).
+- An account sees **only its own**: its code and link, its **direct** referrals, and its own
+  earnings with level, status and date. No downline beyond level 1, no other account's KYC, wallet
+  or private data.
+
+### Compliance note
+
+Multi-level commission paid from joining or package fees is regulated in many jurisdictions and
+licensed in Bangladesh. The system ships with MLM commission **switched off**; switching it on, and
+the plan it runs, are the operator's decision to take with legal advice.
+
 ---
 
 # Final direction
@@ -399,7 +475,8 @@ into", which is the confusion the split exists to end.
 
 Any future change affecting **merchant of record · financial ledger · payment direction ·
 storefront separation · single account structure · product ownership · wallet settlement ·
-referral rewards** must be raised for approval **before** implementation.
+referral rewards** must be raised for approval **before** implementation. (Referral rewards were
+changed under this rule on 2026-09-19 — see D24.)
 
 I will treat a request touching any of these as a stop-and-confirm point rather than an
 instruction to proceed.

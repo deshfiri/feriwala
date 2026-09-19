@@ -118,9 +118,10 @@ _Why here:_ all of these compute from delivered/completed orders and write to th
 only correct once P2 and P6 are correct.
 
 **Done when:** commission rules resolve by priority across six scopes with effective dating, accrue
-on eligible orders, and reverse on cancel/return/refund; the single-level referral program pays both
-parties on qualification with holding periods, and blocks self-referral, duplicate rewards, and
-rewards from failed/cancelled/refunded/reversed payments; withdrawals honour default rules with
+on eligible orders, and reverse on cancel/return/refund; the admin-configurable multi-level referral
+program (D24) pays each ancestor up to the configured depth, and the new user, on qualification with
+holding periods, and blocks self-referral, circular chains, duplicate rewards, and rewards from
+failed/cancelled/refunded/reversed payments; withdrawals honour default rules with
 per-user overrides (with change auditing) through the full approval → paid lifecycle; COD collections
 settle and reconcile against courier statements, with mismatches raising alerts.
 
