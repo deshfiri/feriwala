@@ -11,6 +11,7 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Referral\Models\AccountReferral;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Factories\BusinessAccountFactory;
@@ -21,6 +22,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -61,6 +63,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, User> $members
  * @property-read Collection<int, AccountMembership> $memberships
  * @property-read Collection<int, BusinessAccountStatusChange> $statusHistory
+ * @property-read AccountReferral|null $referral
+ * @property-read Collection<int, AccountReferral> $directReferrals
  */
 #[Fillable(['name', 'slug', 'owner_id', 'status'])]
 class BusinessAccount extends Model
@@ -199,6 +203,26 @@ class BusinessAccount extends Model
     public function staff(): BelongsToMany
     {
         return $this->members()->wherePivot('role', '!=', AccountRole::Owner->value);
+    }
+
+    /**
+     * This account's direct referrer, if it has one (D24).
+     *
+     * @return HasOne<AccountReferral, $this>
+     */
+    public function referral(): HasOne
+    {
+        return $this->hasOne(AccountReferral::class, 'referred_account_id');
+    }
+
+    /**
+     * The accounts this one referred directly — never further down (D24).
+     *
+     * @return HasMany<AccountReferral, $this>
+     */
+    public function directReferrals(): HasMany
+    {
+        return $this->hasMany(AccountReferral::class, 'referrer_account_id');
     }
 
     public function isActivated(): bool

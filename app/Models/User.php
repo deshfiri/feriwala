@@ -255,8 +255,11 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * The account that referred this one. Single level only — there is no
-     * downline, and none may be added (§25.1, §44).
+     * The person whose referral code was typed at registration (§25.1).
+     *
+     * The capture, kept as it was typed. The hierarchy the multi-level
+     * commission engine walks is between business accounts, in
+     * `account_referrals` (D24).
      *
      * @return BelongsTo<User, $this>
      */

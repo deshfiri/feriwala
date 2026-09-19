@@ -12,6 +12,7 @@ use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Account\Exceptions\StaffLimitReached;
 use App\Domain\Account\Models\AccountInvitation;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Referral\Actions\AttachReferrer;
 use App\Domain\Referral\Actions\ResolveReferrer;
 use App\Domain\Referral\ReferralCode;
 use App\Models\User;
@@ -37,6 +38,7 @@ class CreateNewUser implements CreatesNewUsers
         private AcceptStaffInvitation $acceptStaffInvitation,
         private ReferralCode $referralCodes,
         private ResolveReferrer $resolveReferrer,
+        private AttachReferrer $attachReferrer,
     ) {}
 
     /**
@@ -150,6 +152,15 @@ class CreateNewUser implements CreatesNewUsers
                 'user_id' => $user->id,
                 'role' => AccountRole::Owner->value,
             ]);
+
+            // The code the owner typed makes the referrer's business this
+            // business's direct referrer (D24). ResolveReferrer already
+            // admitted only an active business.
+            $referrerAccount = $referrer?->ownedAccount;
+
+            if ($referrer !== null && $referrerAccount !== null) {
+                $this->attachReferrer->atRegistration($account, $referrerAccount, $referrer->referral_code);
+            }
 
             return $user;
         });
