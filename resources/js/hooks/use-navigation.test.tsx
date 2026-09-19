@@ -392,3 +392,64 @@ describe('referral settings navigation', () => {
         expect(titles).not.toContain('nav.referral_settings');
     });
 });
+
+/**
+ * Referral doors (D24): the owner's own page, and the platform's records for
+ * staff who may see them — never each other's.
+ */
+describe('referral navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives an owner who may see referrals their own page and no platform records', () => {
+        renderFor({
+            permissions: { 'referral.view': false },
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: true,
+                managesStaff: false,
+                viewsReferrals: true,
+            },
+        });
+
+        expect(titles).toContain('nav.referrals');
+        expect(titles).not.toContain('nav.referral_commissions');
+    });
+
+    it('gives staff who may see the records the commissions, and no partner page', () => {
+        renderFor({ permissions: { 'referral.view': true }, account: null });
+
+        expect(titles).toContain('nav.referral_commissions');
+        expect(titles).not.toContain('nav.referrals');
+    });
+
+    it('offers the owner page to no member without the permission', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: true,
+                managesStaff: false,
+                viewsReferrals: false,
+            },
+        });
+
+        expect(titles).not.toContain('nav.referrals');
+    });
+});

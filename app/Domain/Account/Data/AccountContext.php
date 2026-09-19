@@ -79,6 +79,12 @@ readonly class AccountContext
          */
         public bool $allowsWebsites = false,
         public bool $hasWebsites = false,
+
+        /*
+         * Whether this person may see the business's own referral code,
+         * direct referrals and earnings (D24).
+         */
+        public bool $viewsReferrals = false,
     ) {}
 
     public static function forUser(User $user, StaffAllowance $allowance, ?Entitlements $entitlements = null): ?self
@@ -132,6 +138,7 @@ readonly class AccountContext
                 ->where('business_account_id', $account->id)
                 ->where('status', '!=', WebsiteStatus::Closed->value)
                 ->exists(),
+            viewsReferrals: $account->status->isActivated() && $role->hasPermission(AccountPermission::ViewReferrals),
         );
     }
 }

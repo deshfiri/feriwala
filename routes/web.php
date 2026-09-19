@@ -28,6 +28,8 @@ use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Admin\ReferralChainController;
+use App\Http\Controllers\Admin\ReferralCommissionController;
 use App\Http\Controllers\Admin\ReferralSettingsController;
 use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Admin\SmsController;
@@ -49,6 +51,7 @@ use App\Http\Controllers\Erp\KycDocumentController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
+use App\Http\Controllers\Erp\ReferralController;
 use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
@@ -275,6 +278,12 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wholesale.orders.payment.store');
         Route::post('wholesale/orders/{order}/cancellation', [WholesaleOrderController::class, 'cancel'])
             ->name('wholesale.orders.cancellation.store');
+
+        /*
+         * The business's own referrals (D24, P7-10, P7-18). Self-scoped
+         * through the membership; no identifier in the URL.
+         */
+        Route::get('referrals', [ReferralController::class, 'index'])->name('referrals.index');
 
         /*
          * The account's own dedicated websites (§16, P5-8–P5-11, P5-15).
@@ -890,6 +899,27 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('referral-settings.plans.store');
         Route::post('referral-settings/plans/{plan}/close', [ReferralSettingsController::class, 'close'])
             ->name('referral-settings.plans.close');
+
+        /*
+         * Platform-wide referral commissions and chains (D24, P7-44). Seen
+         * with `referral.view`; taking commission back needs
+         * `referral.reverse_transaction` and a freshly confirmed password;
+         * attaching a referrer needs `referral.edit`.
+         */
+        Route::get('referral-commissions', [ReferralCommissionController::class, 'index'])
+            ->name('referral-commissions.index');
+        Route::get('referral-events/{event}', [ReferralCommissionController::class, 'event'])
+            ->name('referral-events.show');
+        Route::post('referral-commissions/{commission}/reversal', [ReferralCommissionController::class, 'reverseCommission'])
+            ->middleware(RequirePassword::class)
+            ->name('referral-commissions.reverse');
+        Route::post('referral-events/{event}/reversal', [ReferralCommissionController::class, 'reverseEvent'])
+            ->middleware(RequirePassword::class)
+            ->name('referral-events.reverse');
+        Route::get('referral-chains', [ReferralChainController::class, 'show'])
+            ->name('referral-chains.show');
+        Route::post('referral-chains/{account}/referrer', [ReferralChainController::class, 'attach'])
+            ->name('referral-chains.attach');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

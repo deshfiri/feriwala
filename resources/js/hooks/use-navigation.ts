@@ -11,6 +11,8 @@ import {
     MessageSquare,
     MonitorSmartphone,
     Network,
+    Share2,
+    Coins,
     Package as PackageIcon,
     PackageCheck,
     Palette,
@@ -68,6 +70,8 @@ import { index as websites } from '@/routes/websites';
 import { index as adminWebsites } from '@/routes/admin/websites';
 import { index as websitePricing } from '@/routes/admin/website-pricing';
 import { index as referralSettings } from '@/routes/admin/referral-settings';
+import { index as referralCommissions } from '@/routes/admin/referral-commissions';
+import { index as referrals } from '@/routes/referrals';
 import type { NavGroup } from '@/types';
 
 /**
@@ -206,6 +210,20 @@ export function useNavigation(): {
                                         title: t('nav.websites'),
                                         href: websites(),
                                         icon: Globe,
+                                    },
+                                ]
+                              : []),
+                          /*
+                           * The business's own referral code, direct
+                           * referrals and earnings (D24). Its owner's by
+                           * default; nothing below the direct referrals.
+                           */
+                          ...(account?.viewsReferrals
+                              ? [
+                                    {
+                                        title: t('nav.referrals'),
+                                        href: referrals(),
+                                        icon: Share2,
                                     },
                                 ]
                               : []),
@@ -369,6 +387,20 @@ export function useNavigation(): {
                               title: t('nav.website_pricing'),
                               href: websitePricing(),
                               icon: Scale,
+                          },
+                      ]
+                    : []),
+                /*
+                 * Every referral commission on the platform, and the chains
+                 * behind them (D24). A partner sees only their own, on their
+                 * own page, and holds none of this.
+                 */
+                ...(permissions['referral.view']
+                    ? [
+                          {
+                              title: t('nav.referral_commissions'),
+                              href: referralCommissions(),
+                              icon: Coins,
                           },
                       ]
                     : []),

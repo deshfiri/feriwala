@@ -34,6 +34,8 @@ export interface AccountContext {
     allowsWebsites: boolean;
     /** The account has a website that is not closed (§16.4). */
     hasWebsites: boolean;
+    /** The business's own referrals and earnings (D24). */
+    viewsReferrals: boolean;
 }
 
 export interface StaffMember {

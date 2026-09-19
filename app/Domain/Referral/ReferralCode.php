@@ -3,6 +3,7 @@
 namespace App\Domain\Referral;
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -39,6 +40,33 @@ class ReferralCode
         throw new RuntimeException(
             'Could not generate a unique referral code after '.self::ATTEMPTS.' attempts.'
         );
+    }
+
+    /**
+     * The person's code, issuing one if they have none — never replacing one.
+     *
+     * Registration issues every code; this covers a person created some other
+     * way (a seeder, an import) whose business is active and needs a code to
+     * share. Two requests racing each read back the one that was stored.
+     */
+    public function issueTo(User $user): string
+    {
+        if ($user->referral_code !== null) {
+            return $user->referral_code;
+        }
+
+        DB::transaction(fn () => User::query()
+            ->whereKey($user->id)
+            ->whereNull('referral_code')
+            ->toBase()
+            ->update(['referral_code' => $this->generate()]));
+
+        $code = (string) User::query()->whereKey($user->id)->value('referral_code');
+
+        $user->referral_code = $code;
+        $user->syncOriginalAttribute('referral_code');
+
+        return $code;
     }
 
     /**
