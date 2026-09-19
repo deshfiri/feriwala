@@ -9,6 +9,7 @@ use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Order\Actions\AnnounceWebsiteOrderStatus;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
@@ -17,6 +18,8 @@ use App\Domain\Order\Enums\OrderNotificationStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
+use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Wholesale\Models\Cart;
 use App\Models\User;
 use App\Support\Money\Money;
@@ -50,6 +53,9 @@ use LogicException;
  * @property int $business_account_id
  * @property int|null $placed_by
  * @property int|null $website_id
+ * @property int|null $website_customer_id
+ * @property string|null $storefront_order_reference
+ * @property string|null $storefront_return_url
  * @property int|null $cart_id
  * @property int|null $payment_id
  * @property string|null $idempotency_key
@@ -81,6 +87,8 @@ use LogicException;
  * @property CarbonImmutable $updated_at
  * @property-read BusinessAccount $businessAccount
  * @property-read User|null $placedBy
+ * @property-read Website|null $website
+ * @property-read WebsiteCustomer|null $websiteCustomer
  * @property-read Cart|null $cart
  * @property-read Payment|null $payment
  * @property-read Collection<int, OrderItem> $items
@@ -160,6 +168,27 @@ class Order extends Model
     }
 
     /**
+     * The partner website a website order was placed on (§17).
+     *
+     * @return BelongsTo<Website, $this>
+     */
+    public function website(): BelongsTo
+    {
+        return $this->belongsTo(Website::class);
+    }
+
+    /**
+     * The website's customer who placed it. What the order says about them is
+     * its own snapshot; this is the live record, for the shop's customer list.
+     *
+     * @return BelongsTo<WebsiteCustomer, $this>
+     */
+    public function websiteCustomer(): BelongsTo
+    {
+        return $this->belongsTo(WebsiteCustomer::class);
+    }
+
+    /**
      * @return BelongsTo<Cart, $this>
      */
     public function cart(): BelongsTo
@@ -199,6 +228,10 @@ class Order extends Model
      * The caller has already decided the move is allowed for this order and
      * locked it; this refuses a move the map does not have and writes the move
      * and its history together.
+     *
+     * A website order's storefront is told in the same transaction (contract
+     * §7.1): the delivery is written beside the move and sent once it commits,
+     * so no move goes unannounced and none is announced that did not happen.
      */
     public function moveTo(
         OrderStatus $to,
@@ -211,6 +244,10 @@ class Order extends Model
             'source' => $source,
             'notification_status' => $notification,
         ]);
+
+        if ($this->source === OrderSource::Website) {
+            app(AnnounceWebsiteOrderStatus::class)->handle($this, $entry);
+        }
 
         return $entry;
     }

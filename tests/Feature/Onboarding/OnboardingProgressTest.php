@@ -6,6 +6,8 @@ use App\Domain\Account\OnboardingProgress;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycReview;
 use App\Domain\Kyc\Models\KycSubmission;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 function progressFor(AccountStatus $status): array
 {
@@ -65,7 +67,26 @@ describe('the required action', function () {
         $action = progressFor(AccountStatus::KycPending)['action'];
 
         expect($action['label'])->toBe('Submit your KYC documents')
-            ->and($action)->toHaveKey('route');
+            ->and($action['url'])->toBe(route('kyc.create', absolute: false));
+    });
+
+    it('points every action at an address that exists', function () {
+        // The browser cannot resolve a route name: handed one as a link, it
+        // requests a relative path and 404s — which is what every button on
+        // the stepper once did, starting with "Verify your mobile number".
+        foreach (AccountStatus::cases() as $status) {
+            $action = progressFor($status)['action'];
+
+            if ($action === null) {
+                continue;
+            }
+
+            expect(Route::getRoutes()->match(Request::create($action['url']))->getName())
+                ->not->toBeNull("{$status->value} leads nowhere");
+        }
+
+        expect(progressFor(AccountStatus::Registered)['action']['url'])
+            ->toBe(route('verification.mobile', absolute: false));
     });
 
     it('changes with the step', function () {

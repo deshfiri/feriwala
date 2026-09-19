@@ -6,12 +6,12 @@ use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
-use App\Domain\Order\Actions\CancelUnpaidWholesaleOrder;
-use App\Domain\Order\Actions\InitiateWholesaleOrderPayment;
+use App\Domain\Order\Actions\CancelUnpaidOrder;
+use App\Domain\Order\Actions\InitiateOrderPayment;
 use App\Domain\Order\Actions\PlaceWholesaleOrder;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderStatus;
-use App\Domain\Order\Enums\WholesaleCancellation;
+use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\WholesaleOrderTracking;
@@ -85,7 +85,7 @@ class WholesaleOrderController extends Controller
     public function store(
         Request $request,
         PlaceWholesaleOrder $place,
-        InitiateWholesaleOrderPayment $initiate,
+        InitiateOrderPayment $initiate,
     ): SymfonyResponse {
         $account = $this->businessAccountFor($request);
 
@@ -115,7 +115,7 @@ class WholesaleOrderController extends Controller
     /**
      * Continue to payment for an order still waiting for it.
      */
-    public function pay(Request $request, string $order, InitiateWholesaleOrderPayment $initiate): SymfonyResponse
+    public function pay(Request $request, string $order, InitiateOrderPayment $initiate): SymfonyResponse
     {
         $account = $this->businessAccountFor($request);
         $record = $this->orderFor($request, $order);
@@ -128,14 +128,14 @@ class WholesaleOrderController extends Controller
     /**
      * Cancel an order nobody has paid for, giving its stock back.
      */
-    public function cancel(Request $request, string $order, CancelUnpaidWholesaleOrder $cancel): RedirectResponse
+    public function cancel(Request $request, string $order, CancelUnpaidOrder $cancel): RedirectResponse
     {
         $record = $this->orderFor($request, $order);
 
         Gate::authorize('cancel', $record);
 
         try {
-            $cancel->handle($record, WholesaleCancellation::ByAccount, $this->person($request));
+            $cancel->handle($record, UnpaidOrderCancellation::ByAccount, $this->person($request));
         } catch (OrderRefused $refused) {
             throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
         } catch (LockTimeout) {
@@ -159,7 +159,7 @@ class WholesaleOrderController extends Controller
     protected function sendToGateway(
         Request $request,
         Order $order,
-        InitiateWholesaleOrderPayment $initiate,
+        InitiateOrderPayment $initiate,
         bool $refuseLoudly = false,
     ): SymfonyResponse {
         try {

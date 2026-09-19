@@ -4,7 +4,7 @@ use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
-use App\Domain\Order\Actions\ExpireUnpaidWholesaleOrders;
+use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
@@ -210,7 +210,7 @@ Schedule::call(fn () => app(ReleaseExpiredReservations::class)->handle())
  * `onOneServer` and `withoutOverlapping` as above (§41). Idempotent on its own:
  * each order is re-read under its payment's settlement lock and its row lock.
  */
-Schedule::call(fn () => app(ExpireUnpaidWholesaleOrders::class)->handle())
+Schedule::call(fn () => app(ExpireUnpaidOrders::class)->handle())
     ->name('wholesale-order-payment-sweep')
     ->everyMinute()
     ->onOneServer()

@@ -231,13 +231,13 @@ class PaymentReturnController extends Controller
          * account whose only payment has already closed — which is what a
          * cancel URL routinely arrives against.
          *
-         * Never a wholesale order's payment. Those return to addresses that
+         * Never an order's payment. Those return to addresses that
          * name their order, and closing one here would leave the order's stock
          * held for a payment that no longer exists (P4-9).
          */
         $open = Payment::query()
             ->where('business_account_id', $accountId)
-            ->where('purpose', '!=', PaymentPurpose::WholesaleOrder)
+            ->whereNotIn('purpose', [PaymentPurpose::WholesaleOrder, PaymentPurpose::WebsiteOrder])
             ->whereIn('status', PaymentStatus::open())
             ->latest('id')
             ->first();

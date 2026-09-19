@@ -80,7 +80,7 @@ export default function OnboardingStatus({
 
                     {progress.action ? (
                         <Button asChild>
-                            <Link href={progress.action.route}>
+                            <Link href={progress.action.url}>
                                 {progress.action.label}
                                 <ArrowRight
                                     className="size-4"

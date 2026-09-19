@@ -6,7 +6,7 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
-use App\Domain\Order\Enums\WholesaleCancellation;
+use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Models\Order;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,8 +14,8 @@ use Illuminate\Log\LogManager;
 use Throwable;
 
 /**
- * The scheduled pass over ERP wholesale orders still waiting for payment
- * (§14, §19.1, P4-10).
+ * The scheduled pass over orders still waiting for payment — ERP wholesale and
+ * website alike (§14, §17, §19.1, P4-10, P5-23).
  *
  * Three kinds of order, each answered by the action that owns it:
  *
@@ -34,11 +34,11 @@ use Throwable;
  * second pass or a racing callback finds the work done. One order failing is
  * logged and the pass moves on.
  */
-class ExpireUnpaidWholesaleOrders
+class ExpireUnpaidOrders
 {
     public function __construct(
-        protected ConfirmWholesaleOrderPayment $confirm,
-        protected CancelUnpaidWholesaleOrder $cancel,
+        protected ConfirmOrderPayment $confirm,
+        protected CancelUnpaidOrder $cancel,
         protected LogManager $log,
     ) {}
 
@@ -66,8 +66,8 @@ class ExpireUnpaidWholesaleOrders
             ])),
             function (Order $order) use (&$counts) {
                 $why = $order->payment?->status === PaymentStatus::Failed
-                    ? WholesaleCancellation::PaymentFailed
-                    : WholesaleCancellation::PaymentCancelled;
+                    ? UnpaidOrderCancellation::PaymentFailed
+                    : UnpaidOrderCancellation::PaymentCancelled;
 
                 if ($this->cancel->handle($order, $why)) {
                     $counts['cancelled']++;
@@ -81,7 +81,7 @@ class ExpireUnpaidWholesaleOrders
                 ->whereNotNull('expires_at')
                 ->where('expires_at', '<=', CarbonImmutable::now())),
             function (Order $order) use (&$counts) {
-                if ($this->cancel->handle($order, WholesaleCancellation::PaymentExpired)) {
+                if ($this->cancel->handle($order, UnpaidOrderCancellation::PaymentExpired)) {
                     $counts['expired']++;
                 }
             },
@@ -96,7 +96,7 @@ class ExpireUnpaidWholesaleOrders
     protected function waiting(): Builder
     {
         return Order::query()
-            ->where('source', OrderSource::ErpWholesale)
+            ->whereIn('source', [OrderSource::ErpWholesale, OrderSource::Website])
             ->where('status', OrderStatus::PaymentPending)
             ->with('payment');
     }
@@ -112,7 +112,7 @@ class ExpireUnpaidWholesaleOrders
                 try {
                     $callback($order);
                 } catch (Throwable $throwable) {
-                    $this->log->channel('payment')->error('Could not settle an unpaid wholesale order', [
+                    $this->log->channel('payment')->error('Could not settle an unpaid order', [
                         'order' => $order->reference,
                         'payment' => $order->payment instanceof Payment ? $order->payment->reference : null,
                         'error' => $throwable->getMessage(),

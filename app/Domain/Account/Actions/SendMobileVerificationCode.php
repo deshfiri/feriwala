@@ -48,7 +48,7 @@ class SendMobileVerificationCode
             // Sent in the user's own language — a Bangla-speaking user should
             // not have to read an English SMS to finish signing up (D6).
             body: $this->translator->get(
-                'sms.mobile_verification',
+                'sms.templates.mobile_verification',
                 ['code' => $code],
                 $locale->value,
             ),

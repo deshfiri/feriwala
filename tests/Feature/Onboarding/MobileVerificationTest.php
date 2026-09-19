@@ -5,7 +5,11 @@ use App\Domain\Account\Actions\VerifyMobile;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Account\VerificationCodes;
+use App\Integrations\Sms\Contracts\SmsProvider;
+use App\Integrations\Sms\Data\SmsMessage;
+use App\Integrations\Sms\Data\SmsResult;
 use App\Models\User;
+use Illuminate\Support\Collection;
 
 beforeEach(function () {
     $this->codes = app(VerificationCodes::class);
@@ -42,6 +46,48 @@ it('sends a code and accepts it', function () {
     expect(app(VerifyMobile::class)->handle($user, $code))->toBeTrue()
         ->and($user->fresh()->mobile_verified_at)->not->toBeNull();
 });
+
+it('texts a code that verifies the number, in the user\'s language', function (string $locale, string $wording) {
+    // Read off the message the way the user does. The template key once went
+    // missing and the text said "sms.mobile_verification" — no code at all —
+    // while every test that issued its own code kept passing.
+    $sent = collect();
+    app()->instance(SmsProvider::class, new class($sent) implements SmsProvider
+    {
+        public function __construct(private Collection $sent) {}
+
+        public function send(SmsMessage $message): SmsResult
+        {
+            $this->sent->push($message);
+
+            return SmsResult::accepted('test');
+        }
+
+        public function balance(): ?string
+        {
+            return null;
+        }
+
+        public function name(): string
+        {
+            return 'spy';
+        }
+    });
+
+    $user = verifyingUser(['locale' => $locale]);
+
+    app(SendMobileVerificationCode::class)->handle($user);
+
+    $body = $sent->sole()->body;
+    preg_match('/\d{'.VerificationCodes::LENGTH.'}/', $body, $match);
+
+    expect($body)->toContain($wording)
+        ->and($match)->not->toBeEmpty()
+        ->and(app(VerifyMobile::class)->handle($user, $match[0]))->toBeTrue();
+})->with([
+    'English' => ['en', 'Your Feriwala verification code is'],
+    'Bangla' => ['bn', 'আপনার ফেরিওয়ালা কোড'],
+]);
 
 it('rejects a wrong code and leaves the number unverified', function () {
     $user = verifyingUser();

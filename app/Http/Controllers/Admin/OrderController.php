@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\Enums\PaymentStatus;
-use App\Domain\Order\Actions\CancelWholesaleOrderByStaff;
+use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
@@ -38,7 +38,7 @@ class OrderController extends Controller
     public const PER_PAGE = 25;
 
     public function __construct(
-        protected CancelWholesaleOrderByStaff $cancel,
+        protected CancelUnpaidOrderByStaff $cancel,
     ) {}
 
     public function index(Request $request): Response
@@ -179,7 +179,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('transition', $record);
 
         $validated = $request->validate([
-            'reason' => ['required', 'string', 'min:'.CancelWholesaleOrderByStaff::MINIMUM_REASON, 'max:1000'],
+            'reason' => ['required', 'string', 'min:'.CancelUnpaidOrderByStaff::MINIMUM_REASON, 'max:1000'],
         ]);
 
         try {

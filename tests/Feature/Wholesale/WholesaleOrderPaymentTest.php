@@ -31,7 +31,7 @@ use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\ReservationWindows;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Inventory\StockReservations;
-use App\Domain\Order\Actions\ExpireUnpaidWholesaleOrders;
+use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use App\Domain\Order\Actions\PlaceWholesaleOrder;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderStatus;
@@ -544,7 +544,7 @@ describe('paying (P4-9, P4-11)', function () {
         wholesaleOrderNotify($order);
         wholesaleOrderNotify($order);
         $this->get(route('wholesale.orders.payment.return', ['order' => $order->public_id, ...wholesaleOrderIpn((string) $order->payment?->reference)]));
-        app(ExpireUnpaidWholesaleOrders::class)->handle();
+        app(ExpireUnpaidOrders::class)->handle();
 
         expect(Order::query()->count())->toBe(1)
             ->and(Payment::query()->count())->toBe(1)
@@ -770,7 +770,7 @@ describe('failed, cancelled and expired payments (P4-10)', function () {
 
         $this->travelTo($order->payment?->expires_at->addSecond());
 
-        $sweep = app(ExpireUnpaidWholesaleOrders::class);
+        $sweep = app(ExpireUnpaidOrders::class);
 
         expect($sweep->handle())->toBe(['confirmed' => 0, 'cancelled' => 0, 'expired' => 1])
             ->and($sweep->handle())->toBe(['confirmed' => 0, 'cancelled' => 0, 'expired' => 0]);
@@ -794,7 +794,7 @@ describe('failed, cancelled and expired payments (P4-10)', function () {
 
         $this->travel(20)->minutes();
         app(ReleaseExpiredReservations::class)->handle();
-        app(ExpireUnpaidWholesaleOrders::class)->handle();
+        app(ExpireUnpaidOrders::class)->handle();
 
         expect($order->refresh()->status)->toBe(OrderStatus::Cancelled)
             ->and(wholesaleOrderMovements(StockMovementType::ReservationExpired))->toBe(1)
@@ -829,7 +829,7 @@ describe('failed, cancelled and expired payments (P4-10)', function () {
         $order = wholesaleOrderPlaced();
 
         $this->travel(20)->minutes();
-        app(ExpireUnpaidWholesaleOrders::class)->handle();
+        app(ExpireUnpaidOrders::class)->handle();
 
         wholesaleOrderNotify($order);
 
@@ -882,7 +882,7 @@ describe('a settled order whose stock is not there (P4-10)', function () {
         $payment?->transitionTo(PaymentStatus::Paid);
         $payment?->forceFill(['completed_at' => now()])->save();
 
-        expect(app(ExpireUnpaidWholesaleOrders::class)->handle()['confirmed'])->toBe(1)
+        expect(app(ExpireUnpaidOrders::class)->handle()['confirmed'])->toBe(1)
             ->and($order->refresh()->status)->toBe(OrderStatus::Paid)
             ->and(Invoice::query()->where('payment_id', $payment?->id)->count())->toBe(1);
     });

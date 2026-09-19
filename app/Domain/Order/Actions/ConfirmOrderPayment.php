@@ -9,19 +9,23 @@ use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\StockReservations;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Exceptions\OrderStockUnconfirmable;
 use App\Domain\Order\Models\Order;
 use App\Domain\Wholesale\Actions\CloseOrderedCart;
+use App\Notifications\Orders\WebsiteOrderPaid;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Log\LogManager;
+use Throwable;
 
 /**
- * What a settled wholesale payment does to its order (§14, §19.1, P4-9–P4-11).
+ * What a settled order payment does to its order — ERP wholesale or website
+ * (§14, §17, §19.1, P4-9–P4-11, P5-23).
  *
  * Run by settlement once the payment is paid, and again by the sweep for any
  * order a settlement left waiting. In one transaction, with the order and then
@@ -30,9 +34,11 @@ use Illuminate\Log\LogManager;
  *   - every line's reservation must be the one placed for it, still holding its
  *     units — and each is committed to the order;
  *   - the order moves along the transition map to `paid`, recorded with a note
- *     for the buyer;
+ *     for the buyer — and, for a website order, announced to its storefront;
  *   - the invoice is issued from the payment's own components (P4-11);
- *   - the cart it was bought from is emptied.
+ *   - a wholesale order's cart is emptied.
+ *
+ * A website order's owner is told a paid order is waiting for them.
  *
  * **The same order, once.** An order no longer waiting for payment is answered
  * as it stands, so a repeated callback commits nothing, issues nothing and moves
@@ -44,7 +50,7 @@ use Illuminate\Log\LogManager;
  * staff and a critical alert: the money is real and the stock has to be found or
  * the payment refunded by a person. No invoice is issued for a held order.
  */
-class ConfirmWholesaleOrderPayment
+class ConfirmOrderPayment
 {
     public function __construct(
         protected StockReservations $reservations,
@@ -60,7 +66,7 @@ class ConfirmWholesaleOrderPayment
         $order = Order::query()->where('payment_id', $payment->id)->first();
 
         if ($order === null) {
-            $this->log->channel('payment')->critical('Settled a wholesale payment with no order', [
+            $this->log->channel('payment')->critical('Settled an order payment with no order', [
                 'payment' => $payment->reference,
                 'business_account' => $payment->business_account_id,
                 'amount_minor' => $payment->amount_minor->minorUnits,
@@ -71,13 +77,39 @@ class ConfirmWholesaleOrderPayment
             return null;
         }
 
+        $wasWaiting = $order->status === OrderStatus::PaymentPending;
+
         try {
             $this->database->transaction(fn () => $this->confirm($order, $payment));
         } catch (OrderStockUnconfirmable|InventoryRefused|LockTimeout $problem) {
             $this->hold($order, $payment, $problem->getMessage());
         }
 
-        return $order->refresh();
+        $order->refresh();
+
+        if ($wasWaiting && $order->source === OrderSource::Website && $order->status !== OrderStatus::PaymentPending) {
+            $this->tellOwner($order);
+        }
+
+        return $order;
+    }
+
+    /**
+     * A customer paid on the owner's shop: tell them there is an order to look
+     * at — paid and on its way, or held for Feriwala to resolve.
+     *
+     * Never allowed to fail the confirmation that has already happened.
+     */
+    protected function tellOwner(Order $order): void
+    {
+        try {
+            $order->businessAccount()->with('owner')->first()?->owner?->notify(new WebsiteOrderPaid($order));
+        } catch (Throwable $throwable) {
+            $this->log->channel('payment')->error('Could not tell a website owner about a paid order', [
+                'order' => $order->reference,
+                'error' => $throwable->getMessage(),
+            ]);
+        }
     }
 
     protected function confirm(Order $order, Payment $payment): void
@@ -183,7 +215,7 @@ class ConfirmWholesaleOrderPayment
             return;
         }
 
-        $this->log->channel('payment')->critical('Settled wholesale order held: stock could not be committed', [
+        $this->log->channel('payment')->critical('Settled order held: stock could not be committed', [
             'order' => $order->reference,
             'payment' => $payment->reference,
             'business_account' => $payment->business_account_id,

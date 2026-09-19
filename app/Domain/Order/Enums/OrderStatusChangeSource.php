@@ -30,6 +30,9 @@ enum OrderStatusChangeSource: string
     /** The application itself, for anything else. */
     case System = 'system';
 
+    /** A partner website, through its signed API — a customer placing or cancelling (§17). */
+    case Storefront = 'storefront';
+
     public function label(): string
     {
         return match ($this) {
@@ -39,6 +42,7 @@ enum OrderStatusChangeSource: string
             self::Account => 'Account',
             self::Staff => 'Staff',
             self::System => 'System',
+            self::Storefront => 'Storefront',
         };
     }
 }

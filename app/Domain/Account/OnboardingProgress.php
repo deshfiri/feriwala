@@ -104,48 +104,43 @@ class OnboardingProgress
      * One action, never a list. A person part-way through signing up needs to
      * know the next thing to click, not everything still outstanding.
      *
-     * @return array<string, string>|null
+     * Resolved to an address here rather than handed over as a route name: the
+     * browser cannot resolve a name, and a name used as a link is a relative
+     * path that 404s — which is what every button on the stepper once did.
+     *
+     * @return array{label: string, url: string}|null
      */
     protected function requiredAction(BusinessAccount $account): ?array
     {
-        return match ($account->status) {
+        [$label, $route] = match ($account->status) {
             AccountStatus::Registered,
-            AccountStatus::MobileVerificationPending => [
-                'label' => 'Verify your mobile number',
-                'route' => 'verification.mobile',
-            ],
+            AccountStatus::MobileVerificationPending => ['Verify your mobile number', 'verification.mobile'],
 
-            AccountStatus::EmailVerificationPending => [
-                'label' => 'Verify your email address',
-                'route' => 'verification.notice',
-            ],
+            AccountStatus::EmailVerificationPending => ['Verify your email address', 'verification.notice'],
 
-            AccountStatus::KycPending => [
-                'label' => 'Submit your KYC documents',
-                'route' => 'kyc.create',
-            ],
+            AccountStatus::KycPending => ['Submit your KYC documents', 'kyc.create'],
 
             AccountStatus::KycResubmissionRequired,
-            AccountStatus::KycRejected => [
-                'label' => 'Update your KYC documents',
-                'route' => 'kyc.create',
-            ],
+            AccountStatus::KycRejected => ['Update your KYC documents', 'kyc.create'],
 
             AccountStatus::KycApproved,
-            AccountStatus::PackageSelectionPending => [
-                'label' => 'Choose your package',
-                'route' => 'packages.index',
-            ],
+            AccountStatus::PackageSelectionPending => ['Choose your package', 'packages.index'],
 
-            AccountStatus::PaymentPending => [
-                'label' => 'Complete your payment',
-                'route' => 'payment.checkout',
-            ],
+            AccountStatus::PaymentPending => ['Complete your payment', 'checkout.show'],
 
             // Nothing to do but wait — and saying so is better than showing a
             // button that does nothing.
-            default => null,
+            default => [null, null],
         };
+
+        if ($label === null || $route === null) {
+            return null;
+        }
+
+        return [
+            'label' => $label,
+            'url' => route($route, absolute: false),
+        ];
     }
 
     /**

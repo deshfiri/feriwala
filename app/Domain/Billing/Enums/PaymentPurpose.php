@@ -67,18 +67,19 @@ enum PaymentPurpose: string
             self::PackageRenewal,
             self::PackageUpgrade,
             self::PackageDowngrade,
-            // Settling confirms the ERP wholesale order it pays for (P4-9).
+            // Settling confirms the ERP wholesale order it pays for (P4-9),
+            // or the website order a customer placed (P5-23).
             self::WholesaleOrder,
+            self::WebsiteOrder,
             self::WalletDeposit,
             self::WalletTopUp => true,
 
             /*
-             * Not built yet. Website orders (§16–§17), websites (§18–§20) and
-             * the recurring charges that hang off them are later phases, and a
-             * payment cannot be taken for one through any route that exists
-             * today — which is asserted rather than assumed.
+             * Not taken through a gateway. Website setup and its recurring
+             * charges are charged to the account's wallet (P5-10), and a
+             * gateway payment for one through any route that exists today is
+             * asserted not to happen rather than assumed.
              */
-            self::WebsiteOrder,
             self::WebsiteSetup,
             self::DomainCharge,
             self::HostingCharge,
@@ -90,13 +91,34 @@ enum PaymentPurpose: string
      * Whether the invoice is issued when the payment is recorded (§8.2).
      *
      * An activation, renewal or top-up invoice is what somebody is asked to pay,
-     * so it exists before the money does. A wholesale order's invoice is a record
-     * of a sale, issued once the payment has settled and the order is paid
-     * (P4-11) — an order nobody paid for never carries one.
+     * so it exists before the money does. An order's invoice — wholesale or
+     * website — is a record of a sale, issued once the payment has settled and
+     * the order is paid (P4-11) — an order nobody paid for never carries one.
      */
     public function issuesInvoiceWhenRecorded(): bool
     {
-        return $this !== self::WholesaleOrder;
+        return ! $this->paysForOrder();
+    }
+
+    /**
+     * Whether this payment is for an order, whose own lifecycle — stock held,
+     * a payment window, confirmation on settlement — decides what it does.
+     */
+    public function paysForOrder(): bool
+    {
+        return $this === self::WholesaleOrder || $this === self::WebsiteOrder;
+    }
+
+    /**
+     * Whether the account the payment is recorded against is the one paying.
+     *
+     * A website order's money comes from the shop's customer, not from the
+     * partner whose shop it is: it belongs to the partner's records of sales,
+     * never to what the partner has paid Feriwala (§8.2, §17).
+     */
+    public function isPaidByAccount(): bool
+    {
+        return $this !== self::WebsiteOrder;
     }
 
     /**

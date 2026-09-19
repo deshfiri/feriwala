@@ -116,8 +116,8 @@ class GatewayReturnController extends Controller
      *
      * The shared checkout addresses do not say which gateway sent the person, so
      * each driver reads the request its own way; the payment found must belong to
-     * that gateway, as a notification's must. A wholesale order's payment has
-     * return addresses of its own and is never matched here.
+     * that gateway, as a notification's must. An order's payment has return
+     * addresses of its own and is never matched here.
      *
      * @return array{0: Payment|null, 1: GatewayResult|null}
      */
@@ -133,7 +133,7 @@ class GatewayReturnController extends Controller
             $result = $this->read($name, $request);
             $payment = $result === null ? null : $this->payments->handle($name, $result);
 
-            if ($payment !== null && $payment->purpose !== PaymentPurpose::WholesaleOrder) {
+            if ($payment !== null && ! $payment->purpose->paysForOrder()) {
                 return [$payment, $result];
             }
         }

@@ -145,7 +145,7 @@ class EnforceKycDeadline
 
             $this->sms->send(new SmsMessage(
                 to: (string) $owner->mobile,
-                body: $this->translator->get('sms.kyc_deadline_missed', [], $locale->value),
+                body: $this->translator->get('sms.templates.kyc_deadline_missed', [], $locale->value),
                 locale: $locale,
                 event: 'kyc_deadline_missed',
                 userId: $owner->id,

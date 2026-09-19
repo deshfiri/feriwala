@@ -9,7 +9,8 @@ export type OnboardingStep = {
 
 export type OnboardingAction = {
     label: string;
-    route: string;
+    /** Resolved server-side — a route name here would be a relative 404. */
+    url: string;
 };
 
 export type OnboardingProgress = {

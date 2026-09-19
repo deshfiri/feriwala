@@ -9,7 +9,7 @@ use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Enums\OrderStatus;
-use App\Domain\Order\Enums\WholesaleCancellation;
+use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Wholesale\Actions\CloseOrderedCart;
@@ -21,18 +21,20 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 
 /**
- * Cancel an ERP wholesale order nobody paid for, and give back what it held
- * (§14, §19.1, P4-10).
+ * Cancel an order nobody paid for — ERP wholesale or website — and give back
+ * what it held (§14, §17, §19.1, P4-10, P5-23).
  *
- * Failed, cancelled and expired payments, and a person cancelling before paying,
- * all end here. In one transaction, with the order and then its payment locked:
+ * Failed, cancelled and expired payments, and a person cancelling before paying —
+ * the account, staff, or a website's customer through the storefront — all end
+ * here. In one transaction, with the order and then its payment locked:
  *
  *   - an open payment is closed — failed or cancelled — through its status map;
  *   - every reservation still holding stock for the order is released, once: a
  *     reservation the sweep has already expired has given its units back and is
  *     left as it is;
- *   - the order moves to `cancelled` with its reason and a note for the buyer;
- *   - the cart's confirmation for this order is withdrawn.
+ *   - the order moves to `cancelled` with its reason and a note for the buyer —
+ *     and a website order's storefront is told;
+ *   - a wholesale cart's confirmation for this order is withdrawn.
  *
  * Then the coupon's held use goes back.
  *
@@ -43,7 +45,7 @@ use Illuminate\Database\DatabaseManager;
  * the gateway confirms after this has closed it goes to reconciliation, never to
  * the cancelled order.
  */
-class CancelUnpaidWholesaleOrder
+class CancelUnpaidOrder
 {
     public function __construct(
         protected StockReservations $reservations,
@@ -59,7 +61,7 @@ class CancelUnpaidWholesaleOrder
      * @throws OrderRefused when a person asks to cancel an order that cannot be
      * @throws LockTimeout when settlement is holding the payment
      */
-    public function handle(Order $order, WholesaleCancellation $why, ?User $actor = null, ?string $internalNote = null): bool
+    public function handle(Order $order, UnpaidOrderCancellation $why, ?User $actor = null, ?string $internalNote = null): bool
     {
         if ($order->payment_id === null) {
             return false;
@@ -78,14 +80,14 @@ class CancelUnpaidWholesaleOrder
      *
      * The caller already holds the payment's settlement lock.
      */
-    public function forPaymentWithinSettlement(Payment $payment, WholesaleCancellation $why): bool
+    public function forPaymentWithinSettlement(Payment $payment, UnpaidOrderCancellation $why): bool
     {
         $order = Order::query()->where('payment_id', $payment->id)->first();
 
         return $order !== null && $this->cancel($order, $why, null);
     }
 
-    protected function cancel(Order $order, WholesaleCancellation $why, ?User $actor, ?string $internalNote = null): bool
+    protected function cancel(Order $order, UnpaidOrderCancellation $why, ?User $actor, ?string $internalNote = null): bool
     {
         $payment = null;
 
@@ -111,7 +113,7 @@ class CancelUnpaidWholesaleOrder
             $open = in_array($payment->status, PaymentStatus::open(), true);
 
             // Re-read under the lock: an expiry is only an expiry while the window is shut.
-            if ($why === WholesaleCancellation::PaymentExpired && $open
+            if ($why === UnpaidOrderCancellation::PaymentExpired && $open
                 && ($payment->expires_at === null || $payment->expires_at->isFuture())) {
                 return false;
             }
@@ -148,7 +150,7 @@ class CancelUnpaidWholesaleOrder
         return (bool) $cancelled;
     }
 
-    protected function closePayment(Payment $payment, WholesaleCancellation $why): void
+    protected function closePayment(Payment $payment, UnpaidOrderCancellation $why): void
     {
         $to = $why->paymentStatus();
 
@@ -163,7 +165,7 @@ class CancelUnpaidWholesaleOrder
     /**
      * Give back the stock each line still holds.
      */
-    protected function releaseStock(Order $order, WholesaleCancellation $why): void
+    protected function releaseStock(Order $order, UnpaidOrderCancellation $why): void
     {
         foreach ($order->items()->with('stockReservation')->get() as $item) {
             $reservation = $item->stockReservation;
@@ -184,7 +186,7 @@ class CancelUnpaidWholesaleOrder
     /**
      * A person asking for the impossible is told; the gateway and the clock are not.
      */
-    protected function refuse(WholesaleCancellation $why, OrderRefused $refusal): bool
+    protected function refuse(UnpaidOrderCancellation $why, OrderRefused $refusal): bool
     {
         if ($why->isByPerson()) {
             throw $refusal;

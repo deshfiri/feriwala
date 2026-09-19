@@ -5,12 +5,13 @@ namespace App\Domain\Order\Enums;
 use App\Domain\Billing\Enums\PaymentStatus;
 
 /**
- * Why an unpaid ERP wholesale order was cancelled (§14, §19.1, P4-10).
+ * Why an order nobody paid for was cancelled (§14, §17, §19.1, P4-10, P5-23).
  *
- * Each reason closes the order's payment the same way, gives back the stock held
- * for it, and says so on the order's timeline in words written for the buyer.
+ * ERP wholesale and website orders alike. Each reason closes the order's payment
+ * the same way, gives back the stock held for it, and says so on the order's
+ * timeline in words written for the buyer.
  */
-enum WholesaleCancellation: string
+enum UnpaidOrderCancellation: string
 {
     /** The gateway said the payment did not go through. */
     case PaymentFailed = 'payment_failed';
@@ -26,6 +27,9 @@ enum WholesaleCancellation: string
 
     /** Platform staff cancelled it before it was paid. */
     case ByStaff = 'by_staff';
+
+    /** The website's customer cancelled it before paying, through the storefront. */
+    case ByStorefront = 'by_storefront';
 
     /**
      * The status an open payment is closed with.
@@ -43,7 +47,7 @@ enum WholesaleCancellation: string
      */
     public function isByPerson(): bool
     {
-        return $this === self::ByAccount || $this === self::ByStaff;
+        return $this === self::ByAccount || $this === self::ByStaff || $this === self::ByStorefront;
     }
 
     public function source(): OrderStatusChangeSource
@@ -53,6 +57,7 @@ enum WholesaleCancellation: string
             self::PaymentExpired => OrderStatusChangeSource::Scheduler,
             self::ByAccount => OrderStatusChangeSource::Account,
             self::ByStaff => OrderStatusChangeSource::Staff,
+            self::ByStorefront => OrderStatusChangeSource::Storefront,
         };
     }
 
@@ -65,6 +70,7 @@ enum WholesaleCancellation: string
             self::PaymentExpired => 'The time to pay ran out.',
             self::ByAccount => 'Cancelled by the account before payment.',
             self::ByStaff => 'Cancelled by staff before payment.',
+            self::ByStorefront => 'Cancelled by the customer on the website before payment.',
         };
     }
 

@@ -48,6 +48,7 @@ use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
+use App\Http\Controllers\Erp\MobileVerificationController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
@@ -125,6 +126,18 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
     Route::middleware('noindex')->group(function () {
         Route::get('onboarding', [OnboardingController::class, 'status'])
             ->name('onboarding.status');
+
+        /*
+         * Confirming the registered mobile number (§5.1, P1-9). Opening the
+         * page sends nothing; a code goes out only when it is asked for.
+         * Outside `verified`, because the mobile can be confirmed first.
+         */
+        Route::get('verification/mobile', [MobileVerificationController::class, 'show'])
+            ->name('verification.mobile');
+        Route::post('verification/mobile/code', [MobileVerificationController::class, 'send'])
+            ->name('verification.mobile.send');
+        Route::post('verification/mobile', [MobileVerificationController::class, 'verify'])
+            ->name('verification.mobile.verify');
 
         // KYC (§7). Documents save one at a time so a rejected upload never
         // costs the applicant the ones that were fine.

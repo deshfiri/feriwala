@@ -1,0 +1,464 @@
+[2026-09-19 17:31:06] local.DEBUG: From: Banij <hello@feriwala.local>
+To: tania@feriwala.test
+Subject: Your account is now active
+MIME-Version: 1.0
+Date: Sat, 19 Sep 2026 17:31:06 +0600
+Message-ID: <55a3445fa31204226c789507fdbfa5ca@feriwala.local>
+Content-Type: multipart/alternative; boundary=HILPU6Li
+
+--HILPU6Li
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Banij: http://localhost:8001
+
+# Hello!
+
+Your Feriwala account has been approved and is ready to use.
+
+Go to your dashboard: http://localhost:8001/onboarding
+
+Regards,
+Banij
+
+If you're having trouble clicking the "Go to your dashboard" button, copy and paste the URL below
+into your web browser: [http://localhost:8001/onboarding](http://localhost:8001/onboarding)
+
+© 2026 Banij. All rights reserved.
+
+--HILPU6Li
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+<title>Banij</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<style>
+@media only screen and (max-width: 600px) {
+.inner-body {
+width: 100% !important;
+}
+
+.footer {
+width: 100% !important;
+}
+}
+
+@media only screen and (max-width: 500px) {
+.button {
+width: 100% !important;
+}
+}
+</style>
+
+</head>
+<body style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -webkit-text-size-adjust: none; background-color: #ffffff; color: #52525b; height: 100%; line-height: 1.4; margin: 0; padding: 0; width: 100% !important;">
+
+<table class="wrapper" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; background-color: #fafafa; margin: 0; padding: 0; width: 100%;">
+<tr>
+<td align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table class="content" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; margin: 0; padding: 0; width: 100%;">
+<tr>
+<td class="header" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; padding: 25px 0; text-align: center;">
+<a href="http://localhost:8001" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; color: #18181b; font-size: 19px; font-weight: bold; text-decoration: none; display: inline-block;">
+Banij
+</a>
+</td>
+</tr>
+
+<!-- Email Body -->
+<tr>
+<td class="body" width="100%" cellpadding="0" cellspacing="0" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; background-color: #fafafa; border-bottom: 1px solid #fafafa; border-top: 1px solid #fafafa; margin: 0; padding: 0; width: 100%; border: hidden !important;">
+<table class="inner-body" align="center" width="570" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 570px; background-color: #ffffff; border-color: #e4e4e7; border-radius: 4px; border-width: 1px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); margin: 0 auto; padding: 0; width: 570px;">
+<!-- Body content -->
+<tr>
+<td class="content-cell" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; max-width: 100vw; padding: 32px;">
+<h1 style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; color: #18181b; font-size: 18px; font-weight: bold; margin-top: 0; text-align: start;">Hello!</h1>
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; font-size: 16px; line-height: 1.5em; margin-top: 0; text-align: left;">Your Feriwala account has been approved and is ready to use.</p>
+<table class="action" align="center" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; margin: 30px auto; padding: 0; text-align: center; width: 100%; float: unset;">
+<tr>
+<td align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<tr>
+<td align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table border="0" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<tr>
+<td style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<a href="http://localhost:8001/onboarding" class="button button-primary" target="_blank" rel="noopener" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -webkit-text-size-adjust: none; border-radius: 4px; color: #fff; display: inline-block; overflow: hidden; text-decoration: none; background-color: #18181b; border-bottom: 8px solid #18181b; border-left: 18px solid #18181b; border-right: 18px solid #18181b; border-top: 8px solid #18181b; word-break: break-all;">Go to your dashboard</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; font-size: 16px; line-height: 1.5em; margin-top: 0; text-align: left;">Regards,<br>
+Banij</p>
+
+
+<table class="subcopy" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; border-top: 1px solid #e4e4e7; margin-top: 25px; padding-top: 25px;">
+<tr>
+<td style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; line-height: 1.5em; margin-top: 0; text-align: left; font-size: 14px;">If you're having trouble clicking the "Go to your dashboard" button, copy and paste the URL below
+into your web browser: <span class="break-all" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; word-break: break-all;"><a href="http://localhost:8001/onboarding" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; color: #18181b; word-break: break-all;">http://localhost:8001/onboarding</a></span></p>
+
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table class="footer" align="center" width="570" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 570px; margin: 0 auto; padding: 0; text-align: center; width: 570px;">
+<tr>
+<td class="content-cell" align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; max-width: 100vw; padding: 32px;">
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; line-height: 1.5em; margin-top: 0; color: #a1a1aa; font-size: 12px; text-align: center;">© 2026 Banij. All rights reserved.</p>
+
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+--HILPU6Li--
+  
+[2026-09-19 17:42:34] local.DEBUG: From: Banij <hello@feriwala.local>
+To: tania@feriwala.test
+Subject: Your account is now active
+MIME-Version: 1.0
+Date: Sat, 19 Sep 2026 17:42:34 +0600
+Message-ID: <2683908f5f90c45202c26a2cf9f319b8@feriwala.local>
+Content-Type: multipart/alternative; boundary=mrbbc-FE
+
+--mrbbc-FE
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Banij: http://localhost:8001
+
+# Hello!
+
+Your Feriwala account has been approved and is ready to use.
+
+Go to your dashboard: http://localhost:8001/onboarding
+
+Regards,
+Banij
+
+If you're having trouble clicking the "Go to your dashboard" button, copy and paste the URL below
+into your web browser: [http://localhost:8001/onboarding](http://localhost:8001/onboarding)
+
+© 2026 Banij. All rights reserved.
+
+--mrbbc-FE
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+<title>Banij</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<style>
+@media only screen and (max-width: 600px) {
+.inner-body {
+width: 100% !important;
+}
+
+.footer {
+width: 100% !important;
+}
+}
+
+@media only screen and (max-width: 500px) {
+.button {
+width: 100% !important;
+}
+}
+</style>
+
+</head>
+<body style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -webkit-text-size-adjust: none; background-color: #ffffff; color: #52525b; height: 100%; line-height: 1.4; margin: 0; padding: 0; width: 100% !important;">
+
+<table class="wrapper" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; background-color: #fafafa; margin: 0; padding: 0; width: 100%;">
+<tr>
+<td align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table class="content" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; margin: 0; padding: 0; width: 100%;">
+<tr>
+<td class="header" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; padding: 25px 0; text-align: center;">
+<a href="http://localhost:8001" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; color: #18181b; font-size: 19px; font-weight: bold; text-decoration: none; display: inline-block;">
+Banij
+</a>
+</td>
+</tr>
+
+<!-- Email Body -->
+<tr>
+<td class="body" width="100%" cellpadding="0" cellspacing="0" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; background-color: #fafafa; border-bottom: 1px solid #fafafa; border-top: 1px solid #fafafa; margin: 0; padding: 0; width: 100%; border: hidden !important;">
+<table class="inner-body" align="center" width="570" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 570px; background-color: #ffffff; border-color: #e4e4e7; border-radius: 4px; border-width: 1px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); margin: 0 auto; padding: 0; width: 570px;">
+<!-- Body content -->
+<tr>
+<td class="content-cell" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; max-width: 100vw; padding: 32px;">
+<h1 style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; color: #18181b; font-size: 18px; font-weight: bold; margin-top: 0; text-align: start;">Hello!</h1>
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; font-size: 16px; line-height: 1.5em; margin-top: 0; text-align: left;">Your Feriwala account has been approved and is ready to use.</p>
+<table class="action" align="center" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 100%; margin: 30px auto; padding: 0; text-align: center; width: 100%; float: unset;">
+<tr>
+<td align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<tr>
+<td align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table border="0" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<tr>
+<td style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<a href="http://localhost:8001/onboarding" class="button button-primary" target="_blank" rel="noopener" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -webkit-text-size-adjust: none; border-radius: 4px; color: #fff; display: inline-block; overflow: hidden; text-decoration: none; background-color: #18181b; border-bottom: 8px solid #18181b; border-left: 18px solid #18181b; border-right: 18px solid #18181b; border-top: 8px solid #18181b; word-break: break-all;">Go to your dashboard</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; font-size: 16px; line-height: 1.5em; margin-top: 0; text-align: left;">Regards,<br>
+Banij</p>
+
+
+<table class="subcopy" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; border-top: 1px solid #e4e4e7; margin-top: 25px; padding-top: 25px;">
+<tr>
+<td style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; line-height: 1.5em; margin-top: 0; text-align: left; font-size: 14px;">If you're having trouble clicking the "Go to your dashboard" button, copy and paste the URL below
+into your web browser: <span class="break-all" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; word-break: break-all;"><a href="http://localhost:8001/onboarding" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; color: #18181b; word-break: break-all;">http://localhost:8001/onboarding</a></span></p>
+
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative;">
+<table class="footer" align="center" width="570" cellpadding="0" cellspacing="0" role="presentation" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; -premailer-cellpadding: 0; -premailer-cellspacing: 0; -premailer-width: 570px; margin: 0 auto; padding: 0; text-align: center; width: 570px;">
+<tr>
+<td class="content-cell" align="center" style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; max-width: 100vw; padding: 32px;">
+<p style="box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; position: relative; line-height: 1.5em; margin-top: 0; color: #a1a1aa; font-size: 12px; text-align: center;">© 2026 Banij. All rights reserved.</p>
+
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+--mrbbc-FE--
+  
+[2026-09-19 17:51:57] local.ERROR: cURL error 28: Resolving timed out after 10000 milliseconds (see https://curl.se/libcurl/c/libcurl-errors.html) for https://sandbox.sslcommerz.com/gwprocess/v4/api.php {"userId":43,"exception":"[object] (Illuminate\\Http\\Client\\ConnectionException(code: 0): cURL error 28: Resolving timed out after 10000 milliseconds (see https://curl.se/libcurl/c/libcurl-errors.html) for https://sandbox.sslcommerz.com/gwprocess/v4/api.php at /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:2085)
+[stacktrace]
+#0 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1117): Illuminate\\Http\\Client\\PendingRequest->marshalTransportException()
+#1 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Support/helpers.php(328): Illuminate\\Http\\Client\\PendingRequest->{closure:Illuminate\\Http\\Client\\PendingRequest::send():1075}()
+#2 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1075): retry()
+#3 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(919): Illuminate\\Http\\Client\\PendingRequest->send()
+#4 /home/deshfiri/projects/feriwala/app/Integrations/Payment/Gateways/SslCommerz/SslCommerzGateway.php(71): Illuminate\\Http\\Client\\PendingRequest->post()
+#5 /home/deshfiri/projects/feriwala/app/Http/Controllers/Erp/CheckoutController.php(235): App\\Integrations\\Payment\\Gateways\\SslCommerz\\SslCommerzGateway->initiate()
+#6 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php(46): App\\Http\\Controllers\\Erp\\CheckoutController->pay()
+#7 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Route.php(276): Illuminate\\Routing\\ControllerDispatcher->dispatch()
+#8 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Route.php(216): Illuminate\\Routing\\Route->runController()
+#9 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(822): Illuminate\\Routing\\Route->run()
+#10 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(180): Illuminate\\Routing\\Router->{closure:Illuminate\\Routing\\Router::runRouteWithinStack():821}()
+#11 /home/deshfiri/projects/feriwala/app/Http/Middleware/PreventSearchIndexing.php(30): Illuminate\\Pipeline\\Pipeline->{closure:Illuminate\\Pipeline\\Pipeline::prepareDestination():178}()
+#12 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\PreventSearchIndexing->handle()
+#13 /home/deshfiri/projects/feriwala/app/Http/Middleware/EnsureBusinessAccountIsActivated.php(102): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#14 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\EnsureBusinessAccountIsActivated->handle()
+#15 /home/deshfiri/projects/feriwala/vendor/laravel/boost/src/Middleware/InjectBoost.php(22): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#16 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Laravel\\Boost\\Middleware\\InjectBoost->handle()
+#17 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/AddLinkHeadersForPreloadedAssets.php(32): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#18 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\AddLinkHeadersForPreloadedAssets->handle()
+#19 /home/deshfiri/projects/feriwala/vendor/inertiajs/inertia-laravel/src/Middleware.php(147): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#20 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Inertia\\Middleware->handle()
+#21 /home/deshfiri/projects/feriwala/app/Http/Middleware/TrackAuthenticatedSession.php(65): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#22 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\TrackAuthenticatedSession->handle()
+#23 /home/deshfiri/projects/feriwala/app/Http/Middleware/SetLocale.php(33): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#24 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\SetLocale->handle()
+#25 /home/deshfiri/projects/feriwala/app/Http/Middleware/EnsureIdentityHasPlatformAccess.php(46): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#26 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\EnsureIdentityHasPlatformAccess->handle()
+#27 /home/deshfiri/projects/feriwala/app/Http/Middleware/HandleAppearance.php(21): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#28 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\HandleAppearance->handle()
+#29 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php(52): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#30 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Routing\\Middleware\\SubstituteBindings->handle()
+#31 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Auth/Middleware/Authenticate.php(63): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#32 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Auth\\Middleware\\Authenticate->handle()
+#33 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php(104): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#34 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery->handle()
+#35 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php(48): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#36 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\View\\Middleware\\ShareErrorsFromSession->handle()
+#37 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(120): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#38 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(63): Illuminate\\Session\\Middleware\\StartSession->handleStatefulRequest()
+#39 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Session\\Middleware\\StartSession->handle()
+#40 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php(36): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#41 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse->handle()
+#42 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php(74): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#43 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Cookie\\Middleware\\EncryptCookies->handle()
+#44 /home/deshfiri/projects/feriwala/app/Http/Middleware/ApplyConfiguredSessionLifetime.php(35): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#45 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\ApplyConfiguredSessionLifetime->handle()
+#46 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(137): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#47 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(821): Illuminate\\Pipeline\\Pipeline->then()
+#48 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(800): Illuminate\\Routing\\Router->runRouteWithinStack()
+#49 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(764): Illuminate\\Routing\\Router->runRoute()
+#50 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(753): Illuminate\\Routing\\Router->dispatchToRoute()
+#51 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(200): Illuminate\\Routing\\Router->dispatch()
+#52 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(180): Illuminate\\Foundation\\Http\\Kernel->{closure:Illuminate\\Foundation\\Http\\Kernel::dispatchToRouter():197}()
+#53 /home/deshfiri/projects/feriwala/vendor/inertiajs/inertia-laravel/src/Middleware/EnsureGetOnRedirect.php(19): Illuminate\\Pipeline\\Pipeline->{closure:Illuminate\\Pipeline\\Pipeline::prepareDestination():178}()
+#54 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Inertia\\Middleware\\EnsureGetOnRedirect->handle()
+#55 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#56 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php(31): Illuminate\\Foundation\\Http\\Middleware\\TransformsRequest->handle()
+#57 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\ConvertEmptyStringsToNull->handle()
+#58 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#59 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php(51): Illuminate\\Foundation\\Http\\Middleware\\TransformsRequest->handle()
+#60 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\TrimStrings->handle()
+#61 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php(27): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#62 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\ValidatePostSize->handle()
+#63 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php(110): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#64 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\PreventRequestsDuringMaintenance->handle()
+#65 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php(61): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#66 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\HandleCors->handle()
+#67 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php(58): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#68 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\TrustProxies->handle()
+#69 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php(22): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#70 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\InvokeDeferredCallbacks->handle()
+#71 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php(28): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#72 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\ValidatePathEncoding->handle()
+#73 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(137): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#74 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(175): Illuminate\\Pipeline\\Pipeline->then()
+#75 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(144): Illuminate\\Foundation\\Http\\Kernel->sendRequestThroughRouter()
+#76 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1227): Illuminate\\Foundation\\Http\\Kernel->handle()
+#77 /home/deshfiri/projects/feriwala/public/index.php(20): Illuminate\\Foundation\\Application->handleRequest()
+#78 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php(23): require_once('...')
+#79 {main}
+
+[previous exception] [object] (GuzzleHttp\\Exception\\ConnectTimeoutException(code: 0): cURL error 28: Resolving timed out after 10000 milliseconds (see https://curl.se/libcurl/c/libcurl-errors.html) for https://sandbox.sslcommerz.com/gwprocess/v4/api.php at /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Handler/CurlFactory.php:1423)
+[stacktrace]
+#0 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Handler/CurlFactory.php(1205): GuzzleHttp\\Handler\\CurlFactory::createRejection()
+#1 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Handler/CurlFactory.php(1049): GuzzleHttp\\Handler\\CurlFactory::finishError()
+#2 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Handler/CurlHandler.php(104): GuzzleHttp\\Handler\\CurlFactory::finish()
+#3 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Handler/Proxy.php(38): GuzzleHttp\\Handler\\CurlHandler->__invoke()
+#4 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Handler/Proxy.php(63): GuzzleHttp\\Handler\\Proxy::{closure:GuzzleHttp\\Handler\\Proxy::wrapSync():32}()
+#5 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1788): GuzzleHttp\\Handler\\Proxy::{closure:GuzzleHttp\\Handler\\Proxy::wrapStreaming():57}()
+#6 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1745): Illuminate\\Http\\Client\\PendingRequest->{closure:{closure:Illuminate\\Http\\Client\\PendingRequest::buildStubHandler():1770}:1771}()
+#7 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1731): Illuminate\\Http\\Client\\PendingRequest->{closure:{closure:Illuminate\\Http\\Client\\PendingRequest::buildRecorderHandler():1743}:1744}()
+#8 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/PrepareBodyMiddleware.php(77): Illuminate\\Http\\Client\\PendingRequest->{closure:{closure:Illuminate\\Http\\Client\\PendingRequest::buildBeforeSendingHandler():1729}:1730}()
+#9 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Middleware.php(65): GuzzleHttp\\PrepareBodyMiddleware->__invoke()
+#10 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/AuthMiddleware.php(100): GuzzleHttp\\Middleware::{closure:{closure:GuzzleHttp\\Middleware::cookies():50}:51}()
+#11 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/RedirectMiddleware.php(88): GuzzleHttp\\AuthMiddleware->__invoke()
+#12 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Middleware.php(98): GuzzleHttp\\RedirectMiddleware->__invoke()
+#13 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/HandlerStack.php(89): GuzzleHttp\\Middleware::{closure:{closure:GuzzleHttp\\Middleware::httpErrors():90}:91}()
+#14 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Client.php(1514): GuzzleHttp\\HandlerStack->__invoke()
+#15 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Client.php(561): GuzzleHttp\\Client->transfer()
+#16 /home/deshfiri/projects/feriwala/vendor/guzzlehttp/guzzle/src/Client.php(658): GuzzleHttp\\Client->requestAsync()
+#17 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1361): GuzzleHttp\\Client->request()
+#18 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1077): Illuminate\\Http\\Client\\PendingRequest->sendRequest()
+#19 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Support/helpers.php(328): Illuminate\\Http\\Client\\PendingRequest->{closure:Illuminate\\Http\\Client\\PendingRequest::send():1075}()
+#20 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(1075): retry()
+#21 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php(919): Illuminate\\Http\\Client\\PendingRequest->send()
+#22 /home/deshfiri/projects/feriwala/app/Integrations/Payment/Gateways/SslCommerz/SslCommerzGateway.php(71): Illuminate\\Http\\Client\\PendingRequest->post()
+#23 /home/deshfiri/projects/feriwala/app/Http/Controllers/Erp/CheckoutController.php(235): App\\Integrations\\Payment\\Gateways\\SslCommerz\\SslCommerzGateway->initiate()
+#24 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php(46): App\\Http\\Controllers\\Erp\\CheckoutController->pay()
+#25 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Route.php(276): Illuminate\\Routing\\ControllerDispatcher->dispatch()
+#26 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Route.php(216): Illuminate\\Routing\\Route->runController()
+#27 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(822): Illuminate\\Routing\\Route->run()
+#28 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(180): Illuminate\\Routing\\Router->{closure:Illuminate\\Routing\\Router::runRouteWithinStack():821}()
+#29 /home/deshfiri/projects/feriwala/app/Http/Middleware/PreventSearchIndexing.php(30): Illuminate\\Pipeline\\Pipeline->{closure:Illuminate\\Pipeline\\Pipeline::prepareDestination():178}()
+#30 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\PreventSearchIndexing->handle()
+#31 /home/deshfiri/projects/feriwala/app/Http/Middleware/EnsureBusinessAccountIsActivated.php(102): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#32 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\EnsureBusinessAccountIsActivated->handle()
+#33 /home/deshfiri/projects/feriwala/vendor/laravel/boost/src/Middleware/InjectBoost.php(22): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#34 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Laravel\\Boost\\Middleware\\InjectBoost->handle()
+#35 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/AddLinkHeadersForPreloadedAssets.php(32): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#36 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\AddLinkHeadersForPreloadedAssets->handle()
+#37 /home/deshfiri/projects/feriwala/vendor/inertiajs/inertia-laravel/src/Middleware.php(147): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#38 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Inertia\\Middleware->handle()
+#39 /home/deshfiri/projects/feriwala/app/Http/Middleware/TrackAuthenticatedSession.php(65): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#40 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\TrackAuthenticatedSession->handle()
+#41 /home/deshfiri/projects/feriwala/app/Http/Middleware/SetLocale.php(33): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#42 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\SetLocale->handle()
+#43 /home/deshfiri/projects/feriwala/app/Http/Middleware/EnsureIdentityHasPlatformAccess.php(46): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#44 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\EnsureIdentityHasPlatformAccess->handle()
+#45 /home/deshfiri/projects/feriwala/app/Http/Middleware/HandleAppearance.php(21): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#46 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\HandleAppearance->handle()
+#47 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Middleware/SubstituteBindings.php(52): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#48 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Routing\\Middleware\\SubstituteBindings->handle()
+#49 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Auth/Middleware/Authenticate.php(63): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#50 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Auth\\Middleware\\Authenticate->handle()
+#51 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php(104): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#52 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery->handle()
+#53 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/View/Middleware/ShareErrorsFromSession.php(48): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#54 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\View\\Middleware\\ShareErrorsFromSession->handle()
+#55 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(120): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#56 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Session/Middleware/StartSession.php(63): Illuminate\\Session\\Middleware\\StartSession->handleStatefulRequest()
+#57 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Session\\Middleware\\StartSession->handle()
+#58 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/AddQueuedCookiesToResponse.php(36): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#59 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse->handle()
+#60 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Cookie/Middleware/EncryptCookies.php(74): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#61 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Cookie\\Middleware\\EncryptCookies->handle()
+#62 /home/deshfiri/projects/feriwala/app/Http/Middleware/ApplyConfiguredSessionLifetime.php(35): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#63 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): App\\Http\\Middleware\\ApplyConfiguredSessionLifetime->handle()
+#64 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(137): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#65 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(821): Illuminate\\Pipeline\\Pipeline->then()
+#66 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(800): Illuminate\\Routing\\Router->runRouteWithinStack()
+#67 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(764): Illuminate\\Routing\\Router->runRoute()
+#68 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Routing/Router.php(753): Illuminate\\Routing\\Router->dispatchToRoute()
+#69 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(200): Illuminate\\Routing\\Router->dispatch()
+#70 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(180): Illuminate\\Foundation\\Http\\Kernel->{closure:Illuminate\\Foundation\\Http\\Kernel::dispatchToRouter():197}()
+#71 /home/deshfiri/projects/feriwala/vendor/inertiajs/inertia-laravel/src/Middleware/EnsureGetOnRedirect.php(19): Illuminate\\Pipeline\\Pipeline->{closure:Illuminate\\Pipeline\\Pipeline::prepareDestination():178}()
+#72 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Inertia\\Middleware\\EnsureGetOnRedirect->handle()
+#73 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#74 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/ConvertEmptyStringsToNull.php(31): Illuminate\\Foundation\\Http\\Middleware\\TransformsRequest->handle()
+#75 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\ConvertEmptyStringsToNull->handle()
+#76 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TransformsRequest.php(21): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#77 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/TrimStrings.php(51): Illuminate\\Foundation\\Http\\Middleware\\TransformsRequest->handle()
+#78 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\TrimStrings->handle()
+#79 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePostSize.php(27): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#80 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\ValidatePostSize->handle()
+#81 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/PreventRequestsDuringMaintenance.php(110): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#82 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\PreventRequestsDuringMaintenance->handle()
+#83 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/HandleCors.php(61): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#84 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\HandleCors->handle()
+#85 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/TrustProxies.php(58): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#86 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\TrustProxies->handle()
+#87 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Middleware/InvokeDeferredCallbacks.php(22): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#88 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Foundation\\Http\\Middleware\\InvokeDeferredCallbacks->handle()
+#89 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Http/Middleware/ValidatePathEncoding.php(28): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#90 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(219): Illuminate\\Http\\Middleware\\ValidatePathEncoding->handle()
+#91 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(137): Illuminate\\Pipeline\\Pipeline->{closure:{closure:Illuminate\\Pipeline\\Pipeline::carry():194}:195}()
+#92 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(175): Illuminate\\Pipeline\\Pipeline->then()
+#93 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(144): Illuminate\\Foundation\\Http\\Kernel->sendRequestThroughRouter()
+#94 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1227): Illuminate\\Foundation\\Http\\Kernel->handle()
+#95 /home/deshfiri/projects/feriwala/public/index.php(20): Illuminate\\Foundation\\Application->handleRequest()
+#96 /home/deshfiri/projects/feriwala/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php(23): require_once('...')
+#97 {main}
+"} 

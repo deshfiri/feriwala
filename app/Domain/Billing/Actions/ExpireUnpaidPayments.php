@@ -5,7 +5,7 @@ namespace App\Domain\Billing\Actions;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
-use App\Domain\Order\Actions\ExpireUnpaidWholesaleOrders;
+use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Builder;
@@ -139,16 +139,16 @@ class ExpireUnpaidPayments
     }
 
     /**
-     * A wholesale order's payment is not this sweep's: closing it has to cancel
+     * An order's payment is not this sweep's: closing it has to cancel
      * the order and give its stock back in the same transaction, which
-     * {@see ExpireUnpaidWholesaleOrders} does every minute (P4-10).
+     * {@see ExpireUnpaidOrders} does every minute (P4-10).
      *
      * @return Builder<Payment>
      */
     protected function overdue(): Builder
     {
         return Payment::query()
-            ->where('purpose', '!=', PaymentPurpose::WholesaleOrder)
+            ->whereNotIn('purpose', [PaymentPurpose::WholesaleOrder, PaymentPurpose::WebsiteOrder])
             ->whereIn('status', self::EXPIRABLE)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', CarbonImmutable::now());

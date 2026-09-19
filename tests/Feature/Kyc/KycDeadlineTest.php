@@ -224,8 +224,11 @@ describe('consequences (§7.4)', function () {
             KycDeadlineMissed::class,
         );
 
+        // The wording, not just the event: the template key once went missing
+        // and the text read "sms.kyc_deadline_missed".
         expect($this->sent)->toHaveCount(1)
-            ->and($this->sent->first()->event)->toBe('kyc_deadline_missed');
+            ->and($this->sent->first()->event)->toBe('kyc_deadline_missed')
+            ->and($this->sent->first()->body)->toContain('verification deadline has passed');
     });
 
     it('leaves an unactivated account blocked rather than pushing it backwards', function () {

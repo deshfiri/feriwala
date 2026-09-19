@@ -55,6 +55,25 @@ return [
         'sign_out' => 'Sign out',
     ],
 
+    'verify_mobile' => [
+        'title' => 'Verify your mobile number',
+        'description' => 'We will text a :length-digit code to :mobile.',
+        'why' => 'We use this number for order updates, payment alerts and account security.',
+        'send' => 'Send code',
+        'send_again' => 'Send a new code',
+        'sending' => 'Sending…',
+        'sent' => 'Code sent to :mobile.',
+        'pending' => 'Enter the code we sent. It expires :minutes minutes after it was sent.',
+        'not_sent' => 'Send a code first, then enter it here.',
+        'code' => 'Verification code',
+        'verify' => 'Verify',
+        'verifying' => 'Verifying…',
+        'invalid' => 'That code is not right, or it has expired. Check it, or send a new one.',
+        'wait' => 'A code was sent a moment ago. Wait a minute before asking for another.',
+        'verified' => 'Mobile number verified.',
+        'back' => 'Back to account setup',
+    ],
+
     'settings' => [
         'title' => 'Settings',
         'description' => 'Manage your profile and account settings',

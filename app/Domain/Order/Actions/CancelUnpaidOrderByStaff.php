@@ -5,7 +5,7 @@ namespace App\Domain\Order\Actions;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Order\Enums\OrderStatus;
-use App\Domain\Order\Enums\WholesaleCancellation;
+use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Models\User;
@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Platform staff cancelling a wholesale order nobody has paid for (§18.4, §18.5).
+ * Platform staff cancelling an order nobody has paid for — ERP wholesale or
+ * website (§18.4, §18.5).
  *
  * `order.edit`, asked here as well as at the controller, and a reason every time —
  * taking an order away from a buyer and giving its stock back is the decision
@@ -25,12 +26,12 @@ use InvalidArgumentException;
  *
  * Never an order whose money has arrived: that needs a refund, not a cancellation.
  */
-class CancelWholesaleOrderByStaff
+class CancelUnpaidOrderByStaff
 {
     public const MINIMUM_REASON = 10;
 
     public function __construct(
-        protected CancelUnpaidWholesaleOrder $cancel,
+        protected CancelUnpaidOrder $cancel,
         protected RecordAuditLog $audit,
     ) {}
 
@@ -50,7 +51,7 @@ class CancelWholesaleOrderByStaff
             throw new InvalidArgumentException('A reason of at least '.self::MINIMUM_REASON.' characters is required.');
         }
 
-        $this->cancel->handle($order, WholesaleCancellation::ByStaff, $actor, $reason);
+        $this->cancel->handle($order, UnpaidOrderCancellation::ByStaff, $actor, $reason);
 
         $this->audit->handle(new AuditEntry(
             action: 'order.cancelled_unpaid',

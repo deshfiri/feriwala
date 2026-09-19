@@ -128,6 +128,16 @@ class VerificationCodes
     }
 
     /**
+     * Whether a code is out and still usable.
+     *
+     * Says nothing about the code itself — only whether there is one to type.
+     */
+    public function isPending(string $purpose, string $identifier): bool
+    {
+        return $this->cache->has($this->key($purpose, $identifier));
+    }
+
+    /**
      * Attempts already spent against the current code.
      */
     public function attemptsUsed(string $purpose, string $identifier): int

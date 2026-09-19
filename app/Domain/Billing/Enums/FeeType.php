@@ -31,6 +31,15 @@ enum FeeType: string
     case WholesaleDelivery = 'wholesale_delivery';
 
     /**
+     * Charged on an order a customer places on a partner website (§16, §17, P5-23).
+     *
+     * Feriwala is merchant of record and delivers the order (D12), so the charge
+     * is Feriwala's, priced by rule for the website owner's package and then the
+     * global rule — never a figure the storefront sends.
+     */
+    case WebsiteDelivery = 'website_delivery';
+
+    /**
      * What a dedicated website costs to build, to keep a domain for, to host,
      * and to have worked on afterwards (§16.2, §24, P5-10).
      *
@@ -50,6 +59,7 @@ enum FeeType: string
         return match ($this) {
             self::Registration => 'Registration fee',
             self::WholesaleDelivery => 'Wholesale delivery charge',
+            self::WebsiteDelivery => 'Website order delivery charge',
             self::WebsiteSetup => 'Website setup charge',
             self::WebsiteDomain => 'Domain charge',
             self::WebsiteHosting => 'Hosting charge',
