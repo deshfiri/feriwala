@@ -538,44 +538,44 @@ The P2.B screens on both sides — the account's state, grace deadline, restrict
 
 ## P5.A Product selection & publishing (§15)
 
-- [ ] **P5-1** Eligible-product browsing with search/filter, scoped by package eligibility (§15)
-- [ ] **P5-2** `website_products` selection + publish / unpublish with publication status (§15)
-- [ ] **P5-3** Package publish-limit enforcement (§15, §8.1)
-- [ ] **P5-4** Website-specific category placement, display order, featured selection (§15)
-- [ ] **P5-5** `website_product_price_rules`: admin controls whether user pricing is allowed, min/max/suggested price, allowed margin, locked vs editable fields (§15.1)
-- [ ] **P5-6** User-settable website price, promotional price, promo title, marketing description — validated against admin bounds (§15.1)
-- [ ] **P5-7** Synchronization status surface per product (§15)
+- [x] **P5-1** Eligible-product browsing with search/filter, scoped by package eligibility (§15). Browsing is the **existing dropshipping catalogue**, already searched and filtered through `ProductEligibility`, so a product the account's package may not dropship is never listed. Each product page gains **Sell this on your website**: the account's own websites, whether each already sells it, and an add button; the website's product screen searches by name or SKU and filters by status. Selecting re-checks dropshipping eligibility on the server, and a product the account may not sell is a 404 whatever is typed. English and Bangla strings — `dce16ee`
+- [x] **P5-2** `website_products` selection + publish / unpublish with publication status (§15). **A selection points at a central product and copies nothing the catalogue owns**: one per website and product (unique), `selected` → `published` ↔ `unpublished`, and a published selection must carry a price (CHECK). Selecting twice is refused by name before the unique index is reached, inside a savepoint. Removing a selection takes it off the website only — `dce16ee`
+- [x] **P5-3** Package publish-limit enforcement (§15, §8.1). Publishing counts the account's published selections **across all its websites** under a per-account lock and refuses at `ProductPublishLimit`; unpublishing frees a place. The products screen shows used of allowed — `dce16ee`
+- [x] **P5-4** Website-specific category placement, display order, featured selection (§15). `website_categories` belong to one website — **separate from the catalogue's categories**, which a partner never edits — with a name, slug, visibility and order; a selection takes a website category, a display order and a featured flag. Categories are added, renamed, hidden, reordered and removed (their products stay, uncategorised) — `dce16ee`
+- [x] **P5-5** `website_product_price_rules`: admin controls whether user pricing is allowed, min/max/suggested price, allowed margin, locked vs editable fields (§15.1). **Rules are opened and closed, never edited**: one names a product, a package, both or neither, and the most specific in force wins. A rule sets whether the partner may price, the minimum, maximum and suggested prices, an allowed margin above the minimum, and which fields are locked; without a rule the product's own selling bounds apply. `WebsitePricingTerms` is the one place the terms are worked out. The Website pricing screen needs `website.manage_settings` and is in the staff navigation only for those who hold it — `dce16ee`
+- [x] **P5-6** User-settable website price, promotional price, promo title, marketing description — validated against admin bounds (§15.1). `UpdateWebsiteProduct` checks every change against the terms in force: a fixed price, a price outside the bounds or above the margin ceiling, a promotion that is not a reduction and a locked field are each refused by name, in English and Bangla. **Only amounts in minor units are read, and no cost or wholesale figure is ever sent to the page** — `dce16ee`
+- [x] **P5-7** Synchronization status surface per product (§15). Every selection says whether its storefront has been told: **pending** when changed, **synced** when a webhook landed or the storefront read it, **failed** when delivery was dead-lettered, with the time and reason. Sync bookkeeping never moves the selection's `updated_at`, so a storefront's `updated_since` sees only real changes — `dce16ee`, `3330efc`
 
 ## P5.B Website provisioning & lifecycle (§16)
 
-- [ ] **P5-8** `websites` with all §16.2 setup fields
-- [ ] **P5-9** Website status enum — all 14 states from §16.4 — with transitions + history
-- [ ] **P5-10** Setup charge, domain charge, hosting charge billing via wallet/payment (§16.2, §24)
-- [ ] **P5-11** `website_domains` + `website_hostings` with expiry tracking and renewal reminders (§41)
-- [ ] **P5-12** Website management from ERP: info, logo, banner, contact, colours, branding, theme (§16.3)
+- [x] **P5-8** `websites` with all §16.2 setup fields. Name, subdomain (lowercase, reserved names refused), domain, theme, colours, branding, contact, payment and shipping configuration, the fees in force **snapshotted at request**, connection fields and lifecycle dates. The database holds the shape: status, theme, health and charge CHECKs, lowercase hosts, hex colours, a suspension that must carry its reason, and the account and fee snapshot locked once written. Requested by the account owner within the package's `DedicatedWebsite` and `WebsiteLimit`, with the charges quoted before asking. English and Bangla strings — `d41f182`, 17 tests
+- [x] **P5-9** Website status enum — all 14 states from §16.4 — with transitions + history. Every move goes through `MoveWebsiteStatus`: the status map, a row lock, an append-only history (trigger), an audit entry and a notification to the owner. **The platform's own reasons are codes** (`WebsiteStatusReason`), shown to staff as a translated reason and to the partner as a note in the language being read; a person's reason is shown as written. Staff move websites from Partner websites, with a reason, an internal note and a note for the partner — `d41f182`, `63a1a54`, 11 tests
+- [x] **P5-10** Setup charge, domain charge, hosting charge billing via wallet/payment (§16.2, §24). Charges are raised on request from `FeeRuleResolver::websiteCharge` and **paid from the wallet** through `WalletService`, idempotent on a settlement key per charge; a wallet that cannot cover them moves the website to Deposit pending, and the last charge paid starts the build. The wallet is topped up through the existing gateway top-up; no new payment path. Each paid charge records its wallet transaction (CHECK) — `d41f182`, covered in the P5-8 tests
+- [x] **P5-11** `website_domains` + `website_hostings` with expiry tracking and renewal reminders (§41). Staff record each registration and hosting term; one live domain per website (partial unique). The daily sweep sends reminders 30, 14, 7 and 1 days out (once per stage), moves the website to renewal pending, disables it on expiry, and a renewal paid from the wallet extends the term from when the current one ends — `d41f182`, 12 tests
+- [x] **P5-12** Website management from ERP: info, logo, banner, contact, colours, branding, theme (§16.3). The Website settings screen edits name, tagline, about, one of three themes, colours and contact details, and uploads a logo and banner (JPEG, PNG or WebP, 2 MB). A closed website is not editable. English and Bangla strings — `120c45d`, 10 tests
 - [ ] **P5-13** Website-scoped orders, customers, coupons, discounts, shipping settings, reports (§16.3)
-- [ ] **P5-14** **Block product creation through website management** (§16.3)
-- [ ] **P5-15** Grace period + suspension + maintenance mode handling (§16.4, §24.3)
+- [x] **P5-14** **Block product creation through website management** (§16.3). **Structural: no website route creates a product.** The one product route under a website selects an existing eligible product by identifier and reads no product field; a full product payload posted at it creates nothing, and the catalogue's own create endpoint refuses a partner. The catalogue guard tests name the website routes whose addresses say products or categories one by one, with their controller, and prove the catalogue is byte-for-byte unchanged after a partner selects, prices, publishes, arranges and removes — `120c45d`, `58c1f05`, covered in the P5-12 tests + 1 guard test
+- [x] **P5-15** Grace period + suspension + maintenance mode handling (§16.4, §24.3). A package that stops including a website starts a 7-day grace period, then Package expired; a restored package or wallet brings the shop back. Staff suspend with a reason the partner is told; the partner switches maintenance mode on with a message for customers. The sweep runs daily at 02:15 and tells the storefront when it is suspended or restored — `d41f182`, `3330efc`, covered in the P5-11 tests
 
 > Storefront features (§16.1) are **not** a sub-task of provisioning — they are a whole
 > customer-facing application. See **P5.D** below.
 
 ## P5.C API & webhook integration (§17)
 
-- [ ] **P5-17** `website_credentials`: API key + encrypted secret, permission scopes, rotation, revocation (§17.3)
-- [ ] **P5-18** Signed-request authentication for website ↔ ERP calls (§17.3)
-- [ ] **P5-19** Per-credential rate limiting via Redis (§17.3)
-- [ ] **P5-20** Webhook signature verification both directions (§17.3)
+- [x] **P5-17** `website_credentials`: API key + encrypted secret, permission scopes, rotation, revocation (§17.3). A key identifier (`wsk_` + ULID) and a 64-character secret, **encrypted at rest and shown once** — flash data on the response that made it, never a prop a reload brings back, never in an audit entry or log; the list shows the last four characters. Scopes are the contract's six. Rotation keeps the previous secret for 24 hours; revocation needs a reason and stops it at once. Owner only, from the website's Integration screen — `eed56d3`, 6 tests
+- [x] **P5-18** Signed-request authentication for website ↔ ERP calls (§17.3). The contract's HMAC-SHA256 over method, path and sorted query, timestamp, nonce and body hash; ±300 s, a nonce used once in 600 s, the rotated secret during its window, HTTPS only, and errors in the contract's envelope with a request identifier. **The credential is the tenancy boundary**: every endpoint reads its website from the credential and nowhere else, and another website's record is a 404 — `eed56d3`, 18 tests
+- [x] **P5-19** Per-credential rate limiting via Redis (§17.3). Per credential per minute: 600 reads, 120 writes, 300 other, with the limit headers and `rate_limited` in the envelope — `eed56d3`, covered in the P5-18 tests
+- [x] **P5-20** Webhook signature verification both directions (§17.3). `WebhookSignature` is the one definition: `sha256=` HMAC of timestamp and body, **every outbound delivery signed with it**, and `verify()` — fresh within 300 s, constant-time, the rotated secret accepted in its window — is the check a receiver runs, the storefront's handler and any inbound webhook the ERP takes later (P5-21). The storefront-to-ERP direction is the signed request (P5-18). One HTTPS endpoint per website, its signing secret shown once and rotated with a grace window; localhost, private ranges and `.internal` hosts refused — `3330efc`, 22 tests
 - [ ] **P5-21** Idempotency + duplicate-order prevention on inbound webhooks (§17.3, §43)
-- [ ] **P5-22** Outbound sync jobs: products, images, pricing, availability, stock, categories (§17.1)
+- [x] **P5-22** Outbound sync jobs: products, images, pricing, availability, stock, categories (§17.1). **Each event is a hint, never the product**: which product, its website price and when it changed, sent only to the website the change belongs to, coalesced while unattempted, and queued after the transaction commits. Publishing, unpublishing, price and product edits and category changes announce themselves; stock is swept every 5 minutes and sends only changed availability and out-of-stock; products Feriwala changed centrally — **images and variations now touch the product** — are re-announced every 15 minutes without stacking behind a delivery still retrying. The storefront reads the rest through the signed catalogue, category and inventory API, never a cost, wholesale price or warehouse — `3330efc`, `58c1f05`, covered in the P5-20 tests + 8 catalogue API tests
 - [ ] **P5-23** Inbound sync: website orders, order items, customers, payments, shipping, courier status, returns, refunds, cancellations (§17.1)
 - [ ] **P5-24** Sales, commission, and wallet transaction propagation where applicable (§17.1)
-- [ ] **P5-25** Sync modes: real-time, near-real-time, scheduled, manual retry by authorized user (§17.2)
-- [ ] **P5-26** Retry with backoff + `sync_queue_failures` + manual retry UI (§17.3)
-- [ ] **P5-27** `api_logs` + `webhook_logs` with redaction (§17.3, §42)
-- [ ] **P5-28** Connection monitoring + health status + last-sync display (§16.2, §17.3)
-- [ ] **P5-29** **Isolation test:** one website's credentials cannot access another website's or user's data (§17.3)
-- [ ] **P5-30** Tests: product sync, website cart/checkout, order sync, duplicate prevention (§43)
+- [x] **P5-25** Sync modes: real-time, near-real-time, scheduled, manual retry by authorized user (§17.2). Real-time: partner actions announce as they commit. Near-real-time: stock every 5 minutes. Scheduled: the 15-minute catalogue sweep. Manual: **Synchronise now** (owner only, once a minute per website) and retrying a failed delivery — `3330efc`, covered in the P5-20 tests
+- [x] **P5-26** Retry with backoff + `sync_queue_failures` + manual retry UI (§17.3). One attempt per job; **the schedule lives in the delivery record** (10 s to 12 h, nine attempts), picked up every minute, so a worker restart loses nothing and a duplicate job sends nothing twice. Spent retries dead-letter into `sync_queue_failures`, mark the product's sync failed and the website failing; the owner retries **with the same event identifier**, counted and audited. The partner reads why in their language — answered with a status, timed out, unreachable — and never the platform's network; the raw error stays in the webhook log — `3330efc`, `63a1a54`, covered in the P5-20 tests
+- [x] **P5-27** `api_logs` + `webhook_logs` with redaction (§17.3, §42). Every storefront call is logged — including one refused before a website is known — with its request identifier, status, error code and duration, headers redacted; every delivery attempt likewise, **never with its signature**. Both tables are append-only by trigger. The owner sees recent calls and deliveries on the Integration screen — `eed56d3`, `3330efc`, covered in the P5-18 and P5-20 tests
+- [x] **P5-28** Connection monitoring + health status + last-sync display (§16.2, §17.3). Health is worked out from what happened — failing with an unresolved dead letter in the last day, degraded while retrying, healthy when deliveries land — alongside first API connection, first webhook delivery and last synchronisation, on the website, Integration and staff screens — `eed56d3`, `3330efc`, covered in the P5-20 tests
+- [x] **P5-29** **Isolation test:** one website's credentials cannot access another website's or user's data (§17.3). Another website's products, categories and SKUs are 404s through every endpoint, as are another account's websites, credentials and deliveries on the ERP screens; a revoked or unknown credential learns nothing — `eed56d3`, 7 tests
+- [~] **P5-30** Tests: product sync, website cart/checkout, order sync, duplicate prevention (§43). **Started**: product sync is covered — signing, delivery, retry, dead letter, manual retry, stock and catalogue sweeps, pull reads — in `WebhookDeliveryTest` and `StorefrontCatalogueTest`. Website cart/checkout, order sync and duplicate prevention wait for P5-23 and the storefront (P5.D)
 
 ## P5.D Customer-facing storefront application (§16.1)
 
@@ -890,7 +890,7 @@ increment by hand; a progress table that has drifted is worse than none.
 | P2 Money Core                                   | 38      | 38      | 0       |
 | P3 Catalog & Inventory                          | 31      | 31      | 0       |
 | P4 Wholesale                                    | 14      | 14      | 0       |
-| P5 Dropship, Websites & Storefront              | 50      | 0       | 0       |
+| P5 Dropship, Websites & Storefront              | 50      | 24      | 1       |
 | P6 OMS, Fulfillment, Courier                    | 33      | 5       | 6       |
 | P7 Commission, Referral, Withdrawal, Settlement | 41      | 0       | 0       |
 | P8 Notifications & SMS                          | 18      | 0       | 0       |
@@ -898,9 +898,17 @@ increment by hand; a progress table that has drifted is worse than none.
 | P10 CMS & SEO                                   | 20      | 0       | 0       |
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
-| **Total**                                       | **457** | **193** | **18**  |
+| **Total**                                       | **457** | **217** | **19**  |
 
 ### Revision log
+
+- **2026-09-19** — Phase 5 batch: **P5-1–P5-12, P5-14, P5-15, P5-17–P5-20, P5-22, P5-25–P5-29** done;
+  **P5-30** started (product sync tests only). Left for later, by dependency: P5-13 and P5-21, P5-23,
+  P5-24 (website orders, inbound sync and commission need Phase 6/7 flows), and P5-16 with the P5.D
+  storefront application — D11 settles it as a separate deployable app, and where that application
+  lives, its stack and its dependencies need approval before it is scaffolded. The gateway return fix
+  that preceded the batch is recorded under P1-52. No tasks added or removed. Progress table
+  recounted from the checkboxes: done 193 → 217, started 18 → 19.
 
 - **2026-09-15** — Dependency-closure batch, approved: **P0-56**, **P0-16** and the minimum Phase 6
   order foundation (**P6-1, P6-2, P6-3, P6-5, P6-6**) built ahead of their phases because P4-9–P4-11
