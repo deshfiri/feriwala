@@ -3,7 +3,8 @@
 namespace App\Domain\Access\Enums;
 
 /**
- * The twenty permission verbs from requirements.txt §32.2.
+ * The permission verbs from requirements.txt §32.2 — the original twenty, and
+ * View settings added by D24.
  *
  * Permissions are named `<module>.<action>` — `withdrawal.approve`,
  * `kyc.view_kyc_documents`. Keeping the verb list closed means a new module
@@ -33,6 +34,9 @@ enum PermissionAction: string
     case ManageBackups = 'manage_backups';
     case ManageIntegrations = 'manage_integrations';
 
+    /** Seeing a configuration without the right to change it (§32.2 as amended by D24). */
+    case ViewSettings = 'view_settings';
+
     public function label(): string
     {
         return match ($this) {
@@ -56,6 +60,7 @@ enum PermissionAction: string
             self::ViewAuditLogs => 'View audit logs',
             self::ManageBackups => 'Manage backups',
             self::ManageIntegrations => 'Manage integrations',
+            self::ViewSettings => 'View settings',
         };
     }
 

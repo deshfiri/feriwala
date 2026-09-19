@@ -2,6 +2,99 @@
 
 return [
 
+    'triggers' => [
+        'account_activation' => 'Account activation after verified payment',
+    ],
+
+    'bases' => [
+        'activation_fees' => 'Registration and package fees',
+        'package_fee' => 'Package fee',
+        'registration_fee' => 'Registration fee',
+    ],
+
+    'reward_types' => [
+        'fixed' => 'Fixed amount',
+        'percentage' => 'Percentage of the base',
+    ],
+
+    'plan_states' => [
+        'in_force' => 'In force',
+        'scheduled' => 'Scheduled',
+        'ended' => 'Ended',
+        'closed' => 'Closed',
+    ],
+
+    'settings' => [
+        'title' => 'Referral commission settings',
+        'description' => 'The multi-level referral programme: whether it pays, and the plan versions that say what it pays (D24). Versions are opened and closed, never edited.',
+        'switch_title' => 'Programme switch',
+        'switch_hint' => 'While switched off, no qualifying event pays commission, whatever plans exist. Commissions already calculated are not affected.',
+        'compliance' => 'Multi-level commission paid from joining or package fees is regulated in many places and licensed in Bangladesh. Switch it on only with legal advice.',
+        'on' => 'Switched on',
+        'off' => 'Switched off',
+        'switch_on' => 'Switch the programme on',
+        'switch_off' => 'Switch the programme off',
+        'reason' => 'Reason',
+        'reason_hint' => 'Kept in the audit trail with your name.',
+        'open_title' => 'Open a plan version',
+        'open_hint' => 'A version for a package replaces the global version, whole, for accounts on that package. Opening a version ends the one in force for the same scope when the new one starts.',
+        'package' => 'Package',
+        'every_package' => 'Every package (global default)',
+        'trigger' => 'What triggers commission',
+        'base' => 'Commission base',
+        'max_depth' => 'Maximum payable depth',
+        'max_depth_hint' => 'How many levels above the new account are paid. Each level needs its own rule.',
+        'levels' => 'Level rules',
+        'level' => 'Level :level',
+        'type' => 'Reward',
+        'amount_minor' => 'Amount (poisha)',
+        'rate_percent' => 'Percent',
+        'cap_minor' => 'Cap (poisha, optional)',
+        'enabled' => 'Pays',
+        'min_direct' => 'Minimum active direct referrals',
+        'required_packages' => 'Beneficiary must hold one of these packages (optional)',
+        'joining_title' => 'Joining reward for the new account',
+        'joining_hint' => 'Paid to the newly activated account only when it was referred (D14).',
+        'joining_none' => 'No joining reward',
+        'holding_days' => 'Holding period (days)',
+        'minimum_payment' => 'Minimum qualifying payment (poisha)',
+        'qualifies_title' => 'Beneficiaries who are still paid',
+        'qualifies_hint' => 'A closed account is never paid. An active account always is.',
+        'qualifies' => [
+            'suspended' => 'Suspended accounts',
+            'restricted' => 'Restricted or temporarily disabled accounts',
+            'package_lapsed' => 'Accounts whose package has lapsed',
+            'not_active' => 'Accounts not yet active',
+        ],
+        'effective_from' => 'In force from',
+        'open' => 'Open this version',
+        'versions' => 'Plan versions',
+        'no_versions' => 'No plan versions yet',
+        'no_versions_help' => 'Nothing is paid until a version is opened and the programme is switched on.',
+        'window' => ':from – :to',
+        'open_ended' => 'until replaced',
+        'depth' => 'Depth :depth',
+        'disabled_level' => 'Does not pay',
+        'cap' => 'cap :amount',
+        'min_direct_short' => 'needs :count active direct referrals',
+        'packages_short' => 'only for: :packages',
+        'joining' => 'Joining reward',
+        'holding' => 'Held for :days days',
+        'paid_immediately' => 'Paid on qualification',
+        'opened_by' => 'Opened by :name',
+        'closed_by' => 'Closed by :name',
+        'close' => 'Close this version',
+        'close_reason' => 'Why it is being closed',
+        'read_only' => 'You can see these settings but not change them.',
+    ],
+
+    'flash' => [
+        'switched_on' => 'The referral programme is switched on.',
+        'switched_off' => 'The referral programme is switched off.',
+        'plan_opened' => 'The plan version has been opened.',
+        'plan_closed' => 'The plan version has been closed.',
+    ],
+
     'refused' => [
         'self_referral' => 'An account cannot refer itself.',
         'circular' => 'That account is already below this one in the referral chain, so it cannot be its referrer.',
@@ -12,6 +105,8 @@ return [
         'level_invalid' => 'The rule for level :level is not valid: a fixed amount must be above zero, and a percentage between 0.01% and 100%.',
         'plan_not_open' => 'That plan version is already closed.',
         'nothing_to_reverse' => 'That commission has nothing left to reverse.',
+        'effective_in_past' => 'A plan version cannot start in the past.',
+        'package_not_found' => 'That package does not exist.',
     ],
 
 ];

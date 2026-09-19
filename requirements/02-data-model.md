@@ -180,14 +180,14 @@ All writes: transaction + `SELECT … FOR UPDATE` on `stock_items`.
 
 ## Referral (§25)
 
-| Table                   | Notes                                                                                                                                                                                                     |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `account_referrals`          | referred business account (unique), direct referrer account, code used, how it was attached, locked_at once a qualifying event exists (D24)                                                          |
+| Table                        | Notes                                                                                                                                                                                              |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account_referrals`          | referred business account (unique), direct referrer account, code used, how it was attached, locked_at once a qualifying event exists (D24)                                                        |
 | `referral_plans`             | versioned, opened and closed never edited: optional package, trigger, commission base, maximum depth, joining reward, holding period, qualifying account states, minimum qualifying payment, dates |
 | `referral_plan_levels`       | one per level up to the version's depth: fixed (minor units) or percentage (basis points), cap, enabled, required packages, minimum active direct referrals                                        |
 | `referral_qualifying_events` | one per trigger and subject, ever (e.g. one activation per account): source account, payment, plan version, commission base, chain snapshot                                                        |
 | `referral_commissions`       | the outbox: beneficiary, source, event, level (0 = joining reward), rule snapshot, base, rate or amount, amount, status, available_at, wallet transaction, reversal                                |
-| `referral_fraud_checks`      | duplicate account signals (still to come)                                                                                                                                                           |
+| `referral_fraud_checks`      | duplicate account signals (still to come)                                                                                                                                                          |
 
 Hard constraints: unique `(referred_account_id)` — an account is referred once, ever; referrer never
 equals referred and never descends from it (trigger, serialised); unique `(qualifying_event_id,

@@ -126,7 +126,7 @@ class PermissionCatalogue
             Module::Referral->value => [
                 Action::View, Action::Create, Action::Edit,
                 Action::Approve, Action::Reject, Action::ReverseTransaction,
-                Action::Export, Action::ManageSettings,
+                Action::Export, Action::ManageSettings, Action::ViewSettings,
             ],
 
             Module::Withdrawal->value => [

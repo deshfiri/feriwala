@@ -24,4 +24,12 @@ enum AccountPermission: string
     case RemoveStaff = 'staff:remove';
 
     case RevokeInvitation = 'invitation:revoke';
+
+    /**
+     * The business's own referral code, direct referrals and earnings (D24).
+     *
+     * The owner's by default: earnings are the business's money, and who it
+     * referred is the owner's relationship.
+     */
+    case ViewReferrals = 'referral:view';
 }

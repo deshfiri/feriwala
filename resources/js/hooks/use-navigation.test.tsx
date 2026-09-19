@@ -346,3 +346,49 @@ describe('allocated stock navigation', () => {
         expect(titles).not.toContain('nav.allocated_stock');
     });
 });
+
+/**
+ * The referral configuration (D24): reached by seeing it, never offered to a
+ * partner, whose own referrals live on their own page.
+ */
+describe('referral settings navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives staff who may see the configuration its screen', () => {
+        renderFor({
+            permissions: { 'referral.view_settings': true },
+            account: null,
+        });
+
+        expect(titles).toContain('nav.referral_settings');
+    });
+
+    it('offers it neither to staff without the permission nor to a partner', () => {
+        renderFor({
+            permissions: { 'referral.view_settings': false },
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: true,
+                managesStaff: false,
+            },
+        });
+
+        expect(titles).not.toContain('nav.referral_settings');
+    });
+});

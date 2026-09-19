@@ -10,6 +10,7 @@ import {
     Lock,
     MessageSquare,
     MonitorSmartphone,
+    Network,
     Package as PackageIcon,
     PackageCheck,
     Palette,
@@ -66,6 +67,7 @@ import { index as wholesaleOrders } from '@/routes/wholesale/orders';
 import { index as websites } from '@/routes/websites';
 import { index as adminWebsites } from '@/routes/admin/websites';
 import { index as websitePricing } from '@/routes/admin/website-pricing';
+import { index as referralSettings } from '@/routes/admin/referral-settings';
 import type { NavGroup } from '@/types';
 
 /**
@@ -367,6 +369,20 @@ export function useNavigation(): {
                               title: t('nav.website_pricing'),
                               href: websitePricing(),
                               icon: Scale,
+                          },
+                      ]
+                    : []),
+                /*
+                 * The multi-level referral configuration (D24). Reached by
+                 * seeing it; changing it is a second permission the screen
+                 * checks for itself.
+                 */
+                ...(permissions['referral.view_settings']
+                    ? [
+                          {
+                              title: t('nav.referral_settings'),
+                              href: referralSettings(),
+                              icon: Network,
                           },
                       ]
                     : []),

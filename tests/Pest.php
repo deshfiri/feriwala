@@ -20,6 +20,13 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Referral\Actions\OpenReferralPlan;
+use App\Domain\Referral\Data\ReferralPlanDraft;
+use App\Domain\Referral\Data\RewardRule;
+use App\Domain\Referral\Enums\CommissionBase;
+use App\Domain\Referral\Enums\ReferralTrigger;
+use App\Domain\Referral\Enums\RewardType;
+use App\Domain\Referral\Models\ReferralPlan;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
@@ -481,4 +488,47 @@ function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = nu
     $account->forceFill(['current_user_package_id' => $userPackage->id])->save();
 
     return $account->refresh();
+}
+
+/**
+ * A multi-level plan version in force from an hour ago (D24).
+ *
+ * Each level is `[type, value]` or `[type, value, cap]`: a fixed amount in
+ * minor units, or a percentage as text (`'10'`, `'2.5'`). Anything else a
+ * test needs to vary goes in `$overrides`, keyed as the draft names it.
+ *
+ * @param  list<array{0: string, 1: int|string, 2?: int|null}>  $levels
+ * @param  array<string, mixed>  $overrides
+ */
+function referralTestPlan(array $levels, array $overrides = []): ReferralPlan
+{
+    $rule = fn (array $level) => $level[0] === 'fixed'
+        ? new RewardRule(RewardType::Fixed, amountMinor: (int) $level[1], capMinor: $level[2] ?? null)
+        : new RewardRule(RewardType::Percentage, rateBps: RewardRule::basisPointsFromPercent((string) $level[1]), capMinor: $level[2] ?? null);
+
+    $draft = [
+        'packageId' => null,
+        'trigger' => ReferralTrigger::AccountActivation,
+        'base' => CommissionBase::ActivationFees,
+        'maxDepth' => count($levels),
+        'levels' => array_map(fn (array $level, int $index) => [
+            'level' => $index + 1,
+            'rule' => $rule($level),
+            'enabled' => true,
+            'required_package_ids' => [],
+            'min_active_direct_referrals' => 0,
+        ], $levels, array_keys($levels)),
+        'joiningReward' => null,
+        'holdingDays' => 0,
+        'minimumQualifyingPaymentMinor' => 0,
+        'qualifiesSuspended' => false,
+        'qualifiesRestricted' => false,
+        'qualifiesPackageLapsed' => false,
+        'qualifiesNotActive' => false,
+        'effectiveFrom' => now()->subHour()->toImmutable(),
+        'reason' => 'Plan for a test.',
+        ...$overrides,
+    ];
+
+    return app(OpenReferralPlan::class)->handle(new ReferralPlanDraft(...$draft), User::factory()->create());
 }

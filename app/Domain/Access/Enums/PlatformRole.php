@@ -277,7 +277,7 @@ enum PlatformRole: string
             self::ReferralManager => [
                 Module::Referral->value => [
                     Action::View, Action::Create, Action::Edit, Action::Export,
-                    ...$review, Action::ManageSettings,
+                    ...$review, Action::ManageSettings, Action::ViewSettings,
                 ],
                 Module::Commission->value => [Action::View],
             ],

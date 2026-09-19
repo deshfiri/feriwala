@@ -6,8 +6,9 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
 
 describe('the specification', function () {
-    it('defines exactly the twenty permission verbs in §32.2', function () {
-        expect(PermissionAction::cases())->toHaveCount(20);
+    it('defines exactly the twenty-one permission verbs in §32.2', function () {
+        // Twenty from the original list, and View settings added by D24.
+        expect(PermissionAction::cases())->toHaveCount(21);
     });
 
     it('defines exactly the twenty administrative roles in §32.1', function () {

@@ -79,6 +79,14 @@ class HandleInertiaRequests extends Middleware
         // as administering one storefront.
         [PermissionModule::Website, PermissionAction::ManageSettings],
 
+        // The multi-level referral configuration (D24). Seeing it and changing
+        // it are separate permissions; the screen is reached by seeing.
+        [PermissionModule::Referral, PermissionAction::ViewSettings],
+
+        // Platform-wide referral commissions and chains (D24). A partner sees
+        // only their own, on their own page, and holds none of this.
+        [PermissionModule::Referral, PermissionAction::View],
+
         // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
         [PermissionModule::Payment, PermissionAction::View],
 

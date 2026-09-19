@@ -28,6 +28,7 @@ use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Admin\ReferralSettingsController;
 use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
@@ -874,6 +875,21 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('website-pricing.store');
         Route::delete('website-pricing/{rule}', [WebsitePricingController::class, 'close'])
             ->name('website-pricing.close');
+
+        /*
+         * The multi-level referral configuration (§25.4.1, D24, P7-12, P7-44).
+         * Seen with `referral.view_settings`, changed with
+         * `referral.manage_settings`. Plan versions are opened and closed,
+         * never edited.
+         */
+        Route::get('referral-settings', [ReferralSettingsController::class, 'index'])
+            ->name('referral-settings.index');
+        Route::post('referral-settings/switch', [ReferralSettingsController::class, 'toggle'])
+            ->name('referral-settings.switch');
+        Route::post('referral-settings/plans', [ReferralSettingsController::class, 'store'])
+            ->name('referral-settings.plans.store');
+        Route::post('referral-settings/plans/{plan}/close', [ReferralSettingsController::class, 'close'])
+            ->name('referral-settings.plans.close');
 
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');

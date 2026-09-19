@@ -1567,6 +1567,7 @@ View KYC documents
 View Audit Logs
 Manage backups
 Manage integrations
+View settings (added 2026-09-19, D24: seeing a configuration without the right to change it)
 Sensitive actions may require:
 Password confirmation
 Two-factor authentication
