@@ -84,6 +84,7 @@ it('says which purposes have a module behind them and which do not', function ()
         PaymentPurpose::PackageUpgrade,
         PaymentPurpose::PackageDowngrade,
         PaymentPurpose::WholesaleOrder,
+        PaymentPurpose::WebsiteOrder,
         PaymentPurpose::WalletDeposit,
         PaymentPurpose::WalletTopUp,
     ]);
@@ -96,7 +97,8 @@ it('issues the invoice when the payment is recorded for everything but a wholesa
         fn (PaymentPurpose $purpose) => ! $purpose->issuesInvoiceWhenRecorded(),
     ));
 
-    expect($later)->toBe([PaymentPurpose::WholesaleOrder]);
+    // An order's invoice is a record of a sale, issued once it is paid (P4-11).
+    expect($later)->toBe([PaymentPurpose::WholesaleOrder, PaymentPurpose::WebsiteOrder]);
 });
 
 it('credits a wallet for exactly two of them', function () {
@@ -143,7 +145,7 @@ describe('settling each purpose', function () {
          * The money is real and is recorded as such — nothing rolled back, no
          * status invented. What happens is that it stops being invisible.
          */
-        $payment = purposePayment(PaymentPurpose::WebsiteOrder);
+        $payment = purposePayment(PaymentPurpose::WebsiteSetup);
 
         settlePurpose($payment);
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
@@ -14,6 +15,8 @@ use App\Domain\Order\Enums\OrderFulfillmentStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
+use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Wholesale\Models\Cart;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -89,14 +92,43 @@ it('keeps every field §18 makes mandatory on a wholesale order', function () {
 });
 
 it('types every source §18.1 names', function (OrderSource $source) {
-    $order = Order::factory()->create($source === OrderSource::ErpWholesale ? [] : [
-        'source' => $source,
-        'payment_id' => null,
-        'idempotency_key' => null,
-    ]);
+    $order = Order::factory()->create(match ($source) {
+        OrderSource::ErpWholesale => [],
+        // A website order carries what only it carries (P5-23).
+        OrderSource::Website => orderSchemaWebsiteOrder(),
+        default => ['source' => $source, 'payment_id' => null, 'idempotency_key' => null],
+    });
 
     expect($order->refresh()->source)->toBe($source);
 })->with(OrderSource::cases());
+
+/**
+ * The columns a website order is complete with: its shop, its customer and the
+ * storefront's own reference, and nobody at the account placing it.
+ *
+ * @return array<string, mixed>
+ */
+function orderSchemaWebsiteOrder(): array
+{
+    $account = testBusinessAccount(AccountStatus::Active);
+    $website = Website::factory()->forAccount($account)->active()->create();
+
+    $customer = WebsiteCustomer::create([
+        'website_id' => $website->id,
+        'mobile' => '+88017'.random_int(10000000, 99999999),
+        'name' => 'Ayesha Rahman',
+    ]);
+
+    return [
+        'source' => OrderSource::Website,
+        'business_account_id' => $account->id,
+        'website_id' => $website->id,
+        'website_customer_id' => $customer->id,
+        'storefront_order_reference' => 'SF-'.Str::upper(Str::random(8)),
+        'placed_by' => null,
+        'cart_id' => null,
+    ];
+}
 
 it('refuses a source §18.1 does not name', function () {
     $order = Order::factory()->create();
@@ -117,8 +149,17 @@ it('refuses a wholesale order missing what it must carry', function (array $miss
     'a shipping address' => [['shipping_address' => null]],
     'who placed it' => [['placed_by' => null]],
     'its idempotency key' => [['idempotency_key' => null]],
-    'a website, which wholesale never has' => [['website_id' => 42]],
 ]);
+
+it('refuses a wholesale order that names a website', function () {
+    $account = testBusinessAccount(AccountStatus::Active);
+    $website = Website::factory()->forAccount($account)->active()->create();
+
+    expect(fn () => Order::factory()->create([
+        'business_account_id' => $account->id,
+        'website_id' => $website->id,
+    ]))->toThrow(QueryException::class, 'orders_wholesale_is_complete');
+});
 
 describe('one payment, one order', function () {
     it('refuses a second order for the same payment', function () {
@@ -220,7 +261,7 @@ describe('the status', function () {
             ...collect(DB::table('orders')->where('id', Order::factory()->create()->id)->first())->except(['id', 'public_id', 'reference', 'payment_id', 'idempotency_key'])->all(),
             'public_id' => (string) Str::ulid(),
             'reference' => 'ORD-FAKE-'.Str::upper(Str::random(6)),
-            'source' => 'website',
+            'source' => 'manual',
             'status' => 'teleported',
         ]))->toThrow(QueryException::class, 'orders_status_foreign');
     });
