@@ -70,6 +70,14 @@ return [
             'driver' => SslCommerzGateway::class,
             'enabled' => env('PAYMENT_SSLCOMMERZ_ENABLED', true),
             'label' => 'SSLCommerz',
+
+            /*
+             * A stub standing in for the sandbox on a machine with no route to
+             * SSLCommerz — a local address only, ignored in production and
+             * never used in live mode. Unset everywhere but a developer's own
+             * environment.
+             */
+            'sandbox_host' => env('PAYMENT_SSLCOMMERZ_SANDBOX_HOST'),
         ],
 
         /*

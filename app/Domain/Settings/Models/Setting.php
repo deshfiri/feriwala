@@ -29,9 +29,10 @@ class Setting extends Model
     }
 
     /**
-     * The typed value, decrypting first when the setting holds a credential.
+     * The stored value as it reads, decrypting first when the setting holds a
+     * credential — a string, before its type is applied.
      */
-    public function typedValue(): mixed
+    public function plainValue(): ?string
     {
         $raw = $this->getRawOriginal('value');
 
@@ -39,7 +40,15 @@ class Setting extends Model
             $raw = decrypt($raw);
         }
 
-        return $this->type->cast($raw);
+        return $raw === null ? null : (string) $raw;
+    }
+
+    /**
+     * The typed value, decrypting first when the setting holds a credential.
+     */
+    public function typedValue(): mixed
+    {
+        return $this->type->cast($this->plainValue());
     }
 
     /**

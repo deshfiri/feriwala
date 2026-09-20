@@ -571,8 +571,39 @@ class SslCommerzGateway extends Gateway
         return $this->credentials;
     }
 
+    /**
+     * Where the gateway's API lives.
+     *
+     * Live is the live host and nothing else. In **sandbox** mode, and only
+     * outside production, a local stub may be named instead — what a developer
+     * or a browser check runs against a machine with no route to SSLCommerz.
+     * Anything that is not a local address is ignored, so the override can
+     * never point real money somewhere else.
+     */
     protected function host(): string
     {
-        return $this->isSandbox() ? self::SANDBOX_HOST : self::LIVE_HOST;
+        if (! $this->isSandbox()) {
+            return self::LIVE_HOST;
+        }
+
+        $override = config('payment.gateways.sslcommerz.sandbox_host');
+
+        if (is_string($override) && $override !== '' && ! app()->environment('production') && self::isLocalHost($override)) {
+            return rtrim($override, '/');
+        }
+
+        return self::SANDBOX_HOST;
+    }
+
+    /**
+     * Whether an address is on this machine — the only place a stub may live.
+     */
+    protected static function isLocalHost(string $url): bool
+    {
+        $parts = parse_url($url);
+
+        return is_array($parts)
+            && in_array($parts['scheme'] ?? '', ['http', 'https'], true)
+            && in_array(mb_strtolower((string) ($parts['host'] ?? '')), ['127.0.0.1', 'localhost', '::1'], true);
     }
 }

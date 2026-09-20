@@ -17,6 +17,7 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\WholesaleOrderTracking;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\GatewayNavigation;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use Illuminate\Http\RedirectResponse;
@@ -163,7 +164,7 @@ class WholesaleOrderController extends Controller
         bool $refuseLoudly = false,
     ): SymfonyResponse {
         try {
-            return Inertia::location($initiate->handle($order, $request));
+            return GatewayNavigation::to($initiate->handle($order, $request), (string) $order->payment?->gateway);
         } catch (OrderRefused $refused) {
             if ($refuseLoudly) {
                 throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);

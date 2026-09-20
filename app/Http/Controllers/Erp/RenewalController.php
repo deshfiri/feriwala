@@ -16,6 +16,7 @@ use App\Domain\Package\SubscriptionPolicy;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\PaymentGatewayManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Renewing the term an account is on (§8.2, §8.4).
@@ -101,7 +103,7 @@ class RenewalController extends Controller
         Request $request,
         RecordPaymentFromQuote $record,
         PaymentGatewayManager $gateways,
-    ): RedirectResponse {
+    ): SymfonyResponse {
         $account = $this->businessAccountFor($request);
 
         $validated = $request->validate([
@@ -146,6 +148,9 @@ class RenewalController extends Controller
                     ipnUrl: route('webhooks.payment', $validated['gateway']),
                 ),
             );
+
+            // An address nobody can be sent to is a session that did not open.
+            GatewayNavigation::ensureOpenable($redirect->url, $validated['gateway']);
         } catch (GatewayUnavailable $e) {
             // The payment stays a draft, so the quote is not lost and another
             // gateway can be tried.
@@ -157,7 +162,8 @@ class RenewalController extends Controller
             $payment->forceFill(['initiated_at' => now()])->save();
         }
 
-        return redirect()->away($redirect->url);
+        // Another origin: the browser goes there itself (§26.4).
+        return GatewayNavigation::to($redirect->url, $validated['gateway']);
     }
 
     /**

@@ -20,7 +20,13 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  */
 class SettingsRepository
 {
-    public const CACHE_KEY = 'feriwala:settings';
+    /**
+     * The cache entry every setting lives in.
+     *
+     * Versioned: the entry holds plain values with their type beside them, and
+     * a deployment must not read an entry written in the shape before it.
+     */
+    public const CACHE_KEY = 'feriwala:settings:v2';
 
     /**
      * @var array<string, mixed>|null
@@ -60,16 +66,33 @@ class SettingsRepository
             return $this->resolved;
         }
 
-        /** @var array<string, mixed> $values */
-        $values = $this->cache->rememberForever(
+        /*
+         * **Plain values in the cache, types applied after.**
+         *
+         * A cache holds nothing but strings, numbers and arrays: the stores are
+         * configured to unserialize no classes at all, so that a leaked
+         * application key cannot be turned into a gadget chain
+         * (config/cache.php). A `Money` put in here would come back as an
+         * unusable half-object — and did, until a fee read from the cache in a
+         * later request stopped being a figure at all.
+         *
+         * @var array<string, array{type: string, value: string|null}> $stored
+         */
+        $stored = $this->cache->rememberForever(
             self::CACHE_KEY,
             fn () => Setting::query()
                 ->get()
                 ->mapWithKeys(fn (Setting $setting) => [
-                    $setting->key => $setting->typedValue(),
+                    $setting->key => ['type' => $setting->type->value, 'value' => $setting->plainValue()],
                 ])
                 ->all(),
         );
+
+        $values = [];
+
+        foreach ($stored as $key => $row) {
+            $values[$key] = SettingType::from($row['type'])->cast($row['value']);
+        }
 
         return $this->resolved = $values;
     }

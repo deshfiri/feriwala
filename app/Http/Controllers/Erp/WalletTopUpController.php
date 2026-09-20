@@ -13,14 +13,15 @@ use App\Domain\Wallet\Models\Wallet;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Putting money into your own wallet (§24, §26.3, P2-19).
@@ -77,7 +78,7 @@ class WalletTopUpController extends Controller
     /**
      * Take the amount, decide what it does, and hand off to the gateway.
      */
-    public function store(Request $request, PaymentGatewayManager $gateways): RedirectResponse
+    public function store(Request $request, PaymentGatewayManager $gateways): SymfonyResponse
     {
         $account = $this->businessAccountFor($request);
         $wallet = $this->walletFor($account);
@@ -118,6 +119,9 @@ class WalletTopUpController extends Controller
                     ipnUrl: route('webhooks.payment', $validated['gateway']),
                 ),
             );
+
+            // An address nobody can be sent to is a session that did not open.
+            GatewayNavigation::ensureOpenable($redirect->url, $validated['gateway']);
         } catch (GatewayUnavailable $exception) {
             $this->paymentLogs->handle(
                 gateway: $validated['gateway'],
@@ -133,7 +137,8 @@ class WalletTopUpController extends Controller
             ]);
         }
 
-        return redirect()->away($redirect->url);
+        // Another origin: the browser goes there itself (§26.4).
+        return GatewayNavigation::to($redirect->url, $validated['gateway']);
     }
 
     /**

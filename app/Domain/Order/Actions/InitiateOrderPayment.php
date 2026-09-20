@@ -12,8 +12,10 @@ use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Concurrency\DistributedLock;
+use App\Support\Concurrency\Exceptions\LockTimeout;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
@@ -47,6 +49,7 @@ class InitiateOrderPayment
      *
      * @throws OrderRefused
      * @throws GatewayUnavailable
+     * @throws LockTimeout when a settlement is holding the payment
      */
     public function handle(Order $order, ?Request $request = null): string
     {
@@ -133,6 +136,12 @@ class InitiateOrderPayment
             context: ['order' => $order->reference],
             request: $request,
         );
+
+        // An address nobody can be sent to is a gateway that did not open a
+        // session, whatever it answered (§26.4).
+        if (! GatewayNavigation::isOpenable($redirect->url)) {
+            throw GatewayUnavailable::forGateway($gateway, 'it answered with an address that cannot be opened');
+        }
 
         if ($payment->canTransitionTo(PaymentStatus::Initiated)) {
             $payment->transitionTo(PaymentStatus::Initiated);

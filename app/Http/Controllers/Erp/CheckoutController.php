@@ -24,6 +24,7 @@ use App\Domain\Package\Models\UserPackage;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
 use Illuminate\Http\RedirectResponse;
@@ -33,6 +34,7 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * The combined registration and package fee checkout (§9).
@@ -138,7 +140,7 @@ class CheckoutController extends Controller
         CalculateActivationQuote $quotes,
         RecordPaymentFromQuote $record,
         PaymentGatewayManager $gateways,
-    ): RedirectResponse {
+    ): SymfonyResponse {
         $account = $this->businessAccountFor($request);
 
         $validated = $request->validate([
@@ -244,6 +246,9 @@ class CheckoutController extends Controller
                     ipnUrl: route('webhooks.payment', $validated['gateway']),
                 ),
             );
+
+            // An address nobody can be sent to is a session that did not open.
+            GatewayNavigation::ensureOpenable($redirect->url, $validated['gateway']);
         } catch (GatewayUnavailable $e) {
             $this->paymentLogs->handle(
                 gateway: $validated['gateway'],
@@ -277,7 +282,8 @@ class CheckoutController extends Controller
             $payment->forceFill(['initiated_at' => now()])->save();
         }
 
-        return redirect()->away($redirect->url);
+        // Another origin: the browser goes there itself (§26.4).
+        return GatewayNavigation::to($redirect->url, $validated['gateway']);
     }
 
     /**

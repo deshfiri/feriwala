@@ -27,6 +27,64 @@ beforeEach(function () {
     $this->gateway = app(SslCommerzGateway::class);
 });
 
+/**
+ * Where the driver talks (§26.4).
+ *
+ * A machine with no route to SSLCommerz can stand a stub in front of the
+ * sandbox — that is what a local browser check runs against. Live mode and
+ * production are never redirected anywhere, whatever is configured.
+ */
+describe('the gateway it talks to', function () {
+    it('uses a local stub in sandbox mode outside production, and nothing else', function () {
+        Http::fake(['*' => Http::response(['status' => 'SUCCESS', 'GatewayPageURL' => 'http://127.0.0.1:8004/stub/pay'])]);
+
+        config(['payment.gateways.sslcommerz.sandbox_host' => 'http://127.0.0.1:8004/gateway']);
+
+        $this->gateway->initiate(anIntent());
+
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), 'http://127.0.0.1:8004/gateway/gwprocess'));
+    });
+
+    it('ignores an override that is not on this machine', function () {
+        Http::fake(['*' => Http::response(['status' => 'SUCCESS', 'GatewayPageURL' => 'https://sandbox.sslcommerz.com/pay'])]);
+
+        config(['payment.gateways.sslcommerz.sandbox_host' => 'https://evil.test']);
+
+        $this->gateway->initiate(anIntent());
+
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), SslCommerzGateway::SANDBOX_HOST));
+    });
+
+    it('ignores it in production, where the sandbox is the sandbox', function () {
+        Http::fake(['*' => Http::response(['status' => 'SUCCESS', 'GatewayPageURL' => 'https://sandbox.sslcommerz.com/pay'])]);
+
+        config(['payment.gateways.sslcommerz.sandbox_host' => 'http://127.0.0.1:8004/gateway']);
+        app()['env'] = 'production';
+
+        try {
+            $this->gateway->initiate(anIntent());
+        } finally {
+            app()['env'] = 'testing';
+        }
+
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), SslCommerzGateway::SANDBOX_HOST));
+    });
+
+    it('never leaves the live host in live mode', function () {
+        Http::fake(['*' => Http::response(['status' => 'SUCCESS', 'GatewayPageURL' => 'https://securepay.sslcommerz.com/pay'])]);
+
+        $settings = app(SettingsRepository::class);
+        $settings->set('payment.sslcommerz.mode', 'live');
+        $settings->define('payment.sslcommerz.live.store_id', 'payment', SettingType::String, STORE_ID, isEncrypted: true);
+        $settings->define('payment.sslcommerz.live.store_password', 'payment', SettingType::String, STORE_PASSWORD, isEncrypted: true);
+        config(['payment.gateways.sslcommerz.sandbox_host' => 'http://127.0.0.1:8004/gateway']);
+
+        app(SslCommerzGateway::class)->initiate(anIntent());
+
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), SslCommerzGateway::LIVE_HOST));
+    });
+});
+
 function anIntent(): PaymentIntent
 {
     return new PaymentIntent(

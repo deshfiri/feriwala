@@ -186,7 +186,9 @@ describe('uploading and restoring', function () {
         $path = brandingStoredPath(BrandingAsset::Logo);
         $cached = Cache::get(SettingsRepository::CACHE_KEY);
 
-        expect(is_array($cached) ? ($cached[BrandingAsset::Logo->setting()] ?? null) : $path)->toBe($path)
+        // Settings are cached as plain values with their type beside them, so a
+        // store that unserializes no classes can read them back.
+        expect(is_array($cached) ? ($cached[BrandingAsset::Logo->setting()]['value'] ?? null) : $path)->toBe($path)
             ->and(app(Branding::class)->url(BrandingAsset::Logo))->toBe(Storage::disk(Branding::DISK)->url($path));
     });
 });

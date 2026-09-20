@@ -121,7 +121,16 @@ it('commits no credential for any of them', function () {
      */
     $config = config('payment.gateways');
 
-    foreach ($config as $gateway) {
-        expect(array_keys($gateway))->toBe(['driver', 'enabled', 'label']);
+    foreach ($config as $name => $gateway) {
+        // What a gateway may say about itself here: which driver serves it,
+        // whether it is switched on, what it is called, and — for a developer
+        // with no route to the sandbox — where a local stub stands in.
+        expect(array_keys($gateway))->each->toBeIn(['driver', 'enabled', 'label', 'sandbox_host']);
+
+        foreach ($gateway as $key => $value) {
+            expect($key)->not->toMatch('/secret|password|token|credential|store_id|api_key/i', $name.'.'.$key.' looks like a credential.')
+                ->and(is_string($value) && $value !== '' ? $value : 'x')
+                ->not->toMatch('/^(sk_|pk_|live_)/i', $name.'.'.$key.' holds what looks like a key.');
+        }
     }
 });
