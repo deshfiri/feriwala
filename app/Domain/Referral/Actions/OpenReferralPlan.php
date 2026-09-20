@@ -114,6 +114,8 @@ class OpenReferralPlan
                 ReferralPlanLevel::create([
                     'referral_plan_id' => $plan->id,
                     'level' => $level['level'],
+                    // A level pays the plan's money, and says so (D4).
+                    'currency_code' => $plan->currency_code,
                     'reward_type' => $level['rule']->type,
                     'amount_minor' => $level['rule']->amountMinor,
                     'rate_bps' => $level['rule']->rateBps,

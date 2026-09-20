@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int $referral_plan_id
  * @property int $level
+ * @property string $currency_code
  * @property RewardType $reward_type
  * @property int|null $amount_minor
  * @property int|null $rate_bps
