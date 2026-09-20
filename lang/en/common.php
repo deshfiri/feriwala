@@ -84,6 +84,7 @@ return [
             'appearance' => 'Appearance',
             'package' => 'Package',
             'invoices' => 'Invoices',
+            'receipts' => 'Receipts',
             'staff' => 'Staff',
         ],
     ],

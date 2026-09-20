@@ -13,6 +13,7 @@ import { edit as editSecurity } from '@/routes/security';
 import { index as staff } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
 import { index as invoices } from '@/routes/subscription/invoices';
+import { index as receipts } from '@/routes/subscription/receipts';
 import type { NavItem } from '@/types';
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
@@ -60,6 +61,17 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                   {
                       title: t('common.settings.nav.invoices'),
                       href: invoices(),
+                      icon: null,
+                  },
+                  /*
+                   * And the receipts beside them: an invoice is what somebody
+                   * is asked to pay, a receipt is the proof they did. The
+                   * screen existed and nothing linked to it, which is the same
+                   * as not having it.
+                   */
+                  {
+                      title: t('common.settings.nav.receipts'),
+                      href: receipts(),
                       icon: null,
                   },
               ]

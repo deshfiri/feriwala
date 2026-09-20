@@ -84,6 +84,7 @@ return [
             'appearance' => 'অ্যাপিয়ারেন্স',
             'package' => 'প্যাকেজ',
             'invoices' => 'চালান',
+            'receipts' => 'রসিদ',
             'staff' => 'স্টাফ',
         ],
     ],
