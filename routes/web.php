@@ -984,6 +984,21 @@ Route::withoutMiddleware('web')
             ->name('wholesale.orders.payment.cancelled.receive');
         Route::post('wholesale/orders/{order}/payment/failed', [GatewayReturnController::class, 'orderFailed'])
             ->name('wholesale.orders.payment.failed.receive');
+
+        /*
+         * A website's customer coming back from the gateway (§17, D12, P5-23).
+         *
+         * Feriwala is merchant of record, so the gateway returns the customer
+         * here — by POST from the provider, or by GET where one redirects — and
+         * this sends them on to the storefront they came from. There is no
+         * signed-in page behind these: the customer has no ERP account.
+         */
+        Route::match(['get', 'post'], 'website-orders/{order}/payment/return', [GatewayReturnController::class, 'websiteOrderReturn'])
+            ->name('website-orders.payment.return');
+        Route::match(['get', 'post'], 'website-orders/{order}/payment/cancelled', [GatewayReturnController::class, 'websiteOrderCancelled'])
+            ->name('website-orders.payment.cancelled');
+        Route::match(['get', 'post'], 'website-orders/{order}/payment/failed', [GatewayReturnController::class, 'websiteOrderFailed'])
+            ->name('website-orders.payment.failed');
     });
 
 require __DIR__.'/settings.php';

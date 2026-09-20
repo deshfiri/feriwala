@@ -10,6 +10,7 @@ use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
 use App\Domain\Website\Actions\DispatchDueWebhookRetries;
+use App\Domain\Website\Actions\PruneStorefrontRequests;
 use App\Domain\Website\Actions\SweepWebsiteLifecycle;
 use App\Domain\Website\Actions\SyncWebsiteCatalogue;
 use App\Domain\Website\Actions\SyncWebsiteInventory;
@@ -290,6 +291,17 @@ Schedule::call(fn () => app(SyncWebsiteCatalogue::class)->sweep())
  * is re-read under a lock and posted with its own idempotency key, so this
  * running beside the post-activation job pays nothing twice.
  */
+/*
+ * Answers to storefront writes, kept well past the contract's 24-hour replay
+ * window and then forgotten (P5-21). The orders they created are untouched.
+ */
+Schedule::call(fn () => app(PruneStorefrontRequests::class)->handle())
+    ->name('storefront-request-prune')
+    ->dailyAt('03:40')
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Forget storefront write answers nobody may replay (P5-21)');
+
 Schedule::call(fn () => app(ReleaseDueReferralCommissions::class)->handle())
     ->name('referral-commission-release')
     ->everyFiveMinutes()

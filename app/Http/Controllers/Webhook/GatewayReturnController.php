@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Webhook;
 
 use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\VerifyGatewayReturn;
-use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Billing\Queries\ResolveNotifiedPayment;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
+use App\Domain\Website\WebsiteAddresses;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayResult;
@@ -50,6 +50,7 @@ class GatewayReturnController extends Controller
         protected ResolveNotifiedPayment $payments,
         protected VerifyGatewayReturn $verify,
         protected RecordPaymentLog $logs,
+        protected WebsiteAddresses $addresses,
     ) {}
 
     public function checkoutReturn(Request $request): RedirectResponse
@@ -80,6 +81,111 @@ class GatewayReturnController extends Controller
     public function orderFailed(Request $request, string $order): RedirectResponse
     {
         return $this->receive($request, 'fail', route('wholesale.orders.payment.failed', $order), $order);
+    }
+
+    public function websiteOrderReturn(Request $request, string $order): RedirectResponse
+    {
+        return $this->receiveForWebsite($request, 'return', $order);
+    }
+
+    public function websiteOrderCancelled(Request $request, string $order): RedirectResponse
+    {
+        return $this->receiveForWebsite($request, 'cancel', $order);
+    }
+
+    public function websiteOrderFailed(Request $request, string $order): RedirectResponse
+    {
+        return $this->receiveForWebsite($request, 'fail', $order);
+    }
+
+    /**
+     * A website's customer coming back from the gateway (contract §6.1, D12).
+     *
+     * Feriwala owns the gateway, so the customer returns here — and is sent on
+     * to the storefront they came from, to the address that shop asked for when
+     * it submitted the order, or its home page. **Only ever to that shop**: the
+     * address was checked against the website's own domains when the order was
+     * taken, so this cannot be turned into a redirect to anywhere else.
+     *
+     * Nothing is settled here either; the order's own status is what the
+     * storefront reads back afterwards.
+     */
+    protected function receiveForWebsite(Request $request, string $event, string $order): RedirectResponse
+    {
+        /** @var Order|null $record */
+        $record = Order::query()
+            ->where('public_id', $order)
+            ->where('source', OrderSource::Website)
+            ->with('website')
+            ->first();
+
+        [$payment, $result] = $this->namedForWebsiteOrder($request, $record);
+
+        $this->logs->handle(
+            gateway: $payment !== null && is_string($payment->gateway) && $payment->gateway !== '' ? $payment->gateway : 'unknown',
+            direction: PaymentLog::INBOUND,
+            event: $event,
+            payment: $payment,
+            reference: $result?->reference,
+            gatewayReference: $result?->gatewayReference,
+            outcome: $result?->outcome->value,
+            context: [...$request->all(), 'channel' => 'browser_post', 'order' => $record?->reference],
+            request: $request,
+        );
+
+        if ($payment !== null && $result !== null) {
+            $this->verify->handle($payment, $request, $result, $event);
+        }
+
+        return redirect()->away($this->storefrontLanding($record, $event), 303);
+    }
+
+    /**
+     * Where the customer is sent on to, with what happened in the query so the
+     * storefront can greet them before it reads the order back.
+     */
+    protected function storefrontLanding(?Order $order, string $event): string
+    {
+        $website = $order?->website;
+
+        if ($website === null) {
+            return url('/');
+        }
+
+        $landing = $order->storefront_return_url;
+
+        if ($landing === null || ! $this->addresses->allows($website, $landing)) {
+            $landing = $this->addresses->home($website);
+        }
+
+        $separator = str_contains($landing, '?') ? '&' : '?';
+
+        return $landing.$separator.http_build_query([
+            'order' => $order->public_id,
+            'payment' => $event,
+        ]);
+    }
+
+    /**
+     * The website order's own payment, and only if the gateway named exactly it.
+     *
+     * @return array{0: Payment|null, 1: GatewayResult|null}
+     */
+    protected function namedForWebsiteOrder(Request $request, ?Order $order): array
+    {
+        $payment = $order?->payment;
+
+        if ($payment === null || ! is_string($payment->gateway) || $payment->gateway === '') {
+            return [null, null];
+        }
+
+        $result = $this->read($payment->gateway, $request);
+
+        if ($result === null || $this->payments->handle($payment->gateway, $result)?->id !== $payment->id) {
+            return [null, $result];
+        }
+
+        return [$payment, $result];
     }
 
     protected function receive(Request $request, string $event, string $landing, ?string $order = null): RedirectResponse

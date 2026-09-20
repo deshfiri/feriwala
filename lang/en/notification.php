@@ -80,6 +80,11 @@ return [
             'description' => 'A SKU has no stock available in a warehouse.',
         ],
 
+        'orders.website_order_paid' => [
+            'title' => 'A website order has been paid',
+            'description' => 'A customer paid for an order on your website. Open the order to see where it stands.',
+        ],
+
         'referral.commission_paid' => [
             'title' => 'A referral commission was paid',
             'description' => 'It is in your wallet. Your referrals page shows each earning and its level.',

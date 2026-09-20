@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Api\Storefront\V1\CategoryController;
 use App\Http\Controllers\Api\Storefront\V1\ConnectionController;
+use App\Http\Controllers\Api\Storefront\V1\CustomerController;
 use App\Http\Controllers\Api\Storefront\V1\InventoryController;
+use App\Http\Controllers\Api\Storefront\V1\OrderController;
 use App\Http\Controllers\Api\Storefront\V1\ProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,9 +26,11 @@ use Illuminate\Support\Facades\Route;
  * credential belongs to, bound by `storefront.auth`, and there is deliberately
  * no wallet, ledger, KYC, commission or account surface at all (contract §1).
  *
- * Order, customer and return writes arrive with order intake (P5-23); a route
- * for them before the order flow exists would be a route that accepts orders
- * nothing can fulfil.
+ * Every write carries an `Idempotency-Key`, checked by `storefront.idempotent`
+ * before the route runs: the same key is answered once, with the same bytes,
+ * however many times it arrives (contract §4.7).
+ *
+ * Return and refund requests (contract §6.3) arrive with the returns module.
  */
 Route::prefix('storefront/v1')
     ->name('storefront.v1.')
@@ -51,6 +55,29 @@ Route::prefix('storefront/v1')
             Route::middleware(['storefront.rate:read', 'storefront.scope:inventory:read'])->group(function () {
                 Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
                 Route::get('inventory/{sku}', [InventoryController::class, 'show'])->name('inventory.show');
+            });
+
+            // Reading back this website's own orders (contract §5.3).
+            Route::middleware(['storefront.rate:read', 'storefront.scope:orders:read'])->group(function () {
+                Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+                Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+            });
+
+            /*
+             * Submitting an order, opening its payment again, and cancelling it
+             * before it is paid (contract §6.1, §6.1.2).
+             */
+            Route::middleware(['storefront.rate:write', 'storefront.scope:orders:write', 'storefront.idempotent'])->group(function () {
+                Route::post('orders', [OrderController::class, 'store'])->name('orders.store');
+                Route::post('orders/{order}/payment-session', [OrderController::class, 'paymentSession'])
+                    ->name('orders.payment-session');
+                Route::post('orders/{order}/cancellation', [OrderController::class, 'cancel'])->name('orders.cancel');
+            });
+
+            // The website's own customers (contract §6.2).
+            Route::middleware(['storefront.rate:write', 'storefront.scope:customers:write', 'storefront.idempotent'])->group(function () {
+                Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
+                Route::patch('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
             });
         });
     });

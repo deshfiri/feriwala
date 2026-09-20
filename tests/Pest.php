@@ -389,7 +389,7 @@ function websiteTestProduct(array $attributes = []): Product
  * that part and nothing else.
  *
  * @param  array<string, mixed>  $query
- * @param  array{timestamp?: string, nonce?: string, secret?: string, key_id?: string, authorization?: string|null, https?: bool}  $overrides
+ * @param  array{timestamp?: string, nonce?: string, secret?: string, key_id?: string, authorization?: string|null, https?: bool, headers?: array<string, string>}  $overrides
  * @return TestResponse<Response>
  */
 function storefrontCall(
@@ -425,6 +425,9 @@ function storefrontCall(
         $headers['Authorization'] = $authorization;
     }
 
+    // Anything the call needs besides the signature: an idempotency key, say.
+    $headers = [...$headers, ...($overrides['headers'] ?? [])];
+
     $scheme = ($overrides['https'] ?? true) ? 'https' : 'http';
     $url = $scheme.'://localhost'.$fullPath.($rawQuery === '' ? '' : '?'.$rawQuery);
 
@@ -432,6 +435,11 @@ function storefrontCall(
 
     foreach ($headers as $name => $value) {
         $server['HTTP_'.strtoupper(str_replace('-', '_', $name))] = $value;
+    }
+
+    // The body's type is not an HTTP_ server variable: Symfony reads CONTENT_TYPE.
+    if (isset($headers['Content-Type'])) {
+        $server['CONTENT_TYPE'] = $headers['Content-Type'];
     }
 
     return test()->call($method, $url, [], [], [], $server, $body === '' ? null : $body);

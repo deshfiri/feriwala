@@ -14,6 +14,7 @@ use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\Storefront\AuthenticateStorefrontRequest;
 use App\Http\Middleware\Storefront\LimitStorefrontRate;
 use App\Http\Middleware\Storefront\LogStorefrontRequest;
+use App\Http\Middleware\Storefront\ReplayStorefrontWrite;
 use App\Http\Middleware\Storefront\RequireStorefrontScope;
 use App\Http\Middleware\TrackAuthenticatedSession;
 use App\Models\User;
@@ -103,6 +104,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'storefront.auth' => AuthenticateStorefrontRequest::class,
             'storefront.rate' => LimitStorefrontRate::class,
             'storefront.scope' => RequireStorefrontScope::class,
+            'storefront.idempotent' => ReplayStorefrontWrite::class,
         ]);
 
         /*

@@ -72,7 +72,8 @@ return new class extends Migration
         });
 
         Schema::table('orders', function (Blueprint $table) {
-            $table->foreign('website_id')->references('id')->on('websites')->restrictOnDelete();
+            // `orders.website_id` already names websites, with its index, from
+            // when websites were created.
             $table->foreignId('website_customer_id')->nullable()->after('website_id')
                 ->constrained('website_customers')->restrictOnDelete();
             $table->string('storefront_order_reference', 64)->nullable()->after('website_customer_id');
@@ -219,7 +220,6 @@ return new class extends Migration
             $table->dropIndex(['website_id', 'placed_at']);
             $table->dropColumn(['storefront_order_reference', 'storefront_return_url']);
             $table->dropConstrainedForeignId('website_customer_id');
-            $table->dropForeign(['website_id']);
         });
 
         Schema::dropIfExists('storefront_requests');

@@ -126,6 +126,7 @@ return [
 
     'notes' => [
         'placed' => 'Order placed. Waiting for your payment.',
+        'placed_on_website' => 'Order placed on the website. Waiting for the customer\'s payment.',
         'paid' => 'Payment received. The stock for your order is set aside.',
         'held' => 'Payment received. Your order is being reviewed before it goes ahead.',
         'cancelled_payment_failed' => 'Cancelled because the payment did not go through. The stock held for it was released.',
@@ -133,6 +134,7 @@ return [
         'cancelled_payment_expired' => 'Cancelled because the time to pay ran out. The stock held for it was released.',
         'cancelled_by_account' => 'Cancelled before payment. The stock held for it was released.',
         'cancelled_by_staff' => 'Cancelled by Feriwala before payment. The stock held for it was released.',
+        'cancelled_by_storefront' => 'Cancelled on the website before payment. The stock held for it was released.',
     ],
 
     'actions' => [
