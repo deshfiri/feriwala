@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Actions;
 
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderStatusChange;
 use App\Domain\Website\Actions\PublishWebsiteEvent;
@@ -18,10 +19,14 @@ use App\Domain\Website\Models\Website;
  * commits: the delivery system retries it, dead-letters it and lets the owner
  * retry it like any other.
  *
- * `order.status_changed` for every move, and `order.cancelled` as well when the
- * move is a cancellation. **A hint, never the order**: its identifiers, the move
- * and when it happened. The storefront reads the rest back through the signed
- * API, so a lost or late webhook costs freshness, never correctness (§7.5).
+ * `order.status_changed` for every move, `order.cancelled` as well when the move
+ * is a cancellation, and `cod.confirmed` or `cod.expired` when the move is what
+ * became of a cash-on-delivery confirmation (§6.2, P6-10) — the asking itself is
+ * announced where it happens, by `SendCodConfirmationCode`.
+ *
+ * **A hint, never the order**: its identifiers, the move and when it happened.
+ * The storefront reads the rest back through the signed API, so a lost or late
+ * webhook costs freshness, never correctness (§7.5).
  */
 class AnnounceWebsiteOrderStatus
 {
@@ -58,5 +63,36 @@ class AnnounceWebsiteOrderStatus
         if ($change->new_status === OrderStatus::Cancelled) {
             $this->events->handle($website, WebhookEvent::OrderCancelled, $data, 'order', $order->id);
         }
+
+        $this->announceConfirmation($website, $order, $change, $data);
+    }
+
+    /**
+     * What this move means for a cash-on-delivery order, if anything.
+     *
+     * One event per move, keyed to the order, so the move being announced twice
+     * — a retry, a sweep arriving beside a confirmation — is one delivery.
+     *
+     * @param  array{order: array<string, mixed>}  $data
+     */
+    protected function announceConfirmation(Website $website, Order $order, OrderStatusChange $change, array $data): void
+    {
+        if (! $order->isCashOnDelivery()) {
+            return;
+        }
+
+        $event = match (true) {
+            $change->new_status === OrderStatus::Confirmed
+                && $change->previous_status === OrderStatus::CustomerVerificationPending => WebhookEvent::CodConfirmed,
+            $change->new_status === OrderStatus::Cancelled
+                && $change->public_note === UnpaidOrderCancellation::ConfirmationExpired->publicNote() => WebhookEvent::CodExpired,
+            default => null,
+        };
+
+        if ($event === null) {
+            return;
+        }
+
+        $this->events->handle($website, $event, $data, 'order', $order->id);
     }
 }

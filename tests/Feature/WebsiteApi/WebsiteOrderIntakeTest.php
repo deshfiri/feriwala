@@ -511,8 +511,14 @@ describe('what a settled payment does (P5-23, P6-15)', function () {
 
         Notification::assertSentTo($this->account->owner, WebsiteOrderPaid::class);
 
-        // The storefront is told, through the delivery system every event uses.
-        expect(WebhookDelivery::query()->where('event_type', WebhookEvent::OrderStatusChanged->value)->count())->toBe(1);
+        // The storefront is told, through the delivery system every event uses,
+        // and told nothing about a confirmation an online order never needed.
+        expect(WebhookDelivery::query()->where('event_type', WebhookEvent::OrderStatusChanged->value)->count())->toBe(1)
+            ->and(WebhookDelivery::query()->whereIn('event_type', [
+                WebhookEvent::CodConfirmationRequired->value,
+                WebhookEvent::CodConfirmed->value,
+                WebhookEvent::CodExpired->value,
+            ])->count())->toBe(0);
     });
 
     it('holds a paid order whose stock is gone, for a person to resolve', function () {

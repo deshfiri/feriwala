@@ -370,6 +370,47 @@ describe('the code that confirms it (§6.2)', function () {
     });
 });
 
+describe('what the shop is told (contract §7.1)', function () {
+    beforeEach(function () {
+        codTestSubmit()->assertCreated();
+        $this->order = Order::query()->sole();
+    });
+
+    it('asks the shop to have the customer confirm, with the deadline and never the code', function () {
+        $delivery = WebhookDelivery::query()->where('event_type', WebhookEvent::CodConfirmationRequired->value)->sole();
+
+        expect($delivery->subject_type)->toBe('order')
+            ->and($delivery->subject_id)->toBe($this->order->id)
+            ->and($delivery->payload['data']['order']['id'])->toBe($this->order->public_id)
+            ->and($delivery->payload['data']['order']['confirmation_expires_at'])
+            ->toBe($this->order->payment->expires_at->toIso8601String())
+            ->and(json_encode($delivery->payload))->not->toContain(codTestCode());
+    });
+
+    it('tells it the order was confirmed, once', function () {
+        $code = codTestCode();
+
+        codTestPost('orders/'.$this->order->public_id.'/confirmation', ['code' => $code])->assertOk();
+        codTestPost('orders/'.$this->order->public_id.'/confirmation', ['code' => $code])->assertOk();
+
+        expect(WebhookDelivery::query()->where('event_type', WebhookEvent::CodConfirmed->value)->count())->toBe(1)
+            ->and(WebhookDelivery::query()->where('event_type', WebhookEvent::CodExpired->value)->count())->toBe(0);
+    });
+
+    it('tells it the window closed, once, and not that it was confirmed', function () {
+        $this->travelTo($this->order->payment->expires_at->addMinute());
+
+        app(ExpireUnconfirmedCodOrders::class)->handle();
+        app(ExpireUnconfirmedCodOrders::class)->handle();
+
+        expect(WebhookDelivery::query()->where('event_type', WebhookEvent::CodExpired->value)->count())->toBe(1)
+            ->and(WebhookDelivery::query()->where('event_type', WebhookEvent::CodConfirmed->value)->count())->toBe(0)
+            // The cancellation itself is still announced the way any other is.
+            ->and(WebhookDelivery::query()->where('event_type', WebhookEvent::OrderCancelled->value)->count())->toBe(1);
+    });
+
+});
+
 describe('when the window closes', function () {
     it('cancels the order, gives the stock back once and refuses a later code', function () {
         codTestSubmit()->assertCreated();

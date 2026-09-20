@@ -6,6 +6,9 @@ use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
+use App\Domain\Website\Actions\PublishWebsiteEvent;
+use App\Domain\Website\Enums\WebhookEvent;
+use App\Domain\Website\Models\Website;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
 use App\Support\Localization\Locale;
@@ -31,6 +34,7 @@ class SendCodConfirmationCode
     public function __construct(
         protected VerificationCodes $codes,
         protected SmsProvider $sms,
+        protected PublishWebsiteEvent $events,
         protected Translator $translator,
     ) {}
 
@@ -62,6 +66,36 @@ class SendCodConfirmationCode
             locale: $locale,
             event: 'cod_confirmation',
         ));
+
+        $this->tellTheShop($order);
+    }
+
+    /**
+     * Tell the shop its customer has been asked to confirm (contract §7.1).
+     *
+     * The deadline and nothing else: a storefront showing "confirm your order"
+     * needs to know until when, and must never be near the code itself. Asking
+     * again before the first delivery has gone out updates that one rather than
+     * queueing a second (§7.3).
+     */
+    protected function tellTheShop(Order $order): void
+    {
+        /** @var Website|null $website */
+        $website = $order->website_id === null ? null : Website::query()->find($order->website_id);
+
+        if ($website === null) {
+            return;
+        }
+
+        $this->events->handle($website, WebhookEvent::CodConfirmationRequired, [
+            'order' => [
+                'id' => $order->public_id,
+                'reference' => $order->reference,
+                'storefront_order_reference' => $order->storefront_order_reference,
+                'status' => $order->status->value,
+                'confirmation_expires_at' => $order->payment?->expires_at?->toIso8601String(),
+            ],
+        ], 'order', $order->id);
     }
 
     /**

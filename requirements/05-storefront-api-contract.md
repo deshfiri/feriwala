@@ -519,6 +519,29 @@ long they have:
 }
 ```
 
+### 6.1.3 Confirming a COD order
+
+```
+POST /orders/{id}/confirmation/code     → 202, a code is sent to the customer's own number
+POST /orders/{id}/confirmation          → 200, { "code": "123456" }
+```
+
+A COD order is created `customer_verification_pending`, **not** paid and **not** confirmed. The
+ERP sends a six-digit code to the mobile number the order was placed with and the customer
+confirms with it; confirming commits the reserved stock and moves the order to `confirmed`. The
+money is collected on delivery and settled in the ERP (§28) — no invoice is issued here.
+
+- The code is **never** returned to the storefront, in any response, error or webhook. It exists
+  only in the SMS.
+- Reading an order back carries `confirmation: { state, expires_at, resend_available_in }` — never
+  the code and never how many attempts remain.
+- A wrong code, a spent code and a code that was never issued get **one** answer
+  (`confirmation_refused`, `422`); a closed window gets `confirmation_expired` (`409`). Which it
+  was must not tell somebody guessing whether an order exists.
+- Resends are held to a cooldown (`confirmation_code_too_soon`, `429`, with `retry_after`).
+- The window is the reservation's (§6.1.2). When it closes, the scheduler cancels the order and
+  releases the stock exactly once.
+
 ### 6.2 Customers and guest checkout
 
 ```
@@ -603,6 +626,9 @@ verify it in constant time and reject anything older than 300 seconds.
 | `category.updated`                                              | category tree or content changes                         |
 | `order.status_changed`                                          | any order status transition                              |
 | `order.cancelled`                                               | order cancelled in the ERP                               |
+| `cod.confirmation_required`                                     | COD order awaiting the customer's code (§6.2)            |
+| `cod.confirmed`                                                 | customer confirmed a COD order with their code           |
+| `cod.expired`                                                   | COD confirmation window closed unconfirmed               |
 | `shipment.updated`                                              | courier status or tracking number changes                |
 | `return.status_changed`                                         | return progresses                                        |
 | `refund.completed`                                              | refund settled                                           |

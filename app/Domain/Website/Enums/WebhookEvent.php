@@ -24,6 +24,17 @@ enum WebhookEvent: string
     case CategoryUpdated = 'category.updated';
     case OrderStatusChanged = 'order.status_changed';
     case OrderCancelled = 'order.cancelled';
+
+    /*
+     * Cash on delivery, told as its own three moments beside the status move
+     * they ride with (§6.2, P6-10). A storefront showing a customer "confirm
+     * your order" needs the deadline, not a status name it has to interpret —
+     * and §8 has consumers tolerate an event type they do not know, so these
+     * are an addition to v1 rather than a change to it.
+     */
+    case CodConfirmationRequired = 'cod.confirmation_required';
+    case CodConfirmed = 'cod.confirmed';
+    case CodExpired = 'cod.expired';
     case ShipmentUpdated = 'shipment.updated';
     case ReturnStatusChanged = 'return.status_changed';
     case RefundCompleted = 'refund.completed';
