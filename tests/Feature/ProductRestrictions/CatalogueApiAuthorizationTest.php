@@ -2,6 +2,8 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Billing\Enums\FeeType;
+use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
@@ -10,7 +12,19 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Inventory\Enums\StockBucket;
+use App\Domain\Inventory\Enums\StockMovementType;
+use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Inventory\StockLedger;
+use App\Domain\Order\Actions\PlaceWebsiteOrder;
+use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Settings\Enums\SettingType;
+use App\Domain\Settings\SettingsRepository;
+use App\Domain\Website\Data\WebsiteCustomerDetails;
+use App\Domain\Website\Enums\WebsiteProductStatus;
+use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCategory;
 use App\Domain\Website\Models\WebsiteProduct;
@@ -26,12 +40,17 @@ use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Api\Storefront\V1\CustomerController as StorefrontCustomerController;
+use App\Http\Controllers\Api\Storefront\V1\OrderController as StorefrontOrderController;
 use App\Http\Controllers\Erp\WebsiteCategoryController;
 use App\Http\Controllers\Erp\WebsiteProductController;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 /*
  * API authorisation mirroring the same rules (P3-18, §12).
@@ -95,6 +114,27 @@ function catalogueApiWebsiteCopyRoutes(): array
         'websites.categories.reorder' => WebsiteCategoryController::class,
         'websites.categories.update' => WebsiteCategoryController::class,
         'websites.categories.destroy' => WebsiteCategoryController::class,
+    ];
+}
+
+/**
+ * The writes the storefront contract allows under `api/`, named one by one with
+ * the controller that serves them (contract §6.1, §6.2).
+ *
+ * Orders and customers, and nothing else: no product, category, brand or
+ * attribute is writable through this surface, which is what the test below
+ * proves by fingerprinting the catalogue around a submitted order.
+ *
+ * @return array<string, class-string>
+ */
+function catalogueApiStorefrontWriteRoutes(): array
+{
+    return [
+        'storefront.v1.orders.store' => StorefrontOrderController::class,
+        'storefront.v1.orders.payment-session' => StorefrontOrderController::class,
+        'storefront.v1.orders.cancel' => StorefrontOrderController::class,
+        'storefront.v1.customers.store' => StorefrontCustomerController::class,
+        'storefront.v1.customers.update' => StorefrontCustomerController::class,
     ];
 }
 
@@ -273,6 +313,9 @@ describe('no way into the catalogue except the administration', function () {
             ->reject(fn (RoutingRoute $route) => in_array($route->getControllerClass(), $catalogueControllers, true))
             ->reject(fn (RoutingRoute $route) => ! str_starts_with($route->uri(), 'api/')
                 && (catalogueApiWebsiteCopyRoutes()[(string) $route->getName()] ?? null) === $route->getControllerClass())
+            // The storefront's own writes, by name and controller: orders and
+            // customers, never the catalogue (contract §6.1, §6.2).
+            ->reject(fn (RoutingRoute $route) => (catalogueApiStorefrontWriteRoutes()[(string) $route->getName()] ?? null) === $route->getControllerClass())
             ->filter(fn (RoutingRoute $route) => catalogueApiWriteMethods($route) !== [])
             ->filter(fn (RoutingRoute $route) => str_starts_with($route->uri(), 'api/')
                 || preg_match('/(^|\/)(catalog|catalogue|products?|categories|brands|attributes|variants)(\/|$)/', $route->uri()) === 1)
@@ -319,6 +362,72 @@ describe('no way into the catalogue except the administration', function () {
         $this->delete(route('websites.products.destroy', $pair))->assertSessionHasNoErrors();
 
         expect(WebsiteProduct::query()->count())->toBe(0)
+            ->and(catalogueApiFingerprint())->toBe($before);
+    });
+
+    it('leaves the catalogue exactly as it was when a website takes an order', function () {
+        $account = websiteTestAccount(extra: [
+            PackageFeature::DropshippingEnabled->value => '1',
+            PackageFeature::ProductPublishLimit->value => null,
+        ]);
+
+        $website = Website::factory()->forAccount($account)->active()->create();
+        $product = websiteTestProduct();
+
+        WebsiteProduct::create([
+            'website_id' => $website->id,
+            'business_account_id' => $account->id,
+            'product_id' => $product->id,
+            'status' => WebsiteProductStatus::Published,
+            'sync_status' => WebsiteSyncStatus::Pending,
+            'currency_code' => 'BDT',
+            'price_minor' => 260000,
+            'published_at' => now(),
+        ]);
+
+        $warehouse = Warehouse::query()->firstOrCreate(['code' => 'DHK'], ['name' => 'Dhaka', 'is_default' => true]);
+        $item = StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $product->id]);
+        app(StockLedger::class)->move($item, null, StockBucket::Available, 20, StockMovementType::Adjustment);
+
+        FeeRule::create([
+            'fee_type' => FeeType::WebsiteDelivery->value,
+            'amount_minor' => 6000,
+            'currency_code' => 'BDT',
+            'effective_from' => now()->subDay(),
+        ]);
+
+        // A gateway to open the payment with; the order cannot be taken without one.
+        $settings = app(SettingsRepository::class);
+        $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
+        $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
+        $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
+
+        $before = catalogueApiFingerprint();
+        $money = fn (int $minor) => Money::of($minor, Currency::BDT);
+
+        $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
+
+        [$order] = app(PlaceWebsiteOrder::class)->handle($website, new WebsiteOrderSubmission(
+            reference: 'SF-CATALOGUE-1',
+            idempotencyKey: (string) Str::uuid(),
+            customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+8801712345678'),
+            shippingAddress: $address,
+            billingAddress: $address,
+            items: [['sku' => $product->sku, 'quantity' => 2]],
+            claimedUnitPrices: [$money(260000)],
+            claimedTotals: [
+                'subtotal' => $money(520000),
+                'discount' => $money(0),
+                'shipping' => $money(6000),
+                'tax' => $money(0),
+                'grand_total' => $money(526000),
+            ],
+            paymentMethod: 'online',
+        ));
+
+        // The order is a snapshot of what was bought; the catalogue it was
+        // bought from is not touched by buying from it (§12, D12).
+        expect($order->items()->sole()->sku)->toBe($product->sku)
             ->and(catalogueApiFingerprint())->toBe($before);
     });
 
