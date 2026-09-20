@@ -11,6 +11,8 @@ export type WebsiteOrderRow = {
     status_label: string;
     status_tone: StatusTone;
     payment_state: string | null;
+    /** `cod` or `online` — how the customer pays, decided by the ERP. */
+    payment_method: string;
     total: Money;
     placed_at: string;
 };
@@ -63,6 +65,18 @@ export type WebsiteOrderDetail = WebsiteOrderRow & {
         method: string;
         expires_at: string | null;
         completed_at: string | null;
+    } | null;
+    /**
+     * A cash-on-delivery order's confirmation, or null for any other.
+     *
+     * The code itself is never here, on the wire or in the props: it exists
+     * only in the message the customer was sent (§6.2).
+     */
+    confirmation: {
+        state: 'pending' | 'confirmed' | 'cancelled';
+        expires_at: string | null;
+        code_outstanding: boolean;
+        resend_available_in: number;
     } | null;
     timeline: {
         status: string;

@@ -86,17 +86,25 @@ export default function WebsiteOrders({
         {
             key: 'payment',
             header: t('website.orders.payment'),
-            cell: (row) =>
-                row.payment_state === null ? (
-                    <span className="text-muted-foreground text-sm">—</span>
-                ) : (
-                    <StatusPill
-                        tone={orderPaymentTone(row.payment_state)}
-                        label={t(
-                            `website.orders.payment_states.${row.payment_state}`,
+            cell: (row) => (
+                <div className="space-y-1">
+                    {row.payment_state === null ? (
+                        <span className="text-muted-foreground text-sm">—</span>
+                    ) : (
+                        <StatusPill
+                            tone={orderPaymentTone(row.payment_state)}
+                            label={t(
+                                `website.orders.payment_states.${row.payment_state}`,
+                            )}
+                        />
+                    )}
+                    <div className="text-muted-foreground text-xs">
+                        {t(
+                            `website.orders.payment_methods.${row.payment_method}`,
                         )}
-                    />
-                ),
+                    </div>
+                </div>
+            ),
         },
         {
             key: 'total',

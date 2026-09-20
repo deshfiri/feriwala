@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Account\Enums\AccountRole;
+use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Inventory\Enums\StockBucket;
@@ -10,6 +11,7 @@ use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
+use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
@@ -17,6 +19,7 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Website\Actions\ManageWebhookEndpoint;
+use App\Domain\Website\CodTerms;
 use App\Domain\Website\Data\WebsiteCustomerDetails;
 use App\Domain\Website\Enums\WebhookEvent;
 use App\Domain\Website\Enums\WebsiteProductStatus;
@@ -92,7 +95,7 @@ function websiteOrderScreensSelection(Website $website): WebsiteProduct
 /**
  * One order on a website, placed the way the storefront places it.
  */
-function websiteOrderScreensOrder(Website $website, string $reference): Order
+function websiteOrderScreensOrder(Website $website, string $reference, string $paymentMethod = 'online'): Order
 {
     $selection = WebsiteProduct::query()->where('website_id', $website->id)->firstOrFail();
     $money = fn (int $minor) => Money::of($minor, Currency::BDT);
@@ -125,7 +128,7 @@ function websiteOrderScreensOrder(Website $website, string $reference): Order
             'tax' => $money(0),
             'grand_total' => $money(526000),
         ],
-        paymentMethod: 'online',
+        paymentMethod: $paymentMethod,
         customerNote: 'Please call before delivery.',
     ));
 
@@ -259,6 +262,54 @@ describe('cancelling before payment', function () {
             ->assertSessionHasErrors('order');
 
         expect($this->order->refresh()->status)->toBe(OrderStatus::Paid);
+    });
+});
+
+describe('an order paid on delivery (§6.2, P6-10)', function () {
+    beforeEach(function () {
+        app(SettingsRepository::class)->define(CodTerms::ENABLED, 'orders', SettingType::Boolean, true);
+
+        $this->codOrder = websiteOrderScreensOrder($this->website, 'SF-2026-000490', 'cod');
+    });
+
+    it('shows where the customer\'s confirmation stands, and never the code', function () {
+        // The code as the customer has it, re-issued so the test holds one.
+        $code = app(VerificationCodes::class)->issue(SendCodConfirmationCode::PURPOSE, $this->codOrder->public_id);
+
+        $response = $this->actingAs($this->account->owner)
+            ->get(route('websites.orders.show', [$this->website->public_id, $this->codOrder->public_id]));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('order.payment_method', 'cod')
+                ->where('order.confirmation.state', 'pending')
+                ->where('order.confirmation.code_outstanding', true)
+                ->whereNot('order.confirmation.expires_at', null)
+                // Nobody has paid, so the owner may still call it off.
+                ->where('can.cancel', true));
+
+        $props = (string) json_encode($response->viewData('page')['props']['order']);
+
+        expect($props)->not->toContain($code)
+            ->and($props)->not->toContain('attempts');
+    });
+
+    it('cancels it before confirmation, and gives the stock back', function () {
+        $this->actingAs($this->account->owner)
+            ->post(route('websites.orders.cancellation.store', [$this->website->public_id, $this->codOrder->public_id]))
+            ->assertRedirect(route('websites.orders.show', [$this->website->public_id, $this->codOrder->public_id]));
+
+        $this->codOrder->refresh();
+
+        expect($this->codOrder->status)->toBe(OrderStatus::Cancelled)
+            ->and($this->codOrder->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Released);
+
+        $this->actingAs($this->account->owner)
+            ->get(route('websites.orders.show', [$this->website->public_id, $this->codOrder->public_id]))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('order.confirmation.state', 'cancelled')
+                ->where('order.confirmation.expires_at', null)
+                ->where('can.cancel', false));
     });
 });
 

@@ -12,6 +12,7 @@ use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderStatusChange;
+use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Queries\WebsiteOverview;
 use App\Http\Controllers\Controller;
@@ -47,6 +48,7 @@ class WebsiteOrderController extends Controller
     public function __construct(
         protected WebsiteOverview $websites,
         protected CancelUnpaidOrder $cancellations,
+        protected CodConfirmationState $confirmations,
     ) {}
 
     public function index(Request $request, string $website): Response
@@ -61,7 +63,7 @@ class WebsiteOrderController extends Controller
                 ->where('reference', 'ilike', "%{$term}%")
                 ->orWhere('storefront_order_reference', 'ilike', "%{$term}%")
                 ->orWhereRaw("customer->>'name' ilike ?", ["%{$term}%"])))
-            ->with('payment:id,status')
+            ->with('payment:id,status,gateway')
             ->orderByDesc('placed_at')
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
@@ -129,6 +131,7 @@ class WebsiteOrderController extends Controller
             'status_label' => $order->status->label(),
             'status_tone' => $order->status->tone(),
             'payment_state' => OrderPaymentState::of($order->payment)?->value,
+            'payment_method' => $order->isCashOnDelivery() ? 'cod' : 'online',
             'total' => $order->total_minor->jsonSerialize(),
             'placed_at' => $order->placed_at->toIso8601String(),
         ];
@@ -179,10 +182,16 @@ class WebsiteOrderController extends Controller
             ])->all(),
             'payment' => $payment === null ? null : [
                 'state' => OrderPaymentState::of($payment)?->value,
-                'method' => __('website.orders.payment_methods.online'),
+                'method' => $order->isCashOnDelivery() ? 'cod' : 'online',
                 'expires_at' => $payment->expires_at?->toIso8601String(),
                 'completed_at' => $payment->completed_at?->toIso8601String(),
             ],
+            /*
+             * Where the customer's confirmation stands, for a sale paid on
+             * delivery (§6.2). The window and whether a code is outstanding —
+             * never the code, and never how many guesses are left.
+             */
+            'confirmation' => $this->confirmations->for($order),
             // The customer's own account of what happened, as the storefront reads it.
             'timeline' => $order->statusHistory
                 ->filter(fn (OrderStatusChange $change) => $change->public_note !== null)
@@ -228,9 +237,16 @@ class WebsiteOrderController extends Controller
         ];
     }
 
+    /**
+     * Whether the owner may still call this order off.
+     *
+     * Waiting for a payment, or waiting for a cash-on-delivery customer to
+     * confirm: in both, nobody has paid and the stock is only being held
+     * (§18.4, P6-10). A paid order is refunded, not cancelled.
+     */
     protected function cancellable(Order $order): bool
     {
-        return $order->status === OrderStatus::PaymentPending
+        return in_array($order->status, [OrderStatus::PaymentPending, OrderStatus::CustomerVerificationPending], true)
             && $order->payment !== null
             && ! $order->payment->status->isSettled();
     }

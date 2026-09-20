@@ -58,6 +58,7 @@ const order: WebsiteOrderDetail = {
     status_label: 'Payment pending',
     status_tone: 'warning',
     payment_state: 'awaiting',
+    payment_method: 'online',
     total: money(526000),
     placed_at: '2026-09-20T10:00:00+06:00',
     customer_details: {
@@ -106,10 +107,11 @@ const order: WebsiteOrderDetail = {
     ],
     payment: {
         state: 'awaiting',
-        method: 'Online payment',
+        method: 'online',
         expires_at: '2026-09-20T10:14:00+06:00',
         completed_at: null,
     },
+    confirmation: null,
     timeline: [
         {
             status: 'payment_pending',
@@ -152,6 +154,41 @@ describe('one website order', function () {
         expect(
             screen.getAllByText('orders.statuses.payment_pending').length,
         ).toBeGreaterThan(0);
+    });
+
+    it('shows where a cash-on-delivery confirmation stands, and never a code', () => {
+        const { container } = render(
+            <WebsiteOrder
+                website={website}
+                order={{
+                    ...order,
+                    status: 'customer_verification_pending',
+                    payment_method: 'cod',
+                    payment: { ...order.payment!, method: 'cod' },
+                    confirmation: {
+                        state: 'pending',
+                        expires_at: '2026-09-21T10:00:00+06:00',
+                        code_outstanding: true,
+                        resend_available_in: 42,
+                    },
+                }}
+                can={{ cancel: true }}
+            />,
+        );
+
+        expect(
+            screen.getByText('website.orders.confirmation.title'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('website.orders.confirmation.code_sent'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getAllByText('website.orders.payment_methods.cod').length,
+        ).toBeGreaterThan(0);
+
+        // Nothing that could be a code reaches the page. Six digits standing
+        // on their own: the order reference carries a six-digit date.
+        expect(container.textContent).not.toMatch(/(?<![\d-])\d{6}(?![\d-])/);
     });
 
     it('offers cancellation only when it is allowed, and asks first', async () => {

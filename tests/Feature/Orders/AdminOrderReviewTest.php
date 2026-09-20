@@ -2,7 +2,9 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
@@ -200,7 +202,10 @@ it('refuses a cancellation without a proper reason, and never cancels a paid ord
 /**
  * A website order, as the intake creates one, for the staff screens to read.
  */
-function adminOrderWebsiteOrder(): Order
+/**
+ * @param  array<string, mixed>  $overrides
+ */
+function adminOrderWebsiteOrder(array $overrides = []): Order
 {
     $account = websiteTestAccount(extra: [PackageFeature::DropshippingEnabled->value => '1']);
     $website = Website::factory()->forAccount($account)->active()->create(['name' => 'Ayesha Fashion']);
@@ -226,6 +231,7 @@ function adminOrderWebsiteOrder(): Order
             'email' => null,
             'is_guest' => true,
         ],
+        ...$overrides,
     ]);
 }
 
@@ -274,6 +280,34 @@ describe('website orders (§18.5, P5-23, P6-14)', function () {
                 ->where('order.storefront_reference', 'SF-2026-000481')
                 ->where('order.website_customer.is_guest', true)
                 ->where('order.customer.name', 'Ayesha Rahman'));
+    });
+
+    it('shows a cash-on-delivery confirmation with its failed attempts, and never the code', function () {
+        // Placed as a cash-on-delivery order is: waiting for its customer,
+        // with a payment that names no gateway because none is used (§28).
+        $order = adminOrderWebsiteOrder(['status' => OrderStatus::CustomerVerificationPending]);
+        $order->payment?->forceFill(['expires_at' => now()->addDay()])->save();
+
+        $codes = app(VerificationCodes::class);
+        $code = $codes->issue(SendCodConfirmationCode::PURPOSE, $order->public_id);
+
+        // One wrong guess, so the count staff read is a real one.
+        $codes->verify(SendCodConfirmationCode::PURPOSE, $order->public_id, '000000');
+
+        $response = $this->actingAs(testPlatformStaff(PlatformRole::OrderManager))
+            ->get(route('admin.orders.show', $order->public_id));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('order.payment.method', 'cod')
+                ->where('order.confirmation.state', 'pending')
+                ->where('order.confirmation.code_outstanding', true)
+                ->where('order.confirmation.attempts_used', 1)
+                ->where('order.confirmation.attempts_allowed', VerificationCodes::MAX_ATTEMPTS)
+                // Nobody has paid, so staff may still cancel it, with a reason.
+                ->where('can.cancel', true));
+
+        expect((string) json_encode($response->viewData('page')['props']['order']))->not->toContain($code);
     });
 
     it('refuses the website order to the partner who owns the shop, and to staff without the permission', function () {

@@ -3,9 +3,7 @@
 namespace App\Domain\Order\Queries;
 
 use App\Domain\Inventory\Enums\StockReservationStatus;
-use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Enums\OrderPaymentState;
-use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderStatusChange;
@@ -99,32 +97,23 @@ class WebsiteOrderPayload
     }
 
     /**
-     * Where a cash-on-delivery order's confirmation stands (§6.2).
+     * Where a cash-on-delivery order's confirmation stands (§6.1.3, §6.2).
      *
      * Whether it is still waiting, until when, and how long before another
      * code may be asked for — **never the code**, and never how many guesses
-     * are left, which would tell somebody guessing how close they are.
+     * are left, which would tell somebody guessing how close they are. The
+     * three fields the contract names, from the one place that decides them.
      *
      * @return array{state: string, expires_at: string|null, resend_available_in: int}|null
      */
     protected function confirmation(Order $order): ?array
     {
-        if (! $order->isCashOnDelivery()) {
-            return null;
-        }
+        $state = app(CodConfirmationState::class)->for($order);
 
-        $sender = app(SendCodConfirmationCode::class);
-
-        return [
-            'state' => match ($order->status) {
-                OrderStatus::CustomerVerificationPending => 'pending',
-                OrderStatus::Cancelled => 'cancelled',
-                default => 'confirmed',
-            },
-            'expires_at' => $this->reservation($order)['expires_at'] ?? null,
-            'resend_available_in' => $order->status === OrderStatus::CustomerVerificationPending
-                ? $sender->secondsUntilResend($order)
-                : 0,
+        return $state === null ? null : [
+            'state' => $state['state'],
+            'expires_at' => $state['expires_at'],
+            'resend_available_in' => $state['resend_available_in'],
         ];
     }
 }

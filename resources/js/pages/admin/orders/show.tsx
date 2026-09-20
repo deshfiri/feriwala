@@ -67,6 +67,7 @@ export type AdminOrderDetail = {
     payment: {
         reference: string;
         status: string;
+        method: string;
         gateway: string | null;
         gateway_mode: string | null;
         expires_at: string | null;
@@ -74,6 +75,21 @@ export type AdminOrderDetail = {
         reconciliation_reason: string | null;
     } | null;
     invoice: { number: string } | null;
+    /**
+     * A cash-on-delivery order's confirmation, or null for any other.
+     *
+     * Staff see how many guesses have been used, which is what answers "the
+     * customer says their code does not work". The code itself is held hashed
+     * and reaches no screen, no prop and no log (§6.2).
+     */
+    confirmation: {
+        state: 'pending' | 'confirmed' | 'cancelled';
+        expires_at: string | null;
+        code_outstanding: boolean;
+        resend_available_in: number;
+        attempts_used: number;
+        attempts_allowed: number;
+    } | null;
     history: {
         previous_status: string | null;
         new_status: string;
@@ -370,6 +386,15 @@ export default function AdminOrder({ order, can }: Props) {
                                     </Row>
                                     <Row
                                         label={t(
+                                            'orders.admin.fields.payment_method',
+                                        )}
+                                    >
+                                        {t(
+                                            `orders.admin.payment_methods.${order.payment.method}`,
+                                        )}
+                                    </Row>
+                                    <Row
+                                        label={t(
                                             'orders.admin.fields.reference',
                                         )}
                                     >
@@ -403,6 +428,88 @@ export default function AdminOrder({ order, can }: Props) {
                                             )}
                                         >
                                             {at(order.payment.completed_at)}
+                                        </Row>
+                                    )}
+                                </dl>
+                            </SectionCard>
+                        )}
+
+                        {order.confirmation && (
+                            <SectionCard
+                                title={t('orders.admin.sections.confirmation')}
+                                description={t(
+                                    'orders.admin.confirmation.hint',
+                                )}
+                            >
+                                <dl className="space-y-3 text-sm">
+                                    <Row
+                                        label={t(
+                                            'orders.admin.confirmation.state',
+                                        )}
+                                    >
+                                        {t(
+                                            `orders.admin.confirmation.states.${order.confirmation.state}`,
+                                        )}
+                                    </Row>
+                                    <Row
+                                        label={t(
+                                            'orders.admin.confirmation.expires',
+                                        )}
+                                    >
+                                        {at(order.confirmation.expires_at)}
+                                    </Row>
+                                    <Row
+                                        label={t(
+                                            'orders.admin.confirmation.code',
+                                        )}
+                                    >
+                                        {order.confirmation.code_outstanding
+                                            ? t(
+                                                  'orders.admin.confirmation.code_sent',
+                                              )
+                                            : t(
+                                                  'orders.admin.confirmation.code_none',
+                                              )}
+                                    </Row>
+                                    <Row
+                                        label={t(
+                                            'orders.admin.confirmation.attempts',
+                                        )}
+                                    >
+                                        {t(
+                                            'orders.admin.confirmation.attempts_value',
+                                            {
+                                                used: String(
+                                                    order.confirmation
+                                                        .attempts_used,
+                                                ),
+                                                allowed: String(
+                                                    order.confirmation
+                                                        .attempts_allowed,
+                                                ),
+                                            },
+                                        )}
+                                    </Row>
+                                    {order.confirmation.state === 'pending' && (
+                                        <Row
+                                            label={t(
+                                                'orders.admin.confirmation.resend',
+                                            )}
+                                        >
+                                            {order.confirmation
+                                                .resend_available_in > 0
+                                                ? t(
+                                                      'orders.admin.confirmation.resend_in',
+                                                      {
+                                                          seconds: String(
+                                                              order.confirmation
+                                                                  .resend_available_in,
+                                                          ),
+                                                      },
+                                                  )
+                                                : t(
+                                                      'orders.admin.confirmation.resend_now',
+                                                  )}
                                         </Row>
                                     )}
                                 </dl>

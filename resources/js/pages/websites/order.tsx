@@ -82,10 +82,73 @@ export default function WebsiteOrder({ website, order, can }: Props) {
                             )}
                         />
                     )}
+                    <StatusPill
+                        tone="neutral"
+                        label={t(
+                            `website.orders.payment_methods.${order.payment_method}`,
+                        )}
+                    />
                     <span className="text-muted-foreground text-xs">
                         {t('website.orders.placed')}: {when(order.placed_at)}
                     </span>
                 </div>
+
+                {order.confirmation && (
+                    <SectionCard
+                        title={t('website.orders.confirmation.title')}
+                        description={t('website.orders.confirmation.hint')}
+                    >
+                        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                            <div>
+                                <dt className="text-muted-foreground text-xs">
+                                    {t('website.orders.confirmation.state')}
+                                </dt>
+                                <dd>
+                                    <StatusPill
+                                        tone={
+                                            order.confirmation.state ===
+                                            'confirmed'
+                                                ? 'success'
+                                                : order.confirmation.state ===
+                                                    'cancelled'
+                                                  ? 'danger'
+                                                  : 'warning'
+                                        }
+                                        label={t(
+                                            `website.orders.confirmation.states.${order.confirmation.state}`,
+                                        )}
+                                    />
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted-foreground text-xs">
+                                    {t('website.orders.confirmation.expires')}
+                                </dt>
+                                <dd>
+                                    {order.confirmation.expires_at
+                                        ? when(order.confirmation.expires_at)
+                                        : '—'}
+                                </dd>
+                            </div>
+                            <div className="sm:col-span-2">
+                                <dt className="text-muted-foreground text-xs">
+                                    {t('website.orders.confirmation.code')}
+                                </dt>
+                                <dd>
+                                    {order.confirmation.state !== 'pending'
+                                        ? '—'
+                                        : order.confirmation.code_outstanding
+                                          ? t(
+                                                'website.orders.confirmation.code_sent',
+                                            )
+                                          : t(
+                                                'website.orders.confirmation.code_none',
+                                            )}
+                                </dd>
+                            </div>
+                        </dl>
+                    </SectionCard>
+                )}
 
                 <SectionCard title={t('website.orders.customer')}>
                     <dl className="grid gap-3 text-sm sm:grid-cols-2">

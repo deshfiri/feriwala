@@ -215,6 +215,30 @@ return [
             'hold' => 'Held for review',
             'reconciliation' => 'Payment under reconciliation',
             'cancellation' => 'Cancellation',
+            'confirmation' => 'Customer confirmation',
+        ],
+        /*
+         * A cash-on-delivery order's confirmation, for staff (§6.2). Enough to
+         * answer "the customer says their code does not work" — and not one
+         * word of the code, which is held hashed and readable by nobody.
+         */
+        'confirmation' => [
+            'hint' => 'Paid on delivery, so the customer confirms with a code sent to their own number. Nobody can read that code — not the shop, not Feriwala.',
+            'state' => 'Confirmation',
+            'states' => [
+                'pending' => 'Waiting for the customer',
+                'confirmed' => 'Confirmed by the customer',
+                'cancelled' => 'Never confirmed',
+            ],
+            'expires' => 'Confirm before',
+            'code' => 'Code',
+            'code_sent' => 'Sent and still valid',
+            'code_none' => 'None outstanding',
+            'attempts' => 'Wrong attempts',
+            'attempts_value' => ':used of :allowed used',
+            'resend' => 'Another code',
+            'resend_in' => 'In :seconds seconds',
+            'resend_now' => 'Can be sent now',
         ],
         'fields' => [
             'account' => 'Business',
@@ -230,6 +254,7 @@ return [
             'coupon' => 'Coupon',
             'invoice' => 'Invoice',
             'payment_status' => 'Payment status',
+            'payment_method' => 'Paid by',
             'reference' => 'Payment reference',
             'gateway' => 'Gateway',
             'expires_at' => 'Payment window closes',
@@ -276,6 +301,10 @@ return [
             'refunded' => 'Refunded',
             'partially_refunded' => 'Partially refunded',
             'reconciliation_required' => 'Reconciliation required',
+        ],
+        'payment_methods' => [
+            'online' => 'Online payment',
+            'cod' => 'Cash on delivery',
         ],
     ],
 

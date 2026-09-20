@@ -10,6 +10,7 @@ use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderStatusChange;
+use App\Domain\Order\Queries\CodConfirmationState;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
@@ -40,6 +41,7 @@ class OrderController extends Controller
 
     public function __construct(
         protected CancelUnpaidOrderByStaff $cancel,
+        protected CodConfirmationState $confirmations,
     ) {}
 
     public function index(Request $request): Response
@@ -167,6 +169,7 @@ class OrderController extends Controller
                 'payment' => $payment === null ? null : [
                     'reference' => $payment->reference,
                     'status' => $payment->status->value,
+                    'method' => $record->isCashOnDelivery() ? 'cod' : 'online',
                     'gateway' => $payment->gateway,
                     'gateway_mode' => $payment->gateway_mode,
                     'expires_at' => $payment->expires_at?->toIso8601String(),
@@ -174,6 +177,14 @@ class OrderController extends Controller
                     'reconciliation_reason' => $payment->reconciliation_reason,
                 ],
                 'invoice' => $payment?->invoice === null ? null : ['number' => $payment->invoice->number],
+                /*
+                 * A cash-on-delivery order's confirmation (§6.2, P6-10): where
+                 * it stands, until when, whether a code is outstanding and how
+                 * many wrong guesses have been used — which is what answers
+                 * "the customer says their code does not work". The code
+                 * itself is held hashed and is readable by nobody.
+                 */
+                'confirmation' => $this->confirmations->for($record, forStaff: true),
                 'history' => $record->statusHistory->map(fn (OrderStatusChange $change) => [
                     'previous_status' => $change->previous_status?->value,
                     'new_status' => $change->new_status->value,
@@ -185,8 +196,10 @@ class OrderController extends Controller
                 ])->all(),
             ],
             'can' => [
+                // Waiting for a payment, or for a cash-on-delivery customer to
+                // confirm: nobody has paid for either (§18.4, P6-10).
                 'cancel' => $actor->can('transition', $record)
-                    && $record->status === OrderStatus::PaymentPending
+                    && in_array($record->status, [OrderStatus::PaymentPending, OrderStatus::CustomerVerificationPending], true)
                     && $payment !== null
                     && $payment->status !== PaymentStatus::Pending
                     && ! $payment->status->isSettled(),

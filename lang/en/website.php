@@ -240,6 +240,26 @@ return [
         'keep' => 'Keep it',
         'payment_methods' => [
             'online' => 'Online payment',
+            'cod' => 'Cash on delivery',
+        ],
+        /*
+         * A cash-on-delivery order's confirmation, as its shop's owner sees it
+         * (§6.2). The code is never among these strings, and never in the
+         * props behind them.
+         */
+        'confirmation' => [
+            'title' => 'Customer confirmation',
+            'hint' => 'This order is paid on delivery, so the customer confirms it with a code sent to their own number. The code is not shown to anyone.',
+            'state' => 'Confirmation',
+            'expires' => 'Confirm before',
+            'code' => 'Code',
+            'code_sent' => 'A code has been sent and is still valid',
+            'code_none' => 'No code is waiting to be used',
+            'states' => [
+                'pending' => 'Waiting for the customer',
+                'confirmed' => 'Confirmed by the customer',
+                'cancelled' => 'Never confirmed',
+            ],
         ],
         'payment_states' => [
             'awaiting' => 'Waiting to be paid',

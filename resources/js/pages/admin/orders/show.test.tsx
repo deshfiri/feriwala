@@ -62,6 +62,7 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
         payment: {
             reference: 'PAY-260915-TEST0001',
             status: 'initiated',
+            method: 'online',
             gateway: 'sslcommerz',
             gateway_mode: 'sandbox',
             expires_at: '2026-09-15T10:14:00+06:00',
@@ -69,6 +70,7 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
             reconciliation_reason: null,
         },
         invoice: null,
+        confirmation: null,
         history: [
             {
                 previous_status: null,
@@ -181,6 +183,7 @@ describe('admin order page', () => {
                     payment: {
                         reference: 'PAY-260915-TEST0001',
                         status: 'reconciliation_required',
+                        method: 'online',
                         gateway: 'sslcommerz',
                         gateway_mode: 'sandbox',
                         expires_at: '2026-09-15T10:14:00+06:00',
@@ -201,5 +204,52 @@ describe('admin order page', () => {
                 'orders.admin.payment_statuses.reconciliation_required',
             ),
         ).toBeInTheDocument();
+    });
+
+    it('shows a cash-on-delivery confirmation, its failed attempts and no code', () => {
+        const { container } = render(
+            <AdminOrder
+                order={order({
+                    source: 'website',
+                    status: 'customer_verification_pending',
+                    payment: {
+                        reference: 'PAY-260915-TEST0001',
+                        status: 'draft',
+                        method: 'cod',
+                        gateway: null,
+                        gateway_mode: null,
+                        expires_at: '2026-09-16T10:00:00+06:00',
+                        completed_at: null,
+                        reconciliation_reason: null,
+                    },
+                    confirmation: {
+                        state: 'pending',
+                        expires_at: '2026-09-16T10:00:00+06:00',
+                        code_outstanding: true,
+                        resend_available_in: 0,
+                        attempts_used: 2,
+                        attempts_allowed: 5,
+                    },
+                })}
+                can={{ cancel: true }}
+            />,
+        );
+
+        expect(
+            screen.getByText('orders.admin.sections.confirmation'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('orders.admin.confirmation.attempts_value'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('orders.admin.payment_methods.cod'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('orders.admin.confirmation.resend_now'),
+        ).toBeInTheDocument();
+
+        // Staff see the shape of the code's life, never the code. Six digits
+        // standing on their own: a reference carries a six-digit date.
+        expect(container.textContent).not.toMatch(/(?<![\d-])\d{6}(?![\d-])/);
     });
 });
