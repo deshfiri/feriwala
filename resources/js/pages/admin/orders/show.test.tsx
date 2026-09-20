@@ -45,6 +45,9 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
         status_tone: 'warning',
         account: 'Karim Traders',
         placed_by: 'Karim Uddin',
+        website: null,
+        storefront_reference: null,
+        website_customer: null,
         placed_at: '2026-09-15T10:00:00+06:00',
         paid_at: null,
         cancelled_at: null,
@@ -142,6 +145,32 @@ describe('admin order page', () => {
         expect(timeline).toHaveTextContent(
             'orders.admin.change_sources.payment_gateway',
         );
+    });
+
+    it('says which shop a website order came through, and who bought it there', () => {
+        render(
+            <AdminOrder
+                order={order({
+                    source: 'website',
+                    placed_by: null,
+                    website: { id: '01WEBSITE', name: 'Ayesha Fashion' },
+                    storefront_reference: 'SF-2026-000481',
+                    website_customer: {
+                        id: '01CUSTOMER',
+                        mobile: '+8801712345678',
+                        is_guest: true,
+                    },
+                })}
+                can={{ cancel: false }}
+            />,
+        );
+
+        expect(screen.getByText('Ayesha Fashion')).toBeInTheDocument();
+        expect(screen.getByText('SF-2026-000481')).toBeInTheDocument();
+        expect(screen.getByText('+8801712345678')).toBeInTheDocument();
+        expect(
+            screen.getByText('orders.admin.fields.guest'),
+        ).toBeInTheDocument();
     });
 
     it('says why a payment is under reconciliation', () => {

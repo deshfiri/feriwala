@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
@@ -51,11 +52,14 @@ class OrderController extends Controller
         $term = $filters['search'];
 
         $orders = Order::query()
-            ->with(['businessAccount:id,name', 'payment:id,status'])
+            ->with(['businessAccount:id,name', 'payment:id,status', 'website:id,name'])
             ->when($filters['status'] !== null, fn (Builder $query) => $query->where('status', $filters['status']))
+            ->when($filters['source'] !== null, fn (Builder $query) => $query->where('source', $filters['source']))
             ->when($term !== null, fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
                 ->where('reference', 'ilike', "%{$term}%")
-                ->orWhereHas('businessAccount', fn (Builder $account) => $account->where('name', 'ilike', "%{$term}%"))))
+                ->orWhere('storefront_order_reference', 'ilike', "%{$term}%")
+                ->orWhereHas('businessAccount', fn (Builder $account) => $account->where('name', 'ilike', "%{$term}%"))
+                ->orWhereHas('website', fn (Builder $website) => $website->where('name', 'ilike', "%{$term}%"))))
             // What somebody has to act on first: held orders, then waiting ones.
             ->orderByRaw("CASE status WHEN 'on_hold' THEN 0 WHEN 'payment_pending' THEN 1 ELSE 2 END")
             ->orderByDesc('placed_at')
@@ -67,6 +71,9 @@ class OrderController extends Controller
                 'reference' => $order->reference,
                 'account' => $order->businessAccount->name,
                 'source' => $order->source->value,
+                // Which shop took it, for an order that came through one (§18.5).
+                'website' => $order->website?->name,
+                'storefront_reference' => $order->storefront_order_reference,
                 'status' => $order->status->value,
                 'status_tone' => $order->status->tone(),
                 'payment_status' => $order->payment?->status->value,
@@ -80,6 +87,7 @@ class OrderController extends Controller
             'orders' => $orders,
             'filters' => $filters,
             'statuses' => array_map(fn (OrderStatus $status) => $status->value, OrderStatus::cases()),
+            'sources' => array_map(fn (OrderSource $source) => $source->value, OrderSource::cases()),
         ]);
     }
 
@@ -90,7 +98,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('viewAny', Order::class);
 
         $record = $this->order($order);
-        $record->load(['businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation', 'payment.invoice', 'statusHistory.changedBy:id,name']);
+        $record->load(['businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation', 'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain', 'websiteCustomer:id,public_id,mobile,is_guest']);
 
         $payment = $record->payment;
 
@@ -103,6 +111,21 @@ class OrderController extends Controller
                 'status_tone' => $record->status->tone(),
                 'account' => $record->businessAccount->name,
                 'placed_by' => $record->placedBy?->name,
+                /*
+                 * The shop it came through, and the customer as that shop's
+                 * own record knows them (§18.5). The snapshot below is what
+                 * the order says; this is who to look up.
+                 */
+                'website' => $record->website === null ? null : [
+                    'id' => $record->website->public_id,
+                    'name' => $record->website->name,
+                ],
+                'storefront_reference' => $record->storefront_order_reference,
+                'website_customer' => $record->websiteCustomer === null ? null : [
+                    'id' => $record->websiteCustomer->public_id,
+                    'mobile' => $record->websiteCustomer->mobile,
+                    'is_guest' => $record->websiteCustomer->is_guest,
+                ],
                 'placed_at' => $record->placed_at->toIso8601String(),
                 'paid_at' => $record->paid_at?->toIso8601String(),
                 'cancelled_at' => $record->cancelled_at?->toIso8601String(),
@@ -196,7 +219,7 @@ class OrderController extends Controller
     }
 
     /**
-     * @return array{search: string|null, status: string|null}
+     * @return array{search: string|null, status: string|null, source: string|null}
      */
     protected function filters(Request $request): array
     {
@@ -205,6 +228,7 @@ class OrderController extends Controller
         return [
             'search' => $search === '' ? null : mb_substr($search, 0, 120),
             'status' => OrderStatus::tryFrom($request->string('status')->toString())?->value,
+            'source' => OrderSource::tryFrom($request->string('source')->toString())?->value,
         ];
     }
 

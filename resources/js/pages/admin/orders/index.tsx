@@ -18,6 +18,8 @@ type OrderRow = {
     reference: string;
     account: string;
     source: string;
+    website: string | null;
+    storefront_reference: string | null;
     status: string;
     status_tone: StatusTone;
     payment_status: string | null;
@@ -28,8 +30,13 @@ type OrderRow = {
 
 type Props = {
     orders: Paginator<OrderRow>;
-    filters: { search: string | null; status: string | null };
+    filters: {
+        search: string | null;
+        status: string | null;
+        source: string | null;
+    };
     statuses: string[];
+    sources: string[];
 };
 
 const selectClass =
@@ -42,10 +49,17 @@ const selectClass =
  * ones somebody may have to act on. "Needs attention" is said in words beside the
  * status, never by colour alone.
  */
-export default function AdminOrders({ orders, filters, statuses }: Props) {
+export default function AdminOrders({
+    orders,
+    filters,
+    statuses,
+    sources,
+}: Props) {
     const { t, locale } = useTranslation();
     const { setFilter } = useTableQuery({ only: ['orders', 'filters'] });
-    const filtered = Boolean(filters.search || filters.status);
+    const filtered = Boolean(
+        filters.search || filters.status || filters.source,
+    );
 
     const status = (row: OrderRow) => (
         <div className="min-w-0 space-y-1">
@@ -85,9 +99,15 @@ export default function AdminOrders({ orders, filters, statuses }: Props) {
             cell: (row) => (
                 <div className="min-w-0">
                     <div className="truncate text-sm">{row.account}</div>
-                    <div className="text-muted-foreground text-xs">
+                    <div className="text-muted-foreground truncate text-xs">
                         {t(`orders.admin.sources.${row.source}`)}
+                        {row.website ? ` · ${row.website}` : ''}
                     </div>
+                    {row.storefront_reference && (
+                        <div className="text-muted-foreground truncate font-mono text-xs">
+                            {row.storefront_reference}
+                        </div>
+                    )}
                 </div>
             ),
         },
@@ -132,26 +152,48 @@ export default function AdminOrders({ orders, filters, statuses }: Props) {
                     searchPlaceholder={t('orders.admin.search')}
                     onlyReload={['orders', 'filters']}
                     filters={
-                        <select
-                            aria-label={t('orders.admin.filter_status')}
-                            value={filters.status ?? ''}
-                            onChange={(event) =>
-                                setFilter(
-                                    'status',
-                                    event.target.value || undefined,
-                                )
-                            }
-                            className={selectClass}
-                        >
-                            <option value="">
-                                {t('orders.admin.all_statuses')}
-                            </option>
-                            {statuses.map((value) => (
-                                <option key={value} value={value}>
-                                    {t(`orders.statuses.${value}`)}
+                        <>
+                            <select
+                                aria-label={t('orders.admin.filter_status')}
+                                value={filters.status ?? ''}
+                                onChange={(event) =>
+                                    setFilter(
+                                        'status',
+                                        event.target.value || undefined,
+                                    )
+                                }
+                                className={selectClass}
+                            >
+                                <option value="">
+                                    {t('orders.admin.all_statuses')}
                                 </option>
-                            ))}
-                        </select>
+                                {statuses.map((value) => (
+                                    <option key={value} value={value}>
+                                        {t(`orders.statuses.${value}`)}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                aria-label={t('orders.admin.filter_source')}
+                                value={filters.source ?? ''}
+                                onChange={(event) =>
+                                    setFilter(
+                                        'source',
+                                        event.target.value || undefined,
+                                    )
+                                }
+                                className={selectClass}
+                            >
+                                <option value="">
+                                    {t('orders.admin.all_sources')}
+                                </option>
+                                {sources.map((value) => (
+                                    <option key={value} value={value}>
+                                        {t(`orders.admin.sources.${value}`)}
+                                    </option>
+                                ))}
+                            </select>
+                        </>
                     }
                     renderCard={(row) => (
                         <div className="space-y-2">

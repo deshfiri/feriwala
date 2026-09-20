@@ -32,6 +32,14 @@ export type AdminOrderDetail = {
     status_tone: StatusTone;
     account: string;
     placed_by: string | null;
+    /** The partner website an order came through, where one did (§18.5). */
+    website: { id: string; name: string } | null;
+    storefront_reference: string | null;
+    website_customer: {
+        id: string;
+        mobile: string;
+        is_guest: boolean;
+    } | null;
     placed_at: string;
     paid_at: string | null;
     cancelled_at: string | null;
@@ -278,6 +286,40 @@ export default function AdminOrder({ order, can }: Props) {
                                 <Row label={t('orders.admin.fields.source')}>
                                     {t(`orders.admin.sources.${order.source}`)}
                                 </Row>
+                                {order.website && (
+                                    <Row
+                                        label={t('orders.admin.fields.website')}
+                                    >
+                                        {order.website.name}
+                                    </Row>
+                                )}
+                                {order.storefront_reference && (
+                                    <Row
+                                        label={t(
+                                            'orders.admin.fields.storefront_reference',
+                                        )}
+                                    >
+                                        <span className="font-mono">
+                                            {order.storefront_reference}
+                                        </span>
+                                    </Row>
+                                )}
+                                {order.website_customer && (
+                                    <Row
+                                        label={t(
+                                            'orders.admin.fields.website_customer',
+                                        )}
+                                    >
+                                        <span className="font-mono">
+                                            {order.website_customer.mobile}
+                                        </span>
+                                        {order.website_customer.is_guest && (
+                                            <span className="text-muted-foreground ms-2 text-xs">
+                                                {t('orders.admin.fields.guest')}
+                                            </span>
+                                        )}
+                                    </Row>
+                                )}
                                 {order.intended_resale_channel && (
                                     <Row
                                         label={t('orders.admin.fields.resale')}

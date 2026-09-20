@@ -3,9 +3,13 @@
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Models\Order;
+use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteCustomer;
 use App\Support\StatusHistory\StatusChange;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
@@ -191,4 +195,97 @@ it('refuses a cancellation without a proper reason, and never cancels a paid ord
 
     expect($order->refresh()->status)->toBe(OrderStatus::PaymentPending)
         ->and(DB::table('audit_logs')->where('action', 'order.cancelled_unpaid')->count())->toBe(0);
+});
+
+/**
+ * A website order, as the intake creates one, for the staff screens to read.
+ */
+function adminOrderWebsiteOrder(): Order
+{
+    $account = websiteTestAccount(extra: [PackageFeature::DropshippingEnabled->value => '1']);
+    $website = Website::factory()->forAccount($account)->active()->create(['name' => 'Ayesha Fashion']);
+
+    $customer = WebsiteCustomer::create([
+        'website_id' => $website->id,
+        'mobile' => '+88017'.random_int(10000000, 99999999),
+        'name' => 'Ayesha Rahman',
+    ]);
+
+    return Order::factory()->create([
+        'source' => OrderSource::Website,
+        'business_account_id' => $account->id,
+        'website_id' => $website->id,
+        'website_customer_id' => $customer->id,
+        'storefront_order_reference' => 'SF-2026-000481',
+        'placed_by' => null,
+        'cart_id' => null,
+        'customer' => [
+            'customer_id' => $customer->public_id,
+            'name' => 'Ayesha Rahman',
+            'mobile' => $customer->mobile,
+            'email' => null,
+            'is_guest' => true,
+        ],
+    ]);
+}
+
+describe('website orders (§18.5, P5-23, P6-14)', function () {
+    it('says which shop an order came through, and filters the list by source', function () {
+        $website = adminOrderWebsiteOrder();
+        $wholesale = Order::factory()->create(['business_account_id' => $this->karim->id]);
+
+        $staff = testPlatformStaff(PlatformRole::OrderManager);
+
+        $this->actingAs($staff)
+            ->get(route('admin.orders.index', ['source' => OrderSource::Website->value]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('orders.data', 1)
+                ->where('orders.data.0.reference', $website->reference)
+                ->where('orders.data.0.website', 'Ayesha Fashion')
+                ->where('orders.data.0.storefront_reference', 'SF-2026-000481')
+                ->has('sources'));
+
+        $this->actingAs($staff)
+            ->get(route('admin.orders.index', ['source' => OrderSource::ErpWholesale->value]))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('orders.data', 1)
+                ->where('orders.data.0.reference', $wholesale->reference));
+
+        // And found by the shop's name or the storefront's own reference.
+        $this->actingAs($staff)
+            ->get(route('admin.orders.index', ['search' => 'SF-2026-000481']))
+            ->assertInertia(fn (Assert $page) => $page->has('orders.data', 1));
+
+        $this->actingAs($staff)
+            ->get(route('admin.orders.index', ['search' => 'Ayesha Fashion']))
+            ->assertInertia(fn (Assert $page) => $page->has('orders.data', 1));
+    });
+
+    it('shows the shop, the storefront reference and the customer to look up', function () {
+        $order = adminOrderWebsiteOrder();
+
+        $this->actingAs(testPlatformStaff(PlatformRole::OrderManager))
+            ->get(route('admin.orders.show', $order->public_id))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/orders/show')
+                ->where('order.website.name', 'Ayesha Fashion')
+                ->where('order.storefront_reference', 'SF-2026-000481')
+                ->where('order.website_customer.is_guest', true)
+                ->where('order.customer.name', 'Ayesha Rahman'));
+    });
+
+    it('refuses the website order to the partner who owns the shop, and to staff without the permission', function () {
+        $order = adminOrderWebsiteOrder();
+        $owner = $order->businessAccount->owner;
+
+        // Owning the shop is not staff access, whatever roles exist (§31.3).
+        $this->actingAs($owner)->get(route('admin.orders.show', $order->public_id))->assertForbidden();
+        $this->actingAs($owner)->get(route('admin.orders.index'))->assertForbidden();
+
+        $this->actingAs(testPlatformStaff(PlatformRole::KycManager))
+            ->get(route('admin.orders.show', $order->public_id))
+            ->assertForbidden();
+    });
 });
