@@ -77,7 +77,10 @@ export default function WebsiteOrders({
             key: 'status',
             header: t('website.orders.status'),
             cell: (row) => (
-                <StatusPill tone={row.status_tone} label={row.status_label} />
+                <StatusPill
+                    tone={row.status_tone}
+                    label={t(`orders.statuses.${row.status}`)}
+                />
             ),
         },
         {
@@ -183,7 +186,7 @@ export default function WebsiteOrders({
                             <div className="flex flex-wrap items-center gap-2">
                                 <StatusPill
                                     tone={row.status_tone}
-                                    label={row.status_label}
+                                    label={t(`orders.statuses.${row.status}`)}
                                 />
                                 <span className="text-muted-foreground text-xs">
                                     {when(row.placed_at)}

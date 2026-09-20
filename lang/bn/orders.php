@@ -261,6 +261,7 @@ return [
             'account' => 'অ্যাকাউন্ট',
             'staff' => 'স্টাফ',
             'system' => 'সিস্টেম',
+            'storefront' => 'স্টোরফ্রন্ট',
         ],
         'payment_statuses' => [
             'draft' => 'খসড়া',

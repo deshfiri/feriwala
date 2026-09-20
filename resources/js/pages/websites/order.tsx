@@ -72,7 +72,7 @@ export default function WebsiteOrder({ website, order, can }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                     <StatusPill
                         tone={order.status_tone}
-                        label={order.status_label}
+                        label={t(`orders.statuses.${order.status}`)}
                     />
                     {order.payment_state && (
                         <StatusPill
@@ -200,7 +200,7 @@ export default function WebsiteOrder({ website, order, can }: Props) {
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <span className="font-medium">
-                                        {entry.status_label}
+                                        {t(`orders.statuses.${entry.status}`)}
                                     </span>
                                     <span className="text-muted-foreground text-xs">
                                         {when(entry.at)}

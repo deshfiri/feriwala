@@ -261,6 +261,7 @@ return [
             'account' => 'Account',
             'staff' => 'Staff',
             'system' => 'System',
+            'storefront' => 'Storefront',
         ],
         'payment_statuses' => [
             'draft' => 'Draft',

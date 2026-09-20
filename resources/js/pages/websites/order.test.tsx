@@ -148,6 +148,10 @@ describe('one website order', function () {
         expect(
             screen.getByText('website.orders.stock:', { exact: false }),
         ).toBeInTheDocument();
+        // Statuses read in the reader's language, not the server's English.
+        expect(
+            screen.getAllByText('orders.statuses.payment_pending').length,
+        ).toBeGreaterThan(0);
     });
 
     it('offers cancellation only when it is allowed, and asks first', async () => {
