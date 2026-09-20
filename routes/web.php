@@ -59,6 +59,7 @@ use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WebsiteCategoryController;
 use App\Http\Controllers\Erp\WebsiteController;
 use App\Http\Controllers\Erp\WebsiteIntegrationController;
+use App\Http\Controllers\Erp\WebsiteOrderController;
 use App\Http\Controllers\Erp\WebsiteProductController;
 use App\Http\Controllers\Erp\WebsiteSettingsController;
 use App\Http\Controllers\Erp\WholesaleCartController;
@@ -367,6 +368,19 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          * Connecting the storefront (§17.3, contract §3, P5-17, P5-27, P5-28).
          * A secret is shown once, as flash data, in the response that made it.
          */
+        /*
+         * The orders this shop took (§16.3, §18.4, P5-13, P6-8, P6-10).
+         *
+         * Self-scoped through the website, which is resolved through the
+         * account: another partner's shop, and every order on it, is a 404.
+         */
+        Route::get('websites/{website}/orders', [WebsiteOrderController::class, 'index'])
+            ->name('websites.orders.index');
+        Route::get('websites/{website}/orders/{order}', [WebsiteOrderController::class, 'show'])
+            ->name('websites.orders.show');
+        Route::post('websites/{website}/orders/{order}/cancellation', [WebsiteOrderController::class, 'cancel'])
+            ->name('websites.orders.cancellation.store');
+
         Route::get('websites/{website}/integration', [WebsiteIntegrationController::class, 'show'])
             ->name('websites.integration.show');
         Route::post('websites/{website}/credentials', [WebsiteIntegrationController::class, 'storeCredential'])

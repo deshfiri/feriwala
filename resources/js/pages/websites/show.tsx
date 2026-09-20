@@ -1,5 +1,11 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, KeyRound, PackageSearch, Settings } from 'lucide-react';
+import {
+    ArrowLeft,
+    KeyRound,
+    PackageSearch,
+    Settings,
+    ShoppingBag,
+} from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
@@ -21,6 +27,7 @@ import {
 import { index } from '@/routes/websites';
 import { show as integration } from '@/routes/websites/integration';
 import { index as products } from '@/routes/websites/products';
+import { index as orders } from '@/routes/websites/orders';
 import { edit as settings } from '@/routes/websites/settings';
 import type {
     WebsiteDetail,
@@ -96,6 +103,13 @@ export default function WebsiteShow({ website, wallet, can }: Props) {
                                         <Link href={products(website.id)}>
                                             <PackageSearch aria-hidden="true" />
                                             {t('website.products.title')}
+                                        </Link>
+                                    </Button>
+
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href={orders(website.id)}>
+                                            <ShoppingBag aria-hidden="true" />
+                                            {t('website.orders.title')}
                                         </Link>
                                     </Button>
 
