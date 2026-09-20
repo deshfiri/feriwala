@@ -22,6 +22,7 @@ use App\Domain\Order\Exceptions\WebsiteOrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\PriceWebsiteOrder;
 use App\Domain\Website\Actions\RecordWebsiteCustomer;
+use App\Domain\Website\CodTerms;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Website\WebsiteAddresses;
@@ -36,6 +37,7 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Str;
 use LogicException;
+use Throwable;
 
 /**
  * Take an order a customer placed on a partner website (contract §6.1, §6.1.2,
@@ -72,6 +74,8 @@ class PlaceWebsiteOrder
 
     public function __construct(
         protected PriceWebsiteOrder $pricing,
+        protected CodTerms $cod,
+        protected SendCodConfirmationCode $confirmations,
         protected RecordWebsiteCustomer $customers,
         protected RecordPaymentFromQuote $payments,
         protected StockReservations $reservations,
@@ -165,6 +169,9 @@ class PlaceWebsiteOrder
 
         try {
             $order = $this->database->transaction(fn () => $this->write($website, $submission, $quote, $key));
+
+            // The customer is asked to confirm only once the order is real.
+            $this->askForConfirmation($order, $submission);
         } catch (UniqueConstraintViolationException $exception) {
             // A racing submission of the same order won. Its order is the answer.
             $existing = $this->existingFor($website, $submission->reference);
@@ -189,6 +196,15 @@ class PlaceWebsiteOrder
         $account = $website->businessAccount;
         $customer = $this->customers->findOrRecord($website, $submission->customer);
 
+        // What this shop may take on delivery, against what this order comes to.
+        if ($submission->isCashOnDelivery()) {
+            $maximum = $this->cod->maximumFor($website, $quote->currency);
+
+            if ($maximum !== null && $quote->total->greaterThan($maximum)) {
+                throw WebsiteOrderRefused::codLimitExceeded($maximum);
+            }
+        }
+
         $payment = $this->payments->handle(
             account: $account,
             quote: WebsiteOrderPaymentQuote::fromQuote($quote),
@@ -204,31 +220,42 @@ class PlaceWebsiteOrder
 
         $payment->payable()->associate($order);
 
-        $reservations = $this->reserve($order, $website, $quote);
+        $reservations = $this->reserve($order, $website, $quote, $submission->reservationKind());
 
         $this->writeLines($order, $quote, $reservations);
 
-        $gateway = $this->gateway($submission, $quote);
-
-        $payment->forceFill([
-            'gateway' => $gateway,
-            'gateway_mode' => $this->gateways->driver($gateway)->isSandbox()
-                ? GatewayCredentials::SANDBOX
-                : GatewayCredentials::LIVE,
-            'expires_at' => $this->paymentDeadline($reservations),
-        ])->save();
+        /*
+         * A cash-on-delivery payment names no gateway: the money is collected
+         * on delivery and settled through §28, which is a later phase. It is
+         * recorded all the same, so the order has the one payment every order
+         * has and §28 has something to settle against.
+         */
+        $payment->forceFill($submission->isCashOnDelivery()
+            ? ['expires_at' => $this->paymentDeadline($reservations)]
+            : [
+                'gateway' => $gateway = $this->gateway($submission, $quote),
+                'gateway_mode' => $this->gateways->driver($gateway)->isSandbox()
+                    ? GatewayCredentials::SANDBOX
+                    : GatewayCredentials::LIVE,
+                'expires_at' => $this->paymentDeadline($reservations),
+            ])->save();
 
         $order->recordPlacement(
             new StatusChange(
                 reason: 'Placed on '.$website->name.' ('.$submission->reference.').',
-                publicNote: 'orders.notes.placed_on_website',
+                publicNote: $submission->isCashOnDelivery()
+                    ? 'orders.notes.cod_placed'
+                    : 'orders.notes.placed_on_website',
             ),
             OrderStatusChangeSource::Storefront,
         );
 
         $this->customers->noteOrder($customer, $order->placed_at);
 
-        return $order->load(['items', 'payment']);
+        // Read back what the database holds: the columns it fills in itself —
+        // fulfilment, courier and delivery status — are part of the order the
+        // caller is handed.
+        return $order->refresh()->load(['items', 'payment']);
     }
 
     protected function createOrder(
@@ -243,7 +270,14 @@ class PlaceWebsiteOrder
 
         return Order::create([
             'source' => OrderSource::Website,
-            'status' => OrderStatus::PaymentPending,
+            /*
+             * A cash-on-delivery order waits for its customer to confirm it
+             * with the code they are sent; an online one waits for the money
+             * (§18.2, contract §6.1.2).
+             */
+            'status' => $submission->isCashOnDelivery()
+                ? OrderStatus::CustomerVerificationPending
+                : OrderStatus::PaymentPending,
             'business_account_id' => $website->business_account_id,
             'website_id' => $website->id,
             'website_customer_id' => $customer->id,
@@ -274,7 +308,7 @@ class PlaceWebsiteOrder
      *
      * @throws WebsiteOrderRefused
      */
-    protected function reserve(Order $order, Website $website, WebsiteOrderQuote $quote): array
+    protected function reserve(Order $order, Website $website, WebsiteOrderQuote $quote, ReservationKind $kind): array
     {
         $lines = $quote->lines;
         $positions = array_keys($lines);
@@ -295,7 +329,7 @@ class PlaceWebsiteOrder
                     $line->product,
                     $line->variant,
                     $line->quantity,
-                    ReservationKind::OnlinePayment,
+                    $kind,
                     $order->reference.'-L'.($position + 1),
                     $website->businessAccount,
                 );
@@ -392,8 +426,13 @@ class PlaceWebsiteOrder
      */
     protected function checkPayment(Website $website, WebsiteOrderSubmission $submission): void
     {
-        if ($submission->paymentMethod !== 'online') {
+        if (! in_array($submission->paymentMethod, ['online', 'cod'], true)) {
             throw WebsiteOrderRefused::paymentMethodUnavailable($submission->paymentMethod);
+        }
+
+        // Whether this shop takes cash on delivery is the ERP's answer (§28).
+        if ($submission->isCashOnDelivery() && ! $this->cod->enabledFor($website)) {
+            throw WebsiteOrderRefused::codNotAvailable();
         }
 
         if ($submission->claimedPaymentStatus !== null && $submission->claimedPaymentStatus !== 'pending') {
@@ -424,5 +463,24 @@ class PlaceWebsiteOrder
         }
 
         return $available[0] ?? throw WebsiteOrderRefused::paymentMethodUnavailable('online');
+    }
+
+    /**
+     * Send a cash-on-delivery customer the code that confirms their order.
+     *
+     * Never allowed to fail an order that has been taken: the stock is held and
+     * the window is open, and the storefront can ask for another code.
+     */
+    protected function askForConfirmation(Order $order, WebsiteOrderSubmission $submission): void
+    {
+        if (! $submission->isCashOnDelivery()) {
+            return;
+        }
+
+        try {
+            $this->confirmations->handle($order);
+        } catch (Throwable) {
+            // A provider having a bad afternoon is not a reason to lose an order.
+        }
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Order\Data;
 
+use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Website\Data\WebsiteCustomerDetails;
 use App\Support\Money\Money;
 
@@ -37,6 +38,20 @@ readonly class WebsiteOrderSubmission
         public ?string $couponCode = null,
         public ?string $customerNote = null,
     ) {}
+
+    public function isCashOnDelivery(): bool
+    {
+        return $this->paymentMethod === 'cod';
+    }
+
+    /**
+     * How long the stock is held: minutes for a payment, the confirmation
+     * window for cash on delivery (contract §6.1.2).
+     */
+    public function reservationKind(): ReservationKind
+    {
+        return $this->isCashOnDelivery() ? ReservationKind::CashOnDelivery : ReservationKind::OnlinePayment;
+    }
 
     /**
      * The order's own idempotency key: the storefront's, scoped to its website,

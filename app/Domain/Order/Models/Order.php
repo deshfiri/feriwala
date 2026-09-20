@@ -223,6 +223,19 @@ class Order extends Model
     }
 
     /**
+     * Whether this order is paid on delivery rather than through a gateway.
+     *
+     * A cash-on-delivery order records its payment with no gateway named: the
+     * money is collected by whoever hands the parcel over (§28).
+     */
+    public function isCashOnDelivery(): bool
+    {
+        return $this->source === OrderSource::Website
+            && $this->payment_id !== null
+            && ($this->payment?->gateway === null);
+    }
+
+    /**
      * Move the order along the transition map and record why, in one transaction.
      *
      * The caller has already decided the move is allowed for this order and

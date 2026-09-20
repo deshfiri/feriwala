@@ -95,7 +95,9 @@ class CancelUnpaidOrder
             /** @var Order|null $locked */
             $locked = Order::query()->lockForUpdate()->find($order->id);
 
-            if ($locked === null || $locked->status !== OrderStatus::PaymentPending) {
+            // Waiting for a payment, or for the customer to confirm a
+            // cash-on-delivery order: in both, nobody has paid (P6-10).
+            if ($locked === null || ! in_array($locked->status, [OrderStatus::PaymentPending, OrderStatus::CustomerVerificationPending], true)) {
                 return $this->refuse($why, OrderRefused::notAwaitingPayment());
             }
 
@@ -113,7 +115,7 @@ class CancelUnpaidOrder
             $open = in_array($payment->status, PaymentStatus::open(), true);
 
             // Re-read under the lock: an expiry is only an expiry while the window is shut.
-            if ($why === UnpaidOrderCancellation::PaymentExpired && $open
+            if (in_array($why, [UnpaidOrderCancellation::PaymentExpired, UnpaidOrderCancellation::ConfirmationExpired], true) && $open
                 && ($payment->expires_at === null || $payment->expires_at->isFuture())) {
                 return false;
             }

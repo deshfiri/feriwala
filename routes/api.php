@@ -72,6 +72,16 @@ Route::prefix('storefront/v1')
                 Route::post('orders/{order}/payment-session', [OrderController::class, 'paymentSession'])
                     ->name('orders.payment-session');
                 Route::post('orders/{order}/cancellation', [OrderController::class, 'cancel'])->name('orders.cancel');
+
+                /*
+                 * Confirming a cash-on-delivery order (contract §6.1.2, §6.2).
+                 * The code is sent to the customer's own number and is never
+                 * carried on this surface.
+                 */
+                Route::post('orders/{order}/confirmation/code', [OrderController::class, 'confirmationCode'])
+                    ->name('orders.confirmation.code');
+                Route::post('orders/{order}/confirmation', [OrderController::class, 'confirm'])
+                    ->name('orders.confirmation.store');
             });
 
             // The website's own customers (contract §6.2).

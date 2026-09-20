@@ -31,6 +31,9 @@ enum UnpaidOrderCancellation: string
     /** The website's customer cancelled it before paying, through the storefront. */
     case ByStorefront = 'by_storefront';
 
+    /** Nobody confirmed a cash-on-delivery order before its window closed. */
+    case ConfirmationExpired = 'confirmation_expired';
+
     /**
      * The status an open payment is closed with.
      */
@@ -54,7 +57,7 @@ enum UnpaidOrderCancellation: string
     {
         return match ($this) {
             self::PaymentFailed, self::PaymentCancelled => OrderStatusChangeSource::PaymentGateway,
-            self::PaymentExpired => OrderStatusChangeSource::Scheduler,
+            self::PaymentExpired, self::ConfirmationExpired => OrderStatusChangeSource::Scheduler,
             self::ByAccount => OrderStatusChangeSource::Account,
             self::ByStaff => OrderStatusChangeSource::Staff,
             self::ByStorefront => OrderStatusChangeSource::Storefront,
@@ -68,6 +71,7 @@ enum UnpaidOrderCancellation: string
             self::PaymentFailed => 'The payment did not go through.',
             self::PaymentCancelled => 'The payment was cancelled at the gateway.',
             self::PaymentExpired => 'The time to pay ran out.',
+            self::ConfirmationExpired => 'The time to confirm the order ran out.',
             self::ByAccount => 'Cancelled by the account before payment.',
             self::ByStaff => 'Cancelled by staff before payment.',
             self::ByStorefront => 'Cancelled by the customer on the website before payment.',

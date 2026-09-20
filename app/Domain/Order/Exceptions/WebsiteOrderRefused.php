@@ -79,6 +79,46 @@ class WebsiteOrderRefused extends RuntimeException
         return new self(422, 'payment_method_unavailable', 'That payment method is not available for this website.', ['method' => $method]);
     }
 
+    public static function codNotAvailable(): self
+    {
+        return new self(422, 'payment_method_unavailable', 'This website cannot take cash on delivery.', ['method' => 'cod']);
+    }
+
+    public static function codLimitExceeded(Money $maximum): self
+    {
+        return new self(422, 'cod_limit_exceeded', 'This order is above what may be taken on delivery.', [
+            'maximum' => $maximum->jsonSerialize(),
+        ]);
+    }
+
+    public static function notAwaitingConfirmation(): self
+    {
+        return new self(409, 'order_not_awaiting_confirmation', 'This order is not waiting to be confirmed.');
+    }
+
+    /**
+     * The code was wrong, has run out of guesses, or was never issued.
+     *
+     * One answer for all three: which of them it was tells somebody guessing
+     * whether the order exists and how close they are (§6.2).
+     */
+    public static function confirmationRefused(): self
+    {
+        return new self(422, 'confirmation_refused', 'That code is not right, or it has expired. Ask for a new one.');
+    }
+
+    public static function confirmationExpired(): self
+    {
+        return new self(409, 'confirmation_expired', 'The time to confirm this order has passed.');
+    }
+
+    public static function confirmationTooSoon(int $seconds): self
+    {
+        return new self(429, 'confirmation_code_too_soon', 'A code was sent a moment ago. Wait before asking for another.', [
+            'retry_after' => $seconds,
+        ]);
+    }
+
     public static function couponNotApplicable(string $code): self
     {
         return new self(422, 'coupon_not_applicable', 'Coupons are not available on this website.', ['coupon_code' => $code]);

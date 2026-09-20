@@ -3,7 +3,9 @@
 namespace App\Domain\Order\Queries;
 
 use App\Domain\Inventory\Enums\StockReservationStatus;
+use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Enums\OrderPaymentState;
+use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderStatusChange;
@@ -58,13 +60,14 @@ class WebsiteOrderPayload
                 'line_total' => $item->line_total_minor->jsonSerialize(),
             ])->all(),
             'payment' => [
-                'method' => 'online',
+                'method' => $order->isCashOnDelivery() ? 'cod' : 'online',
                 'state' => OrderPaymentState::of($payment)?->value,
                 'gateway' => $payment?->gateway,
                 'expires_at' => $payment?->expires_at?->toIso8601String(),
                 'redirect_url' => $redirectUrl,
             ],
             'stock_reservation' => $this->reservation($order),
+            'confirmation' => $this->confirmation($order),
             'timeline' => $order->statusHistory
                 ->filter(fn (OrderStatusChange $change) => $change->public_note !== null)
                 ->map(fn (OrderStatusChange $change) => [
@@ -93,5 +96,35 @@ class WebsiteOrderPayload
             ->min();
 
         return $expiry === null ? null : ['expires_at' => $expiry->toIso8601String()];
+    }
+
+    /**
+     * Where a cash-on-delivery order's confirmation stands (§6.2).
+     *
+     * Whether it is still waiting, until when, and how long before another
+     * code may be asked for — **never the code**, and never how many guesses
+     * are left, which would tell somebody guessing how close they are.
+     *
+     * @return array{state: string, expires_at: string|null, resend_available_in: int}|null
+     */
+    protected function confirmation(Order $order): ?array
+    {
+        if (! $order->isCashOnDelivery()) {
+            return null;
+        }
+
+        $sender = app(SendCodConfirmationCode::class);
+
+        return [
+            'state' => match ($order->status) {
+                OrderStatus::CustomerVerificationPending => 'pending',
+                OrderStatus::Cancelled => 'cancelled',
+                default => 'confirmed',
+            },
+            'expires_at' => $this->reservation($order)['expires_at'] ?? null,
+            'resend_available_in' => $order->status === OrderStatus::CustomerVerificationPending
+                ? $sender->secondsUntilResend($order)
+                : 0,
+        ];
     }
 }

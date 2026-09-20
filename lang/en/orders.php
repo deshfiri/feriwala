@@ -135,6 +135,9 @@ return [
         'cancelled_by_account' => 'Cancelled before payment. The stock held for it was released.',
         'cancelled_by_staff' => 'Cancelled by Feriwala before payment. The stock held for it was released.',
         'cancelled_by_storefront' => 'Cancelled on the website before payment. The stock held for it was released.',
+        'cancelled_confirmation_expired' => 'Cancelled because the order was not confirmed in time. The stock held for it was released.',
+        'cod_placed' => 'Order placed on the website. Waiting for you to confirm it with the code we sent.',
+        'cod_confirmed' => 'Order confirmed. You will pay when it is delivered.',
     ],
 
     'actions' => [

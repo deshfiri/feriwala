@@ -4,6 +4,7 @@ use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
+use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
 use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
@@ -217,6 +218,22 @@ Schedule::call(fn () => app(ExpireUnpaidOrders::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Confirm or cancel wholesale orders waiting for payment (§14, §19.1)');
+
+/*
+ * Cash-on-delivery orders nobody confirmed (contract §6.1.2, P6-10).
+ *
+ * Beside the sweep above rather than inside it: that one follows payments,
+ * this one follows confirmations. The window belongs to the stock the order is
+ * holding, so closing it gives those units back — once, under the same locks
+ * a confirmation arriving at that instant takes, so the order ends in one
+ * state whichever of them is second.
+ */
+Schedule::call(fn () => app(ExpireUnconfirmedCodOrders::class)->handle())
+    ->name('cod-confirmation-sweep')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Close cash-on-delivery orders nobody confirmed (P6-10)');
 
 /*
  * The §16.4 website clock: grace, expiry, low balance, renewals (P5-11, P5-15).

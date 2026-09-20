@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Api\Storefront\V1;
 
+use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Order\Actions\CancelUnpaidOrder;
+use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\InitiateOrderPayment;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
+use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
@@ -43,6 +46,8 @@ class OrderController extends StorefrontController
 {
     public function __construct(
         protected PlaceWebsiteOrder $orders,
+        protected ConfirmCodOrder $confirmations,
+        protected SendCodConfirmationCode $confirmationCodes,
         protected InitiateOrderPayment $sessions,
         protected CancelUnpaidOrder $cancellations,
         protected WebsiteOrderPayload $payload,
@@ -76,13 +81,14 @@ class OrderController extends StorefrontController
         try {
             [$order, $placed] = $this->orders->handle($website, $this->submission($request, $input, $mobile));
         } catch (WebsiteOrderRefused $refused) {
-            return StorefrontError::respond($request, $refused->status, $refused->errorCode, $refused->getMessage(), $refused->details);
+            return $this->refused($request, $refused);
         }
 
-        return new JsonResponse(
-            $this->payload->for($order, $placed ? $this->openSession($order) : null),
-            $placed ? 201 : 200,
-        );
+        // Cash on delivery opens no gateway session: it is confirmed by the
+        // customer and collected on delivery (§28).
+        $redirect = $placed && ! $order->isCashOnDelivery() ? $this->openSession($order) : null;
+
+        return new JsonResponse($this->payload->for($order, $redirect), $placed ? 201 : 200);
     }
 
     public function index(Request $request): JsonResponse
@@ -144,6 +150,64 @@ class OrderController extends StorefrontController
         }
 
         return new JsonResponse(['redirect_url' => $redirect]);
+    }
+
+    /**
+     * Send the customer another code for a cash-on-delivery order (§6.2).
+     *
+     * The code never comes back here: it goes to the number the order was
+     * placed with, and this says only when another may be asked for.
+     */
+    public function confirmationCode(Request $request, string $order): JsonResponse
+    {
+        $record = $this->find($this->website($request), $order);
+
+        if ($record === null) {
+            return $this->notFound($request);
+        }
+
+        if ($record->status !== OrderStatus::CustomerVerificationPending) {
+            return $this->refused($request, WebsiteOrderRefused::notAwaitingConfirmation());
+        }
+
+        try {
+            $this->confirmationCodes->handle($record);
+        } catch (ResendTooSoon $tooSoon) {
+            return $this->refused($request, WebsiteOrderRefused::confirmationTooSoon($tooSoon->secondsRemaining));
+        }
+
+        return new JsonResponse($this->payload->for($record->refresh()), 202);
+    }
+
+    /**
+     * The customer confirming a cash-on-delivery order with their code (§6.2).
+     */
+    public function confirm(Request $request, string $order): JsonResponse
+    {
+        $record = $this->find($this->website($request), $order);
+
+        if ($record === null) {
+            return $this->notFound($request);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'code' => ['required', 'string', 'max:16'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->invalid($request, $validator->errors()->toArray());
+        }
+
+        try {
+            /** @var array{code: string} $input */
+            $input = $validator->validated();
+
+            $confirmed = $this->confirmations->handle($record, $input['code']);
+        } catch (WebsiteOrderRefused $refused) {
+            return $this->refused($request, $refused);
+        }
+
+        return new JsonResponse($this->payload->for($confirmed));
     }
 
     /**
@@ -278,6 +342,11 @@ class OrderController extends StorefrontController
         $order = $this->scoped($website)->where('public_id', $publicId)->first();
 
         return $order;
+    }
+
+    protected function refused(Request $request, WebsiteOrderRefused $refused): JsonResponse
+    {
+        return StorefrontError::respond($request, $refused->status, $refused->errorCode, $refused->getMessage(), $refused->details);
     }
 
     protected function notFound(Request $request): JsonResponse
