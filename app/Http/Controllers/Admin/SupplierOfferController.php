@@ -165,7 +165,7 @@ class SupplierOfferController extends Controller
             'supplier_rate' => $offer->supplier_rate_minor->jsonSerialize(),
             'platform_rate' => $offer->platform_rate_minor->jsonSerialize(),
             'platform_margin' => $offer->platformMargin()->jsonSerialize(),
-            'available_quantity' => $offer->stock?->quantity ?? 0,
+            'available_quantity' => $offer->stock->quantity ?? 0,
         ];
     }
 }

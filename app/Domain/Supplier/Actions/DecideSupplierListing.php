@@ -129,7 +129,7 @@ class DecideSupplierListing
             $locked->forceFill([
                 'reviewed_at' => now(),
                 'reviewed_by' => $reviewer->id,
-                'connected_product_id' => $product?->id ?? $locked->connected_product_id,
+                'connected_product_id' => $product->id ?? $locked->connected_product_id,
             ])->save();
 
             $this->audit->handle(new AuditEntry(

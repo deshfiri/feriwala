@@ -7,6 +7,7 @@ use App\Domain\Supplier\Actions\SubmitSupplierStockUpdate;
 use App\Domain\Supplier\Enums\StockUpdateStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierStockUpdate;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,15 +41,15 @@ class StockController extends Controller
                 'id' => $offer->public_id,
                 'product_name' => $offer->product->name,
                 'variant' => $offer->variant?->public_id,
-                'available_quantity' => $offer->stock?->quantity ?? 0,
+                'available_quantity' => $offer->stock->quantity ?? 0,
                 'pending_update' => $offer->stockUpdates->firstWhere('status', StockUpdateStatus::Pending) !== null,
-                'recent_updates' => $offer->stockUpdates->map(fn ($update) => [
+                'recent_updates' => $offer->stockUpdates->map(fn (SupplierStockUpdate $update) => [
                     'id' => $update->public_id,
                     'requested_quantity' => $update->requested_quantity,
                     'status' => $update->status->value,
                     'status_label' => $update->status->label(),
                     'decision_note' => $update->decision_note,
-                    'created_at' => $update->created_at->toIso8601String(),
+                    'created_at' => $update->created_at?->toIso8601String(),
                 ])->all(),
             ]);
 

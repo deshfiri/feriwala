@@ -84,7 +84,7 @@ class SubscriptionController extends Controller
         }
 
         try {
-            $cancel->handle($term, $request->user(), $validated['reason']);
+            $cancel->handle($term, $request->user('web'), $validated['reason']);
         } catch (InvalidArgumentException|RuntimeException $exception) {
             throw ValidationException::withMessages(['reason' => $exception->getMessage()]);
         }

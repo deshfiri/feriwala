@@ -55,7 +55,7 @@ class SupplierListingController extends Controller
                 'reference' => $listing->reference,
                 'product_name' => $listing->product_name,
                 'supplier' => $listing->supplier->business_name,
-                'category' => $listing->category?->name ?? $listing->category_suggestion,
+                'category' => $listing->category->name ?? $listing->category_suggestion,
                 'items_count' => $listing->items_count,
                 'status' => $listing->status->value,
                 'status_label' => $listing->status->label(),
@@ -181,7 +181,7 @@ class SupplierListingController extends Controller
             'items.*.note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $approves = collect($validated['items'])->contains(fn ($item) => $item['decision'] === 'approve');
+        $approves = array_any($validated['items'], fn (array $item) => $item['decision'] === 'approve');
 
         // Setting a Platform Rate is the confidential-pricing boundary: a
         // reviewer who may decide a listing but not price it cannot approve.

@@ -53,7 +53,7 @@ class ListingController extends Controller
                 'status_label' => $listing->status->label(),
                 'status_tone' => $listing->status->tone(),
                 'submitted_at' => $listing->submitted_at?->toIso8601String(),
-                'updated_at' => $listing->updated_at->toIso8601String(),
+                'updated_at' => $listing->updated_at?->toIso8601String(),
             ]);
 
         return Inertia::render('supplier/listings/index', ['listings' => $listings]);

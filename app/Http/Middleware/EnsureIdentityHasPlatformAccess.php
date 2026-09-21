@@ -40,7 +40,10 @@ class EnsureIdentityHasPlatformAccess
 
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
+        // `web` named explicitly: on a Supplier route `auth:supplier` has
+        // already made `supplier` the default guard (D25), and this gate is
+        // about the Client/Partner and staff identity only.
+        $user = $request->user('web');
 
         if (! $user instanceof User || $user->hasPlatformAccess()) {
             return $next($request);

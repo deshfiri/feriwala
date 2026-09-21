@@ -72,6 +72,7 @@ use Illuminate\Notifications\Notifiable;
 #[Hidden(['password', 'remember_token', 'payout_details'])]
 class Supplier extends Authenticatable implements MustVerifyEmail
 {
+    /** @use HasFactory<SupplierFactory> */
     use HasFactory, HasPublicId, HasReference, HasStateMachine, Notifiable, RecordsStatusHistory;
 
     protected $guarded = [];

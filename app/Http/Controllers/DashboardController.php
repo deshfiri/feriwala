@@ -42,7 +42,7 @@ class DashboardController extends Controller
         $account = $this->businessAccountFor($request);
 
         return Inertia::render('dashboard', [
-            'greeting' => $this->greeting($request->user()),
+            'greeting' => $this->greeting($request->user('web')),
             'standing' => $this->standing($account),
 
             /*

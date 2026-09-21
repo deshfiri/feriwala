@@ -43,10 +43,10 @@ class SupplierStockController extends Controller
                 'id' => $update->public_id,
                 'supplier' => $update->offer->supplier->business_name,
                 'product_name' => $update->offer->product->name,
-                'current_quantity' => $update->offer->stock?->quantity ?? 0,
+                'current_quantity' => $update->offer->stock->quantity ?? 0,
                 'requested_quantity' => $update->requested_quantity,
                 'note' => $update->note,
-                'created_at' => $update->created_at->toIso8601String(),
+                'created_at' => $update->created_at?->toIso8601String(),
             ]);
 
         return Inertia::render('admin/supplier-stock/index', [

@@ -35,7 +35,11 @@ class SetLocale
 
     protected function resolve(Request $request): Locale
     {
-        $user = $request->user();
+        // The `web` guard named explicitly. Laravel runs `auth:supplier` ahead
+        // of the global web middleware, so by here the *default* guard is
+        // already `supplier` and a bare `user()` would return the Supplier —
+        // whose stored language would then override the session (D25).
+        $user = $request->user('web');
 
         // The column arrives with the account module; until then this is simply skipped.
         if ($user !== null && filled($user->getAttribute('locale'))) {

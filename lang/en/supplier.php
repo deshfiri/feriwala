@@ -269,7 +269,7 @@ return [
             'reject' => 'Reject',
             'correction' => 'Send back',
             'skip' => 'Leave pending',
-            'platform_rate' => 'Platform rate (minor units)',
+            'platform_rate' => 'Platform rate (BDT)',
             'variant_id' => 'Existing variant ID (optional)',
             'wholesale' => 'Wholesale',
             'dropshipping' => 'Dropshipping',

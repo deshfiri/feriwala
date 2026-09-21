@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Supplier;
 
 use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\SetLocale;
 use App\Notifications\Supplier\SupplierLifecycleNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,7 +35,7 @@ class AccountController extends Controller
             'description' => SupplierLifecycleNotification::line((string) ($notification->data['event'] ?? 'unknown'), 'description'),
             'note' => $notification->data['note'] ?? null,
             'read' => $notification->read_at !== null,
-            'created_at' => $notification->created_at->toIso8601String(),
+            'created_at' => $notification->created_at?->toIso8601String(),
         ]);
 
         return Inertia::render('supplier/notifications', ['notifications' => $notifications]);
@@ -82,6 +83,10 @@ class AccountController extends Controller
         ]);
 
         $supplier->update($validated);
+
+        // The language switcher writes the session, which `SetLocale` reads
+        // before the saved column — so the choice made here has to reach it.
+        $request->session()->put(SetLocale::SESSION_KEY, $validated['locale']);
 
         return back()->with('success', 'Profile updated.');
     }

@@ -73,7 +73,7 @@ class OfferController extends Controller
             'wholesale_enabled' => $offer->wholesale_enabled,
             'dropshipping_enabled' => $offer->dropshipping_enabled,
             'supplier_rate' => $offer->supplier_rate_minor->jsonSerialize(),
-            'available_quantity' => $offer->stock?->quantity ?? 0,
+            'available_quantity' => $offer->stock->quantity ?? 0,
         ];
     }
 }
