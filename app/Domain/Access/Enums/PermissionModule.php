@@ -43,6 +43,17 @@ enum PermissionModule: string
     case System = 'system';
     case Integration = 'integration';
 
+    // The Supplier account domain (D25). `SupplierKyc`'s value deliberately
+    // carries a dot — `supplier.kyc.view` — so the composed permission name
+    // matches the batch's specified literal strings exactly; nothing in the
+    // permission pipeline (Spatie, the seeder, PermissionCatalogue) parses
+    // module names, so this is a safe, ordinary string.
+    case Supplier = 'supplier';
+    case SupplierKyc = 'supplier.kyc';
+    case SupplierListing = 'supplier_listing';
+    case SupplierPricing = 'supplier_pricing';
+    case SupplierStock = 'supplier_stock';
+
     public function label(): string
     {
         return match ($this) {
@@ -74,6 +85,11 @@ enum PermissionModule: string
             self::Audit => 'Audit logs',
             self::System => 'System & monitoring',
             self::Integration => 'Integrations',
+            self::Supplier => 'Suppliers',
+            self::SupplierKyc => 'Supplier KYC',
+            self::SupplierListing => 'Supplier listings',
+            self::SupplierPricing => 'Supplier pricing',
+            self::SupplierStock => 'Supplier stock',
         };
     }
 }

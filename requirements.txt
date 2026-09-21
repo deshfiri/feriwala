@@ -135,6 +135,11 @@ Registration
 Password Reset
 Other Admin-created public pages
 5. Single Account System
+[AMENDED 2026-09-21 by D25, approved by the Project Owner — see requirements/04-decisions.md] This
+section describes the Client/Partner account domain only. Suppliers are a wholly separate account
+domain with their own registration, authentication, session, KYC, approval lifecycle, profile and
+portal — never a role, capability or conversion path inside a Client/Partner account. Everything
+below continues to hold, unchanged, for Client/Partner accounts.
 Every user will have only one Feriwala Account.
 There will be no separate:
 Customer Account
@@ -2134,7 +2139,7 @@ The ERP must have a clear, smooth, responsive and custom SaaS-style UI.
 The interface must not look like a generic template or AI-generated Dashboard.
 45. Final Core Requirements
 The following requirements must not be removed, reduced or changed without explicit written approval from the Project Owner:
-Single Account System
+Single Account System [for the Client/Partner domain — amended 2026-09-21 by D25 to add a wholly separate Supplier account domain; see requirements/04-decisions.md]
 KYC before Account activation
 Dynamic Package selection
 Combined Registration Fee and Package Fee Payment
