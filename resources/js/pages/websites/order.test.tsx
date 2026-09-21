@@ -124,13 +124,26 @@ const order: WebsiteOrderDetail = {
 
 const website = { id: '01WEBSITE', name: 'Ayesha Fashion' };
 
+// Nothing returnable and nothing returned, unless a test says otherwise.
+const returnProps = {
+    returnable: {
+        eligible: false,
+        refusal: 'order_not_returnable',
+        window_closes_at: null,
+        lines: [],
+    },
+    returns: [],
+    reasons: ['damaged', 'wrong_item'],
+};
+
 describe('one website order', function () {
     it('shows what was bought, where it goes and what happened', () => {
         render(
             <WebsiteOrder
                 website={website}
                 order={order}
-                can={{ cancel: false }}
+                {...returnProps}
+                can={{ cancel: false, request_return: false }}
             />,
         );
 
@@ -172,7 +185,8 @@ describe('one website order', function () {
                         resend_available_in: 42,
                     },
                 }}
-                can={{ cancel: true }}
+                {...returnProps}
+                can={{ cancel: true, request_return: false }}
             />,
         );
 
@@ -196,7 +210,8 @@ describe('one website order', function () {
             <WebsiteOrder
                 website={website}
                 order={order}
-                can={{ cancel: false }}
+                {...returnProps}
+                can={{ cancel: false, request_return: false }}
             />,
         );
 
@@ -209,7 +224,8 @@ describe('one website order', function () {
             <WebsiteOrder
                 website={website}
                 order={order}
-                can={{ cancel: true }}
+                {...returnProps}
+                can={{ cancel: true, request_return: false }}
             />,
         );
 
@@ -230,6 +246,105 @@ describe('one website order', function () {
             await screen.findByRole('button', {
                 name: 'website.orders.cancel_confirm',
             }),
+        ).toBeInTheDocument();
+    });
+
+    it('shows each return, its refund, and offers a return only when the server allows it', async () => {
+        const { unmount } = render(
+            <WebsiteOrder
+                website={website}
+                order={order}
+                returnable={{
+                    eligible: true,
+                    refusal: null,
+                    window_closes_at: '2026-09-27T10:00:00+06:00',
+                    lines: [
+                        {
+                            id: '01LINE',
+                            sku: 'FW-1043-NVY-M',
+                            name: 'Cotton panjabi',
+                            variant: 'Navy / M',
+                            sold: 2,
+                            returned: 1,
+                            returnable: 1,
+                        },
+                    ],
+                }}
+                returns={[
+                    {
+                        id: '01RETURN',
+                        reference: 'RET-260920-ABCD1234',
+                        status: 'received',
+                        reason: 'damaged',
+                        customer_note: null,
+                        requested_at: '2026-09-20T12:00:00+06:00',
+                        decision_note: 'The stitching is undone.',
+                        lines: [
+                            {
+                                id: '01RLINE',
+                                sku: 'FW-1043-NVY-M',
+                                name: 'Cotton panjabi',
+                                quantity: 1,
+                                approved_quantity: 1,
+                                received_quantity: 1,
+                            },
+                        ],
+                        refund: {
+                            state: 'manual_review',
+                            amount: money(260000),
+                            refunded_at: null,
+                        },
+                        timeline: [
+                            {
+                                status: 'requested',
+                                at: '2026-09-20T12:00:00+06:00',
+                                note: 'Return requested.',
+                            },
+                        ],
+                        can_cancel: false,
+                    },
+                ]}
+                reasons={['damaged', 'wrong_item']}
+                can={{ cancel: false, request_return: true }}
+            />,
+        );
+
+        expect(screen.getByText('RET-260920-ABCD1234')).toBeInTheDocument();
+        expect(
+            screen.getByText('returns.refund_states.manual_review'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('The stitching is undone.'),
+        ).toBeInTheDocument();
+
+        screen
+            .getByRole('button', { name: 'website.orders.returns.ask' })
+            .click();
+
+        // The quantity offered is the server's figure, never more.
+        const quantity = await screen.findByRole('spinbutton');
+
+        expect(quantity).toHaveAttribute('max', '1');
+
+        unmount();
+        render(
+            <WebsiteOrder
+                website={website}
+                order={order}
+                {...returnProps}
+                can={{ cancel: false, request_return: false }}
+            />,
+        );
+
+        expect(
+            screen.queryByRole('button', {
+                name: 'website.orders.returns.ask',
+            }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByText(
+                'website.orders.returns.refusals.order_not_returnable',
+            ),
         ).toBeInTheDocument();
     });
 });

@@ -3,16 +3,25 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Order\Actions\CancelOrderReturn;
 use App\Domain\Order\Actions\CancelUnpaidOrder;
+use App\Domain\Order\Actions\RequestOrderReturn;
+use App\Domain\Order\Data\ReturnSubmission;
 use App\Domain\Order\Enums\OrderPaymentState;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Enums\OrderStatusChangeSource;
+use App\Domain\Order\Enums\ReturnReason;
 use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Exceptions\OrderRefused;
+use App\Domain\Order\Exceptions\ReturnRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
+use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderStatusChange;
 use App\Domain\Order\Queries\CodConfirmationState;
+use App\Domain\Order\Queries\ReturnEligibility;
+use App\Domain\Order\Queries\ReturnPayload;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Queries\WebsiteOverview;
 use App\Http\Controllers\Controller;
@@ -22,6 +31,7 @@ use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Builder as Query;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -49,6 +59,10 @@ class WebsiteOrderController extends Controller
         protected WebsiteOverview $websites,
         protected CancelUnpaidOrder $cancellations,
         protected CodConfirmationState $confirmations,
+        protected ReturnEligibility $eligibility,
+        protected ReturnPayload $returns,
+        protected RequestOrderReturn $returnRequests,
+        protected CancelOrderReturn $returnCancellations,
     ) {}
 
     public function index(Request $request, string $website): Response
@@ -84,11 +98,108 @@ class WebsiteOrderController extends Controller
         $found = $this->find($record, $order);
         $found->load(['items.stockReservation', 'payment', 'statusHistory']);
 
+        $manages = (bool) $request->user()?->can('manage', $record);
+        $returnable = $this->eligibility->for($found);
+
         return Inertia::render('websites/order', [
             'website' => ['id' => $record->public_id, 'name' => $record->name],
             'order' => $this->detail($found),
-            'can' => ['cancel' => $this->cancellable($found) && $request->user()?->can('manage', $record)],
+            /*
+             * What may still come back, and every return asked for (P6-12) —
+             * in the reader's own language, and nothing of where Feriwala keeps
+             * the goods or what it did with them.
+             */
+            'returnable' => [
+                'eligible' => $returnable['eligible'],
+                'refusal' => $returnable['refusal'],
+                'window_closes_at' => $returnable['window_closes_at'],
+                'lines' => $returnable['lines'],
+            ],
+            'returns' => $this->eligibility->existingFor($found)
+                ->map(fn (OrderReturn $return) => [
+                    ...$this->returns->for($return, app()->getLocale()),
+                    'can_cancel' => $manages && $return->status->isOpen(),
+                ])
+                ->values()
+                ->all(),
+            'reasons' => ReturnReason::values(),
+            'can' => [
+                'cancel' => $this->cancellable($found) && $manages,
+                'request_return' => $manages && $returnable['eligible'],
+            ],
         ]);
+    }
+
+    /**
+     * Ask for a return on the customer's behalf (§18.2, P6-12).
+     *
+     * The owner taking the call their customer made: the same request, the same
+     * checks and the same idempotency as one arriving from the storefront.
+     */
+    public function requestReturn(Request $request, string $website, string $order): RedirectResponse
+    {
+        $record = $this->websiteFor($request, $website);
+        $found = $this->find($record, $order);
+
+        abort_if(! ($request->user()?->can('manage', $record) ?? false), 403);
+
+        $validated = $request->validate([
+            'reason' => ['required', Rule::in(ReturnReason::values())],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'lines' => ['required', 'array'],
+            'lines.*' => ['integer', 'min:0'],
+            'idempotency_key' => ['required', 'string', 'max:64'],
+        ]);
+
+        $lines = [];
+
+        foreach ($validated['lines'] as $sku => $quantity) {
+            if ((int) $quantity > 0) {
+                $lines[] = ['sku' => (string) $sku, 'quantity' => (int) $quantity];
+            }
+        }
+
+        try {
+            $this->returnRequests->handle($found, new ReturnSubmission(
+                reason: ReturnReason::from($validated['reason']),
+                lines: $lines,
+                customerNote: $validated['note'] ?? null,
+                idempotencyKey: 'account:'.$validated['idempotency_key'],
+            ), OrderStatusChangeSource::Account, $this->person($request));
+        } catch (ReturnRefused $refused) {
+            throw ValidationException::withMessages(['lines' => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.orders.returns.flash.requested')]);
+
+        return to_route('websites.orders.show', [$record->public_id, $found->public_id]);
+    }
+
+    /**
+     * Withdraw a return before any goods have come back.
+     */
+    public function cancelReturn(Request $request, string $website, string $order, string $return): RedirectResponse
+    {
+        $record = $this->websiteFor($request, $website);
+        $found = $this->find($record, $order);
+
+        abort_if(! ($request->user()?->can('manage', $record) ?? false), 403);
+
+        /** @var OrderReturn $returned */
+        $returned = OrderReturn::query()
+            ->where('order_id', $found->id)
+            ->where('public_id', $return)
+            ->firstOrFail();
+
+        try {
+            $this->returnCancellations->handle($returned, OrderStatusChangeSource::Account, $this->person($request), 'Withdrawn by the shop.');
+        } catch (ReturnRefused $refused) {
+            throw ValidationException::withMessages(['return' => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.orders.returns.flash.cancelled')]);
+
+        return to_route('websites.orders.show', [$record->public_id, $found->public_id]);
     }
 
     /**

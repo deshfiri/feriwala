@@ -29,6 +29,7 @@ return [
     'brands' => 'ব্র্যান্ড',
     'attributes' => 'অ্যাট্রিবিউট',
     'orders' => 'অর্ডার',
+    'returns' => 'ফেরত',
     'partner_websites' => 'পার্টনার ওয়েবসাইট',
     'website_pricing' => 'ওয়েবসাইট মূল্য',
     'referral_settings' => 'রেফারেল সেটিংস',

@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\OrderReturnController;
 use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
@@ -380,6 +381,11 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('websites.orders.show');
         Route::post('websites/{website}/orders/{order}/cancellation', [WebsiteOrderController::class, 'cancel'])
             ->name('websites.orders.cancellation.store');
+        // Asking for a return on the customer's behalf, and withdrawing one (P6-12).
+        Route::post('websites/{website}/orders/{order}/returns', [WebsiteOrderController::class, 'requestReturn'])
+            ->name('websites.orders.returns.store');
+        Route::post('websites/{website}/orders/{order}/returns/{return}/cancellation', [WebsiteOrderController::class, 'cancelReturn'])
+            ->name('websites.orders.returns.cancellation.store');
 
         Route::get('websites/{website}/integration', [WebsiteIntegrationController::class, 'show'])
             ->name('websites.integration.show');
@@ -848,6 +854,30 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.show');
         Route::post('orders/{order}/cancellation', [OrderController::class, 'cancel'])
             ->name('orders.cancellation.store');
+
+        /*
+         * The returns desk (§18.2, §19.1, §26.3, P6-12). Each step asks for its
+         * own permission — see OrderReturnController — and recording a refund
+         * settled by hand sits behind a freshly confirmed password, as sending
+         * one does.
+         */
+        Route::get('returns', [OrderReturnController::class, 'index'])
+            ->name('returns.index');
+        Route::get('returns/{return}', [OrderReturnController::class, 'show'])
+            ->name('returns.show');
+        Route::post('returns/{return}/approval', [OrderReturnController::class, 'approve'])
+            ->name('returns.approval.store');
+        Route::post('returns/{return}/rejection', [OrderReturnController::class, 'reject'])
+            ->name('returns.rejection.store');
+        Route::post('returns/{return}/receipt', [OrderReturnController::class, 'receive'])
+            ->name('returns.receipt.store');
+        Route::post('returns/{return}/refund', [OrderReturnController::class, 'refund'])
+            ->name('returns.refund.store');
+        Route::post('returns/{return}/refund/decision', [OrderReturnController::class, 'decideRefund'])
+            ->name('returns.refund.decision.store');
+        Route::post('returns/{return}/refund/settlement', [OrderReturnController::class, 'settle'])
+            ->middleware(RequirePassword::class)
+            ->name('returns.refund.settlement.store');
 
         /*
          * Stock reservations (contract §6.1.2). Reading is `inventory.view`;

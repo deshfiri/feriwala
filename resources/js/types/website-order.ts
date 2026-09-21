@@ -26,6 +26,52 @@ export type WebsiteOrderAddress = {
     country?: string | null;
 } | null;
 
+/** What of an order may still be sent back, and until when (P6-12). */
+export type WebsiteOrderReturnable = {
+    eligible: boolean;
+    refusal: string | null;
+    window_closes_at: string | null;
+    lines: {
+        id: string;
+        sku: string;
+        name: string;
+        variant: string | null;
+        sold: number;
+        returned: number;
+        returnable: number;
+    }[];
+};
+
+/**
+ * One return, as the shop's owner and its customer see it: where it stands,
+ * what was agreed and received, and where the money is — never where Feriwala
+ * keeps the goods or what it did with them.
+ */
+export type WebsiteOrderReturn = {
+    id: string;
+    reference: string;
+    status: string;
+    reason: string;
+    customer_note: string | null;
+    requested_at: string;
+    decision_note: string | null;
+    lines: {
+        id: string;
+        sku: string;
+        name: string;
+        quantity: number;
+        approved_quantity: number | null;
+        received_quantity: number;
+    }[];
+    refund: {
+        state: string;
+        amount: Money | null;
+        refunded_at: string | null;
+    };
+    timeline: { status: string; at: string; note: string }[];
+    can_cancel: boolean;
+};
+
 /** One order's detail, as its shop's owner reads it. */
 export type WebsiteOrderDetail = WebsiteOrderRow & {
     customer_details: {

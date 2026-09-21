@@ -35,6 +35,7 @@ return [
     'brands' => 'Brands',
     'attributes' => 'Attributes',
     'orders' => 'Orders',
+    'returns' => 'Returns',
     'partner_websites' => 'Partner websites',
     'website_pricing' => 'Website pricing',
     'referral_settings' => 'Referral settings',

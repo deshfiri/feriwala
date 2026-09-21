@@ -280,6 +280,35 @@ return [
         'flash' => [
             'cancelled' => 'The order has been cancelled and its stock released.',
         ],
+        /*
+         * Returns on a website order, as the shop's owner sees them (P6-12).
+         * What Feriwala does with returned goods is never said here.
+         */
+        'returns' => [
+            'title' => 'Returns',
+            'window' => 'Items can be sent back until :time.',
+            'none' => 'Nothing has been asked back on this order.',
+            'refusals' => [
+                'order_not_returnable' => 'Items can be sent back once the order has been delivered.',
+                'return_window_closed' => 'The time to send items back has passed.',
+                'nothing_returnable' => 'Everything on this order has already been asked back.',
+            ],
+            'quantities' => 'asked :asked · approved :approved · received :received',
+            'refund_amount' => 'Refund',
+            'decision_note' => 'Feriwala\'s reason',
+            'withdraw' => 'Withdraw this return',
+            'ask' => 'Ask for a return',
+            'reason' => 'Why is it coming back?',
+            'choose_reason' => 'Choose a reason',
+            'what' => 'How many of each item',
+            'up_to' => 'Up to :count',
+            'note' => 'What the customer said',
+            'submit' => 'Send the return request',
+            'flash' => [
+                'requested' => 'The return has been requested.',
+                'cancelled' => 'The return has been withdrawn.',
+            ],
+        ],
     ],
 
     'integration' => [

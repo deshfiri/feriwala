@@ -13,15 +13,21 @@ import WebsiteOrderController from '@/actions/App/Http/Controllers/Erp/WebsiteOr
 import { orderPaymentTone } from '@/lib/website-order';
 import { index as websitesIndex } from '@/routes/websites';
 import { index as ordersIndex } from '@/routes/websites/orders';
+import WebsiteOrderReturns from '@/components/website-order-returns';
 import type {
     WebsiteOrderAddress,
     WebsiteOrderDetail,
+    WebsiteOrderReturn,
+    WebsiteOrderReturnable,
 } from '@/types/website-order';
 
 type Props = {
     website: { id: string; name: string };
     order: WebsiteOrderDetail;
-    can: { cancel: boolean };
+    returnable: WebsiteOrderReturnable;
+    returns: WebsiteOrderReturn[];
+    reasons: string[];
+    can: { cancel: boolean; request_return: boolean };
 };
 
 /**
@@ -32,7 +38,14 @@ type Props = {
  * customer was given. An order nobody has paid for can be cancelled here; one
  * that has been paid is refunded, not cancelled.
  */
-export default function WebsiteOrder({ website, order, can }: Props) {
+export default function WebsiteOrder({
+    website,
+    order,
+    returnable,
+    returns,
+    reasons,
+    can,
+}: Props) {
     const { t, locale } = useTranslation();
     const [confirming, setConfirming] = useState(false);
 
@@ -276,6 +289,15 @@ export default function WebsiteOrder({ website, order, can }: Props) {
                         ))}
                     </ol>
                 </SectionCard>
+
+                <WebsiteOrderReturns
+                    websiteId={website.id}
+                    orderId={order.id}
+                    returnable={returnable}
+                    returns={returns}
+                    reasons={reasons}
+                    canRequest={can.request_return}
+                />
 
                 {can.cancel && (
                     <SectionCard

@@ -18,9 +18,12 @@ use App\Domain\Order\Models\OrderReturnStatusChange;
 class ReturnPayload
 {
     /**
+     * @param  string  $locale  the timeline's language: English for a storefront,
+     *                          which shows its customer its own words; the
+     *                          reader's own for the partner's screen
      * @return array<string, mixed>
      */
-    public function for(OrderReturn $return): array
+    public function for(OrderReturn $return, string $locale = 'en'): array
     {
         $return->loadMissing(['items.orderItem', 'statusHistory']);
 
@@ -52,9 +55,7 @@ class ReturnPayload
                 ->map(fn (OrderReturnStatusChange $change) => [
                     'status' => $change->new_status->value,
                     'at' => $change->changed_at->toIso8601String(),
-                    // In English, as an order's timeline is: a storefront shows
-                    // its customer its own words.
-                    'note' => (string) __($change->public_note, [], 'en'),
+                    'note' => (string) __($change->public_note, [], $locale),
                 ])
                 ->values()
                 ->all(),
