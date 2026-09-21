@@ -885,6 +885,60 @@ sized accordingly rather than as one line item under provisioning.
 
 ---
 
+# Phase 13 — Supplier Account System (D25)
+
+A wholly separate account domain from Client/Partner (D25): its own registration, authentication,
+session guard, verification, KYC, approval lifecycle, portal and authorisation boundary. Beta batch
+of 2026-09-21 delivers the foundation, KYC, listings, offers, pricing and the availability
+foundation; **order, payable, wallet, withdrawal and fulfilment integration is deliberately left
+open** for the next batch.
+
+## P13.A Account foundation & authentication
+
+- [x] **P13-1** Separate Supplier domain: `suppliers`, status history, `supplier` guard/provider/broker, nine-status lifecycle, D25 amendment of §5 and §45, twelve `supplier*` permissions and the Supplier Manager role
+- [x] **P13-2** Supplier registration on its own guard (no Client/Partner account, membership or role)
+- [x] **P13-3** Supplier login/logout, guard isolation in both directions, operational gate (`supplier.operational`), guard-aware redirects
+- [x] **P13-4** Supplier password reset on its own broker and token table
+- [x] **P13-5** Supplier email verification (signed link on a Supplier-only route)
+- [x] **P13-6** Supplier mobile verification through the existing hashed-code store, Supplier-only purpose
+
+## P13.B KYC & approval
+
+- [x] **P13-7** Supplier KYC: private, encrypted, random-named document store; type/extension/size validation; submit, correction, resubmission; submitted round read-only
+- [x] **P13-8** Application review: approve (activates operational access), reject, suspend, reactivate — reasons required, transactional, audited, history recorded
+- [x] **P13-9** Product Listing Requests: draft, edit, submit, correction, resubmission, archive; a listing is only a proposal and never writes to the catalogue
+
+## P13.C Listing review, offers & pricing
+
+- [x] **P13-10** Notifications, English and Bangla, for the eleven Supplier lifecycle events
+- [x] **P13-11** Staff listing queue and decision; correction request for a whole listing
+- [x] **P13-12** Per-variation decisions: full, partial and rejected approval rolled up to the listing status
+- [x] **P13-13** Central Catalogue connection through the existing `ManageProducts` action or an existing product; the preferred offer's Platform Rate is the only figure written to the wholesale price the catalogue already reads
+- [x] **P13-14** Supplier offers: several per variation, each with its own Supplier identity, rate, availability and status; one preferred offer per variation (database-enforced); no automatic Supplier selection
+- [x] **P13-15** Supplier Rate and Platform Rate: integer minor units, same currency, never negative, Platform ≥ Supplier (database CHECK), effective-dated append-only versions with a mandatory reason
+- [x] **P13-16** Confidentiality: Supplier Rate and margin absent from Client/Partner pages, the Partner Website API and other Suppliers; pricing permissions never granted to catalogue roles
+- [x] **P13-17** Availability foundation: Supplier submits, staff approve or adjust, immutable movements, never negative (database CHECK), distinct from central stock
+
+## P13.D Screens, audit & tests
+
+- [x] **P13-18** Supplier portal (own layout and navigation, EN/BN, light/dark/system, no mobile overflow) and staff screens (applications, KYC evidence, listings, offers, availability)
+- [x] **P13-19** Audit for every Supplier decision, rate change, preferred-offer selection and availability change — without document bodies, storage paths, secrets or payout detail
+- [x] **P13-20** Supplier test suite: authentication isolation, KYC lifecycle, listings, pricing and data-leak, stock, locale, navigation and screens
+
+## P13.E Open — next batch
+
+- [ ] **P13-21** Supplier order allocation: which offer an order line was fulfilled from, snapshotted on the order line
+- [ ] **P13-22** Supplier payable per fulfilled line at the Supplier Rate in force when the order was priced
+- [ ] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules)
+- [ ] **P13-24** Supplier withdrawals and payout-detail capture (`payout_details` is stored encrypted but has no screen)
+- [ ] **P13-25** Refund and return reversal integration for Supplier payables
+- [ ] **P13-26** Fulfilment integration: Supplier-side dispatch and handover
+- [ ] **P13-27** Supplier reporting
+- [ ] **P13-28** Supplier availability into order reservation (must not change the existing reservation lifecycle)
+- [ ] **P13-29** Listing images and supporting-document uploads (the columns exist; no upload store yet), and creating a new variation from a listing item
+
+---
+
 ## Progress
 
 Counted from the checkboxes above — `[x]` done, `[~]` started. Recount rather than
@@ -898,16 +952,28 @@ increment by hand; a progress table that has drifted is worse than none.
 | P3 Catalog & Inventory                          | 31      | 31      | 0       |
 | P4 Wholesale                                    | 14      | 14      | 0       |
 | P5 Dropship, Websites & Storefront              | 50      | 25      | 3       |
-| P6 OMS, Fulfillment, Courier                    | 33      | 5       | 6       |
+| P6 OMS, Fulfillment, Courier                    | 33      | 5       | 7       |
 | P7 Commission, Referral, Withdrawal, Settlement | 44      | 8       | 1       |
 | P8 Notifications & SMS                          | 18      | 0       | 0       |
 | P9 Reports                                      | 23      | 0       | 0       |
 | P10 CMS & SEO                                   | 20      | 0       | 0       |
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
-| **Total**                                       | **460** | **226** | **22**  |
+| P13 Supplier Account System                     | 29      | 20      | 0       |
+| **Total**                                       | **489** | **246** | **23**  |
 
 ### Revision log
+
+- **2026-09-21** — **Requirement change, D25**: Feriwala gains a wholly separate Supplier account
+  domain, approved by the Project Owner and superseding the Single Account System wording in
+  `requirements.txt` §5 and §45 as applied to Suppliers only (D1/D23 stand for Client/Partner).
+  New **Phase 13 — Supplier Account System**, 29 tasks. **Done: P13-1 to P13-20** — foundation,
+  authentication, verification, KYC, application review, listing requests, listing review, offers,
+  Supplier and Platform rates with confidentiality, availability foundation, screens, audit,
+  notifications and tests. **Open: P13-21 to P13-29** — order allocation, payable, wallet and
+  settlement, withdrawals, refund reversal, fulfilment, reporting, availability in order
+  reservation, and listing image/document uploads. Progress table recounted from the checkboxes:
+  tasks 460 → 489, done 226 → 246, started 22 → 23 (P6's started count had drifted by one).
 
 - **2026-09-20** — Multi-level referral and partner website order batch. **Done: P7-10, P7-11,
   P7-12, P7-18, P7-19, P7-42, P7-43, P7-44** (the configurable MLM system of D24: hierarchy, plan

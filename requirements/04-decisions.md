@@ -521,7 +521,7 @@ session) without inventing new primitives for problems Laravel already solves:
   redirect or 403, never a 200.
 - **Session**: both guards share Laravel's normal session mechanism (Redis-backed, D5), which
   namespaces each guard's login under its own key inside the session array — this is Laravel's
-  documented multi-auth behaviour, not a gap. A browser *could* therefore hold both a Client/Partner
+  documented multi-auth behaviour, not a gap. A browser _could_ therefore hold both a Client/Partner
   login and a Supplier login in one session at once, exactly as it could hold two logins in two
   different browser profiles. What the requirement — "a Supplier session must never gain access to
   Client/Partner, Partner Website or staff resources" — actually rules out is **authorization**, and
