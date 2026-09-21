@@ -56,6 +56,10 @@ return [
     'allocations' => 'Stock allocations',
     'allocated_stock' => 'Allocated stock',
     'invoices' => 'Invoices',
+    'suppliers' => 'Suppliers',
+    'supplier_listings' => 'Supplier listings',
+    'supplier_offers' => 'Supplier offers',
+    'supplier_stock' => 'Supplier availability',
 
     'search' => [
         'open' => 'Search pages',

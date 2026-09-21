@@ -26,6 +26,7 @@ class DashboardController extends Controller
 
         return Inertia::render('supplier/dashboard', [
             'status' => $supplier->status,
+            'statusLabel' => $supplier->status->label(),
             'isOperational' => $supplier->isOperational(),
         ]);
     }

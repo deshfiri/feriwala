@@ -394,6 +394,83 @@ describe('referral settings navigation', () => {
 });
 
 /**
+ * The Supplier account domain's staff screens (D25): each its own permission,
+ * so seeing the listing queue never implies seeing a Supplier Rate, and a
+ * partner is offered none of it.
+ */
+describe('supplier administration navigation', () => {
+    let root: Root;
+
+    const SUPPLIER_DOORS = [
+        'nav.suppliers',
+        'nav.supplier_listings',
+        'nav.supplier_offers',
+        'nav.supplier_stock',
+    ];
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives a supplier manager every supplier screen', () => {
+        renderFor({
+            permissions: {
+                'supplier.view': true,
+                'supplier_listing.view': true,
+                'supplier_pricing.view': true,
+                'supplier_stock.view': true,
+            },
+            account: null,
+        });
+
+        SUPPLIER_DOORS.forEach((title) => expect(titles).toContain(title));
+    });
+
+    it('gates each door on its own permission', () => {
+        renderFor({
+            permissions: {
+                'supplier.view': false,
+                'supplier_listing.view': true,
+                'supplier_pricing.view': false,
+                'supplier_stock.view': false,
+            },
+            account: null,
+        });
+
+        expect(titles).toContain('nav.supplier_listings');
+        // Seeing the queue does not open the confidential pricing screen.
+        expect(titles).not.toContain('nav.supplier_offers');
+        expect(titles).not.toContain('nav.suppliers');
+        expect(titles).not.toContain('nav.supplier_stock');
+    });
+
+    it('offers a partner none of it', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: true,
+                managesStaff: false,
+            },
+        });
+
+        SUPPLIER_DOORS.forEach((title) => expect(titles).not.toContain(title));
+    });
+});
+
+/**
  * Referral doors (D24): the owner's own page, and the platform's records for
  * staff who may see them — never each other's.
  */

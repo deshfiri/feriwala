@@ -5,6 +5,8 @@ import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import SupplierAuthLayout from '@/layouts/supplier-auth-layout';
+import SupplierLayout from '@/layouts/supplier-layout';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -16,6 +18,12 @@ void createInertiaApp({
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
+            // The Supplier account domain (D25) has its own shells, visibly
+            // separate from the Client/Partner ERP.
+            case name.startsWith('supplier/auth/'):
+                return SupplierAuthLayout;
+            case name.startsWith('supplier/'):
+                return SupplierLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
             default:

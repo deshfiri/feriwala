@@ -50,6 +50,10 @@ return [
     'allocations' => 'স্টক বরাদ্দ',
     'allocated_stock' => 'বরাদ্দকৃত স্টক',
     'invoices' => 'চালান',
+    'suppliers' => 'সাপ্লায়ার',
+    'supplier_listings' => 'সাপ্লায়ারের তালিকা',
+    'supplier_offers' => 'সাপ্লায়ার অফার',
+    'supplier_stock' => 'সাপ্লায়ারের প্রাপ্যতা',
 
     'search' => [
         'open' => 'পেজ খুঁজুন',
