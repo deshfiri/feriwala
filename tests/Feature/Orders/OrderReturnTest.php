@@ -455,7 +455,9 @@ describe('the money', function () {
             ->and($refund->status)->toBe(RefundStatus::Requested)
             ->and($refund->allocation_type)->toBe(AllocationType::WebsiteGoods)
             ->and($refund->amount_minor->minorUnits)->toBe(520000)
-            ->and($return->refund_amount_minor?->minorUnits)->toBe(520000);
+            ->and($return->refund_amount_minor?->minorUnits)->toBe(520000)
+            // Started once, said once: the repeat changed nothing.
+            ->and(DB::table('audit_logs')->where('action', 'order_return.refund_started')->count())->toBe(1);
 
         // The refund machinery decides and sends it; the return follows.
         $refund->transitionTo(RefundStatus::Approved)->save();
@@ -525,6 +527,7 @@ describe('the money', function () {
         expect(fn () => app(SettleReturnRefundManually::class)->handle($payments, $return, 'Paid back in cash at the door.', false, true))
             ->toThrow(SensitiveActionRefused::class);
 
+        app(SettleReturnRefundManually::class)->handle($payments, $return, 'Paid back in cash at the door, receipt 0042.', true, true);
         app(SettleReturnRefundManually::class)->handle($payments, $return, 'Paid back in cash at the door, receipt 0042.', true, true);
 
         expect($return->refresh()->refund_state)->toBe(ReturnRefundState::Completed)

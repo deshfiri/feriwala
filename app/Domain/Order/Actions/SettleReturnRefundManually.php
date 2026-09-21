@@ -63,7 +63,9 @@ class SettleReturnRefundManually
             twoFactorEnabled: $twoFactorEnabled,
         ));
 
-        $settled = $this->database->transaction(function () use ($actor, $return, $how) {
+        $recorded = false;
+
+        $settled = $this->database->transaction(function () use ($actor, $return, $how, &$recorded) {
             /** @var OrderReturn $locked */
             $locked = OrderReturn::query()->lockForUpdate()->findOrFail($return->id);
 
@@ -94,9 +96,17 @@ class SettleReturnRefundManually
             );
 
             $this->announcements->handle($locked->refresh()->load('items'));
+            $recorded = true;
 
             return $locked;
         });
+
+        $return->setRawAttributes($settled->getAttributes(), sync: true);
+
+        // A repeat changed nothing, and says nothing.
+        if (! $recorded) {
+            return $settled;
+        }
 
         $this->audit->handle(new AuditEntry(
             action: 'order_return.refund_settled_manually',
@@ -113,8 +123,6 @@ class SettleReturnRefundManually
             module: PermissionModule::Payment->value,
             isSensitive: true,
         ));
-
-        $return->setRawAttributes($settled->getAttributes(), sync: true);
 
         return $settled;
     }

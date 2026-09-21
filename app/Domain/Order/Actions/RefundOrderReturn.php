@@ -70,12 +70,24 @@ class RefundOrderReturn
             throw new AuthorizationException('This account may not start a refund for a return.');
         }
 
+        $started = false;
+
         try {
-            $refunded = $this->database->transaction(fn () => $this->start($actor, $return));
+            // A full closure, not an arrow one: `$started` has to come back out.
+            $refunded = $this->database->transaction(function () use ($actor, $return, &$started) {
+                return $this->start($actor, $return, $started);
+            });
         } catch (UniqueConstraintViolationException) {
             // The open-request index on the payment: another refund of these
             // goods is already waiting for its decision.
             throw ReturnRefused::refundAlreadyOpen();
+        }
+
+        $return->setRawAttributes($refunded->getAttributes(), sync: true);
+
+        // Only the call that started it says so; a repeat changed nothing.
+        if (! $started) {
+            return $refunded;
         }
 
         $this->audit->handle(new AuditEntry(
@@ -94,15 +106,15 @@ class RefundOrderReturn
             module: PermissionModule::Order->value,
         ));
 
-        $return->setRawAttributes($refunded->getAttributes(), sync: true);
-
         return $refunded;
     }
 
     /**
+     * @param  bool  $started  set when this call is the one that started the refund
+     *
      * @throws ReturnRefused
      */
-    protected function start(User $actor, OrderReturn $return): OrderReturn
+    protected function start(User $actor, OrderReturn $return, bool &$started): OrderReturn
     {
         /** @var OrderReturn $locked */
         $locked = OrderReturn::query()->lockForUpdate()->findOrFail($return->id);
@@ -116,6 +128,8 @@ class RefundOrderReturn
         if ($locked->status !== ReturnStatus::Received) {
             throw ReturnRefused::notInThatState();
         }
+
+        $started = true;
 
         $amounts = $this->amounts->for($locked);
 
