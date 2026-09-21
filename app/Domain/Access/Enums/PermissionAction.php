@@ -91,6 +91,11 @@ enum PermissionAction: string
             self::ViewKycDocuments,
             self::ManageBackups,
             self::ManageIntegrations,
+            // Taking a Supplier out of operation needs a recorded reason and
+            // is the kind of decision a second factor should stand behind
+            // (D25). Holding `supplier.suspend` is what makes Supplier Manager
+            // a two-factor role.
+            self::Suspend,
             self::Delete => true,
             default => false,
         };

@@ -22,6 +22,14 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Policies\OrderPolicy;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Policies\PackagePolicy;
+use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierKycSubmission;
+use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierProductListing;
+use App\Domain\Supplier\Policies\SupplierKycSubmissionPolicy;
+use App\Domain\Supplier\Policies\SupplierOfferPolicy;
+use App\Domain\Supplier\Policies\SupplierPolicy;
+use App\Domain\Supplier\Policies\SupplierProductListingPolicy;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Policies\WebsitePolicy;
 use App\Models\User;
@@ -76,6 +84,16 @@ class AuthorizationServiceProvider extends ServiceProvider
         // A dedicated website is run by the account that owns it and
         // administered by staff who may administer websites (§16.3).
         Gate::policy(Website::class, WebsitePolicy::class);
+
+        /*
+         * The Supplier account domain (D25). Staff-side only — a Supplier's
+         * access to its own records is query-scoping in the Supplier-guarded
+         * controllers, never a Gate check against a `User`.
+         */
+        Gate::policy(Supplier::class, SupplierPolicy::class);
+        Gate::policy(SupplierKycSubmission::class, SupplierKycSubmissionPolicy::class);
+        Gate::policy(SupplierProductListing::class, SupplierProductListingPolicy::class);
+        Gate::policy(SupplierOffer::class, SupplierOfferPolicy::class);
 
         /*
          * Super Admin passes every check without holding permission rows, so

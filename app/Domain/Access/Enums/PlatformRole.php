@@ -106,20 +106,6 @@ enum PlatformRole: string
         }
 
         /*
-         * Explicit rather than derived (D25): Supplier KYC review reaches the
-         * same kind of identity document §7.5/§36 already treat as sensitive
-         * for the Client/Partner engine, and Supplier pricing decides a
-         * confidential rate. The derivation below reads the verb after the
-         * *first* dot in a permission name, which for the three-segment
-         * `supplier.kyc.review` finds `kyc.review` — not one of
-         * PermissionAction's cases — so it would silently miss this role.
-         * Naming it here is correct on its own terms, not only a workaround.
-         */
-        if ($this === self::SupplierManager) {
-            return true;
-        }
-
-        /*
          * Read from the permissions the role actually holds, not from the raw
          * grants: a verb the module does not accept is dropped by the catalogue,
          * and an Order Manager granted `delete` on a module with no delete

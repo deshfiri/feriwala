@@ -106,6 +106,14 @@ class HandleInertiaRequests extends Middleware
 
         // The platform's logo and browser icon.
         [PermissionModule::System, PermissionAction::ManageSettings],
+
+        // The Supplier account domain's staff screens (D25). One per screen,
+        // each its own permission — seeing pricing is never implied by
+        // seeing the listing queue.
+        [PermissionModule::Supplier, PermissionAction::View],
+        [PermissionModule::SupplierListing, PermissionAction::View],
+        [PermissionModule::SupplierPricing, PermissionAction::View],
+        [PermissionModule::SupplierStock, PermissionAction::View],
     ];
 
     /**
@@ -127,7 +135,11 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        $user = $request->user();
+        // The `web` guard named explicitly. `auth:supplier` makes `supplier`
+        // the *default* guard for the rest of the request (Authenticate calls
+        // `shouldUse()`), so a bare `user()` here would hand a Supplier to
+        // code that only understands `App\Models\User` (D25).
+        $user = $request->user('web');
 
         return [
             ...parent::share($request),
@@ -143,6 +155,13 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user,
             ],
+
+            /*
+             * The signed-in Supplier (D25), if any — a separate identity from
+             * `auth.user`, on its own guard. Only what the portal shell needs;
+             * never the password, payout detail or any confidential figure.
+             */
+            'supplierAccount' => fn () => $this->supplierAccount($request),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
             /*
@@ -177,6 +196,27 @@ class HandleInertiaRequests extends Middleware
             'unreadNotificationCount' => fn () => $user === null
                 ? 0
                 : $this->notifications->unreadCountFor($user),
+        ];
+    }
+
+    /**
+     * @return array{business_name: string, reference: string, status: string, status_label: string, operational: bool, unread_notifications: int}|null
+     */
+    protected function supplierAccount(Request $request): ?array
+    {
+        $supplier = $request->user('supplier');
+
+        if ($supplier === null) {
+            return null;
+        }
+
+        return [
+            'business_name' => $supplier->business_name,
+            'reference' => $supplier->reference,
+            'status' => $supplier->status->value,
+            'status_label' => $supplier->status->label(),
+            'operational' => $supplier->isOperational(),
+            'unread_notifications' => $supplier->unreadNotifications()->count(),
         ];
     }
 

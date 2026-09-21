@@ -46,6 +46,15 @@ class SetLocale
             return Locale::parse($request->session()->get(self::SESSION_KEY));
         }
 
+        // A signed-in Supplier (D25) has its own saved preference, read after
+        // the session because the language switcher writes the session for
+        // anyone who is not a `web` identity.
+        $supplier = $request->user('supplier');
+
+        if ($supplier !== null && filled($supplier->getAttribute('locale'))) {
+            return Locale::parse($supplier->getAttribute('locale'));
+        }
+
         return $this->fromHeader($request);
     }
 
