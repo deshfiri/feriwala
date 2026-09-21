@@ -39,7 +39,8 @@ use Inertia\Response;
  * so nobody can take goods back, put them on sale and send the money in one
  * sitting unless they hold every one of those rights:
  *
- *   - reading returns is `order.view`;
+ *   - reading returns is `order.view`, or a payment right that works one of
+ *     its money steps (`payment.approve`, `payment.reverse_transaction`);
  *   - approving is `order.approve`, refusing is `order.reject`, both with a reason;
  *   - counting goods back into stock is `order.edit` **and** `inventory.edit`;
  *   - opening the refund is `order.approve`;
@@ -67,7 +68,7 @@ class OrderReturnController extends Controller
 
     public function index(Request $request): Response
     {
-        $this->require($request, PermissionModule::Order, PermissionAction::View);
+        $this->reader($request);
 
         $status = ReturnStatus::tryFrom($request->string('status')->toString());
         $search = trim($request->string('search')->toString());
@@ -112,7 +113,7 @@ class OrderReturnController extends Controller
 
     public function show(Request $request, string $return): Response
     {
-        $actor = $this->require($request, PermissionModule::Order, PermissionAction::View);
+        $actor = $this->reader($request);
 
         $record = $this->find($return);
         $record->load([
@@ -217,7 +218,7 @@ class OrderReturnController extends Controller
 
     public function approve(Request $request, string $return): RedirectResponse
     {
-        $actor = $this->actor($request);
+        $actor = $this->require($request, PermissionModule::Order, PermissionAction::Approve);
         $record = $this->find($return);
 
         $validated = $request->validate([
@@ -236,7 +237,7 @@ class OrderReturnController extends Controller
 
     public function reject(Request $request, string $return): RedirectResponse
     {
-        $actor = $this->actor($request);
+        $actor = $this->require($request, PermissionModule::Order, PermissionAction::Reject);
         $record = $this->find($return);
 
         $validated = $request->validate([
@@ -252,7 +253,10 @@ class OrderReturnController extends Controller
 
     public function receive(Request $request, string $return): RedirectResponse
     {
-        $actor = $this->actor($request);
+        // Both rights before anything is read from the request: somebody who
+        // may not change stock is told so, not told their form was incomplete.
+        $actor = $this->require($request, PermissionModule::Order, PermissionAction::Edit);
+        abort_unless($actor->can(PermissionCatalogue::name(PermissionModule::Inventory, PermissionAction::Edit)), 403);
         $record = $this->find($return);
 
         $validated = $request->validate([
@@ -281,7 +285,7 @@ class OrderReturnController extends Controller
 
     public function refund(Request $request, string $return): RedirectResponse
     {
-        $actor = $this->actor($request);
+        $actor = $this->require($request, PermissionModule::Order, PermissionAction::Approve);
         $record = $this->find($return);
 
         return $this->attempt(fn () => $this->refunds->handle($actor, $record), 'returns.admin.flash.refund_started', 'refund');
@@ -333,7 +337,7 @@ class OrderReturnController extends Controller
      */
     public function settle(Request $request, string $return): RedirectResponse
     {
-        $actor = $this->actor($request);
+        $actor = $this->require($request, PermissionModule::Payment, PermissionAction::ReverseTransaction);
         $record = $this->find($return);
 
         $validated = $request->validate([
@@ -386,6 +390,27 @@ class OrderReturnController extends Controller
         $return = OrderReturn::query()->where('public_id', $publicId)->firstOrFail();
 
         return $return;
+    }
+
+    /**
+     * Somebody who may read the desk.
+     *
+     * Everybody who works one of its steps: the order staff who decide and
+     * count goods back in, and the finance staff who decide, send or settle
+     * the money — who could not otherwise open the return they are settling.
+     */
+    protected function reader(Request $request): User
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(
+            $actor->can(PermissionCatalogue::name(PermissionModule::Order, PermissionAction::View))
+            || $actor->can(PermissionCatalogue::name(PermissionModule::Payment, PermissionAction::Approve))
+            || $actor->can(PermissionCatalogue::name(PermissionModule::Payment, PermissionAction::ReverseTransaction)),
+            403,
+        );
+
+        return $actor;
     }
 
     protected function require(Request $request, PermissionModule $module, PermissionAction $action): User

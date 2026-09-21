@@ -79,7 +79,7 @@ class LogStorefrontRequest
                 'ip' => $request->ip(),
                 'request_summary' => $this->redactor->redact([
                     'query' => $request->query(),
-                    'body' => $request->isJson() ? (array) $request->json()->all() : [],
+                    'body' => $this->body($request),
                 ]),
             ]);
         } catch (Throwable $exception) {
@@ -88,5 +88,31 @@ class LogStorefrontRequest
                 'exception' => $exception->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * The body as it may be kept.
+     *
+     * The shared redactor matches secrets by field name across every payload
+     * it sees, and `code` is too common a name there — a gateway's error code,
+     * a country code — to be one of them. Here it is exactly one thing: the
+     * one-time code a customer confirms an order with (§6.2), and it is never
+     * written down.
+     *
+     * @return array<array-key, mixed>
+     */
+    protected function body(Request $request): array
+    {
+        if (! $request->isJson()) {
+            return [];
+        }
+
+        $body = (array) $request->json()->all();
+
+        if (array_key_exists('code', $body)) {
+            $body['code'] = PaymentLogRedactor::REDACTED;
+        }
+
+        return $body;
     }
 }

@@ -90,6 +90,11 @@ class HandleInertiaRequests extends Middleware
         // Billing rules, payment gateways and the payment log (§9, §26.4, §42).
         [PermissionModule::Payment, PermissionAction::View],
 
+        // Deciding, sending or settling a refund, each of which is worked from
+        // the returns desk (P6-12): these reach it without `order.view`.
+        [PermissionModule::Payment, PermissionAction::Approve],
+        [PermissionModule::Payment, PermissionAction::ReverseTransaction],
+
         // Whether customers hear about their own payments is its own decision,
         // and its own permission (§30).
         [PermissionModule::Sms, PermissionAction::View],

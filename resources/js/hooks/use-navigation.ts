@@ -362,7 +362,17 @@ export function useNavigation(): {
                               href: adminOrders(),
                               icon: ClipboardList,
                           },
-                          // The returns desk (P6-12): reading returns is reading orders.
+                      ]
+                    : []),
+                /*
+                 * The returns desk (P6-12): order staff who decide and count
+                 * goods back in, and finance staff who decide, send or settle
+                 * the money — each of whom works one of its steps.
+                 */
+                ...(permissions['order.view'] ||
+                permissions['payment.approve'] ||
+                permissions['payment.reverse_transaction']
+                    ? [
                           {
                               title: t('nav.returns'),
                               href: adminReturns(),

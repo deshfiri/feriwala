@@ -32,6 +32,7 @@ use App\Integrations\Sms\Data\SmsResult;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 
@@ -294,6 +295,25 @@ describe('the code that confirms it (§6.2)', function () {
 
         expect($this->order->statusHistory()->where('new_status', OrderStatus::Confirmed->value)->count())->toBe(1)
             ->and(WebhookDelivery::query()->where('event_type', WebhookEvent::OrderStatusChanged->value)->count())->toBe(1);
+    });
+
+    it('writes the code into no request log, and leaves no fingerprint it can be recovered from', function () {
+        $code = codTestCode();
+
+        codTestPost('orders/'.$this->order->public_id.'/confirmation', ['code' => $code])->assertOk();
+
+        $logged = (string) json_encode(DB::table('api_logs')->pluck('request_summary')->all());
+
+        expect($logged)->not->toContain($code)
+            ->and($logged)->toContain('[redacted]');
+
+        // A plain hash of the body would give the code back in a million
+        // tries; keyed with the application key, it gives nothing back.
+        $stored = DB::table('storefront_requests')->where('path', 'like', '%/confirmation')->value('fingerprint');
+        $request = implode("\n", ['POST', '/api/storefront/v1/orders/'.$this->order->public_id.'/confirmation', (string) json_encode(['code' => $code])]);
+
+        expect($stored)->not->toBe(hash('sha256', $request))
+            ->and($stored)->toBe(hash_hmac('sha256', $request, (string) config('app.key')));
     });
 
     it('never carries the code back to the storefront', function () {

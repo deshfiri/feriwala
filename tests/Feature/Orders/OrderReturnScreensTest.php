@@ -263,9 +263,26 @@ describe('the staff returns desk', function () {
                 ->where('can.approve', true)
                 ->where('can.receive', false));
 
+        // Finance staff settle refunds from here, so they may open it too.
+        $this->actingAs(testPlatformStaff(PlatformRole::PaymentManager))
+            ->get(route('admin.returns.show', $this->return->public_id))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('can.approve', false));
+
         // Owning the shop is never a way onto the desk.
         $this->actingAs($this->account->owner)->get(route('admin.returns.index'))->assertForbidden();
         $this->actingAs(testPlatformStaff(PlatformRole::KycManager))->get(route('admin.returns.index'))->assertForbidden();
+    });
+
+    it('refuses a step to somebody without its right before reading what they sent', function () {
+        // An order manager may not change stock: a 403, not a complaint about the form.
+        $this->actingAs(testPlatformStaff(PlatformRole::OrderManager))
+            ->post(route('admin.returns.receipt.store', $this->return->public_id), [])
+            ->assertForbidden();
+
+        $this->actingAs(testPlatformStaff(PlatformRole::InventoryManager))
+            ->post(route('admin.returns.approval.store', $this->return->public_id), [])
+            ->assertForbidden();
     });
 
     it('approves with a reason, refuses without one, and refuses staff who may not decide', function () {

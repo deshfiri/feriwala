@@ -57,11 +57,18 @@ class ReplayStorefrontWrite
             );
         }
 
-        $fingerprint = hash('sha256', implode("\n", [
+        /*
+         * Keyed, not a bare hash. A body can carry a one-time confirmation code
+         * (§6.2), and a plain SHA-256 of `{"code":"123456"}` is recovered by
+         * trying all million candidates in a moment by anybody who can read
+         * this table. Keyed with the application key, the stored value says
+         * whether two requests were the same and nothing about what they said.
+         */
+        $fingerprint = hash_hmac('sha256', implode("\n", [
             $request->getMethod(),
             $request->getPathInfo(),
             $request->getContent(),
-        ]));
+        ]), (string) config('app.key'));
 
         if (($kept = $this->kept($website, $key)) !== null) {
             return $this->replay($request, $kept, $fingerprint);
