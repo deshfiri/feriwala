@@ -10,6 +10,7 @@ use App\Integrations\Sms\Providers\LogSmsProvider;
 use App\Integrations\Sms\SmsProviderManager;
 use App\Support\Localization\Locale;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Log;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
@@ -122,6 +123,21 @@ describe('counting what a message costs', function () {
         );
 
         expect($result->accepted)->toBeTrue();
+    });
+
+    it('never writes what a message said in production, where a body carries live codes', function () {
+        Log::shouldReceive('channel')->with('sms')->andReturnSelf();
+        Log::shouldReceive('info')->once()->withArgs(
+            fn (string $message, array $context) => $context['body'] === '[withheld in production]',
+        );
+
+        app()->detectEnvironment(fn () => 'production');
+
+        try {
+            app(LogSmsProvider::class)->send(new SmsMessage('+8801712345678', 'Your code is 482913.'));
+        } finally {
+            app()->detectEnvironment(fn () => 'testing');
+        }
     });
 });
 

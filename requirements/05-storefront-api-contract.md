@@ -538,7 +538,9 @@ money is collected on delivery and settled in the ERP (§28) — no invoice is i
 - A wrong code, a spent code and a code that was never issued get **one** answer
   (`confirmation_refused`, `422`); a closed window gets `confirmation_expired` (`409`). Which it
   was must not tell somebody guessing whether an order exists.
-- Resends are held to a cooldown (`confirmation_code_too_soon`, `429`, with `retry_after`).
+- Resends are held to a cooldown (`confirmation_code_too_soon`, `429`, with `retry_after`), and an
+  order may be sent at most five codes in all (`confirmation_code_limit_reached`, `429`). A code
+  the SMS provider did not take is resent by the ERP on its own, within the same limits.
 - The window is the reservation's (§6.1.2). When it closes, the scheduler cancels the order and
   releases the stock exactly once.
 

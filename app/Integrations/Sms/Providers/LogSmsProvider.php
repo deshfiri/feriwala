@@ -5,6 +5,7 @@ namespace App\Integrations\Sms\Providers;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
 use App\Integrations\Sms\Data\SmsResult;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Log\LogManager;
 
 /**
@@ -14,11 +15,18 @@ use Illuminate\Log\LogManager;
  * merchant account exists. The message body is logged in full — that is the
  * point in development — but the recipient is masked even here, so a shared
  * development log does not become a list of phone numbers.
+ *
+ * **Never the body in production.** This is the configured default, so a
+ * production deployment that forgets to name a real provider lands here — and
+ * a body is where a verification or order-confirmation code travels. There it
+ * would be a log file full of live one-time codes (§6.2). The message is
+ * still recorded as not sent; what it said is not.
  */
 class LogSmsProvider implements SmsProvider
 {
     public function __construct(
         protected LogManager $log,
+        protected Application $app,
     ) {}
 
     public function send(SmsMessage $message): SmsResult
@@ -29,7 +37,7 @@ class LogSmsProvider implements SmsProvider
             'locale' => $message->locale->value,
             'segments' => $message->segments(),
             'unicode' => $message->isUnicode(),
-            'body' => $message->body,
+            'body' => $this->app->isProduction() ? '[withheld in production]' : $message->body,
         ]);
 
         return SmsResult::accepted('log-'.uniqid());
