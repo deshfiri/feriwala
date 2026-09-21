@@ -518,7 +518,8 @@ describe('the money', function () {
 
         expect($return->refresh()->refund_state)->toBe(ReturnRefundState::ManualReview)
             ->and($return->refund_amount_minor?->minorUnits)->toBe(260000)
-            ->and($return->refund_note)->toContain('Paid on delivery')
+            ->and($return->refund_note)->toBe('returns.refund_notes.cash_on_delivery')
+            ->and(__($return->refund_note, [], 'bn'))->not->toBe('returns.refund_notes.cash_on_delivery')
             ->and(RefundRequest::query()->count())->toBe(0);
 
         $payments = testPlatformStaff(PlatformRole::PaymentManager);

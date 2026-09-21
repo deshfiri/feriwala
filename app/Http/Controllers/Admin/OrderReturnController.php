@@ -168,7 +168,8 @@ class OrderReturnController extends Controller
                     'state' => $record->refund_state->value,
                     'tone' => $record->refund_state->tone(),
                     'amount' => $record->refund_amount_minor?->jsonSerialize(),
-                    'note' => $record->refund_note,
+                    // A key when the system wrote it, a person's words when a person did.
+                    'note' => $record->refund_note === null ? null : (string) __($record->refund_note),
                     'refunded_at' => $record->refunded_at?->toIso8601String(),
                     'request' => $refund === null ? null : [
                         'id' => $refund->public_id,

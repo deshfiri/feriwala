@@ -16,6 +16,12 @@ return [
         'cancelled' => 'The return was withdrawn.',
     ],
 
+    // Why a refund is settled by a person rather than sent to a gateway.
+    'refund_notes' => [
+        'cash_on_delivery' => 'Paid on delivery: the money never came through a gateway, so a person settles this refund and records how.',
+        'never_settled' => 'The payment for this order never settled, so there is nothing a gateway can give back. A person settles this.',
+    ],
+
     'statuses' => [
         'requested' => 'Requested',
         'approved' => 'Approved',

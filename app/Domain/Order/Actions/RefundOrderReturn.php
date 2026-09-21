@@ -151,11 +151,12 @@ class RefundOrderReturn
         $payment = $locked->order->payment;
 
         if ($locked->isCashOnDelivery() || $payment === null || ! $this->settled($payment)) {
+            // Kept as a translation key, so staff read why in their own language.
             $locked->forceFill([
                 'refund_state' => ReturnRefundState::ManualReview,
                 'refund_note' => $locked->isCashOnDelivery()
-                    ? 'Paid on delivery: the money never came through a gateway, so a person settles this refund and records how.'
-                    : 'The payment for this order never settled, so there is nothing a gateway can give back. A person settles this.',
+                    ? 'returns.refund_notes.cash_on_delivery'
+                    : 'returns.refund_notes.never_settled',
             ])->save();
         } elseif ($total->isZero()) {
             // Nothing was paid for these goods, so nothing goes back.
