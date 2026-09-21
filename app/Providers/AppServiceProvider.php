@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Billing\Models\RefundRequest;
+use App\Domain\Order\Actions\SyncReturnRefund;
 use App\Domain\Settings\SettingsRepository;
 use App\Listeners\RecordEmailVerification;
 use App\Listeners\SecureAccountAfterPasswordReset;
@@ -54,6 +56,18 @@ class AppServiceProvider extends ServiceProvider
          * reset is usually being done about (§6, P1-19).
          */
         Event::listen(PasswordReset::class, SecureAccountAfterPasswordReset::class);
+
+        /*
+         * A refund for returned goods tells its return what happened to the
+         * money (P6-12). Hung off the refund row itself because a decision, a
+         * gateway answer and the pending-refund sweep all move it, and one hook
+         * here reaches all three — and billing stays unaware that returns exist.
+         */
+        RefundRequest::updated(function (RefundRequest $refund): void {
+            if ($refund->wasChanged('status')) {
+                app(SyncReturnRefund::class)->handle($refund);
+            }
+        });
     }
 
     /**

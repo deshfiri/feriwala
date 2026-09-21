@@ -21,6 +21,7 @@ enum ReferencePrefix: string
     case Commission = 'CMS';
     case Fulfillment = 'FFL';
     case Shipment = 'SHP';
+    case GoodsReturn = 'RET';
 
     public function label(): string
     {
@@ -35,6 +36,7 @@ enum ReferencePrefix: string
             self::Commission => 'Commission',
             self::Fulfillment => 'Fulfillment',
             self::Shipment => 'Shipment',
+            self::GoodsReturn => 'Return',
         };
     }
 }
