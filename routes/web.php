@@ -1046,3 +1046,7 @@ Route::withoutMiddleware('web')
     });
 
 require __DIR__.'/settings.php';
+
+// The Supplier account domain's own routes (D25, P13-1) — a separate tree,
+// on the `supplier` guard throughout, never mixed into the group above.
+require __DIR__.'/supplier.php';

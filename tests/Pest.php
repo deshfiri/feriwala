@@ -106,6 +106,7 @@ pest()->group('permissions')->in('Feature/Permissions');
 pest()->group('self-scope')->in('Feature/SelfScope');
 pest()->group('security')->in('Feature/Security');
 pest()->group('concurrency')->in('Feature/Concurrency');
+pest()->group('supplier')->in('Feature/Supplier');
 
 /*
 |--------------------------------------------------------------------------
