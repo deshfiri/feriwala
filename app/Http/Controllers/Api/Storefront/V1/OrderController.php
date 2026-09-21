@@ -12,6 +12,7 @@ use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\UnpaidOrderCancellation;
+use App\Domain\Order\Exceptions\ConfirmationCodesExhausted;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
 use App\Domain\Order\Models\Order;
@@ -174,6 +175,8 @@ class OrderController extends StorefrontController
             $this->confirmationCodes->handle($record);
         } catch (ResendTooSoon $tooSoon) {
             return $this->refused($request, WebsiteOrderRefused::confirmationTooSoon($tooSoon->secondsRemaining));
+        } catch (ConfirmationCodesExhausted) {
+            return $this->refused($request, WebsiteOrderRefused::confirmationCodesExhausted());
         }
 
         return new JsonResponse($this->payload->for($record->refresh()), 202);

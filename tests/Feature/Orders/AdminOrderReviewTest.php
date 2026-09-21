@@ -304,6 +304,9 @@ describe('website orders (§18.5, P5-23, P6-14)', function () {
                 ->where('order.confirmation.code_outstanding', true)
                 ->where('order.confirmation.attempts_used', 1)
                 ->where('order.confirmation.attempts_allowed', VerificationCodes::MAX_ATTEMPTS)
+                // Issued here directly, so no text was tried.
+                ->where('order.confirmation.code_delivery', null)
+                ->where('order.confirmation.sends_allowed', SendCodConfirmationCode::MAX_SENDS)
                 // Nobody has paid, so staff may still cancel it, with a reason.
                 ->where('can.cancel', true));
 

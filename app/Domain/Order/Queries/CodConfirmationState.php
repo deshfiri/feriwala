@@ -41,6 +41,9 @@ class CodConfirmationState
      *     resend_available_in: int,
      *     attempts_used?: int,
      *     attempts_allowed?: int,
+     *     code_delivery?: string|null,
+     *     sends_used?: int,
+     *     sends_allowed?: int,
      * }|null  null when the order is not paid on delivery
      */
     public function for(Order $order, bool $forStaff = false): ?array
@@ -74,6 +77,11 @@ class CodConfirmationState
                 $this->codes->identifierFor($order),
             ),
             'attempts_allowed' => VerificationCodes::MAX_ATTEMPTS,
+            // Whether the last code reached the SMS provider, and how many of
+            // the order's codes are spent — the delivery, never the message.
+            'code_delivery' => $this->codes->deliveryState($order),
+            'sends_used' => $this->codes->sendsUsed($order),
+            'sends_allowed' => SendCodConfirmationCode::MAX_SENDS,
         ];
     }
 

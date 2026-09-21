@@ -2,10 +2,12 @@
 
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
+use App\Domain\Billing\Actions\SettleRefund;
 use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
 use App\Domain\Order\Actions\ExpireUnpaidOrders;
+use App\Domain\Order\Actions\RetryCodConfirmationCodes;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
@@ -234,6 +236,38 @@ Schedule::call(fn () => app(ExpireUnconfirmedCodOrders::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Close cash-on-delivery orders nobody confirmed (P6-10)');
+
+/*
+ * Confirmation codes the SMS provider did not take (§6.2, P6-10). Only those:
+ * a code that reached the provider is never resent unasked. Each retry is an
+ * ordinary send, held to the resend cooldown and the per-order ceiling.
+ */
+Schedule::call(fn () => app(RetryCodConfirmationCodes::class)->handle())
+    ->name('cod-confirmation-code-retry')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Resend cash-on-delivery codes the SMS provider did not take (P6-10)');
+
+/*
+ * Refunds a gateway accepted and has not yet confirmed (§26.3, P6-12). Asks
+ * the provider what became of each and moves it forward only on an answer;
+ * an unreachable provider leaves it exactly where it was. A refund that
+ * failed outright is never re-sent from here: sending money is a person's
+ * decision, behind a confirmed password, and stays one.
+ */
+Schedule::call(function (): void {
+    $settle = app(SettleRefund::class);
+
+    foreach ($settle->pending() as $refund) {
+        $settle->handle($refund);
+    }
+})
+    ->name('refund-settlement-sweep')
+    ->everyFifteenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Ask gateways what became of refunds they accepted (§26.3)');
 
 /*
  * The §16.4 website clock: grace, expiry, low balance, renewals (P5-11, P5-15).

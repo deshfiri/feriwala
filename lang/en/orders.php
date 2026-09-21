@@ -239,6 +239,14 @@ return [
             'resend' => 'Another code',
             'resend_in' => 'In :seconds seconds',
             'resend_now' => 'Can be sent now',
+            'delivery' => 'Last code',
+            'delivery_states' => [
+                'sent' => 'Reached the SMS provider',
+                'failed' => 'The SMS provider did not take it; it will be retried',
+                'none' => 'None sent yet',
+            ],
+            'sends' => 'Codes sent',
+            'sends_value' => ':used of :allowed sent',
         ],
         'fields' => [
             'account' => 'Business',

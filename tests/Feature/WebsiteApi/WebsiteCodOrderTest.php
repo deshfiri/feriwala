@@ -10,6 +10,7 @@ use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
+use App\Domain\Order\Actions\RetryCodConfirmationCodes;
 use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
@@ -29,6 +30,7 @@ use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
 use App\Integrations\Sms\Data\SmsResult;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -367,6 +369,106 @@ describe('the code that confirms it (§6.2)', function () {
         codTestPost('orders/'.$this->order->public_id.'/confirmation', ['code' => $code])
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'order_not_awaiting_confirmation');
+    });
+});
+
+describe('how many codes an order may have (§6.2)', function () {
+    beforeEach(function () {
+        codTestSubmit()->assertCreated();
+        $this->order = Order::query()->sole();
+    });
+
+    it('stops sending codes once the order has had its share', function () {
+        // One at placement; the rest asked for, each after the cooldown.
+        for ($send = 1; $send < SendCodConfirmationCode::MAX_SENDS; $send++) {
+            $this->travel(VerificationCodes::RESEND_COOLDOWN_SECONDS + 1)->seconds();
+
+            codTestPost('orders/'.$this->order->public_id.'/confirmation/code')->assertStatus(202);
+        }
+
+        $this->travel(VerificationCodes::RESEND_COOLDOWN_SECONDS + 1)->seconds();
+
+        codTestPost('orders/'.$this->order->public_id.'/confirmation/code')
+            ->assertStatus(429)
+            ->assertJsonPath('error.code', 'confirmation_code_limit_reached');
+
+        expect($this->sent)->toHaveCount(SendCodConfirmationCode::MAX_SENDS)
+            // The window still runs; only the codes are spent.
+            ->and($this->order->refresh()->status)->toBe(OrderStatus::CustomerVerificationPending);
+    });
+
+    it('sends again a code the provider did not take, and only that', function () {
+        $codes = app(SendCodConfirmationCode::class);
+
+        expect($codes->deliveryState($this->order))->toBe(SendCodConfirmationCode::DELIVERY_SENT)
+            // Reached the provider: the sweep leaves it alone.
+            ->and(app(RetryCodConfirmationCodes::class)->handle())->toBe(['retried' => 0, 'sent' => 0]);
+
+        // A resend the provider refuses.
+        app()->instance(SmsProvider::class, new class implements SmsProvider
+        {
+            public function send(SmsMessage $message): SmsResult
+            {
+                return SmsResult::failed('The provider is down.');
+            }
+
+            public function balance(): ?string
+            {
+                return null;
+            }
+
+            public function name(): string
+            {
+                return 'down';
+            }
+        });
+
+        $this->travel(VerificationCodes::RESEND_COOLDOWN_SECONDS + 1)->seconds();
+        app(SendCodConfirmationCode::class)->handle($this->order);
+        $failed = $this->order;
+
+        expect(app(SendCodConfirmationCode::class)->deliveryState($failed))->toBe(SendCodConfirmationCode::DELIVERY_FAILED);
+
+        // The provider recovers; once the cooldown has passed, the sweep resends.
+        app()->instance(SmsProvider::class, new class($this->sent) implements SmsProvider
+        {
+            public function __construct(private Collection $sent) {}
+
+            public function send(SmsMessage $message): SmsResult
+            {
+                $this->sent->push($message);
+
+                return SmsResult::accepted('test');
+            }
+
+            public function balance(): ?string
+            {
+                return null;
+            }
+
+            public function name(): string
+            {
+                return 'spy';
+            }
+        });
+
+        $this->travel(VerificationCodes::RESEND_COOLDOWN_SECONDS + 1)->seconds();
+
+        expect(app(RetryCodConfirmationCodes::class)->handle())->toBe(['retried' => 1, 'sent' => 1])
+            ->and(app(SendCodConfirmationCode::class)->deliveryState($failed))->toBe(SendCodConfirmationCode::DELIVERY_SENT)
+            // And a second pass has nothing left to do.
+            ->and(app(RetryCodConfirmationCodes::class)->handle())->toBe(['retried' => 0, 'sent' => 0]);
+    });
+
+    it('is swept by the scheduler, beside the refunds gateways have not yet confirmed', function () {
+        Artisan::call('schedule:list');
+
+        // Read once: the buffer empties as it is read.
+        $schedule = Artisan::output();
+
+        // The list trims long descriptions to the terminal, so their openings.
+        expect($schedule)->toContain('Resend cash-on-delivery codes')
+            ->and($schedule)->toContain('Ask gateways what became of refunds');
     });
 });
 

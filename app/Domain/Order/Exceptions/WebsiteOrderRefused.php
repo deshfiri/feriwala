@@ -119,6 +119,15 @@ class WebsiteOrderRefused extends RuntimeException
         ]);
     }
 
+    /**
+     * Every code this order may be sent has been sent (§6.2). The window
+     * still runs; staff can see why no more are coming.
+     */
+    public static function confirmationCodesExhausted(): self
+    {
+        return new self(429, 'confirmation_code_limit_reached', 'No more codes can be sent for this order.');
+    }
+
     public static function couponNotApplicable(string $code): self
     {
         return new self(422, 'coupon_not_applicable', 'Coupons are not available on this website.', ['coupon_code' => $code]);

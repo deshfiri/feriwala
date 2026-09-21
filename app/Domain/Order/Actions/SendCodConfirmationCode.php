@@ -4,7 +4,9 @@ namespace App\Domain\Order\Actions;
 
 use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Account\VerificationCodes;
+use App\Domain\Inventory\ReservationWindows;
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Exceptions\ConfirmationCodesExhausted;
 use App\Domain\Order\Models\Order;
 use App\Domain\Website\Actions\PublishWebsiteEvent;
 use App\Domain\Website\Enums\WebhookEvent;
@@ -12,7 +14,9 @@ use App\Domain\Website\Models\Website;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
 use App\Support\Localization\Locale;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Contracts\Translation\Translator;
+use Throwable;
 
 /**
  * Send a website customer the code that confirms their cash-on-delivery order
@@ -31,15 +35,31 @@ class SendCodConfirmationCode
 {
     public const PURPOSE = 'cod-order';
 
+    /**
+     * Codes one order may be sent, first and resends together.
+     *
+     * Each code has five guesses; without a ceiling on codes, "resend" is an
+     * unlimited supply of guesses at a million possibilities, and an unlimited
+     * supply of texts at Feriwala's cost to whoever the number belongs to.
+     */
+    public const MAX_SENDS = 5;
+
+    /** Whether the last code reached the provider. */
+    public const DELIVERY_SENT = 'sent';
+
+    public const DELIVERY_FAILED = 'failed';
+
     public function __construct(
         protected VerificationCodes $codes,
         protected SmsProvider $sms,
         protected PublishWebsiteEvent $events,
         protected Translator $translator,
+        protected Cache $cache,
     ) {}
 
     /**
      * @throws ResendTooSoon when the last one was sent moments ago
+     * @throws ConfirmationCodesExhausted when this order has had every code it may
      */
     public function handle(Order $order, ?Locale $locale = null): void
     {
@@ -49,6 +69,10 @@ class SendCodConfirmationCode
 
         $identifier = $this->identifierFor($order);
 
+        if ($this->sendsUsed($order) >= self::MAX_SENDS) {
+            throw new ConfirmationCodesExhausted;
+        }
+
         if (! $this->codes->canIssue(self::PURPOSE, $identifier)) {
             throw ResendTooSoon::wait($this->codes->secondsUntilResend(self::PURPOSE, $identifier));
         }
@@ -56,18 +80,71 @@ class SendCodConfirmationCode
         $code = $this->codes->issue(self::PURPOSE, $identifier);
         $locale ??= Locale::English;
 
-        $this->sms->send(new SmsMessage(
-            to: (string) ($order->customer['mobile'] ?? ''),
-            body: $this->translator->get(
-                'sms.templates.cod_confirmation',
-                ['code' => $code, 'reference' => $order->reference],
-                $locale->value,
-            ),
-            locale: $locale,
-            event: 'cod_confirmation',
-        ));
+        // Counted before the provider is asked: a send that fails still spent
+        // one of the order's codes, or a failing provider would be a way round
+        // the ceiling.
+        $this->cache->put($this->sendsKey($order), $this->sendsUsed($order) + 1, $this->memory());
+
+        try {
+            $result = $this->sms->send(new SmsMessage(
+                to: (string) ($order->customer['mobile'] ?? ''),
+                body: $this->translator->get(
+                    'sms.templates.cod_confirmation',
+                    ['code' => $code, 'reference' => $order->reference],
+                    $locale->value,
+                ),
+                locale: $locale,
+                event: 'cod_confirmation',
+            ));
+        } catch (Throwable $exception) {
+            $this->recordDelivery($order, self::DELIVERY_FAILED);
+
+            throw $exception;
+        }
+
+        $this->recordDelivery($order, $result->accepted ? self::DELIVERY_SENT : self::DELIVERY_FAILED);
 
         $this->tellTheShop($order);
+    }
+
+    /**
+     * Whether the last code reached the SMS provider — `sent`, `failed`, or
+     * null when none has been tried. Never the code, never the message.
+     */
+    public function deliveryState(Order $order): ?string
+    {
+        $state = $this->cache->get($this->deliveryKey($order));
+
+        return is_string($state) ? $state : null;
+    }
+
+    public function sendsUsed(Order $order): int
+    {
+        return (int) $this->cache->get($this->sendsKey($order), 0);
+    }
+
+    protected function recordDelivery(Order $order, string $state): void
+    {
+        $this->cache->put($this->deliveryKey($order), $state, $this->memory());
+    }
+
+    /**
+     * Kept for the longest a confirmation window can be (a week), so the
+     * ceiling holds for as long as the order can still be confirmed.
+     */
+    protected function memory(): int
+    {
+        return ReservationWindows::MAXIMUM_COD_HOURS * 3600;
+    }
+
+    protected function sendsKey(Order $order): string
+    {
+        return 'cod-confirmation:sends:'.$order->public_id;
+    }
+
+    protected function deliveryKey(Order $order): string
+    {
+        return 'cod-confirmation:delivery:'.$order->public_id;
     }
 
     /**

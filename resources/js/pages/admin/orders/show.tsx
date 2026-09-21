@@ -89,6 +89,10 @@ export type AdminOrderDetail = {
         resend_available_in: number;
         attempts_used: number;
         attempts_allowed: number;
+        /** Whether the last code reached the SMS provider: sent, failed, or none tried. */
+        code_delivery: 'sent' | 'failed' | null;
+        sends_used: number;
+        sends_allowed: number;
     } | null;
     history: {
         previous_status: string | null;
@@ -486,6 +490,34 @@ export default function AdminOrder({ order, can }: Props) {
                                                 allowed: String(
                                                     order.confirmation
                                                         .attempts_allowed,
+                                                ),
+                                            },
+                                        )}
+                                    </Row>
+                                    <Row
+                                        label={t(
+                                            'orders.admin.confirmation.delivery',
+                                        )}
+                                    >
+                                        {t(
+                                            `orders.admin.confirmation.delivery_states.${order.confirmation.code_delivery ?? 'none'}`,
+                                        )}
+                                    </Row>
+                                    <Row
+                                        label={t(
+                                            'orders.admin.confirmation.sends',
+                                        )}
+                                    >
+                                        {t(
+                                            'orders.admin.confirmation.sends_value',
+                                            {
+                                                used: String(
+                                                    order.confirmation
+                                                        .sends_used,
+                                                ),
+                                                allowed: String(
+                                                    order.confirmation
+                                                        .sends_allowed,
                                                 ),
                                             },
                                         )}

@@ -229,6 +229,9 @@ describe('admin order page', () => {
                         resend_available_in: 0,
                         attempts_used: 2,
                         attempts_allowed: 5,
+                        code_delivery: 'failed',
+                        sends_used: 1,
+                        sends_allowed: 5,
                     },
                 })}
                 can={{ cancel: true }}
@@ -246,6 +249,12 @@ describe('admin order page', () => {
         ).toBeInTheDocument();
         expect(
             screen.getByText('orders.admin.confirmation.resend_now'),
+        ).toBeInTheDocument();
+        // Whether the text went, said in words — never what it said.
+        expect(
+            screen.getByText(
+                'orders.admin.confirmation.delivery_states.failed',
+            ),
         ).toBeInTheDocument();
 
         // Staff see the shape of the code's life, never the code. Six digits
