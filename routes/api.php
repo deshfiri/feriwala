@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Storefront\V1\CustomerController;
 use App\Http\Controllers\Api\Storefront\V1\InventoryController;
 use App\Http\Controllers\Api\Storefront\V1\OrderController;
 use App\Http\Controllers\Api\Storefront\V1\ProductController;
+use App\Http\Controllers\Api\Storefront\V1\ReturnController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -82,6 +83,16 @@ Route::prefix('storefront/v1')
                     ->name('orders.confirmation.code');
                 Route::post('orders/{order}/confirmation', [OrderController::class, 'confirm'])
                     ->name('orders.confirmation.store');
+            });
+
+            /*
+             * A customer asking to send something back (contract §6.3, P6-12).
+             * A request only: approval, receipt, what happens to the goods and
+             * any refund are decided in the ERP.
+             */
+            Route::middleware(['storefront.rate:write', 'storefront.scope:returns:write', 'storefront.idempotent'])->group(function () {
+                Route::post('orders/{order}/return-requests', [ReturnController::class, 'store'])
+                    ->name('orders.return-requests.store');
             });
 
             // The website's own customers (contract §6.2).

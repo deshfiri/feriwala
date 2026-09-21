@@ -6,6 +6,7 @@ use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Order\Enums\OrderPaymentState;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
+use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderStatusChange;
 
 /**
@@ -66,6 +67,11 @@ class WebsiteOrderPayload
             ],
             'stock_reservation' => $this->reservation($order),
             'confirmation' => $this->confirmation($order),
+            'returnable' => $this->returnable($order),
+            'returns' => app(ReturnEligibility::class)->existingFor($order)
+                ->map(fn (OrderReturn $return) => app(ReturnPayload::class)->for($return))
+                ->values()
+                ->all(),
             'timeline' => $order->statusHistory
                 ->filter(fn (OrderStatusChange $change) => $change->public_note !== null)
                 ->map(fn (OrderStatusChange $change) => [
@@ -77,6 +83,29 @@ class WebsiteOrderPayload
                 ])
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * What the customer may still send back, and until when (contract §6.3).
+     *
+     * Per SKU, net of what earlier returns already claim, so a returns page
+     * never offers a quantity the ERP would refuse.
+     *
+     * @return array{eligible: bool, reason: string|null, window_closes_at: string|null, lines: array<int, array{sku: string, returnable: int}>}
+     */
+    protected function returnable(Order $order): array
+    {
+        $report = app(ReturnEligibility::class)->for($order);
+
+        return [
+            'eligible' => $report['eligible'],
+            'reason' => $report['refusal'],
+            'window_closes_at' => $report['window_closes_at'],
+            'lines' => array_map(fn (array $line) => [
+                'sku' => $line['sku'],
+                'returnable' => $report['eligible'] ? $line['returnable'] : 0,
+            ], $report['lines']),
         ];
     }
 

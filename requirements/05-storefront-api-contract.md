@@ -598,6 +598,33 @@ Both create a **request**, never an executed action. Approval, inspection, stock
 any refund payment happen in the ERP under the roles that own them (§18.2, §26.3). A storefront can
 ask; it can never move money or stock.
 
+**`return-requests`** (scope `returns:write`, idempotent like every write):
+
+```json
+{
+    "reason": "not_as_described",
+    "lines": [{ "sku": "FW-1043-NVY-M", "quantity": 1 }],
+    "customer_note": "The colour is not what the picture showed.",
+    "evidence": ["https://shop.example.com/uploads/photo-1.jpg"]
+}
+```
+
+- `reason` is one of `damaged`, `wrong_item`, `not_as_described`, `missing_parts`, `changed_mind`,
+  `other`.
+- Only a **delivered or completed** order, inside the return window (seven days from delivery by
+  default), for lines it sold and quantities not already claimed by an earlier return. Refusals:
+  `order_not_returnable` (409), `return_window_closed` (409), `quantity_not_returnable` (422, with
+  `returnable`), `line_not_on_order` (422), `nothing_returnable` (422).
+- `201` with the return: `status` (`requested`, `approved`, `rejected`, `received`, `refunded`,
+  `cancelled`), each line's `quantity`, `approved_quantity` and `received_quantity`, and
+  `refund: { state, amount, refunded_at }`. Never a warehouse or what was done with the goods.
+- Reading an order back carries `returnable` (what may still be sent back, per SKU, and until when)
+  and `returns` (every return, newest first, with its customer-facing timeline).
+
+**`refund-requests`** — a refund **without** goods coming back — is not served in this release. Who
+decides such a refund and how its amount is set have not been decided; a refund for returned goods
+follows the return and needs no separate request.
+
 ---
 
 ## 7. Webhooks — ERP notifies storefront

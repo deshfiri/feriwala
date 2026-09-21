@@ -42,6 +42,7 @@ use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Api\Storefront\V1\CustomerController as StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\V1\OrderController as StorefrontOrderController;
+use App\Http\Controllers\Api\Storefront\V1\ReturnController as StorefrontReturnController;
 use App\Http\Controllers\Erp\WebsiteCategoryController;
 use App\Http\Controllers\Erp\WebsiteProductController;
 use App\Models\User;
@@ -119,11 +120,12 @@ function catalogueApiWebsiteCopyRoutes(): array
 
 /**
  * The writes the storefront contract allows under `api/`, named one by one with
- * the controller that serves them (contract §6.1, §6.2).
+ * the controller that serves them (contract §6.1, §6.2, §6.3).
  *
- * Orders and customers, and nothing else: no product, category, brand or
- * attribute is writable through this surface, which is what the test below
- * proves by fingerprinting the catalogue around a submitted order.
+ * Orders, their confirmation and returns, and customers — nothing else: no
+ * product, category, brand or attribute is writable through this surface,
+ * which is what the test below proves by fingerprinting the catalogue around a
+ * submitted order.
  *
  * @return array<string, class-string>
  */
@@ -133,6 +135,9 @@ function catalogueApiStorefrontWriteRoutes(): array
         'storefront.v1.orders.store' => StorefrontOrderController::class,
         'storefront.v1.orders.payment-session' => StorefrontOrderController::class,
         'storefront.v1.orders.cancel' => StorefrontOrderController::class,
+        'storefront.v1.orders.confirmation.code' => StorefrontOrderController::class,
+        'storefront.v1.orders.confirmation.store' => StorefrontOrderController::class,
+        'storefront.v1.orders.return-requests.store' => StorefrontReturnController::class,
         'storefront.v1.customers.store' => StorefrontCustomerController::class,
         'storefront.v1.customers.update' => StorefrontCustomerController::class,
     ];
