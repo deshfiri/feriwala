@@ -1,9 +1,11 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import {
+    Banknote,
     Bell,
     Boxes,
     ClipboardList,
     Coins,
+    CreditCard,
     LayoutGrid,
     LogOut,
     PackageCheck,
@@ -11,6 +13,7 @@ import {
     ShieldCheck,
     Truck,
     UserCog,
+    Wallet,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import AppearanceToggleTab from '@/components/appearance-tabs';
@@ -26,9 +29,12 @@ import { index as listings } from '@/routes/supplier/listings';
 import { index as notifications } from '@/routes/supplier/notifications';
 import { index as offers } from '@/routes/supplier/offers';
 import { index as payables } from '@/routes/supplier/payables';
+import { index as payoutMethods } from '@/routes/supplier/payout-methods';
 import { edit as profile } from '@/routes/supplier/profile';
 import { edit as security } from '@/routes/supplier/security';
 import { index as stock } from '@/routes/supplier/stock';
+import { show as wallet } from '@/routes/supplier/wallet';
+import { index as withdrawals } from '@/routes/supplier/withdrawals';
 
 type SupplierAccount = {
     business_name: string;
@@ -104,6 +110,24 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                       title: t('supplier.nav.payables'),
                       href: payables(),
                       icon: Coins,
+                  },
+                  {
+                      id: 'wallet',
+                      title: t('supplier.nav.wallet'),
+                      href: wallet(),
+                      icon: Wallet,
+                  },
+                  {
+                      id: 'payout-methods',
+                      title: t('supplier.nav.payout_methods'),
+                      href: payoutMethods(),
+                      icon: CreditCard,
+                  },
+                  {
+                      id: 'withdrawals',
+                      title: t('supplier.nav.withdrawals'),
+                      href: withdrawals(),
+                      icon: Banknote,
                   },
               ]
             : []),

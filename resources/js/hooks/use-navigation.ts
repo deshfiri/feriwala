@@ -1,5 +1,6 @@
 import { usePage } from '@inertiajs/react';
 import {
+    Banknote,
     Boxes,
     ClipboardList,
     CreditCard,
@@ -57,6 +58,8 @@ import { index as supplierApplications } from '@/routes/admin/suppliers';
 import { index as supplierListings } from '@/routes/admin/supplier-listings';
 import { index as supplierOffers } from '@/routes/admin/supplier-offers';
 import { index as supplierStock } from '@/routes/admin/supplier-stock';
+import { index as supplierWallets } from '@/routes/admin/supplier-wallets';
+import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawals';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
@@ -581,6 +584,20 @@ export function useNavigation(): {
                               title: t('nav.supplier_payables'),
                               href: supplierPayables(),
                               icon: Coins,
+                          },
+                          {
+                              title: t('nav.supplier_wallets'),
+                              href: supplierWallets(),
+                              icon: WalletIcon,
+                          },
+                      ]
+                    : []),
+                ...(permissions['withdrawal.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_withdrawals'),
+                              href: supplierWithdrawals(),
+                              icon: Banknote,
                           },
                       ]
                     : []),

@@ -408,6 +408,8 @@ describe('supplier administration navigation', () => {
         'nav.supplier_stock',
         'nav.supplier_allocations',
         'nav.supplier_payables',
+        'nav.supplier_wallets',
+        'nav.supplier_withdrawals',
     ];
 
     const renderFor = (props: Record<string, unknown>) => {
@@ -433,6 +435,7 @@ describe('supplier administration navigation', () => {
                 'supplier_pricing.view': true,
                 'supplier_stock.view': true,
                 'supplier_payable.view': true,
+                'withdrawal.view': true,
             },
             account: null,
         });
@@ -448,6 +451,7 @@ describe('supplier administration navigation', () => {
                 'supplier_pricing.view': false,
                 'supplier_stock.view': false,
                 'supplier_payable.view': false,
+                'withdrawal.view': false,
             },
             account: null,
         });
@@ -461,6 +465,41 @@ describe('supplier administration navigation', () => {
         expect(titles).not.toContain('nav.suppliers');
         expect(titles).not.toContain('nav.supplier_stock');
         expect(titles).not.toContain('nav.supplier_payables');
+        expect(titles).not.toContain('nav.supplier_wallets');
+        expect(titles).not.toContain('nav.supplier_withdrawals');
+    });
+
+    /*
+     * Regression for 888a6a9 / P13-23-P13-24: supplier_payable.view and
+     * withdrawal.view are independent gates — a role holding one and not
+     * the other sees only the door its own permission opens.
+     */
+    it('gates the withdrawal queue on withdrawal.view, independent of supplier_payable.view', () => {
+        renderFor({
+            permissions: {
+                'supplier_payable.view': true,
+                'withdrawal.view': false,
+            },
+            account: null,
+        });
+
+        expect(titles).toContain('nav.supplier_payables');
+        expect(titles).toContain('nav.supplier_wallets');
+        expect(titles).not.toContain('nav.supplier_withdrawals');
+    });
+
+    it('gates the wallet screen on supplier_payable.view even when withdrawal.view is held', () => {
+        renderFor({
+            permissions: {
+                'supplier_payable.view': false,
+                'withdrawal.view': true,
+            },
+            account: null,
+        });
+
+        expect(titles).not.toContain('nav.supplier_payables');
+        expect(titles).not.toContain('nav.supplier_wallets');
+        expect(titles).toContain('nav.supplier_withdrawals');
     });
 
     it('offers a partner none of it', () => {

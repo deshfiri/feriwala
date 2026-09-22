@@ -15,6 +15,9 @@ const english = {
             stock: 'Stock & availability',
             allocations: 'Allocated orders',
             payables: 'Payables',
+            wallet: 'Wallet',
+            payout_methods: 'Payout methods',
+            withdrawals: 'Withdrawals',
             notifications: 'Notifications',
             profile: 'Profile',
             security: 'Security',
@@ -36,6 +39,9 @@ const bangla = {
             stock: 'মজুত ও প্রাপ্যতা',
             allocations: 'বরাদ্দকৃত অর্ডার',
             payables: 'পাওনা',
+            wallet: 'ওয়ালেট',
+            payout_methods: 'পরিশোধ পদ্ধতি',
+            withdrawals: 'উত্তোলন',
             notifications: 'বিজ্ঞপ্তি',
             profile: 'প্রোফাইল',
             security: 'নিরাপত্তা',
@@ -97,6 +103,9 @@ const OPERATIONAL_ONLY = [
     'Stock & availability',
     'Allocated orders',
     'Payables',
+    'Wallet',
+    'Payout methods',
+    'Withdrawals',
 ];
 
 afterEach(() => {
@@ -177,6 +186,9 @@ describe('the supplier portal navigation', () => {
             'মজুত ও প্রাপ্যতা',
             'বরাদ্দকৃত অর্ডার',
             'পাওনা',
+            'ওয়ালেট',
+            'পরিশোধ পদ্ধতি',
+            'উত্তোলন',
             'বিজ্ঞপ্তি',
         ]) {
             expect(screen.getByRole('link', { name })).toBeInTheDocument();

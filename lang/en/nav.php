@@ -62,6 +62,8 @@ return [
     'supplier_stock' => 'Supplier availability',
     'supplier_allocations' => 'Supplier allocations',
     'supplier_payables' => 'Supplier payables',
+    'supplier_wallets' => 'Supplier wallets',
+    'supplier_withdrawals' => 'Supplier withdrawals',
 
     'search' => [
         'open' => 'Search pages',

@@ -56,6 +56,8 @@ return [
     'supplier_stock' => 'সাপ্লায়ারের প্রাপ্যতা',
     'supplier_allocations' => 'সাপ্লায়ার বরাদ্দ',
     'supplier_payables' => 'সাপ্লায়ার পাওনা',
+    'supplier_wallets' => 'সাপ্লায়ার ওয়ালেট',
+    'supplier_withdrawals' => 'সাপ্লায়ার উত্তোলন',
 
     'search' => [
         'open' => 'পেজ খুঁজুন',
