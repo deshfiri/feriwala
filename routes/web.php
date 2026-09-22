@@ -43,6 +43,8 @@ use App\Http\Controllers\Admin\SupplierListingController;
 use App\Http\Controllers\Admin\SupplierOfferController;
 use App\Http\Controllers\Admin\SupplierPayableController;
 use App\Http\Controllers\Admin\SupplierStockController;
+use App\Http\Controllers\Admin\SupplierWalletController;
+use App\Http\Controllers\Admin\SupplierWithdrawalController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
@@ -527,6 +529,27 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('supplier-allocations/{item}', [SupplierAllocationController::class, 'show'])->name('supplier-allocations.show');
         Route::get('supplier-payables', [SupplierPayableController::class, 'index'])->name('supplier-payables.index');
         Route::get('supplier-payables/{payable}', [SupplierPayableController::class, 'show'])->name('supplier-payables.show');
+        Route::post('supplier-payables/{payable}/settle', [SupplierPayableController::class, 'settle'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-payables.settle');
+        Route::post('supplier-payables/bulk-settle', [SupplierPayableController::class, 'bulkSettle'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-payables.bulk-settle');
+
+        // Supplier wallets, read-only (D25, P13-23).
+        Route::get('supplier-wallets', [SupplierWalletController::class, 'index'])->name('supplier-wallets.index');
+        Route::get('supplier-wallets/{wallet}', [SupplierWalletController::class, 'show'])->name('supplier-wallets.show');
+
+        // Supplier withdrawals (D25, P13-24).
+        Route::get('supplier-withdrawals', [SupplierWithdrawalController::class, 'index'])->name('supplier-withdrawals.index');
+        Route::get('supplier-withdrawals/{withdrawal}', [SupplierWithdrawalController::class, 'show'])->name('supplier-withdrawals.show');
+        Route::post('supplier-withdrawals/{withdrawal}/approve', [SupplierWithdrawalController::class, 'approve'])->name('supplier-withdrawals.approve');
+        Route::post('supplier-withdrawals/{withdrawal}/reject', [SupplierWithdrawalController::class, 'reject'])->name('supplier-withdrawals.reject');
+        Route::post('supplier-withdrawals/{withdrawal}/process', [SupplierWithdrawalController::class, 'process'])->name('supplier-withdrawals.process');
+        Route::post('supplier-withdrawals/{withdrawal}/paid', [SupplierWithdrawalController::class, 'markPaid'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-withdrawals.paid');
+        Route::post('supplier-withdrawals/{withdrawal}/failed', [SupplierWithdrawalController::class, 'markFailed'])->name('supplier-withdrawals.failed');
 
         /*
          * One trading business, in full (P1-79).

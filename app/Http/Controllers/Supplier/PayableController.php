@@ -55,6 +55,10 @@ class PayableController extends Controller
                     'quantity' => $reversal->quantity,
                     'amount' => $reversal->amount_minor->jsonSerialize(),
                     'reason' => $reversal->reason,
+                    // Set only once the reversal actually clawed money back
+                    // from the wallet — null for a reversal of a payable
+                    // that had not yet settled, which moved no money.
+                    'wallet_reference' => $reversal->settlement_reversal_reference,
                     'created_at' => $reversal->created_at->toIso8601String(),
                 ])->all(),
                 'history' => $model->statusHistory->map(fn ($change) => [
@@ -89,6 +93,7 @@ class PayableController extends Controller
             'payment_settled_at' => $payable->payment_settled_at?->toIso8601String(),
             'eligible_at' => $payable->eligible_at?->toIso8601String(),
             'settled_at' => $payable->settled_at?->toIso8601String(),
+            'settlement_reference' => $payable->settlement_reference,
             'created_at' => $payable->created_at->toIso8601String(),
         ];
     }

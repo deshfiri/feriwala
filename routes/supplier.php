@@ -15,7 +15,10 @@ use App\Http\Controllers\Supplier\KycController;
 use App\Http\Controllers\Supplier\ListingController;
 use App\Http\Controllers\Supplier\OfferController;
 use App\Http\Controllers\Supplier\PayableController;
+use App\Http\Controllers\Supplier\PayoutMethodController;
 use App\Http\Controllers\Supplier\StockController;
+use App\Http\Controllers\Supplier\WalletController;
+use App\Http\Controllers\Supplier\WithdrawalController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -121,6 +124,20 @@ Route::prefix('supplier')
                 Route::get('allocations/{item}', [AllocationController::class, 'show'])->name('allocations.show');
                 Route::get('payables', [PayableController::class, 'index'])->name('payables.index');
                 Route::get('payables/{payable}', [PayableController::class, 'show'])->name('payables.show');
+
+                // Wallet, payout methods and withdrawals (D25, P13-23, P13-24).
+                Route::get('wallet', [WalletController::class, 'show'])->name('wallet.show');
+                Route::get('wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
+
+                Route::get('payout-methods', [PayoutMethodController::class, 'index'])->name('payout-methods.index');
+                Route::post('payout-methods', [PayoutMethodController::class, 'store'])->name('payout-methods.store');
+                Route::put('payout-methods/{method}', [PayoutMethodController::class, 'update'])->name('payout-methods.update');
+                Route::post('payout-methods/{method}/archive', [PayoutMethodController::class, 'archive'])->name('payout-methods.archive');
+
+                Route::get('withdrawals', [WithdrawalController::class, 'index'])->name('withdrawals.index');
+                Route::get('withdrawals/create', [WithdrawalController::class, 'create'])->name('withdrawals.create');
+                Route::post('withdrawals', [WithdrawalController::class, 'store'])->name('withdrawals.store');
+                Route::get('withdrawals/{withdrawal}', [WithdrawalController::class, 'show'])->name('withdrawals.show');
             });
         });
     });

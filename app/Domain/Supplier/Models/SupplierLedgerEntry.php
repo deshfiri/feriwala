@@ -172,4 +172,13 @@ class SupplierLedgerEntry extends Model
     {
         return $this->credit_minor->isPositive();
     }
+
+    /**
+     * The amount, whichever side it landed on. Zero for a bucket-only entry
+     * that moved neither (a pure recovery record, for instance).
+     */
+    public function amount(): Money
+    {
+        return $this->isCredit() ? $this->credit_minor : $this->debit_minor;
+    }
 }
