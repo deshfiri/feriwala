@@ -39,12 +39,19 @@ beforeEach(function () {
 
 /**
  * @param  array<int, array{0: int, 1: int}>  $bands  [min quantity, unit price minor]
+ *
+ * The pair is still given in minor units, as every existing call site already
+ * reads; converted to the Taka decimal string the HTTP form now submits
+ * (§36.1), so callers do not need to change.
  */
 function catalogTierPayload(array $bands, ?string $variantId = null): array
 {
     return [
         'variant_id' => $variantId,
-        'tiers' => array_map(fn (array $band) => ['min_quantity' => $band[0], 'unit_price_minor' => $band[1]], $bands),
+        'tiers' => array_map(fn (array $band) => [
+            'min_quantity' => $band[0],
+            'unit_price_minor' => number_format($band[1] / 100, 2, '.', ''),
+        ], $bands),
     ];
 }
 

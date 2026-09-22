@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ProductVariantController from '@/actions/App/Http/Controllers/Admin/ProductVariantController';
 import AlertError from '@/components/alert-error';
 import FormField from '@/components/forms/form-field';
+import MoneyField from '@/components/forms/money-field';
 import MoneyAmount from '@/components/money-amount';
 import SectionCard from '@/components/section-card';
 import EmptyState from '@/components/states/empty-state';
@@ -78,8 +79,9 @@ export default function VariantsSection({
             {
                 sku: variant.sku,
                 barcode: variant.barcode,
-                wholesale_price_minor: variant.wholesale_price_minor,
-                base_cost_minor: variant.base_cost_minor,
+                wholesale_price_minor:
+                    variant.wholesale_price_override?.decimal ?? '',
+                base_cost_minor: variant.base_cost_override?.decimal ?? '',
                 is_active: !variant.is_active,
             },
             { preserveScroll: true },
@@ -649,17 +651,13 @@ function VariantDialog({
                                     error={errors.wholesale_price_minor}
                                 >
                                     {(field) => (
-                                        <Input
+                                        <MoneyField
                                             {...field}
                                             name="wholesale_price_minor"
-                                            type="number"
-                                            inputMode="numeric"
-                                            min={0}
-                                            step={1}
-                                            className="tabular-nums"
                                             defaultValue={
-                                                variant?.wholesale_price_minor ??
-                                                ''
+                                                variant
+                                                    ?.wholesale_price_override
+                                                    ?.decimal
                                             }
                                         />
                                     )}
@@ -671,16 +669,12 @@ function VariantDialog({
                                     error={errors.base_cost_minor}
                                 >
                                     {(field) => (
-                                        <Input
+                                        <MoneyField
                                             {...field}
                                             name="base_cost_minor"
-                                            type="number"
-                                            inputMode="numeric"
-                                            min={0}
-                                            step={1}
-                                            className="tabular-nums"
                                             defaultValue={
-                                                variant?.base_cost_minor ?? ''
+                                                variant?.base_cost_override
+                                                    ?.decimal
                                             }
                                         />
                                     )}

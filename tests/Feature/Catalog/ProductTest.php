@@ -58,8 +58,8 @@ function catalogProductPayload(array $overrides = []): array
         'description' => 'A rice cooker.',
         'category_id' => Category::query()->value('public_id'),
         'brand_id' => Brand::query()->value('public_id'),
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 249000,
+        'base_cost_minor' => '1800.00',
+        'wholesale_price_minor' => '2490.00',
         ...$overrides,
     ];
 }
@@ -76,7 +76,7 @@ describe('only the platform writes products (§12)', function () {
             ->post(route('admin.catalog.products.store'), catalogProductPayload())
             ->assertForbidden();
         $this->actingAs($owner)
-            ->patch(route('admin.catalog.products.update', $product->public_id), catalogProductPayload(['wholesale_price_minor' => 1]))
+            ->patch(route('admin.catalog.products.update', $product->public_id), catalogProductPayload(['wholesale_price_minor' => '0.01']))
             ->assertForbidden();
         $this->actingAs($owner)
             ->delete(route('admin.catalog.products.destroy', $product->public_id))
@@ -133,6 +133,21 @@ describe('only the platform writes products (§12)', function () {
             ->and($product->wholesale_price_minor->minorUnits)->toBe(249000)
             ->and($product->base_cost_minor->minorUnits)->toBe(180000);
     });
+
+    it('converts Taka form input to exact minor units', function () {
+        $this->actingAs($this->manager)
+            ->post(route('admin.catalog.products.store'), catalogProductPayload([
+                'sku' => 'fw-rc-taka',
+                'wholesale_price_minor' => '2490.50',
+                'base_cost_minor' => '1800.25',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $product = Product::query()->where('sku', 'FW-RC-TAKA')->firstOrFail();
+
+        expect($product->wholesale_price_minor->minorUnits)->toBe(249050)
+            ->and($product->base_cost_minor->minorUnits)->toBe(180025);
+    });
 });
 
 describe('validation and database constraints', function () {
@@ -142,13 +157,13 @@ describe('validation and database constraints', function () {
             ->assertSessionHasErrors(['name', 'sku', 'category_id', 'base_cost_minor', 'wholesale_price_minor']);
     });
 
-    it('refuses a price that is not whole minor units, or is negative', function () {
+    it('refuses a price with more than two decimal places, or that is negative', function () {
         // Refused rather than rounded: a silently rounded price is a wrong price
         // nobody noticed.
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), catalogProductPayload([
-                'wholesale_price_minor' => '2490.50',
-                'base_cost_minor' => -1,
+                'wholesale_price_minor' => '2490.505',
+                'base_cost_minor' => '-1',
             ]))
             ->assertSessionHasErrors(['wholesale_price_minor', 'base_cost_minor']);
 
@@ -231,7 +246,7 @@ describe('editing', function () {
             ->patch(route('admin.catalog.products.update', $product->public_id), catalogProductPayload([
                 'name' => 'Walton Rice Cooker (new model)',
                 'sku' => 'FW-RC-1',
-                'wholesale_price_minor' => 199000,
+                'wholesale_price_minor' => '1990.00',
             ]))
             ->assertSessionHasNoErrors();
 
@@ -337,7 +352,6 @@ describe('the screens', function () {
                 ->component('admin/catalog/products/form')
                 ->where('product.category_id', $child->public_id)
                 ->where('product.brand_id', $this->brand->public_id)
-                ->where('product.wholesale_price_minor', 210000)
                 ->where('product.wholesale_price.decimal', '2100.00')
                 ->where('options.categories.1.label', 'Electronics › Kitchen')
                 ->where('options.brands.0.label', 'Walton'),

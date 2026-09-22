@@ -41,8 +41,8 @@ function catalogBoundsPayload(Product $product, array $overrides = []): array
         'name' => $product->name,
         'sku' => $product->sku,
         'category_id' => Category::query()->value('public_id'),
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 250000,
+        'base_cost_minor' => '1800.00',
+        'wholesale_price_minor' => '2500.00',
         ...$overrides,
     ];
 }
@@ -53,9 +53,9 @@ describe('saving the bounds', function () {
             ->patch(route('admin.catalog.products.update', $this->product->public_id), catalogBoundsPayload($this->product, [
                 'min_order_quantity' => 6,
                 'max_order_quantity' => 120,
-                'minimum_selling_price_minor' => 280000,
-                'suggested_selling_price_minor' => 299000,
-                'maximum_selling_price_minor' => 350000,
+                'minimum_selling_price_minor' => '2800.00',
+                'suggested_selling_price_minor' => '2990.00',
+                'maximum_selling_price_minor' => '3500.00',
             ]))
             ->assertSessionHasNoErrors();
 
@@ -86,7 +86,7 @@ describe('saving the bounds', function () {
     it('is not something a business account can change (§12)', function () {
         $this->actingAs(testBusinessAccount(AccountStatus::Active)->owner)
             ->patch(route('admin.catalog.products.update', $this->product->public_id), catalogBoundsPayload($this->product, [
-                'minimum_selling_price_minor' => 1,
+                'minimum_selling_price_minor' => '0.01',
             ]))
             ->assertForbidden();
 
@@ -109,15 +109,15 @@ describe('the bounds keep their order', function () {
 
         $this->actingAs($this->manager)
             ->patch($url, catalogBoundsPayload($this->product, [
-                'minimum_selling_price_minor' => 400000,
-                'maximum_selling_price_minor' => 300000,
+                'minimum_selling_price_minor' => '4000.00',
+                'maximum_selling_price_minor' => '3000.00',
             ]))
             ->assertSessionHasErrors('minimum_selling_price_minor');
 
         $this->actingAs($this->manager)
             ->patch($url, catalogBoundsPayload($this->product, [
-                'minimum_selling_price_minor' => 280000,
-                'suggested_selling_price_minor' => 270000,
+                'minimum_selling_price_minor' => '2800.00',
+                'suggested_selling_price_minor' => '2700.00',
             ]))
             ->assertSessionHasErrors('suggested_selling_price_minor');
 
@@ -192,7 +192,6 @@ describe('using the bounds', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->where('product.min_order_quantity', 6)
                 ->where('product.max_order_quantity', null)
-                ->where('product.suggested_selling_price_minor', 299000)
                 ->where('product.suggested_selling_price.decimal', '2990.00')
                 ->where('product.minimum_selling_price', null),
             );

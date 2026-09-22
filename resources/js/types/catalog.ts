@@ -95,8 +95,6 @@ export type ProductDetail = {
     description: string | null;
     category_id: string;
     brand_id: string | null;
-    base_cost_minor: number;
-    wholesale_price_minor: number;
     base_cost: Money;
     wholesale_price: Money;
     meta_title: string | null;
@@ -109,9 +107,6 @@ export type ProductDetail = {
     /** Null means no limit. */
     max_order_quantity: number | null;
     /** Selling-price guidance for partners; null means no bound. */
-    suggested_selling_price_minor: number | null;
-    minimum_selling_price_minor: number | null;
-    maximum_selling_price_minor: number | null;
     suggested_selling_price: Money | null;
     minimum_selling_price: Money | null;
     maximum_selling_price: Money | null;
@@ -131,8 +126,8 @@ export type VariantRow = {
     label: string;
     values: { attribute: string; value: string }[];
     /** The override only; null means the product's figure applies. */
-    wholesale_price_minor: number | null;
-    base_cost_minor: number | null;
+    wholesale_price_override: Money | null;
+    base_cost_override: Money | null;
     /** The price that applies, override or not, rendered by the server. */
     wholesale_price: Money;
     overrides_price: boolean;
@@ -150,7 +145,6 @@ export type PriceTierScope = {
     base_price: Money;
     tiers: {
         min_quantity: number;
-        unit_price_minor: number;
         unit_price: Money;
         applies: boolean;
     }[];
