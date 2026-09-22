@@ -54,12 +54,16 @@ class PaySupplierWithdrawal
                 supplierWithdrawalId: $locked->id,
             ));
 
+            // Left dirty rather than saved here: the database's own
+            // `supplier_withdrawals_paid_is_complete` CHECK requires status
+            // and these three columns to change together in one UPDATE, not
+            // paid_at arriving one statement before status does.
             $locked->forceFill([
                 'processed_by' => $actorId,
                 'processed_at' => $locked->processed_at ?? now(),
                 'paid_at' => now(),
                 'external_reference' => $externalReference,
-            ])->save();
+            ]);
 
             $locked->transitionWithHistory(
                 SupplierWithdrawalStatus::Paid,
