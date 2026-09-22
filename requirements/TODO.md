@@ -931,8 +931,8 @@ open** for the next batch.
 
 ## P13.E Open — next batch
 
-- [~] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — parallel `supplier_wallets`/`supplier_ledger_entries` schema, `SupplierWalletService`, `SettleSupplierPayable`/`BulkSettleSupplierPayables`, settlement-side reversal clawback (P13-25) into `recovery`, policies and permissions, real-concurrency tests, Supplier wallet dashboard + transaction history, staff settlement queue (single + bulk, password-confirmed) and read-only wallet detail, all built and covered by HTTP-level Pest tests (self-scoping, permission 403s, masking) and Vitest. _Backend, screens and their tests are done. What is left is a live-browser pass — required by this project's own UI-completeness rule — blocked by the same missing Chromium shared libraries (`libnspr4`, `libnss3`, `libnssutil3`, `libsmime3`, `libasound.so.2`) noted before; no sudo available to install them_
-- [~] **P13-24** Supplier withdrawals and payout-detail capture — `supplier_payout_methods`/`supplier_withdrawals` schema, `SavePayoutMethod`, full request → review → approve → pay/reject/fail lifecycle, per-Supplier withdrawal limit override, real-concurrency tests, Supplier payout-method and withdrawal screens (current-password-gated, idempotency-key-protected request form), staff withdrawal queue and decision screen (password-confirmed release), all built and covered by HTTP-level Pest tests and Vitest. _Same gap as P13-23: backend, screens and tests done; live-browser pass still blocked by environment. `payout_details` on `suppliers` itself is unrelated KYC-era scaffolding, still unused_
+- [~] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — parallel `supplier_wallets`/`supplier_ledger_entries` schema, `SupplierWalletService`, `SettleSupplierPayable`/`BulkSettleSupplierPayables`, settlement-side reversal clawback (P13-25) into `recovery`, policies and permissions, real-concurrency tests, Supplier wallet dashboard + transaction history, staff settlement queue (single + bulk, password-confirmed) and read-only wallet detail, all built and covered by HTTP-level Pest tests (self-scoping, permission 403s, masking) and Vitest. _Backend, screens and tests are done. The Chromium environment blocker is resolved (cached shared libraries at `~/feriwala-verification/p5/chromium`, no sudo needed) and a 2026-09-22 live-browser pass confirmed the Supplier side — wallet dashboard and transaction history render correct Taka amounts in EN/BN and Light/Dark, no console errors. Not yet browser-verified: the staff settlement queue (single + bulk) and desktop/mobile responsiveness — still `[~]` until those are covered_
+- [~] **P13-24** Supplier withdrawals and payout-detail capture — `supplier_payout_methods`/`supplier_withdrawals` schema, `SavePayoutMethod`, full request → review → approve → pay/reject/fail lifecycle, per-Supplier withdrawal limit override, real-concurrency tests, Supplier payout-method and withdrawal screens (current-password-gated, idempotency-key-protected request form), staff withdrawal queue and decision screen (password-confirmed release), all built and covered by HTTP-level Pest tests and Vitest. _Same as P13-23: backend, screens and tests done; the 2026-09-22 live-browser pass confirmed the Supplier side — payout methods (masking) and withdrawal request both work end to end with correct Taka amounts. Not yet browser-verified: the staff withdrawal decision lifecycle and desktop/mobile — still `[~]`. `payout_details` on `suppliers` itself is unrelated KYC-era scaffolding, still unused_
 - [ ] **P13-26** Fulfilment integration: Supplier-side dispatch and handover. This batch adds the explicit `RecordSupplierPayableDelivery` event fulfilment will call; it does not mark ordinary orders delivered itself
 - [ ] **P13-27** Supplier reporting
 - [ ] **P13-29** Listing images and supporting-document uploads (the columns exist; no upload store yet), and creating a new variation from a listing item
@@ -963,6 +963,41 @@ increment by hand; a progress table that has drifted is worse than none.
 | **Total**                                       | **489** | **250** | **25**  |
 
 ### Revision log
+
+- **2026-09-22** — System-wide money architecture correction: every human-facing money INPUT form
+  converted from raw integer minor units to a decimal Taka string, validated by a new shared
+  `App\Support\Money\Rules\DecimalAmountRule` and converted server-side via the new
+  `App\Support\Money\DecimalAmount::parse()`/`parseOrNull()` (a stricter sibling of
+  `Money::fromDecimal()` that refuses excess precision rather than rounding it) — this is the one
+  boundary every human-facing controller/FormRequest now uses; internal Action signatures were
+  never touched, since `MoneyCast` already accepted either a `Money` instance or an integer.
+  Frontend: a new shared `resources/js/components/money-input.tsx` (uncontrolled, ৳-prefixed,
+  submits the decimal string verbatim) and `resources/js/components/forms/money-field.tsx` (the
+  same affordance for `FormField`'s render-prop slot). Corrected forms: wallet top-up, admin wallet
+  manual adjustment, deposit rule thresholds, website pricing bounds, Supplier Rate/Platform Rate
+  (single-offer editor and bulk Supplier-listing decision), Supplier withdrawal request, coupons
+  (fixed-type only — percentage/basis-points deliberately untouched), billing fee rules, MLM/
+  referral fixed commission rules, package/activation fees (including the dynamic charge-row
+  editor), wholesale/quantity pricing (product wholesale price, base cost, three selling-price
+  bounds, variant price overrides, and quantity price tiers), website product selling price, and
+  Supplier product-listing rates. Found and fixed two real client-side-arithmetic bugs along the
+  way (not just stale field names): both Supplier-listing forms had a hand-rolled `toMinorUnits()`
+  multiplying by 100 in React before submit — exactly the pattern this correction exists to remove;
+  now the typed Taka string is submitted unchanged. Corrected two raw-minor-unit DISPLAY bugs (a
+  payment receipt's "settled as" text and an admin payment detail page). Fixed five labels that
+  literally said "(poisha)" in EN/BN. Confirmed the frozen Storefront API contract already used the
+  correct machine (`{minor_units, currency, decimal}`) shape and needed no change; added one
+  non-breaking clarifying note to its documentation. Recorded the canonical money-boundary rule in
+  `CLAUDE.md` and `app/Domain/README.md`. Live-browser verification (harness now unblocked — cached
+  Chromium libraries, no sudo needed) confirmed three representative Taka forms end-to-end against
+  the database (500.50 Taka stored as exactly 50050 minor units, never 100x), confirmed formatted
+  `৳X,XXX.XX` display with no raw-integer leakage, and confirmed the Supplier-facing P13-23/P13-24
+  screens (wallet, transaction history, payout methods, withdrawal request) still render correctly
+  in EN/BN and Light/Dark after this batch touched some of the same controllers — see the P13-23/
+  P13-24 entries above for what is and is not yet browser-verified. 620+ focused backend tests and
+  the full affected Vitest suite pass; `composer types:check` (1004 files), `vendor/bin/pint` and
+  `vp check`/`tsc` are clean. No `[ ]`/`[~]` counts above change: this was a cross-cutting
+  correctness pass across already-`[x]` and already-`[~]` work, not new feature scope.
 
 - **2026-09-22** — Supplier and staff finance screens for the wallet/withdrawal batch. **Still
   started, not done: P13-23, P13-24** — everything but a live browser pass is now built. Fixed a
