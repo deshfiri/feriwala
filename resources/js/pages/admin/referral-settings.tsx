@@ -4,6 +4,7 @@ import { useState } from 'react';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -445,39 +446,23 @@ export default function ReferralSettings({
                                                             />
                                                         </div>
                                                     ) : (
-                                                        <div className="grid gap-1.5">
-                                                            <Label
-                                                                htmlFor={`level-${i}-amount`}
-                                                            >
-                                                                {t(
-                                                                    'referral.settings.amount_minor',
-                                                                )}
-                                                            </Label>
-                                                            <Input
-                                                                id={`level-${i}-amount`}
-                                                                name={`levels[${i}][amount_minor]`}
-                                                                type="number"
-                                                                min={1}
-                                                                required
-                                                            />
-                                                        </div>
+                                                        <MoneyInput
+                                                            id={`level-${i}-amount`}
+                                                            name={`levels[${i}][amount]`}
+                                                            label={t(
+                                                                'referral.settings.amount_minor',
+                                                            )}
+                                                            required
+                                                        />
                                                     )}
 
-                                                    <div className="grid gap-1.5">
-                                                        <Label
-                                                            htmlFor={`level-${i}-cap`}
-                                                        >
-                                                            {t(
-                                                                'referral.settings.cap_minor',
-                                                            )}
-                                                        </Label>
-                                                        <Input
-                                                            id={`level-${i}-cap`}
-                                                            name={`levels[${i}][cap_minor]`}
-                                                            type="number"
-                                                            min={1}
-                                                        />
-                                                    </div>
+                                                    <MoneyInput
+                                                        id={`level-${i}-cap`}
+                                                        name={`levels[${i}][cap]`}
+                                                        label={t(
+                                                            'referral.settings.cap_minor',
+                                                        )}
+                                                    />
 
                                                     <div className="grid gap-1.5">
                                                         <Label
@@ -547,7 +532,7 @@ export default function ReferralSettings({
                                                             `levels.${i}.rate_percent`
                                                         ] ??
                                                         errors[
-                                                            `levels.${i}.amount_minor`
+                                                            `levels.${i}.amount`
                                                         ]
                                                     }
                                                 />
@@ -607,27 +592,24 @@ export default function ReferralSettings({
                                                 />
                                             )}
                                             {joiningType === 'fixed' && (
-                                                <Input
-                                                    aria-label={t(
+                                                <MoneyInput
+                                                    id="joining-amount"
+                                                    name="joining_amount"
+                                                    label={t(
                                                         'referral.settings.amount_minor',
                                                     )}
-                                                    name="joining_amount_minor"
-                                                    type="number"
-                                                    min={1}
                                                     required
+                                                    className="gap-0"
                                                 />
                                             )}
                                             {joiningType !== '' && (
-                                                <Input
-                                                    aria-label={t(
+                                                <MoneyInput
+                                                    id="joining-cap"
+                                                    name="joining_cap"
+                                                    label={t(
                                                         'referral.settings.cap_minor',
                                                     )}
-                                                    name="joining_cap_minor"
-                                                    type="number"
-                                                    min={1}
-                                                    placeholder={t(
-                                                        'referral.settings.cap_minor',
-                                                    )}
+                                                    className="gap-0"
                                                 />
                                             )}
                                         </div>
@@ -654,26 +636,18 @@ export default function ReferralSettings({
                                                 />
                                             )}
                                         </FormField>
-                                        <FormField
+                                        <MoneyInput
+                                            id="minimum-qualifying-payment"
+                                            name="minimum_qualifying_payment"
                                             label={t(
                                                 'referral.settings.minimum_payment',
                                             )}
-                                            error={
-                                                errors.minimum_qualifying_payment_minor
-                                            }
+                                            defaultValue="0"
                                             required
-                                        >
-                                            {(field) => (
-                                                <Input
-                                                    {...field}
-                                                    name="minimum_qualifying_payment_minor"
-                                                    type="number"
-                                                    min={0}
-                                                    defaultValue={0}
-                                                    required
-                                                />
-                                            )}
-                                        </FormField>
+                                            error={
+                                                errors.minimum_qualifying_payment
+                                            }
+                                        />
                                         <FormField
                                             label={t(
                                                 'referral.settings.effective_from',

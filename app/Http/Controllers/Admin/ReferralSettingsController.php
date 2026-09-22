@@ -20,7 +20,9 @@ use App\Domain\Referral\ReferralSettings;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
 use App\Support\Money\Money;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -142,19 +144,19 @@ class ReferralSettingsController extends Controller
             'max_depth' => ['required', 'integer', 'min:1', 'max:100'],
             'levels' => ['required', 'array', 'min:1', 'max:100'],
             'levels.*.type' => ['required', Rule::in(RewardType::values())],
-            'levels.*.amount_minor' => ['nullable', 'integer', 'min:1'],
+            'levels.*.amount' => ['nullable', new DecimalAmountRule],
             'levels.*.rate_percent' => ['nullable', 'string', 'max:6'],
-            'levels.*.cap_minor' => ['nullable', 'integer', 'min:1'],
+            'levels.*.cap' => ['nullable', new DecimalAmountRule],
             'levels.*.enabled' => ['sometimes', 'boolean'],
             'levels.*.required_packages' => ['nullable', 'array'],
             'levels.*.required_packages.*' => ['string', 'size:26'],
             'levels.*.min_active_direct_referrals' => ['nullable', 'integer', 'min:0', 'max:1000'],
             'joining_type' => ['nullable', Rule::in(RewardType::values())],
-            'joining_amount_minor' => ['nullable', 'integer', 'min:1'],
+            'joining_amount' => ['nullable', new DecimalAmountRule],
             'joining_rate_percent' => ['nullable', 'string', 'max:6'],
-            'joining_cap_minor' => ['nullable', 'integer', 'min:1'],
+            'joining_cap' => ['nullable', new DecimalAmountRule],
             'holding_days' => ['required', 'integer', 'min:0', 'max:365'],
-            'minimum_qualifying_payment_minor' => ['required', 'integer', 'min:0'],
+            'minimum_qualifying_payment' => ['required', new DecimalAmountRule],
             'qualifies_suspended' => ['sometimes', 'boolean'],
             'qualifies_restricted' => ['sometimes', 'boolean'],
             'qualifies_package_lapsed' => ['sometimes', 'boolean'],
@@ -186,9 +188,9 @@ class ReferralSettingsController extends Controller
                 'level' => $index + 1,
                 'rule' => $this->rule(
                     $level['type'],
-                    $level['amount_minor'] ?? null,
+                    $level['amount'] ?? null,
                     $level['rate_percent'] ?? null,
-                    $level['cap_minor'] ?? null,
+                    $level['cap'] ?? null,
                     'levels.'.$index,
                     $index + 1,
                 ),
@@ -213,14 +215,14 @@ class ReferralSettingsController extends Controller
             levels: $levels,
             joiningReward: $joiningType === null ? null : $this->rule(
                 $joiningType,
-                $validated['joining_amount_minor'] ?? null,
+                $validated['joining_amount'] ?? null,
                 $validated['joining_rate_percent'] ?? null,
-                $validated['joining_cap_minor'] ?? null,
+                $validated['joining_cap'] ?? null,
                 'joining',
                 0,
             ),
             holdingDays: (int) $validated['holding_days'],
-            minimumQualifyingPaymentMinor: (int) $validated['minimum_qualifying_payment_minor'],
+            minimumQualifyingPaymentMinor: DecimalAmount::parse($validated['minimum_qualifying_payment'])->minorUnits,
             qualifiesSuspended: (bool) ($validated['qualifies_suspended'] ?? false),
             qualifiesRestricted: (bool) ($validated['qualifies_restricted'] ?? false),
             qualifiesPackageLapsed: (bool) ($validated['qualifies_package_lapsed'] ?? false),
@@ -267,7 +269,7 @@ class ReferralSettingsController extends Controller
     /**
      * A rule from the form, or a refusal naming the field it came from.
      */
-    protected function rule(string $type, ?int $amountMinor, ?string $ratePercent, ?int $capMinor, string $field, int $level): RewardRule
+    protected function rule(string $type, ?string $amount, ?string $ratePercent, ?string $cap, string $field, int $level): RewardRule
     {
         $type = RewardType::from($type);
         $rateBps = $type === RewardType::Percentage && $ratePercent !== null
@@ -277,9 +279,9 @@ class ReferralSettingsController extends Controller
         try {
             return new RewardRule(
                 $type,
-                $type === RewardType::Fixed ? $amountMinor : null,
+                $type === RewardType::Fixed ? DecimalAmount::parseOrNull($amount)?->minorUnits : null,
                 $rateBps,
-                $capMinor,
+                DecimalAmount::parseOrNull($cap)?->minorUnits,
             );
         } catch (\InvalidArgumentException) {
             throw ValidationException::withMessages([$field => __('referral.refused.level_invalid', ['level' => $level])]);
