@@ -353,7 +353,7 @@ describe('no way into the catalogue except the administration', function () {
         $selection = WebsiteProduct::query()->where('website_id', $website->id)->firstOrFail();
         $pair = [$website->public_id, $selection->public_id];
 
-        $this->patch(route('websites.products.update', $pair), ['price' => 260000, 'marketing_description' => 'Eid favourite'])->assertSessionHasNoErrors();
+        $this->patch(route('websites.products.update', $pair), ['price' => '2600.00', 'marketing_description' => 'Eid favourite'])->assertSessionHasNoErrors();
         $this->put(route('websites.products.publication.update', $pair), ['published' => true])->assertSessionHasNoErrors();
         $this->put(route('websites.products.publication.update', $pair), ['published' => false])->assertSessionHasNoErrors();
 
