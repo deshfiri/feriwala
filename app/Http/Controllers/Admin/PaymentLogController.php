@@ -9,6 +9,8 @@ use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -147,8 +149,10 @@ class PaymentLogController extends Controller
         return Inertia::render('admin/payments/show', [
             'payment' => array_merge($this->summary($record), [
                 'purpose_label' => $record->purpose->label(),
-                'settled_amount_minor' => $record->settled_amount_minor,
-                'settled_currency_code' => $record->settled_currency_code,
+                // Formatted server-side, like every other amount (§36.1).
+                'settled_amount' => $record->settled_amount_minor === null || $record->settled_currency_code === null
+                    ? null
+                    : Money::of((int) $record->settled_amount_minor, Currency::from($record->settled_currency_code))->jsonSerialize(),
                 'initiated_at' => $record->initiated_at?->toIso8601String(),
                 'expires_at' => $record->expires_at?->toIso8601String(),
                 'failed_at' => $record->failed_at?->toIso8601String(),

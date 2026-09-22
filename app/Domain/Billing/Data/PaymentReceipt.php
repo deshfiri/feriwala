@@ -6,6 +6,8 @@ use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentAllocation;
 use App\Domain\Billing\Models\RefundRequest;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 
 /**
@@ -163,7 +165,7 @@ readonly class PaymentReceipt
             return null;
         }
 
-        return ['minor_units' => (int) $minor, 'currency' => $currency];
+        return Money::of((int) $minor, Currency::from($currency))->jsonSerialize();
     }
 
     /**
