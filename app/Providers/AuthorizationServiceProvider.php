@@ -25,9 +25,11 @@ use App\Domain\Package\Policies\PackagePolicy;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
 use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierPayable;
 use App\Domain\Supplier\Models\SupplierProductListing;
 use App\Domain\Supplier\Policies\SupplierKycSubmissionPolicy;
 use App\Domain\Supplier\Policies\SupplierOfferPolicy;
+use App\Domain\Supplier\Policies\SupplierPayablePolicy;
 use App\Domain\Supplier\Policies\SupplierPolicy;
 use App\Domain\Supplier\Policies\SupplierProductListingPolicy;
 use App\Domain\Website\Models\Website;
@@ -94,6 +96,7 @@ class AuthorizationServiceProvider extends ServiceProvider
         Gate::policy(SupplierKycSubmission::class, SupplierKycSubmissionPolicy::class);
         Gate::policy(SupplierProductListing::class, SupplierProductListingPolicy::class);
         Gate::policy(SupplierOffer::class, SupplierOfferPolicy::class);
+        Gate::policy(SupplierPayable::class, SupplierPayablePolicy::class);
 
         /*
          * Super Admin passes every check without holding permission rows, so

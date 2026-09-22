@@ -54,6 +54,9 @@ enum PermissionModule: string
     case SupplierPricing = 'supplier_pricing';
     case SupplierStock = 'supplier_stock';
 
+    /** What Feriwala owes a Supplier for allocated order lines (D25, P13-22). */
+    case SupplierPayable = 'supplier_payable';
+
     public function label(): string
     {
         return match ($this) {
@@ -90,6 +93,7 @@ enum PermissionModule: string
             self::SupplierListing => 'Supplier listings',
             self::SupplierPricing => 'Supplier pricing',
             self::SupplierStock => 'Supplier stock',
+            self::SupplierPayable => 'Supplier payables',
         };
     }
 }

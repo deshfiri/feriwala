@@ -21,6 +21,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $actor_type
  * @property int|null $actor_id
  * @property string|null $reason
+ * @property int|null $moved_quantity
+ * @property string|null $from_bucket
+ * @property string|null $to_bucket
+ * @property array<string, int>|null $buckets_before
+ * @property array<string, int>|null $buckets_after
+ * @property int|null $stock_reservation_id
+ * @property string|null $idempotency_key
  * @property CarbonImmutable $created_at
  * @property-read SupplierOffer $offer
  */
@@ -38,6 +45,9 @@ class SupplierStockMovement extends Model
         return [
             'quantity_before' => 'integer',
             'quantity_after' => 'integer',
+            'moved_quantity' => 'integer',
+            'buckets_before' => 'array',
+            'buckets_after' => 'array',
             'created_at' => 'immutable_datetime',
         ];
     }

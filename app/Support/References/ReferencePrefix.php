@@ -25,6 +25,7 @@ enum ReferencePrefix: string
     case Supplier = 'SUP';
     case SupplierListing = 'SPL';
     case SupplierOffer = 'SPO';
+    case SupplierPayable = 'SPY';
 
     public function label(): string
     {
@@ -43,6 +44,7 @@ enum ReferencePrefix: string
             self::Supplier => 'Supplier',
             self::SupplierListing => 'Supplier listing',
             self::SupplierOffer => 'Supplier offer',
+            self::SupplierPayable => 'Supplier payable',
         };
     }
 }

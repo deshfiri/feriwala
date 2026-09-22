@@ -208,6 +208,15 @@ class PermissionCatalogue
             Module::SupplierStock->value => [
                 Action::View, Action::Edit,
             ],
+
+            //   supplier_payable.view / .approve — view (seeing what is owed)
+            //   and approve (settling it, P13-23) are deliberately separate
+            //   permission strings, so a role can hold one without the other
+            //   ("Supplier payable viewing and settlement must remain
+            //   permission separated").
+            Module::SupplierPayable->value => [
+                Action::View, Action::Approve,
+            ],
         ];
     }
 

@@ -346,6 +346,7 @@ enum PlatformRole: string
                 Module::SupplierListing->value => [Action::View, Action::Review, Action::Approve],
                 Module::SupplierPricing->value => [Action::View, Action::Edit],
                 Module::SupplierStock->value => [Action::View, Action::Edit],
+                Module::SupplierPayable->value => [Action::View, Action::Approve],
                 Module::Catalog->value => [Action::View],
             ],
         };
