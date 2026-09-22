@@ -3,6 +3,7 @@ import { useState } from 'react';
 import BillingController from '@/actions/App/Http/Controllers/Admin/BillingController';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -246,24 +247,13 @@ export default function Billing({
                                             </p>
                                         </div>
 
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="fee-amount">
-                                                {t('billing.fees.amount')}
-                                            </Label>
-                                            <Input
-                                                id="fee-amount"
-                                                name="amount_minor"
-                                                type="number"
-                                                min={0}
-                                                required
-                                            />
-                                            <p className="text-muted-foreground text-xs">
-                                                {t('billing.fees.amount_help')}
-                                            </p>
-                                            <InputError
-                                                message={errors.amount_minor}
-                                            />
-                                        </div>
+                                        <MoneyInput
+                                            id="fee-amount"
+                                            name="amount"
+                                            label={t('billing.fees.amount')}
+                                            required
+                                            error={errors.amount}
+                                        />
 
                                         <div className="grid gap-2">
                                             <Label htmlFor="fee-from">

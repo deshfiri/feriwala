@@ -23,7 +23,9 @@ use App\Domain\Tax\TaxRuleResolver;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
 use App\Support\Money\Money;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -346,15 +348,25 @@ class BillingController extends Controller
 
         abort_unless(BillingSettingsPolicy::canManage($actor), 403);
 
+        // A fixed discount is money and is typed as decimal Taka (§36.1); a
+        // percentage discount is not money at all — it stays basis points,
+        // exactly as it always was. `value`'s shape depends on which, so the
+        // type is read once, ahead of the rest of validation, to build the
+        // right rule for it.
+        $discountType = DiscountType::tryFrom((string) $request->input('discount_type'));
+        $valueRule = $discountType === DiscountType::Fixed
+            ? ['required', new DecimalAmountRule]
+            : ['required', 'integer', 'min:1'];
+
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40'],
             'name' => ['required', 'string', 'max:191'],
             'discount_type' => ['required', Rule::enum(DiscountType::class)],
-            'value' => ['required', 'integer', 'min:1'],
+            'value' => $valueRule,
             'applies_to' => ['required', Rule::enum(CouponScope::class)],
             'package' => ['nullable', 'string'],
-            'minimum_spend_minor' => ['nullable', 'integer', 'min:0'],
-            'maximum_discount_minor' => ['nullable', 'integer', 'min:0'],
+            'minimum_spend' => ['nullable', new DecimalAmountRule],
+            'maximum_discount' => ['nullable', new DecimalAmountRule],
             'usage_limit' => ['nullable', 'integer', 'min:1'],
             'per_account_limit' => ['nullable', 'integer', 'min:1'],
             'effective_from' => ['required', 'date'],
@@ -365,13 +377,18 @@ class BillingController extends Controller
             ? null
             : Package::query()->where('public_id', $validated['package'])->firstOrFail();
 
+        $type = DiscountType::from($validated['discount_type']);
+        $value = $type === DiscountType::Fixed
+            ? DecimalAmount::parse($validated['value'])->minorUnits
+            : (int) $validated['value'];
+
         try {
             $this->coupons->create(
                 actor: $actor,
                 code: $validated['code'],
                 name: $validated['name'],
-                type: DiscountType::from($validated['discount_type']),
-                value: (int) $validated['value'],
+                type: $type,
+                value: $value,
                 appliesTo: CouponScope::from($validated['applies_to']),
                 currency: Currency::BDT,
                 effectiveFrom: CarbonImmutable::parse($validated['effective_from']),
@@ -379,11 +396,11 @@ class BillingController extends Controller
                     ? CarbonImmutable::parse($validated['effective_until'])
                     : null,
                 packageId: $package?->id,
-                minimumSpend: isset($validated['minimum_spend_minor'])
-                    ? Money::of((int) $validated['minimum_spend_minor'], Currency::BDT)
+                minimumSpend: isset($validated['minimum_spend'])
+                    ? DecimalAmount::parse($validated['minimum_spend'])
                     : null,
-                maximumDiscount: isset($validated['maximum_discount_minor'])
-                    ? Money::of((int) $validated['maximum_discount_minor'], Currency::BDT)
+                maximumDiscount: isset($validated['maximum_discount'])
+                    ? DecimalAmount::parse($validated['maximum_discount'])
                     : null,
                 usageLimit: isset($validated['usage_limit']) ? (int) $validated['usage_limit'] : null,
                 perAccountLimit: isset($validated['per_account_limit'])
@@ -423,7 +440,8 @@ class BillingController extends Controller
         $validated = $request->validate([
             'fee_type' => ['required', Rule::enum(FeeType::class)],
             'package' => ['nullable', 'string'],
-            'amount_minor' => ['required', 'integer', 'min:0'],
+            // Decimal Taka (§36.1), not minor units.
+            'amount' => ['required', new DecimalAmountRule],
             'effective_from' => ['required', 'date'],
             'effective_until' => ['nullable', 'date', 'after:effective_from'],
             'note' => ['nullable', 'string', 'max:1000'],
@@ -437,7 +455,7 @@ class BillingController extends Controller
             $this->feeRules->create(
                 actor: $actor,
                 type: FeeType::from($validated['fee_type']),
-                amount: Money::of((int) $validated['amount_minor'], Currency::BDT),
+                amount: DecimalAmount::parse($validated['amount']),
                 effectiveFrom: CarbonImmutable::parse($validated['effective_from']),
                 effectiveUntil: isset($validated['effective_until'])
                     ? CarbonImmutable::parse($validated['effective_until'])

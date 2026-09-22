@@ -2,6 +2,7 @@ import { Form } from '@inertiajs/react';
 import { useState } from 'react';
 import BillingController from '@/actions/App/Http/Controllers/Admin/BillingController';
 import InputError from '@/components/input-error';
+import MoneyInput from '@/components/money-input';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,9 @@ export default function BillingCoupons({
 }) {
     const { t, locale } = useTranslation();
     const [adding, setAdding] = useState(false);
+    const [discountType, setDiscountType] = useState(
+        discountTypes[0]?.value ?? 'percentage',
+    );
 
     const date = (value: string | null) =>
         value === null ? '—' : new Date(value).toLocaleDateString(locale);
@@ -205,6 +209,10 @@ export default function BillingCoupons({
                                         id="coupon-type"
                                         name="discount_type"
                                         required
+                                        value={discountType}
+                                        onChange={(event) =>
+                                            setDiscountType(event.target.value)
+                                        }
                                         className="border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
                                     >
                                         {discountTypes.map((option) => (
@@ -218,25 +226,43 @@ export default function BillingCoupons({
                                     </select>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="coupon-value">
-                                        {t('billing.coupons.value')}
-                                    </Label>
-                                    <Input
+                                {discountType === 'fixed' ? (
+                                    <MoneyInput
                                         id="coupon-value"
                                         name="value"
-                                        type="number"
-                                        min={1}
+                                        label={t('billing.coupons.value')}
                                         required
+                                        helpText={t(
+                                            'billing.coupons.value_fixed_help',
+                                        )}
+                                        error={errors.value}
                                     />
-                                    <p className="text-muted-foreground text-xs">
-                                        {t(
-                                            'billing.coupons.value_percentage_help',
-                                        )}{' '}
-                                        {t('billing.coupons.value_fixed_help')}
-                                    </p>
-                                    <InputError message={errors.value} />
-                                </div>
+                                ) : (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="coupon-value">
+                                            {t('billing.coupons.value')}
+                                        </Label>
+                                        <Input
+                                            id="coupon-value"
+                                            name="value"
+                                            type="number"
+                                            min={1}
+                                            required
+                                        />
+                                        {/*
+                                          * Basis points, not Taka — a
+                                          * percentage discount is not money
+                                          * and is out of §36.1's decimal-Taka
+                                          * boundary. Left as it was.
+                                          */}
+                                        <p className="text-muted-foreground text-xs">
+                                            {t(
+                                                'billing.coupons.value_percentage_help',
+                                            )}
+                                        </p>
+                                        <InputError message={errors.value} />
+                                    </div>
+                                )}
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="coupon-scope">
@@ -282,29 +308,21 @@ export default function BillingCoupons({
                                     </select>
                                 </div>
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="coupon-min">
-                                        {t('billing.coupons.minimum_spend')}
-                                    </Label>
-                                    <Input
-                                        id="coupon-min"
-                                        name="minimum_spend_minor"
-                                        type="number"
-                                        min={0}
-                                    />
-                                </div>
+                                <MoneyInput
+                                    id="coupon-min"
+                                    name="minimum_spend"
+                                    label={t('billing.coupons.minimum_spend')}
+                                    error={errors.minimum_spend}
+                                />
 
-                                <div className="grid gap-2">
-                                    <Label htmlFor="coupon-max">
-                                        {t('billing.coupons.maximum_discount')}
-                                    </Label>
-                                    <Input
-                                        id="coupon-max"
-                                        name="maximum_discount_minor"
-                                        type="number"
-                                        min={0}
-                                    />
-                                </div>
+                                <MoneyInput
+                                    id="coupon-max"
+                                    name="maximum_discount"
+                                    label={t(
+                                        'billing.coupons.maximum_discount',
+                                    )}
+                                    error={errors.maximum_discount}
+                                />
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="coupon-uses">
