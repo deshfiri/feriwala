@@ -7,17 +7,21 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Order\Actions\ReceiveReturnedItems;
 use App\Domain\Order\Models\OrderReturnItem;
+use App\Domain\Supplier\Data\SupplierPostingContext;
 use App\Domain\Supplier\Enums\PayableChangeSource;
 use App\Domain\Supplier\Enums\PayableStatus;
 use App\Domain\Supplier\Models\SupplierPayable;
 use App\Domain\Supplier\Models\SupplierPayableReversal;
+use App\Domain\Supplier\SupplierWalletService;
+use App\Notifications\Supplier\SupplierPayableReversalSettled;
+use App\Support\Money\Currency;
 use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
  * The compensating record for goods that came back against a Supplier's
- * payable (D25, P13-22).
+ * payable (D25, P13-22/P13-25).
  *
  * **Never edits the payable.** A return or refund appends one
  * {@see SupplierPayableReversal} row, exactly `$quantity` at the payable's own
@@ -27,12 +31,20 @@ use Illuminate\Database\UniqueConstraintViolationException;
  * {@see ReceiveReturnedItems} once a Supplier-backed
  * line's goods are taken back into Supplier stock; a line with no Supplier
  * payable — because it was never Supplier-backed — is simply left alone.
+ *
+ * **If the payable had already been settled**, this also claws the amount
+ * back from the Supplier's wallet (P13-25): debited from whatever is
+ * available, with the rest raised as `recovery` — never a negative balance,
+ * never an unrecorded shortfall. A payable reversed before it was ever
+ * settled moves no money; the wallet does not exist for it to move.
  */
 class ReverseSupplierPayable
 {
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected SupplierWalletService $wallets,
+        protected OpenSupplierWallet $openWallet,
     ) {}
 
     public function handle(OrderReturnItem $returnItem, int $quantity, string $reason): ?SupplierPayableReversal
@@ -56,6 +68,11 @@ class ReverseSupplierPayable
                 /** @var SupplierPayable $locked */
                 $locked = SupplierPayable::query()->lockForUpdate()->findOrFail($payable->id);
 
+                // Captured before anything else changes: whether this payable
+                // had already paid into the Supplier's wallet, which is what
+                // decides whether this reversal has to claw money back.
+                $wasSettled = $locked->settled_at !== null;
+
                 $amount = $locked->supplier_rate_minor->multipliedBy($quantity);
 
                 $reversal = SupplierPayableReversal::create([
@@ -68,6 +85,29 @@ class ReverseSupplierPayable
                     'idempotency_key' => $key,
                     'created_at' => now(),
                 ]);
+
+                if ($wasSettled) {
+                    $wallet = $this->openWallet->handle($locked->supplier, Currency::from($locked->currency_code));
+
+                    $entry = $this->wallets->debitForReversal($wallet, $amount, new SupplierPostingContext(
+                        source: 'payable_reversal',
+                        description: "Reversal for payable {$locked->reference}",
+                        idempotencyKey: 'supplier-payable-reversal-wallet:'.$returnItem->public_id,
+                        reason: $reason,
+                        supplierPayableId: $locked->id,
+                        supplierPayableReversalId: $reversal->id,
+                    ));
+
+                    $reversal->forceFill(['settlement_reversal_reference' => $entry->reference])->save();
+
+                    $locked->supplier->notify(
+                        (new SupplierPayableReversalSettled(
+                            $reversal,
+                            debited: $entry->debit_minor,
+                            recorded: $entry->recovery_after_minor->minus($entry->recovery_before_minor),
+                        ))->locale($locked->supplier->locale)
+                    );
+                }
 
                 $reversedQuantity = $locked->reversedQuantity();
                 $to = $reversedQuantity >= $locked->quantity ? PayableStatus::Reversed : PayableStatus::PartiallyReversed;
