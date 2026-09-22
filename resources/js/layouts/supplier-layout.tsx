@@ -7,6 +7,7 @@ import {
     LayoutGrid,
     LogOut,
     PackageCheck,
+    PackageSearch,
     ShieldCheck,
     Truck,
     UserCog,
@@ -19,10 +20,12 @@ import StatusPill from '@/components/status-pill';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { dashboard, logout } from '@/routes/supplier';
+import { index as allocations } from '@/routes/supplier/allocations';
 import { create as kyc } from '@/routes/supplier/kyc';
 import { index as listings } from '@/routes/supplier/listings';
 import { index as notifications } from '@/routes/supplier/notifications';
 import { index as offers } from '@/routes/supplier/offers';
+import { index as payables } from '@/routes/supplier/payables';
 import { edit as profile } from '@/routes/supplier/profile';
 import { edit as security } from '@/routes/supplier/security';
 import { index as stock } from '@/routes/supplier/stock';
@@ -89,6 +92,18 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                       title: t('supplier.nav.stock'),
                       href: stock(),
                       icon: Boxes,
+                  },
+                  {
+                      id: 'allocations',
+                      title: t('supplier.nav.allocations'),
+                      href: allocations(),
+                      icon: PackageSearch,
+                  },
+                  {
+                      id: 'payables',
+                      title: t('supplier.nav.payables'),
+                      href: payables(),
+                      icon: Coins,
                   },
               ]
             : []),

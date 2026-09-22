@@ -60,6 +60,8 @@ return [
     'supplier_listings' => 'Supplier listings',
     'supplier_offers' => 'Supplier offers',
     'supplier_stock' => 'Supplier availability',
+    'supplier_allocations' => 'Supplier allocations',
+    'supplier_payables' => 'Supplier payables',
 
     'search' => [
         'open' => 'Search pages',

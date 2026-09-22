@@ -15,6 +15,7 @@ import {
     Coins,
     Package as PackageIcon,
     PackageCheck,
+    PackageSearch,
     Palette,
     Receipt,
     Scale,
@@ -50,6 +51,8 @@ import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as adminOrders } from '@/routes/admin/orders';
 import { index as adminReturns } from '@/routes/admin/returns';
+import { index as supplierAllocations } from '@/routes/admin/supplier-allocations';
+import { index as supplierPayables } from '@/routes/admin/supplier-payables';
 import { index as supplierApplications } from '@/routes/admin/suppliers';
 import { index as supplierListings } from '@/routes/admin/supplier-listings';
 import { index as supplierOffers } from '@/routes/admin/supplier-offers';
@@ -556,6 +559,28 @@ export function useNavigation(): {
                               title: t('nav.supplier_stock'),
                               href: supplierStock(),
                               icon: Boxes,
+                          },
+                      ]
+                    : []),
+                /*
+                 * Every row here carries a Supplier Rate — gated the same as
+                 * the offers screen, never `supplier_stock.view` alone (D25).
+                 */
+                ...(permissions['supplier_pricing.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_allocations'),
+                              href: supplierAllocations(),
+                              icon: PackageSearch,
+                          },
+                      ]
+                    : []),
+                ...(permissions['supplier_payable.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_payables'),
+                              href: supplierPayables(),
+                              icon: Coins,
                           },
                       ]
                     : []),

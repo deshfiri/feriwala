@@ -54,6 +54,8 @@ return [
     'supplier_listings' => 'সাপ্লায়ারের তালিকা',
     'supplier_offers' => 'সাপ্লায়ার অফার',
     'supplier_stock' => 'সাপ্লায়ারের প্রাপ্যতা',
+    'supplier_allocations' => 'সাপ্লায়ার বরাদ্দ',
+    'supplier_payables' => 'সাপ্লায়ার পাওনা',
 
     'search' => [
         'open' => 'পেজ খুঁজুন',
