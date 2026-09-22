@@ -218,7 +218,7 @@ describe('referral settings', () => {
         });
 
         expect(
-            rows[4].querySelector('input[name="levels[4][amount_minor]"]'),
+            rows[4].querySelector('input[name="levels[4][amount]"]'),
         ).not.toBeNull();
         expect(
             rows[4].querySelector('input[name="levels[4][rate_percent]"]'),

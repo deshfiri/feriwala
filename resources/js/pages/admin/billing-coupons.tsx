@@ -250,11 +250,11 @@ export default function BillingCoupons({
                                             required
                                         />
                                         {/*
-                                          * Basis points, not Taka — a
-                                          * percentage discount is not money
-                                          * and is out of §36.1's decimal-Taka
-                                          * boundary. Left as it was.
-                                          */}
+                                         * Basis points, not Taka — a
+                                         * percentage discount is not money
+                                         * and is out of §36.1's decimal-Taka
+                                         * boundary. Left as it was.
+                                         */}
                                         <p className="text-muted-foreground text-xs">
                                             {t(
                                                 'billing.coupons.value_percentage_help',
