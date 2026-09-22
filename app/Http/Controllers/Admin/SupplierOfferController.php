@@ -10,7 +10,8 @@ use App\Domain\Supplier\Models\SupplierOffer;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Money\Currency;
-use App\Support\Money\Money;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -70,8 +71,10 @@ class SupplierOfferController extends Controller
         $reviewer = $request->user();
 
         $validated = $request->validate([
-            'supplier_rate_minor' => ['required', 'integer', 'min:0'],
-            'platform_rate_minor' => ['required', 'integer', 'min:0'],
+            // Decimal Taka (§36.1) — a rate is typed the same way any other
+            // human-facing money field is, never as minor units.
+            'supplier_rate' => ['required', new DecimalAmountRule],
+            'platform_rate' => ['required', new DecimalAmountRule],
             'supplier_currency_code' => ['nullable', 'string', 'size:3'],
             'platform_currency_code' => ['nullable', 'string', 'size:3'],
             'reason' => ['required', 'string', 'max:1000'],
@@ -84,12 +87,12 @@ class SupplierOfferController extends Controller
             $action->handle(
                 $offer,
                 $reviewer->id,
-                Money::of((int) $validated['supplier_rate_minor'], $supplierCurrency),
-                Money::of((int) $validated['platform_rate_minor'], $platformCurrency),
+                DecimalAmount::parse($validated['supplier_rate'], $supplierCurrency),
+                DecimalAmount::parse($validated['platform_rate'], $platformCurrency),
                 $validated['reason'],
             );
         } catch (InvalidArgumentException|\ValueError $e) {
-            throw ValidationException::withMessages(['platform_rate_minor' => $e->getMessage()]);
+            throw ValidationException::withMessages(['platform_rate' => $e->getMessage()]);
         }
 
         return back()->with('success', 'Rates updated.');

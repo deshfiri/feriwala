@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -172,52 +173,34 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                 >
                                     {({ processing, errors }) => (
                                         <>
-                                            <FormField
+                                            <MoneyInput
+                                                id="supplier-rate"
+                                                name="supplier_rate"
                                                 label={t(
                                                     'supplier.admin.offers.supplier_rate_minor',
                                                 )}
-                                                error={
-                                                    errors.supplier_rate_minor
+                                                defaultValue={
+                                                    offer.supplier_rate.decimal
                                                 }
                                                 required
-                                            >
-                                                {(field) => (
-                                                    <Input
-                                                        {...field}
-                                                        type="number"
-                                                        min={0}
-                                                        name="supplier_rate_minor"
-                                                        defaultValue={
-                                                            offer.supplier_rate
-                                                                .minor_units
-                                                        }
-                                                        required
-                                                    />
-                                                )}
-                                            </FormField>
-                                            <FormField
+                                                error={
+                                                    errors.supplier_rate
+                                                }
+                                            />
+                                            <MoneyInput
+                                                id="platform-rate"
+                                                name="platform_rate"
                                                 label={t(
                                                     'supplier.admin.offers.platform_rate_minor',
                                                 )}
-                                                error={
-                                                    errors.platform_rate_minor
+                                                defaultValue={
+                                                    offer.platform_rate.decimal
                                                 }
                                                 required
-                                            >
-                                                {(field) => (
-                                                    <Input
-                                                        {...field}
-                                                        type="number"
-                                                        min={0}
-                                                        name="platform_rate_minor"
-                                                        defaultValue={
-                                                            offer.platform_rate
-                                                                .minor_units
-                                                        }
-                                                        required
-                                                    />
-                                                )}
-                                            </FormField>
+                                                error={
+                                                    errors.platform_rate
+                                                }
+                                            />
                                             <FormField
                                                 label={t(
                                                     'supplier.admin.offers.reason',
