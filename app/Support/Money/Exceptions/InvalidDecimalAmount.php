@@ -2,13 +2,15 @@
 
 namespace App\Support\Money\Exceptions;
 
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Money;
 use InvalidArgumentException;
 
 /**
  * A human-entered amount failed the exact decimal boundary (§36.1).
  *
- * Thrown by {@see \App\Support\Money\DecimalAmount}, never by
- * {@see \App\Support\Money\Money} itself — this is the stricter contract the
+ * Thrown by {@see DecimalAmount}, never by
+ * {@see Money} itself — this is the stricter contract the
  * human-input boundary holds callers to, on top of what `Money::fromDecimal()`
  * already tolerates (which rounds a third decimal place rather than refusing
  * it, correct for internal callers that compute a fraction, wrong for a
