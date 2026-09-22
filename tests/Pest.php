@@ -36,6 +36,7 @@ use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\OfferStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierOfferPriceChange;
 use App\Domain\Supplier\Models\SupplierProductListing;
 use App\Domain\Supplier\Queries\ResolvePreferredOffer;
 use App\Domain\Wallet\Actions\OpenWallet;
@@ -681,11 +682,11 @@ function supplierTestListing(Supplier $supplier, array $items = [[]], ListingSta
  * An active offer priced at 1,000 taka from the Supplier and 1,300 from the
  * platform, on a fresh Central Product (or the one given).
  *
- * Also writes the one price-change row {@see SetSupplierOfferRates}
- * always leaves behind, effective now — {@see ResolvePreferredOffer}
- * reads that history, not the offer's own denormalised figures, so an
- * allocation test against this fixture sees the same rates either way (D25,
- * P13-21).
+ * Writes no price-history row — several existing tests assert an exact
+ * history count from zero. A test that allocates an order line to this offer
+ * needs one ({@see ResolvePreferredOffer} reads history, not the offer's own
+ * denormalised figures) and adds it itself; see
+ * {@see supplierTestOfferPriceVersion()}.
  */
 function supplierTestOffer(
     ?Supplier $supplier = null,
@@ -711,14 +712,23 @@ function supplierTestOffer(
 
     $offer->stock()->create(['quantity' => 10]);
 
-    $offer->priceHistory()->create([
-        'supplier_rate_minor' => $supplierRate,
-        'platform_rate_minor' => $platformRate,
-        'currency_code' => 'BDT',
+    return $offer;
+}
+
+/**
+ * The price-change row {@see SetSupplierOfferRates} always leaves behind,
+ * backdated so it is already effective — for a test that allocates an order
+ * line to a {@see supplierTestOffer()} fixture and needs
+ * {@see ResolvePreferredOffer} to find a price version for it (D25, P13-21).
+ */
+function supplierTestOfferPriceVersion(SupplierOffer $offer): SupplierOfferPriceChange
+{
+    return $offer->priceHistory()->create([
+        'supplier_rate_minor' => $offer->supplier_rate_minor->minorUnits,
+        'platform_rate_minor' => $offer->platform_rate_minor->minorUnits,
+        'currency_code' => $offer->currency_code,
         'effective_from' => now()->subMinute(),
         'reason' => 'Fixture rate.',
         'created_at' => now(),
     ]);
-
-    return $offer;
 }

@@ -103,6 +103,7 @@ beforeEach(function () {
     $this->supplier = Supplier::factory()->create(['status' => SupplierStatus::Approved]);
     $this->product = websiteTestProduct();
     $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: 100000, platformRate: 130000, preferred: true);
+    supplierTestOfferPriceVersion($this->offer);
 
     // Dropshipping's own selling price, independent of the Supplier's or
     // Platform Rate — exactly as an ordinary website product is priced.
@@ -286,6 +287,7 @@ describe('allocation', function () {
         $secondSupplier = Supplier::factory()->create(['status' => SupplierStatus::Approved]);
         $secondProduct = websiteTestProduct();
         $secondOffer = supplierTestOffer($secondSupplier, $secondProduct, supplierRate: 50000, platformRate: 70000, preferred: true);
+        supplierTestOfferPriceVersion($secondOffer);
         $secondSelection = WebsiteProduct::create([
             'website_id' => $this->website->id,
             'business_account_id' => $this->account->id,
