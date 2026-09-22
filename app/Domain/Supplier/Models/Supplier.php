@@ -61,8 +61,13 @@ use Illuminate\Notifications\Notifiable;
  * @property CarbonImmutable|null $approved_at
  * @property CarbonImmutable|null $suspended_at
  * @property CarbonImmutable|null $closed_at
+ * @property int|null $withdrawal_minimum_override_minor
+ * @property int|null $withdrawal_maximum_override_minor
  * @property-read User|null $reviewedBy
  * @property-read Collection<int, SupplierStatusChange> $statusHistory
+ * @property-read Collection<int, SupplierWallet> $wallets
+ * @property-read Collection<int, SupplierPayoutMethod> $payoutMethods
+ * @property-read Collection<int, SupplierWithdrawal> $withdrawals
  */
 #[Fillable([
     'business_name', 'contact_person_name', 'business_address',
@@ -154,6 +159,30 @@ class Supplier extends Authenticatable implements MustVerifyEmail
     public function statusHistory(): HasMany
     {
         return $this->hasMany(SupplierStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<SupplierWallet, $this>
+     */
+    public function wallets(): HasMany
+    {
+        return $this->hasMany(SupplierWallet::class);
+    }
+
+    /**
+     * @return HasMany<SupplierPayoutMethod, $this>
+     */
+    public function payoutMethods(): HasMany
+    {
+        return $this->hasMany(SupplierPayoutMethod::class);
+    }
+
+    /**
+     * @return HasMany<SupplierWithdrawal, $this>
+     */
+    public function withdrawals(): HasMany
+    {
+        return $this->hasMany(SupplierWithdrawal::class);
     }
 
     /**
