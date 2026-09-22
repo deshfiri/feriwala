@@ -931,8 +931,8 @@ open** for the next batch.
 
 ## P13.E Open — next batch
 
-- [ ] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — schema extension needed; see the final report's wallet-architecture finding
-- [ ] **P13-24** Supplier withdrawals and payout-detail capture (`payout_details` is stored encrypted but has no screen)
+- [~] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — parallel `supplier_wallets`/`supplier_ledger_entries` schema, `SupplierWalletService`, `SettleSupplierPayable`/`BulkSettleSupplierPayables`, settlement-side reversal clawback (P13-25) into `recovery`, policies and permissions, real-concurrency tests, all done and verified. _No screens yet: Supplier wallet summary/ledger and the staff settlement queue remain_
+- [~] **P13-24** Supplier withdrawals and payout-detail capture — `supplier_payout_methods`/`supplier_withdrawals` schema, `SavePayoutMethod`, full request → review → approve → pay/reject/fail lifecycle, per-Supplier withdrawal limit override, real-concurrency tests, all done and verified. _No screens yet: Supplier withdrawal request/list and the staff withdrawal queue remain. `payout_details` on `suppliers` itself is unrelated KYC-era scaffolding, still unused_
 - [ ] **P13-26** Fulfilment integration: Supplier-side dispatch and handover. This batch adds the explicit `RecordSupplierPayableDelivery` event fulfilment will call; it does not mark ordinary orders delivered itself
 - [ ] **P13-27** Supplier reporting
 - [ ] **P13-29** Listing images and supporting-document uploads (the columns exist; no upload store yet), and creating a new variation from a listing item
@@ -959,10 +959,34 @@ increment by hand; a progress table that has drifted is worse than none.
 | P10 CMS & SEO                                   | 20      | 0       | 0       |
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
-| P13 Supplier Account System                     | 29      | 24      | 0       |
-| **Total**                                       | **489** | **250** | **23**  |
+| P13 Supplier Account System                     | 29      | 24      | 2       |
+| **Total**                                       | **489** | **250** | **25**  |
 
 ### Revision log
+
+- **2026-09-22** — Supplier wallet, settlement and withdrawal batch. **Started: P13-23, P13-24**
+  (backend complete, screens open). Built a parallel `supplier_wallets`/`supplier_ledger_entries`
+  system rather than extending `wallets`/`ledger_entries` — those are owned by `business_account_id`
+  NOT NULL throughout `WalletService`, and a Supplier is a wholly separate account type (D25);
+  retrofitting risked the entire existing Client/Partner financial system for no real gain. Three
+  buckets (total, reserved, recovery); `availableBalance()` nets out both automatically, which is
+  what stops a withdrawal request for money a reversal has already claimed back. `SettleSupplierPayable`
+  pays an Eligible payable's net amount into the wallet once (`settled_at`/`settlement_reference` now
+  locked by a corrective migration); `BulkSettleSupplierPayables` processes a list independently.
+  `ReverseSupplierPayable` (P13-25) now claws money back from the wallet when a settled payable is
+  reversed afterwards — debits whatever is available, records the rest as `recovery` rather than a
+  negative balance, in one entry. Payout methods (bank/bKash/Nagad) are encrypted at rest, masked
+  everywhere, archived not deleted, and snapshotted onto a withdrawal at request time. The withdrawal
+  lifecycle (request → under review → approved → processing → paid, with reject/fail releasing the
+  reservation and paid consuming it, each exactly once) reuses the existing `Module::Withdrawal`
+  permissions rather than inventing Supplier-specific ones. Four real `pcntl_fork()` concurrency tests
+  cover the required races (settling the same payable twice, two withdrawals over one balance,
+  approval racing rejection, a reversal racing a reservation); one found and fixed a real bug
+  (`PaySupplierWithdrawal` writing `paid_at` one statement before `status`, tripping the database's
+  own paid-is-complete CHECK). **No screens**: this batch is backend only — Supplier wallet
+  summary/ledger, payout details, withdrawal request/list, and the staff settlement and withdrawal
+  queues are the immediate next step, not yet built. No tasks added or removed. Progress table
+  recounted: P13 started 0 → 2, total started 23 → 25.
 
 - **2026-09-22** — Order allocation, Supplier stock reservation, and payable batch. **Done: P13-21,
   P13-22, P13-25, P13-28**. Order lines resolve to the Admin-chosen preferred Supplier offer entirely
