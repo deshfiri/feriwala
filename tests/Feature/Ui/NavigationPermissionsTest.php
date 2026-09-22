@@ -3,6 +3,8 @@
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Supplier\Enums\SupplierStatus;
+use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\User;
@@ -242,4 +244,71 @@ it('gives the wallet screens real content with no wallets to show', function () 
             ->has('wallets.data', 0)
             ->has('wallets.total'),
         );
+});
+
+/*
+ * Regression for 888a6a9: `supplier_payable.view` gated the Supplier
+ * payables link from the day it was added, but was never added to
+ * `NAVIGATION_ABILITIES` — so the link was invisible to everybody,
+ * including a Super Admin, who could still reach the page directly. Fixed
+ * alongside `withdrawal.view`, which the new Supplier withdrawal queue
+ * link needs the same way.
+ */
+it('sends a Super Admin the Supplier payable and withdrawal navigation abilities', function () {
+    $permissions = navPermissionsFor(
+        testPlatformStaff(PlatformRole::SuperAdmin),
+        'admin.supplier-payables.index',
+    );
+
+    expect($permissions['supplier_payable.view'] ?? null)->toBeTrue()
+        ->and($permissions['withdrawal.view'] ?? null)->toBeTrue();
+});
+
+it('sends a Supplier Manager the payable ability and not the SMS one', function () {
+    $permissions = navPermissionsFor(
+        testPlatformStaff(PlatformRole::SupplierManager),
+        'admin.supplier-payables.index',
+    );
+
+    expect($permissions['supplier_payable.view'])->toBeTrue()
+        ->and($permissions['sms.view'])->toBeFalse();
+});
+
+it('never sends a business owner the Supplier finance navigation abilities', function () {
+    // A Client/Partner account holds none of the Supplier module — the
+    // finance links stay exactly as invisible to them as order
+    // administration already is.
+    $account = testBusinessAccount(AccountStatus::Active);
+
+    $response = test()->actingAs($account->owner)->get(route('wholesale.orders.index'));
+
+    $response->assertOk();
+
+    $permissions = $response->viewData('page')['props']['permissions'];
+
+    expect($permissions['supplier_payable.view'] ?? null)->toBeFalse()
+        ->and($permissions['withdrawal.view'] ?? null)->toBeFalse();
+});
+
+it('never sends a Supplier account any staff navigation ability, on its own guard', function () {
+    // `HandleInertiaRequests::share()` reads `$request->user('web')`
+    // explicitly, never the default guard — a Supplier request authenticates
+    // no `web` user at all, so this is empty rather than the Supplier's own
+    // identity being asked what a staff permission it does not hold.
+    $supplier = Supplier::factory()->create(['status' => SupplierStatus::Approved]);
+    supplierTestSignIn($supplier);
+
+    $response = test()->get(route('supplier.payables.index'));
+
+    $response->assertOk();
+
+    expect($response->viewData('page')['props']['permissions'])->toBe([]);
+});
+
+it('refuses the Supplier payable and withdrawal staff routes to a role holding neither', function () {
+    $packageManager = testPlatformStaff(PlatformRole::PackageManager);
+
+    foreach (['admin.supplier-payables.index'] as $route) {
+        test()->actingAs($packageManager)->get(route($route))->assertForbidden();
+    }
 });

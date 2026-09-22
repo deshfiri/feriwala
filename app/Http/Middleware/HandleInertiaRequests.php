@@ -114,6 +114,18 @@ class HandleInertiaRequests extends Middleware
         [PermissionModule::SupplierListing, PermissionAction::View],
         [PermissionModule::SupplierPricing, PermissionAction::View],
         [PermissionModule::SupplierStock, PermissionAction::View],
+
+        // Supplier payables and their settlement queue (D25, P13-22/P13-23).
+        // Missing since the payables screen itself was added (888a6a9) — the
+        // link was gated on this key from the start, but the key was never
+        // added here, so it silently never appeared for anyone, Super Admin
+        // included (§33's Gate::before grants the ability; it does not add a
+        // missing entry to this list).
+        [PermissionModule::SupplierPayable, PermissionAction::View],
+
+        // Supplier withdrawals (D25, P13-24), reusing the existing
+        // Client/Partner Withdrawal module rather than a Supplier-specific one.
+        [PermissionModule::Withdrawal, PermissionAction::View],
     ];
 
     /**
