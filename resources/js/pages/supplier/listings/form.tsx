@@ -59,19 +59,6 @@ const emptyItem = (): ItemInput => ({
     return_conditions: '',
 });
 
-/**
- * Whole-taka text to integer minor units, without a float ever holding the
- * money (D4). The server validates it again; this only shapes the request.
- */
-function toMinorUnits(value: string): number {
-    const [whole = '0', fraction = ''] = value.trim().split('.');
-
-    return (
-        Number.parseInt(whole || '0', 10) * 100 +
-        Number.parseInt((fraction + '00').slice(0, 2), 10)
-    );
-}
-
 export default function SupplierListingForm({
     listing,
     options,
@@ -123,7 +110,9 @@ export default function SupplierListingForm({
                 id: item.id || null,
                 variant_label: item.variant_label || null,
                 supplier_sku: item.supplier_sku,
-                supplier_rate_minor: toMinorUnits(item.supplier_rate),
+                // The Taka string exactly as typed; the server is the only
+                // place that converts it to minor units (§36.1).
+                supplier_rate_minor: item.supplier_rate,
                 currency_code: 'BDT',
                 available_quantity: Number.parseInt(
                     item.available_quantity || '0',

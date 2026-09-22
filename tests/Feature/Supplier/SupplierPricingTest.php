@@ -195,7 +195,7 @@ test('view without edit can read rates but not change them', function () {
     $this->actingAs($viewer)->get(route('admin.supplier-offers.show', $this->offer))->assertOk();
 
     $this->post(route('admin.supplier-offers.rates.store', $this->offer), [
-        'supplier_rate_minor' => 1, 'platform_rate_minor' => 2, 'reason' => 'x',
+        'supplier_rate' => '0.01', 'platform_rate' => '0.02', 'reason' => 'x',
     ])->assertForbidden();
     $this->post(route('admin.supplier-offers.suspension.store', $this->offer))->assertForbidden();
     $this->post(route('admin.supplier-offers.preferred.store', $this->offer))->assertForbidden();
@@ -205,8 +205,8 @@ test('view without edit can read rates but not change them', function () {
 
 test('a platform rate below the supplier rate is rejected', function () {
     $this->actingAs($this->manager)->post(route('admin.supplier-offers.rates.store', $this->offer), [
-        'supplier_rate_minor' => 100000, 'platform_rate_minor' => 99999, 'reason' => 'Try.',
-    ])->assertSessionHasErrors('platform_rate_minor');
+        'supplier_rate' => '1000.00', 'platform_rate' => '999.99', 'reason' => 'Try.',
+    ])->assertSessionHasErrors('platform_rate');
 
     expect($this->offer->refresh()->platform_rate_minor->minorUnits)->toBe(SUPPLIER_LEAK_PLATFORM_RATE)
         ->and($this->offer->priceHistory()->count())->toBe(0);
@@ -219,23 +219,23 @@ test('mismatched currencies, negative rates and a missing reason are rejected', 
 
     expect($this->offer->refresh()->supplier_rate_minor->minorUnits)->toBe(SUPPLIER_LEAK_SUPPLIER_RATE);
 })->with([
-    'currency mismatch' => [['supplier_rate_minor' => 1000, 'platform_rate_minor' => 2000, 'supplier_currency_code' => 'BDT', 'platform_currency_code' => 'USD', 'reason' => 'x'], 'platform_rate_minor'],
-    'negative supplier rate' => [['supplier_rate_minor' => -1, 'platform_rate_minor' => 2000, 'reason' => 'x'], 'supplier_rate_minor'],
-    'negative platform rate' => [['supplier_rate_minor' => 1000, 'platform_rate_minor' => -5, 'reason' => 'x'], 'platform_rate_minor'],
-    'no reason' => [['supplier_rate_minor' => 1000, 'platform_rate_minor' => 2000, 'reason' => ''], 'reason'],
+    'currency mismatch' => [['supplier_rate' => '10.00', 'platform_rate' => '20.00', 'supplier_currency_code' => 'BDT', 'platform_currency_code' => 'USD', 'reason' => 'x'], 'platform_rate'],
+    'negative supplier rate' => [['supplier_rate' => -1, 'platform_rate' => '20.00', 'reason' => 'x'], 'supplier_rate'],
+    'negative platform rate' => [['supplier_rate' => '10.00', 'platform_rate' => -5, 'reason' => 'x'], 'platform_rate'],
+    'no reason' => [['supplier_rate' => '10.00', 'platform_rate' => '20.00', 'reason' => ''], 'reason'],
 ]);
 
 test('every rate change is a new effective-dated version and past versions are never altered', function () {
     $this->actingAs($this->manager);
 
     $this->post(route('admin.supplier-offers.rates.store', $this->offer), [
-        'supplier_rate_minor' => 90000, 'platform_rate_minor' => 125000, 'reason' => 'First change.',
+        'supplier_rate' => '900.00', 'platform_rate' => '1250.00', 'reason' => 'First change.',
     ])->assertSessionHasNoErrors();
 
     $this->travel(1)->day();
 
     $this->post(route('admin.supplier-offers.rates.store', $this->offer), [
-        'supplier_rate_minor' => 85000, 'platform_rate_minor' => 120000, 'reason' => 'Second change.',
+        'supplier_rate' => '850.00', 'platform_rate' => '1200.00', 'reason' => 'Second change.',
     ])->assertSessionHasNoErrors();
 
     $history = $this->offer->priceHistory()->get();
@@ -264,7 +264,7 @@ test('the database itself refuses a platform rate below the supplier rate', func
 
 test('a rate change audit never records a secret and does record the reason and both values', function () {
     $this->actingAs($this->manager)->post(route('admin.supplier-offers.rates.store', $this->offer), [
-        'supplier_rate_minor' => 90000, 'platform_rate_minor' => 125000, 'reason' => 'Renegotiated for volume.',
+        'supplier_rate' => '900.00', 'platform_rate' => '1250.00', 'reason' => 'Renegotiated for volume.',
     ]);
 
     $audit = AuditLog::query()->where('action', 'supplier_offer.rates_changed')->firstOrFail();

@@ -75,15 +75,6 @@ type ItemDecision = {
     note: string;
 };
 
-function toMinorUnits(value: string): number {
-    const [whole = '0', fraction = ''] = value.trim().split('.');
-
-    return (
-        Number.parseInt(whole || '0', 10) * 100 +
-        Number.parseInt((fraction + '00').slice(0, 2), 10)
-    );
-}
-
 /**
  * A Supplier's listing request, and the staff decision on it (D25).
  *
@@ -148,10 +139,10 @@ export default function AdminSupplierListingShow({
                     item_id: item.item_id,
                     decision: item.decision,
                     variant_id: item.variant_id || null,
+                    // The Taka string exactly as typed; the server is the
+                    // only place that converts it to minor units (§36.1).
                     platform_rate_minor:
-                        item.decision === 'approve'
-                            ? toMinorUnits(item.platform_rate)
-                            : null,
+                        item.decision === 'approve' ? item.platform_rate : null,
                     wholesale_enabled: item.wholesale_enabled,
                     dropshipping_enabled: item.dropshipping_enabled,
                     note: item.note || null,

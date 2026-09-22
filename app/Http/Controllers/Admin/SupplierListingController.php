@@ -13,6 +13,8 @@ use App\Domain\Supplier\Models\SupplierProductListing;
 use App\Domain\Supplier\Models\SupplierProductListingItem;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -175,11 +177,23 @@ class SupplierListingController extends Controller
             'items.*.item_id' => ['required', 'string'],
             'items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
             'items.*.variant_id' => ['nullable', 'string'],
-            'items.*.platform_rate_minor' => ['nullable', 'integer', 'min:0'],
+
+            // Entered in Taka; converted to minor units below, at this HTTP
+            // boundary — DecideSupplierListing still receives an integer
+            // per item (§36.1).
+            'items.*.platform_rate_minor' => ['nullable', new DecimalAmountRule],
             'items.*.wholesale_enabled' => ['nullable', 'boolean'],
             'items.*.dropshipping_enabled' => ['nullable', 'boolean'],
             'items.*.note' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        $validated['items'] = array_values(array_map(function (array $item) {
+            if (isset($item['platform_rate_minor'])) {
+                $item['platform_rate_minor'] = DecimalAmount::parse($item['platform_rate_minor'])->minorUnits;
+            }
+
+            return $item;
+        }, $validated['items']));
 
         $approves = array_any($validated['items'], fn (array $item) => $item['decision'] === 'approve');
 

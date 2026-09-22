@@ -12,6 +12,9 @@ use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierProductListing;
 use App\Domain\Supplier\Models\SupplierProductListingItem;
 use App\Http\Controllers\Controller;
+use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -178,7 +181,11 @@ class ListingController extends Controller
             'items.*.id' => ['nullable', 'string'],
             'items.*.variant_label' => ['nullable', 'string', 'max:255'],
             'items.*.supplier_sku' => ['required', 'string', 'max:100'],
-            'items.*.supplier_rate_minor' => ['required', 'integer', 'min:0'],
+
+            // Entered in Taka; converted to minor units below, at this HTTP
+            // boundary — SaveSupplierListingDraft still receives an integer
+            // per item (§36.1).
+            'items.*.supplier_rate_minor' => ['required', new DecimalAmountRule],
             'items.*.currency_code' => ['nullable', 'string', 'size:3'],
             'items.*.available_quantity' => ['required', 'integer', 'min:0'],
             'items.*.minimum_supply_quantity' => ['nullable', 'integer', 'min:1'],
@@ -187,7 +194,16 @@ class ListingController extends Controller
             'items.*.return_conditions' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $items = $data['items'];
+        $items = array_values(array_map(function (array $item) {
+            $currency = isset($item['currency_code'])
+                ? Currency::from($item['currency_code'])
+                : Currency::base();
+
+            $item['supplier_rate_minor'] = DecimalAmount::parse($item['supplier_rate_minor'], $currency)->minorUnits;
+
+            return $item;
+        }, $data['items']));
+
         unset($data['items']);
 
         return [$data, $items];
