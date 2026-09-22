@@ -5,6 +5,7 @@ import DepositRuleController from '@/actions/App/Http/Controllers/Admin/DepositR
 import DataTable from '@/components/data-table/data-table';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -307,59 +308,34 @@ export default function AdminDepositRules({
                                             />
                                         </div>
 
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="rule-deposit">
-                                                {t(
-                                                    'wallet.balances.required_deposit',
-                                                )}
-                                            </Label>
-                                            <Input
-                                                id="rule-deposit"
-                                                name="required_initial_deposit_minor"
-                                                type="number"
-                                                min={0}
-                                                defaultValue={0}
-                                                required
-                                            />
-                                            <InputError
-                                                message={
-                                                    errors.required_initial_deposit_minor
-                                                }
-                                            />
-                                        </div>
+                                        <MoneyInput
+                                            id="rule-deposit"
+                                            name="required_deposit"
+                                            label={t(
+                                                'wallet.balances.required_deposit',
+                                            )}
+                                            defaultValue="0"
+                                            required
+                                            error={errors.required_deposit}
+                                        />
 
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="rule-minimum">
-                                                {t(
-                                                    'wallet.balances.minimum_balance',
-                                                )}
-                                            </Label>
-                                            <Input
-                                                id="rule-minimum"
-                                                name="minimum_balance_minor"
-                                                type="number"
-                                                min={0}
-                                                defaultValue={0}
-                                                required
-                                            />
-                                            <InputError
-                                                message={
-                                                    errors.minimum_balance_minor
-                                                }
-                                            />
-                                        </div>
+                                        <MoneyInput
+                                            id="rule-minimum"
+                                            name="minimum_balance"
+                                            label={t(
+                                                'wallet.balances.minimum_balance',
+                                            )}
+                                            defaultValue="0"
+                                            required
+                                            error={errors.minimum_balance}
+                                        />
 
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="rule-low">
-                                                {t('wallet.rules.low')}
-                                            </Label>
-                                            <Input
-                                                id="rule-low"
-                                                name="low_balance_threshold_minor"
-                                                type="number"
-                                                min={0}
-                                            />
-                                        </div>
+                                        <MoneyInput
+                                            id="rule-low"
+                                            name="low_threshold"
+                                            label={t('wallet.rules.low')}
+                                            error={errors.low_threshold}
+                                        />
 
                                         <div className="grid gap-2">
                                             <Label htmlFor="rule-grace">
