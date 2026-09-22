@@ -29,6 +29,16 @@ class SupplierPayablePolicy
         return $user->can($this->permission(PermissionAction::View));
     }
 
+    /**
+     * Whether the user may settle a payable into the Supplier's wallet
+     * (P13-23) — the same `supplier_payable.approve` permission that already
+     * gates every other money-moving decision on a payable.
+     */
+    public function settle(User $user, SupplierPayable $payable): bool
+    {
+        return $user->can($this->permission(PermissionAction::Approve));
+    }
+
     protected function permission(PermissionAction $action): string
     {
         return PermissionCatalogue::name(PermissionModule::SupplierPayable, $action);

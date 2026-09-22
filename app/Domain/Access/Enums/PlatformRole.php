@@ -348,6 +348,15 @@ enum PlatformRole: string
                 Module::SupplierStock->value => [Action::View, Action::Edit],
                 Module::SupplierPayable->value => [Action::View, Action::Approve],
                 Module::Catalog->value => [Action::View],
+
+                /*
+                 * View, decide and reject a Supplier withdrawal (D25,
+                 * P13-24) — but never release the payment. That stays with
+                 * WithdrawalApprover alone, the same separation of duties
+                 * the Client/Partner side already draws: whoever approves
+                 * a request is not also the one who can move the money.
+                 */
+                Module::Withdrawal->value => [Action::View, Action::Edit, Action::Approve, Action::Reject],
             ],
         };
     }

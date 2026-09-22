@@ -49,7 +49,10 @@ enum SupplierWithdrawalStatus: string implements TransitionableState
         return match ($this) {
             self::Requested => [self::UnderReview, self::Rejected],
             self::UnderReview => [self::Approved, self::Rejected],
-            self::Approved => [self::Processing, self::Rejected],
+            // Approval is final regarding whether the request was legitimate;
+            // the only way out from here is proceeding to payment. Anything
+            // that goes wrong afterwards is Failed, not retroactively Rejected.
+            self::Approved => [self::Processing],
             self::Processing => [self::Paid, self::Failed],
             self::Rejected, self::Failed, self::Paid, self::Reversed => [],
         };
