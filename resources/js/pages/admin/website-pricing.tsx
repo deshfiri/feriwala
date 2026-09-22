@@ -4,6 +4,7 @@ import DataTable from '@/components/data-table/data-table';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -231,47 +232,26 @@ export default function WebsitePricing({
                                         <InputError message={errors.package} />
                                     </div>
 
-                                    <FormField
+                                    <MoneyInput
+                                        id="rule-min-price"
+                                        name="min_price"
                                         label={t('website.pricing.minimum')}
-                                        error={errors.min_price_minor}
-                                    >
-                                        {(field) => (
-                                            <Input
-                                                {...field}
-                                                name="min_price_minor"
-                                                type="number"
-                                                min={0}
-                                            />
-                                        )}
-                                    </FormField>
+                                        error={errors.min_price}
+                                    />
 
-                                    <FormField
+                                    <MoneyInput
+                                        id="rule-max-price"
+                                        name="max_price"
                                         label={t('website.pricing.maximum')}
-                                        error={errors.max_price_minor}
-                                    >
-                                        {(field) => (
-                                            <Input
-                                                {...field}
-                                                name="max_price_minor"
-                                                type="number"
-                                                min={0}
-                                            />
-                                        )}
-                                    </FormField>
+                                        error={errors.max_price}
+                                    />
 
-                                    <FormField
+                                    <MoneyInput
+                                        id="rule-suggested-price"
+                                        name="suggested_price"
                                         label={t('website.pricing.suggested')}
-                                        error={errors.suggested_price_minor}
-                                    >
-                                        {(field) => (
-                                            <Input
-                                                {...field}
-                                                name="suggested_price_minor"
-                                                type="number"
-                                                min={0}
-                                            />
-                                        )}
-                                    </FormField>
+                                        error={errors.suggested_price}
+                                    />
 
                                     <FormField
                                         label={t(

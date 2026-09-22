@@ -12,6 +12,8 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Website\Models\WebsiteProductPriceRule;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -89,9 +91,9 @@ class WebsitePricingController extends Controller
             'product' => ['nullable', 'string', 'size:26'],
             'package' => ['nullable', 'string', 'size:26'],
             'allows_user_pricing' => ['required', 'boolean'],
-            'min_price_minor' => ['nullable', 'integer', 'min:0'],
-            'max_price_minor' => ['nullable', 'integer', 'min:0', 'gte:min_price_minor'],
-            'suggested_price_minor' => ['nullable', 'integer', 'min:0'],
+            'min_price' => ['nullable', new DecimalAmountRule],
+            'max_price' => ['nullable', new DecimalAmountRule, 'gte:min_price'],
+            'suggested_price' => ['nullable', new DecimalAmountRule],
             'max_margin_percent' => ['nullable', 'integer', 'min:0', 'max:1000'],
             'locked_fields' => ['nullable', 'array'],
             'locked_fields.*' => ['string', 'in:'.implode(',', WebsiteProductPriceRule::LOCKABLE_FIELDS)],
@@ -122,9 +124,9 @@ class WebsitePricingController extends Controller
             'package_id' => $package?->id,
             'allows_user_pricing' => (bool) $validated['allows_user_pricing'],
             'currency_code' => 'BDT',
-            'min_price_minor' => $validated['min_price_minor'] ?? null,
-            'max_price_minor' => $validated['max_price_minor'] ?? null,
-            'suggested_price_minor' => $validated['suggested_price_minor'] ?? null,
+            'min_price_minor' => DecimalAmount::parseOrNull($validated['min_price'] ?? null),
+            'max_price_minor' => DecimalAmount::parseOrNull($validated['max_price'] ?? null),
+            'suggested_price_minor' => DecimalAmount::parseOrNull($validated['suggested_price'] ?? null),
             'max_margin_percent' => $validated['max_margin_percent'] ?? null,
             'locked_fields' => array_values($validated['locked_fields'] ?? []),
             'effective_from' => CarbonImmutable::parse($validated['effective_from']),
