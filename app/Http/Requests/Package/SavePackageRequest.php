@@ -2,8 +2,12 @@
 
 namespace App\Http\Requests\Package;
 
+use App\Domain\Package\Actions\ManagePackages;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Models\Package;
+use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -47,13 +51,13 @@ class SavePackageRequest extends FormRequest
             'short_description' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
 
-            // Minor units throughout. Money is never a float (D4, §36.1), and a
-            // form that accepted decimals would be the place one crept in.
-            'fee_minor' => ['required', 'integer', 'min:0'],
-            'registration_fee_minor' => ['nullable', 'integer', 'min:0'],
-            'renewal_fee_minor' => ['nullable', 'integer', 'min:0'],
-            'required_deposit_minor' => ['nullable', 'integer', 'min:0'],
-            'minimum_balance_minor' => ['nullable', 'integer', 'min:0'],
+            // Entered in Taka by the administrator; converted to minor units in
+            // packageAttributes() below, at this HTTP boundary (D4, §36.1).
+            'fee' => ['required', new DecimalAmountRule],
+            'registration_fee' => ['nullable', new DecimalAmountRule],
+            'renewal_fee' => ['nullable', new DecimalAmountRule],
+            'required_deposit' => ['nullable', new DecimalAmountRule],
+            'minimum_balance' => ['nullable', new DecimalAmountRule],
             'currency_code' => ['required', 'string', 'size:3'],
 
             'validity_days' => ['nullable', 'integer', 'min:1'],
@@ -72,8 +76,8 @@ class SavePackageRequest extends FormRequest
             'features.*' => ['nullable'],
 
             'charges' => ['sometimes', 'array'],
-            'charges.*.charge_type' => ['required_with:charges.*.amount_minor', Rule::in(self::CHARGE_TYPES)],
-            'charges.*.amount_minor' => ['required_with:charges.*.charge_type', 'integer', 'min:0'],
+            'charges.*.charge_type' => ['required_with:charges.*.amount', Rule::in(self::CHARGE_TYPES)],
+            'charges.*.amount' => ['required_with:charges.*.charge_type', new DecimalAmountRule],
             'charges.*.frequency' => ['nullable', Rule::in(self::FREQUENCIES)],
         ];
     }
@@ -97,12 +101,16 @@ class SavePackageRequest extends FormRequest
             /*
              * A renewal fee with no frequency renews on no schedule, and a
              * frequency with no fee renews for free. Either is a package that
-             * behaves differently from how it reads.
+             * behaves differently from how it reads. Skipped when the amount
+             * itself already failed DecimalAmountRule above — nothing to check
+             * a malformed string against.
              */
-            $renewalFee = (int) ($data['renewal_fee_minor'] ?? 0);
             $frequency = $data['renewal_frequency'] ?? null;
+            $renewalFee = $validator->errors()->has('renewal_fee')
+                ? null
+                : DecimalAmount::parseOrNull($data['renewal_fee'] ?? null);
 
-            if ($renewalFee > 0 && blank($frequency)) {
+            if ($renewalFee !== null && $renewalFee->minorUnits > 0 && blank($frequency)) {
                 $validator->errors()->add(
                     'renewal_frequency',
                     __('A renewal fee needs a renewal frequency.'),
@@ -118,11 +126,26 @@ class SavePackageRequest extends FormRequest
      * validation display names, and overriding it would break every error
      * message this form produces.
      *
+     * The Taka strings the administrator typed are converted to {@see Money}
+     * here, at the HTTP boundary — {@see ManagePackages}
+     * still receives exactly what it always expected: minor-unit columns
+     * (MoneyCast accepts a Money instance directly).
+     *
      * @return array<string, mixed>
      */
     public function packageAttributes(): array
     {
-        return $this->safe()->except(['features', 'charges']);
+        $currency = Currency::tryFrom((string) $this->string('currency_code')) ?? Currency::base();
+        $attributes = $this->safe()->except(['features', 'charges', 'fee', 'registration_fee', 'renewal_fee', 'required_deposit', 'minimum_balance']);
+
+        return [
+            ...$attributes,
+            'fee_minor' => DecimalAmount::parse($this->validated('fee'), $currency),
+            'registration_fee_minor' => DecimalAmount::parseOrNull($this->validated('registration_fee'), $currency),
+            'renewal_fee_minor' => DecimalAmount::parseOrNull($this->validated('renewal_fee'), $currency),
+            'required_deposit_minor' => DecimalAmount::parseOrNull($this->validated('required_deposit'), $currency),
+            'minimum_balance_minor' => DecimalAmount::parseOrNull($this->validated('minimum_balance'), $currency),
+        ];
     }
 
     /**
@@ -143,7 +166,15 @@ class SavePackageRequest extends FormRequest
     {
         /** @var array<int, array<string, mixed>> $charges */
         $charges = $this->validated('charges') ?? [];
+        $currency = Currency::tryFrom((string) $this->string('currency_code')) ?? Currency::base();
 
-        return $charges;
+        return array_map(function (array $charge) use ($currency) {
+            $amount = DecimalAmount::parseOrNull($charge['amount'] ?? null, $currency);
+
+            return [
+                ...$charge,
+                'amount_minor' => $amount === null ? 0 : $amount->minorUnits,
+            ];
+        }, $charges);
     }
 }
