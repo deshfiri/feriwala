@@ -13,6 +13,8 @@ const english = {
             products: 'Approved products',
             rates: 'Rates',
             stock: 'Stock & availability',
+            allocations: 'Allocated orders',
+            payables: 'Payables',
             notifications: 'Notifications',
             profile: 'Profile',
             security: 'Security',
@@ -32,6 +34,8 @@ const bangla = {
             products: 'অনুমোদিত পণ্য',
             rates: 'রেট',
             stock: 'মজুত ও প্রাপ্যতা',
+            allocations: 'বরাদ্দকৃত অর্ডার',
+            payables: 'পাওনা',
             notifications: 'বিজ্ঞপ্তি',
             profile: 'প্রোফাইল',
             security: 'নিরাপত্তা',
@@ -91,6 +95,8 @@ const OPERATIONAL_ONLY = [
     'Approved products',
     'Rates',
     'Stock & availability',
+    'Allocated orders',
+    'Payables',
 ];
 
 afterEach(() => {
@@ -169,6 +175,8 @@ describe('the supplier portal navigation', () => {
             'পণ্য তালিকাভুক্তি',
             'রেট',
             'মজুত ও প্রাপ্যতা',
+            'বরাদ্দকৃত অর্ডার',
+            'পাওনা',
             'বিজ্ঞপ্তি',
         ]) {
             expect(screen.getByRole('link', { name })).toBeInTheDocument();

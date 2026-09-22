@@ -43,6 +43,7 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Supplier\SupplierStockReservations;
 use App\Domain\Wholesale\Actions\ConfirmCheckout;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
@@ -442,7 +443,7 @@ describe('placing the order (P4-9, P4-10)', function () {
         wholesaleOrderConfirm($this->karim);
 
         // The first line reserves; the second finds its stock gone.
-        app()->instance(StockReservations::class, new class(app(StockLedger::class), app(DistributedLock::class), app(ReservationWindows::class), app(DatabaseManager::class)) extends StockReservations
+        app()->instance(StockReservations::class, new class(app(StockLedger::class), app(DistributedLock::class), app(ReservationWindows::class), app(DatabaseManager::class), app(SupplierStockReservations::class)) extends StockReservations
         {
             public int $calls = 0;
 

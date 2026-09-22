@@ -406,6 +406,8 @@ describe('supplier administration navigation', () => {
         'nav.supplier_listings',
         'nav.supplier_offers',
         'nav.supplier_stock',
+        'nav.supplier_allocations',
+        'nav.supplier_payables',
     ];
 
     const renderFor = (props: Record<string, unknown>) => {
@@ -430,6 +432,7 @@ describe('supplier administration navigation', () => {
                 'supplier_listing.view': true,
                 'supplier_pricing.view': true,
                 'supplier_stock.view': true,
+                'supplier_payable.view': true,
             },
             account: null,
         });
@@ -444,15 +447,20 @@ describe('supplier administration navigation', () => {
                 'supplier_listing.view': true,
                 'supplier_pricing.view': false,
                 'supplier_stock.view': false,
+                'supplier_payable.view': false,
             },
             account: null,
         });
 
         expect(titles).toContain('nav.supplier_listings');
-        // Seeing the queue does not open the confidential pricing screen.
+        // Seeing the queue does not open the confidential pricing screen —
+        // allocations carry the same Supplier Rate an offer does, so it is
+        // gated the same way.
         expect(titles).not.toContain('nav.supplier_offers');
+        expect(titles).not.toContain('nav.supplier_allocations');
         expect(titles).not.toContain('nav.suppliers');
         expect(titles).not.toContain('nav.supplier_stock');
+        expect(titles).not.toContain('nav.supplier_payables');
     });
 
     it('offers a partner none of it', () => {
