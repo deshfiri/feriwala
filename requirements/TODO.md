@@ -924,17 +924,17 @@ open** for the next batch.
 - [x] **P13-18** Supplier portal (own layout and navigation, EN/BN, light/dark/system, no mobile overflow) and staff screens (applications, KYC evidence, listings, offers, availability)
 - [x] **P13-19** Audit for every Supplier decision, rate change, preferred-offer selection and availability change — without document bodies, storage paths, secrets or payout detail
 - [x] **P13-20** Supplier test suite: authentication isolation, KYC lifecycle, listings, pricing and data-leak, stock, locale, navigation and screens
+- [x] **P13-21** Supplier order allocation: the Admin-chosen preferred offer resolved and reserved on the server, never a browser-supplied offer or rate; the offer, its price version, both rates and the margin snapshotted immutably on the order line; one whole line to one offer, never split or mixed across Suppliers; a legacy central-stock line unaffected
+- [x] **P13-22** Supplier payable per allocated line at the Supplier Rate in force when the order was placed; eligible for settlement only once delivery and settled payment are both recorded; cancelled or held with its order
+- [x] **P13-25** Refund and return reversal integration for Supplier payables: a return reverses the proportional amount through an append-only, capped reversal record — never edits the payable
+- [x] **P13-28** Supplier availability inside the existing reservation lifecycle: `StockReservations` delegates to a Supplier-stock ledger and reservation service with the same idempotency, locking and commit/release/expire contract; central stock and its reservation queue are unchanged
 
 ## P13.E Open — next batch
 
-- [ ] **P13-21** Supplier order allocation: which offer an order line was fulfilled from, snapshotted on the order line
-- [ ] **P13-22** Supplier payable per fulfilled line at the Supplier Rate in force when the order was priced
-- [ ] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules)
+- [ ] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — schema extension needed; see the final report's wallet-architecture finding
 - [ ] **P13-24** Supplier withdrawals and payout-detail capture (`payout_details` is stored encrypted but has no screen)
-- [ ] **P13-25** Refund and return reversal integration for Supplier payables
-- [ ] **P13-26** Fulfilment integration: Supplier-side dispatch and handover
+- [ ] **P13-26** Fulfilment integration: Supplier-side dispatch and handover. This batch adds the explicit `RecordSupplierPayableDelivery` event fulfilment will call; it does not mark ordinary orders delivered itself
 - [ ] **P13-27** Supplier reporting
-- [ ] **P13-28** Supplier availability into order reservation (must not change the existing reservation lifecycle)
 - [ ] **P13-29** Listing images and supporting-document uploads (the columns exist; no upload store yet), and creating a new variation from a listing item
 
 ---
@@ -959,10 +959,22 @@ increment by hand; a progress table that has drifted is worse than none.
 | P10 CMS & SEO                                   | 20      | 0       | 0       |
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
-| P13 Supplier Account System                     | 29      | 20      | 0       |
-| **Total**                                       | **489** | **246** | **23**  |
+| P13 Supplier Account System                     | 29      | 24      | 0       |
+| **Total**                                       | **489** | **250** | **23**  |
 
 ### Revision log
+
+- **2026-09-22** — Order allocation, Supplier stock reservation, and payable batch. **Done: P13-21,
+  P13-22, P13-25, P13-28**. Order lines resolve to the Admin-chosen preferred Supplier offer entirely
+  on the server, reserve that offer's own stock through the existing central `StockReservations`
+  service (extended to delegate to a Supplier-stock ledger and reservation twin, not a parallel
+  system), and snapshot the Supplier, offer, price version, both rates and the margin immutably on
+  the line. Each Supplier-backed line accrues one pending payable, held or cancelled with its order,
+  eligible only once delivery and settled payment are both recorded, and reversed proportionally —
+  never edited — by a returned line. Left open: **P13-23** (wallet/settlement — see the schema
+  finding below), **P13-24** (withdrawals), **P13-26** (fulfilment integration), **P13-27**
+  (reporting), **P13-29** (listing uploads). No tasks added or removed. Progress table recounted:
+  P13 done 20 → 24, total done 246 → 250.
 
 - **2026-09-21** — **Requirement change, D25**: Feriwala gains a wholly separate Supplier account
   domain, approved by the Project Owner and superseding the Single Account System wording in
