@@ -492,6 +492,7 @@ return [
             'confirm_password' => 'পাসওয়ার্ড নিশ্চিত করুন',
             'bulk_result_title' => 'কিছু পাওনা নিষ্পত্তি করা যায়নি',
             'bulk_result_succeeded' => ':count টি সফলভাবে নিষ্পন্ন হয়েছে।',
+            'dismiss' => 'বাতিল করুন',
         ],
 
         'wallets' => [

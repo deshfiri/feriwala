@@ -492,6 +492,7 @@ return [
             'confirm_password' => 'Confirm password',
             'bulk_result_title' => 'Some payables could not be settled',
             'bulk_result_succeeded' => ':count settled successfully.',
+            'dismiss' => 'Dismiss',
         ],
 
         'wallets' => [

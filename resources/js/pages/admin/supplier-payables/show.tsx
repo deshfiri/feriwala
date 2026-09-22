@@ -1,14 +1,17 @@
-import { Head, Link } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import SupplierPayableController from '@/actions/App/Http/Controllers/Admin/SupplierPayableController';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import { index } from '@/routes/admin/supplier-payables';
+import { confirm as confirmPassword } from '@/routes/password';
 
 type Payable = {
     id: string;
@@ -27,11 +30,14 @@ type Payable = {
     delivered_at: string | null;
     payment_settled_at: string | null;
     eligible_at: string | null;
+    settled_at: string | null;
+    settlement_reference: string | null;
     created_at: string;
     reversals: {
         quantity: number;
         amount: Money;
         reason: string;
+        wallet_reference: string | null;
         created_at: string;
     }[];
     history: {
@@ -45,8 +51,12 @@ type Payable = {
 
 export default function AdminSupplierPayableShow({
     payable,
+    can,
+    password_confirmed: passwordConfirmed,
 }: {
     payable: Payable;
+    can: { settle: boolean };
+    password_confirmed: boolean;
 }) {
     const { t, locale } = useTranslation();
 
@@ -76,6 +86,72 @@ export default function AdminSupplierPayableShow({
                         </>
                     }
                 />
+
+                {payable.status === 'eligible' && can.settle && (
+                    <SectionCard title={t('supplier.payables.settled_at')}>
+                        {passwordConfirmed ? (
+                            <Form
+                                {...SupplierPayableController.settle.form(
+                                    payable.id,
+                                )}
+                                options={{ preserveScroll: true }}
+                            >
+                                {({ processing, errors }) => (
+                                    <>
+                                        <p className="text-muted-foreground mb-3 text-sm">
+                                            {t(
+                                                'supplier.admin.payables.settle_confirm',
+                                            )}
+                                        </p>
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing && <Spinner />}
+                                            {t(
+                                                'supplier.admin.payables.settle',
+                                            )}
+                                        </Button>
+                                        {errors.settlement && (
+                                            <p className="text-destructive mt-2 text-sm">
+                                                {errors.settlement}
+                                            </p>
+                                        )}
+                                    </>
+                                )}
+                            </Form>
+                        ) : (
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                                <span>
+                                    {t(
+                                        'supplier.admin.payables.confirm_password_first',
+                                    )}
+                                </span>
+                                <Button size="sm" variant="outline" asChild>
+                                    <Link href={confirmPassword()}>
+                                        {t(
+                                            'supplier.admin.payables.confirm_password',
+                                        )}
+                                    </Link>
+                                </Button>
+                            </div>
+                        )}
+                    </SectionCard>
+                )}
+
+                {payable.settled_at && (
+                    <SectionCard title={t('supplier.payables.settled_at')}>
+                        <p className="text-sm">
+                            {new Date(payable.settled_at).toLocaleString(
+                                locale,
+                            )}
+                        </p>
+                        <p className="text-muted-foreground font-mono text-xs">
+                            {t('supplier.payables.settlement_reference')}:{' '}
+                            {payable.settlement_reference}
+                        </p>
+                    </SectionCard>
+                )}
 
                 <SectionCard
                     title={t('supplier.admin.payables.columns.amount')}
@@ -152,6 +228,14 @@ export default function AdminSupplierPayableShow({
                                     <p className="text-muted-foreground">
                                         {reversal.reason}
                                     </p>
+                                    {reversal.wallet_reference && (
+                                        <p className="text-muted-foreground font-mono text-xs">
+                                            {t(
+                                                'supplier.payables.wallet_reference',
+                                            )}
+                                            : {reversal.wallet_reference}
+                                        </p>
+                                    )}
                                 </li>
                             ))}
                         </ul>
