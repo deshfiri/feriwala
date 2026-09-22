@@ -135,7 +135,7 @@ describe('starting one', function () {
 
         $this->actingAs($this->account->owner)
             ->post(route('wallet.top-up.store'), [
-                'amount_minor' => 500000,
+                'amount' => '5000.00',
                 'gateway' => 'sslcommerz',
             ])
             ->assertRedirect('https://sandbox.example/redirect');
@@ -156,10 +156,10 @@ describe('starting one', function () {
 
         $this->actingAs($this->account->owner)
             ->post(route('wallet.top-up.store'), [
-                'amount_minor' => 1,
+                'amount' => '0.01',
                 'gateway' => 'sslcommerz',
             ])
-            ->assertSessionHasErrors('amount_minor');
+            ->assertSessionHasErrors('amount');
 
         expect(Payment::query()->count())->toBe(0);
     });
@@ -167,7 +167,7 @@ describe('starting one', function () {
     it('refuses a gateway that is not enabled', function () {
         $this->actingAs($this->account->owner)
             ->post(route('wallet.top-up.store'), [
-                'amount_minor' => 500000,
+                'amount' => '5000.00',
                 'gateway' => 'not-a-gateway',
             ])
             ->assertSessionHasErrors('gateway');
@@ -179,7 +179,7 @@ describe('starting one', function () {
             'GatewayPageURL' => 'https://sandbox.example/redirect',
         ])]);
 
-        $payload = ['amount_minor' => 500000, 'gateway' => 'sslcommerz'];
+        $payload = ['amount' => '5000.00', 'gateway' => 'sslcommerz'];
 
         $this->actingAs($this->account->owner)->post(route('wallet.top-up.store'), $payload);
         $this->actingAs($this->account->owner)->post(route('wallet.top-up.store'), $payload);
@@ -199,7 +199,7 @@ describe('when the gateway posts the payer back', function () {
             : Http::response($answers->getArrayCopy()));
 
         $this->actingAs($this->account->owner)
-            ->post(route('wallet.top-up.store'), ['amount_minor' => 500000, 'gateway' => 'sslcommerz'])
+            ->post(route('wallet.top-up.store'), ['amount' => '5000.00', 'gateway' => 'sslcommerz'])
             ->assertRedirect('https://sandbox.example/redirect');
 
         $payment = Payment::query()->firstOrFail();

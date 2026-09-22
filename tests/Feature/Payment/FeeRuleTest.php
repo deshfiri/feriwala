@@ -258,7 +258,7 @@ describe('the billing screen', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.billing.fee-rules.store'), [
                 'fee_type' => FeeType::Registration->value,
-                'amount_minor' => 120000,
+                'amount' => '1200.00',
                 'effective_from' => now()->toDateString(),
             ])
             ->assertSessionHasErrors('effective_from');
@@ -270,7 +270,7 @@ describe('the billing screen', function () {
         $this->actingAs($viewer)
             ->post(route('admin.billing.fee-rules.store'), [
                 'fee_type' => FeeType::Registration->value,
-                'amount_minor' => 120000,
+                'amount' => '1200.00',
                 'effective_from' => now()->toDateString(),
             ])
             ->assertForbidden();

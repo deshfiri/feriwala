@@ -183,9 +183,7 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                     offer.supplier_rate.decimal
                                                 }
                                                 required
-                                                error={
-                                                    errors.supplier_rate
-                                                }
+                                                error={errors.supplier_rate}
                                             />
                                             <MoneyInput
                                                 id="platform-rate"
@@ -197,9 +195,7 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                     offer.platform_rate.decimal
                                                 }
                                                 required
-                                                error={
-                                                    errors.platform_rate
-                                                }
+                                                error={errors.platform_rate}
                                             />
                                             <FormField
                                                 label={t(

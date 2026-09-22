@@ -96,8 +96,17 @@ class WalletTopUpController extends Controller
         $amount = DecimalAmount::parse($validated['amount']);
 
         // Throws a validation error rather than a refusal page: being asked for
-        // a bigger amount is an answer to the form, not a failure.
-        $plan = $this->planner->handle($wallet, $amount->minorUnits);
+        // a bigger amount is an answer to the form, not a failure. The planner
+        // is a domain action that knows nothing of HTTP field names and
+        // reports against its own `amount_minor` parameter; remapped here to
+        // the `amount` field this form actually submits.
+        try {
+            $plan = $this->planner->handle($wallet, $amount->minorUnits);
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages([
+                'amount' => $exception->errors()['amount_minor'] ?? $exception->getMessage(),
+            ]);
+        }
 
         $payment = $this->payments->handle($account, $plan);
 

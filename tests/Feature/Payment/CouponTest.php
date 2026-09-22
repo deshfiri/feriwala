@@ -539,6 +539,29 @@ describe('managing coupons', function () {
         expect(Coupon::query()->count())->toBe(1);
     });
 
+    it('converts Taka form input to exact minor units for a fixed-amount coupon', function () {
+        // §36.1: the administrator types Taka for a fixed discount; the
+        // percentage path stays basis points and is untouched (D24).
+        $this->actingAs($this->manager)
+            ->post(route('admin.billing.coupons.store'), [
+                'code' => 'FIXED500',
+                'name' => 'Fixed 500',
+                'discount_type' => DiscountType::Fixed->value,
+                'value' => '500.50',
+                'applies_to' => CouponScope::Fees->value,
+                'minimum_spend' => '1000.00',
+                'maximum_discount' => '500.50',
+                'effective_from' => now()->toDateString(),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $coupon = Coupon::query()->where('code', 'FIXED500')->firstOrFail();
+
+        expect($coupon->value)->toBe(50050)
+            ->and($coupon->minimum_spend_minor->minorUnits)->toBe(100000)
+            ->and($coupon->maximum_discount_minor->minorUnits)->toBe(50050);
+    });
+
     it('refuses a percentage above one hundred', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.billing.coupons.store'), [
