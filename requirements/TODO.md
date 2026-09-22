@@ -931,8 +931,8 @@ open** for the next batch.
 
 ## P13.E Open — next batch
 
-- [~] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — parallel `supplier_wallets`/`supplier_ledger_entries` schema, `SupplierWalletService`, `SettleSupplierPayable`/`BulkSettleSupplierPayables`, settlement-side reversal clawback (P13-25) into `recovery`, policies and permissions, real-concurrency tests, all done and verified. _No screens yet: Supplier wallet summary/ledger and the staff settlement queue remain_
-- [~] **P13-24** Supplier withdrawals and payout-detail capture — `supplier_payout_methods`/`supplier_withdrawals` schema, `SavePayoutMethod`, full request → review → approve → pay/reject/fail lifecycle, per-Supplier withdrawal limit override, real-concurrency tests, all done and verified. _No screens yet: Supplier withdrawal request/list and the staff withdrawal queue remain. `payout_details` on `suppliers` itself is unrelated KYC-era scaffolding, still unused_
+- [~] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — parallel `supplier_wallets`/`supplier_ledger_entries` schema, `SupplierWalletService`, `SettleSupplierPayable`/`BulkSettleSupplierPayables`, settlement-side reversal clawback (P13-25) into `recovery`, policies and permissions, real-concurrency tests, Supplier wallet dashboard + transaction history, staff settlement queue (single + bulk, password-confirmed) and read-only wallet detail, all built and covered by HTTP-level Pest tests (self-scoping, permission 403s, masking) and Vitest. _Backend, screens and their tests are done. What is left is a live-browser pass — required by this project's own UI-completeness rule — blocked by the same missing Chromium shared libraries (`libnspr4`, `libnss3`, `libnssutil3`, `libsmime3`, `libasound.so.2`) noted before; no sudo available to install them_
+- [~] **P13-24** Supplier withdrawals and payout-detail capture — `supplier_payout_methods`/`supplier_withdrawals` schema, `SavePayoutMethod`, full request → review → approve → pay/reject/fail lifecycle, per-Supplier withdrawal limit override, real-concurrency tests, Supplier payout-method and withdrawal screens (current-password-gated, idempotency-key-protected request form), staff withdrawal queue and decision screen (password-confirmed release), all built and covered by HTTP-level Pest tests and Vitest. _Same gap as P13-23: backend, screens and tests done; live-browser pass still blocked by environment. `payout_details` on `suppliers` itself is unrelated KYC-era scaffolding, still unused_
 - [ ] **P13-26** Fulfilment integration: Supplier-side dispatch and handover. This batch adds the explicit `RecordSupplierPayableDelivery` event fulfilment will call; it does not mark ordinary orders delivered itself
 - [ ] **P13-27** Supplier reporting
 - [ ] **P13-29** Listing images and supporting-document uploads (the columns exist; no upload store yet), and creating a new variation from a listing item
@@ -963,6 +963,27 @@ increment by hand; a progress table that has drifted is worse than none.
 | **Total**                                       | **489** | **250** | **25**  |
 
 ### Revision log
+
+- **2026-09-22** — Supplier and staff finance screens for the wallet/withdrawal batch. **Still
+  started, not done: P13-23, P13-24** — everything but a live browser pass is now built. Fixed a
+  real regression along the way: `supplier_payable.view` was never added to
+  `HandleInertiaRequests::NAVIGATION_ABILITIES` when the payables screen shipped (888a6a9), so the
+  link was invisible to everyone including a Super Admin; added it, and `withdrawal.view` for the
+  new withdrawal queue link, with a regression test. Supplier portal: wallet dashboard and
+  transaction history (server-computed balances only, never calculated in React), payout methods
+  (create/edit/archive gated by an inline current-password field — the supplier guard has no
+  Fortify confirm-password flow to reuse), and withdrawals (request form with a server-generated,
+  hidden idempotency key so a retried submission reserves once). Staff ERP: settlement added to the
+  existing payables screens (single and bulk, both behind `RequirePassword`, bulk's per-item result
+  read from the flash), a new read-only Supplier wallet list/detail (no manual adjustment — none was
+  asked for), and a new Supplier withdrawal queue with the full decision lifecycle, `markPaid` behind
+  the same password gate. Verification: 138 Supplier-group Pest tests (self-scoping, permission
+  403s, masking, guard isolation both directions, the full withdrawal decision lifecycle by
+  permission), 132 Vitest tests, `composer types:check` (1001 files) and `vp check`/`tsc` all clean.
+  **Left open**: a live-browser pass, which this project's own UI-completeness rule asks for and the
+  environment still cannot run — the same missing Chromium shared libraries as the previous batch
+  (`libnspr4`, `libnss3`, `libnssutil3`, `libsmime3`, `libasound.so.2`), no sudo available. No tasks
+  added or removed; progress table unchanged (both tasks were already counted as started).
 
 - **2026-09-22** — Supplier wallet, settlement and withdrawal batch. **Started: P13-23, P13-24**
   (backend complete, screens open). Built a parallel `supplier_wallets`/`supplier_ledger_entries`
