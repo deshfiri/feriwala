@@ -12,7 +12,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\RequireTwoFactorForSensitiveRoles;
 use App\Models\User;
 use App\Support\Money\Currency;
-use App\Support\Money\Money;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -55,10 +56,13 @@ class WalletAdjustmentController extends Controller
 
         abort_unless(WalletPolicy::canAdjust($actor), 403);
 
+        $currency = Currency::from($record->currency_code);
+
         $validated = $request->validate([
-            // Minor units, as every other money form in the panel takes them.
-            // Nothing here parses a decimal the browser typed.
-            'amount_minor' => ['required', 'integer', 'min:1'],
+            // Decimal Taka (§36.1) — every human-facing money field in the
+            // panel takes them the same way; nothing here parses minor units
+            // the browser was never asked to send.
+            'amount' => ['required', new DecimalAmountRule($currency)],
             'direction' => ['required', Rule::enum(LedgerDirection::class)],
 
             // Not `nullable`. A balance that changed for no recorded reason is
@@ -73,7 +77,7 @@ class WalletAdjustmentController extends Controller
             $transaction = $this->corrections->adjust(
                 wallet: $record,
                 actor: $actor,
-                amount: Money::of((int) $validated['amount_minor'], Currency::from($record->currency_code)),
+                amount: DecimalAmount::parse($validated['amount'], $currency),
                 direction: LedgerDirection::from($validated['direction']),
                 reason: $validated['reason'],
                 internalNote: $validated['internal_note'] ?? null,
@@ -81,7 +85,7 @@ class WalletAdjustmentController extends Controller
         } catch (WalletOperationRefused $refused) {
             // A refusal is an answer to what was asked — most often "there is
             // not that much in the wallet" — not a failure of the request.
-            return back()->withErrors(['amount_minor' => $refused->getMessage()]);
+            return back()->withErrors(['amount' => $refused->getMessage()]);
         }
 
         return back()->with('success', __('wallet.admin.adjusted', [

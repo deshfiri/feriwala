@@ -2,6 +2,7 @@ import { Form } from '@inertiajs/react';
 import { useState } from 'react';
 import WalletAdjustmentController from '@/actions/App/Http/Controllers/Admin/WalletAdjustmentController';
 import InputError from '@/components/input-error';
+import MoneyInput from '@/components/money-input';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -11,7 +12,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
@@ -96,26 +96,13 @@ export default function AdjustWalletDialog({
                                 <InputError message={errors.direction} />
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="adjust-amount">
-                                    {t('wallet.admin.adjust.amount')}
-                                </Label>
-
-                                <Input
-                                    id="adjust-amount"
-                                    name="amount_minor"
-                                    type="number"
-                                    min={1}
-                                    step={1}
-                                    required
-                                />
-
-                                <p className="text-muted-foreground text-xs">
-                                    {t('wallet.admin.adjust.amount_help')}
-                                </p>
-
-                                <InputError message={errors.amount_minor} />
-                            </div>
+                            <MoneyInput
+                                id="adjust-amount"
+                                name="amount"
+                                label={t('wallet.admin.adjust.amount')}
+                                required
+                                error={errors.amount}
+                            />
 
                             <div className="grid gap-2">
                                 <Label htmlFor="adjust-reason">
