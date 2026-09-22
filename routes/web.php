@@ -37,9 +37,11 @@ use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
+use App\Http\Controllers\Admin\SupplierAllocationController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\SupplierListingController;
 use App\Http\Controllers\Admin\SupplierOfferController;
+use App\Http\Controllers\Admin\SupplierPayableController;
 use App\Http\Controllers\Admin\SupplierStockController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
@@ -519,6 +521,12 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('supplier-stock.decision.store');
         Route::post('supplier-offers/{offer}/stock-adjustment', [SupplierStockController::class, 'adjust'])
             ->name('supplier-offers.stock-adjustment.store');
+
+        // Order allocation and Supplier payables (P13-21, P13-22).
+        Route::get('supplier-allocations', [SupplierAllocationController::class, 'index'])->name('supplier-allocations.index');
+        Route::get('supplier-allocations/{item}', [SupplierAllocationController::class, 'show'])->name('supplier-allocations.show');
+        Route::get('supplier-payables', [SupplierPayableController::class, 'index'])->name('supplier-payables.index');
+        Route::get('supplier-payables/{payable}', [SupplierPayableController::class, 'show'])->name('supplier-payables.show');
 
         /*
          * One trading business, in full (P1-79).

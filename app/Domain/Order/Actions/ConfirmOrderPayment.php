@@ -14,6 +14,8 @@ use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Exceptions\OrderStockUnconfirmable;
 use App\Domain\Order\Models\Order;
+use App\Domain\Supplier\Actions\HoldSupplierPayable;
+use App\Domain\Supplier\Actions\QualifySupplierPayablePayment;
 use App\Domain\Wholesale\Actions\CloseOrderedCart;
 use App\Notifications\Orders\WebsiteOrderPaid;
 use App\Support\Concurrency\Exceptions\LockTimeout;
@@ -57,6 +59,8 @@ class ConfirmOrderPayment
         protected IssueInvoice $invoices,
         protected CloseOrderedCart $carts,
         protected RecordPaymentLog $logs,
+        protected QualifySupplierPayablePayment $supplierPayment,
+        protected HoldSupplierPayable $supplierHold,
         protected DatabaseManager $database,
         protected LogManager $log,
     ) {}
@@ -170,6 +174,10 @@ class ConfirmOrderPayment
 
         $this->carts->afterPayment($locked);
 
+        // Records the fact only; a Supplier payable needs delivery too before
+        // it is eligible for settlement (D25, P13-22).
+        $this->supplierPayment->handle($locked, $settled->completed_at);
+
         $order->setRawAttributes($locked->getAttributes(), sync: true);
     }
 
@@ -207,6 +215,11 @@ class ConfirmOrderPayment
             );
 
             $this->carts->afterPayment($locked);
+
+            // The reservation the payable's line relied on is missing or
+            // invalid: the payable is frozen with the order, consistent with
+            // the order's own on_hold path (D25, P13-22).
+            $this->supplierHold->handle($locked, $reason.' '.$problem);
 
             return true;
         });

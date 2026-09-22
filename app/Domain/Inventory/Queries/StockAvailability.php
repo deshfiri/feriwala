@@ -4,6 +4,7 @@ namespace App\Domain\Inventory\Queries;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Supplier\Queries\SupplierSourcedAvailability;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -35,6 +36,10 @@ use Illuminate\Support\Facades\DB;
  */
 class StockAvailability
 {
+    public function __construct(
+        protected SupplierSourcedAvailability $supplierStock = new SupplierSourcedAvailability,
+    ) {}
+
     /**
      * Availability for the given SKUs, keyed by SKU.
      *
@@ -172,7 +177,19 @@ class StockAvailability
 
         $productIds = array_values(array_unique(array_column($units, 'product_id')));
 
-        $totals = DB::table('stock_items')
+        // A unit whose stock comes from Suppliers is never central stock too
+        // (D25): the moment any offer exists for it, its answer comes from
+        // there instead, and central stock is not consulted for it at all.
+        $supplierAnswers = $this->supplierStock->forUnits($units);
+
+        $centralUnits = $supplierAnswers === []
+            ? $units
+            : array_values(array_filter(
+                $units,
+                fn (array $unit) => ! isset($supplierAnswers[$unit['product_id'].':'.($unit['variant_id'] ?? '')]),
+            ));
+
+        $totals = $centralUnits === [] ? collect() : DB::table('stock_items')
             ->join('warehouses', 'warehouses.id', '=', 'stock_items.warehouse_id')
             // Only the asking account's allocation joins; with no account, none does.
             ->leftJoin('stock_allocations', fn ($join) => $join
@@ -193,7 +210,21 @@ class StockAvailability
         $answers = [];
 
         foreach ($units as $unit) {
-            $row = $totals->get($unit['product_id'].':'.($unit['variant_id'] ?? ''));
+            $key = $unit['product_id'].':'.($unit['variant_id'] ?? '');
+            $supplier = $supplierAnswers[$key] ?? null;
+
+            if ($supplier !== null) {
+                $answers[$unit['sku']] = [
+                    'sku' => $unit['sku'],
+                    'in_stock' => $supplier['quantity'] > 0,
+                    'quantity' => $supplier['quantity'],
+                    'updated_at' => $supplier['updated_at'],
+                ];
+
+                continue;
+            }
+
+            $row = $totals->get($key);
             $quantity = $row === null ? 0 : (int) $row->quantity;
 
             $answers[$unit['sku']] = [

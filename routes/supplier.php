@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Supplier\AccountController;
+use App\Http\Controllers\Supplier\AllocationController;
 use App\Http\Controllers\Supplier\Auth\AuthenticatedSupplierSessionController;
 use App\Http\Controllers\Supplier\Auth\NewSupplierPasswordController;
 use App\Http\Controllers\Supplier\Auth\RegisteredSupplierController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\Supplier\DashboardController;
 use App\Http\Controllers\Supplier\KycController;
 use App\Http\Controllers\Supplier\ListingController;
 use App\Http\Controllers\Supplier\OfferController;
+use App\Http\Controllers\Supplier\PayableController;
 use App\Http\Controllers\Supplier\StockController;
 use Illuminate\Support\Facades\Route;
 
@@ -113,6 +115,12 @@ Route::prefix('supplier')
                 // Availability foundation (D25, P13-15).
                 Route::get('stock', [StockController::class, 'index'])->name('stock.index');
                 Route::post('offers/{offer}/stock-updates', [StockController::class, 'store'])->name('stock.updates.store');
+
+                // Order allocation and Supplier payables (D25, P13-21, P13-22).
+                Route::get('allocations', [AllocationController::class, 'index'])->name('allocations.index');
+                Route::get('allocations/{item}', [AllocationController::class, 'show'])->name('allocations.show');
+                Route::get('payables', [PayableController::class, 'index'])->name('payables.index');
+                Route::get('payables/{payable}', [PayableController::class, 'show'])->name('payables.show');
             });
         });
     });
