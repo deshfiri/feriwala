@@ -14,7 +14,8 @@ use App\Domain\Supplier\Models\SupplierWithdrawal;
 use App\Domain\Supplier\SupplierWithdrawalLimits;
 use App\Http\Controllers\Controller;
 use App\Support\Money\Currency;
-use App\Support\Money\Money;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -123,7 +124,8 @@ class WithdrawalController extends Controller
 
         $validated = $request->validate([
             'payout_method_id' => ['required', 'string'],
-            'amount_minor' => ['required', 'integer', 'min:1'],
+            // Decimal Taka (§36.1) — never minor units at this boundary.
+            'amount' => ['required', new DecimalAmountRule(Currency::BDT)],
             'idempotency_key' => ['required', 'string', 'max:64'],
         ]);
 
@@ -138,11 +140,11 @@ class WithdrawalController extends Controller
             $withdrawal = $requestWithdrawal->handle(
                 $supplier,
                 $method,
-                Money::of((int) $validated['amount_minor'], Currency::BDT),
+                DecimalAmount::parse($validated['amount'], Currency::BDT),
                 'supplier-withdrawal:'.$supplier->id.':'.$validated['idempotency_key'],
             );
         } catch (SupplierWithdrawalRefused|SupplierWalletOperationRefused $exception) {
-            throw ValidationException::withMessages(['amount_minor' => $exception->getMessage()]);
+            throw ValidationException::withMessages(['amount' => $exception->getMessage()]);
         }
 
         return redirect()->route('supplier.withdrawals.show', $withdrawal->public_id)

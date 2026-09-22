@@ -3,10 +3,10 @@ import { ArrowLeft } from 'lucide-react';
 import WithdrawalController from '@/actions/App/Http/Controllers/Supplier/WithdrawalController';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
@@ -159,26 +159,13 @@ export default function SupplierWithdrawalCreate({
                                         />
                                     </div>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="withdrawal-amount">
-                                            {t('supplier.withdrawals.amount')}
-                                        </Label>
-                                        <Input
-                                            id="withdrawal-amount"
-                                            name="amount_minor"
-                                            type="number"
-                                            min={minimum.minor_units}
-                                            max={
-                                                maximum?.minor_units ??
-                                                undefined
-                                            }
-                                            step={1}
-                                            required
-                                        />
-                                        <InputError
-                                            message={errors.amount_minor}
-                                        />
-                                    </div>
+                                    <MoneyInput
+                                        id="withdrawal-amount"
+                                        name="amount"
+                                        label={t('supplier.withdrawals.amount')}
+                                        required
+                                        error={errors.amount}
+                                    />
 
                                     <Button type="submit" disabled={processing}>
                                         {processing && <Spinner />}
