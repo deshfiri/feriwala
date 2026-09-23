@@ -55,7 +55,7 @@ class CalculateActivationQuote
         ?BusinessAccount $account = null,
         ?CarbonImmutable $at = null,
     ): ActivationQuote {
-        $currency = $package->fee_minor->currency;
+        $currency = $package->fee->currency;
         $at ??= CarbonImmutable::now();
 
         $lines = [];
@@ -73,10 +73,10 @@ class CalculateActivationQuote
             $lines[] = new QuoteLine(AllocationType::RegistrationFee, $registrationFee);
         }
 
-        if ($package->fee_minor->isPositive()) {
+        if ($package->fee->isPositive()) {
             $lines[] = new QuoteLine(
                 AllocationType::PackageFee,
-                $package->fee_minor,
+                $package->fee,
                 $package->name.' package',
             );
         }
@@ -117,9 +117,10 @@ class CalculateActivationQuote
 
         // 5. Gateway charge on what is actually being transacted, where the
         //    administrator has chosen to pass it on (§9).
-        $gatewayRate = (float) $this->settings->get('billing.gateway_charge_percent', '0');
+        $gatewayRate = (string) $this->settings->get('billing.gateway_charge_percent', '0');
+        assert(is_numeric($gatewayRate));
 
-        if ($gatewayRate > 0 && $quote->total()->isPositive()) {
+        if (bccomp($gatewayRate, '0', 12) > 0 && $quote->total()->isPositive()) {
             $lines[] = new QuoteLine(
                 AllocationType::GatewayCharge,
                 $quote->total()->percentage($gatewayRate),
@@ -173,7 +174,16 @@ class CalculateActivationQuote
             return $amounts;
         }
 
-        $ratios = array_map(fn (Money $amount) => $amount->minorUnits, $amounts);
+        /*
+         * `Money::allocate()` takes integer ratios, not the amounts
+         * themselves — so each taxable line's share of the discount is
+         * weighted by its size in the currency's smallest unit, without
+         * expressing that size as a poisha-style money value anywhere.
+         */
+        $ratios = array_map(
+            fn (Money $amount) => (int) bcdiv($amount->toDecimal(), $currency->smallestUnit(), 0),
+            $amounts,
+        );
 
         if (array_sum($ratios) === 0) {
             return $amounts;

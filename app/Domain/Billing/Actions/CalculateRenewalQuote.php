@@ -11,7 +11,6 @@ use App\Domain\Settings\SettingsRepository;
 use App\Domain\Tax\Data\TaxBreakdown;
 use App\Domain\Tax\TaxEngine;
 use App\Support\Money\Currency;
-use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 
 /**
@@ -52,7 +51,7 @@ class CalculateRenewalQuote
         $currency = Currency::from($terms->currencyCode);
         $at ??= CarbonImmutable::now();
 
-        $fee = Money::of($terms->renewalFeeMinor ?? $terms->feeMinor, $currency);
+        $fee = $terms->renewalFee ?? $terms->fee;
 
         if (! $fee->isPositive()) {
             /*
@@ -92,9 +91,10 @@ class CalculateRenewalQuote
         // The gateway charge, where an administrator has chosen to pass it on
         // (§9). Same setting and same position as the activation quote — last,
         // on the amount actually being transacted.
-        $gatewayRate = (float) $this->settings->get('billing.gateway_charge_percent', '0');
+        $gatewayRate = (string) $this->settings->get('billing.gateway_charge_percent', '0');
+        assert(is_numeric($gatewayRate));
 
-        if ($gatewayRate > 0 && $quote->total()->isPositive()) {
+        if (bccomp($gatewayRate, '0', 12) > 0 && $quote->total()->isPositive()) {
             $lines[] = new QuoteLine(
                 AllocationType::GatewayCharge,
                 $quote->total()->percentage($gatewayRate),

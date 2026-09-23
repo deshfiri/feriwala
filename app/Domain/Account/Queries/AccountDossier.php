@@ -156,7 +156,7 @@ class AccountDossier
                 'status_tone' => $payment->status->tone(),
                 'purpose' => $payment->purpose->label(),
                 // Formatted server-side; the client never divides by a hundred.
-                'amount' => $payment->amount_minor->jsonSerialize(),
+                'amount' => $payment->amount->jsonSerialize(),
                 'initiated_at' => $payment->initiated_at?->toIso8601String(),
                 'completed_at' => $payment->completed_at?->toIso8601String(),
             ])
