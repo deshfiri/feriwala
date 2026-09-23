@@ -9,29 +9,28 @@ use App\Support\Money\Exceptions\InvalidDecimalAmount;
  * {@see Money} value (§36.1, §37).
  *
  * A person types "500.25"; the browser sends that string unchanged; this
- * turns it into exactly 50025 minor units, or refuses it outright — never a
- * float, never a silent round of a digit the person actually typed. This is
- * stricter than {@see Money::fromDecimal()}, which several internal callers
- * already rely on to *round* a computed fraction to the currency's scale.
- * A person is not computing a fraction; a third decimal place they typed by
- * hand is almost always a mistake, so this refuses it rather than rounding
- * it away where they cannot see that happened.
+ * turns it into exactly BDT 500.25, or refuses it outright — never a float,
+ * never a silent round of a digit the person actually typed, and never
+ * scaled by 100 on the way (D26). This is stricter than
+ * {@see Money::fromDecimal()}, which several internal callers already rely
+ * on to *round* a computed fraction to the currency's scale. A person is not
+ * computing a fraction; a third decimal place they typed by hand is almost
+ * always a mistake, so this refuses it rather than rounding it away where
+ * they cannot see that happened.
  *
- * The only entry point human-facing controllers should use for turning
- * request input into money. Machine-facing endpoints (the frozen storefront
- * API, webhooks) are unaffected — they already send integer minor units
- * with a currency code, which is the correct machine contract and stays
- * exactly as it is.
+ * The only entry point controllers should use for turning request input into
+ * money, human-facing or machine-facing alike — the storefront API carries
+ * the same flat-Taka decimals its ERP screens do.
  */
 final class DecimalAmount
 {
     /**
-     * A sanity ceiling, not a technical one — PHP's own integer range is far
-     * larger. Ten billion Taka is well beyond any legitimate single amount
+     * A sanity ceiling, not a technical one — a `NUMERIC(19,2)` column holds
+     * far more. Ten billion Taka is well beyond any legitimate single amount
      * this platform moves, and catches a mistyped or adversarial value
      * before it reaches arithmetic that would otherwise silently accept it.
      */
-    public const MAX_MAJOR_UNITS = 10_000_000_000;
+    public const MAX_AMOUNT = '10000000000';
 
     private function __construct() {}
 
@@ -76,7 +75,9 @@ final class DecimalAmount
             throw InvalidDecimalAmount::excessivePrecision($input, $scale);
         }
 
-        if ((float) $unsigned > self::MAX_MAJOR_UNITS) {
+        // Compared exactly. Casting to a float to check a ceiling would be the
+        // one float in a class whose whole job is to keep them out.
+        if (bccomp($unsigned, self::MAX_AMOUNT, $scale) > 0) {
             throw InvalidDecimalAmount::overflow($input);
         }
 

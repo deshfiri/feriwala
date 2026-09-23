@@ -36,11 +36,18 @@ enum Currency: string
     }
 
     /**
-     * How many minor units make one major unit.
+     * The smallest amount this currency can express, as an exact decimal string
+     * — "0.01" for BDT. Used to hand out an allocation remainder a step at a
+     * time. This is a unit of the currency itself, not a separate minor
+     * denomination: Feriwala stores no minor units anywhere (D26).
      */
-    public function minorUnitFactor(): int
+    public function smallestUnit(): string
     {
-        return 10 ** $this->scale();
+        $scale = $this->scale();
+
+        return $scale === 0
+            ? '1'
+            : '0.'.str_repeat('0', $scale - 1).'1';
     }
 
     /**
@@ -53,18 +60,6 @@ enum Currency: string
             self::USD => '$',
             self::EUR => '€',
             self::GBP => '£',
-        };
-    }
-
-    /**
-     * The name of this currency's minor unit, for labels and receipts.
-     */
-    public function minorUnitName(): string
-    {
-        return match ($this) {
-            self::BDT => 'poisha',
-            self::USD, self::EUR => 'cents',
-            self::GBP => 'pence',
         };
     }
 }

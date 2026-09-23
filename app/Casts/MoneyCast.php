@@ -9,7 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 
 /**
- * Casts an integer minor-units column into a Money value object.
+ * Casts a `NUMERIC(19,2)` flat-Taka column into a Money value object.
+ *
+ * What the column holds is what the Money holds — `100.50` both sides, with no
+ * scaling in either direction (D26).
  *
  * The currency is read from a sibling column — `currency_code` by default (D4) —
  * so a row always carries its own currency rather than inheriting an ambient one.
@@ -45,7 +48,7 @@ class MoneyCast implements CastsAttributes
             return null;
         }
 
-        return Money::of((int) $value, $this->resolveCurrency($attributes));
+        return Money::fromDecimal((string) $value, $this->resolveCurrency($attributes));
     }
 
     /**
@@ -58,17 +61,18 @@ class MoneyCast implements CastsAttributes
             return [$key => null];
         }
 
-        if (is_int($value)) {
-            return [$key => $value];
-        }
-
+        // A bare number is refused rather than interpreted. Under the old
+        // minor-unit architecture `100` meant one Taka here; under D26 it would
+        // mean a hundred. Anything that still hands this cast a raw number is
+        // code written against the old meaning, and guessing which one it
+        // intended is precisely how a 100-times error gets written to a ledger.
         if (! $value instanceof Money) {
             throw new InvalidArgumentException(
-                sprintf('The [%s] attribute must be a %s instance or integer minor units.', $key, Money::class),
+                sprintf('The [%s] attribute must be a %s instance, not a bare number (D26).', $key, Money::class),
             );
         }
 
-        $written = [$key => $value->minorUnits];
+        $written = [$key => $value->amount];
 
         // Keep the currency column in step with the amount, but never silently
         // rewrite an existing currency to a different one — that would corrupt a

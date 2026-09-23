@@ -12,21 +12,23 @@ use App\Support\Money\Exceptions\InvalidDecimalAmount;
  * refuses it instead of silently rounding to an amount they did not enter.
  */
 describe('exact conversion', function () {
-    it('converts a valid decimal Taka string to exact minor units', function (string $input, int $expected) {
-        expect(DecimalAmount::parse($input)->minorUnits)->toBe($expected);
+    it('keeps a typed Taka amount exactly as typed, never scaled by 100', function (string $input, string $expected) {
+        expect(DecimalAmount::parse($input)->amount)->toBe($expected);
     })->with([
-        ['0', 0],
-        ['0.01', 1],
-        ['1', 100],
-        ['1.5', 150],
-        ['1.50', 150],
-        ['500', 50000],
-        ['500.25', 50025],
-        ['9999999.99', 999999999],
+        ['0', '0.00'],
+        ['0.01', '0.01'],
+        ['1', '1.00'],
+        ['1.5', '1.50'],
+        ['1.50', '1.50'],
+        ['100', '100.00'],
+        ['100.50', '100.50'],
+        ['500', '500.00'],
+        ['500.25', '500.25'],
+        ['9999999.99', '9999999.99'],
     ]);
 
     it('accepts a large, legitimate amount', function () {
-        expect(DecimalAmount::parse('1000000.00')->minorUnits)->toBe(100000000);
+        expect(DecimalAmount::parse('1000000.00')->amount)->toBe('1000000.00');
     });
 });
 
@@ -61,7 +63,7 @@ describe('refusals', function () {
 
     it('refuses a negative amount unless the caller explicitly allows one', function () {
         expect(fn () => DecimalAmount::parse('-500.00'))->toThrow(InvalidDecimalAmount::class);
-        expect(DecimalAmount::parse('-500.00', allowNegative: true)->minorUnits)->toBe(-50000);
+        expect(DecimalAmount::parse('-500.00', allowNegative: true)->amount)->toBe('-500.00');
     });
 });
 
@@ -71,7 +73,7 @@ describe('parseOrNull', function () {
     })->with([[null], ['']]);
 
     it('parses a present value the same way parse() does', function () {
-        expect(DecimalAmount::parseOrNull('500.25')?->minorUnits)->toBe(50025);
+        expect(DecimalAmount::parseOrNull('500.25')?->amount)->toBe('500.25');
     });
 });
 
