@@ -1,8 +1,8 @@
 # 02 — Data Model Map
 
 Domain-by-domain table map. This is the target shape, not final DDL — column lists are indicative,
-migrations get written per phase. PostgreSQL throughout. Money columns are `BIGINT` minor units
-plus a `currency` column. Every publicly-addressable table carries `public_id` (ULID) and/or
+migrations get written per phase. PostgreSQL throughout. Money columns are `NUMERIC(19,2)` holding
+flat Taka (D26) plus a `currency` column. Every publicly-addressable table carries `public_id` (ULID) and/or
 `slug`. Soft deletes only where the spec implies archival (§37).
 
 ## Conventions
@@ -11,7 +11,7 @@ plus a `currency` column. Every publicly-addressable table carries `public_id` (
 | ------------- | ------------------------------------------------------------------------------------------- |
 | PK            | `bigint` identity, internal only                                                            |
 | Public ref    | `public_id` ULID + human ref (`ORD-`, `PAY-`, `TXN-`, `WDR-`, `INV-`, `STL-`)               |
-| Money         | `bigint` minor units + `currency char(3)`, never float                                      |
+| Money         | `numeric(19,2)` flat Taka + `currency char(3)`, never float, never minor units              |
 | Timestamps    | `created_at`, `updated_at`; `deleted_at` where archival applies                             |
 | Actor columns | `created_by`, `updated_by`, `approved_by` → `users.id`                                      |
 | Status        | text/enum-backed column + separate `*_status_history` table where the spec requires history |
@@ -184,7 +184,7 @@ All writes: transaction + `SELECT … FOR UPDATE` on `stock_items`.
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `account_referrals`          | referred business account (unique), direct referrer account, code used, how it was attached, locked_at once a qualifying event exists (D24)                                                        |
 | `referral_plans`             | versioned, opened and closed never edited: optional package, trigger, commission base, maximum depth, joining reward, holding period, qualifying account states, minimum qualifying payment, dates |
-| `referral_plan_levels`       | one per level up to the version's depth: fixed (minor units) or percentage (basis points), cap, enabled, required packages, minimum active direct referrals                                        |
+| `referral_plan_levels`       | one per level up to the version's depth: fixed (Taka) or percentage (basis points), cap, enabled, required packages, minimum active direct referrals                                               |
 | `referral_qualifying_events` | one per trigger and subject, ever (e.g. one activation per account): source account, payment, plan version, commission base, chain snapshot                                                        |
 | `referral_commissions`       | the outbox: beneficiary, source, event, level (0 = joining reward), rule snapshot, base, rate or amount, amount, status, available_at, wallet transaction, reversal                                |
 | `referral_fraud_checks`      | duplicate account signals (still to come)                                                                                                                                                          |

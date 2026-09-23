@@ -148,16 +148,43 @@ Always an object, never a bare number — mirroring `Money::jsonSerialize()` so 
 performs arithmetic on a float:
 
 ```json
-{ "minor_units": 123456, "currency": "BDT", "decimal": "1234.56" }
+{ "amount": "1234.56", "currency": "BDT", "formatted": "৳1,234.56" }
 ```
 
-Amounts are **integer minor units** (poisha). `decimal` is informational for display.
+`amount` is **flat Taka** as a decimal string: `"100"` is BDT 100 and `"100.50"` is BDT 100.50.
+Nothing on either side multiplies or divides by 100. `formatted` is informational for display.
 
-This is a **machine contract** and is unaffected by the human-input/display convention used on
-Feriwala's own ERP and admin screens (§36.1): a person types and sees Taka there, through
-`App\Support\Money\DecimalAmount` at the HTTP boundary, but every wire payload — this API, webhooks,
-and every Inertia money prop — stays integer minor units with an explicit currency code. Partner
-integrations reading this API need change nothing.
+This matches Feriwala's own convention exactly (D26) — there is no translation layer between this
+API and the ERP, and no boundary at which the meaning of a number changes.
+
+#### Minor-unit compatibility period
+
+Before 2026-09-23 this field was `{"minor_units": 123456, "currency": "BDT", "decimal": "1234.56"}`,
+where the amount was an integer count of poisha. Adding `amount` is a **non-breaking addition**
+under §8 and ships into v1; no v2 is required.
+
+**Outbound**, every money object carries `amount` **and**, for the compatibility period, the legacy
+`minor_units` and `decimal` keys alongside it. Existing integrations keep working unchanged.
+
+**Inbound**, a money object may supply either `amount` (preferred) or `minor_units` (legacy).
+Exactly one is accepted per object: supplying both is a `422`, not a silent preference, because a
+payload that disagrees with itself is the single way a 100-times error could enter. A legacy
+`minor_units` value is converted once, at the edge, by an explicit compatibility adapter; nothing
+behind that adapter carries minor units.
+
+**Ending the period.** The legacy keys are removed in v2, not silently from v1. Until then:
+
+- Integrations should migrate to `amount`. It is unambiguous and needs no scaling.
+- New endpoints and new fields are `amount`-only from the outset.
+- No new internal Feriwala code reads or writes `minor_units`; the repository guard test enforces
+  this, and the adapter is its one documented exemption.
+- Tests assert that a legacy-shaped payload and a flat-Taka payload for the same order produce
+  identical stored amounts — proving the adapter can cause neither a 100-times overcharge nor a
+  100-times undercharge.
+
+Price-mismatch comparisons (§6.1.1) are exact decimal comparisons at two decimal places. The
+zero-tolerance rule is unchanged in substance: one poisha of difference is still a rejection, now
+expressed as `0.01`.
 
 ### 4.2 Identifiers
 
@@ -298,9 +325,9 @@ Product payload (abbreviated):
             "sku": "FW-1043-NVY-M",
             "attributes": { "size": "M", "colour": "Navy" },
             "price": {
-                "minor_units": 249000,
+                "amount": "2490.00",
                 "currency": "BDT",
-                "decimal": "2490.00"
+                "formatted": "৳2,490.00"
             },
             "compare_at_price": null,
             "availability": {
@@ -390,15 +417,15 @@ Idempotency-Key: <uuid>
         {
             "sku": "FW-1043-NVY-M",
             "quantity": 2,
-            "unit_price": { "minor_units": 249000, "currency": "BDT" }
+            "unit_price": { "amount": "2490.00", "currency": "BDT" }
         }
     ],
     "totals": {
-        "subtotal": { "minor_units": 498000, "currency": "BDT" },
-        "discount": { "minor_units": 0, "currency": "BDT" },
-        "shipping": { "minor_units": 6000, "currency": "BDT" },
-        "tax": { "minor_units": 0, "currency": "BDT" },
-        "grand_total": { "minor_units": 504000, "currency": "BDT" }
+        "subtotal": { "amount": "4980.00", "currency": "BDT" },
+        "discount": { "amount": "0.00", "currency": "BDT" },
+        "shipping": { "amount": "60.00", "currency": "BDT" },
+        "tax": { "amount": "0.00", "currency": "BDT" },
+        "grand_total": { "amount": "5040.00", "currency": "BDT" }
     },
     "payment": {
         "method": "online",
@@ -437,8 +464,8 @@ idempotency key — protecting against a storefront that retries with a fresh ke
 ### 6.1.1 Price mismatch — zero tolerance
 
 The ERP independently recalculates **product price, discount, coupon, tax, delivery charge,
-fulfillment charge, and final totals**, comparing in integer minor units against the correct
-currency. **A difference of one poisha is a rejection.**
+fulfillment charge, and final totals**, comparing exact decimals at two places against the correct
+currency. **A difference of `0.01` is a rejection.**
 
 ```json
 {
@@ -452,25 +479,25 @@ currency. **A difference of one poisha is a rejection.**
                         "sku": "FW-1043-NVY-M",
                         "quantity": 2,
                         "unit_price": {
-                            "minor_units": 259000,
+                            "amount": "2590.00",
                             "currency": "BDT",
-                            "decimal": "2590.00"
+                            "formatted": "৳2,590.00"
                         },
                         "line_total": {
-                            "minor_units": 518000,
+                            "amount": "5180.00",
                             "currency": "BDT",
-                            "decimal": "5180.00"
+                            "formatted": "৳5,180.00"
                         }
                     }
                 ],
-                "subtotal": { "minor_units": 518000, "currency": "BDT" },
-                "discount": { "minor_units": 0, "currency": "BDT" },
-                "tax": { "minor_units": 0, "currency": "BDT" },
-                "shipping": { "minor_units": 6000, "currency": "BDT" },
-                "grand_total": { "minor_units": 524000, "currency": "BDT" }
+                "subtotal": { "amount": "5180.00", "currency": "BDT" },
+                "discount": { "amount": "0.00", "currency": "BDT" },
+                "tax": { "amount": "0.00", "currency": "BDT" },
+                "shipping": { "amount": "60.00", "currency": "BDT" },
+                "grand_total": { "amount": "5240.00", "currency": "BDT" }
             },
             "submitted_grand_total": {
-                "minor_units": 504000,
+                "amount": "5040.00",
                 "currency": "BDT"
             }
         },
@@ -759,7 +786,7 @@ the reasoning survives.
 | --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
 | 1   | Guest checkout customer identity | Guest checkout supported. Identity keyed on `(website_id, normalized_mobile)`; same number on two websites is two customers; no ERP account created; ERP-assigned `public_id`; immutable per-order customer and address snapshot; **history access gated behind OTP or an authenticated session**, configurable per website and order type                               | §4.3.1, §6.2     |
 | 2   | Stock reservation expiry         | Configurable, with v1 defaults of **15 minutes** for online payment and a **24-hour** COD confirmation window. Stored `expires_at`, transactional and lock-guarded, idempotent, released by the scheduler, audited manual override, **never negative stock**. A late successful payment against expired stock goes to **manual review**, not to cancellation or oversell | §6.1.2           |
-| 3   | Price mismatch tolerance         | **Zero.** One minor unit is a rejection. `422` with the authoritative selling-side totals so the cart can refresh; **never** wholesale price, base cost, or margin. Storefront must obtain explicit customer reconfirmation and resubmit with a new idempotency key                                                                                                      | §6.1.1           |
+| 3   | Price mismatch tolerance         | **Zero.** A difference of `0.01` is a rejection. `422` with the authoritative selling-side totals so the cart can refresh; **never** wholesale price, base cost, or margin. Storefront must obtain explicit customer reconfirmation and resubmit with a new idempotency key                                                                                              | §6.1.1           |
 | 4   | Webhook endpoints                | **One active endpoint per website** with its own scoped secret, plus secret rotation with a previous-secret grace window. Async and queued, at-least-once, dead-letter state with authorized manual retry, full delivery record. Multiple endpoints and per-event subscriptions deferred past `v1`                                                                       | §7.2, §7.3, §7.4 |
 
 ## 11. Implementation obligations this contract creates

@@ -78,9 +78,12 @@ resources/js/
 
 **Non-negotiable rules:**
 
-- Stored as **`BIGINT` minor units** (poisha), never `float`, never `double`.
-- A single `Money` value object in `app/Support/Money` with an Eloquent cast; all arithmetic goes
-  through it. No raw arithmetic on money columns anywhere.
+- Stored as **flat Taka in `NUMERIC(19,2)`** (D26), never `float`, never `double`. There is no
+  poisha or minor-unit convention at any layer: `100` means BDT 100 in a form, a column, a payload,
+  a calculation and a display alike, and nothing multiplies or divides by 100 to cross a boundary.
+- A single `Money` value object in `app/Support/Money` with an Eloquent cast; it holds an exact
+  decimal Taka string and computes through bcmath. All arithmetic goes through it — no raw
+  arithmetic on money columns anywhere, and no `round()` or `number_format()` on a financial value.
 - Every currency-bearing row carries a `currency` column (BDT default). **[DECIDE]** whether
   multi-currency is in scope for v1 or BDT-only with the column reserved.
 - All calculation is **server-side**. The client displays; it never computes a payable amount.

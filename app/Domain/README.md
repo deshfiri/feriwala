@@ -25,11 +25,11 @@ Create subfolders when you need them, not before.
 ## Rules
 
 1. **Controllers validate, authorize, delegate, respond.** Business logic belongs in an Action.
-2. **Money is never a float.** Use `App\Support\Money\Money` and `App\Casts\MoneyCast`. Actions
-   keep receiving integer minor units — a human-facing Taka decimal string is converted at the
-   HTTP boundary, in the FormRequest or controller, via `App\Support\Money\DecimalAmount` /
-   `App\Support\Money\Rules\DecimalAmountRule` (§36.1). An Action never parses a decimal string
-   itself.
+2. **Money is flat Taka, and never a float.** Use `App\Support\Money\Money` and
+   `App\Casts\MoneyCast`. `100` means BDT 100 everywhere — nothing multiplies or divides by 100
+   (D26). Actions receive a `Money`, never a raw number and never a decimal string: what a person
+   typed is parsed at the HTTP boundary, in the FormRequest or controller, via
+   `App\Support\Money\DecimalAmount` / `App\Support\Money\Rules\DecimalAmountRule` (§36.1).
 3. **Statuses move through `transitionTo()`**, never by assigning the attribute.
 4. **Every financial mutation** runs in a database transaction with row locking, writes an
    immutable ledger entry, and is idempotent when externally triggered.

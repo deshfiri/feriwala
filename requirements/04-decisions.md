@@ -37,12 +37,14 @@ Repurpose the starter kit's Teams as **staff management under one Account**.
 Monitor failures, retries, throughput, worker status. In production, add network-level restriction
 on top of auth/authorization.
 
-## D4 — Currency (was Q4)
+## D4 — Currency (was Q4) — **AMENDED 2026-09-23 by D26**
 
 **BDT base and operational currency for v1.**
 
 - Every financial table carries a **`currency_code`** column, default `BDT`.
-- Fixed-precision decimal or integer minor units. **Never floating point.** 🔒
+- Fixed-precision decimal. **Never floating point.** 🔒 The "or integer minor units" alternative
+  this decision originally permitted is **withdrawn** — see D26, which settles the representation
+  as flat Taka in `NUMERIC(19,2)` throughout.
 - Schema and ledger stay multi-currency-ready; no exchange-rate accounting in v1.
 - Stripe and PayPal implement the same driver contract but may stay **disabled** until valid
   merchant accounts and supported currency flows exist.
@@ -550,14 +552,95 @@ directly, and submitting a listing request never publishes anything.
 
 ### Supplier Rate confidentiality
 
-A Supplier's own rate for what they supply (`SupplierOffer.supplier_rate_minor`) is commercially
+A Supplier's own rate for what they supply (`SupplierOffer.supplier_rate`) is commercially
 sensitive in the ordinary sense a wholesale cost price always is, and is treated with the same
 severity §12 and D12 already give wholesale cost data: it is visible only to that Supplier and to
 staff holding `supplier_pricing.view`, and it must never reach a Client/Partner Inertia prop, a
 Partner Website API response, an export, a log, or a notification. The **Platform Rate** — what
 Feriwala actually charges — is the only figure a Client/Partner ever sees, exactly as a partner
-never sees `Product.base_cost_minor` today. This is not a new policy; it is the existing wholesale-
+never sees `Product.base_cost` today. This is not a new policy; it is the existing wholesale-
 price confidentiality boundary extended to a second source of cost data.
+
+## D26 — Flat Taka throughout the system (2026-09-23) 🔒
+
+**Instructed directly by the Project Owner on 2026-09-23.** This is the change-control approval the
+"financial ledger" lock requires. It **supersedes** D4's permission to store integer minor units,
+and it **replaces** the minor-unit boundary architecture that had been implemented up to this point.
+
+### The rule
+
+Feriwala has **no poisha or minor-unit convention at any layer**. A monetary value means Taka
+wherever it appears:
+
+| Layer       | `100` means | `100.50` is stored/carried as |
+| ----------- | ----------- | ----------------------------- |
+| Form input  | BDT 100     | `100.50`                      |
+| Database    | BDT 100     | `100.50`                      |
+| API payload | BDT 100     | `100.50`                      |
+| Calculation | BDT 100     | `100.50`                      |
+| Display     | `৳100.00`   | `৳100.50`                     |
+
+Nothing multiplies or divides by 100 to cross a boundary. The previously-approved position — that
+authoritative storage is integer minor units and Taka appears only at human-facing edges — is
+withdrawn in full.
+
+### Why this replaces the minor-unit boundary
+
+The minor-unit boundary was internally consistent but put a translation step between what a person
+means and what the system stores, and that step is the only reason a 100-times error can exist at
+all. Every money field, every payload key and every cast then had to be individually audited for
+which side of the boundary it sat on — and the audit that preceded this decision found real gaps:
+11 money columns bypassed `MoneyCast` entirely, 4 had no cast at all, and `Money::multipliedBy()`
+and `Money::percentage()` were themselves routing every tax, gateway charge and percentage
+commission through binary floating point. Removing the conversion removes the class of defect.
+
+### Representation
+
+- **Storage** is `NUMERIC(19,2)` with an explicit scale, beside the existing `currency_code`
+  column, which is unchanged. Range is ±10¹⁷ Taka.
+- **Scale** for BDT is 2 decimal places unless the specification proves a particular value must be
+  whole Taka.
+- **In PHP**, `Money` holds an exact decimal Taka string and computes through bcmath. `float`,
+  `double`, `round()` and `number_format()` are prohibited for financial values. Percentages state
+  their rounding explicitly; allocation across lines reconciles to the exact total.
+- **On the wire**, decimal strings. `Money::jsonSerialize()` returns flat Taka.
+- **Naming** drops minor-unit terminology: `amount_minor` → `amount`, `price_minor` → `price`,
+  `supplier_rate_minor` → `supplier_rate`, `platform_rate_minor` → `platform_rate`,
+  `*_minimum_minor` → `*_minimum_amount`, `*_maximum_minor` → `*_maximum_amount`.
+
+### Stored data
+
+125 columns across 47 tables were `BIGINT` poisha. They convert by `value::numeric / 100` —
+`10050` → `100.50`, `1` → `0.01`, `0` → `0.00`, `-2550` → `-25.50` — in corrective migrations that
+are transactional, guarded against running twice, and exactly reversible by `× 100`. Committed
+historical migrations are not rewritten.
+
+Two mechanical facts govern how those migrations are written, both verified against an isolated
+PostgreSQL schema rather than assumed:
+
+1. **`ALTER TABLE` does not fire row triggers.** The immutable ledgers convert with
+   `ledger_entries_no_update`, `supplier_ledger_entries_no_update` and the append-only guards
+   fully armed. **No immutability exception is needed and none may be introduced.**
+2. **`ALTER COLUMN … TYPE` is refused on any column named in a trigger definition**
+   (`cannot alter type of a column used in a trigger definition`), so the seven
+   `BEFORE UPDATE OF …` guards naming money columns must be dropped and recreated around the
+   conversion. They **must be recreated with the new column names**: the guard function resolves
+   its arguments as strings (`to_jsonb(OLD) -> locked_column` from `TG_ARGV`), and PostgreSQL does
+   not rewrite those string literals on rename, so a guard left pointing at `amount_minor` **fails
+   open silently** — verified — leaving a financial identity column writable with no error.
+
+CHECK constraint expressions and `BEFORE UPDATE OF` column lists do follow renames automatically;
+only constraint names need correcting. No index, generated column or view touches a money column.
+
+### Frozen Storefront API
+
+The v1 contract carried `{minor_units, currency, decimal}`. It gains a flat-Taka `amount` field as
+a **non-breaking addition**, which §8's compatibility rules permit into v1. The legacy
+`minor_units` key survives inbound and outbound only through an explicit compatibility adapter for
+a documented period; no new internal code reads or writes it. Tests prove a legacy-shaped payload
+cannot produce a 100-times overcharge or undercharge. The migration strategy is written into
+[05-storefront-api-contract.md](05-storefront-api-contract.md) §4.1 rather than the contract being
+silently changed.
 
 ## Change control 🔒
 

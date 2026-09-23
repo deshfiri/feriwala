@@ -219,24 +219,33 @@ what has been approved.
 These come from the specification and from approved decisions. Do not work around them; if one
 seems wrong, raise it rather than routing past it.
 
-1. **Money is never a float.** Use `App\Support\Money\Money` and `App\Casts\MoneyCast`. Stored as
-   `BIGINT` minor units plus a `currency_code` column. All calculation is server-side — the client
-   displays figures, never computes them.
+1. **Money is flat Taka, and never a float.** Use `App\Support\Money\Money` and
+   `App\Casts\MoneyCast`. Stored as `NUMERIC(19,2)` plus a `currency_code` column. All calculation
+   is server-side — the client displays figures, never computes them.
 
-    _All authoritative monetary storage and calculation use integer minor units with an explicit
-    currency code. All human-facing input and display use major currency units such as Taka,
-    converted through the shared exact Money boundary. Float and double are prohibited for
-    financial values._ Every human-facing money **input** goes through
-    `App\Support\Money\DecimalAmount::parse()`/`parseOrNull()` (wrapped as a validation rule by
-    `App\Support\Money\Rules\DecimalAmountRule`) at the HTTP boundary — never
-    `Money::fromDecimal()`, which rounds rather than refuses excess precision, and exists for
-    internal callers computing a fraction, not a person typing a price. The frontend's shared
-    `resources/js/components/money-input.tsx` (`MoneyInput`) submits the decimal string exactly as
-    typed; nothing in React parses, multiplies, or divides it. Every human-facing money **display**
-    renders the server's own `Money::jsonSerialize()` output (`{minor_units, currency, decimal,
-formatted}`) through `resources/js/components/money-amount.tsx`, never a raw `minor_units`
-    integer. Machine-facing contracts — the frozen Storefront API, webhooks — are unaffected and
-    keep integer minor units with a currency code; they are not part of this boundary.
+    _There is no poisha or minor-unit convention anywhere in Feriwala._ `100` means BDT 100 at
+    every layer without exception: typed into a form, held in a column, carried in an API payload,
+    used in a calculation, and rendered as `৳100.00`. `100.50` is stored and calculated as
+    `100.50`. **Nothing multiplies or divides by 100 to cross a boundary** — not a form, not a
+    cast, not a serializer, not a display. A repository guard test fails the build when new
+    production code reintroduces `_minor` naming, `minor_units`, a poisha conversion helper, a
+    suspicious ×100 or ÷100 on money, or a float/double money column.
+
+    `Money` holds an exact decimal Taka **string** and does all arithmetic through bcmath.
+    `float`, `double`, `round()` and `number_format()` are prohibited for financial values —
+    addition, subtraction, multiplication, percentages, comparison and allocation are all exact,
+    currency mismatches are rejected, and every percentage states its rounding explicitly.
+    Allocating tax, discount, commission or a refund across lines must reconcile to the exact
+    total. Human input arrives through `App\Support\Money\DecimalAmount::parse()` (wrapped by
+    `App\Support\Money\Rules\DecimalAmountRule`), which refuses excess precision rather than
+    rounding it away. `resources/js/components/money-input.tsx` submits the decimal string exactly
+    as typed and `money-amount.tsx` renders the server's own `Money::jsonSerialize()` output;
+    nothing in React parses, multiplies or divides an amount.
+
+    The frozen Storefront API carries flat Taka in an additive `amount` field. Its legacy
+    `minor_units` key survives only through the documented compatibility adapter in
+    [requirements/05-storefront-api-contract.md](requirements/05-storefront-api-contract.md) §4.1.
+    No new internal code may read or write it.
 
 2. **Ledger entries are immutable.** No update, no delete. Corrections are new adjustment,
    reversal, or corrective rows. The same applies to audit logs.
