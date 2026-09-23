@@ -255,6 +255,30 @@ describe('approving', function () {
         expect($account->fresh()->status)->toBe(AccountStatus::Active);
     });
 
+    it('accepts an account whose payment is paid but whose status still says payment pending', function () {
+        // How an applicant looked after paying, before the status followed the
+        // payment: every requirement met, the label stale, nothing stamped.
+        $account = testAccountReadyForActivation();
+        $account->forceFill([
+            'status' => AccountStatus::PaymentPending,
+            'approval_pending_at' => null,
+        ])->save();
+
+        $this->actingAs($this->approver)
+            ->get(route('admin.activations.show', $account))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('account.is_ready', true)
+                ->where('account.can_approve', true));
+
+        $this->actingAs($this->approver)
+            ->post(route('admin.activations.approve', $account))
+            ->assertRedirect(route('admin.activations.index'))
+            ->assertSessionHasNoErrors();
+
+        expect($account->fresh()->status)->toBe(AccountStatus::Active)
+            ->and($account->fresh()->activated_at)->not->toBeNull();
+    });
+
     it('reports the blocking conditions rather than failing opaquely', function () {
         // A condition can come undone between the page rendering and the submit.
         $account = testAccountReadyForActivation();

@@ -36,6 +36,7 @@ class ActivateAccount
     public function __construct(
         protected ActivationRequirements $requirements,
         protected ChangeAccountStatus $changeStatus,
+        protected AdvanceToApprovalGate $gate,
         protected RecordAuditLog $audit,
         protected OpenWallet $wallets,
         protected CaptureDepositObligation $obligations,
@@ -91,14 +92,7 @@ class ActivateAccount
             // §5.3 routes activation through approval. An account that reached
             // this point another way is moved onto the approved step first, so
             // the history shows the gate rather than skipping it.
-            if ($locked->status !== AccountStatus::ApprovalPending
-                && $locked->canTransitionTo(AccountStatus::ApprovalPending)) {
-                $this->changeStatus->handle($locked, new AccountStatusChange(
-                    to: AccountStatus::ApprovalPending,
-                    changedBy: $approvedBy,
-                    reason: 'All activation conditions met.',
-                ));
-            }
+            $this->gate->handle($locked, $approvedBy, 'All activation conditions met.');
 
             $this->changeStatus->handle($locked, new AccountStatusChange(
                 to: AccountStatus::Active,

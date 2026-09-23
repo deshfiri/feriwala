@@ -3,7 +3,6 @@
 namespace App\Domain\Account\Actions;
 
 use App\Domain\Account\ActivationRequirements;
-use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Support\Concurrency\DistributedLock;
@@ -37,7 +36,7 @@ class EvaluateActivationReadiness
 {
     public function __construct(
         protected ActivationRequirements $requirements,
-        protected ChangeAccountStatus $changeStatus,
+        protected AdvanceToApprovalGate $gate,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
     ) {}
@@ -99,19 +98,17 @@ class EvaluateActivationReadiness
 
     protected function moveToGate(BusinessAccount $account, ?string $reason): void
     {
-        // The status machine decides whether this move is legal. An account
-        // part-way through onboarding may not be able to jump straight here,
-        // and forcing it would destroy the history §5.3 depends on.
-        if (! $account->canTransitionTo(AccountStatus::ApprovalPending)) {
-            return;
+        // The status machine decides whether this move is legal, and the
+        // action walks any intermediate step it requires.
+        $reachedGate = $this->gate->handle(
+            $account,
+            changedBy: null,
+            reason: $reason ?? 'All activation requirements are met.',
+        );
+
+        if ($reachedGate) {
+            $account->forceFill(['approval_pending_at' => now()])->save();
         }
-
-        $this->changeStatus->handle($account, AccountStatusChange::automatic(
-            AccountStatus::ApprovalPending,
-            $reason ?? 'All activation requirements are met.',
-        ));
-
-        $account->forceFill(['approval_pending_at' => now()])->save();
     }
 
     /**

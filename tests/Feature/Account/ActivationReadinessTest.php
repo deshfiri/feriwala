@@ -116,6 +116,46 @@ describe('reaching the gate', function () {
     });
 });
 
+describe('an applicant still marked as awaiting payment', function () {
+    beforeEach(function () {
+        // Where a real applicant is when they pay: choosing a package moves
+        // them here, and nothing else moves them on before the payment lands.
+        $this->applicant = testBusinessAccount(AccountStatus::PaymentPending);
+    });
+
+    it('reaches the gate once paid, recording the payment being received', function () {
+        approveApplicantKyc();
+        settleApplicantActivationPayment();
+
+        expect(evaluateApplicantReadiness())->toBeTrue()
+            ->and($this->applicant->fresh()->status)->toBe(AccountStatus::ApprovalPending)
+            ->and($this->applicant->fresh()->approval_pending_at)->not->toBeNull()
+            ->and($this->applicant->statusHistory()->reorder('id')->get()
+                ->map(fn ($change) => $change->to_status)->all())
+            ->toBe([AccountStatus::PaymentVerificationPending, AccountStatus::ApprovalPending]);
+    });
+
+    it('stays where it is while the payment has not settled', function () {
+        approveApplicantKyc();
+
+        expect(evaluateApplicantReadiness())->toBeFalse()
+            ->and($this->applicant->fresh()->status)->toBe(AccountStatus::PaymentPending)
+            ->and($this->applicant->statusHistory()->count())->toBe(0);
+    });
+
+    it('can be approved directly, without the gate having been stamped first', function () {
+        // An account that met every requirement before the readiness
+        // orchestration existed reaches a reviewer through the queue's
+        // compatibility net, still at PaymentPending.
+        approveApplicantKyc();
+        settleApplicantActivationPayment();
+
+        app(ActivateAccount::class)->handle($this->applicant, $this->approver->id);
+
+        expect($this->applicant->fresh()->status)->toBe(AccountStatus::Active);
+    });
+});
+
 describe('a requirement reversed after reaching the gate', function () {
     beforeEach(function () {
         approveApplicantKyc();
