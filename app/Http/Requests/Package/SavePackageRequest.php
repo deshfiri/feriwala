@@ -16,6 +16,15 @@ class SavePackageRequest extends FormRequest
     /** How often a charge recurs. */
     public const FREQUENCIES = ['once', 'monthly', 'quarterly', 'yearly'];
 
+    /** Package columns holding money as integer minor units. */
+    protected const MINOR_UNIT_FIELDS = [
+        'fee_minor',
+        'registration_fee_minor',
+        'renewal_fee_minor',
+        'required_deposit_minor',
+        'minimum_balance_minor',
+    ];
+
     /**
      * Authorisation is the controller's, through the policy — one lookup, one
      * place.
@@ -122,7 +131,22 @@ class SavePackageRequest extends FormRequest
      */
     public function packageAttributes(): array
     {
-        return $this->safe()->except(['features', 'charges']);
+        $attributes = $this->safe()->except(['features', 'charges']);
+
+        /*
+         * A browser form submits every number as a string, and `integer`
+         * validates a numeric string without converting it. `MoneyCast` refuses
+         * anything that is not an int or a Money (D4), so the conversion is made
+         * here, at the boundary, rather than by loosening the cast. The rule has
+         * already proved each value is a whole number.
+         */
+        foreach (self::MINOR_UNIT_FIELDS as $field) {
+            if (isset($attributes[$field])) {
+                $attributes[$field] = (int) $attributes[$field];
+            }
+        }
+
+        return $attributes;
     }
 
     /**

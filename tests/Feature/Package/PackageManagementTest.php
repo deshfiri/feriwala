@@ -338,6 +338,46 @@ describe('the admin screen', function () {
         expect($package->refresh()->name)->toBe('Growth Plus');
     });
 
+    it('accepts money the way a browser submits it, as numeric strings', function () {
+        // A form sends "1500000", not 1500000. `integer` validates the string
+        // without converting it, and the money cast refuses anything but an
+        // int — so an edit from the real screen used to end in a 500.
+        $package = Package::create(packageTestPayload());
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.packages.index'))
+            ->patch(route('admin.packages.update', 'growth'), packageTestPayload([
+                'fee_minor' => '1500000',
+                'registration_fee_minor' => null,
+                'renewal_fee_minor' => '1500000',
+                'renewal_frequency' => 'yearly',
+                'required_deposit_minor' => '0',
+                'minimum_balance_minor' => '0',
+                'validity_days' => '365',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $package->refresh();
+
+        expect($package->fee_minor->minorUnits)->toBe(1500000)
+            ->and($package->renewal_fee_minor->minorUnits)->toBe(1500000)
+            ->and($package->registration_fee_minor)->toBeNull()
+            ->and($package->required_deposit_minor->minorUnits)->toBe(0);
+    });
+
+    it('creates a package from money submitted as numeric strings', function () {
+        $this->actingAs($this->admin)
+            ->from(route('admin.packages.index'))
+            ->post(route('admin.packages.store'), packageTestPayload([
+                'slug' => 'enterprise',
+                'fee_minor' => '1500000',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        expect(Package::where('slug', 'enterprise')->firstOrFail()->fee_minor->minorUnits)
+            ->toBe(1500000);
+    });
+
     it('refuses a renewal fee with no frequency', function () {
         // It would renew on no schedule — a package that behaves differently
         // from how it reads.
