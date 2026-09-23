@@ -6,6 +6,7 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\Supplier;
+use App\Support\Localization\MobileNumber;
 use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Validation\Rule;
@@ -27,6 +28,7 @@ class RegisterSupplier
 {
     public function __construct(
         protected DatabaseManager $database,
+        protected MobileNumber $mobiles,
     ) {}
 
     /**
@@ -39,10 +41,16 @@ class RegisterSupplier
             'contact_person_name' => ['required', 'string', 'max:255'],
             'business_address' => ['required', 'string', 'max:1000'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique(Supplier::class, 'email')],
-            'mobile' => ['required', 'string', 'max:20', Rule::unique(Supplier::class, 'mobile')],
+            // Normalised to E.164 before this runs, so the regex is a safety
+            // net against a number the normaliser could not resolve — it
+            // mirrors the `suppliers_mobile_is_e164` check constraint exactly,
+            // so a rejection here is a validation error rather than a 500.
+            'mobile' => ['required', 'string', 'max:20', 'regex:/^\+[1-9][0-9]{7,14}$/', Rule::unique(Supplier::class, 'mobile')],
             'password' => ['required', 'string', 'confirmed', Password::default()],
             'trade_licence_number' => ['nullable', 'string', 'max:255'],
             'tax_identification_number' => ['nullable', 'string', 'max:255'],
+        ], [
+            'mobile.regex' => 'That mobile number could not be resolved.',
         ]);
     }
 
@@ -51,6 +59,10 @@ class RegisterSupplier
      */
     public function handle(array $input): Supplier
     {
+        if (is_string($input['mobile'] ?? null)) {
+            $input['mobile'] = $this->mobiles->normalise($input['mobile']) ?? $input['mobile'];
+        }
+
         $this->validator($input)->validate();
 
         return $this->database->transaction(function () use ($input) {

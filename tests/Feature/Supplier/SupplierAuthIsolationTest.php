@@ -38,6 +38,40 @@ test('registering a supplier creates a verification-pending row and logs it in o
     $this->assertGuest('web');
 });
 
+test('registering a supplier normalises a loosely formatted mobile number to E.164', function () {
+    $response = $this->post(route('supplier.register'), [
+        'business_name' => 'Acme Wholesale',
+        'contact_person_name' => 'Jamal Uddin',
+        'business_address' => '12 Motijheel, Dhaka',
+        'email' => 'loose-mobile@example.com',
+        'mobile' => '+1 (537) 436-9372',
+        'password' => testStrongPassword(),
+        'password_confirmation' => testStrongPassword(),
+    ]);
+
+    $response->assertRedirect(route('supplier.verification.notice'));
+
+    $supplier = Supplier::query()->where('email', 'loose-mobile@example.com')->firstOrFail();
+
+    expect($supplier->mobile)->toBe('+15374369372');
+});
+
+test('registering a supplier with an unresolvable mobile number fails validation instead of crashing', function () {
+    $response = $this->post(route('supplier.register'), [
+        'business_name' => 'Acme Wholesale',
+        'contact_person_name' => 'Jamal Uddin',
+        'business_address' => '12 Motijheel, Dhaka',
+        'email' => 'bad-mobile@example.com',
+        'mobile' => 'not-a-number',
+        'password' => testStrongPassword(),
+        'password_confirmation' => testStrongPassword(),
+    ]);
+
+    $response->assertSessionHasErrors('mobile');
+    $this->assertGuest('supplier');
+    expect(Supplier::query()->where('email', 'bad-mobile@example.com')->exists())->toBeFalse();
+});
+
 test('a supplier logs in only on the supplier guard', function () {
     $supplier = Supplier::factory()->create(['email' => 'login@example.com']);
 
