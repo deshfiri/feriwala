@@ -92,8 +92,12 @@ class VerifyLedgerIntegrity
         // Exact decimal subtraction, never a float: sum(numeric) already comes
         // back from Postgres as a decimal string, and bcmath is what keeps it
         // one all the way through.
+        $credited = (string) ($sums->credited ?? '0');
+        $debited = (string) ($sums->debited ?? '0');
+        assert(is_numeric($credited) && is_numeric($debited));
+
         $derived = Money::fromDecimal(
-            bcsub((string) ($sums->credited ?? '0'), (string) ($sums->debited ?? '0'), 2),
+            bcsub($credited, $debited, 2),
             $wallet->currency(),
         );
 

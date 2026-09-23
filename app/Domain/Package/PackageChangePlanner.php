@@ -41,6 +41,13 @@ class PackageChangePlanner
     /** Whether the unused part of the current term is credited (§8.3). */
     public const PRORATION = 'package.prorate_upgrades';
 
+    /**
+     * Working precision for the proration ratio, well past the currency's own
+     * scale, so truncating to it can only ever discard digits that were
+     * genuinely insignificant.
+     */
+    private const RATIO_GUARD_SCALE = 20;
+
     public function __construct(
         protected DowngradeGuard $guard,
         protected SettingsRepository $settings,
@@ -112,9 +119,12 @@ class PackageChangePlanner
      */
     protected function directionFor(?SubscriptionTerms $held, SubscriptionTerms $target): SubscriptionSource
     {
-        $heldFee = $held === null ? 0 : $held->feeMinor;
+        // UserPackage::terms() is genuinely nullable; ?-> is what makes the
+        // fallback below safe for an account with no held terms.
+        // @phpstan-ignore nullsafe.neverNull
+        $heldFee = $held?->fee ?? Money::zero($target->fee->currency);
 
-        return $target->feeMinor > $heldFee
+        return $target->fee->greaterThan($heldFee)
             ? SubscriptionSource::Upgrade
             : SubscriptionSource::Downgrade;
     }
@@ -136,7 +146,7 @@ class PackageChangePlanner
             return Money::zero($currency);
         }
 
-        $paid = $current->paid_fee_minor;
+        $paid = $current->paid_fee;
         $start = $current->started_at;
         $end = $current->expires_at;
 
@@ -151,11 +161,29 @@ class PackageChangePlanner
             return Money::zero($currency);
         }
 
-        // Integer minor units throughout, floored: a credit rounded up would
+        // Exact decimal Taka throughout, floored: a credit rounded up would
         // pay an account for a day it still has.
-        $credit = intdiv($paid->minorUnits * (int) floor($remainingDays), (int) ceil($totalDays));
+        $credit = $this->flooredShare($paid, (int) floor($remainingDays), (int) ceil($totalDays));
 
-        return Money::of(min($credit, $paid->minorUnits), $currency);
+        return $credit->greaterThan($paid) ? $paid : $credit;
+    }
+
+    /**
+     * `$paid × $numeratorDays ÷ $denominatorDays`, floored to the currency's
+     * own scale by computing the exact quotient at guard precision and
+     * truncating — bcmath's own truncation is exactly a floor for a
+     * non-negative value.
+     */
+    private function flooredShare(Money $paid, int $numeratorDays, int $denominatorDays): Money
+    {
+        $currency = $paid->currency;
+        $scale = $currency->scale();
+
+        $product = bcmul($paid->toDecimal(), (string) $numeratorDays, self::RATIO_GUARD_SCALE);
+        $exact = bcdiv($product, (string) $denominatorDays, self::RATIO_GUARD_SCALE);
+        $floored = bcadd($exact, '0', $scale);
+
+        return Money::fromDecimal($floored, $currency);
     }
 
     /**
@@ -168,11 +196,9 @@ class PackageChangePlanner
      */
     protected function grossFee(SubscriptionSource $direction, SubscriptionTerms $terms, Currency $currency): Money
     {
-        $minor = $direction === SubscriptionSource::Upgrade
-            ? $terms->feeMinor
-            : ($terms->renewalFeeMinor ?? $terms->feeMinor);
-
-        return Money::of($minor, $currency);
+        return $direction === SubscriptionSource::Upgrade
+            ? $terms->fee
+            : ($terms->renewalFee ?? $terms->fee);
     }
 
     /**
@@ -185,11 +211,13 @@ class PackageChangePlanner
      */
     protected function additionalDeposit(?SubscriptionTerms $held, SubscriptionTerms $target, Currency $currency): Money
     {
-        $lodged = $held === null ? 0 : $held->requiredDepositMinor;
+        // Same reasoning as directionFor() above.
+        // @phpstan-ignore nullsafe.neverNull
+        $lodged = $held?->requiredDeposit ?? Money::zero($currency);
 
-        $difference = $target->requiredDepositMinor - $lodged;
-
-        return Money::of(max($difference, 0), $currency);
+        return $target->requiredDeposit->greaterThan($lodged)
+            ? $target->requiredDeposit->minus($lodged)
+            : Money::zero($currency);
     }
 
     protected function termEnd(CarbonImmutable $from, ?int $validityDays): ?CarbonImmutable

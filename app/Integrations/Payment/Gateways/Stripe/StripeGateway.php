@@ -30,10 +30,14 @@ use Illuminate\Http\Request;
  *
  * Three things are specific to this provider.
  *
- * **Amounts need no conversion.** Stripe's `unit_amount` is "a positive integer
- * in the smallest currency unit", which is exactly how {@see Money} stores
- * everything. This is the one driver that does not turn minor units into a
- * decimal string, and that is a feature rather than an oversight.
+ * **Amounts cross to Stripe's own smallest-unit convention, and nowhere else.**
+ * Stripe's `unit_amount` is "a positive integer in the smallest currency unit"
+ * — cents, for every currency this driver supports. {@see Money} holds exact
+ * decimal Taka-equivalent major units (D26), so {@see toSmallestUnit()} and
+ * {@see fromSmallestUnit()} are the one deliberate ×100/÷100 boundary in this
+ * file: not a reintroduction of the old internal minor-unit convention, but
+ * the external wire format of a provider this platform does not control. Both
+ * helpers work in bcmath, never a float.
  *
  * **BDT is not offered here** (D4). The base ledger is in taka and version 1
  * performs no exchange-rate accounting, so a Stripe payment cannot be a
@@ -165,10 +169,7 @@ class StripeGateway extends Gateway
                 'quantity' => 1,
                 'price_data' => [
                     'currency' => mb_strtolower($intent->amount->currency->value),
-
-                    // No conversion: Stripe wants the smallest currency unit,
-                    // which is how Money already holds it.
-                    'unit_amount' => $intent->amount->minorUnits,
+                    'unit_amount' => $this->toSmallestUnit($intent->amount),
                     'product_data' => ['name' => $intent->description],
                 ],
             ]],
@@ -315,9 +316,7 @@ class StripeGateway extends Gateway
                 reference: $reference,
                 gatewayReference: $gatewayReference,
 
-                // Minor units both sides. Nothing to convert and nothing to
-                // round.
-                amount: Money::of(
+                amount: $this->fromSmallestUnit(
                     (int) $body['amount_total'],
                     Currency::from(mb_strtoupper((string) $body['currency'])),
                 ),
@@ -368,7 +367,7 @@ class StripeGateway extends Gateway
 
         $body = $this->call('post', '/v1/refunds', [
             'payment_intent' => $intent->gatewayReference,
-            'amount' => $intent->amount->minorUnits,
+            'amount' => $this->toSmallestUnit($intent->amount),
             'metadata' => ['reference' => $intent->reference, 'reason' => $intent->reason],
         ], idempotencyKey: $intent->idempotencyKey, throwOnError: false);
 
@@ -401,7 +400,7 @@ class StripeGateway extends Gateway
         }
 
         $amount = isset($body['amount'], $body['currency'])
-            ? Money::of((int) $body['amount'], Currency::from(mb_strtoupper((string) $body['currency'])))
+            ? $this->fromSmallestUnit((int) $body['amount'], Currency::from(mb_strtoupper((string) $body['currency'])))
             : null;
 
         if ($status === self::REFUND_SUCCEEDED) {
@@ -494,5 +493,42 @@ class StripeGateway extends Gateway
     protected function credentials(): GatewayCredentials
     {
         return $this->credentials;
+    }
+
+    /**
+     * A `Money` as Stripe's own `unit_amount` — an integer count of the
+     * currency's smallest unit (cents). The one deliberate ×100-shaped
+     * boundary in this file: Stripe's wire format, not Feriwala's internal
+     * one, and computed in bcmath so it is exact for every magnitude a
+     * `NUMERIC(19,2)` column can hold.
+     */
+    protected function toSmallestUnit(Money $amount): int
+    {
+        return (int) bcmul($amount->toDecimal(), $this->unitsPerSmallestUnit($amount->currency), 0);
+    }
+
+    /**
+     * The inverse of {@see toSmallestUnit()} — Stripe's integer smallest-unit
+     * amount back to exact decimal-Taka-equivalent `Money`.
+     */
+    protected function fromSmallestUnit(int $amount, Currency $currency): Money
+    {
+        return Money::fromDecimal(
+            bcdiv((string) $amount, $this->unitsPerSmallestUnit($currency), $currency->scale()),
+            $currency,
+        );
+    }
+
+    /**
+     * How many of the currency's smallest units make one major unit — derived
+     * from {@see Currency::smallestUnit()} rather than a hardcoded 100, so a
+     * currency of a different scale would not need this file to change.
+     */
+    /**
+     * @return numeric-string
+     */
+    private function unitsPerSmallestUnit(Currency $currency): string
+    {
+        return bcdiv('1', $currency->smallestUnit(), 0);
     }
 }

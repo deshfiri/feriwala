@@ -24,7 +24,9 @@ use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use App\Support\Localization\MobileNumber;
 use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
 use App\Support\Money\Money;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
@@ -89,7 +91,7 @@ class OrderController extends StorefrontController
         // customer and collected on delivery (§28).
         $redirect = $placed && ! $order->isCashOnDelivery() ? $this->openSession($order) : null;
 
-        return new JsonResponse($this->payload->for($order, $redirect), $placed ? 201 : 200);
+        return $this->orderResponse($this->payload->for($order, $redirect), $placed ? 201 : 200);
     }
 
     public function index(Request $request): JsonResponse
@@ -109,10 +111,10 @@ class OrderController extends StorefrontController
             ->orderByDesc('id')
             ->cursorPaginate($this->limit($request));
 
-        return new JsonResponse($this->envelope(
+        return new JsonResponse($this->withLegacyMoney($this->envelope(
             $orders,
             $orders->getCollection()->map(fn (Order $order) => $this->payload->for($order))->all(),
-        ));
+        )));
     }
 
     public function show(Request $request, string $order): JsonResponse
@@ -121,7 +123,7 @@ class OrderController extends StorefrontController
 
         return $record === null
             ? $this->notFound($request)
-            : new JsonResponse($this->payload->for($record));
+            : $this->orderResponse($this->payload->for($record));
     }
 
     /**
@@ -179,7 +181,7 @@ class OrderController extends StorefrontController
             return $this->refused($request, WebsiteOrderRefused::confirmationCodesExhausted());
         }
 
-        return new JsonResponse($this->payload->for($record->refresh()), 202);
+        return $this->orderResponse($this->payload->for($record->refresh()), 202);
     }
 
     /**
@@ -210,7 +212,7 @@ class OrderController extends StorefrontController
             return $this->refused($request, $refused);
         }
 
-        return new JsonResponse($this->payload->for($confirmed));
+        return $this->orderResponse($this->payload->for($confirmed));
     }
 
     /**
@@ -239,7 +241,7 @@ class OrderController extends StorefrontController
             );
         }
 
-        return new JsonResponse($this->payload->for($record->refresh()));
+        return $this->orderResponse($this->payload->for($record->refresh()));
     }
 
     /**
@@ -288,11 +290,79 @@ class OrderController extends StorefrontController
     }
 
     /**
+     * A money object as the storefront sent it — `amount` (preferred, flat
+     * Taka) or `minor_units` (legacy poisha) — turned into a {@see Money}
+     * (contract §4.1's minor-unit compatibility period).
+     *
+     * This is the one place a legacy minor-unit value is allowed to become a
+     * Money; nothing behind it carries minor units (D26). The validation
+     * rules already refuse a payload naming both or neither.
+     *
      * @param  array<string, mixed>  $money
      */
     protected function money(array $money): Money
     {
-        return Money::of((int) $money['minor_units'], Currency::from((string) $money['currency']));
+        $currency = Currency::from((string) $money['currency']);
+
+        if (array_key_exists('amount', $money)) {
+            return DecimalAmount::parse((string) $money['amount'], $currency);
+        }
+
+        // Legacy poisha → flat Taka, once, at this one boundary.
+        $decimal = bcdiv((string) (int) $money['minor_units'], '100', $currency->scale());
+
+        return Money::fromDecimal($decimal, $currency);
+    }
+
+    /**
+     * An order payload as the JSON response, with the frozen contract's
+     * legacy `minor_units` and `decimal` keys added beside every money
+     * object's flat-Taka `amount` (contract §4.1's minor-unit compatibility
+     * period).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function orderResponse(array $payload, int $status = 200): JsonResponse
+    {
+        return new JsonResponse($this->withLegacyMoney($payload), $status);
+    }
+
+    /**
+     * Every money object in an outbound payload, with the legacy keys added
+     * beside it. The one place outbound legacy money keys are produced.
+     *
+     * @param  array<array-key, mixed>  $payload
+     * @return array<array-key, mixed>
+     */
+    protected function withLegacyMoney(array $payload): array
+    {
+        if ($this->isMoneyShape($payload)) {
+            $amount = (string) $payload['amount'];
+            assert(is_numeric($amount));
+
+            return $payload + [
+                // Exact: `amount` always has two decimal places here, so
+                // ×100 never truncates anything a person typed or the ERP
+                // computed.
+                'minor_units' => (int) bcmul($amount, '100', 0),
+                'decimal' => $amount,
+            ];
+        }
+
+        return array_map(
+            fn (mixed $value) => is_array($value) ? $this->withLegacyMoney($value) : $value,
+            $payload,
+        );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $value
+     */
+    protected function isMoneyShape(array $value): bool
+    {
+        return array_key_exists('amount', $value)
+            && array_key_exists('currency', $value)
+            && array_key_exists('formatted', $value);
     }
 
     /**
@@ -370,8 +440,13 @@ class OrderController extends StorefrontController
      */
     protected function rules(): array
     {
+        // Exactly one of `amount` (preferred, flat Taka) or `minor_units`
+        // (legacy poisha) per money object — never both, never neither
+        // (contract §4.1's minor-unit compatibility period).
         $money = fn (string $field) => [
-            $field.'.minor_units' => ['required', 'integer', 'min:0'],
+            $field => ['required', 'array'],
+            $field.'.amount' => ['required_without:'.$field.'.minor_units', 'prohibits:'.$field.'.minor_units', new DecimalAmountRule],
+            $field.'.minor_units' => ['required_without:'.$field.'.amount', 'prohibits:'.$field.'.amount', 'integer', 'min:0'],
             $field.'.currency' => ['required', 'string', 'in:'.implode(',', array_column(Currency::cases(), 'value'))],
         ];
 
