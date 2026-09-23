@@ -211,13 +211,13 @@ describe('withdrawals', function () {
 
         $this->post(route('supplier.withdrawals.store'), [
             'payout_method_id' => $this->method->public_id,
-            'amount_minor' => 500000,
+            'amount' => '5000.00',
             'idempotency_key' => 'test-key-1',
-        ])->assertSessionHasErrors('amount_minor');
+        ])->assertSessionHasErrors('amount');
 
         $this->post(route('supplier.withdrawals.store'), [
             'payout_method_id' => $this->method->public_id,
-            'amount_minor' => 100000,
+            'amount' => '1000.00',
             'idempotency_key' => 'test-key-2',
         ])->assertRedirect();
 
@@ -230,7 +230,7 @@ describe('withdrawals', function () {
 
         $payload = [
             'payout_method_id' => $this->method->public_id,
-            'amount_minor' => 100000,
+            'amount' => '1000.00',
             'idempotency_key' => 'test-key-retry',
         ];
 

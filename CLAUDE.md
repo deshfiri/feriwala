@@ -223,20 +223,21 @@ seems wrong, raise it rather than routing past it.
    `BIGINT` minor units plus a `currency_code` column. All calculation is server-side — the client
    displays figures, never computes them.
 
-   *All authoritative monetary storage and calculation use integer minor units with an explicit
-   currency code. All human-facing input and display use major currency units such as Taka,
-   converted through the shared exact Money boundary. Float and double are prohibited for
-   financial values.* Every human-facing money **input** goes through
-   `App\Support\Money\DecimalAmount::parse()`/`parseOrNull()` (wrapped as a validation rule by
-   `App\Support\Money\Rules\DecimalAmountRule`) at the HTTP boundary — never
-   `Money::fromDecimal()`, which rounds rather than refuses excess precision, and exists for
-   internal callers computing a fraction, not a person typing a price. The frontend's shared
-   `resources/js/components/money-input.tsx` (`MoneyInput`) submits the decimal string exactly as
-   typed; nothing in React parses, multiplies, or divides it. Every human-facing money **display**
-   renders the server's own `Money::jsonSerialize()` output (`{minor_units, currency, decimal,
-   formatted}`) through `resources/js/components/money-amount.tsx`, never a raw `minor_units`
-   integer. Machine-facing contracts — the frozen Storefront API, webhooks — are unaffected and
-   keep integer minor units with a currency code; they are not part of this boundary.
+    _All authoritative monetary storage and calculation use integer minor units with an explicit
+    currency code. All human-facing input and display use major currency units such as Taka,
+    converted through the shared exact Money boundary. Float and double are prohibited for
+    financial values._ Every human-facing money **input** goes through
+    `App\Support\Money\DecimalAmount::parse()`/`parseOrNull()` (wrapped as a validation rule by
+    `App\Support\Money\Rules\DecimalAmountRule`) at the HTTP boundary — never
+    `Money::fromDecimal()`, which rounds rather than refuses excess precision, and exists for
+    internal callers computing a fraction, not a person typing a price. The frontend's shared
+    `resources/js/components/money-input.tsx` (`MoneyInput`) submits the decimal string exactly as
+    typed; nothing in React parses, multiplies, or divides it. Every human-facing money **display**
+    renders the server's own `Money::jsonSerialize()` output (`{minor_units, currency, decimal,
+formatted}`) through `resources/js/components/money-amount.tsx`, never a raw `minor_units`
+    integer. Machine-facing contracts — the frozen Storefront API, webhooks — are unaffected and
+    keep integer minor units with a currency code; they are not part of this boundary.
+
 2. **Ledger entries are immutable.** No update, no delete. Corrections are new adjustment,
    reversal, or corrective rows. The same applies to audit logs.
 3. **Every financial mutation** runs inside a database transaction with row locking, is idempotent
