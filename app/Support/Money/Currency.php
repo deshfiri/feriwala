@@ -41,13 +41,20 @@ enum Currency: string
      * time. This is a unit of the currency itself, not a separate minor
      * denomination: Feriwala stores no minor units anywhere (D26).
      */
+    /**
+     * @return numeric-string
+     */
     public function smallestUnit(): string
     {
         $scale = $this->scale();
 
-        return $scale === 0
+        $unit = $scale === 0
             ? '1'
             : '0.'.str_repeat('0', $scale - 1).'1';
+
+        assert(is_numeric($unit));
+
+        return $unit;
     }
 
     /**

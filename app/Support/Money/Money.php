@@ -44,7 +44,7 @@ final class Money implements JsonSerializable, Stringable
     private const MAX_INTEGER_DIGITS = 17;
 
     /**
-     * @param  string  $amount  exact decimal major units, normalized to the currency's scale
+     * @param  numeric-string  $amount  exact decimal major units, normalized to the currency's scale
      */
     private function __construct(
         public readonly string $amount,
@@ -72,6 +72,8 @@ final class Money implements JsonSerializable, Stringable
         if (! preg_match('/^-?\d+(\.\d+)?$/', $normalized)) {
             throw new InvalidArgumentException("[{$normalized}] is not a valid decimal amount.");
         }
+
+        assert(is_numeric($normalized));
 
         $rounded = bcround($normalized, $currency->scale(), $rounding);
 
@@ -191,6 +193,8 @@ final class Money implements JsonSerializable, Stringable
             ? $this->currency->smallestUnit()
             : '-'.$this->currency->smallestUnit();
 
+        assert(is_numeric($step));
+
         $index = 0;
 
         while (bccomp($remainder, '0', $scale) !== 0) {
@@ -257,6 +261,8 @@ final class Money implements JsonSerializable, Stringable
      *
      * This is what the database column stores and what the wire carries — the
      * same digits at every layer, with no conversion between them.
+     *
+     * @return numeric-string
      */
     public function toDecimal(): string
     {
@@ -310,6 +316,9 @@ final class Money implements JsonSerializable, Stringable
         return $this->format();
     }
 
+    /**
+     * @param  numeric-string  $amount
+     */
     private function withAmount(string $amount): self
     {
         self::assertFits($amount, $amount);
@@ -320,12 +329,19 @@ final class Money implements JsonSerializable, Stringable
     /**
      * Force the value to the currency's scale and collapse "-0.00" to "0.00",
      * so two equal amounts are always the same string.
+     *
+     * @param  numeric-string  $amount
+     * @return numeric-string
      */
     private static function normalize(string $amount, Currency $currency): string
     {
         return bcadd($amount, '0', $currency->scale());
     }
 
+    /**
+     * @param  numeric-string  $left
+     * @param  numeric-string  $right
+     */
     private function compareTo(string $left, string $right): int
     {
         return bccomp($left, $right, $this->currency->scale());
@@ -333,6 +349,8 @@ final class Money implements JsonSerializable, Stringable
 
     /**
      * Validate a multiplier or percentage — exact decimals only, no float.
+     *
+     * @return numeric-string
      */
     private static function scalar(string|int $value): string
     {
@@ -341,6 +359,8 @@ final class Money implements JsonSerializable, Stringable
         if (! preg_match('/^-?\d+(\.\d+)?$/', $scalar)) {
             throw new InvalidArgumentException("[{$scalar}] is not a valid exact decimal factor.");
         }
+
+        assert(is_numeric($scalar));
 
         return $scalar;
     }

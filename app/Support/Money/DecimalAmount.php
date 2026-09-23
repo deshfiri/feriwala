@@ -77,6 +77,8 @@ final class DecimalAmount
 
         // Compared exactly. Casting to a float to check a ceiling would be the
         // one float in a class whose whole job is to keep them out.
+        assert(is_numeric($unsigned));
+
         if (bccomp($unsigned, self::MAX_AMOUNT, $scale) > 0) {
             throw InvalidDecimalAmount::overflow($input);
         }
