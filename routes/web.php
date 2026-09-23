@@ -37,6 +37,14 @@ use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
+use App\Http\Controllers\Admin\SupplierAllocationController;
+use App\Http\Controllers\Admin\SupplierController;
+use App\Http\Controllers\Admin\SupplierListingController;
+use App\Http\Controllers\Admin\SupplierOfferController;
+use App\Http\Controllers\Admin\SupplierPayableController;
+use App\Http\Controllers\Admin\SupplierStockController;
+use App\Http\Controllers\Admin\SupplierWalletController;
+use App\Http\Controllers\Admin\SupplierWithdrawalController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
@@ -476,6 +484,72 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
+
+        /*
+         * The Supplier account domain (D25, P13-1, P13-7, P13-9, P13-13). A
+         * wholly separate queue from the Client/Partner KYC above — see
+         * app/Domain/Supplier/Policies for who may reach each action.
+         */
+        Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
+        Route::get('suppliers/{supplier}/kyc/documents/{document}', [SupplierController::class, 'showDocument'])
+            ->name('suppliers.kyc.documents.show');
+        Route::post('suppliers/{supplier}/kyc/correction', [SupplierController::class, 'requestCorrection'])
+            ->name('suppliers.kyc.correction.store');
+        Route::post('suppliers/{supplier}/approval', [SupplierController::class, 'approve'])->name('suppliers.approval.store');
+        Route::post('suppliers/{supplier}/rejection', [SupplierController::class, 'reject'])->name('suppliers.rejection.store');
+        Route::post('suppliers/{supplier}/suspension', [SupplierController::class, 'suspend'])->name('suppliers.suspension.store');
+        Route::post('suppliers/{supplier}/reactivation', [SupplierController::class, 'reactivate'])->name('suppliers.reactivation.store');
+
+        // The Product Listing Request queue (P13-9, P13-11).
+        Route::get('supplier-listings', [SupplierListingController::class, 'index'])->name('supplier-listings.index');
+        Route::get('supplier-listings/{listing}', [SupplierListingController::class, 'show'])->name('supplier-listings.show');
+        Route::post('supplier-listings/{listing}/correction', [SupplierListingController::class, 'requestCorrection'])
+            ->name('supplier-listings.correction.store');
+        Route::post('supplier-listings/{listing}/decision', [SupplierListingController::class, 'decide'])
+            ->name('supplier-listings.decision.store');
+
+        // Supplier offers, pricing, and catalogue connection (P13-13, D25 pricing rules).
+        Route::get('supplier-offers', [SupplierOfferController::class, 'index'])->name('supplier-offers.index');
+        Route::get('supplier-offers/{offer}', [SupplierOfferController::class, 'show'])->name('supplier-offers.show');
+        Route::post('supplier-offers/{offer}/rates', [SupplierOfferController::class, 'setRates'])->name('supplier-offers.rates.store');
+        Route::post('supplier-offers/{offer}/activation', [SupplierOfferController::class, 'activate'])->name('supplier-offers.activation.store');
+        Route::post('supplier-offers/{offer}/suspension', [SupplierOfferController::class, 'suspend'])->name('supplier-offers.suspension.store');
+        Route::post('supplier-offers/{offer}/preferred', [SupplierOfferController::class, 'makePreferred'])->name('supplier-offers.preferred.store');
+
+        // Supplier stock/availability review (P13-15).
+        Route::get('supplier-stock', [SupplierStockController::class, 'index'])->name('supplier-stock.index');
+        Route::post('supplier-stock/{stockUpdate}/decision', [SupplierStockController::class, 'decide'])
+            ->name('supplier-stock.decision.store');
+        Route::post('supplier-offers/{offer}/stock-adjustment', [SupplierStockController::class, 'adjust'])
+            ->name('supplier-offers.stock-adjustment.store');
+
+        // Order allocation and Supplier payables (P13-21, P13-22).
+        Route::get('supplier-allocations', [SupplierAllocationController::class, 'index'])->name('supplier-allocations.index');
+        Route::get('supplier-allocations/{item}', [SupplierAllocationController::class, 'show'])->name('supplier-allocations.show');
+        Route::get('supplier-payables', [SupplierPayableController::class, 'index'])->name('supplier-payables.index');
+        Route::get('supplier-payables/{payable}', [SupplierPayableController::class, 'show'])->name('supplier-payables.show');
+        Route::post('supplier-payables/{payable}/settle', [SupplierPayableController::class, 'settle'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-payables.settle');
+        Route::post('supplier-payables/bulk-settle', [SupplierPayableController::class, 'bulkSettle'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-payables.bulk-settle');
+
+        // Supplier wallets, read-only (D25, P13-23).
+        Route::get('supplier-wallets', [SupplierWalletController::class, 'index'])->name('supplier-wallets.index');
+        Route::get('supplier-wallets/{wallet}', [SupplierWalletController::class, 'show'])->name('supplier-wallets.show');
+
+        // Supplier withdrawals (D25, P13-24).
+        Route::get('supplier-withdrawals', [SupplierWithdrawalController::class, 'index'])->name('supplier-withdrawals.index');
+        Route::get('supplier-withdrawals/{withdrawal}', [SupplierWithdrawalController::class, 'show'])->name('supplier-withdrawals.show');
+        Route::post('supplier-withdrawals/{withdrawal}/approve', [SupplierWithdrawalController::class, 'approve'])->name('supplier-withdrawals.approve');
+        Route::post('supplier-withdrawals/{withdrawal}/reject', [SupplierWithdrawalController::class, 'reject'])->name('supplier-withdrawals.reject');
+        Route::post('supplier-withdrawals/{withdrawal}/process', [SupplierWithdrawalController::class, 'process'])->name('supplier-withdrawals.process');
+        Route::post('supplier-withdrawals/{withdrawal}/paid', [SupplierWithdrawalController::class, 'markPaid'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-withdrawals.paid');
+        Route::post('supplier-withdrawals/{withdrawal}/failed', [SupplierWithdrawalController::class, 'markFailed'])->name('supplier-withdrawals.failed');
 
         /*
          * One trading business, in full (P1-79).
@@ -1046,3 +1120,7 @@ Route::withoutMiddleware('web')
     });
 
 require __DIR__.'/settings.php';
+
+// The Supplier account domain's own routes (D25, P13-1) — a separate tree,
+// on the `supplier` guard throughout, never mixed into the group above.
+require __DIR__.'/supplier.php';

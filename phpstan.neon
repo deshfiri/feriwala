@@ -33,6 +33,17 @@ parameters:
     level: 8
 
     ignoreErrors:
+        # The Supplier listings migration (D25) calls `nullOnDelete()` on a plain
+        # `foreignId()` for `supplier_offer_id`. Blueprint stores it as an unused
+        # column attribute, so it does nothing — the real foreign key, with
+        # `nullOnDelete`, is added in the offers migration once `supplier_offers`
+        # exists. A committed migration is never rewritten, so this one line is
+        # ignored here rather than edited out.
+        -
+            identifier: method.notFound
+            path: database/migrations/2026_10_02_120000_take_supplier_listings.php
+            count: 1
+
         # Shared model traits land before the models that consume them. PHPStan
         # cannot analyse a trait with no user, so it reports them as unused until
         # the first domain model applies them. They are covered by unit tests in

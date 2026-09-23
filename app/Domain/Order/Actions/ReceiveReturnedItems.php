@@ -20,6 +20,9 @@ use App\Domain\Order\Enums\ReturnStatus;
 use App\Domain\Order\Exceptions\ReturnRefused;
 use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderReturnItem;
+use App\Domain\Supplier\Actions\ReverseSupplierPayable;
+use App\Domain\Supplier\Models\SupplierOfferStock;
+use App\Domain\Supplier\SupplierStockLedger;
 use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
@@ -51,11 +54,21 @@ use Illuminate\Database\DatabaseManager;
  * Putting goods back on sale is an inventory change as much as a returns
  * decision, so it asks for both: `order.edit` to move the return along, and
  * `inventory.edit` to change what is in stock.
+ *
+ * **A Supplier-backed line restores into Supplier stock, not the warehouse**
+ * (D25, P13-22): its order item names the offer it was allocated to, so its
+ * units go back through {@see SupplierStockLedger} instead, and the return
+ * item's `supplier_stock_movement_id` — never both columns — is what makes
+ * that restoration recorded exactly once. The same quantity also reverses the
+ * line's Supplier payable, through {@see ReverseSupplierPayable}, in the same
+ * transaction.
  */
 class ReceiveReturnedItems
 {
     public function __construct(
         protected StockLedger $ledger,
+        protected SupplierStockLedger $supplierLedger,
+        protected ReverseSupplierPayable $supplierPayables,
         protected AnnounceReturnStatus $announcements,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
@@ -192,6 +205,25 @@ class ReceiveReturnedItems
             return;
         }
 
+        $orderItem = $item->orderItem;
+
+        if ($orderItem->isSupplierBacked()) {
+            $movementId = $this->restoreToSupplier($item, $line, $actor);
+
+            $item->forceFill([
+                'supplier_stock_movement_id' => $movementId,
+                'restored_at' => CarbonImmutable::now(),
+            ])->save();
+
+            $this->supplierPayables->handle(
+                $item,
+                $line->quantity,
+                'Returned on '.$item->orderReturn->reference.': '.$line->disposition->label().'.',
+            );
+
+            return;
+        }
+
         $movement = $this->restore($item, $line, $warehouse, $actor);
 
         $item->forceFill([
@@ -231,6 +263,40 @@ class ReceiveReturnedItems
                     // One restoration per returned line, whatever arrives twice.
                     idempotencyKey: 'order-return-item:'.$item->public_id,
                 ),
+            );
+        } catch (InventoryRefused) {
+            throw ReturnRefused::nothingSoldToRestore($orderItem->sku);
+        }
+
+        return $movement->id;
+    }
+
+    /**
+     * The Supplier-stock twin of {@see restore()}: the same "sold" bucket
+     * discipline, on the offer's own stock rather than a warehouse (D25,
+     * P13-22).
+     *
+     * @throws ReturnRefused
+     */
+    protected function restoreToSupplier(OrderReturnItem $item, ReturnedLine $line, User $actor): int
+    {
+        $orderItem = $item->orderItem;
+
+        /** @var SupplierOfferStock $stock */
+        $stock = SupplierOfferStock::query()->firstOrCreate(
+            ['supplier_offer_id' => $orderItem->supplier_offer_id],
+            ['quantity' => 0],
+        );
+
+        try {
+            $movement = $this->supplierLedger->move(
+                $stock,
+                StockBucket::Sold,
+                $line->disposition->bucket(),
+                $line->quantity,
+                'return_received',
+                reason: 'Returned on '.$item->orderReturn->reference.': '.$line->disposition->label().'.',
+                idempotencyKey: 'order-return-item:'.$item->public_id,
             );
         } catch (InventoryRefused) {
             throw ReturnRefused::nothingSoldToRestore($orderItem->sku);

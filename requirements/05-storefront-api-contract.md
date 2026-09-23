@@ -153,6 +153,12 @@ performs arithmetic on a float:
 
 Amounts are **integer minor units** (poisha). `decimal` is informational for display.
 
+This is a **machine contract** and is unaffected by the human-input/display convention used on
+Feriwala's own ERP and admin screens (§36.1): a person types and sees Taka there, through
+`App\Support\Money\DecimalAmount` at the HTTP boundary, but every wire payload — this API, webhooks,
+and every Inertia money prop — stays integer minor units with an explicit currency code. Partner
+integrations reading this API need change nothing.
+
 ### 4.2 Identifiers
 
 Public ULIDs and slugs only. No database IDs cross the boundary (§34.2, §34.3).

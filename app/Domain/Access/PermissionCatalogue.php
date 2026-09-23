@@ -178,6 +178,45 @@ class PermissionCatalogue
             Module::Integration->value => [
                 Action::View, Action::ManageIntegrations, Action::ManageSettings,
             ],
+
+            // The Supplier account domain (D25). Exactly the literal
+            // permission strings the batch specifies:
+            //   supplier.view / supplier.approve / supplier.suspend
+            Module::Supplier->value => [
+                Action::View, Action::Approve, Action::Suspend,
+            ],
+
+            //   supplier.kyc.view / supplier.kyc.review
+            Module::SupplierKyc->value => [
+                Action::View, Action::Review,
+            ],
+
+            //   supplier_listing.view / .review / .approve
+            Module::SupplierListing->value => [
+                Action::View, Action::Review, Action::Approve,
+            ],
+
+            //   supplier_pricing.view / .edit — never granted to Product
+            //   Manager by default (D25): a partner-visible catalogue role
+            //   holding a permission that reaches a Supplier's confidential
+            //   rate would be exactly the leak this batch exists to prevent.
+            Module::SupplierPricing->value => [
+                Action::View, Action::Edit,
+            ],
+
+            //   supplier_stock.view / .edit
+            Module::SupplierStock->value => [
+                Action::View, Action::Edit,
+            ],
+
+            //   supplier_payable.view / .approve — view (seeing what is owed)
+            //   and approve (settling it, P13-23) are deliberately separate
+            //   permission strings, so a role can hold one without the other
+            //   ("Supplier payable viewing and settlement must remain
+            //   permission separated").
+            Module::SupplierPayable->value => [
+                Action::View, Action::Approve,
+            ],
         ];
     }
 

@@ -9,8 +9,9 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Catalog\SaveProductRequest;
 use App\Models\User;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -43,9 +44,11 @@ class ProductPriceTierController extends Controller
             'variant_id' => ['nullable', 'string'],
 
             // Empty clears the table: the base price then applies at every quantity.
+            // Entered in Taka; converted to minor units below, at this HTTP
+            // boundary — SetPriceTiers still receives an integer per tier.
             'tiers' => ['nullable', 'array', 'max:'.SetPriceTiers::MAX_TIERS],
             'tiers.*.min_quantity' => ['required', 'integer', 'min:2', 'max:1000000', 'distinct'],
-            'tiers.*.unit_price_minor' => ['required', 'integer', 'min:0', 'max:'.SaveProductRequest::MAX_MINOR],
+            'tiers.*.unit_price_minor' => ['required', new DecimalAmountRule],
 
             // The bands are this endpoint's; the base figures belong to the product form (§12).
             ...CentralProductFields::rules(['tiers'], $request->all()),
@@ -64,8 +67,14 @@ class ProductPriceTierController extends Controller
                 ->firstOrFail();
         }
 
+        /** @var array<int, array{min_quantity: int|string, unit_price_minor: int|string}> $tiers */
+        $tiers = array_map(fn (array $tier) => [
+            'min_quantity' => $tier['min_quantity'],
+            'unit_price_minor' => DecimalAmount::parse($tier['unit_price_minor'])->minorUnits,
+        ], array_values($validated['tiers'] ?? []));
+
         try {
-            $this->tiers->handle($actor, $record, $variant, array_values($validated['tiers'] ?? []));
+            $this->tiers->handle($actor, $record, $variant, $tiers);
         } catch (CatalogRefused $refused) {
             throw ValidationException::withMessages(['tiers' => $refused->getMessage()]);
         }

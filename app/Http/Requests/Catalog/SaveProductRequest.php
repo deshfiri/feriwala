@@ -11,6 +11,8 @@ use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -110,13 +112,16 @@ class SaveProductRequest extends FormRequest
             'brand_id' => ['nullable', 'string', Rule::exists(Brand::class, 'public_id')],
 
             /*
-             * Integer minor units, like every other amount this application
-             * accepts (D4, §36.1). `integer` refuses "2490.50" outright rather
-             * than rounding it, because a silently rounded price is a wrong
-             * price somebody did not notice.
+             * Entered in Taka, like every other human-facing amount (D4,
+             * §36.1). `DecimalAmountRule` refuses excess precision outright
+             * rather than rounding it, because a silently rounded price is a
+             * wrong price somebody did not notice. Converted to minor units
+             * in productAttributes() below, at this HTTP boundary — the
+             * *_minor field names stay the same because ManageProducts and
+             * the §12 owned-field list still key off them.
              */
-            'base_cost_minor' => ['required', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
-            'wholesale_price_minor' => ['required', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+            'base_cost_minor' => ['required', new DecimalAmountRule],
+            'wholesale_price_minor' => ['required', new DecimalAmountRule],
 
             /*
              * What partner websites put in the page head (§34.3), bounded to
@@ -156,9 +161,9 @@ class SaveProductRequest extends FormRequest
             'max_order_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
 
             // Selling-price guidance for partners (§15.1). Blank is no bound.
-            'suggested_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
-            'minimum_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
-            'maximum_selling_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.self::MAX_MINOR],
+            'suggested_selling_price_minor' => ['nullable', new DecimalAmountRule],
+            'minimum_selling_price_minor' => ['nullable', new DecimalAmountRule],
+            'maximum_selling_price_minor' => ['nullable', new DecimalAmountRule],
 
             /*
              * The SKU and both figures are this form's to set; the lifecycle,
@@ -194,6 +199,18 @@ class SaveProductRequest extends FormRequest
                 $data = $validator->getData();
                 $number = fn (string $key): ?int => isset($data[$key]) && is_numeric($data[$key]) ? (int) $data[$key] : null;
 
+                // Money fields compare on parsed minor units, not a raw (int)
+                // cast of the Taka string a person typed — "2490.50" must
+                // compare as 249050, not truncate to 2490. Skipped when the
+                // field already failed DecimalAmountRule above.
+                $minorUnits = function (string $key) use ($validator, $data): ?int {
+                    if ($validator->errors()->has($key)) {
+                        return null;
+                    }
+
+                    return DecimalAmount::parseOrNull($data[$key] ?? null)?->minorUnits;
+                };
+
                 $min = $number('min_order_quantity') ?? 1;
                 $max = $number('max_order_quantity');
 
@@ -220,9 +237,9 @@ class SaveProductRequest extends FormRequest
                     }
                 }
 
-                $suggested = $number('suggested_selling_price_minor');
-                $floor = $number('minimum_selling_price_minor');
-                $ceiling = $number('maximum_selling_price_minor');
+                $suggested = $minorUnits('suggested_selling_price_minor');
+                $floor = $minorUnits('minimum_selling_price_minor');
+                $ceiling = $minorUnits('maximum_selling_price_minor');
 
                 if ($floor !== null && $ceiling !== null && $floor > $ceiling) {
                     $validator->errors()->add('minimum_selling_price_minor', __('catalog.products.bounds.selling_range'));
@@ -233,6 +250,31 @@ class SaveProductRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    /**
+     * The validated data, with the Taka strings converted to minor units
+     * under the same field names ManageProducts already expects.
+     *
+     * @return array<string, mixed>
+     */
+    public function productAttributes(): array
+    {
+        $validated = $this->validated();
+
+        foreach (['base_cost_minor', 'wholesale_price_minor'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $validated[$field] = DecimalAmount::parse($validated[$field])->minorUnits;
+            }
+        }
+
+        foreach (['suggested_selling_price_minor', 'minimum_selling_price_minor', 'maximum_selling_price_minor'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $validated[$field] = DecimalAmount::parseOrNull($validated[$field])?->minorUnits;
+            }
+        }
+
+        return $validated;
     }
 
     /**

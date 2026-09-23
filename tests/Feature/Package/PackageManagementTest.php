@@ -44,6 +44,8 @@ function packageTestManager(): User
 }
 
 /**
+ * Attributes shaped for direct model creation — the real column names.
+ *
  * @param  array<string, mixed>  $overrides
  * @return array<string, mixed>
  */
@@ -57,6 +59,29 @@ function packageTestPayload(array $overrides = []): array
         'currency_code' => 'BDT',
         'required_deposit_minor' => 0,
         'minimum_balance_minor' => 0,
+        'is_active' => '1',
+        'is_public' => '1',
+        ...$overrides,
+    ];
+}
+
+/**
+ * The same package, shaped for the HTTP form: Taka decimal strings for the
+ * money fields, as an administrator actually types them (§36.1).
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function packageTestFormPayload(array $overrides = []): array
+{
+    return [
+        'name' => 'Growth',
+        'slug' => 'growth',
+        'short_description' => 'For a shop finding its feet.',
+        'fee' => '5000.00',
+        'currency_code' => 'BDT',
+        'required_deposit' => '0',
+        'minimum_balance' => '0',
         'is_active' => '1',
         'is_public' => '1',
         ...$overrides,
@@ -308,7 +333,7 @@ describe('the admin screen', function () {
     it('creates through the form', function () {
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))
-            ->post(route('admin.packages.store'), packageTestPayload([
+            ->post(route('admin.packages.store'), packageTestFormPayload([
                 'features' => [PackageFeature::StaffLimit->value => '3'],
             ]))
             ->assertSessionHasNoErrors()
@@ -318,12 +343,45 @@ describe('the admin screen', function () {
             ->toBe(3);
     });
 
+    it('converts Taka form input to exact minor units, including a charge row', function () {
+        // §36.1: the administrator types Taka; the server is the only place
+        // that converts to the integer minor units the column stores.
+        $this->actingAs($this->admin)
+            ->from(route('admin.packages.index'))
+            ->post(route('admin.packages.store'), packageTestFormPayload([
+                'fee' => '500.50',
+                'registration_fee' => '250.25',
+                'charges' => [
+                    ['charge_type' => 'website_setup', 'amount' => '199.99', 'frequency' => 'once'],
+                ],
+            ]))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success');
+
+        $package = Package::query()->where('slug', 'growth')->firstOrFail();
+
+        expect($package->fee_minor->minorUnits)->toBe(50050)
+            ->and($package->registration_fee_minor->minorUnits)->toBe(25025)
+            ->and($package->charges->first()->amount_minor->minorUnits)->toBe(19999);
+    });
+
+    it('refuses a form amount with more than two decimal places', function () {
+        $this->actingAs($this->admin)
+            ->from(route('admin.packages.index'))
+            ->post(route('admin.packages.store'), packageTestFormPayload([
+                'fee' => '500.505',
+            ]))
+            ->assertSessionHasErrors('fee');
+
+        expect(Package::query()->where('slug', 'growth')->exists())->toBeFalse();
+    });
+
     it('refuses a duplicate slug', function () {
         Package::create(packageTestPayload());
 
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))
-            ->post(route('admin.packages.store'), packageTestPayload(['name' => 'Another']))
+            ->post(route('admin.packages.store'), packageTestFormPayload(['name' => 'Another']))
             ->assertSessionHasErrors('slug');
     });
 
@@ -332,27 +390,27 @@ describe('the admin screen', function () {
 
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))
-            ->patch(route('admin.packages.update', 'growth'), packageTestPayload(['name' => 'Growth Plus']))
+            ->patch(route('admin.packages.update', 'growth'), packageTestFormPayload(['name' => 'Growth Plus']))
             ->assertSessionHasNoErrors();
 
         expect($package->refresh()->name)->toBe('Growth Plus');
     });
 
-    it('accepts money the way a browser submits it, as numeric strings', function () {
-        // A form sends "1500000", not 1500000. `integer` validates the string
-        // without converting it, and the money cast refuses anything but an
-        // int — so an edit from the real screen used to end in a 500.
+    it('converts every Taka field an edit submits, including clearing one to null', function () {
+        // Editing exercises a fuller set of fields at once than creating does —
+        // a renewal fee paired with its frequency, and an override cleared back
+        // to "use the default" by submitting nothing for it.
         $package = Package::create(packageTestPayload());
 
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))
-            ->patch(route('admin.packages.update', 'growth'), packageTestPayload([
-                'fee_minor' => '1500000',
-                'registration_fee_minor' => null,
-                'renewal_fee_minor' => '1500000',
+            ->patch(route('admin.packages.update', 'growth'), packageTestFormPayload([
+                'fee' => '15000.00',
+                'registration_fee' => null,
+                'renewal_fee' => '15000.00',
                 'renewal_frequency' => 'yearly',
-                'required_deposit_minor' => '0',
-                'minimum_balance_minor' => '0',
+                'required_deposit' => '0',
+                'minimum_balance' => '0',
                 'validity_days' => '365',
             ]))
             ->assertSessionHasNoErrors();
@@ -365,26 +423,13 @@ describe('the admin screen', function () {
             ->and($package->required_deposit_minor->minorUnits)->toBe(0);
     });
 
-    it('creates a package from money submitted as numeric strings', function () {
-        $this->actingAs($this->admin)
-            ->from(route('admin.packages.index'))
-            ->post(route('admin.packages.store'), packageTestPayload([
-                'slug' => 'enterprise',
-                'fee_minor' => '1500000',
-            ]))
-            ->assertSessionHasNoErrors();
-
-        expect(Package::where('slug', 'enterprise')->firstOrFail()->fee_minor->minorUnits)
-            ->toBe(1500000);
-    });
-
     it('refuses a renewal fee with no frequency', function () {
         // It would renew on no schedule — a package that behaves differently
         // from how it reads.
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))
-            ->post(route('admin.packages.store'), packageTestPayload([
-                'renewal_fee_minor' => 100000,
+            ->post(route('admin.packages.store'), packageTestFormPayload([
+                'renewal_fee' => '1000.00',
             ]))
             ->assertSessionHasErrors('renewal_frequency');
     });
@@ -392,7 +437,7 @@ describe('the admin screen', function () {
     it('refuses a feature key that is not one', function () {
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))
-            ->post(route('admin.packages.store'), packageTestPayload([
+            ->post(route('admin.packages.store'), packageTestFormPayload([
                 'features' => ['staff_limitt' => '3'],
             ]))
             ->assertSessionHasErrors('features.staff_limitt');

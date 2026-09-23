@@ -196,7 +196,12 @@ describe('currency', function () {
         ]);
 
         expect(PaymentReceipt::forPayment($payment)->settled)
-            ->toBe(['minor_units' => 5000, 'currency' => 'USD']);
+            ->toBe([
+                'minor_units' => 5000,
+                'currency' => 'USD',
+                'decimal' => '50.00',
+                'formatted' => '$50.00',
+            ]);
     });
 
     it('says nothing when the settlement is the same money said twice', function () {

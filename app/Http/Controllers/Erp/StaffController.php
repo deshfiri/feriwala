@@ -193,7 +193,7 @@ class StaffController extends Controller
      */
     protected function actor(Request $request): User
     {
-        $user = $request->user();
+        $user = $request->user('web');
 
         abort_if(! $user instanceof User, 403);
 
@@ -205,7 +205,7 @@ class StaffController extends Controller
      */
     protected function account(Request $request): BusinessAccount
     {
-        $account = $request->user()?->businessAccount;
+        $account = $request->user('web')?->businessAccount;
 
         abort_if($account === null, 403);
 

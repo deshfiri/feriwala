@@ -23,6 +23,6 @@ class VerifyEmailResponse implements VerifyEmailResponseContract
     public function toResponse($request): Response
     {
         return redirect()
-            ->to($this->home->urlFor($request->user()).'?verified=1');
+            ->to($this->home->urlFor($request->user('web')).'?verified=1');
     }
 }

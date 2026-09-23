@@ -42,7 +42,7 @@ class StaffInvitationController extends Controller
             ]);
         }
 
-        $user = $request->user();
+        $user = $request->user('web');
 
         return Inertia::render('staff/invitation', [
             'invitation' => [
@@ -72,7 +72,7 @@ class StaffInvitationController extends Controller
      */
     protected function actor(Request $request): User
     {
-        $user = $request->user();
+        $user = $request->user('web');
 
         abort_if(! $user instanceof User, 403);
 

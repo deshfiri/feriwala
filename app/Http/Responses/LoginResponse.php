@@ -20,6 +20,6 @@ class LoginResponse implements LoginResponseContract
         // §5.4 gate and into a 403 at the front door (D23).
         return $request->wantsJson()
             ? new JsonResponse(['two_factor' => false], 200)
-            : redirect()->intended($this->home->urlFor($request->user()));
+            : redirect()->intended($this->home->urlFor($request->user('web')));
     }
 }

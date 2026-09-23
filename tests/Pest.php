@@ -31,6 +31,14 @@ use App\Domain\Referral\Enums\ReferralTrigger;
 use App\Domain\Referral\Enums\RewardType;
 use App\Domain\Referral\Models\ReferralPlan;
 use App\Domain\Referral\ReferralSettings;
+use App\Domain\Supplier\Actions\SetSupplierOfferRates;
+use App\Domain\Supplier\Enums\ListingStatus;
+use App\Domain\Supplier\Enums\OfferStatus;
+use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierOfferPriceChange;
+use App\Domain\Supplier\Models\SupplierProductListing;
+use App\Domain\Supplier\Queries\ResolvePreferredOffer;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
@@ -45,6 +53,7 @@ use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -106,6 +115,7 @@ pest()->group('permissions')->in('Feature/Permissions');
 pest()->group('self-scope')->in('Feature/SelfScope');
 pest()->group('security')->in('Feature/Security');
 pest()->group('concurrency')->in('Feature/Concurrency');
+pest()->group('supplier')->in('Feature/Supplier');
 
 /*
 |--------------------------------------------------------------------------
@@ -619,4 +629,106 @@ function referralTestNewcomer(?BusinessAccount $referrer, ?Package $package = nu
 function referralTestActivate(BusinessAccount $account): BusinessAccount
 {
     return app(ActivateAccount::class)->handle($account, User::factory()->create()->id);
+}
+
+/*
+ * Shared fixtures for the Supplier account domain (D25). Prefixed
+ * `supplierTest` so they cannot collide with anything else in Pest's single
+ * global function namespace.
+ */
+
+/**
+ * Signs a Supplier in on its own guard **without** `actingAs()`, which calls
+ * `Auth::shouldUse()` and would make `supplier` the default guard for the
+ * rest of the test — defeating the isolation these tests exist to prove.
+ */
+function supplierTestSignIn(Supplier $supplier): Supplier
+{
+    Auth::guard('supplier')->login($supplier);
+
+    return $supplier;
+}
+
+/**
+ * A listing request awaiting staff review, with `$items` proposed variations.
+ *
+ * @param  list<array<string, mixed>>  $items
+ */
+function supplierTestListing(Supplier $supplier, array $items = [[]], ListingStatus $status = ListingStatus::UnderReview): SupplierProductListing
+{
+    $listing = $supplier->listings()->create([
+        'product_name' => 'Cotton panjabi',
+        'description' => 'A supplier proposal.',
+        'status' => $status,
+        'submitted_at' => now(),
+    ]);
+
+    foreach ($items as $index => $item) {
+        $listing->items()->create([
+            'variant_label' => count($items) > 1 ? 'Size '.($index + 1) : null,
+            'supplier_sku' => 'SUP-'.Str::upper(Str::random(6)),
+            'supplier_rate_minor' => 100000,
+            'currency_code' => 'BDT',
+            'available_quantity' => 50,
+            'minimum_supply_quantity' => 1,
+            ...$item,
+        ]);
+    }
+
+    return $listing->refresh();
+}
+
+/**
+ * An active offer priced at 1,000 taka from the Supplier and 1,300 from the
+ * platform, on a fresh Central Product (or the one given).
+ *
+ * Writes no price-history row — several existing tests assert an exact
+ * history count from zero. A test that allocates an order line to this offer
+ * needs one ({@see ResolvePreferredOffer} reads history, not the offer's own
+ * denormalised figures) and adds it itself; see
+ * {@see supplierTestOfferPriceVersion()}.
+ */
+function supplierTestOffer(
+    ?Supplier $supplier = null,
+    ?Product $product = null,
+    int $supplierRate = 100000,
+    int $platformRate = 130000,
+    bool $preferred = false,
+): SupplierOffer {
+    $supplier ??= Supplier::factory()->create();
+    $product ??= websiteTestProduct();
+
+    $offer = SupplierOffer::create([
+        'supplier_id' => $supplier->id,
+        'product_id' => $product->id,
+        'status' => OfferStatus::Active,
+        'is_preferred' => $preferred,
+        'supplier_rate_minor' => $supplierRate,
+        'platform_rate_minor' => $platformRate,
+        'currency_code' => 'BDT',
+        'wholesale_enabled' => true,
+        'activated_at' => now(),
+    ]);
+
+    $offer->stock()->create(['quantity' => 10]);
+
+    return $offer;
+}
+
+/**
+ * The price-change row {@see SetSupplierOfferRates} always leaves behind,
+ * backdated so it is already effective — for a test that allocates an order
+ * line to a {@see supplierTestOffer()} fixture and needs
+ * {@see ResolvePreferredOffer} to find a price version for it (D25, P13-21).
+ */
+function supplierTestOfferPriceVersion(SupplierOffer $offer): SupplierOfferPriceChange
+{
+    return $offer->priceHistory()->create([
+        'supplier_rate_minor' => $offer->supplier_rate_minor->minorUnits,
+        'platform_rate_minor' => $offer->platform_rate_minor->minorUnits,
+        'currency_code' => $offer->currency_code,
+        'effective_from' => now()->subMinute(),
+        'reason' => 'Fixture rate.',
+        'created_at' => now(),
+    ]);
 }

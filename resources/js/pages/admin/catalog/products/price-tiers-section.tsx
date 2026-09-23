@@ -48,7 +48,7 @@ export default function PriceTiersSection({ product, scopes, canEdit }: Props) {
         (source?.tiers ?? []).map((tier) => ({
             key: nextKey.current++,
             min_quantity: String(tier.min_quantity),
-            unit_price_minor: String(tier.unit_price_minor),
+            unit_price_minor: tier.unit_price.decimal,
         }));
 
     const [rows, setRows] = useState<Row[]>(() => toRows(scope));
@@ -209,22 +209,30 @@ export default function PriceTiersSection({ product, scopes, canEdit }: Props) {
                                     <Label htmlFor={`tier-${row.key}-price`}>
                                         {t('catalog.tiers.unit_price')}
                                     </Label>
-                                    <Input
-                                        id={`tier-${row.key}-price`}
-                                        type="number"
-                                        inputMode="numeric"
-                                        min={0}
-                                        step={1}
-                                        className="tabular-nums"
-                                        value={row.unit_price_minor}
-                                        onChange={(event) =>
-                                            update(
-                                                row.key,
-                                                'unit_price_minor',
-                                                event.target.value,
-                                            )
-                                        }
-                                    />
+                                    <div className="relative">
+                                        <span
+                                            aria-hidden="true"
+                                            className="text-muted-foreground pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm"
+                                        >
+                                            ৳
+                                        </span>
+                                        <Input
+                                            id={`tier-${row.key}-price`}
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="^\d+(\.\d{1,2})?$"
+                                            placeholder="0.00"
+                                            className="pl-7 tabular-nums"
+                                            value={row.unit_price_minor}
+                                            onChange={(event) =>
+                                                update(
+                                                    row.key,
+                                                    'unit_price_minor',
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
                                     <InputError
                                         message={
                                             errors[

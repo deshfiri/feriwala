@@ -177,7 +177,7 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
     it('posts, moves the balance and records who and why', function () {
         adminConfirmed($this->manager)
             ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
-                'amount_minor' => 2500,
+                'amount' => '25.00',
                 'direction' => 'credit',
                 'reason' => 'Goodwill after a courier failure.',
             ])
@@ -196,7 +196,7 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
         // reason is the first thing an auditor asks about.
         adminConfirmed($this->manager)
             ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
-                'amount_minor' => 2500,
+                'amount' => '25.00',
                 'direction' => 'credit',
             ])
             ->assertSessionHasErrors('reason');
@@ -207,7 +207,7 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
     it('refuses somebody without the permission', function () {
         adminConfirmed(testPlatformStaff(PlatformRole::PaymentManager))
             ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
-                'amount_minor' => 2500,
+                'amount' => '25.00',
                 'direction' => 'credit',
                 'reason' => 'Trying it on.',
             ])
@@ -223,7 +223,7 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
          */
         $this->actingAs($this->manager)
             ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
-                'amount_minor' => 2500,
+                'amount' => '25.00',
                 'direction' => 'credit',
                 'reason' => 'Goodwill after a courier failure.',
             ])
@@ -235,11 +235,11 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
     it('answers a debit it cannot afford rather than overdrawing', function () {
         adminConfirmed($this->manager)
             ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
-                'amount_minor' => 5000,
+                'amount' => '50.00',
                 'direction' => 'debit',
                 'reason' => 'Taking back an overpayment.',
             ])
-            ->assertSessionHasErrors('amount_minor');
+            ->assertSessionHasErrors('amount');
 
         expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(0);
     });

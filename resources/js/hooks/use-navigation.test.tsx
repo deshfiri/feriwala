@@ -394,6 +394,130 @@ describe('referral settings navigation', () => {
 });
 
 /**
+ * The Supplier account domain's staff screens (D25): each its own permission,
+ * so seeing the listing queue never implies seeing a Supplier Rate, and a
+ * partner is offered none of it.
+ */
+describe('supplier administration navigation', () => {
+    let root: Root;
+
+    const SUPPLIER_DOORS = [
+        'nav.suppliers',
+        'nav.supplier_listings',
+        'nav.supplier_offers',
+        'nav.supplier_stock',
+        'nav.supplier_allocations',
+        'nav.supplier_payables',
+        'nav.supplier_wallets',
+        'nav.supplier_withdrawals',
+    ];
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives a supplier manager every supplier screen', () => {
+        renderFor({
+            permissions: {
+                'supplier.view': true,
+                'supplier_listing.view': true,
+                'supplier_pricing.view': true,
+                'supplier_stock.view': true,
+                'supplier_payable.view': true,
+                'withdrawal.view': true,
+            },
+            account: null,
+        });
+
+        SUPPLIER_DOORS.forEach((title) => expect(titles).toContain(title));
+    });
+
+    it('gates each door on its own permission', () => {
+        renderFor({
+            permissions: {
+                'supplier.view': false,
+                'supplier_listing.view': true,
+                'supplier_pricing.view': false,
+                'supplier_stock.view': false,
+                'supplier_payable.view': false,
+                'withdrawal.view': false,
+            },
+            account: null,
+        });
+
+        expect(titles).toContain('nav.supplier_listings');
+        // Seeing the queue does not open the confidential pricing screen —
+        // allocations carry the same Supplier Rate an offer does, so it is
+        // gated the same way.
+        expect(titles).not.toContain('nav.supplier_offers');
+        expect(titles).not.toContain('nav.supplier_allocations');
+        expect(titles).not.toContain('nav.suppliers');
+        expect(titles).not.toContain('nav.supplier_stock');
+        expect(titles).not.toContain('nav.supplier_payables');
+        expect(titles).not.toContain('nav.supplier_wallets');
+        expect(titles).not.toContain('nav.supplier_withdrawals');
+    });
+
+    /*
+     * Regression for 888a6a9 / P13-23-P13-24: supplier_payable.view and
+     * withdrawal.view are independent gates — a role holding one and not
+     * the other sees only the door its own permission opens.
+     */
+    it('gates the withdrawal queue on withdrawal.view, independent of supplier_payable.view', () => {
+        renderFor({
+            permissions: {
+                'supplier_payable.view': true,
+                'withdrawal.view': false,
+            },
+            account: null,
+        });
+
+        expect(titles).toContain('nav.supplier_payables');
+        expect(titles).toContain('nav.supplier_wallets');
+        expect(titles).not.toContain('nav.supplier_withdrawals');
+    });
+
+    it('gates the wallet screen on supplier_payable.view even when withdrawal.view is held', () => {
+        renderFor({
+            permissions: {
+                'supplier_payable.view': false,
+                'withdrawal.view': true,
+            },
+            account: null,
+        });
+
+        expect(titles).not.toContain('nav.supplier_payables');
+        expect(titles).not.toContain('nav.supplier_wallets');
+        expect(titles).toContain('nav.supplier_withdrawals');
+    });
+
+    it('offers a partner none of it', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: true,
+                managesStaff: false,
+            },
+        });
+
+        SUPPLIER_DOORS.forEach((title) => expect(titles).not.toContain(title));
+    });
+});
+
+/**
  * Referral doors (D24): the owner's own page, and the platform's records for
  * staff who may see them — never each other's.
  */

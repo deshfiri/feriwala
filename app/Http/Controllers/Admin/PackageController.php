@@ -49,15 +49,13 @@ class PackageController extends Controller
                 'short_description' => $package->short_description,
                 'description' => $package->description,
 
-                // Rendered by MoneyAmount, which formats server-side (§36.1).
+                // Rendered by MoneyAmount for display, and by MoneyInput's
+                // `.decimal` for the edit form's default value (§36.1).
                 'fee' => $package->fee_minor->jsonSerialize(),
-
-                // The same amount as an integer, for the form's number field.
-                'fee_minor' => $package->fee_minor->minorUnits,
-                'registration_fee_minor' => $package->registration_fee_minor?->minorUnits,
-                'renewal_fee_minor' => $package->renewal_fee_minor?->minorUnits,
-                'required_deposit_minor' => $package->required_deposit_minor->minorUnits,
-                'minimum_balance_minor' => $package->minimum_balance_minor->minorUnits,
+                'registration_fee' => $package->registration_fee_minor?->jsonSerialize(),
+                'renewal_fee' => $package->renewal_fee_minor?->jsonSerialize(),
+                'required_deposit' => $package->required_deposit_minor->jsonSerialize(),
+                'minimum_balance' => $package->minimum_balance_minor->jsonSerialize(),
                 'currency_code' => $package->currency_code,
 
                 'validity_days' => $package->validity_days,
@@ -80,7 +78,7 @@ class PackageController extends Controller
 
                 'charges' => $package->charges->map(fn (PackageCharge $charge) => [
                     'charge_type' => $charge->charge_type,
-                    'amount_minor' => $charge->amount_minor->minorUnits,
+                    'amount' => $charge->amount_minor->jsonSerialize(),
                     'frequency' => $charge->frequency,
                 ])->values(),
 

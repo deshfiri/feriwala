@@ -42,7 +42,7 @@ class ProductVariantController extends Controller
         abort_unless(CatalogPolicy::canCreate($actor), 403);
 
         try {
-            $variant = $this->variants->create($actor, $this->product($product), $request->validated());
+            $variant = $this->variants->create($actor, $this->product($product), $request->variantAttributes());
         } catch (CatalogRefused $refused) {
             throw ValidationException::withMessages(['values' => $refused->getMessage()]);
         }
@@ -96,7 +96,7 @@ class ProductVariantController extends Controller
 
         $record = $this->variant($this->product($product), $variant);
 
-        $updated = $this->variants->update($actor, $record, Arr::except($request->validated(), ['values']));
+        $updated = $this->variants->update($actor, $record, Arr::except($request->variantAttributes(), ['values']));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.variants.updated', ['sku' => $updated->sku])]);
 

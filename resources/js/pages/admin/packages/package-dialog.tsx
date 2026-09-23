@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import PackageController from '@/actions/App/Http/Controllers/Admin/PackageController';
 import InputError from '@/components/input-error';
+import MoneyInput from '@/components/money-input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -17,11 +18,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import type {
-    PackageChargeRow,
-    PackageFeatureDefinition,
-    PackageRow,
-} from '@/types';
+import type { PackageFeatureDefinition, PackageRow } from '@/types';
+
+/** A charge row while it is being edited: the amount is the raw Taka string
+ * the administrator typed, not yet parsed server-side (§36.1). */
+type EditableCharge = {
+    charge_type: string;
+    amount: string;
+    frequency: string;
+};
 
 type Props = {
     open: boolean;
@@ -36,10 +41,10 @@ type Props = {
 /**
  * Create or edit one package (§8.1).
  *
- * Prices are entered and posted in **minor units**. A decimal field would be
- * the one place a float could enter a system that has kept money integer
- * everywhere else (D4, §36.1), and the label says so rather than leaving an
- * administrator to discover it by entering 500 and selling a package for ৳5.
+ * Prices are entered and displayed in **Taka**, as a decimal string; the
+ * server is the only place that converts to minor units, through
+ * `DecimalAmount::parse()` (D4, §36.1). Nothing here does arithmetic on a
+ * price.
  *
  * Entitlements and charges are edited here rather than on screens of their own:
  * what a package grants is what a package *is*, and splitting them lets someone
@@ -54,13 +59,19 @@ export default function PackageDialog({
     frequencies,
 }: Props) {
     const { t } = useTranslation();
-    const [charges, setCharges] = useState<PackageChargeRow[]>([]);
+    const [charges, setCharges] = useState<EditableCharge[]>([]);
 
     // Re-seeded whenever the dialog opens on a different row, so editing one
     // package never shows another one's charges.
     useEffect(() => {
         if (open) {
-            setCharges(row?.charges ?? []);
+            setCharges(
+                (row?.charges ?? []).map((charge) => ({
+                    charge_type: charge.charge_type,
+                    amount: charge.amount.decimal,
+                    frequency: charge.frequency,
+                })),
+            );
         }
     }, [open, row]);
 
@@ -131,48 +142,34 @@ export default function PackageDialog({
 
                             <Section title={t('package.form.pricing')}>
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                    <Field
-                                        name="fee_minor"
-                                        type="number"
+                                    <MoneyInput
+                                        id="fee"
+                                        name="fee"
                                         label={t('package.form.fee')}
-                                        defaultValue={String(
-                                            row?.fee_minor ?? 0,
-                                        )}
-                                        error={errors.fee_minor}
+                                        defaultValue={row?.fee.decimal}
+                                        error={errors.fee}
                                         required
                                     />
-                                    <Field
-                                        name="registration_fee_minor"
-                                        type="number"
+                                    <MoneyInput
+                                        id="registration_fee"
+                                        name="registration_fee"
                                         label={t(
                                             'package.form.registration_fee',
                                         )}
-                                        help={t(
+                                        helpText={t(
                                             'package.form.registration_fee_help',
                                         )}
                                         defaultValue={
-                                            row?.registration_fee_minor === null
-                                                ? ''
-                                                : String(
-                                                      row?.registration_fee_minor ??
-                                                          '',
-                                                  )
+                                            row?.registration_fee?.decimal
                                         }
-                                        error={errors.registration_fee_minor}
+                                        error={errors.registration_fee}
                                     />
-                                    <Field
-                                        name="renewal_fee_minor"
-                                        type="number"
+                                    <MoneyInput
+                                        id="renewal_fee"
+                                        name="renewal_fee"
                                         label={t('package.form.renewal_fee')}
-                                        defaultValue={
-                                            row?.renewal_fee_minor === null
-                                                ? ''
-                                                : String(
-                                                      row?.renewal_fee_minor ??
-                                                          '',
-                                                  )
-                                        }
-                                        error={errors.renewal_fee_minor}
+                                        defaultValue={row?.renewal_fee?.decimal}
+                                        error={errors.renewal_fee}
                                     />
 
                                     <div className="grid gap-2">
@@ -249,27 +246,27 @@ export default function PackageDialog({
 
                             <Section title={t('package.form.wallet')}>
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                    <Field
-                                        name="required_deposit_minor"
-                                        type="number"
+                                    <MoneyInput
+                                        id="required_deposit"
+                                        name="required_deposit"
                                         label={t(
                                             'package.form.required_deposit',
                                         )}
-                                        defaultValue={String(
-                                            row?.required_deposit_minor ?? 0,
-                                        )}
-                                        error={errors.required_deposit_minor}
+                                        defaultValue={
+                                            row?.required_deposit.decimal ?? '0'
+                                        }
+                                        error={errors.required_deposit}
                                     />
-                                    <Field
-                                        name="minimum_balance_minor"
-                                        type="number"
+                                    <MoneyInput
+                                        id="minimum_balance"
+                                        name="minimum_balance"
                                         label={t(
                                             'package.form.minimum_balance',
                                         )}
-                                        defaultValue={String(
-                                            row?.minimum_balance_minor ?? 0,
-                                        )}
-                                        error={errors.minimum_balance_minor}
+                                        defaultValue={
+                                            row?.minimum_balance.decimal ?? '0'
+                                        }
+                                        error={errors.minimum_balance}
                                     />
                                 </div>
                             </Section>
@@ -521,14 +518,14 @@ function ChargeEditor({
     chargeTypes,
     frequencies,
 }: {
-    charges: PackageChargeRow[];
-    onChange: (charges: PackageChargeRow[]) => void;
+    charges: EditableCharge[];
+    onChange: (charges: EditableCharge[]) => void;
     chargeTypes: string[];
     frequencies: string[];
 }) {
     const { t } = useTranslation();
 
-    const update = (index: number, patch: Partial<PackageChargeRow>) =>
+    const update = (index: number, patch: Partial<EditableCharge>) =>
         onChange(
             charges.map((charge, i) =>
                 i === index ? { ...charge, ...patch } : charge,
@@ -549,8 +546,8 @@ function ChargeEditor({
                     />
                     <input
                         type="hidden"
-                        name={`charges[${index}][amount_minor]`}
-                        value={charge.amount_minor}
+                        name={`charges[${index}][amount]`}
+                        value={charge.amount}
                     />
                     <input
                         type="hidden"
@@ -590,17 +587,28 @@ function ChargeEditor({
                         >
                             {t('package.form.charge_amount')}
                         </Label>
-                        <Input
-                            id={`charge-amount-${index}`}
-                            type="number"
-                            min={0}
-                            value={charge.amount_minor}
-                            onChange={(event) =>
-                                update(index, {
-                                    amount_minor: Number(event.target.value),
-                                })
-                            }
-                        />
+                        <div className="relative">
+                            <span
+                                aria-hidden="true"
+                                className="text-muted-foreground pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm"
+                            >
+                                ৳
+                            </span>
+                            <Input
+                                id={`charge-amount-${index}`}
+                                type="text"
+                                inputMode="decimal"
+                                pattern="^\d+(\.\d{1,2})?$"
+                                placeholder="0.00"
+                                className="pl-7"
+                                value={charge.amount}
+                                onChange={(event) =>
+                                    update(index, {
+                                        amount: event.target.value,
+                                    })
+                                }
+                            />
+                        </div>
                     </div>
 
                     <div className="grid gap-1">
@@ -649,7 +657,7 @@ function ChargeEditor({
                         ...charges,
                         {
                             charge_type: chargeTypes[0] ?? 'website_setup',
-                            amount_minor: 0,
+                            amount: '0',
                             frequency: 'once',
                         },
                     ])

@@ -218,7 +218,7 @@ class ProductController extends Controller
 
         abort_unless(CatalogPolicy::canCreate($actor), 403);
 
-        $product = $this->products->create($actor, $request->validated());
+        $product = $this->products->create($actor, $request->productAttributes());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.created', ['name' => $product->name])]);
 
@@ -386,7 +386,7 @@ class ProductController extends Controller
 
         abort_unless(CatalogPolicy::canEdit($actor), 403);
 
-        $updated = $this->products->update($actor, $this->product($product), $request->validated());
+        $updated = $this->products->update($actor, $this->product($product), $request->productAttributes());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.updated', ['name' => $updated->name])]);
 
@@ -460,10 +460,8 @@ class ProductController extends Controller
             'category_id' => $product->category->public_id,
             'brand_id' => $product->brand?->public_id,
 
-            // Both the integer the form edits and the server's own rendering of
-            // it, so the page never formats money itself (§36.1).
-            'base_cost_minor' => $product->base_cost_minor->minorUnits,
-            'wholesale_price_minor' => $product->wholesale_price_minor->minorUnits,
+            // The server's own rendering of the amount; the form edits its
+            // .decimal string and the server converts back on submit (§36.1).
             'base_cost' => $product->base_cost_minor->jsonSerialize(),
             'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
 
@@ -476,9 +474,6 @@ class ProductController extends Controller
 
             'min_order_quantity' => $product->min_order_quantity,
             'max_order_quantity' => $product->max_order_quantity,
-            'suggested_selling_price_minor' => $product->suggested_selling_price_minor?->minorUnits,
-            'minimum_selling_price_minor' => $product->minimum_selling_price_minor?->minorUnits,
-            'maximum_selling_price_minor' => $product->maximum_selling_price_minor?->minorUnits,
             'suggested_selling_price' => $product->suggested_selling_price_minor?->jsonSerialize(),
             'minimum_selling_price' => $product->minimum_selling_price_minor?->jsonSerialize(),
             'maximum_selling_price' => $product->maximum_selling_price_minor?->jsonSerialize(),
@@ -578,7 +573,6 @@ class ProductController extends Controller
                 'tiers' => $own
                     ->map(fn (ProductPriceTier $tier) => [
                         'min_quantity' => $tier->min_quantity,
-                        'unit_price_minor' => $tier->unit_price_minor->minorUnits,
                         'unit_price' => $tier->unit_price_minor->jsonSerialize(),
                         'applies' => $tier->unit_price_minor->lessThanOrEqualTo($base),
                     ])
@@ -673,8 +667,12 @@ class ProductController extends Controller
                     'value' => $value->value,
                 ])
                 ->all(),
-            'wholesale_price_minor' => $variant->wholesale_price_minor?->minorUnits,
-            'base_cost_minor' => $variant->base_cost_minor?->minorUnits,
+            // The override only, for the edit form's default value and for
+            // re-posting it unchanged (e.g. on activation toggle) — never the
+            // effective price, which falls back to the product's own figure
+            // and would turn "no override" into an explicit one if resent.
+            'wholesale_price_override' => $variant->wholesale_price_minor?->jsonSerialize(),
+            'base_cost_override' => $variant->base_cost_minor?->jsonSerialize(),
             'wholesale_price' => $variant->effectiveWholesalePrice()->jsonSerialize(),
             'overrides_price' => $variant->wholesale_price_minor !== null,
             'is_active' => $variant->is_active,

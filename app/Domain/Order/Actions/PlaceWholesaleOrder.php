@@ -11,13 +11,17 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
-use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderItem;
+use App\Domain\Supplier\Actions\AccrueSupplierPayable;
+use App\Domain\Supplier\Actions\AllocateSupplierOrderLine;
+use App\Domain\Supplier\Data\SupplierAllocation;
+use App\Domain\Supplier\Exceptions\SupplierAllocationRefused;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Data\CheckoutLineCharge;
 use App\Domain\Wholesale\Data\CheckoutQuote;
@@ -33,6 +37,7 @@ use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use LogicException;
 use RuntimeException;
@@ -82,8 +87,9 @@ class PlaceWholesaleOrder
         protected PriceCheckout $checkout,
         protected PaymentGatewayManager $gateways,
         protected RecordPaymentFromQuote $payments,
-        protected StockReservations $reservations,
         protected ReserveCoupon $coupons,
+        protected AllocateSupplierOrderLine $supplierAllocation,
+        protected AccrueSupplierPayable $supplierPayables,
         protected DatabaseManager $database,
     ) {}
 
@@ -206,9 +212,15 @@ class PlaceWholesaleOrder
 
         $payment->payable()->associate($order);
 
-        $reservations = $this->reserve($order, $account, $quote);
+        [$reservations, $allocations] = $this->reserve($order, $account, $quote);
 
-        $this->writeLines($order, $quote, $reservations);
+        $items = $this->writeLines($order, $quote, $reservations, $allocations);
+
+        foreach ($items as $item) {
+            if ($item->isSupplierBacked()) {
+                $this->supplierPayables->handle($item);
+            }
+        }
 
         $payment->forceFill([
             'gateway' => $cart->payment_method,
@@ -298,9 +310,11 @@ class PlaceWholesaleOrder
     }
 
     /**
-     * Hold every line's stock, in product order, for the ordering account.
+     * Hold every line's stock, in product order, for the ordering account —
+     * from a Supplier's preferred offer where the variation is Supplier-sourced
+     * (D25, P13-21), and from central stock otherwise.
      *
-     * @return array<int, StockReservation> keyed by the line's position in the checkout
+     * @return array{0: array<int, StockReservation>, 1: array<int, SupplierAllocation|null>} both keyed by the line's position in the checkout
      *
      * @throws OrderRefused
      */
@@ -320,19 +334,25 @@ class PlaceWholesaleOrder
         ]);
 
         $reservations = [];
+        $allocations = [];
 
         foreach ($positions as $position) {
             $item = $charges[$position]->line->item;
 
             try {
-                $reservations[$position] = $this->reservations->reserve(
+                [$reservations[$position], $allocations[$position]] = $this->supplierAllocation->handle(
                     $item->product,
                     $item->variant,
                     $item->quantity,
+                    $quote->total->currency,
                     ReservationKind::OnlinePayment,
                     $order->reference.'-L'.($position + 1),
                     $account,
                 );
+            } catch (SupplierAllocationRefused) {
+                // Never named to the buyer: which Supplier, or why its offer
+                // could not serve, is Feriwala's own business (D25).
+                throw OrderRefused::stockUnavailable();
             } catch (InventoryRefused) {
                 throw OrderRefused::stockUnavailable();
             } catch (LockTimeout) {
@@ -340,26 +360,31 @@ class PlaceWholesaleOrder
             }
         }
 
-        return $reservations;
+        return [$reservations, $allocations];
     }
 
     /**
      * Snapshot every line as it was priced: what, how many, at what price, its
-     * share of the discount, its tax at the rate in force, and the stock held.
+     * share of the discount, its tax at the rate in force, the stock held, and
+     * — for a Supplier-sourced line — the Supplier allocation (D25, P13-21).
      *
      * @param  array<int, StockReservation>  $reservations
+     * @param  array<int, SupplierAllocation|null>  $allocations
+     * @return Collection<int, OrderItem>
      */
-    protected function writeLines(Order $order, CheckoutQuote $quote, array $reservations): void
+    protected function writeLines(Order $order, CheckoutQuote $quote, array $reservations, array $allocations): Collection
     {
-        foreach ($quote->lineCharges as $position => $charge) {
-            $order->items()->create($this->line($charge, $position, $reservations[$position]));
-        }
+        return collect($quote->lineCharges)->map(
+            fn (CheckoutLineCharge $charge, int $position) => $order->items()->create(
+                $this->line($charge, $position, $reservations[$position], $allocations[$position]),
+            ),
+        )->values();
     }
 
     /**
      * @return array<string, mixed>
      */
-    protected function line(CheckoutLineCharge $charge, int $position, StockReservation $reservation): array
+    protected function line(CheckoutLineCharge $charge, int $position, StockReservation $reservation, ?SupplierAllocation $allocation = null): array
     {
         $item = $charge->line->item;
         $variant = $item->variant;
@@ -395,6 +420,7 @@ class PlaceWholesaleOrder
             'tax_rate_basis_points' => $taxed ? $charge->tax->rateBasisPoints : null,
             'tax_mode' => $taxed ? $charge->tax->mode->value : null,
             'stock_reservation_id' => $reservation->id,
+            ...($allocation?->lineSnapshot() ?? []),
         ];
     }
 

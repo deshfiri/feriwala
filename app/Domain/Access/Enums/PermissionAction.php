@@ -37,6 +37,12 @@ enum PermissionAction: string
     /** Seeing a configuration without the right to change it (§32.2 as amended by D24). */
     case ViewSettings = 'view_settings';
 
+    /** Taking a Supplier out of operation, or a listing out of the queue, without deciding it (D25). */
+    case Suspend = 'suspend';
+
+    /** Working a queue item — requesting a correction or refusing it — short of the stronger approval verb (D25). */
+    case Review = 'review';
+
     public function label(): string
     {
         return match ($this) {
@@ -61,6 +67,8 @@ enum PermissionAction: string
             self::ManageBackups => 'Manage backups',
             self::ManageIntegrations => 'Manage integrations',
             self::ViewSettings => 'View settings',
+            self::Suspend => 'Suspend',
+            self::Review => 'Review',
         };
     }
 
@@ -83,6 +91,11 @@ enum PermissionAction: string
             self::ViewKycDocuments,
             self::ManageBackups,
             self::ManageIntegrations,
+            // Taking a Supplier out of operation needs a recorded reason and
+            // is the kind of decision a second factor should stand behind
+            // (D25). Holding `supplier.suspend` is what makes Supplier Manager
+            // a two-factor role.
+            self::Suspend,
             self::Delete => true,
             default => false,
         };

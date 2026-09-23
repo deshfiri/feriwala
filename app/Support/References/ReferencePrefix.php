@@ -22,6 +22,11 @@ enum ReferencePrefix: string
     case Fulfillment = 'FFL';
     case Shipment = 'SHP';
     case GoodsReturn = 'RET';
+    case Supplier = 'SUP';
+    case SupplierListing = 'SPL';
+    case SupplierOffer = 'SPO';
+    case SupplierPayable = 'SPY';
+    case SupplierLedgerEntry = 'SPE';
 
     public function label(): string
     {
@@ -37,6 +42,11 @@ enum ReferencePrefix: string
             self::Fulfillment => 'Fulfillment',
             self::Shipment => 'Shipment',
             self::GoodsReturn => 'Return',
+            self::Supplier => 'Supplier',
+            self::SupplierListing => 'Supplier listing',
+            self::SupplierOffer => 'Supplier offer',
+            self::SupplierPayable => 'Supplier payable',
+            self::SupplierLedgerEntry => 'Supplier ledger entry',
         };
     }
 }

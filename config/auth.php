@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Supplier\Models\Supplier;
 use App\Models\User;
 
 return [
@@ -42,6 +43,18 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        /*
+         * The Supplier account domain's own guard (D25). A Supplier is never
+         * authenticated through `web` — this is a distinct provider pointed
+         * at a distinct model and table, so a Supplier session and a
+         * Client/Partner session are never the same authenticated identity,
+         * whatever else a shared browser session happens to also hold.
+         */
+        'supplier' => [
+            'driver' => 'session',
+            'provider' => 'suppliers',
+        ],
     ],
 
     /*
@@ -71,6 +84,11 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+
+        'suppliers' => [
+            'driver' => 'eloquent',
+            'model' => Supplier::class,
+        ],
     ],
 
     /*
@@ -118,6 +136,18 @@ return [
              * inbox, and stops a stream of links each of which is a live
              * credential.
              */
+            'throttle' => (int) env('AUTH_PASSWORD_RESET_THROTTLE', 60),
+        ],
+
+        /*
+         * A Supplier resets their own password against their own table
+         * (`supplier_password_reset_tokens`) — never `password_reset_tokens`,
+         * which belongs to Client/Partner and staff identities (D25).
+         */
+        'suppliers' => [
+            'provider' => 'suppliers',
+            'table' => 'supplier_password_reset_tokens',
+            'expire' => (int) env('AUTH_PASSWORD_RESET_EXPIRE', 60),
             'throttle' => (int) env('AUTH_PASSWORD_RESET_THROTTLE', 60),
         ],
     ],

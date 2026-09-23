@@ -15,7 +15,7 @@ class PasskeyLoginResponse implements PasskeyLoginResponseContract
 
     public function toResponse($request): Response
     {
-        $redirect = $this->home->urlFor($request->user());
+        $redirect = $this->home->urlFor($request->user('web'));
 
         return $request->wantsJson()
             ? new JsonResponse(['redirect' => redirect()->intended($redirect)->getTargetUrl()], 200)

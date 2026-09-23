@@ -7,10 +7,14 @@ use App\Concerns\HasPublicId;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Models\StockReservation;
+use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierPayable;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use LogicException;
 
 /**
@@ -42,11 +46,28 @@ use LogicException;
  * @property int|null $tax_rate_basis_points
  * @property string|null $tax_mode
  * @property int|null $stock_reservation_id
+ * @property int|null $supplier_id
+ * @property int|null $supplier_offer_id
+ * @property int|null $supplier_offer_price_change_id
+ * @property Money|null $supplier_rate_minor
+ * @property Money|null $platform_rate_minor
+ * @property Money|null $platform_margin_minor
+ * @property string|null $supplier_currency_code
+ * @property int|null $supplier_allocated_quantity
+ * @property CarbonImmutable|null $supplier_allocated_at
  * @property CarbonImmutable|null $created_at
  * @property-read Order $order
  * @property-read Product $product
  * @property-read ProductVariant|null $variant
  * @property-read StockReservation|null $stockReservation
+ * @property-read Supplier|null $supplier
+ * @property-read SupplierOffer|null $supplierOffer
+ * @property-read SupplierPayable|null $supplierPayable
+ *
+ * A Supplier-backed line also snapshots, once and immutably, the Supplier, the
+ * exact offer and price version it was allocated at, both rates and the margin
+ * (D25, P13-21). Those columns are Feriwala's own: never part of a Client,
+ * Partner or Storefront payload — {@see isSupplierBacked()}.
  */
 class OrderItem extends Model
 {
@@ -71,8 +92,45 @@ class OrderItem extends Model
             'tax_included_minor' => MoneyCast::class,
             'line_total_minor' => MoneyCast::class,
             'tax_rate_basis_points' => 'integer',
+            'supplier_rate_minor' => MoneyCast::class.':supplier_currency_code',
+            'platform_rate_minor' => MoneyCast::class.':supplier_currency_code',
+            'platform_margin_minor' => MoneyCast::class.':supplier_currency_code',
+            'supplier_allocated_quantity' => 'integer',
+            'supplier_allocated_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Whether this line was allocated to one Supplier's offer (D25, P13-21).
+     */
+    public function isSupplierBacked(): bool
+    {
+        return $this->supplier_offer_id !== null;
+    }
+
+    /**
+     * @return BelongsTo<Supplier, $this>
+     */
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+    /**
+     * @return BelongsTo<SupplierOffer, $this>
+     */
+    public function supplierOffer(): BelongsTo
+    {
+        return $this->belongsTo(SupplierOffer::class);
+    }
+
+    /**
+     * @return HasOne<SupplierPayable, $this>
+     */
+    public function supplierPayable(): HasOne
+    {
+        return $this->hasOne(SupplierPayable::class);
     }
 
     protected static function booted(): void

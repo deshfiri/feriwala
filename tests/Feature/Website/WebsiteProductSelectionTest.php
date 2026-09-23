@@ -98,14 +98,14 @@ describe('pricing it', function () {
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'price' => 100000,
+                'price' => '1000.00',
             ])
             ->assertSessionHasErrors('price');
 
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'price' => 500000,
+                'price' => '5000.00',
             ])
             ->assertSessionHasErrors('price');
 
@@ -128,13 +128,13 @@ describe('pricing it', function () {
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'price' => 250000,
+                'price' => '2500.00',
             ])
             ->assertSessionHasErrors('price');
 
         $this->actingAs($this->account->owner)
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'price' => 310000,
+                'price' => '3100.00',
             ])
             ->assertRedirect();
 
@@ -156,13 +156,13 @@ describe('pricing it', function () {
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'price' => 260000,
+                'price' => '2600.00',
             ])
             ->assertSessionHasErrors('price');
 
         $this->actingAs($this->account->owner)
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'price' => 240000,
+                'price' => '2400.00',
             ])
             ->assertRedirect();
 
@@ -181,7 +181,7 @@ describe('pricing it', function () {
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'price' => 250000,
+                'price' => '2500.00',
             ])
             ->assertSessionHasErrors('price');
     });
@@ -209,7 +209,7 @@ describe('pricing it', function () {
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
-                'promotional_price' => 300000,
+                'promotional_price' => '3000.00',
             ])
             ->assertSessionHasErrors('promotional_price');
     });

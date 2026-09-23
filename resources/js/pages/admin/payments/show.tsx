@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -7,6 +7,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
+import type { Money } from '@/lib/money';
 import { index } from '@/routes/admin/payments';
 import type { PaymentRow } from './index';
 
@@ -32,8 +33,7 @@ type LogEntry = {
 type Props = {
     payment: PaymentRow & {
         purpose_label: string;
-        settled_amount_minor: number | null;
-        settled_currency_code: string | null;
+        settled_amount: Money | null;
         initiated_at: string | null;
         expires_at: string | null;
         failed_at: string | null;
@@ -70,7 +70,7 @@ export default function AdminPaymentShow({ payment, logs }: Props) {
             ? t('payments.detail.none')
             : new Date(value).toLocaleString(locale);
 
-    const field = (label: string, value: string) => (
+    const field = (label: string, value: ReactNode) => (
         <div>
             <dt className="text-muted-foreground text-xs">{label}</dt>
             <dd className="text-sm">{value}</dd>
@@ -150,9 +150,11 @@ export default function AdminPaymentShow({ payment, logs }: Props) {
                         )}
                         {field(
                             t('payments.detail.settled'),
-                            payment.settled_amount_minor === null
-                                ? t('payments.detail.none')
-                                : `${payment.settled_amount_minor} ${payment.settled_currency_code ?? ''}`.trim(),
+                            payment.settled_amount === null ? (
+                                t('payments.detail.none')
+                            ) : (
+                                <MoneyAmount amount={payment.settled_amount} />
+                            ),
                         )}
                         {field(
                             t('payments.columns.created'),

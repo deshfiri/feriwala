@@ -60,8 +60,8 @@ describe('the rules screen', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.deposit-rules.store'), [
                 'scope' => RuleScope::Global->value,
-                'required_initial_deposit_minor' => 500000,
-                'minimum_balance_minor' => 200000,
+                'required_deposit' => '5000.00',
+                'minimum_balance' => '2000.00',
                 'frequency' => 'one_time',
                 'refundability' => 'full',
                 'grace_period_days' => 14,
@@ -86,8 +86,8 @@ describe('the rules screen', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.deposit-rules.store'), [
                 'scope' => RuleScope::Global->value,
-                'required_initial_deposit_minor' => 0,
-                'minimum_balance_minor' => 0,
+                'required_deposit' => '0',
+                'minimum_balance' => '0',
                 'frequency' => 'one_time',
                 'refundability' => 'full',
                 'effective_from' => CarbonImmutable::now()->toDateString(),
@@ -102,8 +102,8 @@ describe('the rules screen', function () {
         // is an answer to the request.
         $payload = [
             'scope' => RuleScope::Global->value,
-            'required_initial_deposit_minor' => 0,
-            'minimum_balance_minor' => 100000,
+            'required_deposit' => '0',
+            'minimum_balance' => '1000.00',
             'frequency' => 'one_time',
             'refundability' => 'full',
             'effective_from' => CarbonImmutable::now()->toDateString(),
@@ -126,8 +126,8 @@ describe('the rules screen', function () {
         $this->actingAs($reader)
             ->post(route('admin.deposit-rules.store'), [
                 'scope' => RuleScope::Global->value,
-                'required_initial_deposit_minor' => 0,
-                'minimum_balance_minor' => 0,
+                'required_deposit' => '0',
+                'minimum_balance' => '0',
                 'frequency' => 'one_time',
                 'refundability' => 'full',
                 'effective_from' => CarbonImmutable::now()->toDateString(),
@@ -139,8 +139,8 @@ describe('the rules screen', function () {
     it('closes a rule rather than deleting it', function () {
         $this->actingAs($this->manager)->post(route('admin.deposit-rules.store'), [
             'scope' => RuleScope::Global->value,
-            'required_initial_deposit_minor' => 0,
-            'minimum_balance_minor' => 100000,
+            'required_deposit' => '0',
+            'minimum_balance' => '1000.00',
             'frequency' => 'one_time',
             'refundability' => 'full',
             'effective_from' => CarbonImmutable::now()->subWeek()->toDateString(),

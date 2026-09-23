@@ -47,6 +47,10 @@ class ReservationController extends Controller
         $term = $filters['search'];
 
         $reservations = StockReservation::query()
+            // Central warehouse stock only — a Supplier-sourced reservation
+            // has no `item` and belongs on the Supplier allocation screens
+            // instead (D25, P13-21, P13-28).
+            ->whereNotNull('stock_item_id')
             ->with([
                 'item:id,public_id,warehouse_id,product_id,product_variant_id',
                 'item.warehouse:id,code,name',
@@ -69,10 +73,10 @@ class ReservationController extends Controller
             ->through(fn (StockReservation $reservation) => [
                 'id' => $reservation->public_id,
                 'reference' => $reservation->reference,
-                'sku' => $reservation->item->sku(),
-                'product' => $reservation->item->product->name,
-                'item_id' => $reservation->item->public_id,
-                'warehouse' => $reservation->item->warehouse->code,
+                'sku' => $reservation->item?->sku(),
+                'product' => $reservation->item?->product->name,
+                'item_id' => $reservation->item?->public_id,
+                'warehouse' => $reservation->item?->warehouse->code,
                 'quantity' => $reservation->quantity,
                 'kind' => $reservation->kind->value,
                 'kind_label' => __('inventory.reservation_kinds.'.$reservation->kind->value),

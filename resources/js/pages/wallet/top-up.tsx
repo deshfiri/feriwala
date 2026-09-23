@@ -2,11 +2,11 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
@@ -86,36 +86,21 @@ export default function WalletTopUp({
                     >
                         {({ errors, processing }) => (
                             <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="top-up-amount">
-                                        {t('wallet.top_up.amount')}
-                                    </Label>
-
-                                    <Input
-                                        id="top-up-amount"
-                                        name="amount_minor"
-                                        type="number"
-                                        min={minimum.minor_units}
-                                        step={1}
-                                        required
-                                        defaultValue={
-                                            suggested.minor_units > 0
-                                                ? suggested.minor_units
-                                                : undefined
-                                        }
-                                    />
-
-                                    <p className="text-muted-foreground text-xs">
-                                        {t('wallet.top_up.amount_help')}
-                                    </p>
-                                    <p className="text-muted-foreground text-xs">
-                                        {t('wallet.top_up.minimum', {
-                                            amount: minimum.formatted,
-                                        })}
-                                    </p>
-
-                                    <InputError message={errors.amount_minor} />
-                                </div>
+                                <MoneyInput
+                                    id="top-up-amount"
+                                    name="amount"
+                                    label={t('wallet.top_up.amount')}
+                                    required
+                                    defaultValue={
+                                        suggested.minor_units > 0
+                                            ? suggested.decimal
+                                            : undefined
+                                    }
+                                    helpText={t('wallet.top_up.minimum', {
+                                        amount: minimum.formatted,
+                                    })}
+                                    error={errors.amount}
+                                />
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="top-up-gateway">

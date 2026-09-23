@@ -6,6 +6,7 @@ use App\Http\Middleware\ApplyConfiguredSessionLifetime;
 use App\Http\Middleware\EnsureAccountIsEntitled;
 use App\Http\Middleware\EnsureBusinessAccountIsActivated;
 use App\Http\Middleware\EnsureIdentityHasPlatformAccess;
+use App\Http\Middleware\EnsureSupplierIsOperational;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventSearchIndexing;
@@ -46,6 +47,29 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(prepend: [
             ApplyConfiguredSessionLifetime::class,
         ]);
+
+        /*
+         * `Authenticate::redirectTo()` has no guard of its own to ask — it only
+         * sees the request. Every Supplier route is named `supplier.*`
+         * (`routes/supplier.php`), so that is what tells an unauthenticated
+         * `auth:supplier` request apart from an unauthenticated `auth` one and
+         * sends each to its own login screen (D25) rather than a Supplier
+         * guest landing on the Client/Partner login page or the reverse.
+         */
+        $middleware->redirectGuestsTo(
+            fn (Request $request) => $request->routeIs('supplier.*')
+                ? route('supplier.login')
+                : route('login'),
+        );
+
+        // The `guest:supplier` counterpart: an already signed-in Supplier
+        // hitting `supplier/register` lands back on their own dashboard, not
+        // the Client/Partner one.
+        $middleware->redirectUsersTo(
+            fn (Request $request) => $request->routeIs('supplier.*')
+                ? route('supplier.dashboard')
+                : route('dashboard'),
+        );
 
         $middleware->web(append: [
             HandleAppearance::class,
@@ -94,6 +118,15 @@ return Application::configure(basePath: dirname(__DIR__))
              * money and read documents, and a business owner is not one of them.
              */
             'two-factor' => RequireTwoFactorForSensitiveRoles::class,
+
+            /*
+             * The Supplier domain's own funnel gate (D25): only an approved,
+             * un-suspended Supplier may reach operational Supplier routes
+             * (listing submission, rates, stock). Applied per-route, inside
+             * `auth:supplier`, never globally — a Draft or Suspended Supplier
+             * still needs `supplier.dashboard` to see their own status.
+             */
+            'supplier.operational' => EnsureSupplierIsOperational::class,
 
             /*
              * The storefront API's own gates (contract §3, §4.6, §9). Named so

@@ -2,6 +2,7 @@ import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import ProductController from '@/actions/App/Http/Controllers/Admin/ProductController';
 import FormField from '@/components/forms/form-field';
+import MoneyField from '@/components/forms/money-field';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -432,18 +433,13 @@ export default function ProductForm({
                                         required
                                     >
                                         {(field) => (
-                                            <Input
+                                            <MoneyField
                                                 {...field}
                                                 name="wholesale_price_minor"
-                                                type="number"
-                                                inputMode="numeric"
-                                                min={0}
-                                                step={1}
-                                                className="tabular-nums"
-                                                defaultValue={String(
-                                                    product?.wholesale_price_minor ??
-                                                        '',
-                                                )}
+                                                defaultValue={
+                                                    product?.wholesale_price
+                                                        .decimal
+                                                }
                                             />
                                         )}
                                     </FormField>
@@ -471,18 +467,12 @@ export default function ProductForm({
                                         required
                                     >
                                         {(field) => (
-                                            <Input
+                                            <MoneyField
                                                 {...field}
                                                 name="base_cost_minor"
-                                                type="number"
-                                                inputMode="numeric"
-                                                min={0}
-                                                step={1}
-                                                className="tabular-nums"
-                                                defaultValue={String(
-                                                    product?.base_cost_minor ??
-                                                        '',
-                                                )}
+                                                defaultValue={
+                                                    product?.base_cost.decimal
+                                                }
                                             />
                                         )}
                                     </FormField>
@@ -586,16 +576,12 @@ export default function ProductForm({
                                             error={errors[name]}
                                         >
                                             {(field) => (
-                                                <Input
+                                                <MoneyField
                                                     {...field}
                                                     name={name}
-                                                    type="number"
-                                                    inputMode="numeric"
-                                                    min={0}
-                                                    step={1}
-                                                    className="tabular-nums"
                                                     defaultValue={
-                                                        product?.[name] ?? ''
+                                                        product?.[rendered]
+                                                            ?.decimal
                                                     }
                                                 />
                                             )}

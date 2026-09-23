@@ -99,5 +99,65 @@ return [
             'title' => 'A website renewal is due',
             'description' => 'A domain or hosting term is running out. Renew it to keep the shop reachable.',
         ],
+
+        /*
+         * The Supplier account domain (D25). A wholly separate set of events
+         * from the Client/Partner ones above — a Supplier never receives the
+         * `account.*` notifications, and vice versa.
+         */
+        'supplier.kyc_submitted' => [
+            'title' => 'Your verification documents were received',
+            'description' => 'We will review your Supplier application and let you know the outcome.',
+        ],
+
+        'supplier.kyc_correction_requested' => [
+            'title' => 'Your verification needs a correction',
+            'description' => 'Review the feedback and submit your documents again.',
+        ],
+
+        'supplier.approved' => [
+            'title' => 'Your Supplier application has been approved',
+            'description' => 'You can now submit product listing requests.',
+        ],
+
+        'supplier.rejected' => [
+            'title' => 'Your Supplier application was not approved',
+            'description' => 'Contact support to find out what is needed to reapply.',
+        ],
+
+        'supplier.suspended' => [
+            'title' => 'Your Supplier account has been suspended',
+            'description' => 'Contact support to find out what is needed to restore access.',
+        ],
+
+        'supplier.reactivated' => [
+            'title' => 'Your Supplier account has been reactivated',
+            'description' => 'You can resume submitting and managing listings.',
+        ],
+
+        'supplier.listing_submitted' => [
+            'title' => 'Your product listing request was received',
+            'description' => 'We will review it and let you know the outcome.',
+        ],
+
+        'supplier.listing_correction_requested' => [
+            'title' => 'Your product listing needs a correction',
+            'description' => 'Review the feedback and resubmit your listing.',
+        ],
+
+        'supplier.listing_approved' => [
+            'title' => 'Your product listing has been approved',
+            'description' => 'Open the listing to see which items were connected to the catalogue.',
+        ],
+
+        'supplier.listing_rejected' => [
+            'title' => 'Your product listing was not approved',
+            'description' => 'Open the listing to see the reason.',
+        ],
+
+        'supplier.offer_suspended' => [
+            'title' => 'One of your offers has been suspended',
+            'description' => 'It is no longer available for purchase until reactivated.',
+        ],
     ],
 ];

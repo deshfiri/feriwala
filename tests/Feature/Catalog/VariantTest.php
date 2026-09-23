@@ -127,7 +127,7 @@ describe('building a variation', function () {
             ->post(route('admin.catalog.products.variants.store', $this->product->public_id), [
                 'sku' => 'FW-1043-L',
                 'values' => [catalogVariantValue($this->size, 'L')],
-                'wholesale_price_minor' => 259000,
+                'wholesale_price_minor' => '2590.00',
             ])
             ->assertSessionHasNoErrors();
 
@@ -275,7 +275,7 @@ describe('editing and removing a variation', function () {
 
         $this->actingAs($this->manager)->patch($url, [
             'sku' => 'FW-1043-M',
-            'wholesale_price_minor' => 239000,
+            'wholesale_price_minor' => '2390.00',
             'is_active' => false,
         ])->assertSessionHasNoErrors();
 

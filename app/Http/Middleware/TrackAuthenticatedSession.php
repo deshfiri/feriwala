@@ -55,7 +55,9 @@ class TrackAuthenticatedSession
          * until the controller has run, and its identifier is regenerated in
          * the same breath — so that one can only be recorded on the way out.
          */
-        $before = $request->user();
+        // Named `web`: this records Client/Partner and staff devices only, and
+        // `auth:supplier` has already made `supplier` the default guard (D25).
+        $before = $request->user('web');
         $sessionId = $request->hasSession() ? $request->session()->getId() : null;
 
         if ($before !== null && $sessionId !== null) {
@@ -64,7 +66,7 @@ class TrackAuthenticatedSession
 
         $response = $next($request);
 
-        $after = $request->user();
+        $after = $request->user('web');
 
         if ($before === null && $after !== null && $request->hasSession()) {
             $this->record($request, $after, $request->session()->getId());

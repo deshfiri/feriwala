@@ -885,6 +885,60 @@ sized accordingly rather than as one line item under provisioning.
 
 ---
 
+# Phase 13 — Supplier Account System (D25)
+
+A wholly separate account domain from Client/Partner (D25): its own registration, authentication,
+session guard, verification, KYC, approval lifecycle, portal and authorisation boundary. Beta batch
+of 2026-09-21 delivers the foundation, KYC, listings, offers, pricing and the availability
+foundation; **order, payable, wallet, withdrawal and fulfilment integration is deliberately left
+open** for the next batch.
+
+## P13.A Account foundation & authentication
+
+- [x] **P13-1** Separate Supplier domain: `suppliers`, status history, `supplier` guard/provider/broker, nine-status lifecycle, D25 amendment of §5 and §45, twelve `supplier*` permissions and the Supplier Manager role
+- [x] **P13-2** Supplier registration on its own guard (no Client/Partner account, membership or role)
+- [x] **P13-3** Supplier login/logout, guard isolation in both directions, operational gate (`supplier.operational`), guard-aware redirects
+- [x] **P13-4** Supplier password reset on its own broker and token table
+- [x] **P13-5** Supplier email verification (signed link on a Supplier-only route)
+- [x] **P13-6** Supplier mobile verification through the existing hashed-code store, Supplier-only purpose
+
+## P13.B KYC & approval
+
+- [x] **P13-7** Supplier KYC: private, encrypted, random-named document store; type/extension/size validation; submit, correction, resubmission; submitted round read-only
+- [x] **P13-8** Application review: approve (activates operational access), reject, suspend, reactivate — reasons required, transactional, audited, history recorded
+- [x] **P13-9** Product Listing Requests: draft, edit, submit, correction, resubmission, archive; a listing is only a proposal and never writes to the catalogue
+
+## P13.C Listing review, offers & pricing
+
+- [x] **P13-10** Notifications, English and Bangla, for the eleven Supplier lifecycle events
+- [x] **P13-11** Staff listing queue and decision; correction request for a whole listing
+- [x] **P13-12** Per-variation decisions: full, partial and rejected approval rolled up to the listing status
+- [x] **P13-13** Central Catalogue connection through the existing `ManageProducts` action or an existing product; the preferred offer's Platform Rate is the only figure written to the wholesale price the catalogue already reads
+- [x] **P13-14** Supplier offers: several per variation, each with its own Supplier identity, rate, availability and status; one preferred offer per variation (database-enforced); no automatic Supplier selection
+- [x] **P13-15** Supplier Rate and Platform Rate: integer minor units, same currency, never negative, Platform ≥ Supplier (database CHECK), effective-dated append-only versions with a mandatory reason
+- [x] **P13-16** Confidentiality: Supplier Rate and margin absent from Client/Partner pages, the Partner Website API and other Suppliers; pricing permissions never granted to catalogue roles
+- [x] **P13-17** Availability foundation: Supplier submits, staff approve or adjust, immutable movements, never negative (database CHECK), distinct from central stock
+
+## P13.D Screens, audit & tests
+
+- [x] **P13-18** Supplier portal (own layout and navigation, EN/BN, light/dark/system, no mobile overflow) and staff screens (applications, KYC evidence, listings, offers, availability)
+- [x] **P13-19** Audit for every Supplier decision, rate change, preferred-offer selection and availability change — without document bodies, storage paths, secrets or payout detail
+- [x] **P13-20** Supplier test suite: authentication isolation, KYC lifecycle, listings, pricing and data-leak, stock, locale, navigation and screens
+- [x] **P13-21** Supplier order allocation: the Admin-chosen preferred offer resolved and reserved on the server, never a browser-supplied offer or rate; the offer, its price version, both rates and the margin snapshotted immutably on the order line; one whole line to one offer, never split or mixed across Suppliers; a legacy central-stock line unaffected
+- [x] **P13-22** Supplier payable per allocated line at the Supplier Rate in force when the order was placed; eligible for settlement only once delivery and settled payment are both recorded; cancelled or held with its order
+- [x] **P13-25** Refund and return reversal integration for Supplier payables: a return reverses the proportional amount through an append-only, capped reversal record — never edits the payable
+- [x] **P13-28** Supplier availability inside the existing reservation lifecycle: `StockReservations` delegates to a Supplier-stock ledger and reservation service with the same idempotency, locking and commit/release/expire contract; central stock and its reservation queue are unchanged
+
+## P13.E Open — next batch
+
+- [~] **P13-23** Supplier wallet and settlement through the ledger (D25 settlement rules) — parallel `supplier_wallets`/`supplier_ledger_entries` schema, `SupplierWalletService`, `SettleSupplierPayable`/`BulkSettleSupplierPayables`, settlement-side reversal clawback (P13-25) into `recovery`, policies and permissions, real-concurrency tests, Supplier wallet dashboard + transaction history, staff settlement queue (single + bulk, password-confirmed) and read-only wallet detail, all built and covered by HTTP-level Pest tests (self-scoping, permission 403s, masking) and Vitest. _Backend, screens and tests are done. The Chromium environment blocker is resolved (cached shared libraries at `~/feriwala-verification/p5/chromium`, no sudo needed) and a 2026-09-22 live-browser pass confirmed the Supplier side — wallet dashboard and transaction history render correct Taka amounts in EN/BN and Light/Dark, no console errors. Not yet browser-verified: the staff settlement queue (single + bulk) and desktop/mobile responsiveness — still `[~]` until those are covered_
+- [~] **P13-24** Supplier withdrawals and payout-detail capture — `supplier_payout_methods`/`supplier_withdrawals` schema, `SavePayoutMethod`, full request → review → approve → pay/reject/fail lifecycle, per-Supplier withdrawal limit override, real-concurrency tests, Supplier payout-method and withdrawal screens (current-password-gated, idempotency-key-protected request form), staff withdrawal queue and decision screen (password-confirmed release), all built and covered by HTTP-level Pest tests and Vitest. _Same as P13-23: backend, screens and tests done; the 2026-09-22 live-browser pass confirmed the Supplier side — payout methods (masking) and withdrawal request both work end to end with correct Taka amounts. Not yet browser-verified: the staff withdrawal decision lifecycle and desktop/mobile — still `[~]`. `payout_details` on `suppliers` itself is unrelated KYC-era scaffolding, still unused_
+- [ ] **P13-26** Fulfilment integration: Supplier-side dispatch and handover. This batch adds the explicit `RecordSupplierPayableDelivery` event fulfilment will call; it does not mark ordinary orders delivered itself
+- [ ] **P13-27** Supplier reporting
+- [ ] **P13-29** Listing images and supporting-document uploads (the columns exist; no upload store yet), and creating a new variation from a listing item
+
+---
+
 ## Progress
 
 Counted from the checkboxes above — `[x]` done, `[~]` started. Recount rather than
@@ -898,16 +952,120 @@ increment by hand; a progress table that has drifted is worse than none.
 | P3 Catalog & Inventory                          | 31      | 31      | 0       |
 | P4 Wholesale                                    | 14      | 14      | 0       |
 | P5 Dropship, Websites & Storefront              | 50      | 25      | 3       |
-| P6 OMS, Fulfillment, Courier                    | 33      | 5       | 6       |
+| P6 OMS, Fulfillment, Courier                    | 33      | 5       | 7       |
 | P7 Commission, Referral, Withdrawal, Settlement | 44      | 8       | 1       |
 | P8 Notifications & SMS                          | 18      | 0       | 0       |
 | P9 Reports                                      | 23      | 0       | 0       |
 | P10 CMS & SEO                                   | 20      | 0       | 0       |
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
-| **Total**                                       | **460** | **226** | **22**  |
+| P13 Supplier Account System                     | 29      | 24      | 2       |
+| **Total**                                       | **489** | **250** | **25**  |
 
 ### Revision log
+
+- **2026-09-22** — System-wide money architecture correction: every human-facing money INPUT form
+  converted from raw integer minor units to a decimal Taka string, validated by a new shared
+  `App\Support\Money\Rules\DecimalAmountRule` and converted server-side via the new
+  `App\Support\Money\DecimalAmount::parse()`/`parseOrNull()` (a stricter sibling of
+  `Money::fromDecimal()` that refuses excess precision rather than rounding it) — this is the one
+  boundary every human-facing controller/FormRequest now uses; internal Action signatures were
+  never touched, since `MoneyCast` already accepted either a `Money` instance or an integer.
+  Frontend: a new shared `resources/js/components/money-input.tsx` (uncontrolled, ৳-prefixed,
+  submits the decimal string verbatim) and `resources/js/components/forms/money-field.tsx` (the
+  same affordance for `FormField`'s render-prop slot). Corrected forms: wallet top-up, admin wallet
+  manual adjustment, deposit rule thresholds, website pricing bounds, Supplier Rate/Platform Rate
+  (single-offer editor and bulk Supplier-listing decision), Supplier withdrawal request, coupons
+  (fixed-type only — percentage/basis-points deliberately untouched), billing fee rules, MLM/
+  referral fixed commission rules, package/activation fees (including the dynamic charge-row
+  editor), wholesale/quantity pricing (product wholesale price, base cost, three selling-price
+  bounds, variant price overrides, and quantity price tiers), website product selling price, and
+  Supplier product-listing rates. Found and fixed two real client-side-arithmetic bugs along the
+  way (not just stale field names): both Supplier-listing forms had a hand-rolled `toMinorUnits()`
+  multiplying by 100 in React before submit — exactly the pattern this correction exists to remove;
+  now the typed Taka string is submitted unchanged. Corrected two raw-minor-unit DISPLAY bugs (a
+  payment receipt's "settled as" text and an admin payment detail page). Fixed five labels that
+  literally said "(poisha)" in EN/BN. Confirmed the frozen Storefront API contract already used the
+  correct machine (`{minor_units, currency, decimal}`) shape and needed no change; added one
+  non-breaking clarifying note to its documentation. Recorded the canonical money-boundary rule in
+  `CLAUDE.md` and `app/Domain/README.md`. Live-browser verification (harness now unblocked — cached
+  Chromium libraries, no sudo needed) confirmed three representative Taka forms end-to-end against
+  the database (500.50 Taka stored as exactly 50050 minor units, never 100x), confirmed formatted
+  `৳X,XXX.XX` display with no raw-integer leakage, and confirmed the Supplier-facing P13-23/P13-24
+  screens (wallet, transaction history, payout methods, withdrawal request) still render correctly
+  in EN/BN and Light/Dark after this batch touched some of the same controllers — see the P13-23/
+  P13-24 entries above for what is and is not yet browser-verified. 620+ focused backend tests and
+  the full affected Vitest suite pass; `composer types:check` (1004 files), `vendor/bin/pint` and
+  `vp check`/`tsc` are clean. No `[ ]`/`[~]` counts above change: this was a cross-cutting
+  correctness pass across already-`[x]` and already-`[~]` work, not new feature scope.
+
+- **2026-09-22** — Supplier and staff finance screens for the wallet/withdrawal batch. **Still
+  started, not done: P13-23, P13-24** — everything but a live browser pass is now built. Fixed a
+  real regression along the way: `supplier_payable.view` was never added to
+  `HandleInertiaRequests::NAVIGATION_ABILITIES` when the payables screen shipped (888a6a9), so the
+  link was invisible to everyone including a Super Admin; added it, and `withdrawal.view` for the
+  new withdrawal queue link, with a regression test. Supplier portal: wallet dashboard and
+  transaction history (server-computed balances only, never calculated in React), payout methods
+  (create/edit/archive gated by an inline current-password field — the supplier guard has no
+  Fortify confirm-password flow to reuse), and withdrawals (request form with a server-generated,
+  hidden idempotency key so a retried submission reserves once). Staff ERP: settlement added to the
+  existing payables screens (single and bulk, both behind `RequirePassword`, bulk's per-item result
+  read from the flash), a new read-only Supplier wallet list/detail (no manual adjustment — none was
+  asked for), and a new Supplier withdrawal queue with the full decision lifecycle, `markPaid` behind
+  the same password gate. Verification: 138 Supplier-group Pest tests (self-scoping, permission
+  403s, masking, guard isolation both directions, the full withdrawal decision lifecycle by
+  permission), 132 Vitest tests, `composer types:check` (1001 files) and `vp check`/`tsc` all clean.
+  **Left open**: a live-browser pass, which this project's own UI-completeness rule asks for and the
+  environment still cannot run — the same missing Chromium shared libraries as the previous batch
+  (`libnspr4`, `libnss3`, `libnssutil3`, `libsmime3`, `libasound.so.2`), no sudo available. No tasks
+  added or removed; progress table unchanged (both tasks were already counted as started).
+
+- **2026-09-22** — Supplier wallet, settlement and withdrawal batch. **Started: P13-23, P13-24**
+  (backend complete, screens open). Built a parallel `supplier_wallets`/`supplier_ledger_entries`
+  system rather than extending `wallets`/`ledger_entries` — those are owned by `business_account_id`
+  NOT NULL throughout `WalletService`, and a Supplier is a wholly separate account type (D25);
+  retrofitting risked the entire existing Client/Partner financial system for no real gain. Three
+  buckets (total, reserved, recovery); `availableBalance()` nets out both automatically, which is
+  what stops a withdrawal request for money a reversal has already claimed back. `SettleSupplierPayable`
+  pays an Eligible payable's net amount into the wallet once (`settled_at`/`settlement_reference` now
+  locked by a corrective migration); `BulkSettleSupplierPayables` processes a list independently.
+  `ReverseSupplierPayable` (P13-25) now claws money back from the wallet when a settled payable is
+  reversed afterwards — debits whatever is available, records the rest as `recovery` rather than a
+  negative balance, in one entry. Payout methods (bank/bKash/Nagad) are encrypted at rest, masked
+  everywhere, archived not deleted, and snapshotted onto a withdrawal at request time. The withdrawal
+  lifecycle (request → under review → approved → processing → paid, with reject/fail releasing the
+  reservation and paid consuming it, each exactly once) reuses the existing `Module::Withdrawal`
+  permissions rather than inventing Supplier-specific ones. Four real `pcntl_fork()` concurrency tests
+  cover the required races (settling the same payable twice, two withdrawals over one balance,
+  approval racing rejection, a reversal racing a reservation); one found and fixed a real bug
+  (`PaySupplierWithdrawal` writing `paid_at` one statement before `status`, tripping the database's
+  own paid-is-complete CHECK). **No screens**: this batch is backend only — Supplier wallet
+  summary/ledger, payout details, withdrawal request/list, and the staff settlement and withdrawal
+  queues are the immediate next step, not yet built. No tasks added or removed. Progress table
+  recounted: P13 started 0 → 2, total started 23 → 25.
+
+- **2026-09-22** — Order allocation, Supplier stock reservation, and payable batch. **Done: P13-21,
+  P13-22, P13-25, P13-28**. Order lines resolve to the Admin-chosen preferred Supplier offer entirely
+  on the server, reserve that offer's own stock through the existing central `StockReservations`
+  service (extended to delegate to a Supplier-stock ledger and reservation twin, not a parallel
+  system), and snapshot the Supplier, offer, price version, both rates and the margin immutably on
+  the line. Each Supplier-backed line accrues one pending payable, held or cancelled with its order,
+  eligible only once delivery and settled payment are both recorded, and reversed proportionally —
+  never edited — by a returned line. Left open: **P13-23** (wallet/settlement — see the schema
+  finding below), **P13-24** (withdrawals), **P13-26** (fulfilment integration), **P13-27**
+  (reporting), **P13-29** (listing uploads). No tasks added or removed. Progress table recounted:
+  P13 done 20 → 24, total done 246 → 250.
+
+- **2026-09-21** — **Requirement change, D25**: Feriwala gains a wholly separate Supplier account
+  domain, approved by the Project Owner and superseding the Single Account System wording in
+  `requirements.txt` §5 and §45 as applied to Suppliers only (D1/D23 stand for Client/Partner).
+  New **Phase 13 — Supplier Account System**, 29 tasks. **Done: P13-1 to P13-20** — foundation,
+  authentication, verification, KYC, application review, listing requests, listing review, offers,
+  Supplier and Platform rates with confidentiality, availability foundation, screens, audit,
+  notifications and tests. **Open: P13-21 to P13-29** — order allocation, payable, wallet and
+  settlement, withdrawals, refund reversal, fulfilment, reporting, availability in order
+  reservation, and listing image/document uploads. Progress table recounted from the checkboxes:
+  tasks 460 → 489, done 226 → 246, started 22 → 23 (P6's started count had drifted by one).
 
 - **2026-09-20** — Multi-level referral and partner website order batch. **Done: P7-10, P7-11,
   P7-12, P7-18, P7-19, P7-42, P7-43, P7-44** (the configurable MLM system of D24: hierarchy, plan

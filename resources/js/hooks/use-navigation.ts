@@ -1,5 +1,6 @@
 import { usePage } from '@inertiajs/react';
 import {
+    Banknote,
     Boxes,
     ClipboardList,
     CreditCard,
@@ -15,6 +16,7 @@ import {
     Coins,
     Package as PackageIcon,
     PackageCheck,
+    PackageSearch,
     Palette,
     Receipt,
     Scale,
@@ -27,6 +29,7 @@ import {
     Store,
     Tags,
     ShieldCheck,
+    Truck,
     Undo2,
     UserCheck,
     Users,
@@ -49,6 +52,14 @@ import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as adminOrders } from '@/routes/admin/orders';
 import { index as adminReturns } from '@/routes/admin/returns';
+import { index as supplierAllocations } from '@/routes/admin/supplier-allocations';
+import { index as supplierPayables } from '@/routes/admin/supplier-payables';
+import { index as supplierApplications } from '@/routes/admin/suppliers';
+import { index as supplierListings } from '@/routes/admin/supplier-listings';
+import { index as supplierOffers } from '@/routes/admin/supplier-offers';
+import { index as supplierStock } from '@/routes/admin/supplier-stock';
+import { index as supplierWallets } from '@/routes/admin/supplier-wallets';
+import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawals';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
@@ -510,6 +521,83 @@ export function useNavigation(): {
                               title: t('nav.sms'),
                               href: smsSettings(),
                               icon: MessageSquare,
+                          },
+                      ]
+                    : []),
+                /*
+                 * The Supplier account domain's staff screens (D25). Each is
+                 * its own permission: seeing the listing queue never implies
+                 * seeing a Supplier Rate, and the server refuses regardless.
+                 */
+                ...(permissions['supplier.view']
+                    ? [
+                          {
+                              title: t('nav.suppliers'),
+                              href: supplierApplications(),
+                              icon: Truck,
+                          },
+                      ]
+                    : []),
+                ...(permissions['supplier_listing.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_listings'),
+                              href: supplierListings(),
+                              icon: ClipboardList,
+                          },
+                      ]
+                    : []),
+                ...(permissions['supplier_pricing.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_offers'),
+                              href: supplierOffers(),
+                              icon: Coins,
+                          },
+                      ]
+                    : []),
+                ...(permissions['supplier_stock.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_stock'),
+                              href: supplierStock(),
+                              icon: Boxes,
+                          },
+                      ]
+                    : []),
+                /*
+                 * Every row here carries a Supplier Rate — gated the same as
+                 * the offers screen, never `supplier_stock.view` alone (D25).
+                 */
+                ...(permissions['supplier_pricing.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_allocations'),
+                              href: supplierAllocations(),
+                              icon: PackageSearch,
+                          },
+                      ]
+                    : []),
+                ...(permissions['supplier_payable.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_payables'),
+                              href: supplierPayables(),
+                              icon: Coins,
+                          },
+                          {
+                              title: t('nav.supplier_wallets'),
+                              href: supplierWallets(),
+                              icon: WalletIcon,
+                          },
+                      ]
+                    : []),
+                ...(permissions['withdrawal.view']
+                    ? [
+                          {
+                              title: t('nav.supplier_withdrawals'),
+                              href: supplierWithdrawals(),
+                              icon: Banknote,
                           },
                       ]
                     : []),

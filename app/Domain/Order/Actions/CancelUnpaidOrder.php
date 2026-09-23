@@ -12,6 +12,7 @@ use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Supplier\Actions\CancelSupplierPayable;
 use App\Domain\Wholesale\Actions\CloseOrderedCart;
 use App\Models\User;
 use App\Support\Concurrency\DistributedLock;
@@ -51,6 +52,7 @@ class CancelUnpaidOrder
         protected StockReservations $reservations,
         protected SettleCouponRedemption $coupons,
         protected CloseOrderedCart $carts,
+        protected CancelSupplierPayable $supplierPayables,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
     ) {}
@@ -138,6 +140,11 @@ class CancelUnpaidOrder
             );
 
             $this->carts->afterCancellation($locked);
+
+            // The unpaid pending payable for each Supplier-backed line is
+            // cancelled with the order — never a wallet credit for an order
+            // that never went ahead (D25, P13-22).
+            $this->supplierPayables->handle($locked, $why->reason());
 
             $order->setRawAttributes($locked->getAttributes(), sync: true);
 

@@ -16,6 +16,8 @@ use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -84,14 +86,27 @@ class WalletTopUpController extends Controller
         $wallet = $this->walletFor($account);
 
         $validated = $request->validate([
-            // Minor units, like every other money field in the application.
-            'amount_minor' => ['required', 'integer', 'min:1'],
+            // Decimal Taka, like every other human-facing money field (§36.1)
+            // — never minor units. `DecimalAmountRule` refuses anything that
+            // is not an exact whole-or-two-decimal-place amount.
+            'amount' => ['required', new DecimalAmountRule],
             'gateway' => ['required', 'string', Rule::in($gateways->available())],
         ]);
 
+        $amount = DecimalAmount::parse($validated['amount']);
+
         // Throws a validation error rather than a refusal page: being asked for
-        // a bigger amount is an answer to the form, not a failure.
-        $plan = $this->planner->handle($wallet, (int) $validated['amount_minor']);
+        // a bigger amount is an answer to the form, not a failure. The planner
+        // is a domain action that knows nothing of HTTP field names and
+        // reports against its own `amount_minor` parameter; remapped here to
+        // the `amount` field this form actually submits.
+        try {
+            $plan = $this->planner->handle($wallet, $amount->minorUnits);
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages([
+                'amount' => $exception->errors()['amount_minor'] ?? $exception->getMessage(),
+            ]);
+        }
 
         $payment = $this->payments->handle($account, $plan);
 

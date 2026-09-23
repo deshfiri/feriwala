@@ -43,6 +43,9 @@ enum PlatformRole: string
     case SystemAdministrator = 'system_administrator';
     case BackupManager = 'backup_manager';
 
+    /** The Supplier account domain (D25): applications, KYC, listings, pricing, stock. */
+    case SupplierManager = 'supplier_manager';
+
     public function label(): string
     {
         return match ($this) {
@@ -66,6 +69,7 @@ enum PlatformRole: string
             self::ReportViewer => 'Report Viewer',
             self::SystemAdministrator => 'System Administrator',
             self::BackupManager => 'Backup Manager',
+            self::SupplierManager => 'Supplier Manager',
         };
     }
 
@@ -174,6 +178,13 @@ enum PlatformRole: string
                 Module::Report->value => $read,
                 Module::Notification->value => [Action::View, Action::Create, Action::Edit],
                 Module::Audit->value => [Action::ViewAuditLogs],
+
+                // Oversight only (D25) — deliberately not pricing or stock,
+                // for the same reason Admin holds no Payment permission at
+                // all: approving Suppliers and reviewing listings is
+                // operational; setting a confidential rate is not.
+                Module::Supplier->value => [Action::View],
+                Module::SupplierListing->value => [Action::View],
             ],
 
             self::ContentManager => [
@@ -200,12 +211,26 @@ enum PlatformRole: string
                 ],
                 Module::Inventory->value => [Action::View],
                 Module::Dropshipping->value => [Action::View, Action::Publish, Action::Unpublish],
+
+                /*
+                 * Read-only visibility into what Suppliers are proposing for
+                 * the catalogue this role manages (D25) — never the pricing
+                 * or stock permissions. Sensitive pricing is not handed to an
+                 * ordinary catalogue role by default, exactly as the batch
+                 * requires; connecting a listing to the catalogue and setting
+                 * its Platform Rate stay with `SupplierManager`.
+                 */
+                Module::SupplierListing->value => [Action::View],
             ],
 
             self::InventoryManager => [
                 Module::Inventory->value => [Action::View, Action::Edit, Action::Approve, Action::Export],
                 Module::Catalog->value => [Action::View],
                 Module::Fulfillment->value => [Action::View],
+
+                // Read-only: seeing what a Supplier can currently supply,
+                // never editing it (D25) — that stays with SupplierManager.
+                Module::SupplierStock->value => [Action::View],
             ],
 
             self::OrderManager => [
@@ -307,6 +332,31 @@ enum PlatformRole: string
             self::BackupManager => [
                 Module::Backup->value => [Action::View, Action::Create, Action::ManageBackups],
                 Module::System->value => [Action::View],
+            ],
+
+            // The whole Supplier domain (D25): applications, their KYC,
+            // listing review and approval, pricing, and stock — deliberately
+            // one role rather than split across several, since a beta-stage
+            // team is realistically one or two people covering all of it;
+            // narrower roles can be split out once real usage shows where
+            // the boundary actually falls.
+            self::SupplierManager => [
+                Module::Supplier->value => [Action::View, Action::Approve, Action::Suspend],
+                Module::SupplierKyc->value => [Action::View, Action::Review],
+                Module::SupplierListing->value => [Action::View, Action::Review, Action::Approve],
+                Module::SupplierPricing->value => [Action::View, Action::Edit],
+                Module::SupplierStock->value => [Action::View, Action::Edit],
+                Module::SupplierPayable->value => [Action::View, Action::Approve],
+                Module::Catalog->value => [Action::View],
+
+                /*
+                 * View, decide and reject a Supplier withdrawal (D25,
+                 * P13-24) — but never release the payment. That stays with
+                 * WithdrawalApprover alone, the same separation of duties
+                 * the Client/Partner side already draws: whoever approves
+                 * a request is not also the one who can move the money.
+                 */
+                Module::Withdrawal->value => [Action::View, Action::Edit, Action::Approve, Action::Reject],
             ],
         };
     }

@@ -47,8 +47,8 @@ function centralFieldsProductPayload(array $overrides = []): array
         'name' => 'Rice cooker',
         'sku' => 'FW-RC',
         'category_id' => Category::query()->value('public_id'),
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 210000,
+        'base_cost_minor' => '1800.00',
+        'wholesale_price_minor' => '2100.00',
         ...$overrides,
     ];
 }
@@ -111,7 +111,7 @@ describe('the product form', function () {
         $this->actingAs($this->manager)
             ->patch(
                 route('admin.catalog.products.update', $this->product->public_id),
-                centralFieldsProductPayload(['sku' => 'FW-RC-2', 'wholesale_price_minor' => 199000]),
+                centralFieldsProductPayload(['sku' => 'FW-RC-2', 'wholesale_price_minor' => '1990.00']),
             )
             ->assertSessionHasNoErrors();
 

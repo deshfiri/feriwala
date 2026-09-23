@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Domain\Inventory\Models\StockMovement;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Enums\ReturnDisposition;
+use App\Domain\Supplier\Models\SupplierStockMovement;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -36,6 +37,7 @@ use RuntimeException;
  * @property ReturnDisposition|null $disposition
  * @property int|null $warehouse_id
  * @property int|null $stock_movement_id
+ * @property int|null $supplier_stock_movement_id
  * @property CarbonImmutable|null $restored_at
  * @property Money|null $refund_amount_minor
  * @property string $currency_code
@@ -43,6 +45,7 @@ use RuntimeException;
  * @property-read OrderItem $orderItem
  * @property-read Warehouse|null $warehouse
  * @property-read StockMovement|null $stockMovement
+ * @property-read SupplierStockMovement|null $supplierStockMovement
  */
 class OrderReturnItem extends Model
 {
@@ -107,10 +110,19 @@ class OrderReturnItem extends Model
     }
 
     /**
-     * Whether the goods on this line have already been put back into stock.
+     * @return BelongsTo<SupplierStockMovement, $this>
+     */
+    public function supplierStockMovement(): BelongsTo
+    {
+        return $this->belongsTo(SupplierStockMovement::class, 'supplier_stock_movement_id');
+    }
+
+    /**
+     * Whether the goods on this line have already been put back into stock —
+     * a warehouse's, or a Supplier offer's (D25, P13-22).
      */
     public function isRestored(): bool
     {
-        return $this->stock_movement_id !== null;
+        return $this->stock_movement_id !== null || $this->supplier_stock_movement_id !== null;
     }
 }

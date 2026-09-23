@@ -21,7 +21,7 @@ type Props = {
         }[];
         amount: Money;
         /** What the provider settled, when it differed from what was charged. */
-        settled: { minor_units: number; currency: string } | null;
+        settled: Money | null;
         gateway: string;
         is_sandbox: boolean;
         gateway_reference: string | null;
@@ -163,7 +163,7 @@ export default function Receipt({ receipt }: Props) {
                     {receipt.settled && (
                         <p className="text-muted-foreground border-t px-4 py-2 text-xs">
                             {t('package.receipts.settled_as', {
-                                amount: `${receipt.settled.minor_units / 100} ${receipt.settled.currency}`,
+                                amount: receipt.settled.formatted,
                             })}
                         </p>
                     )}

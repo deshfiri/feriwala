@@ -471,6 +471,94 @@ the plan it runs, are the operator's decision to take with legal advice.
 > _Roadmap consequence:_ storefront API contract design moves **from Phase 5 up into Phase 0**, so
 > the contract is frozen before anything depends on it. Recorded as task P0-53.
 
+## D25 — Separate Supplier Account domain (2026-09-21) 🔒
+
+**Approved and instructed directly by the Project Owner on 2026-09-21.** This is the change-control
+approval D1/D23's "single account structure" lock requires, given in the same message as the
+implementation instruction. It **supersedes** every statement that all platform identities share one
+account domain: requirements.txt §5 ("Single Account structure... every user will register... the
+same Account"), §5's "There will be no separate: Customer Account / Partner Account..." list, and
+§45's listing of "Single Account System" as unchangeable **as applied to Suppliers** — that
+protection continues to mean exactly what it always meant for the Client/Partner domain, and D1/D23
+are otherwise untouched. requirements.txt carries an inline amendment marker at both spots rather
+than being silently rewritten.
+
+### The two domains
+
+Feriwala now has **two account domains that never merge and never convert into one another**:
+
+1. **Client/Partner**, exactly as D1 and D23 describe it: one `User` identity, at most one owned
+   `BusinessAccount`, staff as members of it, platform roles for Feriwala staff.
+2. **Supplier**, wholly new and wholly separate: its own identity model, its own authentication
+   guard and session boundary, its own KYC and approval lifecycle, its own portal.
+
+A Supplier is **not** a role, a permission, or a capability reachable from a Client/Partner account,
+and a Client/Partner identity is not reachable from a Supplier one. There is no shared login, no
+account-type flag that switches a `User` into a Supplier, and no conversion path. Someone who is both
+a business owner and runs a supplying business holds two entirely separate logins, exactly as two
+unrelated people would.
+
+### Authentication boundary — what "separate" means in practice
+
+A new Eloquent model, `App\Domain\Supplier\Models\Supplier`, is authenticated through a **second
+Laravel guard** (`supplier`, provider `suppliers`) rather than by extending `User` or by adding a
+guard column to the existing `users` table. This is the standard multi-guard mechanism Laravel ships
+with — not a hand-rolled parallel session system — chosen because it gives every one of the separate
+concerns the batch asks for (registration, login/logout, password reset, email/mobile verification,
+session) without inventing new primitives for problems Laravel already solves:
+
+- **Separate identity**: a distinct model, distinct table, distinct primary key space. A Supplier's
+  `id` and a `User`'s `id` are never comparable and nothing casts between them.
+- **Separate authentication**: `Auth::guard('supplier')`, a distinct Eloquent provider, a distinct
+  password-reset broker and token table. `php artisan make:auth`-style controllers are **not**
+  reused from Fortify, which is bound to the `users` provider; Supplier auth is hand-rolled against
+  the guard directly, in `App\Http\Controllers\Supplier\Auth`.
+- **Separate authorization boundary**: every Supplier route sits behind `auth:supplier` and every
+  Client/Partner or staff route behind `auth` (unchanged). A request authenticated on one guard is
+  simply not authenticated on the other — `Auth::guard('web')->check()` is false for a Supplier
+  session and `Auth::guard('supplier')->check()` is false for a Client/Partner session — and this is
+  asserted by tests that hit the other guard's routes with each kind of session and require a
+  redirect or 403, never a 200.
+- **Session**: both guards share Laravel's normal session mechanism (Redis-backed, D5), which
+  namespaces each guard's login under its own key inside the session array — this is Laravel's
+  documented multi-auth behaviour, not a gap. A browser _could_ therefore hold both a Client/Partner
+  login and a Supplier login in one session at once, exactly as it could hold two logins in two
+  different browser profiles. What the requirement — "a Supplier session must never gain access to
+  Client/Partner, Partner Website or staff resources" — actually rules out is **authorization**, and
+  that is enforced at the route/middleware boundary regardless of what else the session holds. A
+  fully separate cookie name was considered and rejected for this batch as unnecessary complexity
+  that does not change what is actually being guaranteed; if the Project Owner wants literal
+  cookie-level separation later, it is a small, isolated follow-up (a dedicated session driver
+  namespace on the `supplier/*` route group), not an architecture change.
+- **Separate KYC and approval lifecycle**: Supplier KYC is its own lean, purpose-built submission and
+  document model (`SupplierKycSubmission`, `SupplierKycDocument`), not the generic KYC engine built
+  for Client/Partner `BusinessAccount`s under §7. The generic engine is tightly bound to
+  `BusinessAccount` — its `KycSubmission.business_account_id` foreign key cannot point at a Supplier
+  without an incompatible schema change, and D1/D23's single-account structure is exactly what that
+  binding protects. A parallel, smaller model keeps both untouched. The two are visually and
+  procedurally similar on purpose (the same "submit, review, approve/reject/request-correction"
+  shape the Client/Partner KYC engine already established) but share no table and no foreign key.
+
+### Product ownership stays with Feriwala
+
+D1 and D23 are unaffected: only Feriwala's central catalogue (`App\Domain\Catalog\Models\Product`)
+is ever sold to Client/Partner accounts, and only Admin or an Authorized User creates or publishes a
+product — §12 continues to hold exactly as it always has. A Supplier's **listing request** is a
+proposal that may be connected to an existing central product or used as the basis for Admin to
+create a new one through the existing product architecture; a Supplier never writes to `products`
+directly, and submitting a listing request never publishes anything.
+
+### Supplier Rate confidentiality
+
+A Supplier's own rate for what they supply (`SupplierOffer.supplier_rate_minor`) is commercially
+sensitive in the ordinary sense a wholesale cost price always is, and is treated with the same
+severity §12 and D12 already give wholesale cost data: it is visible only to that Supplier and to
+staff holding `supplier_pricing.view`, and it must never reach a Client/Partner Inertia prop, a
+Partner Website API response, an export, a log, or a notification. The **Platform Rate** — what
+Feriwala actually charges — is the only figure a Client/Partner ever sees, exactly as a partner
+never sees `Product.base_cost_minor` today. This is not a new policy; it is the existing wholesale-
+price confidentiality boundary extended to a second source of cost data.
+
 ## Change control 🔒
 
 Any future change affecting **merchant of record · financial ledger · payment direction ·

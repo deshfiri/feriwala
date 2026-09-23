@@ -7,6 +7,8 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -77,9 +79,10 @@ class SaveVariantRequest extends FormRequest
                 : ['prohibited'],
             'values.*' => ['string', 'distinct', Rule::exists(ProductAttributeValue::class, 'public_id')],
 
-            // Blank means the product's own figure applies.
-            'wholesale_price_minor' => ['nullable', 'integer', 'min:0', 'max:'.SaveProductRequest::MAX_MINOR],
-            'base_cost_minor' => ['nullable', 'integer', 'min:0', 'max:'.SaveProductRequest::MAX_MINOR],
+            // Blank means the product's own figure applies. Entered in Taka
+            // and converted to minor units in variantAttributes() below.
+            'wholesale_price_minor' => ['nullable', new DecimalAmountRule],
+            'base_cost_minor' => ['nullable', new DecimalAmountRule],
 
             'is_active' => ['boolean'],
 
@@ -94,6 +97,25 @@ class SaveVariantRequest extends FormRequest
     public function messages(): array
     {
         return CentralProductFields::messages($this->all());
+    }
+
+    /**
+     * The validated data, with the Taka strings converted to minor units
+     * under the same field names ManageVariants already expects.
+     *
+     * @return array<string, mixed>
+     */
+    public function variantAttributes(): array
+    {
+        $validated = $this->validated();
+
+        foreach (['wholesale_price_minor', 'base_cost_minor'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $validated[$field] = DecimalAmount::parseOrNull($validated[$field])?->minorUnits;
+            }
+        }
+
+        return $validated;
     }
 
     /**

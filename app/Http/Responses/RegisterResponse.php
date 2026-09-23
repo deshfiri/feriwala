@@ -22,6 +22,6 @@ class RegisterResponse implements RegisterResponseContract
          */
         return $request->wantsJson()
             ? new JsonResponse(['two_factor' => false], 201)
-            : redirect()->intended($this->home->urlFor($request->user()));
+            : redirect()->intended($this->home->urlFor($request->user('web')));
     }
 }

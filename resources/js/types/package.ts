@@ -5,7 +5,7 @@ import type { Money } from '@/lib/money';
 /** A charge attached to a package (§8.1, §16.2). */
 export type PackageChargeRow = {
     charge_type: string;
-    amount_minor: number;
+    amount: Money;
     frequency: string;
 };
 
@@ -29,15 +29,12 @@ export type PackageRow = {
     short_description: string | null;
     description: string | null;
 
-    /** Formatted server-side, for display. */
+    /** Formatted server-side, for display, and the form's own default value. */
     fee: Money;
-
-    // Minor units throughout, for the form. Money is never a float (D4, §36.1).
-    fee_minor: number;
-    registration_fee_minor: number | null;
-    renewal_fee_minor: number | null;
-    required_deposit_minor: number;
-    minimum_balance_minor: number;
+    registration_fee: Money | null;
+    renewal_fee: Money | null;
+    required_deposit: Money;
+    minimum_balance: Money;
     currency_code: string;
 
     validity_days: number | null;

@@ -7,6 +7,7 @@ use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Enums\StockReservationStatus;
+use App\Domain\Supplier\Models\SupplierOfferStock;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,7 +15,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Units of central stock set aside for an order not yet confirmed (§19.1).
+ * Units of stock set aside for an order not yet confirmed (§19.1) — central
+ * warehouse stock, or one Supplier offer's stock (D25, P13-28).
  *
  * Its status moves only through {@see HasStateMachine::transitionTo()}, and
  * only the reservation service moves it, in the same transaction as the stock
@@ -22,7 +24,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property string $public_id
- * @property int $stock_item_id
+ * @property int|null $stock_item_id
+ * @property int|null $supplier_offer_stock_id
  * @property int $quantity
  * @property ReservationKind $kind
  * @property StockReservationStatus $status
@@ -36,7 +39,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $stock_allocation_id
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
- * @property-read StockItem $item
+ * @property-read StockItem|null $item
+ * @property-read SupplierOfferStock|null $supplierStock
  * @property-read User|null $overrider
  * @property-read BusinessAccount|null $account
  * @property-read StockAllocation|null $allocation
@@ -65,11 +69,32 @@ class StockReservation extends Model
     }
 
     /**
+     * The central stock item this holds units of — null for a reservation
+     * against a Supplier's offer, which names {@see supplierStock()} instead.
+     * A reservation has exactly one source, and the database refuses both or
+     * neither.
+     *
      * @return BelongsTo<StockItem, $this>
      */
     public function item(): BelongsTo
     {
         return $this->belongsTo(StockItem::class, 'stock_item_id');
+    }
+
+    /**
+     * The Supplier offer's stock this holds units of, when the order line is
+     * Supplier-backed (D25, P13-28).
+     *
+     * @return BelongsTo<SupplierOfferStock, $this>
+     */
+    public function supplierStock(): BelongsTo
+    {
+        return $this->belongsTo(SupplierOfferStock::class, 'supplier_offer_stock_id');
+    }
+
+    public function isSupplierSourced(): bool
+    {
+        return $this->supplier_offer_stock_id !== null;
     }
 
     /**

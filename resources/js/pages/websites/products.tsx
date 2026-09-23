@@ -4,6 +4,7 @@ import { useState } from 'react';
 import DataTable from '@/components/data-table/data-table';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
@@ -249,44 +250,30 @@ export default function WebsiteProducts({
             {({ processing, errors }) => (
                 <>
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor={`price-${row.id}`}>
-                                {t('website.products.price_minor')}
-                            </Label>
-                            <Input
-                                id={`price-${row.id}`}
-                                name="price"
-                                type="number"
-                                min={0}
-                                step={1}
-                                defaultValue={row.price?.minor_units ?? ''}
-                                disabled={
-                                    !row.terms.allows_user_pricing ||
-                                    row.terms.locked_fields.includes('price')
-                                }
-                            />
-                            <InputError message={errors.price} />
-                        </div>
+                        <MoneyInput
+                            id={`price-${row.id}`}
+                            name="price"
+                            label={t('website.products.price_minor')}
+                            defaultValue={row.price?.decimal}
+                            disabled={
+                                !row.terms.allows_user_pricing ||
+                                row.terms.locked_fields.includes('price')
+                            }
+                            error={errors.price}
+                        />
 
-                        <div className="grid gap-1.5">
-                            <Label htmlFor={`promo-${row.id}`}>
-                                {t('website.products.promotional_price_minor')}
-                            </Label>
-                            <Input
-                                id={`promo-${row.id}`}
-                                name="promotional_price"
-                                type="number"
-                                min={0}
-                                step={1}
-                                defaultValue={
-                                    row.promotional_price?.minor_units ?? ''
-                                }
-                                disabled={row.terms.locked_fields.includes(
-                                    'promotional_price',
-                                )}
-                            />
-                            <InputError message={errors.promotional_price} />
-                        </div>
+                        <MoneyInput
+                            id={`promo-${row.id}`}
+                            name="promotional_price"
+                            label={t(
+                                'website.products.promotional_price_minor',
+                            )}
+                            defaultValue={row.promotional_price?.decimal}
+                            disabled={row.terms.locked_fields.includes(
+                                'promotional_price',
+                            )}
+                            error={errors.promotional_price}
+                        />
 
                         <div className="grid gap-1.5">
                             <Label htmlFor={`title-${row.id}`}>
