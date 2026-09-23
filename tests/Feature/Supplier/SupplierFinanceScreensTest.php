@@ -72,7 +72,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 130000,
+        'price' => Money::fromDecimal('1300.00', Currency::BDT),
         'published_at' => now(),
     ]);
 
@@ -103,11 +103,11 @@ describe('wallet dashboard', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('supplier/wallet/index')
-                ->where('wallet.total.minor_units', 200000)
-                ->where('wallet.available.minor_units', 200000)
-                ->where('wallet.reserved.minor_units', 0)
-                ->where('wallet.recovery.minor_units', 0)
-                ->where('payable_totals.settled.minor_units', 200000),
+                ->where('wallet.total.amount', '2000.00')
+                ->where('wallet.available.amount', '2000.00')
+                ->where('wallet.reserved.amount', '0.00')
+                ->where('wallet.recovery.amount', '0.00')
+                ->where('payable_totals.settled.amount', '2000.00'),
             );
     });
 
