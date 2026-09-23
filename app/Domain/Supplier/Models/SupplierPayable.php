@@ -40,8 +40,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $supplier_offer_id
  * @property int $supplier_offer_price_change_id
  * @property int $quantity
- * @property Money $supplier_rate_minor
- * @property Money $gross_amount_minor
+ * @property Money $supplier_rate
+ * @property Money $gross_amount
  * @property string $currency_code
  * @property PayableStatus $status
  * @property string $triggering_event
@@ -77,8 +77,8 @@ class SupplierPayable extends Model
         return [
             'status' => PayableStatus::class,
             'quantity' => 'integer',
-            'supplier_rate_minor' => MoneyCast::class,
-            'gross_amount_minor' => MoneyCast::class,
+            'supplier_rate' => MoneyCast::class,
+            'gross_amount' => MoneyCast::class,
             'delivered_at' => 'immutable_datetime',
             'payment_settled_at' => 'immutable_datetime',
             'eligible_at' => 'immutable_datetime',
@@ -161,7 +161,10 @@ class SupplierPayable extends Model
      */
     public function reversedAmount(): Money
     {
-        return Money::of((int) $this->reversals()->sum('amount_minor'), $this->gross_amount_minor->currency);
+        return Money::fromDecimal(
+            (string) ($this->reversals()->sum('amount') ?: '0'),
+            $this->gross_amount->currency,
+        );
     }
 
     /**
@@ -169,6 +172,6 @@ class SupplierPayable extends Model
      */
     public function netAmount(): Money
     {
-        return $this->gross_amount_minor->minus($this->reversedAmount());
+        return $this->gross_amount->minus($this->reversedAmount());
     }
 }

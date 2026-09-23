@@ -50,7 +50,7 @@ class OfferController extends Controller
             'offer' => [
                 ...$this->row($model),
                 'rate_history' => $model->priceHistory->map(fn ($change) => [
-                    'supplier_rate' => $change->supplier_rate_minor->jsonSerialize(),
+                    'supplier_rate' => $change->supplier_rate->jsonSerialize(),
                     'effective_from' => $change->effective_from->toIso8601String(),
                 ])->all(),
             ],
@@ -72,7 +72,7 @@ class OfferController extends Controller
             'is_preferred' => $offer->is_preferred,
             'wholesale_enabled' => $offer->wholesale_enabled,
             'dropshipping_enabled' => $offer->dropshipping_enabled,
-            'supplier_rate' => $offer->supplier_rate_minor->jsonSerialize(),
+            'supplier_rate' => $offer->supplier_rate->jsonSerialize(),
             'available_quantity' => $offer->stock->quantity ?? 0,
         ];
     }

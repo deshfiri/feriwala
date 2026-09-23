@@ -61,8 +61,8 @@ use Illuminate\Notifications\Notifiable;
  * @property CarbonImmutable|null $approved_at
  * @property CarbonImmutable|null $suspended_at
  * @property CarbonImmutable|null $closed_at
- * @property int|null $withdrawal_minimum_override_minor
- * @property int|null $withdrawal_maximum_override_minor
+ * @property string|null $withdrawal_minimum_override
+ * @property string|null $withdrawal_maximum_override
  * @property-read User|null $reviewedBy
  * @property-read Collection<int, SupplierStatusChange> $statusHistory
  * @property-read Collection<int, SupplierWallet> $wallets

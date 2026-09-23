@@ -40,13 +40,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $category_id
  * @property int|null $brand_id
  * @property string $currency_code
- * @property Money $base_cost_minor
- * @property Money $wholesale_price_minor
+ * @property Money $base_cost
+ * @property Money $wholesale_price
  * @property int $min_order_quantity
  * @property int|null $max_order_quantity
- * @property Money|null $suggested_selling_price_minor
- * @property Money|null $minimum_selling_price_minor
- * @property Money|null $maximum_selling_price_minor
+ * @property Money|null $suggested_selling_price
+ * @property Money|null $minimum_selling_price
+ * @property Money|null $maximum_selling_price
  * @property ProductStatus $status
  * @property PackageScope $package_scope
  * @property AccountScope $account_scope
@@ -101,8 +101,8 @@ class Product extends Model
      */
     protected $attributes = [
         'currency_code' => 'BDT',
-        'base_cost_minor' => 0,
-        'wholesale_price_minor' => 0,
+        'base_cost' => '0.00',
+        'wholesale_price' => '0.00',
         'min_order_quantity' => 1,
         'status' => 'draft',
         'package_scope' => 'selected',
@@ -121,13 +121,13 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'base_cost_minor' => MoneyCast::class,
-            'wholesale_price_minor' => MoneyCast::class,
+            'base_cost' => MoneyCast::class,
+            'wholesale_price' => MoneyCast::class,
             'min_order_quantity' => 'integer',
             'max_order_quantity' => 'integer',
-            'suggested_selling_price_minor' => MoneyCast::class,
-            'minimum_selling_price_minor' => MoneyCast::class,
-            'maximum_selling_price_minor' => MoneyCast::class,
+            'suggested_selling_price' => MoneyCast::class,
+            'minimum_selling_price' => MoneyCast::class,
+            'maximum_selling_price' => MoneyCast::class,
             'status' => ProductStatus::class,
             'package_scope' => PackageScope::class,
             'account_scope' => AccountScope::class,

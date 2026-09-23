@@ -47,7 +47,7 @@ class PaySupplierWithdrawal
 
             $wallet = $locked->wallet()->lockForUpdate()->firstOrFail();
 
-            $this->wallets->pay($wallet, $locked->amount_minor, new SupplierPostingContext(
+            $this->wallets->pay($wallet, $locked->amount, new SupplierPostingContext(
                 source: 'withdrawal',
                 description: "Withdrawal {$locked->reference} paid",
                 idempotencyKey: 'supplier-withdrawal-paid:'.$locked->public_id,

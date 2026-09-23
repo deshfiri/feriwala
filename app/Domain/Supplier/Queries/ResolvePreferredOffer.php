@@ -87,12 +87,12 @@ class ResolvePreferredOffer
         // The price version in force now: the newest one already effective.
         $priceVersion = $offer->priceHistory()->where('effective_from', '<=', $at)->first();
 
-        if ($priceVersion === null || $priceVersion->platform_rate_minor->lessThan($priceVersion->supplier_rate_minor)) {
+        if ($priceVersion === null || $priceVersion->platform_rate->lessThan($priceVersion->supplier_rate)) {
             throw SupplierAllocationRefused::rateUnavailable();
         }
 
-        if ($priceVersion->supplier_rate_minor->currency !== $priceVersion->platform_rate_minor->currency
-            || $priceVersion->supplier_rate_minor->currency !== $currency) {
+        if ($priceVersion->supplier_rate->currency !== $priceVersion->platform_rate->currency
+            || $priceVersion->supplier_rate->currency !== $currency) {
             throw SupplierAllocationRefused::currencyMismatch();
         }
 

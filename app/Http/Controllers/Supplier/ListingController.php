@@ -182,9 +182,8 @@ class ListingController extends Controller
             'items.*.variant_label' => ['nullable', 'string', 'max:255'],
             'items.*.supplier_sku' => ['required', 'string', 'max:100'],
 
-            // Entered in Taka; converted to minor units below, at this HTTP
-            // boundary — SaveSupplierListingDraft still receives an integer
-            // per item (§36.1).
+            // Entered in Taka; parsed into a Money instance below, at this
+            // HTTP boundary (§36.1).
             'items.*.supplier_rate_minor' => ['required', new DecimalAmountRule],
             'items.*.currency_code' => ['nullable', 'string', 'size:3'],
             'items.*.available_quantity' => ['required', 'integer', 'min:0'],
@@ -199,7 +198,7 @@ class ListingController extends Controller
                 ? Currency::from($item['currency_code'])
                 : Currency::base();
 
-            $item['supplier_rate_minor'] = DecimalAmount::parse($item['supplier_rate_minor'], $currency)->minorUnits;
+            $item['supplier_rate_minor'] = DecimalAmount::parse($item['supplier_rate_minor'], $currency);
 
             return $item;
         }, $data['items']));
@@ -249,7 +248,7 @@ class ListingController extends Controller
                 'id' => $item->public_id,
                 'variant_label' => $item->variant_label,
                 'supplier_sku' => $item->supplier_sku,
-                'supplier_rate' => $item->supplier_rate_minor->jsonSerialize(),
+                'supplier_rate' => $item->supplier_rate->jsonSerialize(),
                 'available_quantity' => $item->available_quantity,
                 'minimum_supply_quantity' => $item->minimum_supply_quantity,
                 'lead_time_days' => $item->lead_time_days,

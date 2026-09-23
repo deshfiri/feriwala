@@ -37,7 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $supplier_wallet_id
  * @property int $supplier_payout_method_id
  * @property array<string, mixed> $payout_snapshot
- * @property Money $amount_minor
+ * @property Money $amount
  * @property string $currency_code
  * @property SupplierWithdrawalStatus $status
  * @property CarbonImmutable $requested_at
@@ -70,7 +70,7 @@ class SupplierWithdrawal extends Model
         return [
             'status' => SupplierWithdrawalStatus::class,
             'payout_snapshot' => 'array',
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'requested_at' => 'immutable_datetime',
             'decided_at' => 'immutable_datetime',
             'processed_at' => 'immutable_datetime',

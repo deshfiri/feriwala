@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $supplier_product_listing_id
  * @property string|null $variant_label
  * @property string $supplier_sku
- * @property Money $supplier_rate_minor
+ * @property Money $supplier_rate
  * @property string $currency_code
  * @property int $available_quantity
  * @property int $minimum_supply_quantity
@@ -55,7 +55,7 @@ class SupplierProductListingItem extends Model
     protected function casts(): array
     {
         return [
-            'supplier_rate_minor' => MoneyCast::class,
+            'supplier_rate' => MoneyCast::class,
             'available_quantity' => 'integer',
             'minimum_supply_quantity' => 'integer',
             'lead_time_days' => 'integer',

@@ -23,7 +23,7 @@ use InvalidArgumentException;
  * This is also the beta's whole catalogue integration point: making an offer
  * preferred writes its **Platform Rate only** — never the Supplier Rate, and
  * never the Supplier's identity — into the connected product's or variant's
- * own `wholesale_price_minor`, which is the column the existing, unmodified
+ * own `wholesale_price`, which is the column the existing, unmodified
  * `App\Http\Controllers\Erp\CatalogController` already reads for every
  * Client/Partner. Nothing about the wholesale/dropshipping browsing or
  * eligibility logic is duplicated or touched.
@@ -57,9 +57,9 @@ class SetPreferredSupplierOffer
             $locked->forceFill(['is_preferred' => true])->save();
 
             if ($locked->product_variant_id !== null) {
-                $locked->variant()->update(['wholesale_price_minor' => $locked->platform_rate_minor->minorUnits]);
+                $locked->variant()->update(['wholesale_price' => $locked->platform_rate->toDecimal()]);
             } else {
-                $locked->product()->update(['wholesale_price_minor' => $locked->platform_rate_minor->minorUnits]);
+                $locked->product()->update(['wholesale_price' => $locked->platform_rate->toDecimal()]);
             }
 
             $this->audit->handle(new AuditEntry(

@@ -106,7 +106,7 @@ class SupplierListingController extends Controller
                     'id' => $item->public_id,
                     'variant_label' => $item->variant_label,
                     'supplier_sku' => $item->supplier_sku,
-                    'supplier_rate' => $mayViewPricing ? $item->supplier_rate_minor->jsonSerialize() : null,
+                    'supplier_rate' => $mayViewPricing ? $item->supplier_rate->jsonSerialize() : null,
                     'available_quantity' => $item->available_quantity,
                     'minimum_supply_quantity' => $item->minimum_supply_quantity,
                     'lead_time_days' => $item->lead_time_days,
@@ -178,9 +178,8 @@ class SupplierListingController extends Controller
             'items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
             'items.*.variant_id' => ['nullable', 'string'],
 
-            // Entered in Taka; converted to minor units below, at this HTTP
-            // boundary — DecideSupplierListing still receives an integer
-            // per item (§36.1).
+            // Entered in Taka; parsed into a Money instance below, at this
+            // HTTP boundary (§36.1).
             'items.*.platform_rate_minor' => ['nullable', new DecimalAmountRule],
             'items.*.wholesale_enabled' => ['nullable', 'boolean'],
             'items.*.dropshipping_enabled' => ['nullable', 'boolean'],
@@ -189,7 +188,7 @@ class SupplierListingController extends Controller
 
         $validated['items'] = array_values(array_map(function (array $item) {
             if (isset($item['platform_rate_minor'])) {
-                $item['platform_rate_minor'] = DecimalAmount::parse($item['platform_rate_minor'])->minorUnits;
+                $item['platform_rate_minor'] = DecimalAmount::parse($item['platform_rate_minor']);
             }
 
             return $item;

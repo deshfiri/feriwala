@@ -73,13 +73,13 @@ class ReverseSupplierPayable
                 // decides whether this reversal has to claw money back.
                 $wasSettled = $locked->settled_at !== null;
 
-                $amount = $locked->supplier_rate_minor->multipliedBy($quantity);
+                $amount = $locked->supplier_rate->multipliedBy($quantity);
 
                 $reversal = SupplierPayableReversal::create([
                     'supplier_payable_id' => $locked->id,
                     'order_return_item_id' => $returnItem->id,
                     'quantity' => $quantity,
-                    'amount_minor' => $amount->minorUnits,
+                    'amount' => $amount,
                     'currency_code' => $locked->currency_code,
                     'reason' => $reason,
                     'idempotency_key' => $key,
@@ -103,8 +103,8 @@ class ReverseSupplierPayable
                     $locked->supplier->notify(
                         (new SupplierPayableReversalSettled(
                             $reversal,
-                            debited: $entry->debit_minor,
-                            recorded: $entry->recovery_after_minor->minus($entry->recovery_before_minor),
+                            debited: $entry->debit,
+                            recorded: $entry->recovery_after->minus($entry->recovery_before),
                         ))->locale($locked->supplier->locale)
                     );
                 }
@@ -124,7 +124,7 @@ class ReverseSupplierPayable
                     action: 'supplier_payable.reversed',
                     auditableType: SupplierPayable::class,
                     auditableId: $locked->id,
-                    after: ['quantity' => $quantity, 'amount_minor' => $amount->minorUnits, 'new_status' => $to->value],
+                    after: ['quantity' => $quantity, 'amount' => $amount->toDecimal(), 'new_status' => $to->value],
                     reason: $reason,
                     accountId: $locked->supplier_id,
                     module: PermissionModule::SupplierPayable->value,

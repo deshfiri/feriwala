@@ -119,7 +119,7 @@ class SaveSupplierListingDraft
         return [
             'variant_label' => $item['variant_label'] ?? null,
             'supplier_sku' => $item['supplier_sku'],
-            'supplier_rate_minor' => (int) $item['supplier_rate_minor'],
+            'supplier_rate' => $item['supplier_rate_minor'],
             'currency_code' => $item['currency_code'] ?? 'BDT',
             'available_quantity' => (int) $item['available_quantity'],
             'minimum_supply_quantity' => (int) ($item['minimum_supply_quantity'] ?? 1),

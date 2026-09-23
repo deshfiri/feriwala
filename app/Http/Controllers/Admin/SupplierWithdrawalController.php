@@ -189,7 +189,7 @@ class SupplierWithdrawalController extends Controller
             'reference' => $withdrawal->reference,
             'supplier' => $withdrawal->supplier->business_name,
             'supplier_id' => $withdrawal->supplier->public_id,
-            'amount' => $withdrawal->amount_minor->jsonSerialize(),
+            'amount' => $withdrawal->amount->jsonSerialize(),
             'currency' => $withdrawal->currency_code,
             'status' => $withdrawal->status->value,
             'status_label' => $withdrawal->status->label(),

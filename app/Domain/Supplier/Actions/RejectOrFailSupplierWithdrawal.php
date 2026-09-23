@@ -48,7 +48,7 @@ class RejectOrFailSupplierWithdrawal
 
             $wallet = $locked->wallet()->lockForUpdate()->firstOrFail();
 
-            $this->wallets->release($wallet, $locked->amount_minor, new SupplierPostingContext(
+            $this->wallets->release($wallet, $locked->amount, new SupplierPostingContext(
                 source: 'withdrawal',
                 description: "Reservation released for withdrawal {$locked->reference}",
                 idempotencyKey: 'supplier-withdrawal-release:'.$locked->public_id,

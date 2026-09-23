@@ -53,8 +53,8 @@ class SupplierOfferController extends Controller
                 ...$this->row($offer),
                 'can_edit' => Gate::allows('edit', $offer),
                 'rate_history' => $offer->priceHistory->map(fn ($change) => [
-                    'supplier_rate' => $change->supplier_rate_minor->jsonSerialize(),
-                    'platform_rate' => $change->platform_rate_minor->jsonSerialize(),
+                    'supplier_rate' => $change->supplier_rate->jsonSerialize(),
+                    'platform_rate' => $change->platform_rate->jsonSerialize(),
                     'effective_from' => $change->effective_from->toIso8601String(),
                     'changed_by' => $change->changedBy?->name,
                     'reason' => $change->reason,
@@ -165,8 +165,8 @@ class SupplierOfferController extends Controller
             'is_preferred' => $offer->is_preferred,
             'wholesale_enabled' => $offer->wholesale_enabled,
             'dropshipping_enabled' => $offer->dropshipping_enabled,
-            'supplier_rate' => $offer->supplier_rate_minor->jsonSerialize(),
-            'platform_rate' => $offer->platform_rate_minor->jsonSerialize(),
+            'supplier_rate' => $offer->supplier_rate->jsonSerialize(),
+            'platform_rate' => $offer->platform_rate->jsonSerialize(),
             'platform_margin' => $offer->platformMargin()->jsonSerialize(),
             'available_quantity' => $offer->stock->quantity ?? 0,
         ];

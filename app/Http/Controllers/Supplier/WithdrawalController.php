@@ -159,7 +159,7 @@ class WithdrawalController extends Controller
         return [
             'id' => $withdrawal->public_id,
             'reference' => $withdrawal->reference,
-            'amount' => $withdrawal->amount_minor->jsonSerialize(),
+            'amount' => $withdrawal->amount->jsonSerialize(),
             'status' => $withdrawal->status->value,
             'status_label' => $withdrawal->status->label(),
             'status_tone' => $withdrawal->status->tone(),

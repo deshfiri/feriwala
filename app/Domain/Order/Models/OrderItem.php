@@ -36,12 +36,12 @@ use LogicException;
  * @property string|null $variant_label
  * @property int $quantity
  * @property string $currency_code
- * @property Money $unit_price_minor
- * @property Money $line_subtotal_minor
- * @property Money $discount_minor
- * @property Money $tax_minor
- * @property Money $tax_included_minor
- * @property Money $line_total_minor
+ * @property Money $unit_price
+ * @property Money $line_subtotal
+ * @property Money $discount
+ * @property Money $tax
+ * @property Money $tax_included
+ * @property Money $line_total
  * @property string|null $tax_code
  * @property int|null $tax_rate_basis_points
  * @property string|null $tax_mode
@@ -49,9 +49,9 @@ use LogicException;
  * @property int|null $supplier_id
  * @property int|null $supplier_offer_id
  * @property int|null $supplier_offer_price_change_id
- * @property Money|null $supplier_rate_minor
- * @property Money|null $platform_rate_minor
- * @property Money|null $platform_margin_minor
+ * @property Money|null $supplier_rate
+ * @property Money|null $platform_rate
+ * @property Money|null $platform_margin
  * @property string|null $supplier_currency_code
  * @property int|null $supplier_allocated_quantity
  * @property CarbonImmutable|null $supplier_allocated_at
@@ -85,16 +85,16 @@ class OrderItem extends Model
         return [
             'quantity' => 'integer',
             'line_number' => 'integer',
-            'unit_price_minor' => MoneyCast::class,
-            'line_subtotal_minor' => MoneyCast::class,
-            'discount_minor' => MoneyCast::class,
-            'tax_minor' => MoneyCast::class,
-            'tax_included_minor' => MoneyCast::class,
-            'line_total_minor' => MoneyCast::class,
+            'unit_price' => MoneyCast::class,
+            'line_subtotal' => MoneyCast::class,
+            'discount' => MoneyCast::class,
+            'tax' => MoneyCast::class,
+            'tax_included' => MoneyCast::class,
+            'line_total' => MoneyCast::class,
             'tax_rate_basis_points' => 'integer',
-            'supplier_rate_minor' => MoneyCast::class.':supplier_currency_code',
-            'platform_rate_minor' => MoneyCast::class.':supplier_currency_code',
-            'platform_margin_minor' => MoneyCast::class.':supplier_currency_code',
+            'supplier_rate' => MoneyCast::class.':supplier_currency_code',
+            'platform_rate' => MoneyCast::class.':supplier_currency_code',
+            'platform_margin' => MoneyCast::class.':supplier_currency_code',
             'supplier_allocated_quantity' => 'integer',
             'supplier_allocated_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',

@@ -62,7 +62,7 @@ beforeEach(function () {
 
     $this->supplier = Supplier::factory()->create();
     $this->product = websiteTestProduct();
-    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: 100000, platformRate: 130000, preferred: true);
+    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: '1000.00', platformRate: '1300.00', preferred: true);
     supplierTestOfferPriceVersion($this->offer);
 
     $this->selection = WebsiteProduct::create([
@@ -201,7 +201,7 @@ describe('withdrawals', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('supplier/withdrawals/create')
-                ->where('available_balance.minor_units', 300000)
+                ->where('available_balance.amount', '3000.00')
                 ->has('idempotency_key'),
             );
     });
@@ -222,7 +222,7 @@ describe('withdrawals', function () {
         ])->assertRedirect();
 
         $wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
-        expect($wallet->reserved_minor->minorUnits)->toBe(100000);
+        expect($wallet->reserved->toDecimal())->toBe('1000.00');
     });
 
     it('retries the same submission once, by idempotency key, rather than reserving twice', function () {
@@ -238,7 +238,7 @@ describe('withdrawals', function () {
         $this->post(route('supplier.withdrawals.store'), $payload)->assertRedirect();
 
         $wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
-        expect($wallet->reserved_minor->minorUnits)->toBe(100000);
+        expect($wallet->reserved->toDecimal())->toBe('1000.00');
     });
 });
 
@@ -250,7 +250,7 @@ describe('self-scope and guard isolation', function () {
             $this->supplier, SupplierPayoutMethodType::Bkash, 'bKash', ['account_name' => 'Test', 'account_number' => '01711112222'],
         );
         $withdrawal = app(RequestSupplierWithdrawal::class)->handle(
-            $this->supplier, $method, Money::of(50000, Currency::BDT), 'scope-test',
+            $this->supplier, $method, Money::fromDecimal('500.00', Currency::BDT), 'scope-test',
         );
 
         $stranger = Supplier::factory()->create();

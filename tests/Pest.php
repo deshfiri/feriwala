@@ -381,10 +381,11 @@ function websiteTestProduct(array $attributes = []): Product
         'brand_id' => null,
         'status' => ProductStatus::Active,
         'currency_code' => 'BDT',
-        'wholesale_price_minor' => 150000,
-        'minimum_selling_price_minor' => 200000,
-        'maximum_selling_price_minor' => 400000,
-        'suggested_selling_price_minor' => 250000,
+        'base_cost' => Money::zero(Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('1500.00', Currency::BDT),
+        'minimum_selling_price' => Money::fromDecimal('2000.00', Currency::BDT),
+        'maximum_selling_price' => Money::fromDecimal('4000.00', Currency::BDT),
+        'suggested_selling_price' => Money::fromDecimal('2500.00', Currency::BDT),
         'dropshipping_status' => ProductStatus::DropshippingEnabled,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
         'package_scope' => PackageScope::AllPackages,
@@ -669,7 +670,7 @@ function supplierTestListing(Supplier $supplier, array $items = [[]], ListingSta
         $listing->items()->create([
             'variant_label' => count($items) > 1 ? 'Size '.($index + 1) : null,
             'supplier_sku' => 'SUP-'.Str::upper(Str::random(6)),
-            'supplier_rate_minor' => 100000,
+            'supplier_rate' => Money::fromDecimal('1000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'available_quantity' => 50,
             'minimum_supply_quantity' => 1,
@@ -693,8 +694,8 @@ function supplierTestListing(Supplier $supplier, array $items = [[]], ListingSta
 function supplierTestOffer(
     ?Supplier $supplier = null,
     ?Product $product = null,
-    int $supplierRate = 100000,
-    int $platformRate = 130000,
+    string $supplierRate = '1000.00',
+    string $platformRate = '1300.00',
     bool $preferred = false,
 ): SupplierOffer {
     $supplier ??= Supplier::factory()->create();
@@ -705,8 +706,8 @@ function supplierTestOffer(
         'product_id' => $product->id,
         'status' => OfferStatus::Active,
         'is_preferred' => $preferred,
-        'supplier_rate_minor' => $supplierRate,
-        'platform_rate_minor' => $platformRate,
+        'supplier_rate' => Money::fromDecimal($supplierRate, Currency::BDT),
+        'platform_rate' => Money::fromDecimal($platformRate, Currency::BDT),
         'currency_code' => 'BDT',
         'wholesale_enabled' => true,
         'activated_at' => now(),
@@ -726,8 +727,8 @@ function supplierTestOffer(
 function supplierTestOfferPriceVersion(SupplierOffer $offer): SupplierOfferPriceChange
 {
     return $offer->priceHistory()->create([
-        'supplier_rate_minor' => $offer->supplier_rate_minor->minorUnits,
-        'platform_rate_minor' => $offer->platform_rate_minor->minorUnits,
+        'supplier_rate' => $offer->supplier_rate,
+        'platform_rate' => $offer->platform_rate,
         'currency_code' => $offer->currency_code,
         'effective_from' => now()->subMinute(),
         'reason' => 'Fixture rate.',

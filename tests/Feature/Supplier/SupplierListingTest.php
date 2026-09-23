@@ -13,6 +13,8 @@ use App\Notifications\Supplier\SupplierListingApproved;
 use App\Notifications\Supplier\SupplierListingCorrectionRequested;
 use App\Notifications\Supplier\SupplierListingRejected;
 use App\Notifications\Supplier\SupplierListingSubmitted;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Notification;
@@ -68,7 +70,7 @@ test('a supplier drafts, edits and submits a listing which then locks', function
     $listing = SupplierProductListing::query()->firstOrFail();
     expect($listing->status)->toBe(ListingStatus::Draft)
         ->and($listing->items()->count())->toBe(1)
-        ->and($listing->items()->first()->supplier_rate_minor->minorUnits)->toBe(100000);
+        ->and($listing->items()->first()->supplier_rate->toDecimal())->toBe('1000.00');
 
     $this->patch(route('supplier.listings.update', $listing), supplierListingTestPayload(['product_name' => 'Cotton panjabi v2']))
         ->assertSessionHasNoErrors();
@@ -187,8 +189,8 @@ test('full approval creates a Central Product through the catalogue action and o
         // Created as a draft: connecting never publishes anything by itself.
         ->and($listing->connectedProduct->status->value)->toBe('draft')
         ->and($offer->supplier_id)->toBe($supplier->id)
-        ->and($offer->supplier_rate_minor->minorUnits)->toBe(100000)
-        ->and($offer->platform_rate_minor->minorUnits)->toBe(130000)
+        ->and($offer->supplier_rate->toDecimal())->toBe('1000.00')
+        ->and($offer->platform_rate->toDecimal())->toBe('1300.00')
         ->and($offer->wholesale_enabled)->toBeTrue()
         ->and($offer->dropshipping_enabled)->toBeFalse()
         ->and($offer->stock->quantity)->toBe(0)
@@ -288,9 +290,9 @@ test('a platform rate below the supplier rate is refused and nothing is written'
 
 test('connecting to an existing product changes none of its catalogue data', function () {
     $product = websiteTestProduct(['name' => 'Original name', 'description' => 'Original description']);
-    $before = $product->only(['name', 'description', 'sku', 'status', 'wholesale_price_minor', 'suggested_selling_price_minor']);
-    $before['wholesale_price_minor'] = $product->wholesale_price_minor->minorUnits;
-    $before['suggested_selling_price_minor'] = $product->suggested_selling_price_minor->minorUnits;
+    $before = $product->only(['name', 'description', 'sku', 'status']);
+    $before['wholesale_price_minor'] = $product->wholesale_price->toDecimal();
+    $before['suggested_selling_price_minor'] = $product->suggested_selling_price->toDecimal();
 
     $listing = supplierTestListing(Supplier::factory()->create());
 
@@ -303,8 +305,8 @@ test('connecting to an existing product changes none of its catalogue data', fun
 
     expect($after->name)->toBe($before['name'])
         ->and($after->description)->toBe($before['description'])
-        ->and($after->wholesale_price_minor->minorUnits)->toBe($before['wholesale_price_minor'])
-        ->and($after->suggested_selling_price_minor->minorUnits)->toBe($before['suggested_selling_price_minor'])
+        ->and($after->wholesale_price->toDecimal())->toBe($before['wholesale_price_minor'])
+        ->and($after->suggested_selling_price->toDecimal())->toBe($before['suggested_selling_price_minor'])
         ->and($listing->refresh()->connected_product_id)->toBe($product->id);
 });
 
@@ -312,41 +314,41 @@ test('two suppliers on one product keep separate offers and the second never ove
     $product = websiteTestProduct();
     $reviewer = supplierListingTestReviewer();
 
-    $approve = function (Supplier $supplier, int $supplierRate, int $platformRate) use ($product, $reviewer) {
-        $listing = supplierTestListing($supplier, [['supplier_rate_minor' => $supplierRate]]);
+    $approve = function (Supplier $supplier, string $supplierRate, string $platformRate) use ($product, $reviewer) {
+        $listing = supplierTestListing($supplier, [['supplier_rate' => Money::fromDecimal($supplierRate, Currency::BDT)]]);
 
         test()->actingAs($reviewer)->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approve.', 'connect_product_id' => $product->public_id,
-            'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate_minor' => number_format($platformRate / 100, 2, '.', '')]],
+            'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate_minor' => $platformRate]],
         ])->assertSessionHasNoErrors();
 
         return SupplierOffer::query()->where('supplier_id', $supplier->id)->firstOrFail();
     };
 
-    $first = $approve($supplierA = Supplier::factory()->create(), 100000, 130000);
-    $second = $approve(Supplier::factory()->create(), 90000, 125000);
+    $first = $approve($supplierA = Supplier::factory()->create(), '1000.00', '1300.00');
+    $second = $approve(Supplier::factory()->create(), '900.00', '1250.00');
 
     expect(SupplierOffer::query()->where('product_id', $product->id)->count())->toBe(2)
-        ->and($first->refresh()->supplier_rate_minor->minorUnits)->toBe(100000)
-        ->and($first->platform_rate_minor->minorUnits)->toBe(130000)
+        ->and($first->refresh()->supplier_rate->toDecimal())->toBe('1000.00')
+        ->and($first->platform_rate->toDecimal())->toBe('1300.00')
         ->and($first->supplier_id)->toBe($supplierA->id)
-        ->and($second->supplier_rate_minor->minorUnits)->toBe(90000);
+        ->and($second->supplier_rate->toDecimal())->toBe('900.00');
 });
 
 test('only one offer per product may be preferred, and the preferred one sets the catalogue price', function () {
     $product = websiteTestProduct();
-    $a = supplierTestOffer(product: $product, supplierRate: 100000, platformRate: 130000);
-    $b = supplierTestOffer(product: $product, supplierRate: 90000, platformRate: 125000);
+    $a = supplierTestOffer(product: $product, supplierRate: '1000.00', platformRate: '1300.00');
+    $b = supplierTestOffer(product: $product, supplierRate: '900.00', platformRate: '1250.00');
     $staff = testPlatformStaff(PlatformRole::SupplierManager);
 
     $this->actingAs($staff)->post(route('admin.supplier-offers.preferred.store', $a))->assertSessionHasNoErrors();
     expect($a->refresh()->is_preferred)->toBeTrue()
-        ->and($product->refresh()->wholesale_price_minor->minorUnits)->toBe(130000);
+        ->and($product->refresh()->wholesale_price->toDecimal())->toBe('1300.00');
 
     $this->post(route('admin.supplier-offers.preferred.store', $b))->assertSessionHasNoErrors();
     expect($a->refresh()->is_preferred)->toBeFalse()
         ->and($b->refresh()->is_preferred)->toBeTrue()
-        ->and($product->refresh()->wholesale_price_minor->minorUnits)->toBe(125000)
+        ->and($product->refresh()->wholesale_price->toDecimal())->toBe('1250.00')
         ->and(AuditLog::query()->where('action', 'supplier_offer.preferred_selected')->count())->toBe(2);
 
     // The database backs it up, whatever the application does.

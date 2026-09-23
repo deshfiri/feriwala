@@ -24,7 +24,7 @@ class SupplierWithdrawalStatusChanged extends SupplierLifecycleNotification
             'withdrawal_reference' => $this->withdrawal->reference,
             'withdrawal_id' => $this->withdrawal->public_id,
             'status' => $this->withdrawal->status->value,
-            'amount' => $this->withdrawal->amount_minor->jsonSerialize(),
+            'amount' => $this->withdrawal->amount->jsonSerialize(),
         ];
     }
 }

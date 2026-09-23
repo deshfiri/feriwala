@@ -102,7 +102,7 @@ beforeEach(function () {
 
     $this->supplier = Supplier::factory()->create(['status' => SupplierStatus::Approved]);
     $this->product = websiteTestProduct();
-    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: 100000, platformRate: 130000, preferred: true);
+    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: '1000.00', platformRate: '1300.00', preferred: true);
     supplierTestOfferPriceVersion($this->offer);
 
     // Dropshipping's own selling price, independent of the Supplier's or
@@ -207,9 +207,9 @@ describe('allocation', function () {
         expect($item->supplier_id)->toBe($this->supplier->id)
             ->and($item->supplier_offer_id)->toBe($this->offer->id)
             ->and($item->supplier_allocated_quantity)->toBe(2)
-            ->and($item->supplier_rate_minor->minorUnits)->toBe(100000)
-            ->and($item->platform_rate_minor->minorUnits)->toBe(130000)
-            ->and($item->platform_margin_minor->minorUnits)->toBe(30000)
+            ->and($item->supplier_rate->toDecimal())->toBe('1000.00')
+            ->and($item->platform_rate->toDecimal())->toBe('1300.00')
+            ->and($item->platform_margin->toDecimal())->toBe('300.00')
             // Its own reservation, never a central stock_items row.
             ->and($item->stockReservation->isSupplierSourced())->toBeTrue()
             ->and(StockItem::query()->where('product_id', $this->product->id)->exists())->toBeFalse();
@@ -223,21 +223,21 @@ describe('allocation', function () {
         $flat = json_encode(app(WebsiteOrderPayload::class)->for($order));
         expect($flat)->not->toContain('supplier')
             ->not->toContain($this->supplier->business_name)
-            // Colon-prefixed so the legitimate 130000 selling price — which
-            // contains "30000" as a bare substring — is not a false positive.
-            ->not->toContain(':100000')
-            ->not->toContain(':30000');
+            // Colon-prefixed so the legitimate 1300.00 selling price — which
+            // contains "300.00" as a bare substring — is not a false positive.
+            ->not->toContain(':1000.00')
+            ->not->toContain(':300.00');
 
         expect(SupplierPayable::query()->count())->toBe(1);
         $payable = SupplierPayable::query()->sole();
         expect($payable->supplier_id)->toBe($this->supplier->id)
             ->and($payable->quantity)->toBe(2)
-            ->and($payable->gross_amount_minor->minorUnits)->toBe(200000)
+            ->and($payable->gross_amount->toDecimal())->toBe('2000.00')
             ->and($payable->status)->toBe(PayableStatus::Pending);
     });
 
     it('ignores a non-preferred offer from another Supplier, however much stock it holds', function () {
-        $richer = supplierTestOffer(product: $this->product, supplierRate: 80000, platformRate: 90000);
+        $richer = supplierTestOffer(product: $this->product, supplierRate: '800.00', platformRate: '900.00');
         $richer->stock()->update(['quantity' => 500]);
 
         $order = supplierOrderPlace($this->selection, 2);
@@ -269,24 +269,24 @@ describe('allocation', function () {
 
     it('keeps an order line\'s Supplier Rate exactly as allocated, even after the rate later changes', function () {
         $order = supplierOrderPlace($this->selection, 1);
-        $originalRate = $order->items()->sole()->supplier_rate_minor->minorUnits;
+        $originalRate = $order->items()->sole()->supplier_rate->toDecimal();
 
         app(SetSupplierOfferRates::class)->handle(
             $this->offer,
             User::factory()->create()->id,
-            Money::of(150000, Currency::BDT),
-            Money::of(180000, Currency::BDT),
+            Money::fromDecimal('1500.00', Currency::BDT),
+            Money::fromDecimal('1800.00', Currency::BDT),
             'Rate went up.',
         );
 
-        expect($order->items()->sole()->supplier_rate_minor->minorUnits)->toBe($originalRate)
-            ->and($originalRate)->toBe(100000);
+        expect($order->items()->sole()->supplier_rate->toDecimal())->toBe($originalRate)
+            ->and($originalRate)->toBe('1000.00');
     });
 
     it('allocates two lines in one order to two different Suppliers, never mixing their stock', function () {
         $secondSupplier = Supplier::factory()->create(['status' => SupplierStatus::Approved]);
         $secondProduct = websiteTestProduct();
-        $secondOffer = supplierTestOffer($secondSupplier, $secondProduct, supplierRate: 50000, platformRate: 70000, preferred: true);
+        $secondOffer = supplierTestOffer($secondSupplier, $secondProduct, supplierRate: '500.00', platformRate: '700.00', preferred: true);
         supplierTestOfferPriceVersion($secondOffer);
         $secondSelection = WebsiteProduct::create([
             'website_id' => $this->website->id,
@@ -523,7 +523,7 @@ describe('payable lifecycle', function () {
         expect(SupplierPayableReversal::query()->count())->toBe(1)
             ->and($payable->refresh()->status)->toBe(PayableStatus::PartiallyReversed)
             ->and($payable->reversedQuantity())->toBe(1)
-            ->and($payable->netAmount()->minorUnits)->toBe(200000)
+            ->and($payable->netAmount()->toDecimal())->toBe('2000.00')
             // The Supplier's own stock got the unit back, not central stock:
             // 10 minus the 3 the order allocated, plus this one restock.
             ->and(SupplierOfferStock::query()->sole()->quantity)->toBe(8);
@@ -533,9 +533,9 @@ describe('payable lifecycle', function () {
 
         expect($payable->refresh()->status)->toBe(PayableStatus::Reversed)
             ->and($payable->reversedQuantity())->toBe(3)
-            ->and($payable->netAmount()->minorUnits)->toBe(0)
+            ->and($payable->netAmount()->toDecimal())->toBe('0.00')
             ->and((int) SupplierPayableReversal::query()->sum('quantity'))->toBe(3)
-            ->and((int) SupplierPayableReversal::query()->sum('amount_minor'))->toBe($payable->gross_amount_minor->minorUnits);
+            ->and((string) (SupplierPayableReversal::query()->sum('amount') ?: '0'))->toBe($payable->gross_amount->toDecimal());
 
         // Every sold unit has already come back; a further return is refused,
         // which is what keeps a reversal from ever exceeding the payable.

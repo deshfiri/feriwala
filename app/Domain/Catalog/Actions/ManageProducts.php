@@ -208,9 +208,9 @@ class ManageProducts
                 : Brand::query()->where('public_id', $attributes['brand_id'])->value('id');
         }
 
-        foreach (['base_cost_minor', 'wholesale_price_minor'] as $figure) {
-            if (array_key_exists($figure, $attributes)) {
-                $fields[$figure] = Money::of((int) $attributes[$figure], Currency::base());
+        foreach (['base_cost_minor' => 'base_cost', 'wholesale_price_minor' => 'wholesale_price'] as $input => $figure) {
+            if (array_key_exists($input, $attributes)) {
+                $fields[$figure] = Money::fromDecimal((string) $attributes[$input], Currency::base());
             }
         }
 
@@ -232,11 +232,15 @@ class ManageProducts
 
         // Selling-price guidance for partners (§15.1). Blank is no bound, and
         // never zero — zero is a real price.
-        foreach (['suggested_selling_price_minor', 'minimum_selling_price_minor', 'maximum_selling_price_minor'] as $bound) {
-            if (array_key_exists($bound, $attributes)) {
-                $fields[$bound] = blank($attributes[$bound])
+        foreach ([
+            'suggested_selling_price_minor' => 'suggested_selling_price',
+            'minimum_selling_price_minor' => 'minimum_selling_price',
+            'maximum_selling_price_minor' => 'maximum_selling_price',
+        ] as $input => $bound) {
+            if (array_key_exists($input, $attributes)) {
+                $fields[$bound] = blank($attributes[$input])
                     ? null
-                    : Money::of((int) $attributes[$bound], Currency::base());
+                    : Money::fromDecimal((string) $attributes[$input], Currency::base());
             }
         }
 
@@ -255,14 +259,14 @@ class ManageProducts
             'barcode' => $product->barcode,
             'category_id' => $product->category_id,
             'brand_id' => $product->brand_id,
-            'base_cost_minor' => $product->base_cost_minor->minorUnits,
-            'wholesale_price_minor' => $product->wholesale_price_minor->minorUnits,
+            'base_cost' => $product->base_cost->toDecimal(),
+            'wholesale_price' => $product->wholesale_price->toDecimal(),
             'currency_code' => $product->currency_code,
             'min_order_quantity' => $product->min_order_quantity,
             'max_order_quantity' => $product->max_order_quantity,
-            'suggested_selling_price_minor' => $product->suggested_selling_price_minor?->minorUnits,
-            'minimum_selling_price_minor' => $product->minimum_selling_price_minor?->minorUnits,
-            'maximum_selling_price_minor' => $product->maximum_selling_price_minor?->minorUnits,
+            'suggested_selling_price' => $product->suggested_selling_price?->toDecimal(),
+            'minimum_selling_price' => $product->minimum_selling_price?->toDecimal(),
+            'maximum_selling_price' => $product->maximum_selling_price?->toDecimal(),
             'status' => $product->status->value,
         ];
     }

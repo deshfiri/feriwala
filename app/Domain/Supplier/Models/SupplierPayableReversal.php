@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $supplier_payable_id
  * @property int $order_return_item_id
  * @property int $quantity
- * @property Money $amount_minor
+ * @property Money $amount
  * @property string $currency_code
  * @property string $reason
  * @property string $idempotency_key
@@ -46,7 +46,7 @@ class SupplierPayableReversal extends Model
     {
         return [
             'quantity' => 'integer',
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
         ];
     }

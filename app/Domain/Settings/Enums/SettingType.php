@@ -37,7 +37,7 @@ enum SettingType: string
             // Kept as a string so a rate never becomes a float before it is used
             // in a money calculation.
             self::Decimal => $value,
-            self::Money => Money::of((int) $value),
+            self::Money => Money::fromDecimal($value),
             self::Json => json_decode($value, true) ?? [],
         };
     }
@@ -55,9 +55,9 @@ enum SettingType: string
             self::String, self::Decimal => (string) $value,
             self::Integer => (string) (int) $value,
             self::Boolean => $value ? '1' : '0',
-            self::Money => (string) ($value instanceof Money
-                ? $value->minorUnits
-                : (int) $value),
+            self::Money => $value instanceof Money
+                ? $value->toDecimal()
+                : (string) $value,
             self::Json => (string) json_encode($value),
         };
     }

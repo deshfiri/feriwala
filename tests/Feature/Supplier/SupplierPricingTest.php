@@ -26,9 +26,9 @@ use Inertia\Testing\AssertableInertia as Assert;
  * shows up by value, not just by field name.
  */
 
-const SUPPLIER_LEAK_SUPPLIER_RATE = 91234;
-const SUPPLIER_LEAK_PLATFORM_RATE = 137777;
-const SUPPLIER_LEAK_MARGIN = 46543;
+const SUPPLIER_LEAK_SUPPLIER_RATE = '912.34';
+const SUPPLIER_LEAK_PLATFORM_RATE = '1377.77';
+const SUPPLIER_LEAK_MARGIN = '465.43';
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -75,7 +75,7 @@ test('the owning supplier sees its own rate and never the platform rate or margi
     $response = $this->get(route('supplier.offers.index'))->assertOk();
 
     $response->assertInertia(fn (Assert $page) => $page->component('supplier/offers/index')
-        ->where('offers.data.0.supplier_rate.minor_units', SUPPLIER_LEAK_SUPPLIER_RATE));
+        ->where('offers.data.0.supplier_rate.amount', SUPPLIER_LEAK_SUPPLIER_RATE));
 
     expect(supplierLeakTestPage($response))
         ->not->toContain((string) SUPPLIER_LEAK_PLATFORM_RATE)
@@ -174,9 +174,9 @@ test('notifications about an offer carry no rate, margin or internal reason', fu
 test('staff with supplier_pricing.view see the supplier rate and margin', function () {
     $this->actingAs($this->manager)->get(route('admin.supplier-offers.show', $this->offer))
         ->assertInertia(fn (Assert $page) => $page->component('admin/supplier-offers/show')
-            ->where('offer.supplier_rate.minor_units', SUPPLIER_LEAK_SUPPLIER_RATE)
-            ->where('offer.platform_rate.minor_units', SUPPLIER_LEAK_PLATFORM_RATE)
-            ->where('offer.platform_margin.minor_units', SUPPLIER_LEAK_MARGIN));
+            ->where('offer.supplier_rate.amount', SUPPLIER_LEAK_SUPPLIER_RATE)
+            ->where('offer.platform_rate.amount', SUPPLIER_LEAK_PLATFORM_RATE)
+            ->where('offer.platform_margin.amount', SUPPLIER_LEAK_MARGIN));
 });
 
 test('pricing permissions are separate and never granted to catalogue roles by default', function (PlatformRole $role) {
@@ -200,7 +200,7 @@ test('view without edit can read rates but not change them', function () {
     $this->post(route('admin.supplier-offers.suspension.store', $this->offer))->assertForbidden();
     $this->post(route('admin.supplier-offers.preferred.store', $this->offer))->assertForbidden();
 
-    expect($this->offer->refresh()->platform_rate_minor->minorUnits)->toBe(SUPPLIER_LEAK_PLATFORM_RATE);
+    expect($this->offer->refresh()->platform_rate->toDecimal())->toBe(SUPPLIER_LEAK_PLATFORM_RATE);
 });
 
 test('a platform rate below the supplier rate is rejected', function () {
@@ -208,7 +208,7 @@ test('a platform rate below the supplier rate is rejected', function () {
         'supplier_rate' => '1000.00', 'platform_rate' => '999.99', 'reason' => 'Try.',
     ])->assertSessionHasErrors('platform_rate');
 
-    expect($this->offer->refresh()->platform_rate_minor->minorUnits)->toBe(SUPPLIER_LEAK_PLATFORM_RATE)
+    expect($this->offer->refresh()->platform_rate->toDecimal())->toBe(SUPPLIER_LEAK_PLATFORM_RATE)
         ->and($this->offer->priceHistory()->count())->toBe(0);
 });
 
@@ -217,7 +217,7 @@ test('mismatched currencies, negative rates and a missing reason are rejected', 
         ->post(route('admin.supplier-offers.rates.store', $this->offer), $payload)
         ->assertSessionHasErrors($error);
 
-    expect($this->offer->refresh()->supplier_rate_minor->minorUnits)->toBe(SUPPLIER_LEAK_SUPPLIER_RATE);
+    expect($this->offer->refresh()->supplier_rate->toDecimal())->toBe(SUPPLIER_LEAK_SUPPLIER_RATE);
 })->with([
     'currency mismatch' => [['supplier_rate' => '10.00', 'platform_rate' => '20.00', 'supplier_currency_code' => 'BDT', 'platform_currency_code' => 'USD', 'reason' => 'x'], 'platform_rate'],
     'negative supplier rate' => [['supplier_rate' => -1, 'platform_rate' => '20.00', 'reason' => 'x'], 'supplier_rate'],
@@ -242,9 +242,9 @@ test('every rate change is a new effective-dated version and past versions are n
 
     expect($history)->toHaveCount(2)
         ->and($history->pluck('reason')->all())->toBe(['Second change.', 'First change.'])
-        ->and($history->last()->platform_rate_minor->minorUnits)->toBe(125000)
+        ->and($history->last()->platform_rate->toDecimal())->toBe('1250.00')
         ->and($history->first()->effective_from->greaterThan($history->last()->effective_from))->toBeTrue()
-        ->and($this->offer->refresh()->platform_rate_minor->minorUnits)->toBe(120000)
+        ->and($this->offer->refresh()->platform_rate->toDecimal())->toBe('1200.00')
         ->and(AuditLog::query()->where('action', 'supplier_offer.rates_changed')->count())->toBe(2);
 
     $first = $history->last();
@@ -256,9 +256,9 @@ test('every rate change is a new effective-dated version and past versions are n
 });
 
 test('the database itself refuses a platform rate below the supplier rate', function () {
-    expect(fn () => SupplierOffer::query()->whereKey($this->offer->id)->update(['platform_rate_minor' => 1]))
+    expect(fn () => SupplierOffer::query()->whereKey($this->offer->id)->update(['platform_rate' => '0.01']))
         ->toThrow(QueryException::class);
-    expect(fn () => SupplierOffer::query()->whereKey($this->offer->id)->update(['supplier_rate_minor' => -1]))
+    expect(fn () => SupplierOffer::query()->whereKey($this->offer->id)->update(['supplier_rate' => '-0.01']))
         ->toThrow(QueryException::class);
 });
 
@@ -270,19 +270,19 @@ test('a rate change audit never records a secret and does record the reason and 
     $audit = AuditLog::query()->where('action', 'supplier_offer.rates_changed')->firstOrFail();
 
     expect($audit->reason)->toBe('Renegotiated for volume.')
-        ->and($audit->before['platform_rate_minor'])->toBe(SUPPLIER_LEAK_PLATFORM_RATE)
-        ->and($audit->after['platform_rate_minor'])->toBe(125000)
+        ->and($audit->before['platform_rate'])->toBe(SUPPLIER_LEAK_PLATFORM_RATE)
+        ->and($audit->after['platform_rate'])->toBe('1250.00')
         ->and($audit->actor_id)->toBe($this->manager->id);
 });
 
 test('suspending one supplier\'s offer leaves another supplier\'s offer on the same product untouched', function () {
-    $other = supplierTestOffer(product: $this->product, supplierRate: 95000, platformRate: 140000);
+    $other = supplierTestOffer(product: $this->product, supplierRate: '950.00', platformRate: '1400.00');
 
     $this->actingAs($this->manager)->post(route('admin.supplier-offers.suspension.store', $this->offer), ['reason' => 'Late deliveries.'])
         ->assertSessionHasNoErrors();
 
     expect($this->offer->refresh()->isActive())->toBeFalse()
         ->and($other->refresh()->isActive())->toBeTrue()
-        ->and($other->supplier_rate_minor->minorUnits)->toBe(95000)
+        ->and($other->supplier_rate->toDecimal())->toBe('950.00')
         ->and(AuditLog::query()->where('action', 'supplier_offer.suspended')->count())->toBe(1);
 });

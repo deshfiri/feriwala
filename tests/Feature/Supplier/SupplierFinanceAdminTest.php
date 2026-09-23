@@ -64,7 +64,7 @@ beforeEach(function () {
 
     $this->supplier = Supplier::factory()->create();
     $this->product = websiteTestProduct();
-    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: 100000, platformRate: 130000, preferred: true);
+    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: '1000.00', platformRate: '1300.00', preferred: true);
     supplierTestOfferPriceVersion($this->offer);
 
     $this->selection = WebsiteProduct::create([
@@ -107,7 +107,7 @@ describe('payable settlement', function () {
         expect($payable->fresh()->status)->toBe(PayableStatus::Settled);
 
         $wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
-        expect($wallet->total_minor->minorUnits)->toBe(200000);
+        expect($wallet->total->toDecimal())->toBe('2000.00');
     });
 
     it('refuses settlement to a role holding only supplier_payable.view', function () {
@@ -131,7 +131,7 @@ describe('payable settlement', function () {
         $good = supplierWalletTestEligiblePayable(1);
 
         $secondSupplier = Supplier::factory()->create();
-        $secondOffer = supplierTestOffer($secondSupplier, supplierRate: 50000, platformRate: 70000, preferred: true);
+        $secondOffer = supplierTestOffer($secondSupplier, supplierRate: '500.00', platformRate: '700.00', preferred: true);
         supplierTestOfferPriceVersion($secondOffer);
         $this->selection = WebsiteProduct::create([
             'website_id' => $this->website->id,
@@ -196,7 +196,7 @@ describe('withdrawal decisions', function () {
             $this->supplier, SupplierPayoutMethodType::Bkash, 'bKash', ['account_name' => 'Test', 'account_number' => '01711112222'],
         );
         $this->withdrawal = app(RequestSupplierWithdrawal::class)->handle(
-            $this->supplier, $method, Money::of(100000, Currency::BDT), 'admin-test:withdrawal',
+            $this->supplier, $method, Money::fromDecimal('1000.00', Currency::BDT), 'admin-test:withdrawal',
         );
     });
 
@@ -248,12 +248,12 @@ describe('withdrawal decisions', function () {
             ->and($fresh->external_reference)->toBe('BKASH-TXN-1');
 
         $wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
-        expect($wallet->reserved_minor->minorUnits)->toBe(0);
+        expect($wallet->reserved->toDecimal())->toBe('0.00');
     });
 
     it('releases the reservation exactly once on rejection, with a reason', function () {
         $wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
-        expect($wallet->reserved_minor->minorUnits)->toBe(100000);
+        expect($wallet->reserved->toDecimal())->toBe('1000.00');
 
         $this->actingAs($this->manager)
             ->post(route('admin.supplier-withdrawals.reject', $this->withdrawal->public_id), [
@@ -262,7 +262,7 @@ describe('withdrawal decisions', function () {
             ->assertRedirect();
 
         expect($this->withdrawal->fresh()->status)->toBe(SupplierWithdrawalStatus::Rejected)
-            ->and($wallet->fresh()->reserved_minor->minorUnits)->toBe(0);
+            ->and($wallet->fresh()->reserved->toDecimal())->toBe('0.00');
     });
 });
 

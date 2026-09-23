@@ -35,7 +35,7 @@ class AccrueSupplierPayable
 
     public function handle(OrderItem $item): SupplierPayable
     {
-        $rate = $item->supplier_rate_minor;
+        $rate = $item->supplier_rate;
         $quantity = $item->supplier_allocated_quantity;
 
         if (! $item->isSupplierBacked() || $rate === null || $quantity === null) {
@@ -60,8 +60,8 @@ class AccrueSupplierPayable
                     'supplier_offer_id' => $item->supplier_offer_id,
                     'supplier_offer_price_change_id' => $item->supplier_offer_price_change_id,
                     'quantity' => $quantity,
-                    'supplier_rate_minor' => $rate->minorUnits,
-                    'gross_amount_minor' => $gross->minorUnits,
+                    'supplier_rate' => $rate,
+                    'gross_amount' => $gross,
                     'currency_code' => $item->supplier_currency_code,
                     'status' => PayableStatus::Pending->value,
                     'triggering_event' => 'order_placed',
@@ -82,7 +82,7 @@ class AccrueSupplierPayable
                     after: [
                         'order_item' => $item->public_id,
                         'quantity' => $payable->quantity,
-                        'gross_amount_minor' => $gross->minorUnits,
+                        'gross_amount' => $gross->toDecimal(),
                         'currency' => $payable->currency_code,
                     ],
                     accountId: $item->supplier_id,

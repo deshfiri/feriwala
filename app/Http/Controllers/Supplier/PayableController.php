@@ -53,7 +53,7 @@ class PayableController extends Controller
                 ...$this->row($model),
                 'reversals' => $model->reversals->map(fn ($reversal) => [
                     'quantity' => $reversal->quantity,
-                    'amount' => $reversal->amount_minor->jsonSerialize(),
+                    'amount' => $reversal->amount->jsonSerialize(),
                     'reason' => $reversal->reason,
                     // Set only once the reversal actually clawed money back
                     // from the wallet — null for a reversal of a payable
@@ -83,8 +83,8 @@ class PayableController extends Controller
             'product_name' => $payable->orderItem->product_name,
             'variant_label' => $payable->orderItem->variant_label,
             'quantity' => $payable->quantity,
-            'supplier_rate' => $payable->supplier_rate_minor->jsonSerialize(),
-            'gross_amount' => $payable->gross_amount_minor->jsonSerialize(),
+            'supplier_rate' => $payable->supplier_rate->jsonSerialize(),
+            'gross_amount' => $payable->gross_amount->jsonSerialize(),
             'net_amount' => $payable->netAmount()->jsonSerialize(),
             'status' => $payable->status->value,
             'status_label' => $payable->status->label(),

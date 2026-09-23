@@ -135,7 +135,7 @@ function supplierWalletRacePayoutMethod(): SupplierPayoutMethod
 it('settles a payable exactly once when two workers race to settle it', function () {
     $businessAccount = BusinessAccount::factory()->create();
 
-    $offer = supplierTestOffer($this->supplier, supplierRate: 100000, platformRate: 130000, preferred: true);
+    $offer = supplierTestOffer($this->supplier, supplierRate: '1000.00', platformRate: '1300.00', preferred: true);
     $priceChange = supplierTestOfferPriceVersion($offer);
 
     $order = Order::create([
@@ -156,15 +156,15 @@ it('settles a payable exactly once when two workers race to settle it', function
         'product_name' => 'Race fixture product',
         'quantity' => 1,
         'currency_code' => 'BDT',
-        'unit_price_minor' => $priceChange->platform_rate_minor,
-        'line_subtotal_minor' => $priceChange->platform_rate_minor,
-        'line_total_minor' => $priceChange->platform_rate_minor,
+        'unit_price_minor' => $priceChange->platform_rate,
+        'line_subtotal_minor' => $priceChange->platform_rate,
+        'line_total_minor' => $priceChange->platform_rate,
         'supplier_id' => $offer->supplier_id,
         'supplier_offer_id' => $offer->id,
         'supplier_offer_price_change_id' => $priceChange->id,
-        'supplier_rate_minor' => $priceChange->supplier_rate_minor,
-        'platform_rate_minor' => $priceChange->platform_rate_minor,
-        'platform_margin_minor' => $priceChange->platform_rate_minor->minus($priceChange->supplier_rate_minor),
+        'supplier_rate' => $priceChange->supplier_rate,
+        'platform_rate' => $priceChange->platform_rate,
+        'platform_margin' => $priceChange->platform_rate->minus($priceChange->supplier_rate),
         'supplier_currency_code' => 'BDT',
         'supplier_allocated_quantity' => 1,
         'supplier_allocated_at' => now(),
@@ -177,8 +177,8 @@ it('settles a payable exactly once when two workers race to settle it', function
         'supplier_offer_id' => $offer->id,
         'supplier_offer_price_change_id' => $priceChange->id,
         'quantity' => 1,
-        'supplier_rate_minor' => $priceChange->supplier_rate_minor,
-        'gross_amount_minor' => $priceChange->supplier_rate_minor,
+        'supplier_rate' => $priceChange->supplier_rate,
+        'gross_amount' => $priceChange->supplier_rate,
         'currency_code' => 'BDT',
         'status' => PayableStatus::Eligible,
         'triggering_event' => 'order_placed',
@@ -196,7 +196,7 @@ it('settles a payable exactly once when two workers race to settle it', function
 
     $wallet = supplierWalletRaceWallet();
 
-    expect($wallet->total_minor->minorUnits)->toBe(100000)
+    expect($wallet->total->toDecimal())->toBe('1000.00')
         ->and(SupplierLedgerEntry::query()->where('supplier_wallet_id', $wallet->id)->count())->toBe(1)
         ->and($payable->fresh()->settled_at)->not->toBeNull();
 })->group('slow');
@@ -204,7 +204,7 @@ it('settles a payable exactly once when two workers race to settle it', function
 it('reserves only what is available when two withdrawals compete for the same balance', function () {
     app(SupplierWalletService::class)->credit(
         supplierWalletRaceWallet(),
-        Money::of(100000, Currency::BDT),
+        Money::fromDecimal('1000.00', Currency::BDT),
         new SupplierPostingContext(source: 'test', description: 'Opening'),
     );
 
@@ -215,23 +215,23 @@ it('reserves only what is available when two withdrawals compete for the same ba
         app(RequestSupplierWithdrawal::class)->handle(
             $supplier->fresh(),
             $method->fresh(),
-            Money::of(70000, Currency::BDT),
+            Money::fromDecimal('700.00', Currency::BDT),
             'race:withdrawal:'.$worker,
         );
     });
 
     $wallet = supplierWalletRaceWallet();
 
-    // Only one of the two 70000 requests could fit inside 100000 available.
-    expect($wallet->reserved_minor->minorUnits)->toBe(70000)
-        ->and($wallet->availableBalance()->minorUnits)->toBe(30000)
+    // Only one of the two 700.00 requests could fit inside 1000.00 available.
+    expect($wallet->reserved->toDecimal())->toBe('700.00')
+        ->and($wallet->availableBalance()->toDecimal())->toBe('300.00')
         ->and(SupplierWithdrawal::query()->where('supplier_wallet_id', $wallet->id)->count())->toBe(1);
 });
 
 it('never double-decides a withdrawal when approval races rejection', function () {
     app(SupplierWalletService::class)->credit(
         supplierWalletRaceWallet(),
-        Money::of(100000, Currency::BDT),
+        Money::fromDecimal('1000.00', Currency::BDT),
         new SupplierPostingContext(source: 'test', description: 'Opening'),
     );
 
@@ -240,7 +240,7 @@ it('never double-decides a withdrawal when approval races rejection', function (
     $withdrawal = app(RequestSupplierWithdrawal::class)->handle(
         $this->supplier->fresh(),
         $method,
-        Money::of(50000, Currency::BDT),
+        Money::fromDecimal('500.00', Currency::BDT),
         'race:withdrawal:decision',
     );
 
@@ -264,9 +264,9 @@ it('never double-decides a withdrawal when approval races rejection', function (
     expect(in_array($fresh->status, [SupplierWithdrawalStatus::Approved, SupplierWithdrawalStatus::Rejected], true))->toBeTrue();
 
     if ($fresh->status === SupplierWithdrawalStatus::Approved) {
-        expect($wallet->reserved_minor->minorUnits)->toBe(50000);
+        expect($wallet->reserved->toDecimal())->toBe('500.00');
     } else {
-        expect($wallet->reserved_minor->minorUnits)->toBe(0);
+        expect($wallet->reserved->toDecimal())->toBe('0.00');
     }
 
     // Requested -> UnderReview -> (Approved | Rejected): three rows, never four.
@@ -276,7 +276,7 @@ it('never double-decides a withdrawal when approval races rejection', function (
 it('never lets a payable reversal and a withdrawal reservation together overdraw the wallet', function () {
     app(SupplierWalletService::class)->credit(
         supplierWalletRaceWallet(),
-        Money::of(100000, Currency::BDT),
+        Money::fromDecimal('1000.00', Currency::BDT),
         new SupplierPostingContext(source: 'test', description: 'Opening'),
     );
 
@@ -290,13 +290,13 @@ it('never lets a payable reversal and a withdrawal reservation together overdraw
             // to prove it serialises against a competing reservation.
             $wallets->debitForReversal(
                 supplierWalletRaceWallet(),
-                Money::of(70000, Currency::BDT),
+                Money::fromDecimal('700.00', Currency::BDT),
                 new SupplierPostingContext(source: 'test', description: 'Reversal', reason: 'Race fixture return.'),
             );
         } else {
             $wallets->reserve(
                 supplierWalletRaceWallet(),
-                Money::of(70000, Currency::BDT),
+                Money::fromDecimal('700.00', Currency::BDT),
                 new SupplierPostingContext(source: 'test', description: 'Withdrawal reservation'),
             );
         }
@@ -304,16 +304,16 @@ it('never lets a payable reversal and a withdrawal reservation together overdraw
 
     $wallet = supplierWalletRaceWallet();
 
-    // Whichever ran first took the full 70000 from the 100000 available;
-    // the other found only 30000 left. A reversal always "succeeds" in the
+    // Whichever ran first took the full 700.00 from the 1000.00 available;
+    // the other found only 300.00 left. A reversal always "succeeds" in the
     // sense of recording *something* (debit, or recovery, or both), so what
     // proves the lock held is that the two effects never overlap: the
     // wallet's own invariants (reserved <= total, everything non-negative)
     // are enforced by CHECK constraints that a race without the lock would
-    // have tripped by now, and the ledger explains every minor unit moved.
-    expect($wallet->reserved_minor->minorUnits)->toBeLessThanOrEqual($wallet->total_minor->minorUnits)
-        ->and($wallet->total_minor->minorUnits)->toBeGreaterThanOrEqual(0)
-        ->and($wallet->recovery_minor->minorUnits)->toBeGreaterThanOrEqual(0);
+    // have tripped by now, and the ledger explains every taka moved.
+    expect($wallet->reserved->toDecimal())->toBeLessThanOrEqual($wallet->total->toDecimal())
+        ->and((float) $wallet->total->toDecimal())->toBeGreaterThanOrEqual(0)
+        ->and((float) $wallet->recovery->toDecimal())->toBeGreaterThanOrEqual(0);
 
     $entries = SupplierLedgerEntry::query()->where('supplier_wallet_id', $wallet->id)->orderBy('id')->get();
 
@@ -334,8 +334,8 @@ it('never lets a payable reversal and a withdrawal reservation together overdraw
         }
 
         $previous = $entries[$index - 1];
-        expect($entry->balance_before_minor->minorUnits)->toBe($previous->balance_after_minor->minorUnits)
-            ->and($entry->reserved_before_minor->minorUnits)->toBe($previous->reserved_after_minor->minorUnits)
-            ->and($entry->recovery_before_minor->minorUnits)->toBe($previous->recovery_after_minor->minorUnits);
+        expect($entry->balance_before->toDecimal())->toBe($previous->balance_after->toDecimal())
+            ->and($entry->reserved_before->toDecimal())->toBe($previous->reserved_after->toDecimal())
+            ->and($entry->recovery_before->toDecimal())->toBe($previous->recovery_after->toDecimal());
     }
 });

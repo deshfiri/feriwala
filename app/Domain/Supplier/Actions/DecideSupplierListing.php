@@ -52,7 +52,7 @@ class DecideSupplierListing
 
     /**
      * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string}
-     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate_minor?: int, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string}
+     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate_minor?: Money, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string}
      */
     public function handle(
         SupplierProductListing $listing,
@@ -212,8 +212,10 @@ class DecideSupplierListing
         }
 
         $currency = Currency::from($item->currency_code);
-        $supplierRate = $item->supplier_rate_minor;
-        $platformRate = Money::of((int) $itemDecision['platform_rate_minor'], $currency);
+        $supplierRate = $item->supplier_rate;
+        $platformRate = $itemDecision['platform_rate_minor'] instanceof Money
+            ? $itemDecision['platform_rate_minor']
+            : Money::fromDecimal((string) $itemDecision['platform_rate_minor'], $currency);
 
         if ($platformRate->lessThan($supplierRate)) {
             throw new InvalidArgumentException('The Platform Rate cannot be lower than the Supplier Rate.');
@@ -227,16 +229,16 @@ class DecideSupplierListing
             'status' => OfferStatus::Active,
             'wholesale_enabled' => (bool) ($itemDecision['wholesale_enabled'] ?? false),
             'dropshipping_enabled' => (bool) ($itemDecision['dropshipping_enabled'] ?? false),
-            'supplier_rate_minor' => $supplierRate->minorUnits,
-            'platform_rate_minor' => $platformRate->minorUnits,
+            'supplier_rate' => $supplierRate,
+            'platform_rate' => $platformRate,
             'currency_code' => $currency->value,
             'activated_by' => $reviewer->id,
             'activated_at' => now(),
         ]);
 
         $offer->priceHistory()->create([
-            'supplier_rate_minor' => $supplierRate->minorUnits,
-            'platform_rate_minor' => $platformRate->minorUnits,
+            'supplier_rate' => $supplierRate,
+            'platform_rate' => $platformRate,
             'currency_code' => $currency->value,
             'effective_from' => now(),
             'changed_by' => $reviewer->id,

@@ -88,7 +88,7 @@ class SettleSupplierPayable
                 auditableType: SupplierPayable::class,
                 auditableId: $locked->id,
                 after: [
-                    'amount_minor' => $netAmount->minorUnits,
+                    'amount' => $netAmount->toDecimal(),
                     'settlement_reference' => $entry->reference,
                 ],
                 accountId: $locked->supplier_id,

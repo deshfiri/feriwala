@@ -19,8 +19,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property int $supplier_offer_id
- * @property Money $supplier_rate_minor
- * @property Money $platform_rate_minor
+ * @property Money $supplier_rate
+ * @property Money $platform_rate
  * @property string $currency_code
  * @property CarbonImmutable $effective_from
  * @property int|null $changed_by
@@ -41,8 +41,8 @@ class SupplierOfferPriceChange extends Model
     protected function casts(): array
     {
         return [
-            'supplier_rate_minor' => MoneyCast::class,
-            'platform_rate_minor' => MoneyCast::class,
+            'supplier_rate' => MoneyCast::class,
+            'platform_rate' => MoneyCast::class,
             'effective_from' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
         ];

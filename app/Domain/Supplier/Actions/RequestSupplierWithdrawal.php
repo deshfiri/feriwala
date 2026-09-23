@@ -90,7 +90,7 @@ class RequestSupplierWithdrawal
                     'supplier_wallet_id' => $wallet->id,
                     'supplier_payout_method_id' => $payoutMethod->id,
                     'payout_snapshot' => $payoutMethod->toSnapshot(),
-                    'amount_minor' => $amount,
+                    'amount' => $amount,
                     'currency_code' => $amount->currency->value,
                     'status' => SupplierWithdrawalStatus::Requested,
                     'requested_at' => now(),
@@ -115,7 +115,7 @@ class RequestSupplierWithdrawal
                     action: 'supplier_withdrawal.requested',
                     auditableType: SupplierWithdrawal::class,
                     auditableId: $withdrawal->id,
-                    after: ['amount_minor' => $amount->minorUnits, 'currency' => $amount->currency->value],
+                    after: ['amount' => $amount->toDecimal(), 'currency' => $amount->currency->value],
                     accountId: $supplier->id,
                     module: PermissionModule::Withdrawal->value,
                 ));

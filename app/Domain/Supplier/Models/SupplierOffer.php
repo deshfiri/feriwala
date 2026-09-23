@@ -28,9 +28,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * variation — approving a second Supplier for a product a first Supplier
  * already supplies must never overwrite the first one's figures.
  *
- * `supplier_rate_minor` is commercially confidential in the way a wholesale
+ * `supplier_rate` is commercially confidential in the way a wholesale
  * cost price is (D12, D25): visible only to the owning Supplier and to staff
- * holding `supplier_pricing.view`. `platform_rate_minor` is the only figure a
+ * holding `supplier_pricing.view`. `platform_rate` is the only figure a
  * Client/Partner or a Partner Website ever sees.
  *
  * @property int $id
@@ -44,8 +44,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property bool $is_preferred
  * @property bool $wholesale_enabled
  * @property bool $dropshipping_enabled
- * @property Money $supplier_rate_minor
- * @property Money $platform_rate_minor
+ * @property Money $supplier_rate
+ * @property Money $platform_rate
  * @property string $currency_code
  * @property int|null $activated_by
  * @property CarbonImmutable|null $activated_at
@@ -81,8 +81,8 @@ class SupplierOffer extends Model
             'is_preferred' => 'boolean',
             'wholesale_enabled' => 'boolean',
             'dropshipping_enabled' => 'boolean',
-            'supplier_rate_minor' => MoneyCast::class,
-            'platform_rate_minor' => MoneyCast::class,
+            'supplier_rate' => MoneyCast::class,
+            'platform_rate' => MoneyCast::class,
             'activated_at' => 'immutable_datetime',
             'suspended_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
@@ -173,7 +173,7 @@ class SupplierOffer extends Model
      */
     public function platformMargin(): Money
     {
-        return $this->platform_rate_minor->minus($this->supplier_rate_minor);
+        return $this->platform_rate->minus($this->supplier_rate);
     }
 
     public function isActive(): bool

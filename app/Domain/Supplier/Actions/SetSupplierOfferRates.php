@@ -50,17 +50,17 @@ class SetSupplierOfferRates
             /** @var SupplierOffer $locked */
             $locked = SupplierOffer::query()->lockForUpdate()->findOrFail($offer->id);
 
-            $before = ['supplier_rate_minor' => $locked->supplier_rate_minor->minorUnits, 'platform_rate_minor' => $locked->platform_rate_minor->minorUnits];
+            $before = ['supplier_rate' => $locked->supplier_rate->toDecimal(), 'platform_rate' => $locked->platform_rate->toDecimal()];
 
             $locked->forceFill([
-                'supplier_rate_minor' => $supplierRate->minorUnits,
-                'platform_rate_minor' => $platformRate->minorUnits,
+                'supplier_rate' => $supplierRate,
+                'platform_rate' => $platformRate,
                 'currency_code' => $supplierRate->currency->value,
             ])->save();
 
             $locked->priceHistory()->create([
-                'supplier_rate_minor' => $supplierRate->minorUnits,
-                'platform_rate_minor' => $platformRate->minorUnits,
+                'supplier_rate' => $supplierRate,
+                'platform_rate' => $platformRate,
                 'currency_code' => $supplierRate->currency->value,
                 'effective_from' => now(),
                 'changed_by' => $reviewerId,
@@ -74,7 +74,7 @@ class SetSupplierOfferRates
                 auditableType: SupplierOffer::class,
                 auditableId: $locked->id,
                 before: $before,
-                after: ['supplier_rate_minor' => $supplierRate->minorUnits, 'platform_rate_minor' => $platformRate->minorUnits],
+                after: ['supplier_rate' => $supplierRate->toDecimal(), 'platform_rate' => $platformRate->toDecimal()],
                 reason: $reason,
                 module: PermissionModule::SupplierPricing->value,
             ));

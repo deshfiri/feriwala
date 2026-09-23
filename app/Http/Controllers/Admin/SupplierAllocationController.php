@@ -47,9 +47,9 @@ class SupplierAllocationController extends Controller
                 'product_name' => $item->product->name,
                 'variant' => $item->variant?->public_id,
                 'quantity' => $item->supplier_allocated_quantity,
-                'supplier_rate' => $item->supplier_rate_minor?->jsonSerialize(),
-                'platform_rate' => $item->platform_rate_minor?->jsonSerialize(),
-                'platform_margin' => $item->platform_margin_minor?->jsonSerialize(),
+                'supplier_rate' => $item->supplier_rate?->jsonSerialize(),
+                'platform_rate' => $item->platform_rate?->jsonSerialize(),
+                'platform_margin' => $item->platform_margin?->jsonSerialize(),
             ]);
 
         return Inertia::render('admin/supplier-allocations/index', ['allocations' => $items]);
@@ -77,9 +77,9 @@ class SupplierAllocationController extends Controller
                 'product_name' => $model->product->name,
                 'variant' => $model->variant?->public_id,
                 'quantity' => $model->supplier_allocated_quantity,
-                'supplier_rate' => $model->supplier_rate_minor?->jsonSerialize(),
-                'platform_rate' => $model->platform_rate_minor?->jsonSerialize(),
-                'platform_margin' => $model->platform_margin_minor?->jsonSerialize(),
+                'supplier_rate' => $model->supplier_rate?->jsonSerialize(),
+                'platform_rate' => $model->platform_rate?->jsonSerialize(),
+                'platform_margin' => $model->platform_margin?->jsonSerialize(),
                 'allocated_at' => $model->supplier_allocated_at?->toIso8601String(),
                 'payable' => $model->supplierPayable === null ? null : [
                     'id' => $model->supplierPayable->public_id,

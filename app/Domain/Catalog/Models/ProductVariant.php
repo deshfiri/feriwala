@@ -27,8 +27,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property string|null $barcode
  * @property string $combination_key
  * @property string $currency_code
- * @property Money|null $wholesale_price_minor
- * @property Money|null $base_cost_minor
+ * @property Money|null $wholesale_price
+ * @property Money|null $base_cost
  * @property bool $is_active
  * @property int $sort_order
  * @property CarbonImmutable $created_at
@@ -56,8 +56,8 @@ class ProductVariant extends Model
     protected function casts(): array
     {
         return [
-            'wholesale_price_minor' => MoneyCast::class,
-            'base_cost_minor' => MoneyCast::class,
+            'wholesale_price' => MoneyCast::class,
+            'base_cost' => MoneyCast::class,
             'is_active' => 'boolean',
             'sort_order' => 'integer',
             'created_at' => 'immutable_datetime',
@@ -91,7 +91,7 @@ class ProductVariant extends Model
      */
     public function effectiveWholesalePrice(): Money
     {
-        return $this->wholesale_price_minor ?? $this->product->wholesale_price_minor;
+        return $this->wholesale_price ?? $this->product->wholesale_price;
     }
 
     /**

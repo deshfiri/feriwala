@@ -14,6 +14,9 @@ use App\Models\User;
  * Set the global default Supplier withdrawal limits, or one Supplier's
  * override (D25, P13-24). Authorisation is the controller's job, as it is
  * for every other Supplier action.
+ *
+ * `$minimum`/`$maximum` are exact decimal Taka strings (e.g. `"500.00"`),
+ * already parsed at the HTTP boundary — never a bare number (D26).
  */
 class SetSupplierWithdrawalLimits
 {
@@ -22,33 +25,33 @@ class SetSupplierWithdrawalLimits
         protected RecordAuditLog $audit,
     ) {}
 
-    public function setDefault(User $actor, ?int $minimumMinor, ?int $maximumMinor): void
+    public function setDefault(User $actor, ?string $minimum, ?string $maximum): void
     {
-        $this->settings->define(SupplierWithdrawalLimits::MINIMUM_MINOR, 'supplier', SettingType::Integer, label: 'Supplier withdrawal minimum (minor units)');
-        $this->settings->define(SupplierWithdrawalLimits::MAXIMUM_MINOR, 'supplier', SettingType::Integer, label: 'Supplier withdrawal maximum (minor units)');
+        $this->settings->define(SupplierWithdrawalLimits::MINIMUM_SETTING, 'supplier', SettingType::Decimal, label: 'Supplier withdrawal minimum');
+        $this->settings->define(SupplierWithdrawalLimits::MAXIMUM_SETTING, 'supplier', SettingType::Decimal, label: 'Supplier withdrawal maximum');
 
-        $this->settings->set(SupplierWithdrawalLimits::MINIMUM_MINOR, $minimumMinor, $actor->id);
-        $this->settings->set(SupplierWithdrawalLimits::MAXIMUM_MINOR, $maximumMinor, $actor->id);
+        $this->settings->set(SupplierWithdrawalLimits::MINIMUM_SETTING, $minimum, $actor->id);
+        $this->settings->set(SupplierWithdrawalLimits::MAXIMUM_SETTING, $maximum, $actor->id);
 
         $this->audit->handle(new AuditEntry(
             action: 'supplier.withdrawal_limits_default_set',
             actorId: $actor->id,
-            after: ['minimum_minor' => $minimumMinor, 'maximum_minor' => $maximumMinor],
+            after: ['minimum' => $minimum, 'maximum' => $maximum],
             module: 'supplier',
             isSensitive: true,
         ));
     }
 
-    public function setOverride(User $actor, Supplier $supplier, ?int $minimumMinor, ?int $maximumMinor): Supplier
+    public function setOverride(User $actor, Supplier $supplier, ?string $minimum, ?string $maximum): Supplier
     {
         $before = [
-            'minimum_minor' => $supplier->withdrawal_minimum_override_minor,
-            'maximum_minor' => $supplier->withdrawal_maximum_override_minor,
+            'minimum' => $supplier->withdrawal_minimum_override,
+            'maximum' => $supplier->withdrawal_maximum_override,
         ];
 
         $supplier->forceFill([
-            'withdrawal_minimum_override_minor' => $minimumMinor,
-            'withdrawal_maximum_override_minor' => $maximumMinor,
+            'withdrawal_minimum_override' => $minimum,
+            'withdrawal_maximum_override' => $maximum,
         ])->save();
 
         $this->audit->handle(new AuditEntry(
@@ -57,7 +60,7 @@ class SetSupplierWithdrawalLimits
             auditableType: Supplier::class,
             auditableId: $supplier->id,
             before: $before,
-            after: ['minimum_minor' => $minimumMinor, 'maximum_minor' => $maximumMinor],
+            after: ['minimum' => $minimum, 'maximum' => $maximum],
             accountId: $supplier->id,
             module: 'supplier',
             isSensitive: true,

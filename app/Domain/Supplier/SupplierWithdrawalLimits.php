@@ -19,19 +19,19 @@ use App\Support\Money\Money;
  */
 class SupplierWithdrawalLimits
 {
-    public const MINIMUM_MINOR = 'supplier.withdrawal_minimum_minor';
+    public const MINIMUM_SETTING = 'supplier.withdrawal_minimum';
 
-    public const MAXIMUM_MINOR = 'supplier.withdrawal_maximum_minor';
+    public const MAXIMUM_SETTING = 'supplier.withdrawal_maximum';
 
-    /** 500 taka: small enough not to lock out a new Supplier's first request. */
-    public const DEFAULT_MINIMUM_MINOR = 50000;
+    /** BDT 500: small enough not to lock out a new Supplier's first request. */
+    public const DEFAULT_MINIMUM = '500.00';
 
     /** No default ceiling — a Supplier may withdraw everything available. */
-    public const DEFAULT_MAXIMUM_MINOR = null;
+    public const DEFAULT_MAXIMUM = null;
 
-    public const FLOOR_MINIMUM_MINOR = 100;
+    public const FLOOR_MINIMUM = '1.00';
 
-    public const CEILING_MAXIMUM_MINOR = 100_000_000_00;
+    public const CEILING_MAXIMUM = '1000000000.00';
 
     public function __construct(
         protected SettingsRepository $settings,
@@ -39,29 +39,35 @@ class SupplierWithdrawalLimits
 
     public function minimumFor(Supplier $supplier, Currency $currency): Money
     {
-        if ($supplier->withdrawal_minimum_override_minor !== null) {
-            return Money::of((int) $supplier->withdrawal_minimum_override_minor, $currency);
+        if ($supplier->withdrawal_minimum_override !== null) {
+            return Money::fromDecimal($supplier->withdrawal_minimum_override, $currency);
         }
 
-        $value = $this->settings->get(self::MINIMUM_MINOR);
-        $minor = is_numeric($value) && (int) $value > 0 ? (int) $value : self::DEFAULT_MINIMUM_MINOR;
+        $value = $this->settings->get(self::MINIMUM_SETTING);
+        $decimal = is_string($value) && $value !== '' ? $value : self::DEFAULT_MINIMUM;
 
-        return Money::of(max(self::FLOOR_MINIMUM_MINOR, $minor), $currency);
+        $requested = Money::fromDecimal($decimal, $currency);
+        $floor = Money::fromDecimal(self::FLOOR_MINIMUM, $currency);
+
+        return $requested->greaterThan($floor) ? $requested : $floor;
     }
 
     public function maximumFor(Supplier $supplier, Currency $currency): ?Money
     {
-        if ($supplier->withdrawal_maximum_override_minor !== null) {
-            return Money::of((int) $supplier->withdrawal_maximum_override_minor, $currency);
+        if ($supplier->withdrawal_maximum_override !== null) {
+            return Money::fromDecimal($supplier->withdrawal_maximum_override, $currency);
         }
 
-        $value = $this->settings->get(self::MAXIMUM_MINOR);
+        $value = $this->settings->get(self::MAXIMUM_SETTING);
 
-        if (! is_numeric($value) || (int) $value <= 0) {
+        if (! is_string($value) || $value === '' || ! Money::fromDecimal($value, $currency)->isPositive()) {
             // No default ceiling: a Supplier may withdraw everything available.
             return null;
         }
 
-        return Money::of(min(self::CEILING_MAXIMUM_MINOR, (int) $value), $currency);
+        $requested = Money::fromDecimal($value, $currency);
+        $ceiling = Money::fromDecimal(self::CEILING_MAXIMUM, $currency);
+
+        return $requested->lessThan($ceiling) ? $requested : $ceiling;
     }
 }

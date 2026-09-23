@@ -36,16 +36,16 @@ final class SupplierAllocation
      */
     public function lineSnapshot(): array
     {
-        $supplierRate = $this->priceVersion->supplier_rate_minor;
-        $platformRate = $this->priceVersion->platform_rate_minor;
+        $supplierRate = $this->priceVersion->supplier_rate;
+        $platformRate = $this->priceVersion->platform_rate;
 
         return [
             'supplier_id' => $this->offer->supplier_id,
             'supplier_offer_id' => $this->offer->id,
             'supplier_offer_price_change_id' => $this->priceVersion->id,
-            'supplier_rate_minor' => $supplierRate->minorUnits,
-            'platform_rate_minor' => $platformRate->minorUnits,
-            'platform_margin_minor' => $platformRate->minus($supplierRate)->minorUnits,
+            'supplier_rate' => $supplierRate,
+            'platform_rate' => $platformRate,
+            'platform_margin' => $platformRate->minus($supplierRate),
             'supplier_currency_code' => $supplierRate->currency->value,
             'supplier_allocated_quantity' => $this->quantity,
             'supplier_allocated_at' => $this->allocatedAt,
