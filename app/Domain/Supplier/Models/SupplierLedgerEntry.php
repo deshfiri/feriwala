@@ -35,15 +35,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $supplier_payable_id
  * @property int|null $supplier_payable_reversal_id
  * @property int|null $supplier_withdrawal_id
- * @property Money $debit_minor
- * @property Money $credit_minor
+ * @property Money $debit
+ * @property Money $credit
  * @property string $currency_code
- * @property Money $balance_before_minor
- * @property Money $balance_after_minor
- * @property Money $reserved_before_minor
- * @property Money $reserved_after_minor
- * @property Money $recovery_before_minor
- * @property Money $recovery_after_minor
+ * @property Money $balance_before
+ * @property Money $balance_after
+ * @property Money $reserved_before
+ * @property Money $reserved_after
+ * @property Money $recovery_before
+ * @property Money $recovery_after
  * @property string $description
  * @property string|null $internal_note
  * @property int|null $created_by
@@ -60,7 +60,7 @@ class SupplierLedgerEntry extends Model
     /** The columns a Supplier's own statement may ever see. */
     public const MEMBER_VISIBLE = [
         'id', 'public_id', 'reference', 'supplier_wallet_id', 'type', 'source',
-        'debit_minor', 'credit_minor', 'currency_code', 'balance_after_minor',
+        'debit', 'credit', 'currency_code', 'balance_after',
         'description', 'created_at', 'corrects_ledger_entry_id',
     ];
 
@@ -95,14 +95,14 @@ class SupplierLedgerEntry extends Model
     {
         return [
             'type' => SupplierLedgerEntryType::class,
-            'debit_minor' => MoneyCast::class,
-            'credit_minor' => MoneyCast::class,
-            'balance_before_minor' => MoneyCast::class,
-            'balance_after_minor' => MoneyCast::class,
-            'reserved_before_minor' => MoneyCast::class,
-            'reserved_after_minor' => MoneyCast::class,
-            'recovery_before_minor' => MoneyCast::class,
-            'recovery_after_minor' => MoneyCast::class,
+            'debit' => MoneyCast::class,
+            'credit' => MoneyCast::class,
+            'balance_before' => MoneyCast::class,
+            'balance_after' => MoneyCast::class,
+            'reserved_before' => MoneyCast::class,
+            'reserved_after' => MoneyCast::class,
+            'recovery_before' => MoneyCast::class,
+            'recovery_after' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
         ];
     }
@@ -170,7 +170,7 @@ class SupplierLedgerEntry extends Model
 
     public function isCredit(): bool
     {
-        return $this->credit_minor->isPositive();
+        return $this->credit->isPositive();
     }
 
     /**
@@ -179,6 +179,6 @@ class SupplierLedgerEntry extends Model
      */
     public function amount(): Money
     {
-        return $this->isCredit() ? $this->credit_minor : $this->debit_minor;
+        return $this->isCredit() ? $this->credit : $this->debit;
     }
 }

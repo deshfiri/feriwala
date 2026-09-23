@@ -6,6 +6,7 @@ use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierWallet;
 use App\Domain\Wallet\WalletService;
 use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
@@ -32,13 +33,15 @@ class OpenSupplierWallet
             return $existing;
         }
 
+        $zero = Money::zero($currency);
+
         try {
             return SupplierWallet::create([
                 'supplier_id' => $supplier->id,
                 'currency_code' => $currency->value,
-                'total_minor' => 0,
-                'reserved_minor' => 0,
-                'recovery_minor' => 0,
+                'total' => $zero,
+                'reserved' => $zero,
+                'recovery' => $zero,
             ]);
         } catch (UniqueConstraintViolationException) {
             /** @var SupplierWallet */

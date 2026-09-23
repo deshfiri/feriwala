@@ -247,18 +247,18 @@ class SupplierWalletService
         Money $reservedDelta,
         Money $recoveryDelta,
     ): SupplierLedgerEntry {
-        $balanceBefore = $locked->total_minor;
-        $reservedBefore = $locked->reserved_minor;
-        $recoveryBefore = $locked->recovery_minor;
+        $balanceBefore = $locked->total;
+        $reservedBefore = $locked->reserved;
+        $recoveryBefore = $locked->recovery;
 
         $balanceAfter = $balanceBefore->plus($credit)->minus($debit);
         $reservedAfter = $reservedBefore->plus($reservedDelta);
         $recoveryAfter = $recoveryBefore->plus($recoveryDelta);
 
         $locked->forceFill([
-            'total_minor' => $balanceAfter,
-            'reserved_minor' => $reservedAfter,
-            'recovery_minor' => $recoveryAfter,
+            'total' => $balanceAfter,
+            'reserved' => $reservedAfter,
+            'recovery' => $recoveryAfter,
         ])->save();
 
         return SupplierLedgerEntry::create([
@@ -270,14 +270,14 @@ class SupplierWalletService
             'supplier_payable_reversal_id' => $context->supplierPayableReversalId,
             'supplier_withdrawal_id' => $context->supplierWithdrawalId,
             'currency_code' => $locked->currency_code,
-            'debit_minor' => $debit,
-            'credit_minor' => $credit,
-            'balance_before_minor' => $balanceBefore,
-            'balance_after_minor' => $balanceAfter,
-            'reserved_before_minor' => $reservedBefore,
-            'reserved_after_minor' => $reservedAfter,
-            'recovery_before_minor' => $recoveryBefore,
-            'recovery_after_minor' => $recoveryAfter,
+            'debit' => $debit,
+            'credit' => $credit,
+            'balance_before' => $balanceBefore,
+            'balance_after' => $balanceAfter,
+            'reserved_before' => $reservedBefore,
+            'reserved_after' => $reservedAfter,
+            'recovery_before' => $recoveryBefore,
+            'recovery_after' => $recoveryAfter,
             'description' => $context->description,
             'internal_note' => $context->internalNote,
             'created_by' => $context->actorId,

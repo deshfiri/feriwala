@@ -39,9 +39,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $public_id
  * @property int $supplier_id
  * @property string $currency_code
- * @property Money $total_minor
- * @property Money $reserved_minor
- * @property Money $recovery_minor
+ * @property Money $total
+ * @property Money $reserved
+ * @property Money $recovery
  * @property CarbonImmutable $created_at
  * @property-read Supplier $supplier
  */
@@ -57,9 +57,9 @@ class SupplierWallet extends Model
     protected function casts(): array
     {
         return [
-            'total_minor' => MoneyCast::class,
-            'reserved_minor' => MoneyCast::class,
-            'recovery_minor' => MoneyCast::class,
+            'total' => MoneyCast::class,
+            'reserved' => MoneyCast::class,
+            'recovery' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -105,13 +105,13 @@ class SupplierWallet extends Model
     public function availableBalance(): Money
     {
         return $this->floored(
-            $this->total_minor->minus($this->reserved_minor)->minus($this->recovery_minor)
+            $this->total->minus($this->reserved)->minus($this->recovery)
         );
     }
 
     public function hasOutstandingRecovery(): bool
     {
-        return $this->recovery_minor->isPositive();
+        return $this->recovery->isPositive();
     }
 
     /**
@@ -121,9 +121,9 @@ class SupplierWallet extends Model
     {
         return [
             'currency' => $this->currency_code,
-            'total' => $this->total_minor->jsonSerialize(),
-            'reserved' => $this->reserved_minor->jsonSerialize(),
-            'recovery' => $this->recovery_minor->jsonSerialize(),
+            'total' => $this->total->jsonSerialize(),
+            'reserved' => $this->reserved->jsonSerialize(),
+            'recovery' => $this->recovery->jsonSerialize(),
             'available' => $this->availableBalance()->jsonSerialize(),
             'has_outstanding_recovery' => $this->hasOutstandingRecovery(),
         ];

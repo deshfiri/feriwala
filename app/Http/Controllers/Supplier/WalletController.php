@@ -74,10 +74,10 @@ class WalletController extends Controller
         return [
             'id' => $wallet->public_id,
             'currency' => $wallet->currency_code,
-            'total' => $wallet->total_minor->jsonSerialize(),
+            'total' => $wallet->total->jsonSerialize(),
             'available' => $wallet->availableBalance()->jsonSerialize(),
-            'reserved' => $wallet->reserved_minor->jsonSerialize(),
-            'recovery' => $wallet->recovery_minor->jsonSerialize(),
+            'reserved' => $wallet->reserved->jsonSerialize(),
+            'recovery' => $wallet->recovery->jsonSerialize(),
             'has_outstanding_recovery' => $wallet->hasOutstandingRecovery(),
         ];
     }
@@ -87,16 +87,16 @@ class WalletController extends Controller
      */
     protected function payableTotals(Supplier $supplier, Currency $currency): array
     {
-        $base = fn (PayableStatus $status) => (int) SupplierPayable::query()
+        $base = fn (PayableStatus $status) => (string) (SupplierPayable::query()
             ->where('supplier_id', $supplier->id)
             ->where('currency_code', $currency->value)
             ->where('status', $status)
-            ->sum('gross_amount_minor');
+            ->sum('gross_amount') ?: '0');
 
         return [
-            'pending' => Money::of($base(PayableStatus::Pending), $currency)->jsonSerialize(),
-            'eligible' => Money::of($base(PayableStatus::Eligible), $currency)->jsonSerialize(),
-            'settled' => Money::of($base(PayableStatus::Settled), $currency)->jsonSerialize(),
+            'pending' => Money::fromDecimal($base(PayableStatus::Pending), $currency)->jsonSerialize(),
+            'eligible' => Money::fromDecimal($base(PayableStatus::Eligible), $currency)->jsonSerialize(),
+            'settled' => Money::fromDecimal($base(PayableStatus::Settled), $currency)->jsonSerialize(),
         ];
     }
 
@@ -115,7 +115,7 @@ class WalletController extends Controller
             'type_label' => $entry->type->label(),
             'is_credit' => $entry->isCredit(),
             'amount' => $entry->amount()->jsonSerialize(),
-            'balance_after' => $entry->balance_after_minor->jsonSerialize(),
+            'balance_after' => $entry->balance_after->jsonSerialize(),
             'description' => $entry->description,
             'related_payable_id' => $entry->payable?->public_id,
             'related_payable_reference' => $entry->payable?->reference,
