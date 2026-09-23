@@ -29,8 +29,8 @@ function obligationRule(array $attributes = []): DepositRule
 {
     return DepositRule::create([
         'scope' => RuleScope::Global,
-        'required_initial_deposit_minor' => 300000,
-        'minimum_balance_minor' => 100000,
+        'required_initial_deposit' => Money::fromDecimal('3000.00'),
+        'minimum_balance' => Money::fromDecimal('1000.00'),
         'currency_code' => 'BDT',
         'effective_from' => CarbonImmutable::now()->subMonth(),
         'is_active' => true,
@@ -38,15 +38,16 @@ function obligationRule(array $attributes = []): DepositRule
     ]);
 }
 
-function obligationWallet(int $credit = 0): Wallet
+function obligationWallet(string $credit = '0.00'): Wallet
 {
     $wallet = app(OpenWallet::class)->handle(test()->account);
+    $amount = Money::fromDecimal($credit, Currency::BDT);
 
-    if ($credit > 0) {
+    if ($amount->isPositive()) {
         app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of($credit, Currency::BDT),
+            $amount,
             new PostingContext(source: 'test', description: 'Opening'),
         );
     }
@@ -67,8 +68,8 @@ describe('capturing', function () {
 
         $wallet->refresh();
 
-        expect($wallet->required_deposit_minor->minorUnits)->toBe(300000)
-            ->and($wallet->minimum_balance_minor->minorUnits)->toBe(100000)
+        expect($wallet->required_deposit->toDecimal())->toBe('3000.00')
+            ->and($wallet->minimum_balance->toDecimal())->toBe('1000.00')
             ->and($wallet->deposit_rule_id)->toBe($rule->id)
             ->and($wallet->obligation_captured_at)->not->toBeNull();
     });
@@ -82,8 +83,8 @@ describe('capturing', function () {
         $obligation = WalletDepositObligation::query()->firstOrFail();
 
         expect($obligation->business_account_id)->toBe($this->account->id)
-            ->and($obligation->required_deposit_minor->minorUnits)->toBe(300000)
-            ->and($obligation->minimum_balance_minor->minorUnits)->toBe(100000)
+            ->and($obligation->required_deposit->toDecimal())->toBe('3000.00')
+            ->and($obligation->minimum_balance->toDecimal())->toBe('1000.00')
             ->and($obligation->source)->toBe(CaptureDepositObligation::ACTIVATION);
     });
 
@@ -96,9 +97,9 @@ describe('capturing', function () {
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
-        $rule->forceFill(['minimum_balance_minor' => Money::of(900000, Currency::BDT)])->save();
+        $rule->forceFill(['minimum_balance' => Money::fromDecimal('9000.00', Currency::BDT)])->save();
 
-        expect($wallet->refresh()->minimum_balance_minor->minorUnits)->toBe(100000);
+        expect($wallet->refresh()->minimum_balance->toDecimal())->toBe('1000.00');
     });
 
     it('records that nothing is required when no rule applies', function () {
@@ -111,7 +112,7 @@ describe('capturing', function () {
         expect($obligation)->not->toBeNull()
             ->and($obligation->deposit_rule_id)->toBeNull()
             ->and($obligation->requiresAnything())->toBeFalse()
-            ->and($wallet->refresh()->required_deposit_minor->minorUnits)->toBe(0);
+            ->and($wallet->refresh()->required_deposit->toDecimal())->toBe('0.00');
     });
 
     it('captures once when the figures have not changed', function () {
@@ -145,14 +146,14 @@ describe('capturing', function () {
 
         DepositRule::query()->update(['effective_until' => CarbonImmutable::now()]);
         obligationRule([
-            'minimum_balance_minor' => 500000,
+            'minimum_balance' => Money::fromDecimal('5000.00'),
             'effective_from' => CarbonImmutable::now(),
         ]);
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
         expect(WalletDepositObligation::query()->count())->toBe(2)
-            ->and(Wallet::query()->firstOrFail()->minimum_balance_minor->minorUnits)->toBe(500000);
+            ->and(Wallet::query()->firstOrFail()->minimum_balance->toDecimal())->toBe('5000.00');
     });
 
     it('sets the deadline from the rule rather than from nothing', function () {
@@ -176,8 +177,8 @@ describe('capturing', function () {
 
         $wallet = Wallet::query()->where('business_account_id', $pending->id)->firstOrFail();
 
-        expect($wallet->required_deposit_minor->minorUnits)->toBe(300000)
-            ->and($wallet->minimum_balance_minor->minorUnits)->toBe(100000)
+        expect($wallet->required_deposit->toDecimal())->toBe('3000.00')
+            ->and($wallet->minimum_balance->toDecimal())->toBe('1000.00')
             ->and(WalletDepositObligation::query()
                 ->where('business_account_id', $pending->id)
                 ->where('source', CaptureDepositObligation::ACTIVATION)
@@ -189,23 +190,23 @@ describe('the balances it changes (§24.2)', function () {
     it('keeps the minimum balance out of what can be spent', function () {
         // §24.2 lists the reserved minimum balance separately from the deposit
         // because they are different promises. This one has to stay.
-        obligationRule(['required_initial_deposit_minor' => 0, 'minimum_balance_minor' => 100000]);
-        $wallet = obligationWallet(500000);
+        obligationRule(['required_initial_deposit' => Money::zero(), 'minimum_balance' => Money::fromDecimal('1000.00')]);
+        $wallet = obligationWallet('5000.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
-        expect($wallet->refresh()->usableBalance()->minorUnits)->toBe(400000)
-            ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(400000);
+        expect($wallet->refresh()->usableBalance()->toDecimal())->toBe('4000.00')
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('4000.00');
     });
 
     it('keeps it out of what can be withdrawn as well', function () {
         obligationRule();
-        $wallet = obligationWallet(500000);
+        $wallet = obligationWallet('5000.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
-        // 500,000 less the 100,000 minimum and the 300,000 deposit.
-        expect($wallet->refresh()->availableForWithdrawal()->minorUnits)->toBe(100000);
+        // 5,000 less the 1,000 minimum and the 3,000 deposit.
+        expect($wallet->refresh()->availableForWithdrawal()->toDecimal())->toBe('1000.00');
     });
 
     it('lets a deposit be spent on services when the rule allows it', function () {
@@ -214,81 +215,81 @@ describe('the balances it changes (§24.2)', function () {
          * as a withdrawal — that is the difference between the two questions.
          */
         obligationRule();
-        $wallet = obligationWallet(500000);
+        $wallet = obligationWallet('5000.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
         $wallet->refresh();
 
         expect($wallet->deposit_usable_for_charges)->toBeTrue()
-            ->and($wallet->usableBalance()->minorUnits)->toBe(400000)
-            ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(100000);
+            ->and($wallet->usableBalance()->toDecimal())->toBe('4000.00')
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('1000.00');
     });
 
     it('locks the deposit out of spending when the rule does not', function () {
         obligationRule();
-        $wallet = obligationWallet(500000);
+        $wallet = obligationWallet('5000.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
         $wallet->forceFill(['deposit_usable_for_charges' => false])->save();
 
-        expect($wallet->refresh()->usableBalance()->minorUnits)->toBe(100000);
+        expect($wallet->refresh()->usableBalance()->toDecimal())->toBe('1000.00');
     });
 
     it('never reports a withdrawable balance above the spendable one', function () {
         obligationRule();
-        $wallet = obligationWallet(350000);
+        $wallet = obligationWallet('3500.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
         $wallet->refresh();
 
-        expect($wallet->availableForWithdrawal()->minorUnits)
-            ->toBeLessThanOrEqual($wallet->usableBalance()->minorUnits)
-            ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(0);
+        expect($wallet->availableForWithdrawal()->toDecimal())
+            ->toBeLessThanOrEqual($wallet->usableBalance()->toDecimal())
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('0.00');
     });
 
     it('refuses to spend money the account is required to keep', function () {
         // The invariant, not just the display: the posting service reads the
         // same spendable balance.
-        obligationRule(['required_initial_deposit_minor' => 0, 'minimum_balance_minor' => 400000]);
-        $wallet = obligationWallet(500000);
+        obligationRule(['required_initial_deposit' => Money::zero(), 'minimum_balance' => Money::fromDecimal('4000.00')]);
+        $wallet = obligationWallet('5000.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
         expect(fn () => app(WalletService::class)->debit(
             $wallet->refresh(),
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(200000, Currency::BDT),
+            Money::fromDecimal('2000.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'A charge'),
         ))->toThrow(WalletOperationRefused::class);
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(500000);
+        expect($wallet->refresh()->total->toDecimal())->toBe('5000.00');
     });
 
     it('reports the shortfall against both obligations together', function () {
         obligationRule();
-        $wallet = obligationWallet(250000);
+        $wallet = obligationWallet('2500.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
         $wallet->refresh();
 
-        // 400,000 required in total, 250,000 held.
-        expect($wallet->reservedObligation()->minorUnits)->toBe(400000)
-            ->and($wallet->obligationShortfall()->minorUnits)->toBe(150000)
+        // 4,000 required in total, 2,500 held.
+        expect($wallet->reservedObligation()->toDecimal())->toBe('4000.00')
+            ->and($wallet->obligationShortfall()->toDecimal())->toBe('1500.00')
             ->and($wallet->meetsObligation())->toBeFalse()
             // The deposit alone is not met either, and says so separately.
             ->and($wallet->meetsRequiredDeposit())->toBeFalse()
-            ->and($wallet->shortfall()->minorUnits)->toBe(50000);
+            ->and($wallet->shortfall()->toDecimal())->toBe('500.00');
     });
 });
 
 describe('the guard a service setup knocks on (§24)', function () {
     it('permits a setup when the obligation is met', function () {
         obligationRule();
-        $wallet = obligationWallet(500000);
+        $wallet = obligationWallet('5000.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
@@ -297,7 +298,7 @@ describe('the guard a service setup knocks on (§24)', function () {
 
     it('refuses one when the account is short', function () {
         obligationRule();
-        $wallet = obligationWallet(100000);
+        $wallet = obligationWallet('1000.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
@@ -312,22 +313,22 @@ describe('the guard a service setup knocks on (§24)', function () {
          * meeting it: the service would be granted and the account restricted
          * in the same breath.
          */
-        obligationRule(['required_initial_deposit_minor' => 0, 'minimum_balance_minor' => 100000]);
-        $wallet = obligationWallet(150000);
+        obligationRule(['required_initial_deposit' => Money::zero(), 'minimum_balance' => Money::fromDecimal('1000.00')]);
+        $wallet = obligationWallet('1500.00');
 
         app(CaptureDepositObligation::class)->handle($this->account);
 
         $guard = app(DepositGuard::class);
-        $charge = Money::of(80000, Currency::BDT);
+        $charge = Money::fromDecimal('800.00', Currency::BDT);
 
         expect($guard->permits($wallet->refresh(), $charge))->toBeFalse()
-            ->and($guard->shortfallFor($wallet->refresh(), $charge)->minorUnits)->toBe(30000);
+            ->and($guard->shortfallFor($wallet->refresh(), $charge)->toDecimal())->toBe('300.00');
     });
 
     it('says a wallet with no obligation is free to proceed', function () {
-        $wallet = obligationWallet(1000);
+        $wallet = obligationWallet('10.00');
 
         expect(app(DepositGuard::class)->permits($wallet))->toBeTrue()
-            ->and(app(DepositGuard::class)->shortfallFor($wallet)->minorUnits)->toBe(0);
+            ->and(app(DepositGuard::class)->shortfallFor($wallet)->toDecimal())->toBe('0.00');
     });
 });

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * One component of a payment (§5.1, §9).
  *
  * @property AllocationType $type
- * @property Money $amount_minor
+ * @property Money $amount
  */
 class PaymentAllocation extends Model
 {
@@ -22,7 +22,7 @@ class PaymentAllocation extends Model
     {
         return [
             'type' => AllocationType::class,
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
         ];
     }
 

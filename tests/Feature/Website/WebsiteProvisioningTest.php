@@ -141,7 +141,7 @@ describe('asking for a website', function () {
 describe('paying for a website', function () {
     it('takes the charge from the wallet and starts the build once nothing is owed', function () {
         $account = websiteTestAccount();
-        $wallet = websiteTestWallet($account, 1_000_000);
+        $wallet = websiteTestWallet($account, '10000.00');
 
         $this->actingAs($account->owner)
             ->post(route('websites.store'), ['name' => 'Payable', 'subdomain' => 'payable-shop']);
@@ -155,14 +155,14 @@ describe('paying for a website', function () {
         }
 
         // 850,000 of charges against a million.
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(150000)
+        expect($wallet->refresh()->total->toDecimal())->toBe('1500.00')
             ->and($website->refresh()->status)->toBe(WebsiteStatus::Development)
             ->and(WebsiteCharge::query()->where('website_id', $website->id)->outstanding()->count())->toBe(0);
     });
 
     it('pays a charge once however many times the button is pressed', function () {
         $account = websiteTestAccount();
-        $wallet = websiteTestWallet($account, 1_000_000);
+        $wallet = websiteTestWallet($account, '10000.00');
         $website = Website::factory()->forAccount($account)->create();
 
         $charge = WebsiteCharge::factory()->create([
@@ -176,14 +176,14 @@ describe('paying for a website', function () {
                 ->post(route('websites.charges.pay', [$website->public_id, $charge->public_id]));
         }
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(500000)
+        expect($wallet->refresh()->total->toDecimal())->toBe('5000.00')
             ->and($charge->refresh()->status)->toBe(WebsiteChargeStatus::Paid)
             ->and($charge->wallet_transaction_id)->not->toBeNull();
     });
 
     it('asks for a deposit rather than charging a wallet that cannot cover it', function () {
         $account = websiteTestAccount();
-        $wallet = websiteTestWallet($account, 1000);
+        $wallet = websiteTestWallet($account, '10.00');
         $website = Website::factory()->forAccount($account)->create();
 
         $charge = WebsiteCharge::factory()->create([
@@ -197,14 +197,14 @@ describe('paying for a website', function () {
             ->post(route('websites.charges.pay', [$website->public_id, $charge->public_id]))
             ->assertSessionHasErrors('wallet');
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(1000)
+        expect($wallet->refresh()->total->toDecimal())->toBe('10.00')
             ->and($charge->refresh()->status)->toBe(WebsiteChargeStatus::Due)
             ->and($website->refresh()->status)->toBe(WebsiteStatus::DepositPending);
     });
 
     it('never pays another account\'s charge', function () {
         $mine = websiteTestAccount();
-        websiteTestWallet($mine, 1_000_000);
+        websiteTestWallet($mine, '10000.00');
 
         $theirs = websiteTestAccount();
         $website = Website::factory()->forAccount($theirs)->create();

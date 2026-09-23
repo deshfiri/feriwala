@@ -21,11 +21,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $name
  * @property string|null $short_description
  * @property string|null $description
- * @property Money $fee_minor
- * @property Money|null $registration_fee_minor
- * @property Money|null $renewal_fee_minor
- * @property Money $required_deposit_minor
- * @property Money $minimum_balance_minor
+ * @property Money $fee
+ * @property Money|null $registration_fee
+ * @property Money|null $renewal_fee
+ * @property Money $required_deposit
+ * @property Money $minimum_balance
  * @property string $currency_code
  * @property int|null $validity_days
  * @property string|null $renewal_frequency
@@ -47,11 +47,11 @@ class Package extends Model
     protected function casts(): array
     {
         return [
-            'fee_minor' => MoneyCast::class,
-            'registration_fee_minor' => MoneyCast::class,
-            'renewal_fee_minor' => MoneyCast::class,
-            'required_deposit_minor' => MoneyCast::class,
-            'minimum_balance_minor' => MoneyCast::class,
+            'fee' => MoneyCast::class,
+            'registration_fee' => MoneyCast::class,
+            'renewal_fee' => MoneyCast::class,
+            'required_deposit' => MoneyCast::class,
+            'minimum_balance' => MoneyCast::class,
             'is_active' => 'boolean',
             'is_public' => 'boolean',
             'validity_days' => 'integer',

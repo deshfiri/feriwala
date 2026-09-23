@@ -80,7 +80,7 @@ class SettlePayment
             return GatewayResult::paid(
                 reference: $payment->reference,
                 gatewayReference: (string) $payment->gateway_reference,
-                amount: $payment->amount_minor,
+                amount: $payment->amount,
             );
         }
 
@@ -164,11 +164,11 @@ class SettlePayment
         // The amount check. A gateway reporting a different figure means the
         // request was tampered with or the gateway is misconfigured — either
         // way it does not pay for this order.
-        if (! $result->matchesAmount($payment->amount_minor)) {
+        if (! $result->matchesAmount($payment->amount)) {
             $this->log->channel('payment')->critical('Payment amount mismatch', [
                 'payment' => $payment->reference,
-                'expected_minor' => $payment->amount_minor->minorUnits,
-                'reported_minor' => $result->amount?->minorUnits,
+                'expected' => $payment->amount->toDecimal(),
+                'reported' => $result->amount?->toDecimal(),
                 'gateway' => $payment->gateway,
             ]);
 
@@ -217,8 +217,7 @@ class SettlePayment
             $locked->forceFill([
                 'gateway_reference' => $gatewayReference,
                 'completed_at' => now(),
-                'settled_currency_code' => $result->amount?->currency->value,
-                'settled_amount_minor' => $result->amount?->minorUnits,
+                'settled_amount' => $result->amount,
 
                 // Kept now because a refund is addressed to it, and going back
                 // to ask for it later is an extra call that can fail at exactly
@@ -231,8 +230,7 @@ class SettlePayment
                  * not answer either question: what the customer paid, or what
                  * the business received.
                  */
-                'gateway_fee_minor' => $result->fee?->minorUnits,
-                'gateway_fee_currency_code' => $result->fee?->currency->value,
+                'gateway_fee' => $result->fee,
             ])->save();
 
             $payment->setRawAttributes($locked->getAttributes(), sync: true);
@@ -356,8 +354,7 @@ class SettlePayment
 
             $locked->forceFill([
                 'gateway_reference' => $gatewayReference,
-                'settled_currency_code' => $result->amount?->currency->value,
-                'settled_amount_minor' => $result->amount?->minorUnits,
+                'settled_amount' => $result->amount,
                 'gateway_settlement_reference' => $result->settlementReference,
                 'reconciliation_required_at' => now(),
                 'reconciliation_reason' => sprintf(
@@ -374,7 +371,7 @@ class SettlePayment
             'payment' => $payment->reference,
             'gateway' => $payment->gateway,
             'gateway_reference' => $gatewayReference,
-            'amount_minor' => $result->amount?->minorUnits,
+            'amount' => $result->amount?->toDecimal(),
             'currency' => $result->amount?->currency->value,
         ]);
     }
@@ -475,7 +472,7 @@ class SettlePayment
             'payment' => $payment->reference,
             'purpose' => $payment->purpose->value,
             'business_account' => $payment->business_account_id,
-            'amount_minor' => $payment->amount_minor->minorUnits,
+            'amount' => $payment->amount->toDecimal(),
         ]);
 
         $this->logs->handle(
@@ -483,7 +480,7 @@ class SettlePayment
             direction: PaymentLog::OUTBOUND,
             event: 'settle',
             payment: $payment,
-            amount: $payment->amount_minor,
+            amount: $payment->amount,
             outcome: 'undeliverable_purpose',
             context: ['purpose' => $payment->purpose->value],
         );
@@ -504,7 +501,7 @@ class SettlePayment
             $this->log->channel('payment')->critical('Could not confirm a settled order', [
                 'payment' => $payment->reference,
                 'business_account' => $payment->business_account_id,
-                'amount_minor' => $payment->amount_minor->minorUnits,
+                'amount' => $payment->amount->toDecimal(),
                 'error' => $throwable->getMessage(),
             ]);
 
@@ -513,7 +510,7 @@ class SettlePayment
                 direction: PaymentLog::OUTBOUND,
                 event: 'settle',
                 payment: $payment,
-                amount: $payment->amount_minor,
+                amount: $payment->amount,
                 outcome: 'order_unconfirmed',
                 context: ['error' => $throwable->getMessage()],
             );
@@ -556,7 +553,7 @@ class SettlePayment
             $this->log->channel('wallet')->critical('Could not credit a settled wallet payment', [
                 'payment' => $payment->reference,
                 'business_account' => $payment->business_account_id,
-                'amount_minor' => $payment->amount_minor->minorUnits,
+                'amount' => $payment->amount->toDecimal(),
                 'error' => $throwable->getMessage(),
             ]);
 
@@ -588,7 +585,7 @@ class SettlePayment
 
         try {
             $payment->businessAccount()->with('owner')->first()?->owner?->notify(
-                new PaymentReceived($payment->reference, $payment->amount_minor),
+                new PaymentReceived($payment->reference, $payment->amount),
             );
         } catch (Throwable $throwable) {
             $this->log->channel('payment')->error('Could not announce a settled payment', [

@@ -86,7 +86,7 @@ class CreditSettledPayment
                 'payment' => $payment->reference,
                 'business_account' => $payment->business_account_id,
                 'purpose' => $payment->purpose->value,
-                'amount_minor' => $payment->amount_minor->minorUnits,
+                'amount' => $payment->amount->toDecimal(),
             ]);
 
             $this->flagUnapplied($payment, 'This account has no wallet to credit.');
@@ -94,7 +94,7 @@ class CreditSettledPayment
             return null;
         }
 
-        $transaction = $this->wallet->credit($wallet, $type, $payment->amount_minor, new PostingContext(
+        $transaction = $this->wallet->credit($wallet, $type, $payment->amount, new PostingContext(
             source: 'payment',
             description: $payment->purpose->label().' — '.$payment->reference,
 

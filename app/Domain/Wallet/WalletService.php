@@ -94,7 +94,7 @@ class WalletService
         Money $amount,
         PostingContext $context,
     ): WalletTransaction {
-        return $this->claim($wallet, $type, $amount, $context, 'hold_minor', WalletTransactionStatus::OnHold);
+        return $this->claim($wallet, $type, $amount, $context, 'hold', WalletTransactionStatus::OnHold);
     }
 
     /**
@@ -109,7 +109,7 @@ class WalletService
         Money $amount,
         PostingContext $context,
     ): WalletTransaction {
-        return $this->claim($wallet, $type, $amount, $context, 'reserved_minor', WalletTransactionStatus::Pending);
+        return $this->claim($wallet, $type, $amount, $context, 'reserved', WalletTransactionStatus::Pending);
     }
 
     /**
@@ -172,7 +172,7 @@ class WalletService
                     throw WalletOperationRefused::insufficientBalance($amount, $locked->usableBalance());
                 }
 
-                $before = $locked->total_minor;
+                $before = $locked->total;
                 $after = $isCredit ? $before->plus($amount) : $before->minus($amount);
 
                 // A posting that reaches here has moved value, so it is settled
@@ -181,20 +181,20 @@ class WalletService
                     $locked, $type, $amount, $context, $direction, WalletTransactionStatus::Settled,
                 );
 
-                $locked->forceFill(['total_minor' => $after])->save();
+                $locked->forceFill(['total' => $after])->save();
 
                 $entry = $this->writeEntry($locked, $transaction, $context, [
-                    'credit_minor' => $isCredit ? $amount : Money::zero($amount->currency),
-                    'debit_minor' => $isCredit ? Money::zero($amount->currency) : $amount,
-                    'balance_before_minor' => $before,
-                    'balance_after_minor' => $after,
+                    'credit' => $isCredit ? $amount : Money::zero($amount->currency),
+                    'debit' => $isCredit ? Money::zero($amount->currency) : $amount,
+                    'balance_before' => $before,
+                    'balance_after' => $after,
                 ]);
 
                 $this->recordEvent($locked, $transaction, $context, [
                     'from_status' => null,
                     'to_status' => $transaction->status,
-                    'total_before_minor' => $before,
-                    'total_after_minor' => $after,
+                    'total_before' => $before,
+                    'total_after' => $after,
                     'ledger_entry_id' => $entry->id,
                 ]);
 
@@ -268,10 +268,10 @@ class WalletService
                     'from_status' => null,
                     'to_status' => $status,
                     'bucket' => $bucket,
-                    'bucket_before_minor' => $bucketBefore,
-                    'bucket_after_minor' => $locked->{$bucket},
-                    'total_before_minor' => $locked->total_minor,
-                    'total_after_minor' => $locked->total_minor,
+                    'bucket_before' => $bucketBefore,
+                    'bucket_after' => $locked->{$bucket},
+                    'total_before' => $locked->total,
+                    'total_after' => $locked->total,
                 ]);
 
                 $wallet->setRawAttributes($locked->getAttributes(), sync: true);
@@ -309,20 +309,20 @@ class WalletService
             $wallet = Wallet::query()->lockForUpdate()->findOrFail($locked->wallet_id);
 
             $bucket = $locked->status === WalletTransactionStatus::OnHold
-                ? 'hold_minor'
-                : 'reserved_minor';
+                ? 'hold'
+                : 'reserved';
 
-            $amount = $locked->amount_minor;
+            $amount = $locked->amount;
 
             // Read before anything is written: after the update the wallet no
             // longer knows where it started.
-            $before = $wallet->total_minor;
+            $before = $wallet->total;
             $bucketBefore = $wallet->{$bucket};
 
             $changes = [$bucket => $bucketBefore->minus($amount)];
 
             if ($capture) {
-                $changes['total_minor'] = $before->minus($amount);
+                $changes['total'] = $before->minus($amount);
             }
 
             $wallet->forceFill($changes)->save();
@@ -347,10 +347,10 @@ class WalletService
                     paymentId: $locked->payment_id,
                     userId: $locked->user_id,
                 ), [
-                    'credit_minor' => Money::zero($amount->currency),
-                    'debit_minor' => $amount,
-                    'balance_before_minor' => $before,
-                    'balance_after_minor' => $wallet->total_minor,
+                    'credit' => Money::zero($amount->currency),
+                    'debit' => $amount,
+                    'balance_before' => $before,
+                    'balance_after' => $wallet->total,
                 ]);
             }
 
@@ -368,10 +368,10 @@ class WalletService
                 'from_status' => $from,
                 'to_status' => $to,
                 'bucket' => $bucket,
-                'bucket_before_minor' => $bucketBefore,
-                'bucket_after_minor' => $wallet->{$bucket},
-                'total_before_minor' => $before,
-                'total_after_minor' => $wallet->total_minor,
+                'bucket_before' => $bucketBefore,
+                'bucket_after' => $wallet->{$bucket},
+                'total_before' => $before,
+                'total_after' => $wallet->total,
                 'ledger_entry_id' => $entry?->id,
             ]);
 
@@ -445,7 +445,7 @@ class WalletService
             'type' => $type,
             'direction' => $direction,
             'source' => $context->source,
-            'amount_minor' => $amount,
+            'amount' => $amount,
             'currency_code' => $amount->currency->value,
             'status' => $status,
             'payment_id' => $context->paymentId,
@@ -479,7 +479,7 @@ class WalletService
             'wallet_transaction_id' => $transaction->id,
             'wallet_id' => $wallet->id,
             'business_account_id' => $wallet->business_account_id,
-            'amount_minor' => $transaction->amount_minor,
+            'amount' => $transaction->amount,
             'currency_code' => $transaction->currency_code,
             'source' => $context->source,
             'actor_id' => $context->actorId,
@@ -515,10 +515,10 @@ class WalletService
 
             // What every bucket held immediately after this entry (§23.2), so a
             // statement from last March reads without reconstructing March.
-            'pending_minor' => $wallet->pending_minor,
-            'reserved_minor' => $wallet->reserved_minor,
-            'hold_minor' => $wallet->hold_minor,
-            'available_minor' => $wallet->usableBalance(),
+            'pending' => $wallet->pending,
+            'reserved' => $wallet->reserved,
+            'hold' => $wallet->hold,
+            'available' => $wallet->usableBalance(),
 
             'status' => $transaction->status,
             'created_by' => $context->actorId,

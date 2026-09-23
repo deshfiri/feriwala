@@ -37,12 +37,12 @@ beforeEach(function () {
 /**
  * @param  array<string, mixed>  $rule
  */
-function enforcementWallet(int $credit, array $rule = []): Wallet
+function enforcementWallet(string $credit, array $rule = []): Wallet
 {
     DepositRule::create([
         'scope' => RuleScope::Global,
-        'required_initial_deposit_minor' => 0,
-        'minimum_balance_minor' => 200000,
+        'required_initial_deposit' => Money::zero(),
+        'minimum_balance' => Money::fromDecimal('2000.00'),
         'currency_code' => 'BDT',
         'effective_from' => CarbonImmutable::now()->subMonth(),
         'is_active' => true,
@@ -50,12 +50,13 @@ function enforcementWallet(int $credit, array $rule = []): Wallet
     ]);
 
     $wallet = app(OpenWallet::class)->handle(test()->account);
+    $amount = Money::fromDecimal($credit, Currency::BDT);
 
-    if ($credit > 0) {
+    if ($amount->isPositive()) {
         app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of($credit, Currency::BDT),
+            $amount,
             new PostingContext(source: 'test', description: 'Opening'),
         );
     }
@@ -65,12 +66,12 @@ function enforcementWallet(int $credit, array $rule = []): Wallet
     return $wallet->refresh();
 }
 
-function topUp(Wallet $wallet, int $amount): void
+function topUp(Wallet $wallet, string $amount): void
 {
     app(WalletService::class)->credit(
         $wallet->refresh(),
         LedgerTransactionType::TopUpCredit,
-        Money::of($amount, Currency::BDT),
+        Money::fromDecimal($amount, Currency::BDT),
         new PostingContext(source: 'test', description: 'Top-up'),
     );
 }
@@ -78,7 +79,7 @@ function topUp(Wallet $wallet, int $amount): void
 describe('the order of things', function () {
     it('tells the account and takes nothing away', function () {
         // §24.3 opens with the notice. Nothing is restricted for being told.
-        $wallet = enforcementWallet(100000, ['restricts_account' => true, 'grace_period_days' => 14]);
+        $wallet = enforcementWallet('1000.00', ['restricts_account' => true, 'grace_period_days' => 14]);
 
         $applied = app(EnforceBalanceRules::class)->handle($wallet);
 
@@ -93,7 +94,7 @@ describe('the order of things', function () {
          * The point of a grace period. Acting during it would make the
          * configured window decorative.
          */
-        $wallet = enforcementWallet(100000, [
+        $wallet = enforcementWallet('1000.00', [
             'restricts_chargeable_services' => true,
             'restricts_account' => true,
             'grace_period_days' => 14,
@@ -112,7 +113,7 @@ describe('the order of things', function () {
     });
 
     it('starts taking things away once the time runs out', function () {
-        $wallet = enforcementWallet(100000, [
+        $wallet = enforcementWallet('1000.00', [
             'restricts_chargeable_services' => true,
             'pauses_website_setup' => true,
             'grace_period_days' => 14,
@@ -134,7 +135,7 @@ describe('the order of things', function () {
 
     it('applies only the stages the rule authorises', function () {
         // A platform that only ever warns is a legitimate configuration.
-        $wallet = enforcementWallet(100000);
+        $wallet = enforcementWallet('1000.00');
 
         app(EnforceBalanceRules::class)->handle($wallet);
         $applied = app(EnforceBalanceRules::class)->handle($wallet->refresh());
@@ -146,7 +147,7 @@ describe('the order of things', function () {
     });
 
     it('disables an account only where that is configured', function () {
-        $wallet = enforcementWallet(100000, ['disables_account' => true]);
+        $wallet = enforcementWallet('1000.00', ['disables_account' => true]);
 
         app(EnforceBalanceRules::class)->handle($wallet);
 
@@ -158,7 +159,7 @@ describe('the order of things', function () {
     });
 
     it('does nothing at all to a healthy wallet', function () {
-        $wallet = enforcementWallet(500000, ['restricts_account' => true]);
+        $wallet = enforcementWallet('5000.00', ['restricts_account' => true]);
 
         expect(app(EnforceBalanceRules::class)->handle($wallet))->toBe([])
             ->and(WalletRestriction::query()->count())->toBe(0)
@@ -174,7 +175,7 @@ describe('running it again', function () {
          * The sweep runs every morning and the shortfall lasts until it is
          * paid. Everything here has to be safe to repeat.
          */
-        $wallet = enforcementWallet(100000, ['restricts_chargeable_services' => true]);
+        $wallet = enforcementWallet('1000.00', ['restricts_chargeable_services' => true]);
 
         app(EnforceBalanceRules::class)->handle($wallet);
         app(EnforceBalanceRules::class)->handle($wallet->refresh());
@@ -187,7 +188,7 @@ describe('running it again', function () {
     it('sends one message, not one a morning', function () {
         // Somebody texted daily about the same shortfall learns to ignore the
         // messages that matter.
-        $wallet = enforcementWallet(100000);
+        $wallet = enforcementWallet('1000.00');
 
         app(EnforceBalanceRules::class)->handle($wallet);
         app(EnforceBalanceRules::class)->handle($wallet->refresh());
@@ -197,7 +198,7 @@ describe('running it again', function () {
     });
 
     it('writes the restriction to the audit log', function () {
-        $wallet = enforcementWallet(100000);
+        $wallet = enforcementWallet('1000.00');
 
         app(EnforceBalanceRules::class)->handle($wallet);
 
@@ -207,11 +208,11 @@ describe('running it again', function () {
 
 describe('restoring (P2-17)', function () {
     it('gives everything back when the balance is restored', function () {
-        $wallet = enforcementWallet(100000, ['restricts_chargeable_services' => true]);
+        $wallet = enforcementWallet('1000.00', ['restricts_chargeable_services' => true]);
 
         app(EnforceBalanceRules::class)->handle($wallet);
 
-        topUp($wallet, 200000);
+        topUp($wallet, '2000.00');
 
         $lifted = app(RestoreWalletServices::class)->handle($wallet->refresh());
 
@@ -228,13 +229,13 @@ describe('restoring (P2-17)', function () {
          */
         $this->account->forceFill(['status' => AccountStatus::PackageRenewalDue])->save();
 
-        $wallet = enforcementWallet(100000, ['disables_account' => true]);
+        $wallet = enforcementWallet('1000.00', ['disables_account' => true]);
 
         app(EnforceBalanceRules::class)->handle($wallet);
 
         expect($this->account->fresh()->status)->toBe(AccountStatus::TemporarilyDisabled);
 
-        topUp($wallet, 200000);
+        topUp($wallet, '2000.00');
         app(RestoreWalletServices::class)->handle($wallet->refresh());
 
         expect($this->account->fresh()->status)->toBe(AccountStatus::PackageRenewalDue);
@@ -243,11 +244,11 @@ describe('restoring (P2-17)', function () {
     it('gives nothing back on a partial top-up', function () {
         // §24.3 restores on *sufficient* top-up, and half of it is not
         // sufficient.
-        $wallet = enforcementWallet(100000, ['restricts_chargeable_services' => true]);
+        $wallet = enforcementWallet('1000.00', ['restricts_chargeable_services' => true]);
 
         app(EnforceBalanceRules::class)->handle($wallet);
 
-        topUp($wallet, 50000);
+        topUp($wallet, '500.00');
 
         expect(app(RestoreWalletServices::class)->handle($wallet->refresh()))->toBe([])
             ->and(WalletRestriction::query()->standing()->count())->toBe(2);
@@ -258,7 +259,7 @@ describe('restoring (P2-17)', function () {
          * The rule that makes restoration safe. An account restricted for a
          * failed review does not get its panel back by paying a deposit.
          */
-        $wallet = enforcementWallet(500000);
+        $wallet = enforcementWallet('5000.00');
 
         $foreign = WalletRestriction::create([
             'wallet_id' => $wallet->id,
@@ -278,13 +279,13 @@ describe('restoring (P2-17)', function () {
     it('leaves an account somebody else moved alone', function () {
         // Restoring a balance is not a reason to undo a decision this module
         // knows nothing about.
-        $wallet = enforcementWallet(100000, ['disables_account' => true]);
+        $wallet = enforcementWallet('1000.00', ['disables_account' => true]);
 
         app(EnforceBalanceRules::class)->handle($wallet);
 
         $this->account->forceFill(['status' => AccountStatus::Suspended])->save();
 
-        topUp($wallet, 200000);
+        topUp($wallet, '2000.00');
         app(RestoreWalletServices::class)->handle($wallet->refresh());
 
         expect($this->account->fresh()->status)->toBe(AccountStatus::Suspended)
@@ -293,16 +294,16 @@ describe('restoring (P2-17)', function () {
     });
 
     it('does nothing when nothing is standing', function () {
-        $wallet = enforcementWallet(500000);
+        $wallet = enforcementWallet('5000.00');
 
         expect(app(RestoreWalletServices::class)->handle($wallet))->toBe([]);
     });
 
     it('writes the restoration to the audit log', function () {
-        $wallet = enforcementWallet(100000);
+        $wallet = enforcementWallet('1000.00');
 
         app(EnforceBalanceRules::class)->handle($wallet);
-        topUp($wallet, 200000);
+        topUp($wallet, '2000.00');
         app(RestoreWalletServices::class)->handle($wallet->refresh());
 
         expect(AuditLog::query()->where('action', 'wallet.restriction_lifted')->count())->toBe(1);

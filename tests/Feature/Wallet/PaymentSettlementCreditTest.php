@@ -13,6 +13,7 @@ use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -39,14 +40,14 @@ beforeEach(function () {
 function walletPayment(
     PaymentPurpose $purpose,
     ?BusinessAccount $account = null,
-    int $amountMinor = 600000,
+    string $amount = '6000.00',
 ): Payment {
     return Payment::create([
         'business_account_id' => ($account ?? test()->account)->id,
         'purpose' => $purpose,
         'status' => PaymentStatus::Initiated,
         'gateway' => 'sslcommerz',
-        'amount_minor' => $amountMinor,
+        'amount' => Money::fromDecimal($amount),
         'currency_code' => 'BDT',
     ]);
 }
@@ -73,8 +74,8 @@ describe('a settled top-up', function () {
 
         walletSettle($payment);
 
-        expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(600000)
-            ->and($this->wallet->usableBalance()->minorUnits)->toBe(600000);
+        expect($this->wallet->refresh()->total->toDecimal())->toBe('6000.00')
+            ->and($this->wallet->usableBalance()->toDecimal())->toBe('6000.00');
     });
 
     it('is explained by a ledger entry naming the payment', function () {
@@ -87,10 +88,10 @@ describe('a settled top-up', function () {
         $entry = LedgerEntry::query()->where('wallet_id', $this->wallet->id)->firstOrFail();
 
         expect($entry->type)->toBe(LedgerTransactionType::TopUpCredit)
-            ->and($entry->credit_minor->minorUnits)->toBe(600000)
+            ->and($entry->credit->toDecimal())->toBe('6000.00')
             ->and($entry->payment_id)->toBe($payment->id)
-            ->and($entry->balance_before_minor->minorUnits)->toBe(0)
-            ->and($entry->balance_after_minor->minorUnits)->toBe(600000);
+            ->and($entry->balance_before->toDecimal())->toBe('0.00')
+            ->and($entry->balance_after->toDecimal())->toBe('6000.00');
     });
 
     it('posts a deposit as a deposit, not as a top-up', function () {
@@ -120,7 +121,7 @@ describe('exactly once (§26.4)', function () {
         walletSettle($payment);
         walletSettle($payment);
 
-        expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(600000)
+        expect($this->wallet->refresh()->total->toDecimal())->toBe('6000.00')
             ->and(LedgerEntry::query()->where('wallet_id', $this->wallet->id)->count())->toBe(1);
     });
 
@@ -140,7 +141,7 @@ describe('exactly once (§26.4)', function () {
         expect($again?->reference)->toBe(
             $this->wallet->transactions()->firstOrFail()->reference
         )
-            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(600000)
+            ->and($this->wallet->refresh()->total->toDecimal())->toBe('6000.00')
             ->and(LedgerEntry::query()->count())->toBe(1);
     });
 });
@@ -158,7 +159,7 @@ describe('what is not wallet money', function () {
         walletSettle($payment);
 
         expect($payment->fresh()->status)->toBe(PaymentStatus::Paid)
-            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(0)
+            ->and($this->wallet->refresh()->total->toDecimal())->toBe('0.00')
             ->and(LedgerEntry::query()->count())->toBe(0);
     });
 
@@ -168,7 +169,7 @@ describe('what is not wallet money', function () {
 
         walletSettle($payment);
 
-        expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(0);
+        expect($this->wallet->refresh()->total->toDecimal())->toBe('0.00');
     });
 
     it('ignores a top-up that has not actually settled', function () {
@@ -176,7 +177,7 @@ describe('what is not wallet money', function () {
         $payment = walletPayment(PaymentPurpose::WalletTopUp);
 
         expect(app(CreditSettledPayment::class)->handle($payment))->toBeNull()
-            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(0);
+            ->and($this->wallet->refresh()->total->toDecimal())->toBe('0.00');
     });
 });
 
@@ -194,7 +195,7 @@ it('leaves the payment settled when the wallet cannot be credited', function () 
 
     expect($payment->fresh()->status)->toBe(PaymentStatus::Paid)
         ->and(Wallet::query()->where('business_account_id', $other->id)->exists())->toBeFalse()
-        ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(0);
+        ->and($this->wallet->refresh()->total->toDecimal())->toBe('0.00');
 });
 
 it('says so loudly when there is no wallet to credit', function () {

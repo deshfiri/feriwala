@@ -72,11 +72,11 @@ class CaptureDepositObligation
 
         $figures = [
             'deposit_rule_id' => $rule?->id,
-            'required_deposit_minor' => $rule === null ? $nothing : $rule->required_initial_deposit_minor,
-            'minimum_balance_minor' => $rule === null ? $nothing : $rule->minimum_balance_minor,
-            'required_top_up_minor' => $rule === null ? $nothing : $rule->required_top_up_minor,
-            'low_balance_threshold_minor' => $rule?->low_balance_threshold_minor,
-            'critical_balance_threshold_minor' => $rule?->critical_balance_threshold_minor,
+            'required_deposit' => $rule === null ? $nothing : $rule->required_initial_deposit,
+            'minimum_balance' => $rule === null ? $nothing : $rule->minimum_balance,
+            'required_top_up' => $rule === null ? $nothing : $rule->required_top_up,
+            'low_balance_threshold' => $rule?->low_balance_threshold,
+            'critical_balance_threshold' => $rule?->critical_balance_threshold,
             'grace_period_days' => $rule?->grace_period_days,
 
             /*
@@ -127,8 +127,8 @@ class CaptureDepositObligation
              * required to keep.
              */
             $wallet->forceFill([
-                'required_deposit_minor' => $figures['required_deposit_minor'],
-                'minimum_balance_minor' => $figures['minimum_balance_minor'],
+                'required_deposit' => $figures['required_deposit'],
+                'minimum_balance' => $figures['minimum_balance'],
                 'deposit_usable_for_charges' => $figures['deposit_usable_for_charges'],
 
                 /*
@@ -162,8 +162,8 @@ class CaptureDepositObligation
             return false;
         }
 
-        return $wallet->required_deposit_minor->equals($figures['required_deposit_minor'])
-            && $wallet->minimum_balance_minor->equals($figures['minimum_balance_minor'])
+        return $wallet->required_deposit->equals($figures['required_deposit'])
+            && $wallet->minimum_balance->equals($figures['minimum_balance'])
             && $wallet->deposit_usable_for_charges === $figures['deposit_usable_for_charges']
             && $wallet->deposit_rule_id === $figures['deposit_rule_id'];
     }

@@ -24,7 +24,7 @@ use App\Support\Money\Money;
  * putting-right of it are both on the record.
  */
 
-function correctionWallet(int $opening = 100000): Wallet
+function correctionWallet(string $opening = '1000.00'): Wallet
 {
     $wallet = app(OpenWallet::class)
         ->handle(testBusinessAccount(AccountStatus::Active));
@@ -32,7 +32,7 @@ function correctionWallet(int $opening = 100000): Wallet
     app(WalletService::class)->credit(
         $wallet,
         LedgerTransactionType::TopUpCredit,
-        Money::of($opening, Currency::BDT),
+        Money::fromDecimal($opening, Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );
 
@@ -50,10 +50,10 @@ it('answers a credit with the opposite movement', function () {
     $reversal = LedgerEntry::query()->latest('id')->firstOrFail();
 
     expect($reversal->id)->not->toBe($original->id)
-        ->and($reversal->debit_minor->minorUnits)->toBe(100000)
-        ->and($reversal->credit_minor->minorUnits)->toBe(0)
+        ->and($reversal->debit->toDecimal())->toBe('1000.00')
+        ->and($reversal->credit->toDecimal())->toBe('0.00')
         ->and($reversal->corrects_ledger_entry_id)->toBe($original->id)
-        ->and($wallet->refresh()->total_minor->minorUnits)->toBe(0);
+        ->and($wallet->refresh()->total->toDecimal())->toBe('0.00');
 });
 
 it('leaves the original exactly as it was', function () {
@@ -62,11 +62,11 @@ it('leaves the original exactly as it was', function () {
     $staff = User::factory()->staff()->create();
 
     $original = LedgerEntry::query()->latest('id')->firstOrFail();
-    $before = $original->credit_minor->minorUnits;
+    $before = $original->credit->toDecimal();
 
     app(CorrectLedgerEntry::class)->reverse($original, $staff, 'Wrong account.');
 
-    expect($original->fresh()->credit_minor->minorUnits)->toBe($before)
+    expect($original->fresh()->credit->toDecimal())->toBe($before)
         ->and($original->fresh()->corrects_ledger_entry_id)->toBeNull()
         ->and(LedgerEntry::query()->count())->toBe(2);
 });
@@ -98,7 +98,7 @@ it('reverses once however many times it is asked', function () {
 
     expect($second->id)->toBe($first->id)
         ->and(LedgerEntry::query()->count())->toBe(2)
-        ->and($wallet->refresh()->total_minor->minorUnits)->toBe(0);
+        ->and($wallet->refresh()->total->toDecimal())->toBe('0.00');
 });
 
 it('names the reversal §23.1 gives it where there is one', function () {
@@ -108,7 +108,7 @@ it('names the reversal §23.1 gives it where there is one', function () {
     app(WalletService::class)->credit(
         $wallet,
         LedgerTransactionType::CommissionCredit,
-        Money::of(5000, Currency::BDT),
+        Money::fromDecimal('50.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Commission'),
     );
 
@@ -138,13 +138,13 @@ describe('a manual adjustment', function () {
         $transaction = app(CorrectLedgerEntry::class)->adjust(
             $wallet,
             $staff,
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill after a courier failure.',
             'Approved verbally by finance.',
         );
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(102500)
+        expect($wallet->refresh()->total->toDecimal())->toBe('1025.00')
             ->and($transaction->type)->toBe(LedgerTransactionType::ManualAdjustment)
             ->and($transaction->reason)->toBe('Goodwill after a courier failure.')
             ->and($transaction->created_by)->toBe($staff->id);
@@ -158,12 +158,12 @@ describe('a manual adjustment', function () {
         app(CorrectLedgerEntry::class)->adjust(
             $wallet,
             User::factory()->staff()->create(),
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Debit,
             'Overpaid last month.',
         );
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(97500);
+        expect($wallet->refresh()->total->toDecimal())->toBe('975.00');
     });
 
     it('is written to the audit log as a sensitive act', function () {
@@ -175,7 +175,7 @@ describe('a manual adjustment', function () {
         app(CorrectLedgerEntry::class)->adjust(
             $wallet,
             $staff,
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill.',
         );
@@ -193,7 +193,7 @@ describe('a manual adjustment', function () {
         $transaction = app(CorrectLedgerEntry::class)->adjust(
             $wallet,
             User::factory()->staff()->create(),
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill.',
             'Customer complained loudly on social media.',

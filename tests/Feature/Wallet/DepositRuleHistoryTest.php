@@ -5,6 +5,7 @@ use App\Domain\Wallet\Actions\ManageDepositRules;
 use App\Domain\Wallet\Models\DepositRule;
 use App\Domain\Wallet\Models\DepositRuleChange;
 use App\Models\User;
+use App\Support\Money\Money;
 use App\Support\Rules\RuleScope;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
@@ -36,7 +37,7 @@ function createDepositRule(array $attributes = [], ?CarbonImmutable $from = null
         actor: test()->actor,
         scope: RuleScope::Global,
         scopeId: null,
-        attributes: ['minimum_balance_minor' => 200000, ...$attributes],
+        attributes: ['minimum_balance' => Money::fromDecimal('2000.00'), ...$attributes],
         effectiveFrom: $from ?? CarbonImmutable::now()->subMonth(),
         reason: 'The standing policy.',
     );
@@ -44,7 +45,7 @@ function createDepositRule(array $attributes = [], ?CarbonImmutable $from = null
 
 describe('creating a rule', function () {
     it('records the figures it was created with', function () {
-        $rule = createDepositRule(['required_initial_deposit_minor' => 500000]);
+        $rule = createDepositRule(['required_initial_deposit' => Money::fromDecimal('5000.00')]);
 
         $change = DepositRuleChange::query()->where('deposit_rule_id', $rule->id)->firstOrFail();
 
@@ -52,8 +53,8 @@ describe('creating a rule', function () {
             // A creation has no previous state, which is not the same as one
             // whose previous state was empty.
             ->and($change->before)->toBeNull()
-            ->and($change->after['minimum_balance_minor'])->toBe(200000)
-            ->and($change->after['required_initial_deposit_minor'])->toBe(500000)
+            ->and($change->after['minimum_balance'])->toBe('2000.00')
+            ->and($change->after['required_initial_deposit'])->toBe('5000.00')
             ->and($change->actor_id)->toBe($this->actor->id)
             ->and($change->reason)->toBe('The standing policy.');
     });
@@ -100,7 +101,7 @@ describe('creating a rule', function () {
             actor: $this->actor,
             scope: RuleScope::Package,
             scopeId: 42,
-            attributes: ['minimum_balance_minor' => 0],
+            attributes: ['minimum_balance' => Money::zero()],
             effectiveFrom: CarbonImmutable::now()->subWeek(),
         );
 
@@ -132,21 +133,21 @@ describe('changing a rule', function () {
          * The whole point. An obligation captured last month still resolves to
          * the rule it was captured from.
          */
-        $original = createDepositRule(['minimum_balance_minor' => 200000]);
+        $original = createDepositRule(['minimum_balance' => Money::fromDecimal('2000.00')]);
 
         $closesAt = CarbonImmutable::now();
 
         manageRules()->close($this->actor, $original, $closesAt, 'Raising the floor.');
 
-        $replacement = createDepositRule(['minimum_balance_minor' => 500000], $closesAt);
+        $replacement = createDepositRule(['minimum_balance' => Money::fromDecimal('5000.00')], $closesAt);
 
-        expect($original->fresh()->minimum_balance_minor->minorUnits)->toBe(200000)
+        expect($original->fresh()->minimum_balance->toDecimal())->toBe('2000.00')
             ->and($original->fresh()->effective_until)->not->toBeNull()
-            ->and($replacement->minimum_balance_minor->minorUnits)->toBe(500000);
+            ->and($replacement->minimum_balance->toDecimal())->toBe('5000.00');
     });
 
     it('records what the figures were before the close', function () {
-        $rule = createDepositRule(['minimum_balance_minor' => 200000]);
+        $rule = createDepositRule(['minimum_balance' => Money::fromDecimal('2000.00')]);
 
         manageRules()->close($this->actor, $rule, CarbonImmutable::now(), 'Raising the floor.');
 
@@ -155,7 +156,7 @@ describe('changing a rule', function () {
             ->where('action', DepositRuleChange::CLOSED)
             ->firstOrFail();
 
-        expect($change->before['minimum_balance_minor'])->toBe(200000)
+        expect($change->before['minimum_balance'])->toBe('2000.00')
             ->and($change->before['effective_until'])->toBeNull()
             ->and($change->after['effective_until'])->not->toBeNull()
             ->and($change->reason)->toBe('Raising the floor.');

@@ -23,16 +23,18 @@ use App\Support\Money\Money;
  * account for is exactly what a ledger exists to make impossible.
  */
 
-function serviceWallet(int $openingCredit = 0): Wallet
+function serviceWallet(string $openingCredit = '0.00'): Wallet
 {
     $wallet = app(OpenWallet::class)->handle(testBusinessAccount(AccountStatus::Active));
 
-    if ($openingCredit > 0) {
+    $amount = Money::fromDecimal($openingCredit, Currency::BDT);
+
+    if ($amount->isPositive()) {
         // Funded the only way money is allowed in — through the service.
         app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of($openingCredit, Currency::BDT),
+            $amount,
             new PostingContext(source: 'test', description: 'Opening top-up'),
         );
 
@@ -60,95 +62,95 @@ describe('crediting and debiting', function () {
         $transaction = app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of(50000, Currency::BDT),
+            Money::fromDecimal('500.00', Currency::BDT),
             serviceContext('Wallet top-up'),
         );
 
         $entry = LedgerEntry::query()->firstOrFail();
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(50000)
+        expect($wallet->refresh()->total->toDecimal())->toBe('500.00')
             ->and($transaction->status)->toBe(WalletTransactionStatus::Settled)
             ->and($entry->wallet_transaction_id)->toBe($transaction->id)
-            ->and($entry->credit_minor->minorUnits)->toBe(50000)
-            ->and($entry->debit_minor->minorUnits)->toBe(0)
-            ->and($entry->balance_before_minor->minorUnits)->toBe(0)
-            ->and($entry->balance_after_minor->minorUnits)->toBe(50000)
+            ->and($entry->credit->toDecimal())->toBe('500.00')
+            ->and($entry->debit->toDecimal())->toBe('0.00')
+            ->and($entry->balance_before->toDecimal())->toBe('0.00')
+            ->and($entry->balance_after->toDecimal())->toBe('500.00')
             ->and($entry->balances())->toBeTrue();
     });
 
     it('takes money out and records where the balance ended', function () {
-        $wallet = serviceWallet(50000);
+        $wallet = serviceWallet('500.00');
 
         app(WalletService::class)->debit(
             $wallet,
             LedgerTransactionType::PackageFeeDebit,
-            Money::of(20000, Currency::BDT),
+            Money::fromDecimal('200.00', Currency::BDT),
             serviceContext('Package fee'),
         );
 
         $entry = LedgerEntry::query()->latest('id')->firstOrFail();
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(30000)
-            ->and($entry->debit_minor->minorUnits)->toBe(20000)
-            ->and($entry->balance_before_minor->minorUnits)->toBe(50000)
-            ->and($entry->balance_after_minor->minorUnits)->toBe(30000);
+        expect($wallet->refresh()->total->toDecimal())->toBe('300.00')
+            ->and($entry->debit->toDecimal())->toBe('200.00')
+            ->and($entry->balance_before->toDecimal())->toBe('500.00')
+            ->and($entry->balance_after->toDecimal())->toBe('300.00');
     });
 
     it('records the bucket snapshot §23.2 asks for', function () {
         // So a statement from last March reads without reconstructing March.
-        $wallet = serviceWallet(100000);
+        $wallet = serviceWallet('1000.00');
 
         app(WalletService::class)->reserve(
             $wallet,
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(30000, Currency::BDT),
+            Money::fromDecimal('300.00', Currency::BDT),
             serviceContext('Reserved for a service fee'),
         );
 
         app(WalletService::class)->credit(
             $wallet->refresh(),
             LedgerTransactionType::SalesCredit,
-            Money::of(10000, Currency::BDT),
+            Money::fromDecimal('100.00', Currency::BDT),
             serviceContext('Sales earnings'),
         );
 
         $entry = LedgerEntry::query()->latest('id')->firstOrFail();
 
-        expect($entry->reserved_minor->minorUnits)->toBe(30000)
-            ->and($entry->available_minor->minorUnits)->toBe(80000);
+        expect($entry->reserved->toDecimal())->toBe('300.00')
+            ->and($entry->available->toDecimal())->toBe('800.00');
     });
 
     it('refuses to spend money that is not there', function () {
         // No P2.A requirement authorises a negative available balance, and an
         // overdraft nobody agreed to is a loan nobody agreed to.
-        $wallet = serviceWallet(10000);
+        $wallet = serviceWallet('100.00');
 
         expect(fn () => app(WalletService::class)->debit(
             $wallet,
             LedgerTransactionType::PlatformFeeDebit,
-            Money::of(25000, Currency::BDT),
+            Money::fromDecimal('250.00', Currency::BDT),
             serviceContext(),
         ))->toThrow(WalletOperationRefused::class);
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(10000)
+        expect($wallet->refresh()->total->toDecimal())->toBe('100.00')
             ->and(LedgerEntry::query()->count())->toBe(1);
     });
 
     it('refuses to spend money that is reserved', function () {
         // Reserved money is already spoken for. That is the point of it.
-        $wallet = serviceWallet(50000);
+        $wallet = serviceWallet('500.00');
 
         app(WalletService::class)->reserve(
             $wallet,
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(40000, Currency::BDT),
+            Money::fromDecimal('400.00', Currency::BDT),
             serviceContext('Reserved'),
         );
 
         expect(fn () => app(WalletService::class)->debit(
             $wallet->refresh(),
             LedgerTransactionType::PlatformFeeDebit,
-            Money::of(20000, Currency::BDT),
+            Money::fromDecimal('200.00', Currency::BDT),
             serviceContext(),
         ))->toThrow(WalletOperationRefused::class);
     });
@@ -164,7 +166,7 @@ describe('crediting and debiting', function () {
         expect(fn () => app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of(50000, Currency::USD),
+            Money::fromDecimal('500.00', Currency::USD),
             serviceContext(),
         ))->toThrow(WalletOperationRefused::class);
 
@@ -175,7 +177,7 @@ describe('crediting and debiting', function () {
         expect(fn () => app(WalletService::class)->credit(
             serviceWallet(),
             LedgerTransactionType::TopUpCredit,
-            Money::of(0, Currency::BDT),
+            Money::fromDecimal('0.00', Currency::BDT),
             serviceContext(),
         ))->toThrow(WalletOperationRefused::class);
     });
@@ -183,13 +185,13 @@ describe('crediting and debiting', function () {
     it('leaves nothing behind when it refuses', function () {
         // A failed command must not leave a half-posted transaction or an
         // orphan claim.
-        $wallet = serviceWallet(1000);
+        $wallet = serviceWallet('10.00');
 
         try {
             app(WalletService::class)->debit(
                 $wallet,
                 LedgerTransactionType::WithdrawalDebit,
-                Money::of(9999999, Currency::BDT),
+                Money::fromDecimal('99999.99', Currency::BDT),
                 serviceContext(),
             );
         } catch (WalletOperationRefused) {
@@ -198,7 +200,7 @@ describe('crediting and debiting', function () {
 
         expect(WalletTransaction::query()->count())->toBe(1)
             ->and(LedgerEntry::query()->count())->toBe(1)
-            ->and($wallet->refresh()->total_minor->minorUnits)->toBe(1000);
+            ->and($wallet->refresh()->total->toDecimal())->toBe('10.00');
     });
 });
 
@@ -214,11 +216,11 @@ describe('idempotency', function () {
 
         $context = serviceContext('Top-up', ['idempotencyKey' => 'topup:PAY-1']);
 
-        $first = $service->credit($wallet, LedgerTransactionType::TopUpCredit, Money::of(50000, Currency::BDT), $context);
-        $second = $service->credit($wallet->refresh(), LedgerTransactionType::TopUpCredit, Money::of(50000, Currency::BDT), $context);
+        $first = $service->credit($wallet, LedgerTransactionType::TopUpCredit, Money::fromDecimal('500.00', Currency::BDT), $context);
+        $second = $service->credit($wallet->refresh(), LedgerTransactionType::TopUpCredit, Money::fromDecimal('500.00', Currency::BDT), $context);
 
         expect($second->id)->toBe($first->id)
-            ->and($wallet->refresh()->total_minor->minorUnits)->toBe(50000)
+            ->and($wallet->refresh()->total->toDecimal())->toBe('500.00')
             ->and(WalletTransaction::query()->count())->toBe(1)
             ->and(LedgerEntry::query()->count())->toBe(1);
     });
@@ -231,12 +233,12 @@ describe('idempotency', function () {
             $service->credit(
                 $wallet->refresh(),
                 LedgerTransactionType::TopUpCredit,
-                Money::of(10000, Currency::BDT),
+                Money::fromDecimal('100.00', Currency::BDT),
                 serviceContext('Top-up', ['idempotencyKey' => $key]),
             );
         }
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(20000)
+        expect($wallet->refresh()->total->toDecimal())->toBe('200.00')
             ->and(LedgerEntry::query()->count())->toBe(2);
     });
 });
@@ -245,56 +247,56 @@ describe('holding, reserving and letting go', function () {
     it('moves money out of reach without moving it out of the wallet', function () {
         // Nothing arrives or leaves, so no entry is written — what changes is
         // what can be spent.
-        $wallet = serviceWallet(100000);
+        $wallet = serviceWallet('1000.00');
 
         app(WalletService::class)->hold(
             $wallet,
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(40000, Currency::BDT),
+            Money::fromDecimal('400.00', Currency::BDT),
             serviceContext('Held pending review'),
         );
 
         $wallet->refresh();
 
-        expect($wallet->total_minor->minorUnits)->toBe(100000)
-            ->and($wallet->hold_minor->minorUnits)->toBe(40000)
-            ->and($wallet->usableBalance()->minorUnits)->toBe(60000)
+        expect($wallet->total->toDecimal())->toBe('1000.00')
+            ->and($wallet->hold->toDecimal())->toBe('400.00')
+            ->and($wallet->usableBalance()->toDecimal())->toBe('600.00')
             // One entry: the opening top-up. The hold moved no value.
             ->and(LedgerEntry::query()->count())->toBe(1);
     });
 
     it('gives a claim back exactly once', function () {
-        $wallet = serviceWallet(100000);
+        $wallet = serviceWallet('1000.00');
         $service = app(WalletService::class);
 
         $claim = $service->hold(
             $wallet,
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(40000, Currency::BDT),
+            Money::fromDecimal('400.00', Currency::BDT),
             serviceContext('Held'),
         );
 
         $service->release($claim);
 
-        expect($wallet->refresh()->hold_minor->minorUnits)->toBe(0)
-            ->and($wallet->usableBalance()->minorUnits)->toBe(100000);
+        expect($wallet->refresh()->hold->toDecimal())->toBe('0.00')
+            ->and($wallet->usableBalance()->toDecimal())->toBe('1000.00');
 
         // The second attempt has no move left, so it is refused rather than
         // releasing the same money twice.
         expect(fn () => $service->release($claim->refresh()))
             ->toThrow(WalletOperationRefused::class);
 
-        expect($wallet->refresh()->hold_minor->minorUnits)->toBe(0);
+        expect($wallet->refresh()->hold->toDecimal())->toBe('0.00');
     });
 
     it('turns a claim into a real debit exactly once', function () {
-        $wallet = serviceWallet(100000);
+        $wallet = serviceWallet('1000.00');
         $service = app(WalletService::class);
 
         $claim = $service->reserve(
             $wallet,
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(40000, Currency::BDT),
+            Money::fromDecimal('400.00', Currency::BDT),
             serviceContext('Reserved for a service fee'),
         );
 
@@ -303,29 +305,29 @@ describe('holding, reserving and letting go', function () {
         $wallet->refresh();
         $entry = LedgerEntry::query()->latest('id')->firstOrFail();
 
-        expect($wallet->total_minor->minorUnits)->toBe(60000)
-            ->and($wallet->reserved_minor->minorUnits)->toBe(0)
-            ->and($entry->debit_minor->minorUnits)->toBe(40000)
-            ->and($entry->balance_before_minor->minorUnits)->toBe(100000)
-            ->and($entry->balance_after_minor->minorUnits)->toBe(60000);
+        expect($wallet->total->toDecimal())->toBe('600.00')
+            ->and($wallet->reserved->toDecimal())->toBe('0.00')
+            ->and($entry->debit->toDecimal())->toBe('400.00')
+            ->and($entry->balance_before->toDecimal())->toBe('1000.00')
+            ->and($entry->balance_after->toDecimal())->toBe('600.00');
 
         expect(fn () => $service->capture($claim->refresh()))
             ->toThrow(WalletOperationRefused::class);
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(60000);
+        expect($wallet->refresh()->total->toDecimal())->toBe('600.00');
     });
 
     it('refuses to claim money the wallet does not have', function () {
-        $wallet = serviceWallet(10000);
+        $wallet = serviceWallet('100.00');
 
         expect(fn () => app(WalletService::class)->reserve(
             $wallet,
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(50000, Currency::BDT),
+            Money::fromDecimal('500.00', Currency::BDT),
             serviceContext(),
         ))->toThrow(WalletOperationRefused::class);
 
-        expect($wallet->refresh()->reserved_minor->minorUnits)->toBe(0);
+        expect($wallet->refresh()->reserved->toDecimal())->toBe('0.00');
     });
 });
 
@@ -336,7 +338,7 @@ describe('what a correction has to carry', function () {
         expect(fn () => app(WalletService::class)->credit(
             serviceWallet(),
             LedgerTransactionType::ManualAdjustment,
-            Money::of(1000, Currency::BDT),
+            Money::fromDecimal('10.00', Currency::BDT),
             serviceContext('Adjustment', ['direction' => LedgerDirection::Credit, 'actorId' => User::factory()->staff()->create()->id]),
         ))->toThrow(WalletOperationRefused::class);
     });
@@ -345,7 +347,7 @@ describe('what a correction has to carry', function () {
         expect(fn () => app(WalletService::class)->credit(
             serviceWallet(),
             LedgerTransactionType::ManualAdjustment,
-            Money::of(1000, Currency::BDT),
+            Money::fromDecimal('10.00', Currency::BDT),
             serviceContext('Adjustment', ['reason' => 'Goodwill', 'direction' => LedgerDirection::Credit]),
         ))->toThrow(WalletOperationRefused::class);
     });
@@ -356,7 +358,7 @@ describe('what a correction has to carry', function () {
         $transaction = app(WalletService::class)->credit(
             serviceWallet(),
             LedgerTransactionType::ManualAdjustment,
-            Money::of(1000, Currency::BDT),
+            Money::fromDecimal('10.00', Currency::BDT),
             serviceContext('Adjustment', [
                 'reason' => 'Goodwill after a courier failure',
                 'actorId' => $staff->id,
@@ -371,18 +373,18 @@ describe('what a correction has to carry', function () {
 
 describe('account isolation', function () {
     it('never lets one account\'s posting touch another\'s wallet', function () {
-        $mine = serviceWallet(50000);
-        $theirs = serviceWallet(50000);
+        $mine = serviceWallet('500.00');
+        $theirs = serviceWallet('500.00');
 
         app(WalletService::class)->debit(
             $mine,
             LedgerTransactionType::PlatformFeeDebit,
-            Money::of(20000, Currency::BDT),
+            Money::fromDecimal('200.00', Currency::BDT),
             serviceContext(),
         );
 
-        expect($mine->refresh()->total_minor->minorUnits)->toBe(30000)
-            ->and($theirs->refresh()->total_minor->minorUnits)->toBe(50000)
+        expect($mine->refresh()->total->toDecimal())->toBe('300.00')
+            ->and($theirs->refresh()->total->toDecimal())->toBe('500.00')
             ->and(LedgerEntry::query()->where('wallet_id', $theirs->id)->count())->toBe(1);
     });
 });

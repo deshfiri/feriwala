@@ -4,6 +4,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Wallet\Enums\DepositFrequency;
 use App\Domain\Wallet\Models\DepositRule;
 use App\Domain\Wallet\Queries\ResolveDepositRule;
+use App\Support\Money\Money;
 use App\Support\Rules\RuleScope;
 use Carbon\CarbonImmutable;
 
@@ -21,8 +22,8 @@ function depositRule(array $attributes = []): DepositRule
     return DepositRule::create([
         'scope' => RuleScope::Global,
         'scope_id' => null,
-        'required_initial_deposit_minor' => 500000,
-        'minimum_balance_minor' => 200000,
+        'required_initial_deposit' => Money::fromDecimal('5000.00'),
+        'minimum_balance' => Money::fromDecimal('2000.00'),
         'currency_code' => 'BDT',
         'effective_from' => CarbonImmutable::now()->subMonth(),
         'is_active' => true,
@@ -31,18 +32,18 @@ function depositRule(array $attributes = []): DepositRule
 }
 
 describe('what a rule holds', function () {
-    it('keeps §24.1 figures as money in minor units', function () {
+    it('keeps §24.1 figures as exact flat-Taka money', function () {
         $rule = depositRule([
-            'required_top_up_minor' => 100000,
-            'low_balance_threshold_minor' => 250000,
-            'critical_balance_threshold_minor' => 150000,
+            'required_top_up' => Money::fromDecimal('1000.00'),
+            'low_balance_threshold' => Money::fromDecimal('2500.00'),
+            'critical_balance_threshold' => Money::fromDecimal('1500.00'),
         ]);
 
-        expect($rule->required_initial_deposit_minor->minorUnits)->toBe(500000)
-            ->and($rule->minimum_balance_minor->minorUnits)->toBe(200000)
-            ->and($rule->required_top_up_minor->minorUnits)->toBe(100000)
-            ->and($rule->low_balance_threshold_minor->minorUnits)->toBe(250000)
-            ->and($rule->critical_balance_threshold_minor->minorUnits)->toBe(150000)
+        expect($rule->required_initial_deposit->toDecimal())->toBe('5000.00')
+            ->and($rule->minimum_balance->toDecimal())->toBe('2000.00')
+            ->and($rule->required_top_up->toDecimal())->toBe('1000.00')
+            ->and($rule->low_balance_threshold->toDecimal())->toBe('2500.00')
+            ->and($rule->critical_balance_threshold->toDecimal())->toBe('1500.00')
             ->and($rule->frequency)->toBe(DepositFrequency::OneTime);
     });
 
@@ -51,9 +52,9 @@ describe('what a rule holds', function () {
          * Falling below what you are required to keep is the condition §24.3
          * acts on, whether or not somebody configured a second figure for it.
          */
-        $rule = depositRule(['critical_balance_threshold_minor' => null]);
+        $rule = depositRule(['critical_balance_threshold' => null]);
 
-        expect($rule->criticalFloor()->minorUnits)->toBe(200000)
+        expect($rule->criticalFloor()->toDecimal())->toBe('2000.00')
             ->and($rule->lowFloor())->toBeNull();
     });
 
@@ -61,8 +62,8 @@ describe('what a rule holds', function () {
         // How an administrator says "this package requires no deposit" and
         // overrides a global rule that does.
         $rule = depositRule([
-            'required_initial_deposit_minor' => 0,
-            'minimum_balance_minor' => 0,
+            'required_initial_deposit' => Money::zero(),
+            'minimum_balance' => Money::zero(),
         ]);
 
         expect($rule->requiresAnything())->toBeFalse();
@@ -102,7 +103,7 @@ describe('precedence', function () {
         $package = depositRule([
             'scope' => RuleScope::Package,
             'scope_id' => $this->packageId,
-            'minimum_balance_minor' => 300000,
+            'minimum_balance' => Money::fromDecimal('3000.00'),
         ]);
 
         expect(app(ResolveDepositRule::class)->for($this->account)?->id)->toBe($package->id);
@@ -117,7 +118,7 @@ describe('precedence', function () {
         $mine = depositRule([
             'scope' => RuleScope::User,
             'scope_id' => $this->account->id,
-            'minimum_balance_minor' => 50000,
+            'minimum_balance' => Money::fromDecimal('500.00'),
         ]);
 
         expect(app(ResolveDepositRule::class)->for($this->account)?->id)->toBe($mine->id);
@@ -166,7 +167,7 @@ describe('precedence', function () {
         $old = depositRule([
             'effective_from' => CarbonImmutable::now()->subMonths(6),
             'effective_until' => CarbonImmutable::now()->subWeek(),
-            'minimum_balance_minor' => 100000,
+            'minimum_balance' => Money::fromDecimal('1000.00'),
         ]);
 
         depositRule(['effective_from' => CarbonImmutable::now()->subWeek()]);
@@ -175,7 +176,7 @@ describe('precedence', function () {
             ->for($this->account, CarbonImmutable::now()->subMonth());
 
         expect($resolved?->id)->toBe($old->id)
-            ->and($resolved?->minimum_balance_minor->minorUnits)->toBe(100000);
+            ->and($resolved?->minimum_balance->toDecimal())->toBe('1000.00');
     });
 
     it('ignores a rule somebody switched off', function () {

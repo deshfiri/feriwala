@@ -2,8 +2,10 @@
 
 namespace App\Domain\Billing\Models;
 
+use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,7 +29,7 @@ use RuntimeException;
  * @property string $event
  * @property string|null $reference
  * @property string|null $gateway_reference
- * @property int|null $amount_minor
+ * @property Money|null $amount
  * @property string|null $currency_code
  * @property string|null $outcome
  * @property int|null $http_status
@@ -68,7 +70,7 @@ class PaymentLog extends Model
     {
         return [
             'context' => 'array',
-            'amount_minor' => 'integer',
+            'amount' => MoneyCast::class,
             'http_status' => 'integer',
             'created_at' => 'immutable_datetime',
         ];

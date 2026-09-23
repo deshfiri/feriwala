@@ -21,7 +21,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
  * locking that every other payment gets, rather than a second path that would
  * have to be kept in step with the first.
  *
- * `revenue_minor` is zero, and that is not an oversight. Feriwala keeps nothing
+ * `revenue` is zero, and that is not an oversight. Feriwala keeps nothing
  * from a top-up: the money becomes the account's own balance. A report summing
  * revenue would otherwise count somebody's deposit as income.
  *
@@ -44,10 +44,10 @@ class RecordTopUpPayment
                 'business_account_id' => $account->id,
                 'purpose' => $plan->purpose,
                 'status' => PaymentStatus::Draft,
-                'amount_minor' => $plan->amount,
+                'amount' => $plan->amount,
 
                 // Nothing is earned. The money becomes the account's balance.
-                'revenue_minor' => Money::zero($plan->amount->currency),
+                'revenue' => Money::zero($plan->amount->currency),
                 'currency_code' => $plan->amount->currency->value,
                 'idempotency_key' => $key,
             ]));
@@ -74,7 +74,7 @@ class RecordTopUpPayment
         $open = Payment::query()
             ->where('business_account_id', $account->id)
             ->whereIn('status', [PaymentStatus::Draft, PaymentStatus::Initiated, PaymentStatus::Pending])
-            ->where('amount_minor', $amount->minorUnits)
+            ->where('amount', $amount->toDecimal())
             ->whereIn('purpose', ['wallet_top_up', 'wallet_deposit'])
             ->orderByDesc('id')
             ->first();
@@ -83,6 +83,6 @@ class RecordTopUpPayment
             return $open->idempotency_key;
         }
 
-        return 'wallet-top-up:'.$account->public_id.':'.$amount->minorUnits.':'.now()->timestamp;
+        return 'wallet-top-up:'.$account->public_id.':'.$amount->toDecimal().':'.now()->timestamp;
     }
 }

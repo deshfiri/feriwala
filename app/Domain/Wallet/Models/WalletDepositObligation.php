@@ -26,12 +26,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $wallet_id
  * @property int $business_account_id
  * @property int|null $deposit_rule_id
- * @property Money $required_deposit_minor
- * @property Money $minimum_balance_minor
- * @property Money $required_top_up_minor
+ * @property Money $required_deposit
+ * @property Money $minimum_balance
+ * @property Money $required_top_up
  * @property string $currency_code
- * @property Money|null $low_balance_threshold_minor
- * @property Money|null $critical_balance_threshold_minor
+ * @property Money|null $low_balance_threshold
+ * @property Money|null $critical_balance_threshold
  * @property int|null $grace_period_days
  * @property bool $deposit_usable_for_charges
  * @property DepositRefundability $refundability
@@ -70,11 +70,11 @@ class WalletDepositObligation extends Model
     protected function casts(): array
     {
         return [
-            'required_deposit_minor' => MoneyCast::class,
-            'minimum_balance_minor' => MoneyCast::class,
-            'required_top_up_minor' => MoneyCast::class,
-            'low_balance_threshold_minor' => MoneyCast::class,
-            'critical_balance_threshold_minor' => MoneyCast::class,
+            'required_deposit' => MoneyCast::class,
+            'minimum_balance' => MoneyCast::class,
+            'required_top_up' => MoneyCast::class,
+            'low_balance_threshold' => MoneyCast::class,
+            'critical_balance_threshold' => MoneyCast::class,
             'deposit_usable_for_charges' => 'boolean',
             'refundability' => DepositRefundability::class,
             'reserved_until_cancellation' => 'boolean',
@@ -121,7 +121,7 @@ class WalletDepositObligation extends Model
      */
     public function requiresAnything(): bool
     {
-        return $this->required_deposit_minor->isPositive()
-            || $this->minimum_balance_minor->isPositive();
+        return $this->required_deposit->isPositive()
+            || $this->minimum_balance->isPositive();
     }
 }

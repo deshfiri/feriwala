@@ -79,20 +79,20 @@ class WalletStatement
             'direction' => $transaction->direction->value,
             'description' => $transaction->description,
             'source' => $transaction->source,
-            'amount' => $transaction->amount_minor->jsonSerialize(),
+            'amount' => $transaction->amount->jsonSerialize(),
 
             // Both sides, so a column of debits sums without sign handling —
             // and null where nothing moved, because a reservation is not a
             // debit of zero, it is not a debit at all.
-            'debit' => $entry?->debit_minor->jsonSerialize(),
-            'credit' => $entry?->credit_minor->jsonSerialize(),
+            'debit' => $entry?->debit->jsonSerialize(),
+            'credit' => $entry?->credit->jsonSerialize(),
 
             /*
              * The balance this movement left behind. Absent for a claim, and
              * deliberately not filled in with the current balance: a
              * reservation did not leave the wallet at any particular figure.
              */
-            'balance_after' => $entry?->balance_after_minor->jsonSerialize(),
+            'balance_after' => $entry?->balance_after->jsonSerialize(),
             'entry_reference' => $entry?->reference,
 
             'status' => $transaction->status->value,

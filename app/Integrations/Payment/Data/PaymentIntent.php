@@ -37,7 +37,7 @@ class PaymentIntent
 
         return new self(
             reference: $payment->reference,
-            amount: $payment->amount_minor,
+            amount: $payment->amount,
             customerName: (string) $user?->name,
             customerEmail: (string) $user?->email,
             customerMobile: $user?->mobile,

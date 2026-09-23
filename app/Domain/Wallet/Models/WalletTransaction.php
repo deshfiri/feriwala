@@ -38,7 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property LedgerTransactionType $type
  * @property LedgerDirection $direction
  * @property string $source
- * @property Money $amount_minor
+ * @property Money $amount
  * @property string $currency_code
  * @property WalletTransactionStatus $status
  * @property int|null $payment_id
@@ -73,7 +73,7 @@ class WalletTransaction extends Model
             'type' => LedgerTransactionType::class,
             'direction' => LedgerDirection::class,
             'status' => WalletTransactionStatus::class,
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

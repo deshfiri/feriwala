@@ -31,12 +31,12 @@ beforeEach(function () {
     $this->wallet = app(OpenWallet::class)->handle($this->account);
 });
 
-function statementCredit(Wallet $wallet, int $amount, string $description = 'Top-up'): WalletTransaction
+function statementCredit(Wallet $wallet, string $amount, string $description = 'Top-up'): WalletTransaction
 {
     return app(WalletService::class)->credit(
         $wallet->refresh(),
         LedgerTransactionType::TopUpCredit,
-        Money::of($amount, Currency::BDT),
+        Money::fromDecimal($amount, Currency::BDT),
         new PostingContext(source: 'test', description: $description),
     );
 }
@@ -45,16 +45,16 @@ describe('the wallet screen', function () {
     it('tells the buckets apart', function () {
         // §33.7 asks for these to be distinguishable. They are not synonyms:
         // the total includes money already spoken for.
-        statementCredit($this->wallet, 50000);
+        statementCredit($this->wallet, '500.00');
 
         $this->actingAs($this->owner)
             ->get(route('wallet.show'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('wallet/show')
-                ->where('balances.total.minor_units', 50000)
-                ->where('balances.usable.minor_units', 50000)
-                ->where('balances.available_for_withdrawal.minor_units', 50000)
+                ->where('balances.total.amount', '500.00')
+                ->where('balances.usable.amount', '500.00')
+                ->where('balances.available_for_withdrawal.amount', '500.00')
                 ->has('balances.reserved')
                 ->has('balances.pending')
                 ->has('balances.hold')
@@ -71,14 +71,14 @@ describe('the wallet screen', function () {
             ->get(route('wallet.show'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('balances.total.minor_units', 0)
+                ->where('balances.total.amount', '0.00')
                 ->where('transactions.total', 0)
                 ->has('transactions.data', 0));
     });
 
     it('lists movements newest first', function () {
-        statementCredit($this->wallet, 10000, 'First');
-        statementCredit($this->wallet, 20000, 'Second');
+        statementCredit($this->wallet, '100.00', 'First');
+        statementCredit($this->wallet, '200.00', 'Second');
 
         $this->actingAs($this->owner)
             ->get(route('wallet.show'))
@@ -86,8 +86,8 @@ describe('the wallet screen', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->has('transactions.data', 2)
                 ->where('transactions.data.0.description', 'Second')
-                ->where('transactions.data.0.credit.minor_units', 20000)
-                ->where('transactions.data.0.balance_after.minor_units', 30000)
+                ->where('transactions.data.0.credit.amount', '200.00')
+                ->where('transactions.data.0.balance_after.amount', '300.00')
                 ->where('transactions.data.0.status_label', 'Settled'));
     });
 
@@ -97,12 +97,12 @@ describe('the wallet screen', function () {
          * the spendable balance is lower than the total — so it belongs on the
          * statement, saying so through its status rather than a blank row.
          */
-        statementCredit($this->wallet, 50000);
+        statementCredit($this->wallet, '500.00');
 
         app(WalletService::class)->reserve(
             $this->wallet->refresh(),
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(20000, Currency::BDT),
+            Money::fromDecimal('200.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'Reserved for a charge'),
         );
 
@@ -110,20 +110,20 @@ describe('the wallet screen', function () {
             ->get(route('wallet.show'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('balances.total.minor_units', 50000)
-                ->where('balances.usable.minor_units', 30000)
+                ->where('balances.total.amount', '500.00')
+                ->where('balances.usable.amount', '300.00')
                 ->where('transactions.data.0.debit', null)
                 ->where('transactions.data.0.balance_after', null)
                 ->where('transactions.data.0.status_label', 'Pending'));
     });
 
     it('filters by type', function () {
-        statementCredit($this->wallet, 10000, 'A top-up');
+        statementCredit($this->wallet, '100.00', 'A top-up');
 
         app(WalletService::class)->credit(
             $this->wallet->refresh(),
             LedgerTransactionType::PromotionalCredit,
-            Money::of(5000, Currency::BDT),
+            Money::fromDecimal('50.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'A promotion'),
         );
 
@@ -139,7 +139,7 @@ describe('the wallet screen', function () {
     it('drops a filter it does not recognise instead of failing', function () {
         // A mistyped query string should show an unfiltered statement, not a
         // 500 and not an empty one.
-        statementCredit($this->wallet, 10000);
+        statementCredit($this->wallet, '100.00');
 
         $this->actingAs($this->owner)
             ->get(route('wallet.show', ['type' => 'nonsense', 'from' => 'not-a-date']))
@@ -151,16 +151,16 @@ describe('the wallet screen', function () {
     });
 
     it('says plainly when the wallet is under its required deposit', function () {
-        $this->wallet->forceFill(['required_deposit_minor' => Money::of(80000, Currency::BDT)])->save();
+        $this->wallet->forceFill(['required_deposit' => Money::fromDecimal('800.00', Currency::BDT)])->save();
 
-        statementCredit($this->wallet, 50000);
+        statementCredit($this->wallet, '500.00');
 
         $this->actingAs($this->owner)
             ->get(route('wallet.show'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('balances.meets_required_deposit', false)
-                ->where('balances.shortfall.minor_units', 30000));
+                ->where('balances.shortfall.amount', '300.00'));
     });
 });
 
@@ -168,12 +168,12 @@ describe('what a member may never see', function () {
     it('never sends a staff note to the account holder', function () {
         // §23.2's internal note is written by staff for staff, about the person
         // reading this screen.
-        statementCredit($this->wallet, 100000);
+        statementCredit($this->wallet, '1000.00');
 
         app(CorrectLedgerEntry::class)->adjust(
             $this->wallet->refresh(),
             User::factory()->staff()->create(),
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill after a courier failure.',
             'Customer complained loudly on social media.',
@@ -193,7 +193,7 @@ describe('what a member may never see', function () {
          */
         $other = testBusinessAccount(AccountStatus::Active);
         $otherWallet = app(OpenWallet::class)->handle($other);
-        $theirs = statementCredit($otherWallet, 50000);
+        $theirs = statementCredit($otherWallet, '500.00');
 
         $this->actingAs($this->owner)
             ->get(route('wallet.transactions.show', $theirs->public_id))
@@ -219,7 +219,7 @@ describe('what a member may never see', function () {
 
 describe('the movement detail', function () {
     it('shows the entries behind a movement', function () {
-        $transaction = statementCredit($this->wallet, 50000);
+        $transaction = statementCredit($this->wallet, '500.00');
 
         $this->actingAs($this->owner)
             ->get(route('wallet.transactions.show', $transaction->public_id))
@@ -228,14 +228,14 @@ describe('the movement detail', function () {
                 ->component('wallet/transaction')
                 ->where('transaction.reference', $transaction->reference)
                 ->has('transaction.entries', 1)
-                ->where('transaction.entries.0.balance_before.minor_units', 0)
-                ->where('transaction.entries.0.balance_after.minor_units', 50000));
+                ->where('transaction.entries.0.balance_before.amount', '0.00')
+                ->where('transaction.entries.0.balance_after.amount', '500.00'));
     });
 });
 
 describe('the export (§33.7)', function () {
     it('hands over the statement as a file', function () {
-        statementCredit($this->wallet, 50000, 'A top-up');
+        statementCredit($this->wallet, '500.00', 'A top-up');
 
         $response = $this->actingAs($this->owner)->get(route('wallet.download'));
 
@@ -252,12 +252,12 @@ describe('the export (§33.7)', function () {
     });
 
     it('honours the filters that were on screen', function () {
-        statementCredit($this->wallet, 10000, 'A top-up');
+        statementCredit($this->wallet, '100.00', 'A top-up');
 
         app(WalletService::class)->credit(
             $this->wallet->refresh(),
             LedgerTransactionType::PromotionalCredit,
-            Money::of(5000, Currency::BDT),
+            Money::fromDecimal('50.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'A promotion'),
         );
 
@@ -275,7 +275,7 @@ describe('the export (§33.7)', function () {
          * description is text somebody else typed, so it is neutralised on the
          * way out.
          */
-        statementCredit($this->wallet, 10000, '=1+1');
+        statementCredit($this->wallet, '100.00', '=1+1');
 
         $csv = $this->actingAs($this->owner)
             ->get(route('wallet.download'))
@@ -285,12 +285,12 @@ describe('the export (§33.7)', function () {
     });
 
     it('leaves the staff note out of the file entirely', function () {
-        statementCredit($this->wallet, 100000);
+        statementCredit($this->wallet, '1000.00');
 
         app(CorrectLedgerEntry::class)->adjust(
             $this->wallet->refresh(),
             User::factory()->staff()->create(),
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill.',
             'Customer complained loudly on social media.',

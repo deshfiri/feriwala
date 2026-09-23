@@ -77,7 +77,7 @@ class CorrectLedgerEntry
 
         $this->record($actor, $wallet, $transaction, $reason, [
             'reverses' => $original->reference,
-            'amount_minor' => $amount->minorUnits,
+            'amount' => $amount->toDecimal(),
         ]);
 
         return $transaction;
@@ -115,7 +115,7 @@ class CorrectLedgerEntry
 
         $this->record($actor, $wallet, $transaction, $reason, [
             'direction' => $direction->value,
-            'amount_minor' => $amount->minorUnits,
+            'amount' => $amount->toDecimal(),
         ]);
 
         return $transaction;

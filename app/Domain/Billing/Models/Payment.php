@@ -27,8 +27,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property int $business_account_id
  * @property PaymentStatus $status
  * @property PaymentPurpose $purpose
- * @property Money $amount_minor
- * @property Money $revenue_minor
+ * @property Money $amount
+ * @property Money $revenue
+ * @property Money|null $settled_amount
+ * @property Money|null $gateway_fee
  * @property CarbonImmutable|null $initiated_at
  * @property CarbonImmutable|null $expires_at
  * @property CarbonImmutable|null $completed_at
@@ -57,8 +59,10 @@ class Payment extends Model
         return [
             'status' => PaymentStatus::class,
             'purpose' => PaymentPurpose::class,
-            'amount_minor' => MoneyCast::class,
-            'revenue_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
+            'revenue' => MoneyCast::class,
+            'settled_amount' => MoneyCast::class.':settled_currency_code',
+            'gateway_fee' => MoneyCast::class.':gateway_fee_currency_code',
             'initiated_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
@@ -141,11 +145,11 @@ class Payment extends Model
      */
     public function allocatedTo(AllocationType $type): Money
     {
-        $total = Money::of(0, $this->amount_minor->currency);
+        $total = Money::zero($this->amount->currency);
 
         foreach ($this->allocations as $allocation) {
             if ($allocation->type === $type) {
-                $total = $total->plus($allocation->amount_minor);
+                $total = $total->plus($allocation->amount);
             }
         }
 
@@ -161,15 +165,15 @@ class Payment extends Model
      */
     public function allocationsBalance(): bool
     {
-        $sum = Money::of(0, $this->amount_minor->currency);
+        $sum = Money::zero($this->amount->currency);
 
         foreach ($this->allocations as $allocation) {
             $sum = $allocation->type->isDeduction()
-                ? $sum->minus($allocation->amount_minor)
-                : $sum->plus($allocation->amount_minor);
+                ? $sum->minus($allocation->amount)
+                : $sum->plus($allocation->amount);
         }
 
-        return $sum->equals($this->amount_minor);
+        return $sum->equals($this->amount);
     }
 
     public function isSettled(): bool

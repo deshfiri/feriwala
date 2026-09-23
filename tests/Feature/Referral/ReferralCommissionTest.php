@@ -191,7 +191,7 @@ describe('traversal and calculation', function () {
 
         // Package fee 500 000 of 650 000 revenue carries ceil(500 000 × 10 001 ÷ 650 000)
         // = 7 694 of the discount: a base of 492 306, and 10% of it is 49 230.6.
-        $newcomer = referralTestActivate(referralTestNewcomer($direct, discount: 10001));
+        $newcomer = referralTestActivate(referralTestNewcomer($direct, discount: '100.01'));
 
         $level = referralCommissionsByLevel($newcomer)[1];
 

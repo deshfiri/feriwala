@@ -37,29 +37,32 @@ class PlanWalletTopUp
      * one-taka top-up costs more to process than it adds. §24.1's configured
      * required top-up overrides it whenever there is one.
      */
-    public const FLOOR_MINOR = 100;
+    public const FLOOR = '1.00';
 
     /**
      * Work out what this amount would do.
      *
+     * Takes the already-parsed {@see Money} the HTTP boundary produced —
+     * `DecimalAmount::parse()` at the controller — rather than a number of
+     * any kind, so this action never has to decide what a bare int or string
+     * means (D26).
+     *
      * @throws ValidationException when the amount is not one this account may pay
      */
-    public function handle(Wallet $wallet, int $amountMinor): TopUpPlan
+    public function handle(Wallet $wallet, Money $amount): TopUpPlan
     {
         $currency = Currency::from($wallet->currency_code);
-        $amount = Money::of($amountMinor, $currency);
-
         $minimum = $this->minimumFor($wallet, $currency);
 
         if (! $amount->isPositive()) {
             throw ValidationException::withMessages([
-                'amount_minor' => __('wallet.top_up.errors.not_positive'),
+                'amount' => __('wallet.top_up.errors.not_positive'),
             ]);
         }
 
         if ($amount->lessThan($minimum)) {
             throw ValidationException::withMessages([
-                'amount_minor' => __('wallet.top_up.errors.below_minimum', [
+                'amount' => __('wallet.top_up.errors.below_minimum', [
                     'amount' => $minimum->format(),
                 ]),
             ]);
@@ -98,11 +101,11 @@ class PlanWalletTopUp
     {
         $currency ??= Currency::from($wallet->currency_code);
 
-        $required = $this->obligation($wallet)?->required_top_up_minor;
+        $required = $this->obligation($wallet)?->required_top_up;
 
         return $required !== null && $required->isPositive()
             ? $required
-            : Money::of(self::FLOOR_MINOR, $currency);
+            : Money::fromDecimal(self::FLOOR, $currency);
     }
 
     protected function obligation(Wallet $wallet): ?WalletDepositObligation

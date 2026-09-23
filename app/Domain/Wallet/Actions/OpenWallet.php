@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Wallet\Enums\WalletBalanceState;
 use App\Domain\Wallet\Models\Wallet;
 use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
@@ -32,26 +33,29 @@ class OpenWallet
             return $existing;
         }
 
+        $currency ??= Currency::BDT;
+        $zero = Money::zero($currency);
+
         try {
             return Wallet::create([
                 'business_account_id' => $account->id,
 
                 // BDT is the base and operational currency (D4). The column and
                 // the argument exist so the schema stays multi-currency-ready.
-                'currency_code' => ($currency ?? Currency::BDT)->value,
+                'currency_code' => $currency->value,
 
                 /*
                  * Every bucket stated rather than left to the column defaults.
                  * A model that has to be re-read before its own balances are
                  * legible is one a caller will eventually read too early.
                  */
-                'total_minor' => 0,
-                'required_deposit_minor' => 0,
-                'minimum_balance_minor' => 0,
-                'reserved_minor' => 0,
-                'pending_minor' => 0,
-                'hold_minor' => 0,
-                'cod_receivable_minor' => 0,
+                'total' => $zero,
+                'required_deposit' => $zero,
+                'minimum_balance' => $zero,
+                'reserved' => $zero,
+                'pending' => $zero,
+                'hold' => $zero,
+                'cod_receivable' => $zero,
 
                 // §24.4's default until a rule says otherwise: a deposit that
                 // cannot be spent is the stricter reading, and nobody has

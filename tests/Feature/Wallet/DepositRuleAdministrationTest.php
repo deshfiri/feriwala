@@ -8,6 +8,7 @@ use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Models\DepositRule;
 use App\Domain\Wallet\Models\DepositRuleChange;
 use App\Models\User;
+use App\Support\Money\Money;
 use App\Support\Rules\RuleScope;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -73,7 +74,7 @@ describe('the rules screen', function () {
 
         $rule = DepositRule::query()->firstOrFail();
 
-        expect($rule->minimum_balance_minor->minorUnits)->toBe(200000)
+        expect($rule->minimum_balance->toDecimal())->toBe('2000.00')
             ->and($rule->grace_period_days)->toBe(14)
             ->and($rule->restricts_chargeable_services)->toBeTrue()
             ->and(DepositRuleChange::query()
@@ -173,8 +174,8 @@ describe('one account, as an administrator sees it', function () {
 
         DepositRule::create([
             'scope' => RuleScope::Global,
-            'required_initial_deposit_minor' => 300000,
-            'minimum_balance_minor' => 100000,
+            'required_initial_deposit' => Money::fromDecimal('3000.00'),
+            'minimum_balance' => Money::fromDecimal('1000.00'),
             'grace_period_days' => 7,
             'currency_code' => 'BDT',
             'effective_from' => CarbonImmutable::now()->subMonth(),
@@ -183,13 +184,13 @@ describe('one account, as an administrator sees it', function () {
 
         app(CaptureDepositObligation::class)->handle($account);
 
-        DepositRule::query()->update(['minimum_balance_minor' => 900000]);
+        DepositRule::query()->update(['minimum_balance' => '9000.00']);
 
         $this->actingAs($this->manager)
             ->get(route('admin.wallets.show', $wallet->public_id))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('obligation.minimum_balance.minor_units', 100000)
+                ->where('obligation.minimum_balance.amount', '1000.00')
                 ->where('obligation.grace_period_days', 7)
                 ->has('obligation.captured_at')
                 ->where('obligation.rule_scope', 'Global default'));
@@ -201,8 +202,8 @@ describe('one account, as an administrator sees it', function () {
 
         DepositRule::create([
             'scope' => RuleScope::Global,
-            'required_initial_deposit_minor' => 0,
-            'minimum_balance_minor' => 200000,
+            'required_initial_deposit' => Money::zero(),
+            'minimum_balance' => Money::fromDecimal('2000.00'),
             'restricts_chargeable_services' => true,
             'currency_code' => 'BDT',
             'effective_from' => CarbonImmutable::now()->subMonth(),

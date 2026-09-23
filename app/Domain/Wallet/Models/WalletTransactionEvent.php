@@ -30,12 +30,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property WalletTransactionStatus|null $from_status
  * @property WalletTransactionStatus $to_status
  * @property string|null $bucket
- * @property Money $amount_minor
+ * @property Money $amount
  * @property string $currency_code
- * @property Money|null $bucket_before_minor
- * @property Money|null $bucket_after_minor
- * @property Money $total_before_minor
- * @property Money $total_after_minor
+ * @property Money|null $bucket_before
+ * @property Money|null $bucket_after
+ * @property Money $total_before
+ * @property Money $total_after
  * @property string $source
  * @property int|null $actor_id
  * @property string|null $reason
@@ -72,11 +72,11 @@ class WalletTransactionEvent extends Model
         return [
             'from_status' => WalletTransactionStatus::class,
             'to_status' => WalletTransactionStatus::class,
-            'amount_minor' => MoneyCast::class,
-            'bucket_before_minor' => MoneyCast::class,
-            'bucket_after_minor' => MoneyCast::class,
-            'total_before_minor' => MoneyCast::class,
-            'total_after_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
+            'bucket_before' => MoneyCast::class,
+            'bucket_after' => MoneyCast::class,
+            'total_before' => MoneyCast::class,
+            'total_after' => MoneyCast::class,
             'occurred_at' => 'immutable_datetime',
         ];
     }

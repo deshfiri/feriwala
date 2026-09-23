@@ -34,14 +34,14 @@ it('opens empty', function () {
      */
     $wallet = app(OpenWallet::class)->handle(testBusinessAccount(AccountStatus::Active));
 
-    expect($wallet->total_minor->minorUnits)->toBe(0)
-        ->and($wallet->reserved_minor->minorUnits)->toBe(0)
-        ->and($wallet->pending_minor->minorUnits)->toBe(0)
-        ->and($wallet->hold_minor->minorUnits)->toBe(0)
-        ->and($wallet->required_deposit_minor->minorUnits)->toBe(0)
-        ->and($wallet->cod_receivable_minor->minorUnits)->toBe(0)
-        ->and($wallet->usableBalance()->minorUnits)->toBe(0)
-        ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(0)
+    expect($wallet->total->toDecimal())->toBe('0.00')
+        ->and($wallet->reserved->toDecimal())->toBe('0.00')
+        ->and($wallet->pending->toDecimal())->toBe('0.00')
+        ->and($wallet->hold->toDecimal())->toBe('0.00')
+        ->and($wallet->required_deposit->toDecimal())->toBe('0.00')
+        ->and($wallet->cod_receivable->toDecimal())->toBe('0.00')
+        ->and($wallet->usableBalance()->toDecimal())->toBe('0.00')
+        ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('0.00')
         ->and($wallet->currency_code)->toBe('BDT');
 });
 
@@ -60,18 +60,23 @@ it('opens exactly one however many times it is asked for', function () {
 
 describe('the derived balances', function () {
     /**
-     * A wallet holding `$total` with the given claims against it.
+     * A wallet holding `$total` Taka with the given claims against it.
      *
-     * @param  array<string, int>  $claims
+     * @param  array<string, string>  $claims  column => decimal Taka
      */
-    function walletHolding(int $total, array $claims = []): Wallet
+    function walletHolding(string $total, array $claims = []): Wallet
     {
         $wallet = app(OpenWallet::class)->handle(testBusinessAccount(AccountStatus::Active));
+
+        $currency = $wallet->currency();
 
         // Written directly because this is a test of the arithmetic, not of the
         // posting service — which has its own tests, and is the only thing
         // allowed to do this for real.
-        $wallet->forceFill(array_merge(['total_minor' => $total], $claims))->save();
+        $wallet->forceFill(array_merge(
+            ['total' => Money::fromDecimal($total, $currency)],
+            array_map(fn (string $value) => Money::fromDecimal($value, $currency), $claims),
+        ))->save();
 
         return $wallet->refresh();
     }
@@ -79,13 +84,13 @@ describe('the derived balances', function () {
     it('is what is there less everything that is not spendable', function () {
         // §24.2: usable service balance. Reserved, held and pending money is
         // present but not available to spend.
-        $wallet = walletHolding(100000, [
-            'reserved_minor' => 20000,
-            'hold_minor' => 10000,
-            'pending_minor' => 5000,
+        $wallet = walletHolding('1000.00', [
+            'reserved' => '200.00',
+            'hold' => '100.00',
+            'pending' => '50.00',
         ]);
 
-        expect($wallet->usableBalance()->minorUnits)->toBe(65000);
+        expect($wallet->usableBalance()->toDecimal())->toBe('650.00');
     });
 
     it('keeps the required deposit out of what can be withdrawn', function () {
@@ -94,45 +99,45 @@ describe('the derived balances', function () {
          * unable to trade the moment it succeeded. It stays spendable on
          * services (§24.4) and unavailable to take out.
          */
-        $wallet = walletHolding(100000, ['required_deposit_minor' => 40000]);
+        $wallet = walletHolding('1000.00', ['required_deposit' => '400.00']);
 
-        expect($wallet->usableBalance()->minorUnits)->toBe(100000)
-            ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(60000);
+        expect($wallet->usableBalance()->toDecimal())->toBe('1000.00')
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('600.00');
     });
 
     it('never reports a negative spending power', function () {
         // A hold on the whole balance is legitimate. "You have minus two
         // hundred taka to spend" is not a true statement about spending.
-        $wallet = walletHolding(10000, ['hold_minor' => 25000]);
+        $wallet = walletHolding('100.00', ['hold' => '250.00']);
 
-        expect($wallet->usableBalance()->minorUnits)->toBe(0)
-            ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(0);
+        expect($wallet->usableBalance()->toDecimal())->toBe('0.00')
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('0.00');
     });
 
     it('says what is missing rather than showing a negative', function () {
-        $wallet = walletHolding(30000, ['required_deposit_minor' => 50000]);
+        $wallet = walletHolding('300.00', ['required_deposit' => '500.00']);
 
         expect($wallet->meetsRequiredDeposit())->toBeFalse()
-            ->and($wallet->shortfall()->minorUnits)->toBe(20000);
+            ->and($wallet->shortfall()->toDecimal())->toBe('200.00');
     });
 
     it('reports COD receivable beside the balance and never inside it', function () {
         // Money a courier is holding is owed to the account and is not in the
         // wallet; counting it as balance would let it be spent twice.
-        $wallet = walletHolding(50000, ['cod_receivable_minor' => 90000]);
+        $wallet = walletHolding('500.00', ['cod_receivable' => '900.00']);
 
-        expect($wallet->total_minor->minorUnits)->toBe(50000)
-            ->and($wallet->usableBalance()->minorUnits)->toBe(50000)
-            ->and($wallet->cod_receivable_minor->minorUnits)->toBe(90000);
+        expect($wallet->total->toDecimal())->toBe('500.00')
+            ->and($wallet->usableBalance()->toDecimal())->toBe('500.00')
+            ->and($wallet->cod_receivable->toDecimal())->toBe('900.00');
     });
 
     it('describes the same money one way for every screen', function () {
-        $balances = walletHolding(100000, ['reserved_minor' => 25000])->toBalances();
+        $balances = walletHolding('1000.00', ['reserved' => '250.00'])->toBalances();
 
         expect($balances['currency'])->toBe('BDT')
-            ->and($balances['total']['minor_units'])->toBe(100000)
-            ->and($balances['usable']['minor_units'])->toBe(75000)
-            ->and($balances['reserved']['minor_units'])->toBe(25000)
+            ->and($balances['total']['amount'])->toBe('1000.00')
+            ->and($balances['usable']['amount'])->toBe('750.00')
+            ->and($balances['reserved']['amount'])->toBe('250.00')
             ->and($balances)->toHaveKeys([
                 'available_for_withdrawal', 'required_deposit', 'pending',
                 'hold', 'cod_receivable', 'meets_required_deposit', 'shortfall',
@@ -158,5 +163,5 @@ it('is opened by activation itself', function () {
 
     expect($account->fresh()->status)->toBe(AccountStatus::Active)
         ->and($wallet)->not->toBeNull()
-        ->and($wallet->total_minor->equals(Money::zero(Currency::BDT)))->toBeTrue();
+        ->and($wallet->total->equals(Money::zero(Currency::BDT)))->toBeTrue();
 });

@@ -35,12 +35,12 @@ beforeEach(function () {
     $this->manager = testPlatformStaff(PlatformRole::WalletManager);
 });
 
-function adminCredit(Wallet $wallet, int $amount, string $description = 'Top-up'): WalletTransaction
+function adminCredit(Wallet $wallet, string $amount, string $description = 'Top-up'): WalletTransaction
 {
     return app(WalletService::class)->credit(
         $wallet->refresh(),
         LedgerTransactionType::TopUpCredit,
-        Money::of($amount, Currency::BDT),
+        Money::fromDecimal($amount, Currency::BDT),
         new PostingContext(source: 'test', description: $description),
     );
 }
@@ -61,7 +61,7 @@ function adminConfirmed(User $actor): TestCase
 
 describe('the lookup', function () {
     it('lists wallets to somebody who may read them', function () {
-        adminCredit($this->wallet, 50000);
+        adminCredit($this->wallet, '500.00');
 
         $this->actingAs($this->manager)
             ->get(route('admin.wallets.index'))
@@ -70,7 +70,7 @@ describe('the lookup', function () {
                 ->component('admin/wallets/index')
                 ->has('wallets.data', 1)
                 ->where('wallets.data.0.account', $this->account->name)
-                ->where('wallets.data.0.total.minor_units', 50000));
+                ->where('wallets.data.0.total.amount', '500.00'));
     });
 
     it('refuses somebody without the permission', function () {
@@ -90,15 +90,15 @@ describe('the lookup', function () {
 
 describe('one wallet', function () {
     it('shows the same balances the account holder sees', function () {
-        adminCredit($this->wallet, 50000);
+        adminCredit($this->wallet, '500.00');
 
         $this->actingAs($this->manager)
             ->get(route('admin.wallets.show', $this->wallet->public_id))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/wallets/show')
-                ->where('balances.total.minor_units', 50000)
-                ->where('balances.usable.minor_units', 50000)
+                ->where('balances.total.amount', '500.00')
+                ->where('balances.usable.amount', '500.00')
                 ->has('transactions.data', 1)
                 ->where('can.adjust', true)
                 ->where('can.reverse', true));
@@ -123,12 +123,12 @@ describe('one wallet', function () {
 
 describe('the staff note (§23.2)', function () {
     it('reaches an administrator who may read sensitive data', function () {
-        adminCredit($this->wallet, 100000);
+        adminCredit($this->wallet, '1000.00');
 
         $transaction = app(CorrectLedgerEntry::class)->adjust(
             $this->wallet->refresh(),
             $this->manager,
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill after a courier failure.',
             'Customer complained loudly on social media.',
@@ -151,12 +151,12 @@ describe('the staff note (§23.2)', function () {
          * `ledger.view_sensitive_data`. The note is not sent at all rather than
          * sent and hidden by the browser.
          */
-        adminCredit($this->wallet, 100000);
+        adminCredit($this->wallet, '1000.00');
 
         $transaction = app(CorrectLedgerEntry::class)->adjust(
             $this->wallet->refresh(),
             $this->manager,
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill.',
             'Customer complained loudly on social media.',
@@ -185,7 +185,7 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
 
         $entry = LedgerEntry::query()->where('wallet_id', $this->wallet->id)->firstOrFail();
 
-        expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(2500)
+        expect($this->wallet->refresh()->total->toDecimal())->toBe('25.00')
             ->and($entry->type)->toBe(LedgerTransactionType::ManualAdjustment)
             ->and($entry->created_by)->toBe($this->manager->id)
             ->and(AuditLog::query()->where('action', 'wallet.manual_adjustment')->exists())->toBeTrue();
@@ -241,13 +241,13 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
             ])
             ->assertSessionHasErrors('amount');
 
-        expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(0);
+        expect($this->wallet->refresh()->total->toDecimal())->toBe('0.00');
     });
 });
 
 describe('a reversal (§23.2)', function () {
     it('answers the original instead of editing it', function () {
-        $transaction = adminCredit($this->wallet, 50000);
+        $transaction = adminCredit($this->wallet, '500.00');
         $original = LedgerEntry::query()->latest('id')->firstOrFail();
 
         adminConfirmed($this->manager)
@@ -261,13 +261,13 @@ describe('a reversal (§23.2)', function () {
 
         expect($reversal->id)->not->toBe($original->id)
             ->and($reversal->corrects_ledger_entry_id)->toBe($original->id)
-            ->and($original->fresh()->credit_minor->minorUnits)->toBe(50000)
-            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(0)
+            ->and($original->fresh()->credit->toDecimal())->toBe('500.00')
+            ->and($this->wallet->refresh()->total->toDecimal())->toBe('0.00')
             ->and(LedgerEntry::query()->count())->toBe(2);
     });
 
     it('refuses without a reason', function () {
-        $transaction = adminCredit($this->wallet, 50000);
+        $transaction = adminCredit($this->wallet, '500.00');
 
         adminConfirmed($this->manager)
             ->post(route('admin.wallets.reversals.store', [
@@ -282,12 +282,12 @@ describe('a reversal (§23.2)', function () {
     it('says so when there is nothing posted to reverse', function () {
         // A reservation moved no value, so there is nothing to answer — the
         // operation that applies is releasing it.
-        adminCredit($this->wallet, 50000);
+        adminCredit($this->wallet, '500.00');
 
         $claim = app(WalletService::class)->reserve(
             $this->wallet->refresh(),
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(20000, Currency::BDT),
+            Money::fromDecimal('200.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'Reserved'),
         );
 
@@ -302,7 +302,7 @@ describe('a reversal (§23.2)', function () {
     });
 
     it('refuses somebody without the permission', function () {
-        $transaction = adminCredit($this->wallet, 50000);
+        $transaction = adminCredit($this->wallet, '500.00');
 
         adminConfirmed(testPlatformStaff(PlatformRole::PaymentManager))
             ->post(route('admin.wallets.reversals.store', [
@@ -317,7 +317,7 @@ describe('a reversal (§23.2)', function () {
 
 describe('the administrator export', function () {
     it('is allowed to somebody holding wallet.export', function () {
-        adminCredit($this->wallet, 50000, 'A top-up');
+        adminCredit($this->wallet, '500.00', 'A top-up');
 
         $csv = $this->actingAs($this->manager)
             ->get(route('admin.wallets.download', $this->wallet->public_id))

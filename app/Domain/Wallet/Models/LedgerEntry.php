@@ -42,15 +42,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $source
  * @property int|null $payment_id
  * @property int|null $user_package_id
- * @property Money $debit_minor
- * @property Money $credit_minor
+ * @property Money $debit
+ * @property Money $credit
  * @property string $currency_code
- * @property Money $balance_before_minor
- * @property Money $balance_after_minor
- * @property Money $pending_minor
- * @property Money $reserved_minor
- * @property Money $available_minor
- * @property Money $hold_minor
+ * @property Money $balance_before
+ * @property Money $balance_after
+ * @property Money $pending
+ * @property Money $reserved
+ * @property Money $available
+ * @property Money $hold
  * @property WalletTransactionStatus $status
  * @property int|null $wallet_transaction_id
  * @property int|null $created_by
@@ -69,8 +69,8 @@ class LedgerEntry extends Model
     /** The columns an account member's own statement may ever see. */
     public const MEMBER_VISIBLE = [
         'id', 'public_id', 'reference', 'wallet_id', 'business_account_id',
-        'type', 'source', 'debit_minor', 'credit_minor', 'currency_code',
-        'balance_after_minor', 'status', 'description', 'created_at',
+        'type', 'source', 'debit', 'credit', 'currency_code',
+        'balance_after', 'status', 'description', 'created_at',
         'corrects_ledger_entry_id',
     ];
 
@@ -110,14 +110,14 @@ class LedgerEntry extends Model
         return [
             'type' => LedgerTransactionType::class,
             'status' => WalletTransactionStatus::class,
-            'debit_minor' => MoneyCast::class,
-            'credit_minor' => MoneyCast::class,
-            'balance_before_minor' => MoneyCast::class,
-            'balance_after_minor' => MoneyCast::class,
-            'pending_minor' => MoneyCast::class,
-            'reserved_minor' => MoneyCast::class,
-            'available_minor' => MoneyCast::class,
-            'hold_minor' => MoneyCast::class,
+            'debit' => MoneyCast::class,
+            'credit' => MoneyCast::class,
+            'balance_before' => MoneyCast::class,
+            'balance_after' => MoneyCast::class,
+            'pending' => MoneyCast::class,
+            'reserved' => MoneyCast::class,
+            'available' => MoneyCast::class,
+            'hold' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
         ];
     }
@@ -174,7 +174,7 @@ class LedgerEntry extends Model
      */
     public function isCredit(): bool
     {
-        return $this->credit_minor->isPositive();
+        return $this->credit->isPositive();
     }
 
     /**
@@ -183,8 +183,8 @@ class LedgerEntry extends Model
     public function signedAmount(): Money
     {
         return $this->isCredit()
-            ? $this->credit_minor
-            : $this->debit_minor->negated();
+            ? $this->credit
+            : $this->debit->negated();
     }
 
     /**
@@ -192,7 +192,7 @@ class LedgerEntry extends Model
      */
     public function amount(): Money
     {
-        return $this->isCredit() ? $this->credit_minor : $this->debit_minor;
+        return $this->isCredit() ? $this->credit : $this->debit;
     }
 
     /**
@@ -203,8 +203,8 @@ class LedgerEntry extends Model
      */
     public function balances(): bool
     {
-        return $this->balance_before_minor
+        return $this->balance_before
             ->plus($this->signedAmount())
-            ->equals($this->balance_after_minor);
+            ->equals($this->balance_after);
     }
 }

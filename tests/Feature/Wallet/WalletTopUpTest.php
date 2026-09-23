@@ -14,6 +14,7 @@ use App\Domain\Wallet\Actions\PlanWalletTopUp;
 use App\Domain\Wallet\Models\DepositRule;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
+use App\Support\Money\Money;
 use App\Support\Rules\RuleScope;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -46,8 +47,8 @@ function topUpRule(array $rule = []): void
 {
     DepositRule::create([
         'scope' => RuleScope::Global,
-        'required_initial_deposit_minor' => 300000,
-        'minimum_balance_minor' => 0,
+        'required_initial_deposit' => Money::fromDecimal('3000.00'),
+        'minimum_balance' => Money::zero(),
         'currency_code' => 'BDT',
         'effective_from' => CarbonImmutable::now()->subMonth(),
         'is_active' => true,
@@ -65,38 +66,38 @@ describe('planning', function () {
          */
         topUpRule();
 
-        $plan = app(PlanWalletTopUp::class)->handle($this->wallet->refresh(), 500000);
+        $plan = app(PlanWalletTopUp::class)->handle($this->wallet->refresh(), Money::fromDecimal('5000.00'));
 
-        expect($plan->toObligation->minorUnits)->toBe(300000)
-            ->and($plan->toUsable->minorUnits)->toBe(200000)
+        expect($plan->toObligation->toDecimal())->toBe('3000.00')
+            ->and($plan->toUsable->toDecimal())->toBe('2000.00')
             ->and($plan->purpose)->toBe(PaymentPurpose::WalletDeposit);
     });
 
     it('calls it a top-up when no deposit is owed', function () {
         // §26.3 keeps the two apart, and so does the ledger.
-        $plan = app(PlanWalletTopUp::class)->handle($this->wallet, 500000);
+        $plan = app(PlanWalletTopUp::class)->handle($this->wallet, Money::fromDecimal('5000.00'));
 
         expect($plan->purpose)->toBe(PaymentPurpose::WalletTopUp)
-            ->and($plan->toObligation->minorUnits)->toBe(0)
-            ->and($plan->toUsable->minorUnits)->toBe(500000);
+            ->and($plan->toObligation->toDecimal())->toBe('0.00')
+            ->and($plan->toUsable->toDecimal())->toBe('5000.00');
     });
 
     it('refuses an amount below the configured minimum', function () {
-        topUpRule(['required_top_up_minor' => 100000]);
+        topUpRule(['required_top_up' => Money::fromDecimal('1000.00')]);
 
-        expect(fn () => app(PlanWalletTopUp::class)->handle($this->wallet->refresh(), 5000))
+        expect(fn () => app(PlanWalletTopUp::class)->handle($this->wallet->refresh(), Money::fromDecimal('50.00')))
             ->toThrow(ValidationException::class);
     });
 
     it('refuses nothing at all', function () {
-        expect(fn () => app(PlanWalletTopUp::class)->handle($this->wallet, 0))
+        expect(fn () => app(PlanWalletTopUp::class)->handle($this->wallet, Money::zero()))
             ->toThrow(ValidationException::class);
     });
 
     it('falls back to a floor when no minimum is configured', function () {
         // A one-taka top-up costs more to process than it adds.
-        expect(app(PlanWalletTopUp::class)->minimumFor($this->wallet)->minorUnits)
-            ->toBe(PlanWalletTopUp::FLOOR_MINOR);
+        expect(app(PlanWalletTopUp::class)->minimumFor($this->wallet)->toDecimal())
+            ->toBe(PlanWalletTopUp::FLOOR);
     });
 });
 
@@ -109,8 +110,8 @@ describe('the screen', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('wallet/top-up')
-                ->where('suggested.minor_units', 300000)
-                ->where('balances.obligation_shortfall.minor_units', 300000)
+                ->where('suggested.amount', '3000.00')
+                ->where('balances.obligation_shortfall.amount', '3000.00')
                 ->has('minimum')
                 ->has('gateways'));
     });
@@ -143,16 +144,16 @@ describe('starting one', function () {
         $payment = Payment::query()->firstOrFail();
 
         expect($payment->purpose)->toBe(PaymentPurpose::WalletDeposit)
-            ->and($payment->amount_minor->minorUnits)->toBe(500000)
+            ->and($payment->amount->toDecimal())->toBe('5000.00')
             // Feriwala keeps nothing: the money becomes the account's balance.
-            ->and($payment->revenue_minor->minorUnits)->toBe(0)
+            ->and($payment->revenue->toDecimal())->toBe('0.00')
             ->and($payment->gateway)->toBe('sslcommerz');
     });
 
     it('refuses a total the browser made up', function () {
         // §36.1. The amount is checked against what the account is required to
         // hold, not against whatever the page was rendered with.
-        topUpRule(['required_top_up_minor' => 100000]);
+        topUpRule(['required_top_up' => Money::fromDecimal('1000.00')]);
 
         $this->actingAs($this->account->owner)
             ->post(route('wallet.top-up.store'), [
@@ -221,7 +222,7 @@ describe('when the gateway posts the payer back', function () {
 
         expect($response->headers->getCookies())->toBe([])
             ->and($payment->refresh()->status->value)->toBe('paid')
-            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(500000)
+            ->and($this->wallet->refresh()->total->toDecimal())->toBe('5000.00')
             ->and(LedgerEntry::query()->count())->toBe(1);
     });
 });
@@ -235,7 +236,7 @@ describe('when it settles', function () {
             'purpose' => PaymentPurpose::WalletDeposit,
             'status' => PaymentStatus::Initiated,
             'gateway' => 'sslcommerz',
-            'amount_minor' => 500000,
+            'amount' => Money::fromDecimal('5000.00'),
             'currency_code' => 'BDT',
         ]);
 
@@ -249,7 +250,7 @@ describe('when it settles', function () {
         app(SettlePayment::class)->handle($payment, 'VAL-1');
         app(SettlePayment::class)->handle($payment->fresh(), 'VAL-1');
 
-        expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(500000)
+        expect($this->wallet->refresh()->total->toDecimal())->toBe('5000.00')
             ->and(LedgerEntry::query()->count())->toBe(1)
             ->and($payment->fresh()->wallet_credited_at)->not->toBeNull()
             ->and($payment->fresh()->wallet_credit_failed_at)->toBeNull();
@@ -268,7 +269,7 @@ describe('when it settles', function () {
             'purpose' => PaymentPurpose::WalletTopUp,
             'status' => PaymentStatus::Initiated,
             'gateway' => 'sslcommerz',
-            'amount_minor' => 500000,
+            'amount' => Money::fromDecimal('5000.00'),
             'currency_code' => 'BDT',
         ]);
 
@@ -296,7 +297,7 @@ describe('when it settles', function () {
             'purpose' => PaymentPurpose::WalletTopUp,
             'status' => PaymentStatus::Paid,
             'gateway' => 'sslcommerz',
-            'amount_minor' => 250000,
+            'amount' => Money::fromDecimal('2500.00'),
             'currency_code' => 'BDT',
             'wallet_credit_failed_at' => now(),
             'wallet_credit_failure_reason' => 'Something went wrong.',
@@ -311,7 +312,7 @@ describe('when it settles', function () {
                 ->assertRedirect();
         }
 
-        expect($this->wallet->refresh()->total_minor->minorUnits)->toBe(250000)
+        expect($this->wallet->refresh()->total->toDecimal())->toBe('2500.00')
             ->and(LedgerEntry::query()->count())->toBe(1)
             ->and($payment->fresh()->wallet_credit_failed_at)->toBeNull();
     });
@@ -323,7 +324,7 @@ describe('when it settles', function () {
             'business_account_id' => $this->account->id,
             'purpose' => PaymentPurpose::WalletTopUp,
             'status' => PaymentStatus::Paid,
-            'amount_minor' => 250000,
+            'amount' => Money::fromDecimal('2500.00'),
             'currency_code' => 'BDT',
         ]);
 
@@ -332,6 +333,6 @@ describe('when it settles', function () {
             ->post(route('admin.payments.wallet-credit', $payment->public_id))
             ->assertForbidden();
 
-        expect(Wallet::query()->firstOrFail()->total_minor->minorUnits)->toBe(0);
+        expect(Wallet::query()->firstOrFail()->total->toDecimal())->toBe('0.00');
     });
 });

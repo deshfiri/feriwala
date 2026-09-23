@@ -31,16 +31,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $public_id
  * @property RuleScope $scope
  * @property int|null $scope_id
- * @property Money $required_initial_deposit_minor
- * @property Money $minimum_balance_minor
- * @property Money $required_top_up_minor
+ * @property Money $required_initial_deposit
+ * @property Money $minimum_balance
+ * @property Money $required_top_up
  * @property string $currency_code
  * @property int|null $deposit_deadline_days
  * @property int|null $grace_period_days
  * @property DepositFrequency $frequency
  * @property int|null $frequency_days
- * @property Money|null $low_balance_threshold_minor
- * @property Money|null $critical_balance_threshold_minor
+ * @property Money|null $low_balance_threshold
+ * @property Money|null $critical_balance_threshold
  * @property bool $restricts_chargeable_services
  * @property bool $pauses_website_setup
  * @property bool $disables_website
@@ -76,9 +76,9 @@ class DepositRule extends Model implements ScopedRule
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'required_initial_deposit_minor' => 0,
-        'minimum_balance_minor' => 0,
-        'required_top_up_minor' => 0,
+        'required_initial_deposit' => 0,
+        'minimum_balance' => 0,
+        'required_top_up' => 0,
         'currency_code' => 'BDT',
         'frequency' => 'one_time',
         'restricts_chargeable_services' => false,
@@ -115,11 +115,11 @@ class DepositRule extends Model implements ScopedRule
             'reserved_until_cancellation' => 'boolean',
             'deposit_usable_for_charges' => 'boolean',
             'withdrawable_after_liabilities' => 'boolean',
-            'required_initial_deposit_minor' => MoneyCast::class,
-            'minimum_balance_minor' => MoneyCast::class,
-            'required_top_up_minor' => MoneyCast::class,
-            'low_balance_threshold_minor' => MoneyCast::class,
-            'critical_balance_threshold_minor' => MoneyCast::class,
+            'required_initial_deposit' => MoneyCast::class,
+            'minimum_balance' => MoneyCast::class,
+            'required_top_up' => MoneyCast::class,
+            'low_balance_threshold' => MoneyCast::class,
+            'critical_balance_threshold' => MoneyCast::class,
             'restricts_chargeable_services' => 'boolean',
             'pauses_website_setup' => 'boolean',
             'disables_website' => 'boolean',
@@ -205,8 +205,8 @@ class DepositRule extends Model implements ScopedRule
      */
     public function requiresAnything(): bool
     {
-        return $this->required_initial_deposit_minor->isPositive()
-            || $this->minimum_balance_minor->isPositive();
+        return $this->required_initial_deposit->isPositive()
+            || $this->minimum_balance->isPositive();
     }
 
     /**
@@ -218,7 +218,7 @@ class DepositRule extends Model implements ScopedRule
      */
     public function criticalFloor(): Money
     {
-        return $this->critical_balance_threshold_minor ?? $this->minimum_balance_minor;
+        return $this->critical_balance_threshold ?? $this->minimum_balance;
     }
 
     /**
@@ -226,6 +226,6 @@ class DepositRule extends Model implements ScopedRule
      */
     public function lowFloor(): ?Money
     {
-        return $this->low_balance_threshold_minor;
+        return $this->low_balance_threshold;
     }
 }

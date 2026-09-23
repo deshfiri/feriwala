@@ -52,7 +52,7 @@ class WalletController extends Controller
             ->when($search !== '', fn (Builder $query) => $query
                 ->whereHas('businessAccount', fn (Builder $account) => $account
                     ->where('name', 'ilike', "%{$search}%")))
-            ->orderByDesc('total_minor')
+            ->orderByDesc('total')
             ->orderBy('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString()
@@ -136,10 +136,10 @@ class WalletController extends Controller
                     ->map(fn ($entry) => [
                         'id' => $entry->public_id,
                         'reference' => $entry->reference,
-                        'debit' => $entry->debit_minor->jsonSerialize(),
-                        'credit' => $entry->credit_minor->jsonSerialize(),
-                        'balance_before' => $entry->balance_before_minor->jsonSerialize(),
-                        'balance_after' => $entry->balance_after_minor->jsonSerialize(),
+                        'debit' => $entry->debit->jsonSerialize(),
+                        'credit' => $entry->credit->jsonSerialize(),
+                        'balance_before' => $entry->balance_before->jsonSerialize(),
+                        'balance_after' => $entry->balance_after->jsonSerialize(),
 
                         // What this entry puts right, where it is a correction
                         // (§23.2). The link is the point of a correction: the
@@ -194,11 +194,11 @@ class WalletController extends Controller
         }
 
         return [
-            'required_deposit' => $obligation->required_deposit_minor->jsonSerialize(),
-            'minimum_balance' => $obligation->minimum_balance_minor->jsonSerialize(),
-            'required_top_up' => $obligation->required_top_up_minor->jsonSerialize(),
-            'low_threshold' => $obligation->low_balance_threshold_minor?->jsonSerialize(),
-            'critical_threshold' => $obligation->critical_balance_threshold_minor?->jsonSerialize(),
+            'required_deposit' => $obligation->required_deposit->jsonSerialize(),
+            'minimum_balance' => $obligation->minimum_balance->jsonSerialize(),
+            'required_top_up' => $obligation->required_top_up->jsonSerialize(),
+            'low_threshold' => $obligation->low_balance_threshold?->jsonSerialize(),
+            'critical_threshold' => $obligation->critical_balance_threshold?->jsonSerialize(),
             'grace_period_days' => $obligation->grace_period_days,
             'refundability' => $obligation->refundability->value,
             'refundability_label' => $obligation->refundability->label(),
@@ -227,10 +227,10 @@ class WalletController extends Controller
             'account_id' => $wallet->businessAccount?->public_id,
             'account_status' => $wallet->businessAccount?->status->value,
             'currency' => $wallet->currency_code,
-            'total' => $wallet->total_minor->jsonSerialize(),
+            'total' => $wallet->total->jsonSerialize(),
             'usable' => $wallet->usableBalance()->jsonSerialize(),
-            'reserved' => $wallet->reserved_minor->jsonSerialize(),
-            'hold' => $wallet->hold_minor->jsonSerialize(),
+            'reserved' => $wallet->reserved->jsonSerialize(),
+            'hold' => $wallet->hold->jsonSerialize(),
             'meets_required_deposit' => $wallet->meetsRequiredDeposit(),
             'meets_obligation' => $wallet->meetsObligation(),
             'shortfall' => $wallet->shortfall()->jsonSerialize(),

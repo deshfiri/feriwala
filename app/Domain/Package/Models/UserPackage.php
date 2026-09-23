@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $renews_user_package_id
  * @property UserPackageStatus $status
  * @property SubscriptionSource $source
- * @property Money|null $paid_fee_minor
+ * @property Money|null $paid_fee
  * @property CarbonImmutable|null $started_at
  * @property CarbonImmutable|null $expires_at
  * @property CarbonImmutable|null $grace_ends_at
@@ -44,7 +44,7 @@ class UserPackage extends Model
         return [
             'status' => UserPackageStatus::class,
             'source' => SubscriptionSource::class,
-            'paid_fee_minor' => MoneyCast::class,
+            'paid_fee' => MoneyCast::class,
             'started_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
             'grace_ends_at' => 'immutable_datetime',

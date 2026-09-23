@@ -31,12 +31,12 @@ beforeEach(function () {
 /**
  * @param  array<string, mixed>  $terms
  */
-function refundabilityWallet(array $terms = [], int $credit = 500000): Wallet
+function refundabilityWallet(array $terms = [], string $credit = '5000.00'): Wallet
 {
     DepositRule::create([
         'scope' => RuleScope::Global,
-        'required_initial_deposit_minor' => 300000,
-        'minimum_balance_minor' => 0,
+        'required_initial_deposit' => Money::fromDecimal('3000.00'),
+        'minimum_balance' => Money::zero(),
         'currency_code' => 'BDT',
         'effective_from' => CarbonImmutable::now()->subMonth(),
         'is_active' => true,
@@ -48,7 +48,7 @@ function refundabilityWallet(array $terms = [], int $credit = 500000): Wallet
     app(WalletService::class)->credit(
         $wallet,
         LedgerTransactionType::TopUpCredit,
-        Money::of($credit, Currency::BDT),
+        Money::fromDecimal($credit, Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );
 
@@ -116,18 +116,18 @@ describe('what the terms change today', function () {
     it('lets a spendable deposit be spent', function () {
         $wallet = refundabilityWallet(['deposit_usable_for_charges' => true]);
 
-        // 500,000 held, 300,000 of it deposit — all of it spendable.
-        expect($wallet->usableBalance()->minorUnits)->toBe(500000)
+        // 5,000 held, 3,000 of it deposit — all of it spendable.
+        expect($wallet->usableBalance()->toDecimal())->toBe('5000.00')
             // But never withdrawable: that is the other question entirely.
-            ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(200000);
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('2000.00');
     });
 
     it('locks a deposit that may not cover charges', function () {
         $wallet = refundabilityWallet(['deposit_usable_for_charges' => false]);
 
         expect($wallet->deposit_usable_for_charges)->toBeFalse()
-            ->and($wallet->usableBalance()->minorUnits)->toBe(200000)
-            ->and($wallet->availableForWithdrawal()->minorUnits)->toBe(200000);
+            ->and($wallet->usableBalance()->toDecimal())->toBe('2000.00')
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('2000.00');
     });
 
     it('records a deposit held until cancellation', function () {

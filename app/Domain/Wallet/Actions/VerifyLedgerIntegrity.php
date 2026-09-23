@@ -86,20 +86,23 @@ class VerifyLedgerIntegrity
 
         $sums = DB::table('ledger_entries')
             ->where('wallet_id', $wallet->id)
-            ->selectRaw('coalesce(sum(credit_minor), 0) as credited, coalesce(sum(debit_minor), 0) as debited')
+            ->selectRaw('coalesce(sum(credit), 0) as credited, coalesce(sum(debit), 0) as debited')
             ->first();
 
-        $derived = Money::of(
-            (int) ($sums->credited ?? 0) - (int) ($sums->debited ?? 0),
+        // Exact decimal subtraction, never a float: sum(numeric) already comes
+        // back from Postgres as a decimal string, and bcmath is what keeps it
+        // one all the way through.
+        $derived = Money::fromDecimal(
+            bcsub((string) ($sums->credited ?? '0'), (string) ($sums->debited ?? '0'), 2),
             $wallet->currency(),
         );
 
-        if (! $derived->equals($wallet->total_minor)) {
+        if (! $derived->equals($wallet->total)) {
             $problems[] = [
                 'wallet' => $wallet->public_id,
                 'problem' => 'balance_mismatch',
-                'stored_minor' => $wallet->total_minor->minorUnits,
-                'derived_minor' => $derived->minorUnits,
+                'stored' => $wallet->total->toDecimal(),
+                'derived' => $derived->toDecimal(),
             ];
         }
 
@@ -117,13 +120,13 @@ class VerifyLedgerIntegrity
             // The chain. A missing entry shows up here and nowhere else: the
             // sums still add up, but the story has a hole in it.
             if ($previous !== null
-                && ! $previous->balance_after_minor->equals($entry->balance_before_minor)) {
+                && ! $previous->balance_after->equals($entry->balance_before)) {
                 $problems[] = [
                     'wallet' => $wallet->public_id,
                     'problem' => 'broken_chain',
                     'entry' => $entry->reference,
-                    'after_previous_minor' => $previous->balance_after_minor->minorUnits,
-                    'before_this_minor' => $entry->balance_before_minor->minorUnits,
+                    'after_previous' => $previous->balance_after->toDecimal(),
+                    'before_this' => $entry->balance_before->toDecimal(),
                 ];
             }
 

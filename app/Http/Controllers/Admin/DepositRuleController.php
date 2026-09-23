@@ -14,6 +14,7 @@ use App\Domain\Wallet\Models\DepositRuleChange;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Money\DecimalAmount;
+use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
 use App\Support\Rules\RuleScope;
 use Carbon\CarbonImmutable;
@@ -117,12 +118,13 @@ class DepositRuleController extends Controller
             'scope' => ['required', Rule::enum(RuleScope::class)],
             'scope_id' => ['nullable', 'integer'],
 
-            // Entered in Taka by the administrator; converted to minor units below.
+            // Entered in Taka by the administrator (D26): every money field
+            // here takes the same exact decimal boundary, never a bare integer.
             'required_deposit' => ['required', new DecimalAmountRule],
             'minimum_balance' => ['required', new DecimalAmountRule],
-            'required_top_up_minor' => ['nullable', 'integer', 'min:0'],
+            'required_top_up' => ['nullable', new DecimalAmountRule],
             'low_threshold' => ['nullable', new DecimalAmountRule],
-            'critical_balance_threshold_minor' => ['nullable', 'integer', 'min:0'],
+            'critical_threshold' => ['nullable', new DecimalAmountRule],
 
             'deposit_deadline_days' => ['nullable', 'integer', 'min:0', 'max:365'],
             'grace_period_days' => ['nullable', 'integer', 'min:0', 'max:365'],
@@ -204,11 +206,11 @@ class DepositRuleController extends Controller
     protected function attributes(array $validated): array
     {
         return [
-            'required_initial_deposit_minor' => DecimalAmount::parse($validated['required_deposit']),
-            'minimum_balance_minor' => DecimalAmount::parse($validated['minimum_balance']),
-            'required_top_up_minor' => $validated['required_top_up_minor'] ?? 0,
-            'low_balance_threshold_minor' => DecimalAmount::parseOrNull($validated['low_threshold'] ?? null),
-            'critical_balance_threshold_minor' => $validated['critical_balance_threshold_minor'] ?? null,
+            'required_initial_deposit' => DecimalAmount::parse($validated['required_deposit']),
+            'minimum_balance' => DecimalAmount::parse($validated['minimum_balance']),
+            'required_top_up' => DecimalAmount::parseOrNull($validated['required_top_up'] ?? null) ?? Money::zero(),
+            'low_balance_threshold' => DecimalAmount::parseOrNull($validated['low_threshold'] ?? null),
+            'critical_balance_threshold' => DecimalAmount::parseOrNull($validated['critical_threshold'] ?? null),
             'deposit_deadline_days' => $validated['deposit_deadline_days'] ?? null,
             'grace_period_days' => $validated['grace_period_days'] ?? null,
             'frequency' => $validated['frequency'],
@@ -244,11 +246,11 @@ class DepositRuleController extends Controller
             // hard to trust without seeing the order.
             'specificity' => $rule->scope->specificity(),
 
-            'required_deposit' => $rule->required_initial_deposit_minor->jsonSerialize(),
-            'minimum_balance' => $rule->minimum_balance_minor->jsonSerialize(),
-            'required_top_up' => $rule->required_top_up_minor->jsonSerialize(),
-            'low_threshold' => $rule->low_balance_threshold_minor?->jsonSerialize(),
-            'critical_threshold' => $rule->critical_balance_threshold_minor?->jsonSerialize(),
+            'required_deposit' => $rule->required_initial_deposit->jsonSerialize(),
+            'minimum_balance' => $rule->minimum_balance->jsonSerialize(),
+            'required_top_up' => $rule->required_top_up->jsonSerialize(),
+            'low_threshold' => $rule->low_balance_threshold?->jsonSerialize(),
+            'critical_threshold' => $rule->critical_balance_threshold?->jsonSerialize(),
             'grace_period_days' => $rule->grace_period_days,
             'deposit_deadline_days' => $rule->deposit_deadline_days,
             'frequency' => $rule->frequency->value,

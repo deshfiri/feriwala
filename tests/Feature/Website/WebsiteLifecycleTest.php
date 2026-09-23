@@ -82,13 +82,13 @@ describe('the lifecycle sweep', function () {
 
     it('flags a wallet that no longer holds what the account agreed to', function () {
         $account = websiteTestAccount();
-        $wallet = websiteTestWallet($account, 500000);
+        $wallet = websiteTestWallet($account, '5000.00');
 
         // §24 asks for both at once: a deposit to keep and a balance to
         // maintain. Half of it is not meeting it.
         $wallet->forceFill([
-            'required_deposit_minor' => 500000,
-            'minimum_balance_minor' => 500000,
+            'required_deposit' => Money::fromDecimal('5000.00', Currency::BDT),
+            'minimum_balance' => Money::fromDecimal('5000.00', Currency::BDT),
         ])->save();
 
         $website = Website::factory()->forAccount($account)->active()->create();
@@ -101,7 +101,7 @@ describe('the lifecycle sweep', function () {
         app(WalletService::class)->credit(
             $wallet->refresh(),
             LedgerTransactionType::TopUpCredit,
-            Money::of(500000, Currency::BDT),
+            Money::fromDecimal('5000.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'Top up'),
         );
 
@@ -171,7 +171,7 @@ describe('the lifecycle sweep', function () {
 describe('renewing a term', function () {
     it('charges for the next term and extends from the current expiry', function () {
         $account = websiteTestAccount();
-        $wallet = websiteTestWallet($account, 1_000_000);
+        $wallet = websiteTestWallet($account, '10000.00');
 
         $website = Website::factory()->forAccount($account)->create([
             'status' => WebsiteStatus::DomainRenewalPending,
@@ -184,7 +184,7 @@ describe('renewing a term', function () {
             ->post(route('websites.domains.renew', [$website->public_id, $domain->id]))
             ->assertRedirect(route('websites.show', $website->public_id));
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe(850000)
+        expect($wallet->refresh()->total->toDecimal())->toBe('8500.00')
             ->and($domain->refresh()->expires_at?->toDateString())
             ->toBe($expiry?->addMonths(12)->toDateString())
             ->and($domain->reminder_stage)->toBeNull()
@@ -199,7 +199,7 @@ describe('renewing a term', function () {
 
     it('raises one charge for a term, however many times a renewal is attempted', function () {
         $account = websiteTestAccount();
-        websiteTestWallet($account, 1000);
+        websiteTestWallet($account, '10.00');
 
         $website = Website::factory()->forAccount($account)->create([
             'status' => WebsiteStatus::HostingRenewalPending,

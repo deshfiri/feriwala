@@ -28,12 +28,12 @@ beforeEach(function () {
     $this->account = testBusinessAccount(AccountStatus::Active);
 });
 
-function thresholdWallet(int $credit, array $rule = []): Wallet
+function thresholdWallet(string $credit, array $rule = []): Wallet
 {
     DepositRule::create([
         'scope' => RuleScope::Global,
-        'required_initial_deposit_minor' => 0,
-        'minimum_balance_minor' => 200000,
+        'required_initial_deposit' => Money::zero(),
+        'minimum_balance' => Money::fromDecimal('2000.00'),
         'currency_code' => 'BDT',
         'effective_from' => CarbonImmutable::now()->subMonth(),
         'is_active' => true,
@@ -41,12 +41,13 @@ function thresholdWallet(int $credit, array $rule = []): Wallet
     ]);
 
     $wallet = app(OpenWallet::class)->handle(test()->account);
+    $amount = Money::fromDecimal($credit, Currency::BDT);
 
-    if ($credit > 0) {
+    if ($amount->isPositive()) {
         app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of($credit, Currency::BDT),
+            $amount,
             new PostingContext(source: 'test', description: 'Opening'),
         );
     }
@@ -58,7 +59,7 @@ function thresholdWallet(int $credit, array $rule = []): Wallet
 
 describe('reading the state', function () {
     it('calls a wallet healthy when it holds what it must', function () {
-        $wallet = thresholdWallet(500000);
+        $wallet = thresholdWallet('5000.00');
 
         expect(app(EvaluateWalletBalance::class)->handle($wallet))
             ->toBe(WalletBalanceState::Healthy);
@@ -70,7 +71,7 @@ describe('reading the state', function () {
          * figure somebody chose as worth mentioning — which is well above the
          * requirement here, and nothing is restricted for it.
          */
-        $wallet = thresholdWallet(300000, ['low_balance_threshold_minor' => 400000]);
+        $wallet = thresholdWallet('3000.00', ['low_balance_threshold' => Money::fromDecimal('4000.00')]);
 
         $state = app(EvaluateWalletBalance::class)->handle($wallet);
 
@@ -80,7 +81,7 @@ describe('reading the state', function () {
     });
 
     it('calls it critical when it is below what it is required to hold', function () {
-        $wallet = thresholdWallet(100000);
+        $wallet = thresholdWallet('1000.00');
 
         $state = app(EvaluateWalletBalance::class)->handle($wallet);
 
@@ -89,7 +90,7 @@ describe('reading the state', function () {
     });
 
     it('records the state on the wallet so a list need not re-derive it', function () {
-        $wallet = thresholdWallet(100000);
+        $wallet = thresholdWallet('1000.00');
 
         app(EvaluateWalletBalance::class)->handle($wallet);
 
@@ -100,7 +101,7 @@ describe('reading the state', function () {
     it('answers without writing anything when only asked', function () {
         // A screen should be able to ask where a wallet stands without the act
         // of looking starting a grace period.
-        $wallet = thresholdWallet(100000);
+        $wallet = thresholdWallet('1000.00');
 
         expect(app(EvaluateWalletBalance::class)->stateOf($wallet))
             ->toBe(WalletBalanceState::Critical)
@@ -110,7 +111,7 @@ describe('reading the state', function () {
 
 describe('the grace period', function () {
     it('stamps a deadline when the shortfall begins', function () {
-        $wallet = thresholdWallet(100000, ['grace_period_days' => 14]);
+        $wallet = thresholdWallet('1000.00', ['grace_period_days' => 14]);
 
         app(EvaluateWalletBalance::class)->handle($wallet);
 
@@ -128,7 +129,7 @@ describe('the grace period', function () {
          * deadline that never arrives — or one that moves when an administrator
          * edits a setting, which is the complaint afterwards.
          */
-        $wallet = thresholdWallet(100000, ['grace_period_days' => 14]);
+        $wallet = thresholdWallet('1000.00', ['grace_period_days' => 14]);
 
         app(EvaluateWalletBalance::class)->handle($wallet);
         $deadline = $wallet->refresh()->grace_ends_at;
@@ -145,7 +146,7 @@ describe('the grace period', function () {
     it('does not move it when the rule changes underneath', function () {
         // The obligation was captured with fourteen days. Changing the policy
         // to thirty does not hand this account another sixteen.
-        $wallet = thresholdWallet(100000, ['grace_period_days' => 14]);
+        $wallet = thresholdWallet('1000.00', ['grace_period_days' => 14]);
 
         app(EvaluateWalletBalance::class)->handle($wallet);
         $deadline = $wallet->refresh()->grace_ends_at;
@@ -161,14 +162,14 @@ describe('the grace period', function () {
     it('clears the clock once the account is back above the line', function () {
         // Not paused — gone. A shortfall next month is a new shortfall with its
         // own grace period.
-        $wallet = thresholdWallet(100000, ['grace_period_days' => 14]);
+        $wallet = thresholdWallet('1000.00', ['grace_period_days' => 14]);
 
         app(EvaluateWalletBalance::class)->handle($wallet);
 
         app(WalletService::class)->credit(
             $wallet->refresh(),
             LedgerTransactionType::TopUpCredit,
-            Money::of(200000, Currency::BDT),
+            Money::fromDecimal('2000.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'Top-up'),
         );
 
@@ -182,7 +183,7 @@ describe('the grace period', function () {
     it('treats a wallet given no grace as out of time immediately', function () {
         // §24.1 makes the period optional. An account that was never given one
         // is short from the moment it falls short.
-        $wallet = thresholdWallet(100000);
+        $wallet = thresholdWallet('1000.00');
 
         app(EvaluateWalletBalance::class)->handle($wallet);
 
@@ -191,7 +192,7 @@ describe('the grace period', function () {
     });
 
     it('says the grace has not expired while it is still running', function () {
-        $wallet = thresholdWallet(100000, ['grace_period_days' => 14]);
+        $wallet = thresholdWallet('1000.00', ['grace_period_days' => 14]);
 
         app(EvaluateWalletBalance::class)->handle($wallet);
 
@@ -200,7 +201,7 @@ describe('the grace period', function () {
     });
 
     it('says it has once the day arrives', function () {
-        $wallet = thresholdWallet(100000, ['grace_period_days' => 14]);
+        $wallet = thresholdWallet('1000.00', ['grace_period_days' => 14]);
 
         app(EvaluateWalletBalance::class)->handle($wallet);
 
@@ -213,7 +214,7 @@ describe('the grace period', function () {
     });
 
     it('never says a healthy wallet is out of time', function () {
-        $wallet = thresholdWallet(500000);
+        $wallet = thresholdWallet('5000.00');
 
         app(EvaluateWalletBalance::class)->handle($wallet);
 

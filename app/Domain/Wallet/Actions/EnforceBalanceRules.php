@@ -279,7 +279,7 @@ class EnforceBalanceRules
              */
             $required = $obligation === null
                 ? $wallet->reservedObligation()
-                : $obligation->required_deposit_minor->plus($obligation->minimum_balance_minor);
+                : $obligation->required_deposit->plus($obligation->minimum_balance);
 
             $wallet->businessAccount()->with('owner')->first()?->owner?->notify(
                 new WalletBalanceLow(

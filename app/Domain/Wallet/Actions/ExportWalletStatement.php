@@ -79,9 +79,9 @@ class ExportWalletStatement
             // Empty rather than zero where no value moved: a reservation is not
             // a debit of nothing, it is not a debit. Written as the exact
             // decimal, so the column adds up in a spreadsheet.
-            $entry === null ? '' : $entry->debit_minor->toDecimal(),
-            $entry === null ? '' : $entry->credit_minor->toDecimal(),
-            $entry === null ? '' : $entry->balance_after_minor->toDecimal(),
+            $entry === null ? '' : $entry->debit->toDecimal(),
+            $entry === null ? '' : $entry->credit->toDecimal(),
+            $entry === null ? '' : $entry->balance_after->toDecimal(),
 
             $transaction->currency_code,
             $this->safe($transaction->status->label()),

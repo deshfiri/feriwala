@@ -6,6 +6,7 @@ use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Enums\WalletTransactionStatus;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
+use App\Support\Money\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -36,12 +37,12 @@ function ledgerTestEntry(Wallet $wallet, array $overrides = []): LedgerEntry
         'business_account_id' => $wallet->business_account_id,
         'type' => LedgerTransactionType::TopUpCredit,
         'source' => 'test',
-        'credit_minor' => 50000,
-        'debit_minor' => 0,
+        'credit' => Money::fromDecimal('500.00'),
+        'debit' => Money::zero(),
         'currency_code' => 'BDT',
-        'balance_before_minor' => 0,
-        'balance_after_minor' => 50000,
-        'available_minor' => 50000,
+        'balance_before' => Money::zero(),
+        'balance_after' => Money::fromDecimal('500.00'),
+        'available' => Money::fromDecimal('500.00'),
         'status' => WalletTransactionStatus::Settled,
         'description' => 'Top-up',
         'created_at' => now(),
@@ -61,8 +62,8 @@ describe('what an entry records', function () {
             ->and($entry->public_id)->not->toBeEmpty()
             ->and($entry->type)->toBe(LedgerTransactionType::TopUpCredit)
             ->and($entry->status)->toBe(WalletTransactionStatus::Settled)
-            ->and($entry->balance_before_minor->minorUnits)->toBe(0)
-            ->and($entry->balance_after_minor->minorUnits)->toBe(50000)
+            ->and($entry->balance_before->toDecimal())->toBe('0.00')
+            ->and($entry->balance_after->toDecimal())->toBe('500.00')
             ->and($entry->description)->toBe('Wallet top-up')
             ->and($entry->internal_note)->toBe('Checked against the gateway statement.');
     });
@@ -86,18 +87,18 @@ describe('what an entry records', function () {
         $credit = ledgerTestEntry($wallet);
         $debit = ledgerTestEntry($wallet, [
             'type' => LedgerTransactionType::PackageFeeDebit,
-            'credit_minor' => 0,
-            'debit_minor' => 20000,
-            'balance_before_minor' => 50000,
-            'balance_after_minor' => 30000,
+            'credit' => Money::zero(),
+            'debit' => Money::fromDecimal('200.00'),
+            'balance_before' => Money::fromDecimal('500.00'),
+            'balance_after' => Money::fromDecimal('300.00'),
         ]);
 
         expect($credit->isCredit())->toBeTrue()
-            ->and($credit->signedAmount()->minorUnits)->toBe(50000)
+            ->and($credit->signedAmount()->toDecimal())->toBe('500.00')
             ->and($debit->isCredit())->toBeFalse()
-            ->and($debit->debit_minor->minorUnits)->toBe(20000)
-            ->and($debit->signedAmount()->minorUnits)->toBe(-20000)
-            ->and($debit->amount()->minorUnits)->toBe(20000);
+            ->and($debit->debit->toDecimal())->toBe('200.00')
+            ->and($debit->signedAmount()->toDecimal())->toBe('-200.00')
+            ->and($debit->amount()->toDecimal())->toBe('200.00');
     });
 
     it('knows whether its own arithmetic holds', function () {
@@ -106,7 +107,7 @@ describe('what an entry records', function () {
         $wallet = ledgerTestWallet();
 
         expect(ledgerTestEntry($wallet)->balances())->toBeTrue()
-            ->and(ledgerTestEntry($wallet, ['balance_after_minor' => 999])->balances())
+            ->and(ledgerTestEntry($wallet, ['balance_after' => Money::fromDecimal('9.99')])->balances())
             ->toBeFalse();
     });
 
@@ -124,7 +125,7 @@ describe('immutability', function () {
     it('refuses to be edited through the model', function () {
         $entry = ledgerTestEntry(ledgerTestWallet());
 
-        expect(fn () => $entry->forceFill(['credit_minor' => 1])->save())
+        expect(fn () => $entry->forceFill(['credit' => Money::fromDecimal('0.01')])->save())
             ->toThrow(RuntimeException::class);
     });
 
@@ -159,10 +160,10 @@ describe('immutability', function () {
 
         ledgerTestRefuses(fn () => DB::table('ledger_entries')
             ->where('id', $entry->id)
-            ->update(['credit_minor' => 999999]));
+            ->update(['credit' => '9999.99']));
 
-        expect(LedgerEntry::query()->findOrFail($entry->id)->credit_minor->minorUnits)
-            ->toBe(50000);
+        expect(LedgerEntry::query()->findOrFail($entry->id)->credit->toDecimal())
+            ->toBe('500.00');
     });
 
     it('refuses a delete that goes around the model entirely', function () {

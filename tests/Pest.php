@@ -191,7 +191,7 @@ function testAccountReadyForActivation(int $readyDaysAgo = 0): BusinessAccount
         'business_account_id' => $account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00'),
         'currency_code' => 'BDT',
         'completed_at' => now()->subDays($readyDaysAgo),
     ]);
@@ -278,7 +278,7 @@ function testAccountWithPackageFeatures(array $features, ?AccountStatus $status 
     $package = Package::create([
         'slug' => 'features-'.Str::lower(Str::random(8)),
         'name' => 'Test package',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00'),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -297,7 +297,7 @@ function testAccountWithPackageFeatures(array $features, ?AccountStatus $status 
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00'),
         'currency_code' => 'BDT',
     ]);
 
@@ -338,17 +338,18 @@ function websiteTestFee(FeeType $type, int $minorUnits): FeeRule
 }
 
 /**
- * An open wallet holding `$credit` for the account.
+ * An open wallet holding `$credit` Taka for the account.
  */
-function websiteTestWallet(BusinessAccount $account, int $credit): Wallet
+function websiteTestWallet(BusinessAccount $account, string $credit): Wallet
 {
     $wallet = app(OpenWallet::class)->handle($account);
+    $amount = Money::fromDecimal($credit, Currency::BDT);
 
-    if ($credit > 0) {
+    if ($amount->isPositive()) {
         app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of($credit, Currency::BDT),
+            $amount,
             new PostingContext(source: 'test', description: 'Opening'),
         );
     }
@@ -483,7 +484,7 @@ function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = nu
     $package = Package::create([
         'slug' => 'staff-limit-'.Str::lower(Str::random(8)),
         'name' => 'Test package',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00'),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -504,7 +505,7 @@ function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = nu
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00'),
         'currency_code' => 'BDT',
     ]);
 
@@ -591,7 +592,7 @@ function referralTestSwitchOn(): void
  * payment itemised as a registration fee, a package fee and an optional
  * discount, and — when a package is named — a subscription waiting for it.
  */
-function referralTestNewcomer(?BusinessAccount $referrer, ?Package $package = null, int $registration = 150000, int $packageFee = 500000, int $discount = 0): BusinessAccount
+function referralTestNewcomer(?BusinessAccount $referrer, ?Package $package = null, string $registration = '1500.00', string $packageFee = '5000.00', string $discount = '0.00'): BusinessAccount
 {
     $account = testAccountReadyForActivation();
 
@@ -604,7 +605,7 @@ function referralTestNewcomer(?BusinessAccount $referrer, ?Package $package = nu
             'business_account_id' => $account->id,
             'package_id' => $package->id,
             'status' => UserPackageStatus::PendingPayment,
-            'paid_fee_minor' => $packageFee,
+            'paid_fee' => Money::fromDecimal($packageFee),
             'currency_code' => 'BDT',
         ]);
     }
@@ -614,11 +615,11 @@ function referralTestNewcomer(?BusinessAccount $referrer, ?Package $package = nu
         ->where('purpose', PaymentPurpose::Activation)
         ->firstOrFail();
 
-    $payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'amount_minor' => $registration, 'currency_code' => 'BDT']);
-    $payment->allocations()->create(['type' => AllocationType::PackageFee, 'amount_minor' => $packageFee, 'currency_code' => 'BDT']);
+    $payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'amount' => Money::fromDecimal($registration), 'currency_code' => 'BDT']);
+    $payment->allocations()->create(['type' => AllocationType::PackageFee, 'amount' => Money::fromDecimal($packageFee), 'currency_code' => 'BDT']);
 
-    if ($discount > 0) {
-        $payment->allocations()->create(['type' => AllocationType::Discount, 'amount_minor' => $discount, 'currency_code' => 'BDT']);
+    if (Money::fromDecimal($discount)->isPositive()) {
+        $payment->allocations()->create(['type' => AllocationType::Discount, 'amount' => Money::fromDecimal($discount), 'currency_code' => 'BDT']);
     }
 
     return $account;

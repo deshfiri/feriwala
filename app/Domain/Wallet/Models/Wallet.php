@@ -30,13 +30,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $public_id
  * @property int $business_account_id
  * @property string $currency_code
- * @property Money $total_minor
- * @property Money $required_deposit_minor
- * @property Money $minimum_balance_minor
- * @property Money $reserved_minor
- * @property Money $pending_minor
- * @property Money $hold_minor
- * @property Money $cod_receivable_minor
+ * @property Money $total
+ * @property Money $required_deposit
+ * @property Money $minimum_balance
+ * @property Money $reserved
+ * @property Money $pending
+ * @property Money $hold
+ * @property Money $cod_receivable
  * @property bool $deposit_usable_for_charges
  * @property int|null $deposit_rule_id
  * @property CarbonImmutable|null $obligation_captured_at
@@ -59,9 +59,9 @@ class Wallet extends Model
     protected function casts(): array
     {
         return [
-            'total_minor' => MoneyCast::class,
-            'required_deposit_minor' => MoneyCast::class,
-            'minimum_balance_minor' => MoneyCast::class,
+            'total' => MoneyCast::class,
+            'required_deposit' => MoneyCast::class,
+            'minimum_balance' => MoneyCast::class,
             'deposit_usable_for_charges' => 'boolean',
             'deposit_reserved_until_cancellation' => 'boolean',
             'obligation_captured_at' => 'immutable_datetime',
@@ -70,10 +70,10 @@ class Wallet extends Model
             'grace_ends_at' => 'immutable_datetime',
             'balance_state' => WalletBalanceState::class,
             'balance_checked_at' => 'immutable_datetime',
-            'reserved_minor' => MoneyCast::class,
-            'pending_minor' => MoneyCast::class,
-            'hold_minor' => MoneyCast::class,
-            'cod_receivable_minor' => MoneyCast::class,
+            'reserved' => MoneyCast::class,
+            'pending' => MoneyCast::class,
+            'hold' => MoneyCast::class,
+            'cod_receivable' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -148,11 +148,11 @@ class Wallet extends Model
     public function usableBalance(): Money
     {
         return $this->floored(
-            $this->total_minor
-                ->minus($this->reserved_minor)
-                ->minus($this->hold_minor)
-                ->minus($this->pending_minor)
-                ->minus($this->minimum_balance_minor)
+            $this->total
+                ->minus($this->reserved)
+                ->minus($this->hold)
+                ->minus($this->pending)
+                ->minus($this->minimum_balance)
                 ->minus($this->depositLockedFromSpending())
         );
     }
@@ -171,12 +171,12 @@ class Wallet extends Model
     public function availableForWithdrawal(): Money
     {
         return $this->floored(
-            $this->total_minor
-                ->minus($this->reserved_minor)
-                ->minus($this->hold_minor)
-                ->minus($this->pending_minor)
-                ->minus($this->minimum_balance_minor)
-                ->minus($this->required_deposit_minor)
+            $this->total
+                ->minus($this->reserved)
+                ->minus($this->hold)
+                ->minus($this->pending)
+                ->minus($this->minimum_balance)
+                ->minus($this->required_deposit)
         );
     }
 
@@ -191,7 +191,7 @@ class Wallet extends Model
     {
         return $this->deposit_usable_for_charges
             ? Money::zero($this->currency())
-            : $this->required_deposit_minor;
+            : $this->required_deposit;
     }
 
     /**
@@ -202,7 +202,7 @@ class Wallet extends Model
      */
     public function reservedObligation(): Money
     {
-        return $this->required_deposit_minor->plus($this->minimum_balance_minor);
+        return $this->required_deposit->plus($this->minimum_balance);
     }
 
     /**
@@ -210,7 +210,7 @@ class Wallet extends Model
      */
     public function meetsRequiredDeposit(): bool
     {
-        return $this->total_minor->greaterThanOrEqualTo($this->required_deposit_minor);
+        return $this->total->greaterThanOrEqualTo($this->required_deposit);
     }
 
     /**
@@ -221,7 +221,7 @@ class Wallet extends Model
      */
     public function meetsObligation(): bool
     {
-        return $this->total_minor->greaterThanOrEqualTo($this->reservedObligation());
+        return $this->total->greaterThanOrEqualTo($this->reservedObligation());
     }
 
     /**
@@ -229,7 +229,7 @@ class Wallet extends Model
      */
     public function shortfall(): Money
     {
-        return $this->floored($this->required_deposit_minor->minus($this->total_minor));
+        return $this->floored($this->required_deposit->minus($this->total));
     }
 
     /**
@@ -237,7 +237,7 @@ class Wallet extends Model
      */
     public function obligationShortfall(): Money
     {
-        return $this->floored($this->reservedObligation()->minus($this->total_minor));
+        return $this->floored($this->reservedObligation()->minus($this->total));
     }
 
     /**
@@ -252,19 +252,19 @@ class Wallet extends Model
     {
         return [
             'currency' => $this->currency_code,
-            'total' => $this->total_minor->jsonSerialize(),
+            'total' => $this->total->jsonSerialize(),
             'usable' => $this->usableBalance()->jsonSerialize(),
             'available_for_withdrawal' => $this->availableForWithdrawal()->jsonSerialize(),
-            'required_deposit' => $this->required_deposit_minor->jsonSerialize(),
+            'required_deposit' => $this->required_deposit->jsonSerialize(),
 
             // §24.2 lists this beside the deposit, not instead of it: the part
             // that has to stay, spendable on nothing and withdrawable never.
-            'minimum_balance' => $this->minimum_balance_minor->jsonSerialize(),
+            'minimum_balance' => $this->minimum_balance->jsonSerialize(),
 
-            'reserved' => $this->reserved_minor->jsonSerialize(),
-            'pending' => $this->pending_minor->jsonSerialize(),
-            'hold' => $this->hold_minor->jsonSerialize(),
-            'cod_receivable' => $this->cod_receivable_minor->jsonSerialize(),
+            'reserved' => $this->reserved->jsonSerialize(),
+            'pending' => $this->pending->jsonSerialize(),
+            'hold' => $this->hold->jsonSerialize(),
+            'cod_receivable' => $this->cod_receivable->jsonSerialize(),
             'deposit_usable_for_charges' => $this->deposit_usable_for_charges,
             'meets_required_deposit' => $this->meetsRequiredDeposit(),
             'meets_obligation' => $this->meetsObligation(),

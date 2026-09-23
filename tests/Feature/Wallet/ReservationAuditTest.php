@@ -38,19 +38,19 @@ beforeEach(function () {
     app(WalletService::class)->credit(
         $this->wallet,
         LedgerTransactionType::TopUpCredit,
-        Money::of(100000, Currency::BDT),
+        Money::fromDecimal('1000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );
 
     $this->wallet->refresh();
 });
 
-function auditReserve(int $amount = 30000, ?User $actor = null): WalletTransaction
+function auditReserve(string $amount = '300.00', ?User $actor = null): WalletTransaction
 {
     return app(WalletService::class)->reserve(
         test()->wallet->refresh(),
         LedgerTransactionType::ServiceFeeDebit,
-        Money::of($amount, Currency::BDT),
+        Money::fromDecimal($amount, Currency::BDT),
         new PostingContext(
             source: 'test',
             description: 'Reserved against a charge',
@@ -78,8 +78,8 @@ describe('the boundary', function () {
         auditReserve();
 
         expect(LedgerEntry::query()->count())->toBe($before)
-            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(100000)
-            ->and($this->wallet->reserved_minor->minorUnits)->toBe(30000);
+            ->and($this->wallet->refresh()->total->toDecimal())->toBe('1000.00')
+            ->and($this->wallet->reserved->toDecimal())->toBe('300.00');
     });
 
     it('writes no ledger entry for a release either', function () {
@@ -90,7 +90,7 @@ describe('the boundary', function () {
         app(WalletService::class)->release($claim);
 
         expect(LedgerEntry::query()->count())->toBe($before)
-            ->and($this->wallet->refresh()->reserved_minor->minorUnits)->toBe(0);
+            ->and($this->wallet->refresh()->reserved->toDecimal())->toBe('0.00');
     });
 
     it('writes one the moment a capture makes value leave', function () {
@@ -102,7 +102,7 @@ describe('the boundary', function () {
         app(WalletService::class)->capture($claim->fresh());
 
         expect(LedgerEntry::query()->count())->toBe($before + 1)
-            ->and($this->wallet->refresh()->total_minor->minorUnits)->toBe(70000);
+            ->and($this->wallet->refresh()->total->toDecimal())->toBe('700.00');
     });
 });
 
@@ -116,12 +116,12 @@ describe('the audit record for bucket movement', function () {
 
         expect($event->wallet_id)->toBe($this->wallet->id)
             ->and($event->business_account_id)->toBe($this->account->id)
-            ->and($event->amount_minor->minorUnits)->toBe(30000)
+            ->and($event->amount->toDecimal())->toBe('300.00')
             ->and($event->currency_code)->toBe('BDT')
             ->and($event->source)->toBe('test')
             ->and($event->actor_id)->toBe($staff->id)
             ->and($event->reason)->toBe('A charge is coming.')
-            ->and($event->idempotency_key)->toBe('audit:30000')
+            ->and($event->idempotency_key)->toBe('audit:300.00')
             ->and($event->occurred_at)->not->toBeNull()
             ->and($event->ledger_entry_id)->toBeNull();
     });
@@ -133,19 +133,19 @@ describe('the audit record for bucket movement', function () {
 
         $event = auditEvents($claim)->firstOrFail();
 
-        expect($event->bucket)->toBe('reserved_minor')
-            ->and($event->bucket_before_minor->minorUnits)->toBe(0)
-            ->and($event->bucket_after_minor->minorUnits)->toBe(30000)
+        expect($event->bucket)->toBe('reserved')
+            ->and($event->bucket_before->toDecimal())->toBe('0.00')
+            ->and($event->bucket_after->toDecimal())->toBe('300.00')
             // Nothing left the wallet, and the record says so.
-            ->and($event->total_before_minor->minorUnits)->toBe(100000)
-            ->and($event->total_after_minor->minorUnits)->toBe(100000);
+            ->and($event->total_before->toDecimal())->toBe('1000.00')
+            ->and($event->total_after->toDecimal())->toBe('1000.00');
     });
 
     it('keeps the reservation on the record after it is released', function () {
         /*
          * The whole point. `wallet_transactions.status` now says Cancelled and
          * the bucket is empty; without this, nothing anywhere would show that
-         * thirty thousand taka was ever spoken for.
+         * three hundred taka was ever spoken for.
          */
         $claim = auditReserve();
 
@@ -158,9 +158,9 @@ describe('the audit record for bucket movement', function () {
             ->and($events[0]->to_status)->toBe(WalletTransactionStatus::Pending)
             ->and($events[1]->from_status)->toBe(WalletTransactionStatus::Pending)
             ->and($events[1]->to_status)->toBe(WalletTransactionStatus::Cancelled)
-            ->and($events[1]->bucket_before_minor->minorUnits)->toBe(30000)
-            ->and($events[1]->bucket_after_minor->minorUnits)->toBe(0)
-            ->and($events[1]->total_after_minor->minorUnits)->toBe(100000);
+            ->and($events[1]->bucket_before->toDecimal())->toBe('300.00')
+            ->and($events[1]->bucket_after->toDecimal())->toBe('0.00')
+            ->and($events[1]->total_after->toDecimal())->toBe('1000.00');
     });
 
     it('links a capture to the entry it produced', function () {
@@ -175,16 +175,16 @@ describe('the audit record for bucket movement', function () {
 
         expect($closing->to_status)->toBe(WalletTransactionStatus::Settled)
             ->and($closing->ledger_entry_id)->toBe($entry->id)
-            ->and($closing->total_before_minor->minorUnits)->toBe(100000)
-            ->and($closing->total_after_minor->minorUnits)->toBe(70000)
-            ->and($entry->debit_minor->minorUnits)->toBe(30000);
+            ->and($closing->total_before->toDecimal())->toBe('1000.00')
+            ->and($closing->total_after->toDecimal())->toBe('700.00')
+            ->and($entry->debit->toDecimal())->toBe('300.00');
     });
 
     it('records a plain posting too, so the history has no special cases', function () {
         $transaction = app(WalletService::class)->credit(
             $this->wallet->refresh(),
             LedgerTransactionType::TopUpCredit,
-            Money::of(5000, Currency::BDT),
+            Money::fromDecimal('50.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'Another top-up'),
         );
 
@@ -192,8 +192,8 @@ describe('the audit record for bucket movement', function () {
 
         expect($event->to_status)->toBe(WalletTransactionStatus::Settled)
             ->and($event->bucket)->toBeNull()
-            ->and($event->total_before_minor->minorUnits)->toBe(100000)
-            ->and($event->total_after_minor->minorUnits)->toBe(105000)
+            ->and($event->total_before->toDecimal())->toBe('1000.00')
+            ->and($event->total_after->toDecimal())->toBe('1050.00')
             ->and($event->ledger_entry_id)->not->toBeNull();
     });
 });
@@ -237,10 +237,10 @@ it('leaves no event behind when the posting it describes fails', function () {
     expect(fn () => app(WalletService::class)->reserve(
         $this->wallet->refresh(),
         LedgerTransactionType::ServiceFeeDebit,
-        Money::of(500000, Currency::BDT),
+        Money::fromDecimal('5000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'More than there is'),
     ))->toThrow(WalletOperationRefused::class);
 
     expect(WalletTransactionEvent::query()->count())->toBe($before)
-        ->and($this->wallet->refresh()->reserved_minor->minorUnits)->toBe(0);
+        ->and($this->wallet->refresh()->reserved->toDecimal())->toBe('0.00');
 });

@@ -89,7 +89,7 @@ class EvaluateWalletBalance
 
         $threshold = $this->lowThreshold($wallet);
 
-        if ($threshold !== null && $wallet->total_minor->lessThan($threshold)) {
+        if ($threshold !== null && $wallet->total->lessThan($threshold)) {
             return WalletBalanceState::Low;
         }
 
@@ -121,7 +121,7 @@ class EvaluateWalletBalance
      */
     protected function lowThreshold(Wallet $wallet): ?Money
     {
-        return $this->obligation($wallet)?->low_balance_threshold_minor;
+        return $this->obligation($wallet)?->low_balance_threshold;
     }
 
     /**

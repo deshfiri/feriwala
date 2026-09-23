@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Log;
  * never diverge. "Should never" is not a control. This is.
  */
 
-function integrityWallet(int ...$movements): Wallet
+function integrityWallet(string ...$movements): Wallet
 {
     $wallet = app(OpenWallet::class)->handle(testBusinessAccount(AccountStatus::Active));
 
@@ -27,7 +27,7 @@ function integrityWallet(int ...$movements): Wallet
         app(WalletService::class)->credit(
             $wallet->refresh(),
             LedgerTransactionType::TopUpCredit,
-            Money::of($amount, Currency::BDT),
+            Money::fromDecimal($amount, Currency::BDT),
             new PostingContext(source: 'test', description: 'Top-up'),
         );
     }
@@ -36,7 +36,7 @@ function integrityWallet(int ...$movements): Wallet
 }
 
 it('finds nothing wrong with a wallet that was posted to properly', function () {
-    integrityWallet(50000, 20000);
+    integrityWallet('500.00', '200.00');
 
     $result = app(VerifyLedgerIntegrity::class)->handle();
 
@@ -51,26 +51,26 @@ it('catches a balance that was written outside the posting service', function ()
      * an entry, and every screen has been showing a figure nobody can account
      * for ever since.
      */
-    $wallet = integrityWallet(50000);
+    $wallet = integrityWallet('500.00');
 
-    DB::table('wallets')->where('id', $wallet->id)->update(['total_minor' => 99999]);
+    DB::table('wallets')->where('id', $wallet->id)->update(['total' => '999.99']);
 
     $problems = app(VerifyLedgerIntegrity::class)->problemsFor($wallet->refresh());
 
     expect($problems)->toHaveCount(1)
         ->and($problems[0]['problem'])->toBe('balance_mismatch')
-        ->and($problems[0]['stored_minor'])->toBe(99999)
-        ->and($problems[0]['derived_minor'])->toBe(50000);
+        ->and($problems[0]['stored'])->toBe('999.99')
+        ->and($problems[0]['derived'])->toBe('500.00');
 });
 
 it('catches an entry whose own arithmetic is wrong', function () {
-    $wallet = integrityWallet(50000);
+    $wallet = integrityWallet('500.00');
 
     // Reaching past the append-only trigger the only way a test can: this is
     // the corruption the sweep has to notice, so it has to be creatable.
     DB::statement('ALTER TABLE ledger_entries DISABLE TRIGGER ledger_entries_no_update');
     DB::table('ledger_entries')->where('wallet_id', $wallet->id)
-        ->update(['balance_after_minor' => 12345]);
+        ->update(['balance_after' => '123.45']);
     DB::statement('ALTER TABLE ledger_entries ENABLE TRIGGER ledger_entries_no_update');
 
     $problems = collect(app(VerifyLedgerIntegrity::class)->problemsFor($wallet->refresh()))
@@ -85,7 +85,7 @@ it('catches a missing entry through the broken chain', function () {
      * still add up among themselves — what gives it away is that one entry's
      * closing balance is no longer the next one's opening balance.
      */
-    $wallet = integrityWallet(50000, 20000, 10000);
+    $wallet = integrityWallet('500.00', '200.00', '100.00');
 
     $middle = DB::table('ledger_entries')->where('wallet_id', $wallet->id)
         ->orderBy('id')->skip(1)->first();
@@ -114,9 +114,9 @@ it('catches a missing entry through the broken chain', function () {
 it('shouts once per sweep rather than once per row', function () {
     // A ledger drift is one incident however many rows it touched, and an
     // alert that arrives a thousand times is an alert nobody reads.
-    $wallet = integrityWallet(50000, 20000, 10000);
+    $wallet = integrityWallet('500.00', '200.00', '100.00');
 
-    DB::table('wallets')->where('id', $wallet->id)->update(['total_minor' => 1]);
+    DB::table('wallets')->where('id', $wallet->id)->update(['total' => '0.01']);
 
     Log::shouldReceive('channel')->once()->with('wallet')->andReturnSelf();
     Log::shouldReceive('critical')->once()
@@ -126,7 +126,7 @@ it('shouts once per sweep rather than once per row', function () {
 });
 
 it('says nothing at all when everything adds up', function () {
-    integrityWallet(50000);
+    integrityWallet('500.00');
 
     Log::shouldReceive('channel')->never();
 
@@ -139,11 +139,11 @@ it('repairs nothing', function () {
      * whatever caused the drift — and §23.2 already has a way to put things
      * right that leaves a record.
      */
-    $wallet = integrityWallet(50000);
+    $wallet = integrityWallet('500.00');
 
-    DB::table('wallets')->where('id', $wallet->id)->update(['total_minor' => 99999]);
+    DB::table('wallets')->where('id', $wallet->id)->update(['total' => '999.99']);
 
     app(VerifyLedgerIntegrity::class)->handle();
 
-    expect($wallet->refresh()->total_minor->minorUnits)->toBe(99999);
+    expect($wallet->refresh()->total->toDecimal())->toBe('999.99');
 });

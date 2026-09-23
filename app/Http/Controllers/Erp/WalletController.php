@@ -100,10 +100,10 @@ class WalletController extends Controller
                 'entries' => $record->ledgerEntries
                     ->map(fn ($entry) => [
                         'reference' => $entry->reference,
-                        'debit' => $entry->debit_minor->jsonSerialize(),
-                        'credit' => $entry->credit_minor->jsonSerialize(),
-                        'balance_before' => $entry->balance_before_minor->jsonSerialize(),
-                        'balance_after' => $entry->balance_after_minor->jsonSerialize(),
+                        'debit' => $entry->debit->jsonSerialize(),
+                        'credit' => $entry->credit->jsonSerialize(),
+                        'balance_before' => $entry->balance_before->jsonSerialize(),
+                        'balance_after' => $entry->balance_after->jsonSerialize(),
                         'at' => $entry->created_at->toIso8601String(),
                     ])
                     ->all(),

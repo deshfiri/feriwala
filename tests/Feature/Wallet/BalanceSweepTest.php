@@ -32,8 +32,8 @@ beforeEach(function () {
 
     DepositRule::create([
         'scope' => RuleScope::Global,
-        'required_initial_deposit_minor' => 0,
-        'minimum_balance_minor' => 200000,
+        'required_initial_deposit' => Money::zero(),
+        'minimum_balance' => Money::fromDecimal('2000.00'),
         'restricts_chargeable_services' => true,
         'currency_code' => 'BDT',
         'effective_from' => CarbonImmutable::now()->subMonth(),
@@ -41,16 +41,17 @@ beforeEach(function () {
     ]);
 });
 
-function sweptWallet(int $credit): Wallet
+function sweptWallet(string $credit): Wallet
 {
     $account = testBusinessAccount(AccountStatus::Active);
     $wallet = app(OpenWallet::class)->handle($account);
+    $amount = Money::fromDecimal($credit, Currency::BDT);
 
-    if ($credit > 0) {
+    if ($amount->isPositive()) {
         app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of($credit, Currency::BDT),
+            $amount,
             new PostingContext(source: 'test', description: 'Opening'),
         );
     }
@@ -61,9 +62,9 @@ function sweptWallet(int $credit): Wallet
 }
 
 it('checks every wallet there is', function () {
-    sweptWallet(500000);
-    sweptWallet(100000);
-    sweptWallet(0);
+    sweptWallet('5000.00');
+    sweptWallet('1000.00');
+    sweptWallet('0.00');
 
     $result = app(SweepWalletBalances::class)->handle();
 
@@ -73,7 +74,7 @@ it('checks every wallet there is', function () {
 });
 
 it('leaves a healthy wallet alone', function () {
-    $wallet = sweptWallet(500000);
+    $wallet = sweptWallet('5000.00');
 
     app(SweepWalletBalances::class)->handle();
 
@@ -84,7 +85,7 @@ it('leaves a healthy wallet alone', function () {
 });
 
 it('restricts one that has fallen short', function () {
-    $wallet = sweptWallet(100000);
+    $wallet = sweptWallet('1000.00');
 
     app(SweepWalletBalances::class)->handle();
 
@@ -98,7 +99,7 @@ it('does the same thing tomorrow and the day after', function () {
      * Everything it does has to be safe to repeat: no second restriction, no
      * second message, no deadline that quietly moves.
      */
-    $wallet = sweptWallet(100000);
+    $wallet = sweptWallet('1000.00');
 
     app(SweepWalletBalances::class)->handle();
     $deadline = $wallet->refresh()->grace_ends_at;
@@ -128,7 +129,7 @@ it('gives services back before it considers taking more away', function () {
      * back before anything else looks at it — the other way round, a wallet
      * briefly reaches a stage it had already paid its way out of.
      */
-    $wallet = sweptWallet(100000);
+    $wallet = sweptWallet('1000.00');
 
     app(SweepWalletBalances::class)->handle();
 
@@ -137,7 +138,7 @@ it('gives services back before it considers taking more away', function () {
     app(WalletService::class)->credit(
         $wallet->refresh(),
         LedgerTransactionType::TopUpCredit,
-        Money::of(200000, Currency::BDT),
+        Money::fromDecimal('2000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Paid up'),
     );
 
@@ -152,8 +153,8 @@ it('gives services back before it considers taking more away', function () {
 it('keeps going when one wallet cannot be handled', function () {
     // A thousand accounts should not go unchecked because one of them has a
     // problem.
-    $broken = sweptWallet(100000);
-    sweptWallet(100000);
+    $broken = sweptWallet('1000.00');
+    sweptWallet('1000.00');
 
     // A currency the Money value object will refuse to reason about.
     $broken->forceFill(['currency_code' => 'XXX'])->saveQuietly();
@@ -166,8 +167,8 @@ it('keeps going when one wallet cannot be handled', function () {
 });
 
 it('counts how many are short without changing anything', function () {
-    sweptWallet(100000);
-    sweptWallet(500000);
+    sweptWallet('1000.00');
+    sweptWallet('5000.00');
 
     app(SweepWalletBalances::class)->handle();
 

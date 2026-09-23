@@ -7,6 +7,7 @@ use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Enums\WalletTransactionStatus;
 use App\Domain\Wallet\Models\Wallet;
 use App\Domain\Wallet\Models\WalletTransaction;
+use App\Support\Money\Money;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Illuminate\Database\UniqueConstraintViolationException;
 
@@ -37,7 +38,7 @@ function lifecycleTransaction(array $overrides = []): WalletTransaction
         'type' => LedgerTransactionType::TopUpCredit,
         'direction' => LedgerDirection::Credit,
         'source' => 'test',
-        'amount_minor' => 50000,
+        'amount' => Money::fromDecimal('500.00'),
         'currency_code' => 'BDT',
         'status' => WalletTransactionStatus::Initiated,
         'description' => 'Wallet top-up',
