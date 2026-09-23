@@ -126,7 +126,7 @@ renamed, and entries are never deleted.
 - [x] **P0-10** Create `app/Domain/*`, `app/Integrations/*`, `app/Support/*` structure per [01-architecture.md](01-architecture.md) — 24 domains + `app/Domain/README.md` conventions
 - [x] **P0-11** Split controllers into `Http/Controllers/{Public,Erp,Admin,Api,Webhook}`
 - [x] **P0-12** Action/Data/FormRequest conventions with a worked example: `ChangeLocaleRequest` → `LocaleChange` (Data) → `ChangeLocale` (Action) → thin `LocaleController` — 4 tests, no HTTP layer needed
-- [x] **P0-13** `Money` value object + `MoneyCast` + JSON shape for React (BIGINT minor units, `currency_code`) (D4) — 32 tests
+- [x] **P0-13** `Money` value object + `MoneyCast` + JSON shape for React (BIGINT minor units, `currency_code`) (D4) — 32 tests. **Superseded 2026-09-23 by D26**: the minor-units representation this task built is withdrawn; `Money`/`MoneyCast` now hold an exact decimal Taka string over `NUMERIC(19,2)`, per D26 in [04-decisions.md](04-decisions.md).
 - [x] **P0-14** `HasPublicId` (ULID) + `HasSlug` + `HasReference` + `Reference`/`ReferencePrefix` generator (§34.2)
 - [x] **P0-15** `HasStateMachine` + `TransitionableState` + `IllegalStateTransition` — 8 tests
 - [x] **P0-16** Shared status-history recording trait (previous, new, actor, at, reason, internal note, public note). **One recording contract, reused rather than a shared table**: `RecordsStatusHistory` moves a `TransitionableState` model through `transitionTo()` and writes the change in the same transaction — previous, new, who (null for the system), when, reason, internal note and public note — with `StatusChange` carrying the fields and `StatusChange::bySystem` for automatic moves. `AppendOnlyStatusHistory` makes a history model refuse update and delete in Eloquent, and `feriwala_status_history_is_append_only()` lets a history table refuse them in the database. Adopted first by order status history (P6-6); the existing account, KYC and product histories are deliberately not retrofitted — `36a284d`, 8 tests
@@ -915,7 +915,7 @@ open** for the next batch.
 - [x] **P13-12** Per-variation decisions: full, partial and rejected approval rolled up to the listing status
 - [x] **P13-13** Central Catalogue connection through the existing `ManageProducts` action or an existing product; the preferred offer's Platform Rate is the only figure written to the wholesale price the catalogue already reads
 - [x] **P13-14** Supplier offers: several per variation, each with its own Supplier identity, rate, availability and status; one preferred offer per variation (database-enforced); no automatic Supplier selection
-- [x] **P13-15** Supplier Rate and Platform Rate: integer minor units, same currency, never negative, Platform ≥ Supplier (database CHECK), effective-dated append-only versions with a mandatory reason
+- [x] **P13-15** Supplier Rate and Platform Rate: integer minor units, same currency, never negative, Platform ≥ Supplier (database CHECK), effective-dated append-only versions with a mandatory reason. **Superseded 2026-09-23 by D26**: both rates are now exact decimal Taka over `NUMERIC(19,2)`, converted in the Supplier settlement/withdrawal/reversal batch; every other property this task describes (same currency, non-negative, Platform ≥ Supplier, append-only history) is unchanged.
 - [x] **P13-16** Confidentiality: Supplier Rate and margin absent from Client/Partner pages, the Partner Website API and other Suppliers; pricing permissions never granted to catalogue roles
 - [x] **P13-17** Availability foundation: Supplier submits, staff approve or adjust, immutable movements, never negative (database CHECK), distinct from central stock
 
@@ -964,6 +964,35 @@ increment by hand; a progress table that has drifted is worse than none.
 
 ### Revision log
 
+- **2026-09-23** — Read-only repository/branch audit, then the Client/Partner and Supplier wallet
+  legs of the D26 flat-Taka conversion. Branch audit: `feature/supplier-beta` and
+  `feature/p1-78-identity-business-account` are both fully merged into `main` (0 commits ahead of
+  it); `ui/ultra-modern-saas` remains correctly unmerged (2 commits, diverged, visual reference only
+  for the later redesign, per instruction — not merged here); the three `backup/*` tags and the two
+  `parked-shell-checkpoint`/`rejected-typography-checkpoint` tags are dead-end WIP snapshots, none an
+  ancestor of any live branch, left untouched. No stashes, no unexpected worktrees. Navigation audit:
+  `use-navigation.ts`'s procedural gating and `HandleInertiaRequests::NAVIGATION_ABILITIES` are in
+  1:1 parity (enforced by `tests/Feature/Ui/NavigationPermissionsTest.php`, added after the
+  888a6a9 regression logged below on 2026-09-22); no missing nav entry or permission-allowlist gap
+  found. `app-header.tsx`'s `mainNavItems`/`rightNavItems` are unused starter-kit leftovers — no page
+  renders `AppHeaderLayout` — flagged as dead code, not fixed, since nothing reachable depends on it.
+  Conversion: `Wallet`/`LedgerEntry`/`WalletTransaction(Event)`/`DepositRule`/
+  `WalletDepositObligation` (Client/Partner) and `SupplierWallet`/`SupplierLedgerEntry`/
+  `SupplierPayable`/`SupplierPayableReversal`/`SupplierWithdrawal`/`SupplierOffer`/
+  `SupplierOfferPriceChange`/`SupplierProductListingItem` converted from integer minor units to
+  exact decimal Taka, superseding the representation P0-13 and P13-15 originally built (see those
+  entries above) — every other property both tasks describe is unchanged. Minimal bounded fixes to
+  unblock these two units: `Payment`/`PaymentAllocation`/`PaymentLog`, `Package`/`UserPackage`,
+  `SettingType::Money`, `OrderItem`'s three Supplier-rate fields (its six checkout-only money fields
+  are untouched, Order/Checkout domain being a separate unit), and `Product`/`ProductVariant`'s
+  `wholesale_price`/`base_cost` plus `ManageProducts`' use of them. `vendor/bin/pest
+  tests/Feature/Wallet tests/Feature/Ledger`: 253 passed. `tests/Feature/Supplier
+  tests/Feature/Concurrency/SupplierWalletConcurrencyTest.php`: 91 passed, 51 failed — every
+  remaining failure traced to the still-unconverted Website (`FeeRule`, `WebsiteProduct` pricing),
+  Order/Checkout (six `OrderItem` fields), and Package/Billing fee-setup paths, none of them this
+  batch's scope. No `[ ]`/`[~]` counts above change: this is a storage-representation correctness
+  pass across already-`[x]` work, not new feature scope.
+
 - **2026-09-22** — System-wide money architecture correction: every human-facing money INPUT form
   converted from raw integer minor units to a decimal Taka string, validated by a new shared
   `App\Support\Money\Rules\DecimalAmountRule` and converted server-side via the new
@@ -987,7 +1016,10 @@ increment by hand; a progress table that has drifted is worse than none.
   payment receipt's "settled as" text and an admin payment detail page). Fixed five labels that
   literally said "(poisha)" in EN/BN. Confirmed the frozen Storefront API contract already used the
   correct machine (`{minor_units, currency, decimal}`) shape and needed no change; added one
-  non-breaking clarifying note to its documentation. Recorded the canonical money-boundary rule in
+  non-breaking clarifying note to its documentation. **Superseded the next day by D26** (see
+  [04-decisions.md](04-decisions.md)): the storefront contract gains a flat-Taka `amount` field as a
+  non-breaking v1 addition, and `minor_units` survives only as the documented legacy-compatibility
+  key — this entry's "needed no change" no longer holds. Recorded the canonical money-boundary rule in
   `CLAUDE.md` and `app/Domain/README.md`. Live-browser verification (harness now unblocked — cached
   Chromium libraries, no sudo needed) confirmed three representative Taka forms end-to-end against
   the database (500.50 Taka stored as exactly 50050 minor units, never 100x), confirmed formatted
