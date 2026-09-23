@@ -13,6 +13,7 @@ use App\Integrations\Payment\Gateways\Gateway;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpClient;
 use Illuminate\Http\Request;
 use Illuminate\Log\LogManager;
@@ -229,14 +230,18 @@ class SslCommerzGateway extends Gateway
      */
     public function verify(string $gatewayReference): GatewayResult
     {
-        $response = $this->http
-            ->timeout(20)
-            ->get($this->host().'/validator/api/validationserverAPI.php', [
-                'val_id' => $gatewayReference,
-                'store_id' => $this->credentials->storeId(),
-                'store_passwd' => $this->credentials->storePassword(),
-                'format' => 'json',
-            ]);
+        try {
+            $response = $this->http
+                ->timeout(20)
+                ->get($this->host().'/validator/api/validationserverAPI.php', [
+                    'val_id' => $gatewayReference,
+                    'store_id' => $this->credentials->storeId(),
+                    'store_passwd' => $this->credentials->storePassword(),
+                    'format' => 'json',
+                ]);
+        } catch (ConnectionException) {
+            throw GatewayUnavailable::forGateway($this->name(), 'verification connection failed');
+        }
 
         if ($response->failed()) {
             throw GatewayUnavailable::forGateway($this->name(), 'HTTP '.$response->status());
@@ -248,6 +253,10 @@ class SslCommerzGateway extends Gateway
         $status = (string) ($body['status'] ?? '');
         $reference = (string) ($body['tran_id'] ?? '');
 
+        // An unreadable response is not evidence that the customer failed to pay.
+        if (! in_array($status, ['VALID', 'VALIDATED', 'PENDING', 'PROCESSING', 'FAILED', 'CANCELLED', 'INVALID_TRANSACTION'], true)) {
+            throw GatewayUnavailable::malformedResponse($this->name());
+        }
         // VALID means settled; VALIDATED means settled and already acknowledged.
         if ($status === 'VALID' || $status === 'VALIDATED') {
             if (! isset($body['currency_amount'], $body['currency_type'])) {
@@ -277,10 +286,13 @@ class SslCommerzGateway extends Gateway
             return GatewayResult::pending($reference, $gatewayReference, $body);
         }
 
+        // Only CANCELLED, FAILED and INVALID_TRANSACTION reach here — every
+        // other value already returned above, or was refused by the
+        // whitelist check.
         return GatewayResult::failed(
             reference: $reference === '' ? null : $reference,
-            error: (string) ($body['error'] ?? 'The gateway reported the payment as '.($status ?: 'unknown').'.'),
-            errorCode: $status !== '' ? $status : null,
+            error: (string) ($body['error'] ?? 'The gateway reported the payment as '.$status.'.'),
+            errorCode: $status,
             raw: $body,
         );
     }

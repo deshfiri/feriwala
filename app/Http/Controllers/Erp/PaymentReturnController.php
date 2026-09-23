@@ -102,6 +102,8 @@ class PaymentReturnController extends Controller
             $status->needsReconciliation() => to_route('checkout.show')
                 ->with('info', __('payment.return.reconciling')),
 
+            in_array($status, PaymentStatus::open(), true) => to_route('checkout.show')
+                ->with('info', __('payment.return.checking')),
             default => to_route('checkout.show')->with('error', __('payment.return.failed')),
         };
     }

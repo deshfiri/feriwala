@@ -180,6 +180,25 @@ describe('a gateway posting the payer back (SSLCommerz, signed)', function () {
             ->assertSessionHas('success', __('payment.return.received'));
     });
 
+    it('tells the payer to keep waiting rather than that they failed, while the gateway still calls it pending', function () {
+        // A bank transfer or a risk review can leave a gateway undecided for a
+        // while. That is not a failure, and the return page must not say so.
+        $payment = ($this->start)();
+        $this->validation['status'] = 'PROCESSING';
+        $this->app['auth']->forgetGuards();
+
+        $this->post(route('checkout.return'), returnSafetySigned(['tran_id' => $payment->reference, 'val_id' => 'val-3', 'status' => 'PROCESSING']))
+            ->assertStatus(303)
+            ->assertRedirect(route('checkout.return'));
+
+        expect($payment->refresh()->status)->toBe(PaymentStatus::Pending);
+
+        $this->actingAs($this->applicant)
+            ->get(route('checkout.return'))
+            ->assertRedirect(route('checkout.show'))
+            ->assertSessionHas('info', __('payment.return.checking'));
+    });
+
     it('refuses a broken signature before asking the gateway anything', function () {
         $payment = ($this->start)();
 

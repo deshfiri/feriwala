@@ -648,3 +648,13 @@ describe('what this driver will not do', function () {
             ->toThrow(GatewayUnavailable::class);
     });
 });
+
+it('keeps verification retryable when SSLCommerz cannot be reached', function () {
+    Http::fake(['*' => Http::failedConnection()]);
+    expect(fn () => $this->gateway->verify('VAL1'))->toThrow(GatewayUnavailable::class);
+});
+
+it('does not turn an unreadable validation response into a failed payment', function () {
+    Http::fake(['*' => Http::response('<html>Service unavailable</html>', 200)]);
+    expect(fn () => $this->gateway->verify('VAL1'))->toThrow(GatewayUnavailable::class);
+});
