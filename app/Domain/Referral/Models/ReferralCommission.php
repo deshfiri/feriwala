@@ -2,6 +2,7 @@
 
 namespace App\Domain\Referral\Models;
 
+use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
@@ -11,7 +12,6 @@ use App\Domain\Referral\Enums\ReversalCause;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\WalletTransaction;
 use App\Models\User;
-use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,9 +36,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $source_account_id
  * @property int $level
  * @property string $kind
- * @property array{type: string, amount_minor: int|null, rate_bps: int|null, cap_minor: int|null, enabled?: bool, required_package_ids?: list<int>, min_active_direct_referrals?: int} $rule_snapshot
- * @property int $commission_base_minor
- * @property int $amount_minor
+ * @property array{type: string, amount: array<string, mixed>|null, rate_bps: int|null, cap: array<string, mixed>|null, enabled?: bool, required_package_ids?: list<int>, min_active_direct_referrals?: int} $rule_snapshot
+ * @property Money $commission_base
+ * @property Money $amount
  * @property string $currency_code
  * @property bool $capped
  * @property CommissionStatus $status
@@ -78,8 +78,8 @@ class ReferralCommission extends Model
         return [
             'level' => 'integer',
             'rule_snapshot' => 'array',
-            'commission_base_minor' => 'integer',
-            'amount_minor' => 'integer',
+            'commission_base' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'capped' => 'boolean',
             'status' => CommissionStatus::class,
             'skip_reason' => CommissionSkipReason::class,
@@ -90,11 +90,6 @@ class ReferralCommission extends Model
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
-    }
-
-    public function amount(): Money
-    {
-        return Money::of($this->amount_minor, Currency::from($this->currency_code));
     }
 
     public function isJoiningReward(): bool

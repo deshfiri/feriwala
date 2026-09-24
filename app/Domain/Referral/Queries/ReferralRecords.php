@@ -8,8 +8,6 @@ use App\Domain\Referral\Enums\RewardType;
 use App\Domain\Referral\Models\AccountReferral;
 use App\Domain\Referral\Models\ReferralCommission;
 use App\Domain\Referral\Models\ReferralQualifyingEvent;
-use App\Support\Money\Currency;
-use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -89,7 +87,7 @@ class ReferralRecords
             'id' => $commission->public_id,
             'level' => $commission->level,
             'is_joining_reward' => $commission->isJoiningReward(),
-            'amount' => $commission->amount()->jsonSerialize(),
+            'amount' => $commission->amount->jsonSerialize(),
             'rule' => $this->rule($commission),
             'status' => $commission->status->value,
             'status_label' => __('referral.statuses.'.$commission->status->value),
@@ -121,7 +119,7 @@ class ReferralRecords
             'status' => $event->status,
             'source' => ['id' => $event->sourceAccount->public_id, 'name' => $event->sourceAccount->name],
             'payment' => $event->payment?->reference,
-            'base' => Money::of($event->commission_base_minor, Currency::from($event->currency_code))->jsonSerialize(),
+            'base' => $event->commission_base->jsonSerialize(),
             'plan' => [
                 'id' => $event->plan->public_id,
                 'max_depth' => $event->plan->max_depth,
@@ -231,9 +229,7 @@ class ReferralRecords
             'percent' => $type === RewardType::Percentage && $rate !== null
                 ? rtrim(rtrim(sprintf('%d.%02d', intdiv((int) $rate, 100), (int) $rate % 100), '0'), '.')
                 : null,
-            'amount' => $type === RewardType::Fixed && isset($snapshot['amount_minor'])
-                ? Money::of((int) $snapshot['amount_minor'], Currency::from($commission->currency_code))->jsonSerialize()
-                : null,
+            'amount' => $type === RewardType::Fixed ? ($snapshot['amount'] ?? null) : null,
         ];
     }
 

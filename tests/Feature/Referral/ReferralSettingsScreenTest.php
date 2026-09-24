@@ -61,7 +61,7 @@ function referralSettingsPayload(array $overrides = []): array
 }
 
 it('shows the configuration to a person who may see it, without the forms to change it', function () {
-    referralTestPlan([['percentage', '10'], ['fixed', 10000, null]]);
+    referralTestPlan([['percentage', '10'], ['fixed', '100.00', null]]);
 
     $this->actingAs(referralSettingsViewer())
         ->get(route('admin.referral-settings.index'))
@@ -73,7 +73,7 @@ it('shows the configuration to a person who may see it, without the forms to cha
             ->has('plans.data', 1)
             ->where('plans.data.0.max_depth', 2)
             ->where('plans.data.0.levels.0.reward.percent', '10')
-            ->where('plans.data.0.levels.1.reward.amount.minor_units', 10000)
+            ->where('plans.data.0.levels.1.reward.amount.amount', '100.00')
             ->where('plans.data.0.state', 'in_force'));
 });
 
@@ -107,9 +107,9 @@ it('opens a plan version with a rule for every level, a joining reward and quali
 
     expect($plan->max_depth)->toBe(3)
         ->and($plan->levels->pluck('rate_bps')->all())->toBe([1000, 500, null])
-        ->and($plan->levels[2]->amount_minor)->toBe(10000)
+        ->and($plan->levels[2]->amount->toDecimal())->toBe('100.00')
         ->and($plan->levels[2]->min_active_direct_referrals)->toBe(2)
-        ->and($plan->joining_reward_amount_minor)->toBe(5000)
+        ->and($plan->joining_reward_amount->toDecimal())->toBe('50.00')
         ->and($plan->holding_days)->toBe(7)
         ->and($plan->qualifies_restricted)->toBeTrue()
         ->and($plan->qualifies_suspended)->toBeFalse()

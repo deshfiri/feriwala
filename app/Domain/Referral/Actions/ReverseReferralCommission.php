@@ -83,7 +83,7 @@ class ReverseReferralCommission
                 $transaction = $this->wallet->debit(
                     $this->wallets->handle(BusinessAccount::query()->findOrFail($locked->beneficiary_account_id)),
                     LedgerTransactionType::ReferralRewardReversal,
-                    $locked->amount(),
+                    $locked->amount,
                     new PostingContext(
                         source: 'referral',
                         description: $locked->isJoiningReward()
@@ -122,7 +122,7 @@ class ReverseReferralCommission
                 before: ['status' => $before->value],
                 after: [
                     'status' => $reversed->status->value,
-                    'amount_minor' => $reversed->amount_minor,
+                    'amount' => $reversed->amount->jsonSerialize(),
                     'level' => $reversed->level,
                     'cause' => $reversed->reversal_cause?->value,
                 ],

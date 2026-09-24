@@ -4,6 +4,7 @@ namespace App\Domain\Referral\Data;
 
 use App\Domain\Referral\Enums\CommissionBase;
 use App\Domain\Referral\Enums\ReferralTrigger;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 
 /**
@@ -24,7 +25,7 @@ readonly class ReferralPlanDraft
         public array $levels,
         public ?RewardRule $joiningReward,
         public int $holdingDays,
-        public int $minimumQualifyingPaymentMinor,
+        public Money $minimumQualifyingPayment,
         public bool $qualifiesSuspended,
         public bool $qualifiesRestricted,
         public bool $qualifiesPackageLapsed,

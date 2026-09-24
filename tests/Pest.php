@@ -326,13 +326,17 @@ function websiteTestAccount(?int $limit = 1, bool $entitled = true, array $extra
 
 /**
  * What Feriwala charges for one of the website services, from today.
+ *
+ * `$minorUnits` keeps its old poisha-shorthand name so call sites do not all
+ * need to change, but it is converted to exact Taka once, here, via bcmath —
+ * never scaled at the column or the cast (D26).
  */
 function websiteTestFee(FeeType $type, int $minorUnits): FeeRule
 {
     return FeeRule::create([
         'fee_type' => $type->value,
-        'amount_minor' => $minorUnits,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal(bcdiv((string) $minorUnits, '100', 2)),
         'effective_from' => now()->subDay(),
     ]);
 }
@@ -518,9 +522,10 @@ function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = nu
 /**
  * A multi-level plan version in force from an hour ago (D24).
  *
- * Each level is `[type, value]` or `[type, value, cap]`: a fixed amount in
- * minor units, or a percentage as text (`'10'`, `'2.5'`). Anything else a
- * test needs to vary goes in `$overrides`, keyed as the draft names it.
+ * Each level is `[type, value]` or `[type, value, cap]`: a fixed amount as a
+ * flat-Taka decimal string (D26; `'100.00'` is BDT 100.00), or a percentage
+ * as text (`'10'`, `'2.5'`). Anything else a test needs to vary goes in
+ * `$overrides`, keyed as the draft names it.
  *
  * @param  list<array{0: string, 1: int|string, 2?: int|null}>  $levels
  * @param  array<string, mixed>  $overrides
@@ -528,8 +533,8 @@ function testAccountWithStaffLimit(?int $staffLimit, ?AccountStatus $status = nu
 function referralTestPlan(array $levels, array $overrides = []): ReferralPlan
 {
     $rule = fn (array $level) => $level[0] === 'fixed'
-        ? new RewardRule(RewardType::Fixed, amountMinor: (int) $level[1], capMinor: $level[2] ?? null)
-        : new RewardRule(RewardType::Percentage, rateBps: RewardRule::basisPointsFromPercent((string) $level[1]), capMinor: $level[2] ?? null);
+        ? new RewardRule(RewardType::Fixed, amount: Money::fromDecimal((string) $level[1]), cap: isset($level[2]) ? Money::fromDecimal((string) $level[2]) : null)
+        : new RewardRule(RewardType::Percentage, rateBps: RewardRule::basisPointsFromPercent((string) $level[1]), cap: isset($level[2]) ? Money::fromDecimal((string) $level[2]) : null);
 
     $draft = [
         'packageId' => null,
@@ -545,7 +550,7 @@ function referralTestPlan(array $levels, array $overrides = []): ReferralPlan
         ], $levels, array_keys($levels)),
         'joiningReward' => null,
         'holdingDays' => 0,
-        'minimumQualifyingPaymentMinor' => 0,
+        'minimumQualifyingPayment' => Money::zero(),
         'qualifiesSuspended' => false,
         'qualifiesRestricted' => false,
         'qualifiesPackageLapsed' => false,

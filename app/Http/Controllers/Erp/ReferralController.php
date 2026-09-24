@@ -45,11 +45,11 @@ class ReferralController extends Controller
         $code = $account->canTransact() && $account->owner !== null ? $codes->issueTo($account->owner) : null;
         $currency = Currency::BDT;
 
-        $sum = fn (CommissionStatus $status) => Money::of(
-            (int) ReferralCommission::query()
+        $sum = fn (CommissionStatus $status) => Money::fromDecimal(
+            (string) ReferralCommission::query()
                 ->where('beneficiary_account_id', $account->id)
                 ->where('status', $status->value)
-                ->sum('amount_minor'),
+                ->sum('amount'),
             $currency,
         )->jsonSerialize();
 

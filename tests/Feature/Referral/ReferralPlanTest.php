@@ -11,6 +11,7 @@ use App\Domain\Referral\Models\ReferralPlan;
 use App\Domain\Referral\Queries\ResolveReferralPlan;
 use App\Domain\Referral\ReferralSettings;
 use App\Models\User;
+use App\Support\Money\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -18,21 +19,21 @@ use Illuminate\Support\Facades\DB;
  * Multi-level plan versions and their arithmetic (§25.4.1, D24, P7-12).
  */
 describe('the reward arithmetic', function () {
-    it('pays a fixed amount, or a percentage rounded down to the poisha', function () {
+    it('pays a fixed amount, or a percentage rounded down to the smallest unit', function () {
         $tenPercent = new RewardRule(RewardType::Percentage, rateBps: 1000);
-        $fixed = new RewardRule(RewardType::Fixed, amountMinor: 10000);
+        $fixed = new RewardRule(RewardType::Fixed, amount: Money::fromDecimal('100.00'));
 
-        expect($tenPercent->amountFor(650000))->toBe(65000)
-            // 10% of 12 345 poisha is 1 234.5 — rounded down, never up.
-            ->and($tenPercent->amountFor(12345))->toBe(1234)
-            ->and((new RewardRule(RewardType::Percentage, rateBps: 333))->amountFor(99999))->toBe(3329)
-            ->and($fixed->amountFor(650000))->toBe(10000);
+        expect($tenPercent->amountFor(Money::fromDecimal('6500.00'))->toDecimal())->toBe('650.00')
+            // 10% of 123.45 is 12.345 — rounded down, never up.
+            ->and($tenPercent->amountFor(Money::fromDecimal('123.45'))->toDecimal())->toBe('12.34')
+            ->and((new RewardRule(RewardType::Percentage, rateBps: 333))->amountFor(Money::fromDecimal('999.99'))->toDecimal())->toBe('33.29')
+            ->and($fixed->amountFor(Money::fromDecimal('6500.00'))->toDecimal())->toBe('100.00');
     });
 
     it('never pays above its cap or above the base itself', function () {
-        expect((new RewardRule(RewardType::Percentage, rateBps: 5000, capMinor: 20000))->amountFor(650000))->toBe(20000)
-            ->and((new RewardRule(RewardType::Fixed, amountMinor: 900000))->amountFor(650000))->toBe(650000)
-            ->and((new RewardRule(RewardType::Percentage, rateBps: 1000))->amountFor(-500))->toBe(0);
+        expect((new RewardRule(RewardType::Percentage, rateBps: 5000, cap: Money::fromDecimal('200.00')))->amountFor(Money::fromDecimal('6500.00'))->toDecimal())->toBe('200.00')
+            ->and((new RewardRule(RewardType::Fixed, amount: Money::fromDecimal('9000.00')))->amountFor(Money::fromDecimal('6500.00'))->toDecimal())->toBe('6500.00')
+            ->and((new RewardRule(RewardType::Percentage, rateBps: 1000))->amountFor(Money::fromDecimal('-5.00'))->toDecimal())->toBe('0.00');
     });
 
     it('reads a percentage typed as text into basis points without a float', function (string $typed, ?int $basisPoints) {
@@ -50,26 +51,26 @@ describe('the reward arithmetic', function () {
         ['-5', null],
     ]);
 
-    it('refuses a malformed or unsupported rule', function (string $type, ?int $amount, ?int $rate, ?int $cap) {
-        expect(fn () => new RewardRule(RewardType::from($type), $amount, $rate, $cap))
+    it('refuses a malformed or unsupported rule', function (string $type, ?string $amount, ?int $rate, ?string $cap) {
+        expect(fn () => new RewardRule(RewardType::from($type), $amount === null ? null : Money::fromDecimal($amount), $rate, $cap === null ? null : Money::fromDecimal($cap)))
             ->toThrow(InvalidArgumentException::class);
     })->with([
-        'zero fixed' => ['fixed', 0, null, null],
-        'negative fixed' => ['fixed', -100, null, null],
+        'zero fixed' => ['fixed', '0', null, null],
+        'negative fixed' => ['fixed', '-1.00', null, null],
         'percentage above whole' => ['percentage', null, 10001, null],
-        'percentage with an amount' => ['percentage', 100, 100, null],
-        'zero cap' => ['fixed', 100, null, 0],
+        'percentage with an amount' => ['percentage', '1.00', 100, null],
+        'zero cap' => ['fixed', '1.00', null, '0'],
     ]);
 });
 
 describe('plan versions', function () {
     it('opens a version with a rule for every level up to its depth, audited', function () {
-        $plan = referralTestPlan([['percentage', '10'], ['percentage', '5'], ['fixed', 10000]]);
+        $plan = referralTestPlan([['percentage', '10'], ['percentage', '5'], ['fixed', '100.00']]);
 
         expect($plan->max_depth)->toBe(3)
             ->and($plan->levels->pluck('level')->all())->toBe([1, 2, 3])
             ->and($plan->levels[0]->rate_bps)->toBe(1000)
-            ->and($plan->levels[2]->amount_minor)->toBe(10000);
+            ->and($plan->levels[2]->amount->toDecimal())->toBe('100.00');
 
         $audit = AuditLog::query()->where('action', 'referral.plan_opened')->firstOrFail();
 
@@ -106,8 +107,8 @@ describe('plan versions', function () {
     });
 
     it('resolves a package\'s own version before the global default, and falls back to it', function () {
-        $package = Package::create(['slug' => 'gold', 'name' => 'Gold', 'fee_minor' => 900000, 'currency_code' => 'BDT', 'is_active' => true]);
-        $other = Package::create(['slug' => 'silver', 'name' => 'Silver', 'fee_minor' => 500000, 'currency_code' => 'BDT', 'is_active' => true]);
+        $package = Package::create(['slug' => 'gold', 'name' => 'Gold', 'fee' => Money::fromDecimal('9000.00'), 'currency_code' => 'BDT', 'is_active' => true]);
+        $other = Package::create(['slug' => 'silver', 'name' => 'Silver', 'fee' => Money::fromDecimal('5000.00'), 'currency_code' => 'BDT', 'is_active' => true]);
 
         $global = referralTestPlan([['percentage', '10']]);
         $gold = referralTestPlan([['percentage', '15'], ['percentage', '5']], ['packageId' => $package->id]);
@@ -121,7 +122,7 @@ describe('plan versions', function () {
     });
 
     it('closes a version with a reason, and never deletes or edits one', function () {
-        $plan = referralTestPlan([['percentage', '10'], ['fixed', 5000]]);
+        $plan = referralTestPlan([['percentage', '10'], ['fixed', '100.00']]);
         $admin = User::factory()->create();
 
         app(CloseReferralPlan::class)->handle($plan, $admin, 'Suspending the programme for review.');

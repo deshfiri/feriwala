@@ -2,10 +2,12 @@
 
 namespace App\Domain\Referral\Models;
 
+use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Referral\Enums\ReferralTrigger;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -29,7 +31,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $payment_id
  * @property int $referral_plan_id
  * @property string $currency_code
- * @property int $commission_base_minor
+ * @property Money $commission_base
  * @property list<array{level: int, account: string|null, outcome: string}> $chain
  * @property string $status
  * @property CarbonImmutable $occurred_at
@@ -61,7 +63,7 @@ class ReferralQualifyingEvent extends Model
     {
         return [
             'trigger_event' => ReferralTrigger::class,
-            'commission_base_minor' => 'integer',
+            'commission_base' => MoneyCast::class,
             'chain' => 'array',
             'occurred_at' => 'immutable_datetime',
             'reversed_at' => 'immutable_datetime',

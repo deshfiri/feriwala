@@ -39,8 +39,8 @@ use Illuminate\Support\Facades\Notification;
 /**
  * The multi-level commission engine and its money (D24, P7-42, P7-43).
  *
- * Activation fees of 6 500 taka (650 000 poisha) unless a test says otherwise,
- * so 10% is 65 000 and 5% is 32 500.
+ * Activation fees of 6 500.00 taka unless a test says otherwise, so 10% is
+ * 650.00 and 5% is 325.00.
  */
 beforeEach(function () {
     referralTestSwitchOn();
@@ -63,22 +63,26 @@ function referralCommissionsByLevel(BusinessAccount $source): array
 }
 
 /**
- * What a business's wallet has been credited for referrals, in poisha.
+ * What a business's wallet has been credited for referrals, as exact Taka.
  */
-function referralCredited(BusinessAccount $account): int
+function referralCredited(BusinessAccount $account): Money
 {
     $wallet = Wallet::query()->where('business_account_id', $account->id)->first();
 
-    return $wallet === null ? 0 : (int) LedgerEntry::query()
+    if ($wallet === null) {
+        return Money::zero();
+    }
+
+    return Money::fromDecimal((string) LedgerEntry::query()
         ->where('wallet_id', $wallet->id)
         ->whereIn('type', [LedgerTransactionType::ReferralRewardCredit->value, LedgerTransactionType::JoiningRewardCredit->value])
-        ->sum('credit_minor');
+        ->sum('credit'));
 }
 
 describe('traversal and calculation', function () {
     it('pays each level its own rule, fixed or percentage, up to the depth and no further', function () {
         [$fifth, $fourth, $third, $second, $direct] = referralTestChain(5);
-        referralTestPlan([['percentage', '10'], ['percentage', '5'], ['fixed', 10000]]);
+        referralTestPlan([['percentage', '10'], ['percentage', '5'], ['fixed', '100.00']]);
 
         $newcomer = referralTestActivate(referralTestNewcomer($direct));
 
@@ -86,18 +90,18 @@ describe('traversal and calculation', function () {
 
         expect(array_keys($levels))->toBe([1, 2, 3])
             ->and($levels[1]->beneficiary_account_id)->toBe($direct->id)
-            ->and($levels[1]->amount_minor)->toBe(65000)
+            ->and($levels[1]->amount->toDecimal())->toBe('650.00')
             ->and($levels[2]->beneficiary_account_id)->toBe($second->id)
-            ->and($levels[2]->amount_minor)->toBe(32500)
+            ->and($levels[2]->amount->toDecimal())->toBe('325.00')
             ->and($levels[3]->beneficiary_account_id)->toBe($third->id)
-            ->and($levels[3]->amount_minor)->toBe(10000)
+            ->and($levels[3]->amount->toDecimal())->toBe('100.00')
             ->and(collect($levels)->every(fn (ReferralCommission $c) => $c->status === CommissionStatus::Paid))->toBeTrue()
             // Beyond the depth nobody is paid.
-            ->and(referralCredited($fourth))->toBe(0)
-            ->and(referralCredited($fifth))->toBe(0)
-            ->and(referralCredited($direct))->toBe(65000)
-            ->and(referralCredited($second))->toBe(32500)
-            ->and(referralCredited($third))->toBe(10000);
+            ->and(referralCredited($fourth)->isZero())->toBeTrue()
+            ->and(referralCredited($fifth)->isZero())->toBeTrue()
+            ->and(referralCredited($direct)->toDecimal())->toBe('650.00')
+            ->and(referralCredited($second)->toDecimal())->toBe('325.00')
+            ->and(referralCredited($third)->toDecimal())->toBe('100.00');
 
         Notification::assertSentTo($direct->owner, ReferralCommissionPaid::class);
     });
@@ -117,11 +121,11 @@ describe('traversal and calculation', function () {
         [$third, $second, $direct] = referralTestChain(3);
         $second->forceFill(['status' => AccountStatus::Suspended])->save();
 
-        referralTestPlan([['percentage', '10'], ['percentage', '5'], ['fixed', 10000]], [
+        referralTestPlan([['percentage', '10'], ['percentage', '5'], ['fixed', '100.00']], [
             'levels' => [
                 ['level' => 1, 'rule' => new RewardRule(RewardType::Percentage, rateBps: 1000), 'enabled' => false, 'required_package_ids' => [], 'min_active_direct_referrals' => 0],
                 ['level' => 2, 'rule' => new RewardRule(RewardType::Percentage, rateBps: 500), 'enabled' => true, 'required_package_ids' => [], 'min_active_direct_referrals' => 0],
-                ['level' => 3, 'rule' => new RewardRule(RewardType::Fixed, amountMinor: 10000), 'enabled' => true, 'required_package_ids' => [], 'min_active_direct_referrals' => 0],
+                ['level' => 3, 'rule' => new RewardRule(RewardType::Fixed, amount: Money::fromDecimal('100.00')), 'enabled' => true, 'required_package_ids' => [], 'min_active_direct_referrals' => 0],
             ],
         ]);
 
@@ -134,10 +138,10 @@ describe('traversal and calculation', function () {
             ->and($levels[2]->skip_reason)->toBe(CommissionSkipReason::StatusNotQualified)
             // The third ancestor keeps level 3 and its fixed reward.
             ->and($levels[3]->beneficiary_account_id)->toBe($third->id)
-            ->and($levels[3]->amount_minor)->toBe(10000)
+            ->and($levels[3]->amount->toDecimal())->toBe('100.00')
             ->and($levels[3]->status)->toBe(CommissionStatus::Paid)
-            ->and(referralCredited($direct))->toBe(0)
-            ->and(referralCredited($second))->toBe(0);
+            ->and(referralCredited($direct)->isZero())->toBeTrue()
+            ->and(referralCredited($second)->isZero())->toBeTrue();
     });
 
     it('pays a suspended ancestor only under a version that says so', function () {
@@ -148,12 +152,12 @@ describe('traversal and calculation', function () {
         $newcomer = referralTestActivate(referralTestNewcomer($direct));
 
         expect(referralCommissionsByLevel($newcomer)[1]->status)->toBe(CommissionStatus::Paid)
-            ->and(referralCredited($direct))->toBe(65000);
+            ->and(referralCredited($direct)->toDecimal())->toBe('650.00');
     });
 
     it('asks each level for its packages and its active direct referrals', function () {
         [$second, $direct] = referralTestChain(2);
-        $gold = Package::create(['slug' => 'gold', 'name' => 'Gold', 'fee_minor' => 900000, 'currency_code' => 'BDT', 'is_active' => true]);
+        $gold = Package::create(['slug' => 'gold', 'name' => 'Gold', 'fee' => Money::fromDecimal('9000.00'), 'currency_code' => 'BDT', 'is_active' => true]);
 
         $rule = fn (string $percent) => new RewardRule(RewardType::Percentage, rateBps: RewardRule::basisPointsFromPercent($percent));
 
@@ -173,7 +177,7 @@ describe('traversal and calculation', function () {
 
     it('resolves the account\'s package version first and falls back to the global default', function () {
         [$direct] = referralTestChain(1);
-        $gold = Package::create(['slug' => 'gold', 'name' => 'Gold', 'fee_minor' => 900000, 'currency_code' => 'BDT', 'is_active' => true]);
+        $gold = Package::create(['slug' => 'gold', 'name' => 'Gold', 'fee' => Money::fromDecimal('9000.00'), 'currency_code' => 'BDT', 'is_active' => true]);
 
         referralTestPlan([['percentage', '10']]);
         referralTestPlan([['percentage', '20']], ['packageId' => $gold->id]);
@@ -181,46 +185,46 @@ describe('traversal and calculation', function () {
         $onGold = referralTestActivate(referralTestNewcomer($direct, $gold));
         $withoutPackage = referralTestActivate(referralTestNewcomer($direct));
 
-        expect(referralCommissionsByLevel($onGold)[1]->amount_minor)->toBe(130000)
-            ->and(referralCommissionsByLevel($withoutPackage)[1]->amount_minor)->toBe(65000);
+        expect(referralCommissionsByLevel($onGold)[1]->amount->toDecimal())->toBe('1300.00')
+            ->and(referralCommissionsByLevel($withoutPackage)[1]->amount->toDecimal())->toBe('650.00');
     });
 
-    it('calculates in exact poisha, rounding down, net of a discount shared in proportion', function () {
+    it('calculates in exact Taka, rounding down, net of a discount shared in proportion', function () {
         [$direct] = referralTestChain(1);
         referralTestPlan([['percentage', '10']], ['base' => CommissionBase::PackageFee]);
 
-        // Package fee 500 000 of 650 000 revenue carries ceil(500 000 × 10 001 ÷ 650 000)
-        // = 7 694 of the discount: a base of 492 306, and 10% of it is 49 230.6.
+        // Package fee 5000.00 of 6500.00 revenue carries ceil(5000.00 × 100.01 ÷ 6500.00)
+        // = 76.94 of the discount: a base of 4923.06, and 10% of it is 492.306.
         $newcomer = referralTestActivate(referralTestNewcomer($direct, discount: '100.01'));
 
         $level = referralCommissionsByLevel($newcomer)[1];
 
-        expect($level->commission_base_minor)->toBe(492306)
-            ->and($level->amount_minor)->toBe(49230)
-            ->and(referralCredited($direct))->toBe(49230);
+        expect($level->commission_base->toDecimal())->toBe('4923.06')
+            ->and($level->amount->toDecimal())->toBe('492.30')
+            ->and(referralCredited($direct)->toDecimal())->toBe('492.30');
     });
 
     it('never lets the chain pay more than the base', function () {
         [$second, $direct] = referralTestChain(2);
         referralTestPlan([['percentage', '60'], ['percentage', '60']], [
-            'joiningReward' => new RewardRule(RewardType::Fixed, amountMinor: 5000),
+            'joiningReward' => new RewardRule(RewardType::Fixed, amount: Money::fromDecimal('50.00')),
         ]);
 
         $newcomer = referralTestActivate(referralTestNewcomer($direct));
         $levels = referralCommissionsByLevel($newcomer);
 
-        expect($levels[1]->amount_minor)->toBe(390000)
-            ->and($levels[2]->amount_minor)->toBe(260000)
+        expect($levels[1]->amount->toDecimal())->toBe('3900.00')
+            ->and($levels[2]->amount->toDecimal())->toBe('2600.00')
             ->and($levels[2]->capped)->toBeTrue()
             ->and($levels[0]->status)->toBe(CommissionStatus::Skipped)
             ->and($levels[0]->skip_reason)->toBe(CommissionSkipReason::BaseExhausted)
-            ->and(collect($levels)->sum('amount_minor'))->toBe(650000);
+            ->and(collect($levels)->reduce(fn (Money $sum, ReferralCommission $c) => $sum->plus($c->amount), Money::zero())->toDecimal())->toBe('6500.00');
     });
 
     it('pays the new account its joining reward only when it was referred', function () {
         [$direct] = referralTestChain(1);
         referralTestPlan([['percentage', '10']], [
-            'joiningReward' => new RewardRule(RewardType::Fixed, amountMinor: 5000),
+            'joiningReward' => new RewardRule(RewardType::Fixed, amount: Money::fromDecimal('50.00')),
         ]);
 
         $referred = referralTestActivate(referralTestNewcomer($direct));
@@ -229,8 +233,8 @@ describe('traversal and calculation', function () {
         $joining = referralCommissionsByLevel($referred)[0];
 
         expect($joining->beneficiary_account_id)->toBe($referred->id)
-            ->and($joining->amount_minor)->toBe(5000)
-            ->and((int) LedgerEntry::query()->where('type', LedgerTransactionType::JoiningRewardCredit->value)->sum('credit_minor'))->toBe(5000)
+            ->and($joining->amount->toDecimal())->toBe('50.00')
+            ->and((string) LedgerEntry::query()->where('type', LedgerTransactionType::JoiningRewardCredit->value)->sum('credit'))->toBe('50.00')
             ->and(ReferralCommission::query()->where('source_account_id', $unreferred->id)->exists())->toBeFalse();
     });
 
@@ -245,7 +249,7 @@ describe('traversal and calculation', function () {
         $switchedOff = referralTestActivate(referralTestNewcomer($direct));
 
         expect(ReferralQualifyingEvent::query()->whereIn('source_account_id', [$noPlan->id, $switchedOff->id])->exists())->toBeFalse()
-            ->and(referralCredited($direct))->toBe(0);
+            ->and(referralCredited($direct)->isZero())->toBeTrue();
     });
 });
 
@@ -266,9 +270,9 @@ describe('the ledger and the outbox', function () {
 
         expect($transaction->idempotency_key)->toBe('referral-commission:'.$commission->public_id)
             ->and(WalletTransaction::query()->where('idempotency_key', 'like', 'referral-commission:%')->count())->toBe(1)
-            ->and(referralCredited($direct))->toBe(65000);
+            ->and(referralCredited($direct)->toDecimal())->toBe('650.00');
 
-        expect(fn () => DB::transaction(fn () => DB::table('ledger_entries')->where('wallet_transaction_id', $transaction->id)->update(['credit_minor' => 1])))
+        expect(fn () => DB::transaction(fn () => DB::table('ledger_entries')->where('wallet_transaction_id', $transaction->id)->update(['credit' => 1])))
             ->toThrow(QueryException::class);
     });
 
@@ -291,12 +295,12 @@ describe('the ledger and the outbox', function () {
         $newcomer = referralTestActivate(referralTestNewcomer($direct));
 
         expect(referralCommissionsByLevel($newcomer)[1]->status)->toBe(CommissionStatus::Pending)
-            ->and(referralCredited($direct))->toBe(0);
+            ->and(referralCredited($direct)->isZero())->toBeTrue();
 
         $this->travel(8)->days();
 
         expect(app(ReleaseDueReferralCommissions::class)->handle()['released'])->toBe(1)
-            ->and(referralCredited($direct))->toBe(65000);
+            ->and(referralCredited($direct)->toDecimal())->toBe('650.00');
     });
 
     it('waits while a beneficiary may not be paid, and cancels for one that closed', function () {
@@ -351,10 +355,10 @@ describe('the ledger and the outbox', function () {
 
         expect($old->referral_plan_id)->toBe($plan->id)
             ->and($old->rule_snapshot['rate_bps'])->toBe(1000)
-            ->and($old->amount_minor)->toBe(65000)
-            ->and(referralCommissionsByLevel($second)[1]->amount_minor)->toBe(19500);
+            ->and($old->amount->toDecimal())->toBe('650.00')
+            ->and(referralCommissionsByLevel($second)[1]->amount->toDecimal())->toBe('195.00');
 
-        expect(fn () => DB::transaction(fn () => DB::table('referral_commissions')->where('id', $old->id)->update(['amount_minor' => 1])))
+        expect(fn () => DB::transaction(fn () => DB::table('referral_commissions')->where('id', $old->id)->update(['amount' => 1])))
             ->toThrow(QueryException::class);
     });
 });
@@ -375,11 +379,11 @@ describe('reversal', function () {
         expect($event->refresh()->status)->toBe(ReferralQualifyingEvent::REVERSED)
             ->and($levels[1]->status)->toBe(CommissionStatus::Reversed)
             ->and($levels[2]->status)->toBe(CommissionStatus::Reversed)
-            ->and($reversal->debit_minor->minorUnits)->toBe(65000)
+            ->and($reversal->debit->toDecimal())->toBe('650.00')
             ->and($reversal->type)->toBe(LedgerTransactionType::ReferralRewardReversal)
             // The credit it answers is still there, unchanged.
-            ->and(LedgerEntry::query()->where('wallet_transaction_id', $levels[1]->wallet_transaction_id)->firstOrFail()->credit_minor->minorUnits)->toBe(65000)
-            ->and(Wallet::query()->where('business_account_id', $direct->id)->firstOrFail()->total_minor->minorUnits)->toBe(0)
+            ->and(LedgerEntry::query()->where('wallet_transaction_id', $levels[1]->wallet_transaction_id)->firstOrFail()->credit->toDecimal())->toBe('650.00')
+            ->and(Wallet::query()->where('business_account_id', $direct->id)->firstOrFail()->total->toDecimal())->toBe('0.00')
             ->and(AuditLog::query()->where('action', 'referral.event_reversed')->exists())->toBeTrue();
     });
 
@@ -408,18 +412,18 @@ describe('reversal', function () {
         $wallet = Wallet::query()->where('business_account_id', $direct->id)->firstOrFail();
 
         // The commission has been spent.
-        app(WalletService::class)->debit($wallet, LedgerTransactionType::ServiceFeeDebit, Money::of(60000, Currency::BDT), new PostingContext(source: 'test', description: 'Spent'));
+        app(WalletService::class)->debit($wallet, LedgerTransactionType::ServiceFeeDebit, Money::fromDecimal('600.00', Currency::BDT), new PostingContext(source: 'test', description: 'Spent'));
 
         app(ReverseReferralCommission::class)->handle($commission, ReversalCause::Chargeback, 'Chargeback on the activation payment.', User::factory()->create());
 
         expect($commission->status)->toBe(CommissionStatus::ReversalOwed)
-            ->and($wallet->refresh()->total_minor->minorUnits)->toBe(5000);
+            ->and($wallet->refresh()->total->toDecimal())->toBe('50.00');
 
-        app(WalletService::class)->credit($wallet, LedgerTransactionType::TopUpCredit, Money::of(100000, Currency::BDT), new PostingContext(source: 'test', description: 'Top-up'));
+        app(WalletService::class)->credit($wallet, LedgerTransactionType::TopUpCredit, Money::fromDecimal('1000.00', Currency::BDT), new PostingContext(source: 'test', description: 'Top-up'));
 
         expect(app(ReleaseDueReferralCommissions::class)->handle()['recovered'])->toBe(1)
             ->and($commission->refresh()->status)->toBe(CommissionStatus::Reversed)
             ->and($commission->reversal_cause)->toBe(ReversalCause::Chargeback)
-            ->and($wallet->refresh()->total_minor->minorUnits)->toBe(40000);
+            ->and($wallet->refresh()->total->toDecimal())->toBe('400.00');
     });
 });

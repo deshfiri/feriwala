@@ -2,8 +2,10 @@
 
 namespace App\Domain\Referral\Models;
 
+use App\Casts\MoneyCast;
 use App\Domain\Referral\Data\RewardRule;
 use App\Domain\Referral\Enums\RewardType;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,9 +20,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $level
  * @property string $currency_code
  * @property RewardType $reward_type
- * @property int|null $amount_minor
+ * @property Money|null $amount
  * @property int|null $rate_bps
- * @property int|null $cap_minor
+ * @property Money|null $cap
  * @property bool $is_enabled
  * @property list<int>|null $required_package_ids
  * @property int $min_active_direct_referrals
@@ -41,9 +43,9 @@ class ReferralPlanLevel extends Model
         return [
             'level' => 'integer',
             'reward_type' => RewardType::class,
-            'amount_minor' => 'integer',
+            'amount' => MoneyCast::class,
             'rate_bps' => 'integer',
-            'cap_minor' => 'integer',
+            'cap' => MoneyCast::class,
             'is_enabled' => 'boolean',
             'required_package_ids' => 'array',
             'min_active_direct_referrals' => 'integer',
@@ -61,7 +63,7 @@ class ReferralPlanLevel extends Model
 
     public function rule(): RewardRule
     {
-        return new RewardRule($this->reward_type, $this->amount_minor, $this->rate_bps, $this->cap_minor);
+        return new RewardRule($this->reward_type, $this->amount, $this->rate_bps, $this->cap);
     }
 
     /**

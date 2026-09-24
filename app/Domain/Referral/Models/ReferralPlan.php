@@ -2,6 +2,7 @@
 
 namespace App\Domain\Referral\Models;
 
+use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Package\Models\Package;
@@ -10,6 +11,7 @@ use App\Domain\Referral\Enums\CommissionBase;
 use App\Domain\Referral\Enums\ReferralTrigger;
 use App\Domain\Referral\Enums\RewardType;
 use App\Models\User;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -33,11 +35,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $max_depth
  * @property string $currency_code
  * @property RewardType|null $joining_reward_type
- * @property int|null $joining_reward_amount_minor
+ * @property Money|null $joining_reward_amount
  * @property int|null $joining_reward_rate_bps
- * @property int|null $joining_reward_cap_minor
+ * @property Money|null $joining_reward_cap
  * @property int $holding_days
- * @property int $minimum_qualifying_payment_minor
+ * @property Money $minimum_qualifying_payment
  * @property bool $qualifies_suspended
  * @property bool $qualifies_restricted
  * @property bool $qualifies_package_lapsed
@@ -73,10 +75,10 @@ class ReferralPlan extends Model
             'joining_reward_type' => RewardType::class,
             'max_depth' => 'integer',
             'holding_days' => 'integer',
-            'minimum_qualifying_payment_minor' => 'integer',
-            'joining_reward_amount_minor' => 'integer',
+            'minimum_qualifying_payment' => MoneyCast::class,
+            'joining_reward_amount' => MoneyCast::class,
             'joining_reward_rate_bps' => 'integer',
-            'joining_reward_cap_minor' => 'integer',
+            'joining_reward_cap' => MoneyCast::class,
             'qualifies_suspended' => 'boolean',
             'qualifies_restricted' => 'boolean',
             'qualifies_package_lapsed' => 'boolean',
@@ -147,9 +149,9 @@ class ReferralPlan extends Model
     {
         return $this->joining_reward_type === null ? null : new RewardRule(
             $this->joining_reward_type,
-            $this->joining_reward_amount_minor,
+            $this->joining_reward_amount,
             $this->joining_reward_rate_bps,
-            $this->joining_reward_cap_minor,
+            $this->joining_reward_cap,
         );
     }
 

@@ -54,7 +54,7 @@ describe('platform commissions', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->has('commissions.data', 1)
                 ->where('commissions.data.0.beneficiary.name', $this->second->name)
-                ->where('commissions.data.0.amount.minor_units', 32500)
+                ->where('commissions.data.0.amount.amount', '325.00')
                 ->where('commissions.data.0.rule.percent', '5'));
 
         $this->actingAs($this->manager)
@@ -85,7 +85,7 @@ describe('platform commissions', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/referral-commissions/event')
                 ->where('event.source.name', $this->newcomer->name)
-                ->where('event.base.minor_units', 650000)
+                ->where('event.base.amount', '6500.00')
                 ->where('event.chain.0.account.name', $this->direct->name)
                 ->where('event.chain.1.outcome', 'pending')
                 ->has('event.commissions', 2)
@@ -228,7 +228,7 @@ describe('an account\'s own referrals', function () {
             ->component('referrals/index')
             ->where('code', $code)
             ->where('summary.direct', 1)
-            ->where('summary.paid.minor_units', 32500)
+            ->where('summary.paid.amount', '325.00')
             ->has('direct.data', 1)
             ->where('direct.data.0.name', $this->direct->name)
             ->where('direct.data.0.state', 'active')
@@ -247,7 +247,7 @@ describe('an account\'s own referrals', function () {
         $this->actingAs($this->direct->owner)
             ->get(route('referrals.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('summary.paid.minor_units', 65000)
+                ->where('summary.paid.amount', '650.00')
                 ->where('earnings.data.0.level', 1));
 
         $staff = User::factory()->staffOf($this->second, AccountRole::Staff)->create();

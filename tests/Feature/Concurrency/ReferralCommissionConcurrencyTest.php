@@ -13,6 +13,8 @@ use App\Domain\Referral\Enums\CommissionStatus;
 use App\Domain\Referral\Models\ReferralCommission;
 use App\Domain\Referral\Models\ReferralQualifyingEvent;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -52,12 +54,12 @@ beforeEach(function () {
         'business_account_id' => $this->newcomer->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => 650000,
+        'amount' => Money::fromDecimal('6500.00', Currency::BDT),
         'currency_code' => 'BDT',
         'completed_at' => now(),
     ]);
-    $this->payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'amount_minor' => 150000, 'currency_code' => 'BDT']);
-    $this->payment->allocations()->create(['type' => AllocationType::PackageFee, 'amount_minor' => 500000, 'currency_code' => 'BDT']);
+    $this->payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'amount' => Money::fromDecimal('1500.00', Currency::BDT), 'currency_code' => 'BDT']);
+    $this->payment->allocations()->create(['type' => AllocationType::PackageFee, 'amount' => Money::fromDecimal('5000.00', Currency::BDT), 'currency_code' => 'BDT']);
 });
 
 afterEach(function () {
@@ -161,6 +163,6 @@ it('pays the chain once when six workers process the same activation at once', f
         ->and($commissions->every(fn (ReferralCommission $commission) => $commission->status === CommissionStatus::Paid))->toBeTrue()
         ->and($credits($this->direct))->toBe(1)
         ->and($credits($this->second))->toBe(1)
-        ->and((int) DB::table('wallets')->where('business_account_id', $this->direct->id)->value('total_minor'))->toBe(65000)
-        ->and((int) DB::table('wallets')->where('business_account_id', $this->second->id)->value('total_minor'))->toBe(32500);
+        ->and((string) DB::table('wallets')->where('business_account_id', $this->direct->id)->value('total'))->toBe('650.00')
+        ->and((string) DB::table('wallets')->where('business_account_id', $this->second->id)->value('total'))->toBe('325.00');
 });

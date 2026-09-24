@@ -19,9 +19,7 @@ use App\Domain\Referral\Models\ReferralPlanLevel;
 use App\Domain\Referral\ReferralSettings;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Support\Money\Currency;
 use App\Support\Money\DecimalAmount;
-use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -82,7 +80,7 @@ class ReferralSettingsController extends Controller
                 ])->all(),
                 'joining_reward' => ($rule = $plan->joiningRule()) === null ? null : $this->describe($rule),
                 'holding_days' => $plan->holding_days,
-                'minimum_qualifying_payment' => Money::of($plan->minimum_qualifying_payment_minor, Currency::from($plan->currency_code))->jsonSerialize(),
+                'minimum_qualifying_payment' => $plan->minimum_qualifying_payment->jsonSerialize(),
                 'qualifies' => [
                     'suspended' => $plan->qualifies_suspended,
                     'restricted' => $plan->qualifies_restricted,
@@ -222,7 +220,7 @@ class ReferralSettingsController extends Controller
                 0,
             ),
             holdingDays: (int) $validated['holding_days'],
-            minimumQualifyingPaymentMinor: DecimalAmount::parse($validated['minimum_qualifying_payment'])->minorUnits,
+            minimumQualifyingPayment: DecimalAmount::parse($validated['minimum_qualifying_payment']),
             qualifiesSuspended: (bool) ($validated['qualifies_suspended'] ?? false),
             qualifiesRestricted: (bool) ($validated['qualifies_restricted'] ?? false),
             qualifiesPackageLapsed: (bool) ($validated['qualifies_package_lapsed'] ?? false),
@@ -279,9 +277,9 @@ class ReferralSettingsController extends Controller
         try {
             return new RewardRule(
                 $type,
-                $type === RewardType::Fixed ? DecimalAmount::parseOrNull($amount)?->minorUnits : null,
+                $type === RewardType::Fixed ? DecimalAmount::parseOrNull($amount) : null,
                 $rateBps,
-                DecimalAmount::parseOrNull($cap)?->minorUnits,
+                DecimalAmount::parseOrNull($cap),
             );
         } catch (\InvalidArgumentException) {
             throw ValidationException::withMessages([$field => __('referral.refused.level_invalid', ['level' => $level])]);
@@ -295,9 +293,9 @@ class ReferralSettingsController extends Controller
     {
         return [
             'type' => $rule->type->value,
-            'amount' => $rule->amountMinor === null ? null : Money::of($rule->amountMinor, Currency::BDT)->jsonSerialize(),
+            'amount' => $rule->amount?->jsonSerialize(),
             'percent' => $rule->rateBps === null ? null : rtrim(rtrim(sprintf('%d.%02d', intdiv($rule->rateBps, 100), $rule->rateBps % 100), '0'), '.'),
-            'cap' => $rule->capMinor === null ? null : Money::of($rule->capMinor, Currency::BDT)->jsonSerialize(),
+            'cap' => $rule->cap?->jsonSerialize(),
         ];
     }
 

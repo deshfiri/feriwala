@@ -24,6 +24,7 @@ use App\Domain\Referral\Models\ReferralQualifyingEvent;
 use App\Domain\Referral\Queries\ReferralHierarchy;
 use App\Domain\Referral\Queries\ResolveReferralPlan;
 use App\Domain\Referral\ReferralSettings;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -101,7 +102,7 @@ class CalculateReferralCommissions
             ->latest('id')
             ->first();
 
-        if ($payment === null || $payment->amount_minor->minorUnits < $plan->minimum_qualifying_payment_minor) {
+        if ($payment === null || $payment->amount->lessThan($plan->minimum_qualifying_payment)) {
             return null;
         }
 
@@ -122,7 +123,7 @@ class CalculateReferralCommissions
                     'payment_id' => $payment->id,
                     'referral_plan_id' => $plan->id,
                     'currency_code' => $plan->currency_code,
-                    'commission_base_minor' => $base,
+                    'commission_base' => $base,
                     'chain' => $decision['chain'],
                     'status' => ReferralQualifyingEvent::RECORDED,
                     'occurred_at' => $at,
@@ -136,8 +137,8 @@ class CalculateReferralCommissions
                     'referral_qualifying_event_id' => $event->id,
                     'referral_plan_id' => $plan->id,
                     'source_account_id' => $account->id,
-                    'commission_base_minor' => $base,
                     'currency_code' => $plan->currency_code,
+                    'commission_base' => $base,
                     'available_at' => $at->addDays($plan->holding_days),
                     ...$row,
                 ]);
@@ -156,7 +157,7 @@ class CalculateReferralCommissions
                 after: [
                     'event' => $event->public_id,
                     'plan' => $plan->public_id,
-                    'commission_base_minor' => $base,
+                    'commission_base' => $base->jsonSerialize(),
                     'levels' => array_map(fn (array $level) => [$level['level'], $level['outcome']], $decision['chain']),
                 ],
                 accountId: $account->id,
@@ -176,7 +177,7 @@ class CalculateReferralCommissions
      * @param  array<int, int>  $ancestors  level => account id
      * @return array{rows: list<array<string, mixed>>, chain: list<array{level: int, account: string|null, outcome: string}>}
      */
-    protected function decide(ReferralPlan $plan, BusinessAccount $source, array $ancestors, int $base, CarbonImmutable $at): array
+    protected function decide(ReferralPlan $plan, BusinessAccount $source, array $ancestors, Money $base, CarbonImmutable $at): array
     {
         $remaining = $base;
         $rows = [];
@@ -201,13 +202,13 @@ class CalculateReferralCommissions
             $beneficiary = $accounts[$beneficiaryId];
 
             $skip = $this->skipFor($plan, $level, $beneficiary);
-            [$amount, $capped] = $skip === null ? $this->within($level->rule(), $base, $remaining) : [0, false];
+            [$amount, $capped] = $skip === null ? $this->within($level->rule(), $base, $remaining) : [Money::zero($base->currency), false];
 
-            if ($skip === null && $amount === 0) {
+            if ($skip === null && $amount->isZero()) {
                 $skip = $capped ? CommissionSkipReason::BaseExhausted : CommissionSkipReason::NothingToPay;
             }
 
-            $remaining -= $amount;
+            $remaining = $remaining->minus($amount);
 
             $rows[] = $this->row($beneficiary->id, $level->level, ReferralCommission::KIND_LEVEL, [
                 ...$level->rule()->snapshot(),
@@ -228,7 +229,7 @@ class CalculateReferralCommissions
 
         if ($joining !== null && isset($ancestors[1])) {
             [$amount, $capped] = $this->within($joining, $base, $remaining);
-            $skip = $amount === 0 ? ($capped ? CommissionSkipReason::BaseExhausted : CommissionSkipReason::NothingToPay) : null;
+            $skip = $amount->isZero() ? ($capped ? CommissionSkipReason::BaseExhausted : CommissionSkipReason::NothingToPay) : null;
 
             $rows[] = $this->row($source->id, 0, ReferralCommission::KIND_JOINING, $joining->snapshot(), $amount, $capped, $skip);
 
@@ -280,27 +281,33 @@ class CalculateReferralCommissions
     /**
      * The rule's amount, held to what is left of the base.
      *
-     * @return array{0: int, 1: bool} amount, and whether the base cut it
+     * @return array{0: Money, 1: bool} amount, and whether the base cut it
      */
-    protected function within(RewardRule $rule, int $base, int $remaining): array
+    protected function within(RewardRule $rule, Money $base, Money $remaining): array
     {
         $amount = $rule->amountFor($base);
 
-        return $amount > $remaining ? [max(0, $remaining), true] : [$amount, false];
+        if ($amount->greaterThan($remaining)) {
+            $clamped = $remaining->isNegative() ? Money::zero($remaining->currency) : $remaining;
+
+            return [$clamped, true];
+        }
+
+        return [$amount, false];
     }
 
     /**
      * @param  array<string, mixed>  $snapshot
      * @return array<string, mixed>
      */
-    protected function row(int $beneficiaryId, int $level, string $kind, array $snapshot, int $amount, bool $capped, ?CommissionSkipReason $skip): array
+    protected function row(int $beneficiaryId, int $level, string $kind, array $snapshot, Money $amount, bool $capped, ?CommissionSkipReason $skip): array
     {
         return [
             'beneficiary_account_id' => $beneficiaryId,
             'level' => $level,
             'kind' => $kind,
             'rule_snapshot' => $snapshot,
-            'amount_minor' => $skip === null ? $amount : 0,
+            'amount' => $skip === null ? $amount : Money::zero($amount->currency),
             'capped' => $capped,
             'status' => $skip === null ? CommissionStatus::Pending : CommissionStatus::Skipped,
             'skip_reason' => $skip,

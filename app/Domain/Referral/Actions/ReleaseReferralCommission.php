@@ -70,7 +70,7 @@ class ReleaseReferralCommission
             $transaction = $this->wallet->credit(
                 $this->wallets->handle($beneficiary),
                 $commission->creditType(),
-                $commission->amount(),
+                $commission->amount,
                 new PostingContext(
                     source: 'referral',
                     description: $commission->isJoiningReward()
@@ -93,7 +93,7 @@ class ReleaseReferralCommission
             // After the commit: a message about money that then rolled back is
             // worse than one a moment late.
             $paid->beneficiary->owner?->notify(new ReferralCommissionPaid(
-                amount: $paid->amount()->jsonSerialize(),
+                amount: $paid->amount->jsonSerialize(),
                 level: $paid->level,
             ));
         }

@@ -3,17 +3,19 @@
 namespace App\Domain\Referral\Data;
 
 use App\Domain\Referral\Enums\RewardType;
+use App\Support\Money\Money;
 use InvalidArgumentException;
+use RoundingMode;
 
 /**
  * One reward, as a plan version states it: fixed or percentage, and a cap (D24).
  *
- * The arithmetic lives here and nowhere else, in integers only:
+ * The arithmetic lives here and nowhere else, in exact flat-Taka {@see Money} (D26):
  *
  *   - **fixed** pays its amount;
- *   - **percentage** pays `floor(base × basis points ÷ 10 000)` — always rounded
- *     **down** to the poisha, so the platform never pays a fraction of a poisha
- *     it did not have;
+ *   - **percentage** pays `base × basis points ÷ 10 000`, always rounded **down**
+ *     (`RoundingMode::TowardsZero`) to the currency's smallest unit, so the platform
+ *     never pays a fraction of a poisha it did not have;
  *   - either is then held to its cap and to the base itself.
  *
  * A basis point is a hundredth of a percent, so 10% is 1 000 and 2.5% is 250.
@@ -24,16 +26,16 @@ readonly class RewardRule
 
     public function __construct(
         public RewardType $type,
-        public ?int $amountMinor = null,
+        public ?Money $amount = null,
         public ?int $rateBps = null,
-        public ?int $capMinor = null,
+        public ?Money $cap = null,
     ) {
         $valid = match ($type) {
-            RewardType::Fixed => $amountMinor !== null && $amountMinor > 0 && $rateBps === null,
-            RewardType::Percentage => $rateBps !== null && $rateBps >= 1 && $rateBps <= self::BASIS_POINTS_IN_WHOLE && $amountMinor === null,
+            RewardType::Fixed => $amount !== null && $amount->isPositive() && $rateBps === null,
+            RewardType::Percentage => $rateBps !== null && $rateBps >= 1 && $rateBps <= self::BASIS_POINTS_IN_WHOLE && $amount === null,
         };
 
-        if (! $valid || ($capMinor !== null && $capMinor <= 0)) {
+        if (! $valid || ($cap !== null && ! $cap->isPositive())) {
             throw new InvalidArgumentException('A reward is a positive fixed amount or a percentage between 1 and 10 000 basis points.');
         }
     }
@@ -41,19 +43,19 @@ readonly class RewardRule
     /**
      * What this rule pays on a base, before the chain's own limit.
      */
-    public function amountFor(int $baseMinor): int
+    public function amountFor(Money $base): Money
     {
-        $base = max(0, $baseMinor);
+        $base = $base->isNegative() ? Money::zero($base->currency) : $base;
 
         $amount = $this->type === RewardType::Fixed
-            ? (int) $this->amountMinor
-            : intdiv($base * (int) $this->rateBps, self::BASIS_POINTS_IN_WHOLE);
+            ? ($this->amount ?? throw new InvalidArgumentException('A fixed reward always carries an amount; the constructor guarantees it.'))
+            : $base->percentage(self::percentFromBps((int) $this->rateBps), RoundingMode::TowardsZero);
 
-        if ($this->capMinor !== null) {
-            $amount = min($amount, $this->capMinor);
+        if ($this->cap !== null && $amount->greaterThan($this->cap)) {
+            $amount = $this->cap;
         }
 
-        return max(0, min($amount, $base));
+        return $amount->greaterThan($base) ? $base : $amount;
     }
 
     /**
@@ -72,18 +74,28 @@ readonly class RewardRule
     }
 
     /**
+     * A basis-point count as a percent decimal string, e.g. `250` → `"2.50"`,
+     * without a float: bcmath's `percentage()` divides by 100 itself, so this
+     * only needs to place the decimal point two digits from bps' own scale.
+     */
+    private static function percentFromBps(int $bps): string
+    {
+        return sprintf('%d.%02d', intdiv($bps, 100), $bps % 100);
+    }
+
+    /**
      * The rule as it is kept on a commission: what was applied, not a pointer
      * to a row that could be misread later.
      *
-     * @return array{type: string, amount_minor: int|null, rate_bps: int|null, cap_minor: int|null}
+     * @return array{type: string, amount: array<string, mixed>|null, rate_bps: int|null, cap: array<string, mixed>|null}
      */
     public function snapshot(): array
     {
         return [
             'type' => $this->type->value,
-            'amount_minor' => $this->amountMinor,
+            'amount' => $this->amount?->jsonSerialize(),
             'rate_bps' => $this->rateBps,
-            'cap_minor' => $this->capMinor,
+            'cap' => $this->cap?->jsonSerialize(),
         ];
     }
 }
