@@ -50,6 +50,8 @@ use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
 use App\Domain\Wholesale\Models\Cart;
 use App\Domain\Wholesale\Queries\PriceCheckout;
 use App\Support\Concurrency\DistributedLock;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\QueryException;
@@ -112,7 +114,7 @@ beforeEach(function () {
     $this->warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
 
     // Ten kettles at 2,000 taka: 20,000 taka.
-    $this->kettle = wholesaleOrderProduct('Electric kettle', 'FW-KT', 200000);
+    $this->kettle = wholesaleOrderProduct('Electric kettle', 'FW-KT', '2000.00');
     $this->stock = wholesaleOrderStock($this->kettle, 50);
 
     wholesaleOrderCart($this->karim, [[$this->kettle, 10]]);
@@ -123,7 +125,7 @@ function wholesaleOrderPackage(): Package
     return Package::create([
         'slug' => 'order-'.Str::lower(Str::random(8)),
         'name' => 'Order package',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -140,7 +142,7 @@ function wholesaleOrderAccount(Package $package): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 
@@ -149,14 +151,14 @@ function wholesaleOrderAccount(Package $package): BusinessAccount
     return $account->refresh();
 }
 
-function wholesaleOrderProduct(string $name, string $sku, int $priceMinor): Product
+function wholesaleOrderProduct(string $name, string $sku, string $price): Product
 {
     return Product::create([
         'name' => $name,
         'sku' => $sku,
         'category_id' => test()->category->id,
-        'base_cost_minor' => 50000,
-        'wholesale_price_minor' => $priceMinor,
+        'base_cost' => Money::fromDecimal('500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal($price, Currency::BDT),
         'min_order_quantity' => 1,
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
@@ -281,16 +283,16 @@ describe('placing the order (P4-9, P4-10)', function () {
             ->and($order->status)->toBe(OrderStatus::PaymentPending)
             ->and($order->placed_by)->toBe($this->karim->owner_id)
             ->and($order->cart_id)->toBe(wholesaleOrderCartOf()->id)
-            ->and($order->total_minor->minorUnits)->toBe(2000000)
-            ->and($order->subtotal_minor->minorUnits)->toBe(2000000)
+            ->and($order->total->toDecimal())->toBe('20000.00')
+            ->and($order->subtotal->toDecimal())->toBe('20000.00')
             ->and($order->shipping_address['city'])->toBe('Dhaka')
             ->and($order->customer['business_name'])->toBe($this->karim->name);
 
         expect($line->sku)->toBe('FW-KT')
             ->and($line->product_name)->toBe('Electric kettle')
             ->and($line->quantity)->toBe(10)
-            ->and($line->unit_price_minor->minorUnits)->toBe(200000)
-            ->and($line->line_total_minor->minorUnits)->toBe(2000000);
+            ->and($line->unit_price->toDecimal())->toBe('2000.00')
+            ->and($line->line_total->toDecimal())->toBe('20000.00');
 
         // Reserved through the P3 service, for the ordering account, all from one warehouse.
         expect($reservation)->not->toBeNull()
@@ -303,7 +305,7 @@ describe('placing the order (P4-9, P4-10)', function () {
         // One payment for it, opened at the gateway, closing a margin before the stock is released.
         expect($payment->purpose)->toBe(PaymentPurpose::WholesaleOrder)
             ->and($payment->status)->toBe(PaymentStatus::Initiated)
-            ->and($payment->amount_minor->minorUnits)->toBe(2000000)
+            ->and($payment->amount->toDecimal())->toBe('20000.00')
             ->and($payment->gateway)->toBe('sslcommerz')
             ->and($payment->gateway_mode)->toBe('sandbox')
             ->and($payment->payable_id)->toBe($order->id)
@@ -341,10 +343,10 @@ describe('placing the order (P4-9, P4-10)', function () {
 
         $order = Order::query()->sole();
 
-        expect($order->total_minor->minorUnits)->toBe(2000000)
+        expect($order->total->toDecimal())->toBe('20000.00')
             ->and($order->status)->toBe(OrderStatus::PaymentPending)
             ->and($order->items()->sole()->quantity)->toBe(10)
-            ->and($order->payment?->amount_minor->minorUnits)->toBe(2000000);
+            ->and($order->payment?->amount->toDecimal())->toBe('20000.00');
 
         Http::assertSent(fn (ClientRequest $request) => str_contains($request->url(), 'gwprocess')
             && $request['total_amount'] === '20000.00');
@@ -368,12 +370,12 @@ describe('placing the order (P4-9, P4-10)', function () {
         $order = wholesaleOrderPlaced();
         $line = $order->items()->sole();
 
-        expect($order->discount_minor->minorUnits)->toBe(50000)
+        expect($order->discount->toDecimal())->toBe('500.00')
             ->and($order->coupon_code)->toBe('BULK500')
-            ->and($order->total_minor->minorUnits)->toBe(1950000)
-            ->and($line->discount_minor->minorUnits)->toBe(50000)
-            ->and($line->line_total_minor->minorUnits)->toBe(1950000)
-            ->and($order->payment?->amount_minor->minorUnits)->toBe(1950000)
+            ->and($order->total->toDecimal())->toBe('19500.00')
+            ->and($line->discount->toDecimal())->toBe('500.00')
+            ->and($line->line_total->toDecimal())->toBe('19500.00')
+            ->and($order->payment?->amount->toDecimal())->toBe('19500.00')
             ->and($order->payment?->allocations->pluck('type')->all())->toBe([AllocationType::WholesaleGoods, AllocationType::Discount])
             ->and(CouponRedemption::query()->where('payment_id', $order->payment_id)->sole()->status)->toBe(RedemptionStatus::Reserved);
     });
@@ -436,7 +438,7 @@ describe('placing the order (P4-9, P4-10)', function () {
     });
 
     it('rolls everything back when one line\'s stock goes between the checkout and the order', function () {
-        $teaSet = wholesaleOrderProduct('Tea set', 'FW-TS', 100000);
+        $teaSet = wholesaleOrderProduct('Tea set', 'FW-TS', '1000.00');
         $teaStock = wholesaleOrderStock($teaSet, 20);
 
         $this->post(route('wholesale.cart.items.store'), ['product' => $teaSet->slug, 'quantity' => 5])->assertSessionHasNoErrors();
@@ -486,8 +488,8 @@ describe('the intended resale channel (P4-14)', function () {
         $order = Order::query()->sole();
 
         expect($order->intended_resale_channel)->toBe(IntendedResaleChannel::Marketplace)
-            ->and($order->total_minor->minorUnits)->toBe(2000000)
-            ->and($order->payment?->amount_minor->minorUnits)->toBe(2000000)
+            ->and($order->total->toDecimal())->toBe('20000.00')
+            ->and($order->payment?->amount->toDecimal())->toBe('20000.00')
             ->and($this->stock->refresh()->reserved)->toBe(10);
 
         $this->get(route('wholesale.orders.show', $order->public_id))
@@ -530,7 +532,7 @@ describe('paying (P4-9, P4-11)', function () {
             ->and($order->items()->sole()->stockReservation?->status)->toBe(StockReservationStatus::Committed)
             ->and($this->stock->refresh()->processing)->toBe(10)
             ->and($this->stock->reserved)->toBe(0)
-            ->and($invoice->total_minor->minorUnits)->toBe(2000000)
+            ->and($invoice->total->toDecimal())->toBe('20000.00')
             ->and($invoice->purpose)->toBe(PaymentPurpose::WholesaleOrder)
             ->and($invoice->lines->pluck('type')->all())->toBe(['wholesale_goods'])
             ->and($order->statusHistory->pluck('new_status')->all())->toBe([OrderStatus::PaymentPending, OrderStatus::Paid])
@@ -721,7 +723,7 @@ describe('failed, cancelled and expired payments (P4-10)', function () {
             'business_account_id' => $this->rahim->id,
             'purpose' => PaymentPurpose::WalletTopUp,
             'status' => PaymentStatus::Initiated,
-            'amount_minor' => 2000000,
+            'amount' => Money::fromDecimal('20000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'gateway' => 'sslcommerz',
         ]);

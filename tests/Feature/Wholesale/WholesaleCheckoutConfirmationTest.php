@@ -30,6 +30,8 @@ use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
 use App\Domain\Wholesale\Models\Cart;
 use App\Domain\Wholesale\Queries\PriceCheckout;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -66,8 +68,8 @@ beforeEach(function () {
         'name' => 'Electric kettle',
         'sku' => 'FW-KT',
         'category_id' => $category->id,
-        'base_cost_minor' => 50000,
-        'wholesale_price_minor' => 200000,
+        'base_cost' => Money::fromDecimal('500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'min_order_quantity' => 1,
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
@@ -90,7 +92,7 @@ function wholesaleConfirmPackage(): Package
     return Package::create([
         'slug' => 'confirm-'.Str::lower(Str::random(8)),
         'name' => 'Confirm package',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -107,7 +109,7 @@ function wholesaleConfirmAccount(Package $package): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 
@@ -170,7 +172,7 @@ describe('payment method and summary', function () {
                 ->where('checkout.fingerprint', wholesaleConfirmFingerprint())
                 ->where('checkout.confirmation', null)
                 ->where('checkout.ready_to_confirm', true)
-                ->where('checkout.total.minor_units', 2000000));
+                ->where('checkout.total.amount', '20000.00'));
     });
 });
 
@@ -185,14 +187,14 @@ describe('confirming', function () {
         expect($cart->payment_method)->toBe('sslcommerz')
             ->and($cart->confirmed_at)->not->toBeNull()
             ->and($cart->confirmed_fingerprint)->toBe($fingerprint)
-            ->and($cart->confirmed_total_minor)->toBe(2000000)
+            ->and($cart->confirmed_total->toDecimal())->toBe('20000.00')
             ->and($cart->currency_code)->toBe('BDT');
 
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('checkout.confirmation.status', 'confirmed')
                 ->where('checkout.confirmation.payment_method.label', 'SSLCommerz')
-                ->where('checkout.confirmation.total.minor_units', 2000000));
+                ->where('checkout.confirmation.total.amount', '20000.00'));
     });
 
     it('leaves one confirmation when the same summary is confirmed again', function () {
@@ -227,15 +229,15 @@ describe('confirming', function () {
     it('keeps the server\'s figures whatever the browser sends', function () {
         wholesaleConfirmPost([
             'total' => 1,
-            'confirmed_total_minor' => 1,
+            'confirmed_total' => '0.01',
             'confirmed_at' => '2020-01-01 00:00:00',
             'currency_code' => 'USD',
-            'discount' => 1999999,
+            'discount' => '19999.99',
         ])->assertSessionHasNoErrors();
 
         $cart = wholesaleConfirmCart();
 
-        expect($cart->confirmed_total_minor)->toBe(2000000)
+        expect($cart->confirmed_total->toDecimal())->toBe('20000.00')
             ->and($cart->currency_code)->toBe('BDT')
             ->and($cart->confirmed_at?->isAfter(now()->subMinute()))->toBeTrue();
     });
@@ -266,7 +268,7 @@ describe('a stale summary', function () {
     })->with([
         'a delivery charge' => [fn () => FeeRule::create([
             'fee_type' => FeeType::WholesaleDelivery,
-            'amount_minor' => 10000,
+            'amount' => Money::fromDecimal('100.00', Currency::BDT),
             'currency_code' => 'BDT',
             'effective_from' => now()->subDay(),
             'is_active' => true,
@@ -304,12 +306,12 @@ describe('a stale summary', function () {
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('checkout.confirmation.status', 'stale')
-                ->where('checkout.confirmation.total.minor_units', 2000000)
-                ->where('checkout.total.minor_units', 2400000));
+                ->where('checkout.confirmation.total.amount', '20000.00')
+                ->where('checkout.total.amount', '24000.00'));
 
         wholesaleConfirmPost()->assertSessionHasNoErrors();
 
-        expect(wholesaleConfirmCart()->confirmed_total_minor)->toBe(2400000);
+        expect(wholesaleConfirmCart()->confirmed_total->toDecimal())->toBe('24000.00');
 
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page->where('checkout.confirmation.status', 'confirmed'));
@@ -318,7 +320,7 @@ describe('a stale summary', function () {
     it('sends a changed price back to the cart before anything can be confirmed again', function () {
         wholesaleConfirmPost()->assertSessionHasNoErrors();
 
-        Product::query()->whereKey($this->kettle->id)->update(['wholesale_price_minor' => 210000]);
+        Product::query()->whereKey($this->kettle->id)->update(['wholesale_price' => '2100.00']);
 
         $this->get(route('wholesale.checkout.show'))->assertRedirect(route('wholesale.cart.show'));
 
@@ -330,7 +332,7 @@ describe('a stale summary', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('checkout.confirmation.status', 'stale')
-                ->where('checkout.total.minor_units', 2100000));
+                ->where('checkout.total.amount', '21000.00'));
     });
 
     it('will not confirm without both addresses', function () {

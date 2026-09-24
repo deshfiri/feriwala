@@ -17,6 +17,8 @@ use App\Domain\Inventory\StockLedger;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -44,24 +46,24 @@ beforeEach(function () {
 
     // Twelve units shared, and three more allocated to Karim.
     $this->kettle = wholesaleDetailProduct('FW-KT', 'Electric kettle', ['min_order_quantity' => 6, 'max_order_quantity' => 60]);
-    ProductPriceTier::create(['product_id' => $this->kettle->id, 'min_quantity' => 24, 'unit_price_minor' => 180000]);
+    ProductPriceTier::create(['product_id' => $this->kettle->id, 'min_quantity' => 24, 'currency_code' => 'BDT', 'unit_price' => Money::fromDecimal('1800.00', Currency::BDT)]);
     $kettleItem = wholesaleDetailStock($this->kettle, null, 15);
     app(StockAllocations::class)->allocate($kettleItem, $this->karim, 3);
 
     // Variations: one with its own price, bands and stock; one with no stock;
     // one switched off with stock that must not show.
-    $this->shirt = wholesaleDetailProduct('FW-SH', 'Polo shirt', ['wholesale_price_minor' => 100000]);
+    $this->shirt = wholesaleDetailProduct('FW-SH', 'Polo shirt', ['wholesale_price' => Money::fromDecimal('1000.00', Currency::BDT)]);
     $medium = ProductVariant::create([
         'product_id' => $this->shirt->id,
         'sku' => 'FW-SH-M',
         'combination_key' => 'm',
-        'wholesale_price_minor' => 95000,
         'currency_code' => 'BDT',
+        'wholesale_price' => Money::fromDecimal('950.00', Currency::BDT),
         'is_active' => true,
     ]);
     $large = ProductVariant::create(['product_id' => $this->shirt->id, 'sku' => 'FW-SH-L', 'combination_key' => 'l', 'is_active' => true]);
     $small = ProductVariant::create(['product_id' => $this->shirt->id, 'sku' => 'FW-SH-S', 'combination_key' => 's', 'is_active' => false]);
-    ProductPriceTier::create(['product_id' => $this->shirt->id, 'product_variant_id' => $medium->id, 'min_quantity' => 10, 'unit_price_minor' => 85000]);
+    ProductPriceTier::create(['product_id' => $this->shirt->id, 'product_variant_id' => $medium->id, 'min_quantity' => 10, 'currency_code' => 'BDT', 'unit_price' => Money::fromDecimal('850.00', Currency::BDT)]);
     wholesaleDetailStock($this->shirt, $medium, 6);
     wholesaleDetailStock($this->shirt, $large, 0);
     wholesaleDetailStock($this->shirt, $small, 9);
@@ -72,8 +74,8 @@ function wholesaleDetailPackage(): Package
     return Package::create([
         'slug' => 'detail-'.Str::lower(Str::random(8)),
         'name' => 'Detail package',
-        'fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'is_active' => true,
         'is_public' => true,
     ]);
@@ -89,8 +91,8 @@ function wholesaleDetailAccount(Package $package): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
     ]);
 
     $account->forceFill(['current_user_package_id' => $subscription->id])->save();
@@ -107,8 +109,9 @@ function wholesaleDetailProduct(string $sku, string $name, array $attributes = [
         'name' => $name,
         'sku' => $sku,
         'category_id' => test()->kitchen->id,
-        'base_cost_minor' => 50000,
-        'wholesale_price_minor' => 200000,
+        'currency_code' => 'BDT',
+        'base_cost' => Money::fromDecimal('500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
         'package_scope' => PackageScope::AllPackages,
@@ -141,7 +144,7 @@ it('shows how many of a product without variations this account can order, count
             ->where('product.min_order_quantity', 6)
             ->where('product.max_order_quantity', 60)
             ->where('product.quantity_pricing.0.min_quantity', 24)
-            ->where('product.quantity_pricing.0.unit_price.minor_units', 180000));
+            ->where('product.quantity_pricing.0.unit_price.amount', '1800.00'));
 
     $this->actingAs($this->rahim->owner)
         ->get(route('catalog.wholesale.show', $this->kettle->slug))
@@ -159,14 +162,14 @@ it('shows each active variation with its own price, quantity pricing and stock, 
                 $bySku = $variants->keyBy('sku');
 
                 return $bySku->keys()->sort()->values()->all() === ['FW-SH-L', 'FW-SH-M']
-                    && $bySku['FW-SH-M']['wholesale_price']['minor_units'] === 95000
+                    && $bySku['FW-SH-M']['wholesale_price']['amount'] === '950.00'
                     && $bySku['FW-SH-M']['in_stock'] === true
                     && $bySku['FW-SH-M']['available'] === 6
                     && $bySku['FW-SH-M']['quantity_pricing'] === [[
                         'min_quantity' => 10,
                         'unit_price' => $bySku['FW-SH-M']['quantity_pricing'][0]['unit_price'],
                     ]]
-                    && $bySku['FW-SH-M']['quantity_pricing'][0]['unit_price']['minor_units'] === 85000
+                    && $bySku['FW-SH-M']['quantity_pricing'][0]['unit_price']['amount'] === '850.00'
                     && $bySku['FW-SH-L']['in_stock'] === false
                     && $bySku['FW-SH-L']['available'] === 0
                     && $bySku['FW-SH-L']['quantity_pricing'] === [];

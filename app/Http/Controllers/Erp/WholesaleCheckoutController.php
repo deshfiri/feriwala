@@ -21,8 +21,6 @@ use App\Domain\Wholesale\Queries\PriceCheckout;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Models\User;
-use App\Support\Money\Currency;
-use App\Support\Money\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -243,7 +241,7 @@ class WholesaleCheckoutController extends Controller
     {
         if ($cart->confirmed_at === null
             || $cart->payment_method === null
-            || $cart->confirmed_total_minor === null) {
+            || $cart->confirmed_total === null) {
             return null;
         }
 
@@ -258,7 +256,7 @@ class WholesaleCheckoutController extends Controller
                 'label' => $this->gatewayLabel($cart->payment_method),
             ],
             'confirmed_at' => $cart->confirmed_at->toIso8601String(),
-            'total' => Money::of($cart->confirmed_total_minor, Currency::from($cart->currency_code))->jsonSerialize(),
+            'total' => $cart->confirmed_total->jsonSerialize(),
         ];
     }
 

@@ -128,8 +128,8 @@ class CatalogController extends Controller
             ->when($category !== null, fn (Builder $query) => $query->whereIn('category_id', $category?->descendantIds() ?? []))
             ->when($brand !== null, fn (Builder $query) => $query->where('brand_id', $brand?->id))
             // The product's own wholesale price, the figure the card shows.
-            ->when($priceMin !== null, fn (Builder $query) => $query->where('wholesale_price_minor', '>=', $priceMin))
-            ->when($priceMax !== null, fn (Builder $query) => $query->where('wholesale_price_minor', '<=', $priceMax))
+            ->when($priceMin !== null, fn (Builder $query) => $query->where('wholesale_price', '>=', $priceMin))
+            ->when($priceMax !== null, fn (Builder $query) => $query->where('wholesale_price', '<=', $priceMax))
             // Featured first (§11.1), newest featured first among them.
             ->orderByDesc('is_featured')
             ->orderByDesc('featured_at')
@@ -151,8 +151,8 @@ class CatalogController extends Controller
                 'category' => $category?->public_id,
                 'brand' => $brand?->public_id,
                 'stock' => $stock,
-                'price_min' => $priceMin === null ? null : Money::of($priceMin, Currency::BDT)->toDecimal(),
-                'price_max' => $priceMax === null ? null : Money::of($priceMax, Currency::BDT)->toDecimal(),
+                'price_min' => $priceMin,
+                'price_max' => $priceMax,
             ],
             'options' => [
                 'categories' => Category::query()
@@ -234,7 +234,7 @@ class CatalogController extends Controller
             $hasVariants = $product->variants->isNotEmpty();
 
             $detail += [
-                'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
+                'wholesale_price' => $product->wholesale_price->jsonSerialize(),
                 'min_order_quantity' => $product->min_order_quantity,
                 'max_order_quantity' => $product->max_order_quantity,
 
@@ -377,10 +377,11 @@ class CatalogController extends Controller
     }
 
     /**
-     * A wholesale price bound typed in taka, as minor units — or null when it is
-     * missing or not a sensible amount, so a mistyped bound narrows nothing.
+     * A wholesale price bound typed in Taka, as an exact decimal string — or
+     * null when it is missing or not a sensible amount, so a mistyped bound
+     * narrows nothing.
      */
-    protected function priceFilter(Request $request, string $key): ?int
+    protected function priceFilter(Request $request, string $key): ?string
     {
         $value = trim($request->string($key)->toString());
 
@@ -388,7 +389,7 @@ class CatalogController extends Controller
             return null;
         }
 
-        return (int) round(((float) $value) * 100);
+        return Money::fromDecimal($value, Currency::BDT)->toDecimal();
     }
 
     /**
@@ -461,7 +462,7 @@ class CatalogController extends Controller
             ],
             ...($channel === SalesChannel::Wholesale
                 ? [
-                    'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
+                    'wholesale_price' => $product->wholesale_price->jsonSerialize(),
                     'min_order_quantity' => $product->min_order_quantity,
                     'has_quantity_pricing' => (bool) $product->price_tiers_exists,
                     'in_stock' => $inStock ?? false,
@@ -478,9 +479,9 @@ class CatalogController extends Controller
     protected function sellingGuidance(Product $product): array
     {
         return [
-            'suggested_selling_price' => $product->suggested_selling_price_minor?->jsonSerialize(),
-            'minimum_selling_price' => $product->minimum_selling_price_minor?->jsonSerialize(),
-            'maximum_selling_price' => $product->maximum_selling_price_minor?->jsonSerialize(),
+            'suggested_selling_price' => $product->suggested_selling_price?->jsonSerialize(),
+            'minimum_selling_price' => $product->minimum_selling_price?->jsonSerialize(),
+            'maximum_selling_price' => $product->maximum_selling_price?->jsonSerialize(),
         ];
     }
 }

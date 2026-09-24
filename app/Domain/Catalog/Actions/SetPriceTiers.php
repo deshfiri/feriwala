@@ -43,7 +43,7 @@ class SetPriceTiers
     ) {}
 
     /**
-     * @param  array<int, array{min_quantity: int|string, unit_price_minor: int|string}>  $tiers
+     * @param  array<int, array{min_quantity: int|string, unit_price: int|string}>  $tiers
      *
      * @throws CatalogRefused
      */
@@ -63,7 +63,7 @@ class SetPriceTiers
             $bands = collect($tiers)
                 ->map(fn (array $tier) => [
                     'min_quantity' => (int) $tier['min_quantity'],
-                    'unit_price' => Money::of((int) $tier['unit_price_minor'], Currency::from($locked->currency_code)),
+                    'unit_price' => Money::fromDecimal((string) $tier['unit_price'], Currency::from($locked->currency_code)),
                 ])
                 ->sortBy('min_quantity')
                 ->values();
@@ -110,7 +110,7 @@ class SetPriceTiers
                     'product_id' => $locked->id,
                     'product_variant_id' => $variant?->id,
                     'min_quantity' => $band['min_quantity'],
-                    'unit_price_minor' => $band['unit_price'],
+                    'unit_price' => $band['unit_price'],
                 ]);
             }
 
@@ -122,7 +122,7 @@ class SetPriceTiers
                 before: ['tiers' => $before],
                 after: ['tiers' => $bands->map(fn (array $band) => [
                     'min_quantity' => $band['min_quantity'],
-                    'unit_price_minor' => $band['unit_price']->minorUnits,
+                    'unit_price' => $band['unit_price']->toDecimal(),
                 ])->all()],
                 module: 'catalog',
             ));
@@ -131,13 +131,13 @@ class SetPriceTiers
 
     /**
      * @param  array<int, ProductPriceTier>  $tiers
-     * @return array<int, array{min_quantity: int, unit_price_minor: int}>
+     * @return array<int, array{min_quantity: int, unit_price: string}>
      */
     protected function describe(array $tiers): array
     {
         return array_map(fn (ProductPriceTier $tier) => [
             'min_quantity' => $tier->min_quantity,
-            'unit_price_minor' => $tier->unit_price_minor->minorUnits,
+            'unit_price' => $tier->unit_price->toDecimal(),
         ], $tiers);
     }
 }

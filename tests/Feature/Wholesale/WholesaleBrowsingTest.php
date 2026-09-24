@@ -46,26 +46,26 @@ beforeEach(function () {
     $this->sylhet = Warehouse::create(['code' => 'SYL', 'name' => 'Sylhet']);
 
     // Shared stock.
-    $this->kettle = wholesaleBrowseProduct('FW-KT', 'Electric kettle', ['wholesale_price_minor' => 200000]);
+    $this->kettle = wholesaleBrowseProduct('FW-KT', 'Electric kettle', ['wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT)]);
     wholesaleBrowseStock($this->kettle, null, $this->dhaka, 5);
 
     // Never brought into inventory.
-    $this->pan = wholesaleBrowseProduct('FW-PAN', 'Frying pan', ['wholesale_price_minor' => 350000]);
+    $this->pan = wholesaleBrowseProduct('FW-PAN', 'Frying pan', ['wholesale_price' => Money::fromDecimal('3500.00', Currency::BDT)]);
 
     // Only stock allocated to Karim.
-    $this->pot = wholesaleBrowseProduct('FW-POT', 'Steel pot', ['wholesale_price_minor' => 120000]);
+    $this->pot = wholesaleBrowseProduct('FW-POT', 'Steel pot', ['wholesale_price' => Money::fromDecimal('1200.00', Currency::BDT)]);
     $potItem = wholesaleBrowseStock($this->pot, null, $this->dhaka, 3);
     app(StockAllocations::class)->allocate($potItem, $this->karim, 3);
 
     // Stock only on a variation that is switched off.
-    $this->shirt = wholesaleBrowseProduct('FW-SH', 'Polo shirt', ['wholesale_price_minor' => 90000]);
+    $this->shirt = wholesaleBrowseProduct('FW-SH', 'Polo shirt', ['wholesale_price' => Money::fromDecimal('900.00', Currency::BDT)]);
     $medium = ProductVariant::create(['product_id' => $this->shirt->id, 'sku' => 'FW-SH-M', 'combination_key' => 'm', 'is_active' => false]);
     $large = ProductVariant::create(['product_id' => $this->shirt->id, 'sku' => 'FW-SH-L', 'combination_key' => 'l', 'is_active' => true]);
     wholesaleBrowseStock($this->shirt, $medium, $this->dhaka, 10);
     wholesaleBrowseStock($this->shirt, $large, $this->dhaka, 0);
 
     // Stock only in a warehouse that is switched off.
-    $this->offsite = wholesaleBrowseProduct('FW-OFF', 'Off-site kettle', ['wholesale_price_minor' => 210000]);
+    $this->offsite = wholesaleBrowseProduct('FW-OFF', 'Off-site kettle', ['wholesale_price' => Money::fromDecimal('2100.00', Currency::BDT)]);
     wholesaleBrowseStock($this->offsite, null, $this->sylhet, 8);
     $this->sylhet->forceFill(['is_active' => false])->save();
 
@@ -80,8 +80,8 @@ function wholesaleBrowsePackage(): Package
     return Package::create([
         'slug' => 'wholesale-'.Str::lower(Str::random(8)),
         'name' => 'Wholesale package',
-        'fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'is_active' => true,
         'is_public' => true,
     ]);
@@ -97,8 +97,8 @@ function wholesaleBrowseAccount(Package $package): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
     ]);
 
     $account->forceFill(['current_user_package_id' => $subscription->id])->save();
@@ -115,8 +115,9 @@ function wholesaleBrowseProduct(string $sku, string $name, array $attributes = [
         'name' => $name,
         'sku' => $sku,
         'category_id' => test()->kitchen->id,
-        'base_cost_minor' => 50000,
-        'wholesale_price_minor' => 200000,
+        'currency_code' => 'BDT',
+        'base_cost' => Money::fromDecimal('500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
         'package_scope' => PackageScope::AllPackages,
@@ -210,8 +211,8 @@ describe('price on the wholesale catalogue', function () {
         $this->actingAs($this->karim->owner)
             ->get(route('catalog.wholesale.index', ['price_min' => '2000', 'price_max' => '3500.00']))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('filters.price_min', Money::of(200000, Currency::BDT)->toDecimal())
-                ->where('filters.price_max', Money::of(350000, Currency::BDT)->toDecimal())
+                ->where('filters.price_min', Money::fromDecimal('2000.00', Currency::BDT)->toDecimal())
+                ->where('filters.price_max', Money::fromDecimal('3500.00', Currency::BDT)->toDecimal())
                 ->where('products.data', fn (Collection $cards) => $cards->pluck('sku')->sort()->values()->all() === ['FW-KT', 'FW-OFF', 'FW-PAN']));
     });
 

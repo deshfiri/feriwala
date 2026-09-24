@@ -15,7 +15,7 @@ use Illuminate\Support\Arr;
  * is the second half: among the requests an authorised editor *can* send, each
  * protected field is accepted by exactly one endpoint, and every other endpoint
  * rejects it outright rather than silently ignoring it. A crafted request that
- * slips `status` into a product edit, or `wholesale_price_minor` into a bulk
+ * slips `status` into a product edit, or `wholesale_price` into a bulk
  * action, gets a validation error naming the field — not a quiet no-op that
  * looks like it might have worked.
  *
@@ -41,7 +41,7 @@ final class CentralProductFields
      *
      * @var array<int, string>
      */
-    public const PRICING = ['wholesale_price_minor', 'base_cost_minor', 'tiers'];
+    public const PRICING = ['wholesale_price', 'base_cost', 'tiers'];
 
     /**
      * Locked product information (§12).

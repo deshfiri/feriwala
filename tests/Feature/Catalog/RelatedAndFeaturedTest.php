@@ -12,6 +12,8 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -46,7 +48,7 @@ function catalogMerchProduct(string $sku, string $name, array $attributes = []):
         'name' => $name,
         'sku' => $sku,
         'category_id' => Category::query()->value('id'),
-        'wholesale_price_minor' => 100000,
+        'wholesale_price' => Money::fromDecimal('1000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         'package_scope' => PackageScope::AllPackages,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
@@ -61,7 +63,7 @@ function catalogMerchAccount(): BusinessAccount
     $package = Package::create([
         'slug' => 'merch-'.Str::lower(Str::random(8)),
         'name' => 'Merch package',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -73,7 +75,7 @@ function catalogMerchAccount(): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 

@@ -7,6 +7,8 @@ use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -47,7 +49,7 @@ function catalogueGuardFixtures(): array
         'size_bytes' => 100,
         'position' => 1,
     ]);
-    $tier = ProductPriceTier::create(['product_id' => $product->id, 'min_quantity' => 10, 'unit_price_minor' => 1000]);
+    $tier = ProductPriceTier::create(['product_id' => $product->id, 'min_quantity' => 10, 'unit_price' => Money::fromDecimal('10.00', Currency::BDT)]);
 
     return compact('category', 'brand', 'product', 'otherProduct', 'attribute', 'otherAttribute', 'value', 'variant', 'otherVariant', 'media', 'tier');
 }

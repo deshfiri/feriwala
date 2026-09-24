@@ -65,7 +65,7 @@ class CloseOrderedCart
             'payment_method' => null,
             'confirmed_at' => null,
             'confirmed_fingerprint' => null,
-            'confirmed_total_minor' => null,
+            'confirmed_total' => null,
         ];
     }
 }

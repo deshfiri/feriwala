@@ -43,12 +43,12 @@ class WholesalePriceResolver
             return $base;
         }
 
-        return $tier->unit_price_minor->lessThan($base) ? $tier->unit_price_minor : $base;
+        return $tier->unit_price->lessThan($base) ? $tier->unit_price : $base;
     }
 
     public function basePrice(Product $product, ?ProductVariant $variant): Money
     {
-        return $variant?->effectiveWholesalePrice() ?? $product->wholesale_price_minor;
+        return $variant?->effectiveWholesalePrice() ?? $product->wholesale_price;
     }
 
     /**

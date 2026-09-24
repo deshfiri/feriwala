@@ -219,11 +219,11 @@ class ManageVariants
         }
 
         // Null means the product's own figure applies, so the two cannot drift.
-        foreach (['wholesale_price_minor', 'base_cost_minor'] as $figure) {
+        foreach (['wholesale_price', 'base_cost'] as $figure) {
             if (array_key_exists($figure, $attributes)) {
                 $fields[$figure] = $attributes[$figure] === null || $attributes[$figure] === ''
                     ? null
-                    : Money::of((int) $attributes[$figure], Currency::base());
+                    : Money::fromDecimal((string) $attributes[$figure], Currency::base());
             }
         }
 
@@ -244,8 +244,8 @@ class ManageVariants
             'sku' => $variant->sku,
             'barcode' => $variant->barcode,
             'combination_key' => $variant->combination_key,
-            'wholesale_price_minor' => $variant->wholesale_price_minor?->minorUnits,
-            'base_cost_minor' => $variant->base_cost_minor?->minorUnits,
+            'wholesale_price' => $variant->wholesale_price?->toDecimal(),
+            'base_cost' => $variant->base_cost?->toDecimal(),
             'is_active' => $variant->is_active,
         ];
     }

@@ -13,6 +13,8 @@ use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -47,7 +49,7 @@ function catalogEligibilityPackage(string $name): Package
     return Package::create([
         'slug' => Str::slug($name).'-'.Str::lower(Str::random(6)),
         'name' => $name,
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -65,7 +67,7 @@ function catalogEligibilityAccount(?Package $package, AccountStatus $status = Ac
             'status' => UserPackageStatus::Active,
             'started_at' => now()->subDay(),
             'expires_at' => now()->addYear(),
-            'paid_fee_minor' => 500000,
+            'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
             'currency_code' => 'BDT',
         ]);
 
@@ -81,7 +83,7 @@ function catalogEligibilityProduct(string $sku, array $attributes = []): Product
         'name' => "Product {$sku}",
         'sku' => $sku,
         'category_id' => Category::query()->value('id'),
-        'wholesale_price_minor' => 100000,
+        'wholesale_price' => Money::fromDecimal('1000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         ...$attributes,
     ]);

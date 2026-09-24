@@ -21,6 +21,8 @@ use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Models\Order;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use App\Support\StatusHistory\StatusChange;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
@@ -47,8 +49,8 @@ beforeEach(function () {
         'name' => 'Electric kettle',
         'sku' => 'FW-KT-17',
         'category_id' => Category::create(['name' => 'Kitchen'])->id,
-        'base_cost_minor' => 120000,
-        'wholesale_price_minor' => 200000,
+        'base_cost' => Money::fromDecimal('1200.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
         'package_scope' => PackageScope::AllPackages,
@@ -64,10 +66,12 @@ beforeEach(function () {
  */
 function trackingOrder(BusinessAccount $account, array $overrides = [], int $lines = 1): Order
 {
+    $lineTotal = bcmul('20000.00', (string) $lines, 2);
+
     $order = Order::factory()->create([
         'business_account_id' => $account->id,
-        'subtotal_minor' => 2000000 * $lines,
-        'total_minor' => 2000000 * $lines,
+        'subtotal' => Money::fromDecimal($lineTotal, Currency::BDT),
+        'total' => Money::fromDecimal($lineTotal, Currency::BDT),
         ...$overrides,
     ]);
 
@@ -85,9 +89,9 @@ function trackingOrder(BusinessAccount $account, array $overrides = [], int $lin
             'product_name' => 'Electric kettle',
             'quantity' => 10,
             'currency_code' => 'BDT',
-            'unit_price_minor' => 200000,
-            'line_subtotal_minor' => 2000000,
-            'line_total_minor' => 2000000,
+            'unit_price' => '2000.00',
+            'line_subtotal' => '20000.00',
+            'line_total' => '20000.00',
             'stock_reservation_id' => $reservation->id,
             'created_at' => now(),
         ]);
@@ -112,7 +116,7 @@ it('lists the account\'s own wholesale orders, newest first, and nobody else\'s'
             ->where('orders.data.0.status', 'payment_pending')
             ->where('orders.data.0.payment_state', 'awaiting')
             ->where('orders.data.0.item_count', 1)
-            ->where('orders.data.0.total.minor_units', 2000000));
+            ->where('orders.data.0.total.amount', '20000.00'));
 
     expect(json_encode($this->get(route('wholesale.orders.index'))->viewData('page')))->not->toContain($theirs->reference);
 });
@@ -131,8 +135,8 @@ it('shows an order as it was recorded: lines, totals, addresses, payment, stock 
             ->where('order.lines.0.name', 'Electric kettle')
             ->where('order.lines.0.sku', 'FW-KT-17')
             ->where('order.lines.0.quantity', 10)
-            ->where('order.lines.0.total.minor_units', 2000000)
-            ->where('order.totals.total.minor_units', 2000000)
+            ->where('order.lines.0.total.amount', '20000.00')
+            ->where('order.totals.total.amount', '20000.00')
             ->where('order.addresses.shipping.city', 'Dhaka')
             ->where('order.payment.gateway', 'SSLCommerz')
             ->where('order.payment_state', 'awaiting')
@@ -159,7 +163,7 @@ it('never sends an internal note, a staff reason, who changed it, a hold reason,
     $response = $this->actingAs($this->karim->owner)->get(route('wholesale.orders.show', $order->public_id))->assertOk();
     $props = json_encode($response->viewData('page')['props']['order']);
 
-    foreach (['STAFF-REASON-TEXT', 'INTERNAL-NOTE-TEXT', 'HOLD-REASON-TEXT', 'base_cost', '120000', 'warehouse', 'allocation', 'changed_by'] as $secret) {
+    foreach (['STAFF-REASON-TEXT', 'INTERNAL-NOTE-TEXT', 'HOLD-REASON-TEXT', 'base_cost', '1200.00', 'warehouse', 'allocation', 'changed_by'] as $secret) {
         expect($props)->not->toContain($secret);
     }
 });

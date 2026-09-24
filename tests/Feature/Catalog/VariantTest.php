@@ -7,6 +7,7 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
@@ -34,8 +35,8 @@ beforeEach(function () {
         'sku' => 'FW-1043',
         'barcode' => '8941100500012',
         'category_id' => Category::create(['name' => 'Clothing'])->id,
-        'base_cost_minor' => 150000,
-        'wholesale_price_minor' => 249000,
+        'base_cost' => Money::fromDecimal('1500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2490.00', Currency::BDT),
     ]);
 
     $this->size = catalogVariantAttribute('Size', ['M', 'L']);
@@ -82,7 +83,7 @@ describe('only the platform creates variations (§12)', function () {
         $this->actingAs($owner)
             ->patch(route('admin.catalog.products.variants.update', [$this->product->public_id, $variant->public_id]), [
                 'sku' => 'FW-1043-L',
-                'wholesale_price_minor' => 1,
+                'wholesale_price' => '0.01',
             ])
             ->assertForbidden();
         $this->actingAs($owner)
@@ -90,7 +91,7 @@ describe('only the platform creates variations (§12)', function () {
             ->assertForbidden();
 
         expect(ProductVariant::query()->count())->toBe(1)
-            ->and($variant->refresh()->wholesale_price_minor)->toBeNull();
+            ->and($variant->refresh()->wholesale_price)->toBeNull();
     });
 
     it('refuses staff who may only read the catalogue', function () {
@@ -118,8 +119,8 @@ describe('building a variation', function () {
 
         expect($variant->sku)->toBe('FW-1043-M-NVY')
             ->and($variant->values)->toHaveCount(2)
-            ->and($variant->wholesale_price_minor)->toBeNull()
-            ->and($variant->effectiveWholesalePrice()->minorUnits)->toBe(249000);
+            ->and($variant->wholesale_price)->toBeNull()
+            ->and($variant->effectiveWholesalePrice()->toDecimal())->toBe('2490.00');
     });
 
     it('holds its own price as Money when one is given', function () {
@@ -127,14 +128,14 @@ describe('building a variation', function () {
             ->post(route('admin.catalog.products.variants.store', $this->product->public_id), [
                 'sku' => 'FW-1043-L',
                 'values' => [catalogVariantValue($this->size, 'L')],
-                'wholesale_price_minor' => '2590.00',
+                'wholesale_price' => '2590.00',
             ])
             ->assertSessionHasNoErrors();
 
         $variant = ProductVariant::query()->firstOrFail();
 
-        expect($variant->wholesale_price_minor)->toBeInstanceOf(Money::class)
-            ->and($variant->effectiveWholesalePrice()->minorUnits)->toBe(259000);
+        expect($variant->wholesale_price)->toBeInstanceOf(Money::class)
+            ->and($variant->effectiveWholesalePrice()->toDecimal())->toBe('2590.00');
     });
 
     it('refuses two values of one attribute', function () {
@@ -214,8 +215,8 @@ describe('one identifier namespace across products and variations', function () 
                 'name' => 'Another',
                 'sku' => 'FW-2000',
                 'category_id' => Category::query()->value('public_id'),
-                'base_cost_minor' => 1,
-                'wholesale_price_minor' => 1,
+                'base_cost' => '0.01',
+                'wholesale_price' => '0.01',
             ])
             ->assertSessionHasErrors('sku');
     });
@@ -249,7 +250,7 @@ describe('one identifier namespace across products and variations', function () 
             'product_id' => $this->product->id,
             'sku' => 'FW-1043-M',
             'combination_key' => 'k',
-            'wholesale_price_minor' => -1,
+            'wholesale_price' => Money::fromDecimal('-0.01', Currency::BDT),
         ]))->toThrow(QueryException::class, 'product_variants_wholesale_price_not_negative');
     });
 });
@@ -275,14 +276,14 @@ describe('editing and removing a variation', function () {
 
         $this->actingAs($this->manager)->patch($url, [
             'sku' => 'FW-1043-M',
-            'wholesale_price_minor' => '2390.00',
+            'wholesale_price' => '2390.00',
             'is_active' => false,
         ])->assertSessionHasNoErrors();
 
         $this->variant->refresh();
 
         expect($this->variant->is_active)->toBeFalse()
-            ->and($this->variant->wholesale_price_minor?->minorUnits)->toBe(239000)
+            ->and($this->variant->wholesale_price?->toDecimal())->toBe('2390.00')
             ->and($this->variant->values()->pluck('value')->all())->toBe(['M']);
     });
 
@@ -331,7 +332,7 @@ describe('editing and removing a variation', function () {
                 ->where('variants.0.label', 'M')
                 ->where('variants.0.sku', 'FW-1043-M')
                 ->where('variants.0.overrides_price', false)
-                ->where('variants.0.wholesale_price.minor_units', 249000)
+                ->where('variants.0.wholesale_price.amount', '2490.00')
                 ->has('attributes', 2),
             );
     });

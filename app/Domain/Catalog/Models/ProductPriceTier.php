@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $product_variant_id
  * @property int $min_quantity
  * @property string $currency_code
- * @property Money $unit_price_minor
+ * @property Money $unit_price
  * @property-read Product $product
  * @property-read ProductVariant|null $variant
  */
@@ -31,7 +31,7 @@ class ProductPriceTier extends Model
     {
         return [
             'min_quantity' => 'integer',
-            'unit_price_minor' => MoneyCast::class,
+            'unit_price' => MoneyCast::class,
         ];
     }
 

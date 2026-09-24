@@ -55,8 +55,8 @@ readonly class CheckoutQuote
                 'product' => $line->item->product_id,
                 'variant' => $line->item->product_variant_id,
                 'quantity' => $line->item->quantity,
-                'unit_price' => $line->unitPrice?->minorUnits,
-                'line_total' => $line->lineTotal?->minorUnits,
+                'unit_price' => $line->unitPrice?->toDecimal(),
+                'line_total' => $line->lineTotal?->toDecimal(),
                 'problems' => $line->problems,
             ];
         }
@@ -64,18 +64,18 @@ readonly class CheckoutQuote
         return hash('sha256', json_encode([
             'currency' => $this->total->currency->value,
             'lines' => $lines,
-            'subtotal' => $this->cart->subtotal->minorUnits,
+            'subtotal' => $this->cart->subtotal->toDecimal(),
             'coupon' => $this->coupon !== null && $this->coupon->isAccepted ? $this->coupon->coupon?->code : null,
-            'discount' => $this->discount->minorUnits,
-            'delivery' => $this->delivery->minorUnits,
+            'discount' => $this->discount->toDecimal(),
+            'delivery' => $this->delivery->toDecimal(),
             'tax' => array_map(fn (TaxCharge $charge) => [
                 $charge->code,
                 $charge->rateBasisPoints,
                 $charge->mode->value,
-                $charge->net->minorUnits,
-                $charge->tax->minorUnits,
+                $charge->net->toDecimal(),
+                $charge->tax->toDecimal(),
             ], $this->tax->charges),
-            'total' => $this->total->minorUnits,
+            'total' => $this->total->toDecimal(),
             'billing' => $this->billingAddress?->toSnapshot(),
             'shipping' => $this->shippingAddress?->toSnapshot(),
         ], JSON_THROW_ON_ERROR));

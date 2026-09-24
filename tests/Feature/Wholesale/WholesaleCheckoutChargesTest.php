@@ -29,6 +29,8 @@ use App\Domain\Tax\Models\TaxRule;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Data\CheckoutQuote;
 use App\Domain\Wholesale\Queries\PriceCheckout;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -55,8 +57,8 @@ beforeEach(function () {
     $this->warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
 
     // Ten kettles at 2,000 taka and ten shirts at 1,000: 30,000 taka of goods.
-    $this->kettle = wholesaleChargesProduct('FW-KT', 'Electric kettle', $this->kettles, 200000);
-    $this->shirt = wholesaleChargesProduct('FW-SH', 'Polo shirt', $apparel, 100000);
+    $this->kettle = wholesaleChargesProduct('FW-KT', 'Electric kettle', $this->kettles, '2000.00');
+    $this->shirt = wholesaleChargesProduct('FW-SH', 'Polo shirt', $apparel, '1000.00');
 
     $this->actingAs($this->karim->owner);
 
@@ -71,8 +73,8 @@ function wholesaleChargesPackage(): Package
     return Package::create([
         'slug' => 'charges-'.Str::lower(Str::random(8)),
         'name' => 'Charges package',
-        'fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'is_active' => true,
         'is_public' => true,
     ]);
@@ -88,8 +90,8 @@ function wholesaleChargesAccount(Package $package): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
     ]);
 
     $account->forceFill(['current_user_package_id' => $subscription->id])->save();
@@ -97,14 +99,15 @@ function wholesaleChargesAccount(Package $package): BusinessAccount
     return $account->refresh();
 }
 
-function wholesaleChargesProduct(string $sku, string $name, Category $category, int $priceMinor): Product
+function wholesaleChargesProduct(string $sku, string $name, Category $category, string $price): Product
 {
     $product = Product::create([
         'name' => $name,
         'sku' => $sku,
         'category_id' => $category->id,
-        'base_cost_minor' => 50000,
-        'wholesale_price_minor' => $priceMinor,
+        'currency_code' => 'BDT',
+        'base_cost' => Money::fromDecimal('500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal($price, Currency::BDT),
         'min_order_quantity' => 1,
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
@@ -117,13 +120,13 @@ function wholesaleChargesProduct(string $sku, string $name, Category $category, 
     return $product;
 }
 
-function wholesaleChargesDelivery(int $amountMinor, ?Package $package = null): FeeRule
+function wholesaleChargesDelivery(string $amount, ?Package $package = null): FeeRule
 {
     return FeeRule::create([
         'fee_type' => FeeType::WholesaleDelivery,
         'package_id' => $package?->id,
-        'amount_minor' => $amountMinor,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal($amount, Currency::BDT),
         'effective_from' => now()->subDay(),
         'is_active' => true,
     ]);
@@ -139,26 +142,31 @@ function wholesaleChargesQuote(): CheckoutQuote
 /**
  * The tax charged at each rate, keyed by code.
  *
- * @return array<string, array{net: int, tax: int, mode: string}>
+ * @return array<string, array{net: string, tax: string, mode: string}>
  */
 function wholesaleChargesTaxByCode(CheckoutQuote $quote): array
 {
     return collect($quote->tax->charges)
         ->mapWithKeys(fn (TaxCharge $charge) => [$charge->code => [
-            'net' => $charge->net->minorUnits,
-            'tax' => $charge->tax->minorUnits,
+            'net' => $charge->net->toDecimal(),
+            'tax' => $charge->tax->toDecimal(),
             'mode' => $charge->mode->value,
         ]])
         ->all();
 }
 
-function wholesaleChargesApplyCoupon(int $fixedMinor): void
+/**
+ * A fixed wholesale-order coupon. `$value` is the frozen D24 column (still
+ * minor-units-shaped and untouched by D26, per Coupon::amountFor()), never
+ * the flat-Taka figures this file otherwise uses.
+ */
+function wholesaleChargesApplyCoupon(int $value): void
 {
     $coupon = Coupon::create([
         'code' => 'BULK'.Str::upper(Str::random(6)),
         'name' => 'Bulk buyer',
         'discount_type' => DiscountType::Fixed,
-        'value' => $fixedMinor,
+        'value' => $value,
         'currency_code' => 'BDT',
         'applies_to' => CouponScope::WholesaleOrder,
         'per_account_limit' => 1,
@@ -192,28 +200,28 @@ describe('delivery charge', function () {
     it('charges nothing for delivery when no rule is configured', function () {
         $quote = wholesaleChargesQuote();
 
-        expect($quote->delivery->minorUnits)->toBe(0)
-            ->and($quote->total->minorUnits)->toBe(3000000);
+        expect($quote->delivery->isZero())->toBeTrue()
+            ->and($quote->total->toDecimal())->toBe('30000.00');
     });
 
     it('charges the global delivery rule, and a rule for the account\'s own package ahead of it', function () {
-        wholesaleChargesDelivery(12000);
-        wholesaleChargesDelivery(1000, $this->otherPackage);
+        wholesaleChargesDelivery('120.00');
+        wholesaleChargesDelivery('10.00', $this->otherPackage);
 
-        expect(wholesaleChargesQuote()->delivery->minorUnits)->toBe(12000);
+        expect(wholesaleChargesQuote()->delivery->toDecimal())->toBe('120.00');
 
-        wholesaleChargesDelivery(8000, $this->package);
+        wholesaleChargesDelivery('80.00', $this->package);
 
         $quote = wholesaleChargesQuote();
 
-        expect($quote->delivery->minorUnits)->toBe(8000)
-            ->and($quote->total->minorUnits)->toBe(3008000);
+        expect($quote->delivery->toDecimal())->toBe('80.00')
+            ->and($quote->total->toDecimal())->toBe('30080.00');
     });
 
     it('charges no delivery on a cart with nothing to buy', function () {
-        wholesaleChargesDelivery(12000);
+        wholesaleChargesDelivery('120.00');
 
-        expect(app(PriceCheckout::class)->quote(null, $this->karim)->delivery->minorUnits)->toBe(0);
+        expect(app(PriceCheckout::class)->quote(null, $this->karim)->delivery->isZero())->toBeTrue();
     });
 });
 
@@ -222,13 +230,13 @@ describe('tax', function () {
         $quote = wholesaleChargesQuote();
 
         expect($quote->tax->isEmpty())->toBeTrue()
-            ->and($quote->total->minorUnits)->toBe(3000000);
+            ->and($quote->total->toDecimal())->toBe('30000.00');
     });
 
     it('taxes goods after the discount and the delivery charge, and adds it to the total', function () {
         TaxRate::factory()->create();
         TaxRule::factory()->create();
-        wholesaleChargesDelivery(10000);
+        wholesaleChargesDelivery('100.00');
         wholesaleChargesApplyCoupon(300000);
 
         // Goods 30,000 − 3,000 discount = 27,000 at 15% is 4,050; delivery 100 at 15% is 15.
@@ -236,15 +244,15 @@ describe('tax', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('wholesale/checkout')
-                ->where('checkout.subtotal.minor_units', 3000000)
-                ->where('checkout.discount.minor_units', 300000)
-                ->where('checkout.delivery.minor_units', 10000)
+                ->where('checkout.subtotal.amount', '30000.00')
+                ->where('checkout.discount.amount', '3000.00')
+                ->where('checkout.delivery.amount', '100.00')
                 ->has('checkout.tax', 1)
                 ->where('checkout.tax.0.code', 'vat-standard')
-                ->where('checkout.tax.0.net.minor_units', 2710000)
-                ->where('checkout.tax.0.tax.minor_units', 406500)
-                ->where('checkout.tax_added.minor_units', 406500)
-                ->where('checkout.total.minor_units', 3116500));
+                ->where('checkout.tax.0.net.amount', '27100.00')
+                ->where('checkout.tax.0.tax.amount', '4065.00')
+                ->where('checkout.tax_added.amount', '4065.00')
+                ->where('checkout.total.amount', '31165.00'));
     });
 
     it('resolves tax on goods by product, then category, then the category above it, then everything', function () {
@@ -259,22 +267,22 @@ describe('tax', function () {
 
         expect(wholesaleChargesTaxByCode(wholesaleChargesQuote()))
             ->toMatchArray([
-                'vat-reduced' => ['net' => 2000000, 'tax' => 100000, 'mode' => 'exclusive'],
-                'vat-standard' => ['net' => 1000000, 'tax' => 150000, 'mode' => 'exclusive'],
+                'vat-reduced' => ['net' => '20000.00', 'tax' => '1000.00', 'mode' => 'exclusive'],
+                'vat-standard' => ['net' => '10000.00', 'tax' => '1500.00', 'mode' => 'exclusive'],
             ]);
 
         // The product's own category wins over the one above it.
         TaxRule::factory()->forCategory($this->kettles->slug)->usingCode('vat-kettles')->create();
 
         expect(wholesaleChargesTaxByCode(wholesaleChargesQuote()))
-            ->toHaveKey('vat-kettles', ['net' => 2000000, 'tax' => 200000, 'mode' => 'exclusive'])
+            ->toHaveKey('vat-kettles', ['net' => '20000.00', 'tax' => '2000.00', 'mode' => 'exclusive'])
             ->not->toHaveKey('vat-reduced');
 
         // And the product itself wins over both, matched whatever the case.
         TaxRule::factory()->forProduct('fw-kt')->usingCode('vat-zero')->create();
 
         expect(wholesaleChargesTaxByCode(wholesaleChargesQuote()))
-            ->toBe(['vat-standard' => ['net' => 1000000, 'tax' => 150000, 'mode' => 'exclusive']]);
+            ->toBe(['vat-standard' => ['net' => '10000.00', 'tax' => '1500.00', 'mode' => 'exclusive']]);
     });
 
     it('shares the discount across lines in proportion, without losing a poisha', function () {
@@ -289,17 +297,17 @@ describe('tax', function () {
         $quote = wholesaleChargesQuote();
 
         expect(wholesaleChargesTaxByCode($quote))->toMatchArray([
-            'vat-reduced' => ['net' => 1933332, 'tax' => 96667, 'mode' => 'exclusive'],
-            'vat-standard' => ['net' => 966667, 'tax' => 145000, 'mode' => 'exclusive'],
+            'vat-reduced' => ['net' => '19333.32', 'tax' => '966.67', 'mode' => 'exclusive'],
+            'vat-standard' => ['net' => '9666.67', 'tax' => '1450.00', 'mode' => 'exclusive'],
         ])
-            ->and($quote->tax->taxableTotal()->minorUnits)->toBe(3000000 - 100001)
-            ->and($quote->total->minorUnits)->toBe(3000000 - 100001 + 96667 + 145000);
+            ->and($quote->tax->taxableTotal()->toDecimal())->toBe('28999.99')
+            ->and($quote->total->toDecimal())->toBe('31416.66');
     });
 
     it('charges no tax to an exempt account', function () {
         TaxRate::factory()->create();
         TaxRule::factory()->create();
-        wholesaleChargesDelivery(10000);
+        wholesaleChargesDelivery('100.00');
 
         TaxExemption::create([
             'business_account_id' => $this->karim->id,
@@ -310,7 +318,7 @@ describe('tax', function () {
         $quote = wholesaleChargesQuote();
 
         expect($quote->tax->isEmpty())->toBeTrue()
-            ->and($quote->total->minorUnits)->toBe(3010000);
+            ->and($quote->total->toDecimal())->toBe('30100.00');
     });
 
     it('shows tax already inside the price without adding it again', function () {
@@ -321,9 +329,9 @@ describe('tax', function () {
 
         // 20,000 ÷ 1.15 leaves 2,608.70 of tax; 10,000 ÷ 1.15 leaves 1,304.35.
         expect(wholesaleChargesTaxByCode($quote))
-            ->toBe(['vat-standard' => ['net' => 2608695, 'tax' => 391305, 'mode' => 'inclusive']])
-            ->and($quote->tax->addedTotal()->minorUnits)->toBe(0)
-            ->and($quote->total->minorUnits)->toBe(3000000);
+            ->toBe(['vat-standard' => ['net' => '26086.95', 'tax' => '3913.05', 'mode' => 'inclusive']])
+            ->and($quote->tax->addedTotal()->isZero())->toBeTrue()
+            ->and($quote->total->toDecimal())->toBe('30000.00');
     });
 });
 
@@ -421,7 +429,7 @@ describe('addresses', function () {
             ->and($address->is_default)->toBeTrue();
 
         $this->get(route('wholesale.checkout.show'))
-            ->assertInertia(fn (Assert $page) => $page->where('checkout.total.minor_units', 3000000));
+            ->assertInertia(fn (Assert $page) => $page->where('checkout.total.amount', '30000.00'));
     });
 
     it('never shows or changes another person\'s address', function () {

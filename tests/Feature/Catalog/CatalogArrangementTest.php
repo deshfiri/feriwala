@@ -12,6 +12,8 @@ use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -49,8 +51,8 @@ function catalogArrangeProduct(string $sku, Category $category, array $attribute
         'name' => 'Product '.$sku,
         'sku' => $sku,
         'category_id' => $category->id,
-        'base_cost_minor' => 150000,
-        'wholesale_price_minor' => 200000,
+        'base_cost' => Money::fromDecimal('1500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         'package_scope' => PackageScope::AllPackages,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
@@ -63,7 +65,7 @@ function catalogArrangeAccount(): BusinessAccount
     $package = Package::create([
         'slug' => 'arrange-'.Str::lower(Str::random(8)),
         'name' => 'Arrange package',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -77,7 +79,7 @@ function catalogArrangeAccount(): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 

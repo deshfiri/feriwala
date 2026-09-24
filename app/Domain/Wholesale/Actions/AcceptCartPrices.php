@@ -36,7 +36,7 @@ class AcceptCartPrices
 
                 CartItem::query()
                     ->whereKey($line->item->id)
-                    ->update(['unit_price_seen_minor' => $line->unitPrice->minorUnits]);
+                    ->update(['unit_price_seen' => $line->unitPrice->toDecimal()]);
 
                 $accepted++;
             }

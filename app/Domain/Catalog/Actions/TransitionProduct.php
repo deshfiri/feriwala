@@ -135,7 +135,7 @@ class TransitionProduct
             $missing[] = 'its brand is switched off';
         }
 
-        if (! $product->wholesale_price_minor->isPositive()) {
+        if (! $product->wholesale_price->isPositive()) {
             $missing[] = 'it has no wholesale price';
         }
 

@@ -124,20 +124,20 @@ class PriceCart
         }
 
         if (! $eligible) {
-            return new CartLineQuote($item, 0, null, null, null, $item->unit_price_seen_minor, false, $problems);
+            return new CartLineQuote($item, 0, null, null, null, $item->unit_price_seen, false, $problems);
         }
 
         $unit = $this->prices->unitPrice($product, $variant, $item->quantity);
-        $seen = $item->unit_price_seen_minor;
+        $seen = $item->unit_price_seen;
 
         return new CartLineQuote(
             item: $item,
             available: $units,
             unitPrice: $unit,
             basePrice: $this->prices->basePrice($product, $variant),
-            lineTotal: Money::of($unit->minorUnits * $item->quantity, $unit->currency),
+            lineTotal: $unit->multipliedBy($item->quantity),
             unitPriceSeen: $seen,
-            priceChanged: $seen !== null && $seen->minorUnits !== $unit->minorUnits,
+            priceChanged: $seen !== null && ! $seen->equals($unit),
             problems: $problems,
         );
     }

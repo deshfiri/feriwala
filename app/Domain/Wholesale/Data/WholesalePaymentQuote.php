@@ -15,7 +15,7 @@ use App\Support\Money\Money;
  * The components a payment and its invoice carry, taken from the checkout the
  * server priced and the person confirmed: one goods component per order line,
  * then the discount, the delivery charge and the tax added on top — with the tax
- * per rate beside them. Its total is the checkout's total, to the poisha.
+ * per rate beside them. Its total is the checkout's total, to the last decimal place.
  */
 readonly class WholesalePaymentQuote implements PaymentQuote
 {

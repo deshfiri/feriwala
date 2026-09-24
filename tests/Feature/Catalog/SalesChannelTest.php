@@ -7,6 +7,8 @@ use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -31,7 +33,7 @@ beforeEach(function () {
         'name' => 'Rice cooker',
         'sku' => 'FW-RC',
         'category_id' => Category::create(['name' => 'Kitchen'])->id,
-        'wholesale_price_minor' => 250000,
+        'wholesale_price' => Money::fromDecimal('2500.00', Currency::BDT),
     ]);
 });
 

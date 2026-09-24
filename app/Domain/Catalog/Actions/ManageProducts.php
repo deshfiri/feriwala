@@ -27,9 +27,9 @@ use Illuminate\Database\DatabaseManager;
  * is reached — the controller asks the policy — and nothing here takes a
  * business account, because nothing a business account does writes a product.
  *
- * Figures arrive as integer minor units and are turned into {@see Money} here,
- * in the base currency, so no caller can hand the model a float or a currency
- * nobody chose (D4).
+ * Figures arrive as exact decimal Taka strings and are turned into {@see Money}
+ * here, in the base currency, so no caller can hand the model a float or a
+ * currency nobody chose (D4).
  */
 class ManageProducts
 {
@@ -208,9 +208,9 @@ class ManageProducts
                 : Brand::query()->where('public_id', $attributes['brand_id'])->value('id');
         }
 
-        foreach (['base_cost_minor' => 'base_cost', 'wholesale_price_minor' => 'wholesale_price'] as $input => $figure) {
-            if (array_key_exists($input, $attributes)) {
-                $fields[$figure] = Money::fromDecimal((string) $attributes[$input], Currency::base());
+        foreach (['base_cost', 'wholesale_price'] as $figure) {
+            if (array_key_exists($figure, $attributes)) {
+                $fields[$figure] = Money::fromDecimal((string) $attributes[$figure], Currency::base());
             }
         }
 
@@ -232,15 +232,11 @@ class ManageProducts
 
         // Selling-price guidance for partners (§15.1). Blank is no bound, and
         // never zero — zero is a real price.
-        foreach ([
-            'suggested_selling_price_minor' => 'suggested_selling_price',
-            'minimum_selling_price_minor' => 'minimum_selling_price',
-            'maximum_selling_price_minor' => 'maximum_selling_price',
-        ] as $input => $bound) {
-            if (array_key_exists($input, $attributes)) {
-                $fields[$bound] = blank($attributes[$input])
+        foreach (['suggested_selling_price', 'minimum_selling_price', 'maximum_selling_price'] as $bound) {
+            if (array_key_exists($bound, $attributes)) {
+                $fields[$bound] = blank($attributes[$bound])
                     ? null
-                    : Money::fromDecimal((string) $attributes[$input], Currency::base());
+                    : Money::fromDecimal((string) $attributes[$bound], Currency::base());
             }
         }
 

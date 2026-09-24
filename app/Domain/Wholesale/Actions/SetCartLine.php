@@ -96,7 +96,7 @@ class SetCartLine
                 ->first();
 
             if ($line !== null) {
-                $line->forceFill(['quantity' => $quantity, 'unit_price_seen_minor' => $unit])->save();
+                $line->forceFill(['quantity' => $quantity, 'unit_price_seen' => $unit])->save();
 
                 return $line;
             }
@@ -110,8 +110,8 @@ class SetCartLine
                 'product_id' => $product->id,
                 'product_variant_id' => $variant?->id,
                 'quantity' => $quantity,
-                'unit_price_seen_minor' => $unit,
                 'currency_code' => $unit->currency->value,
+                'unit_price_seen' => $unit,
             ]);
         });
     }

@@ -29,6 +29,7 @@ use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
 use App\Domain\Wholesale\Actions\SetCartLine;
 use App\Domain\Wholesale\Queries\PriceCheckout;
 use App\Models\User;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -69,8 +70,8 @@ beforeEach(function () {
     $this->package = Package::create([
         'slug' => 'order-race-'.Str::lower(Str::random(8)),
         'name' => 'Order race package',
-        'fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'fee' => Money::fromDecimal('5000.00'),
         'is_active' => true,
         'is_public' => true,
     ]);
@@ -80,7 +81,7 @@ beforeEach(function () {
         'name' => 'Order race kettle',
         'sku' => 'FW-ORACE-'.strtoupper(uniqid()),
         'category_id' => $this->category->id,
-        'wholesale_price_minor' => 200000,
+        'wholesale_price' => Money::fromDecimal('2000.00'),
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
         'package_scope' => PackageScope::AllPackages,
@@ -148,8 +149,8 @@ function wholesaleOrderRaceBuyer(int $quantity): array
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'paid_fee' => Money::fromDecimal('5000.00'),
     ]);
     $account->forceFill(['current_user_package_id' => $subscription->id])->save();
     $account->refresh();

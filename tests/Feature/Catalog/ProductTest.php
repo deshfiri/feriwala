@@ -6,6 +6,7 @@ use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
@@ -37,8 +38,8 @@ function catalogProduct(array $attributes = []): Product
         'name' => 'Walton Rice Cooker',
         'sku' => 'FW-RC-1',
         'category_id' => Category::query()->value('id'),
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 210000,
+        'base_cost' => Money::fromDecimal('1800.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2100.00', Currency::BDT),
         ...$attributes,
     ]);
 }
@@ -58,8 +59,8 @@ function catalogProductPayload(array $overrides = []): array
         'description' => 'A rice cooker.',
         'category_id' => Category::query()->value('public_id'),
         'brand_id' => Brand::query()->value('public_id'),
-        'base_cost_minor' => '1800.00',
-        'wholesale_price_minor' => '2490.00',
+        'base_cost' => '1800.00',
+        'wholesale_price' => '2490.00',
         ...$overrides,
     ];
 }
@@ -76,14 +77,14 @@ describe('only the platform writes products (§12)', function () {
             ->post(route('admin.catalog.products.store'), catalogProductPayload())
             ->assertForbidden();
         $this->actingAs($owner)
-            ->patch(route('admin.catalog.products.update', $product->public_id), catalogProductPayload(['wholesale_price_minor' => '0.01']))
+            ->patch(route('admin.catalog.products.update', $product->public_id), catalogProductPayload(['wholesale_price' => '0.01']))
             ->assertForbidden();
         $this->actingAs($owner)
             ->delete(route('admin.catalog.products.destroy', $product->public_id))
             ->assertForbidden();
 
         expect(Product::query()->count())->toBe(1)
-            ->and($product->refresh()->wholesale_price_minor->minorUnits)->toBe(210000);
+            ->and($product->refresh()->wholesale_price->toDecimal())->toBe('2100.00');
     });
 
     it('lets staff who may read the catalogue see a product but not change it', function () {
@@ -116,7 +117,7 @@ describe('only the platform writes products (§12)', function () {
             ->assertForbidden();
     });
 
-    it('lets a product manager create a draft, with money held as minor units', function () {
+    it('lets a product manager create a draft, with money held as an exact flat-Taka decimal', function () {
         $response = $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), catalogProductPayload());
 
@@ -129,24 +130,24 @@ describe('only the platform writes products (§12)', function () {
             ->and($product->currency_code)->toBe('BDT')
             ->and($product->category_id)->toBe($this->category->id)
             ->and($product->brand_id)->toBe($this->brand->id)
-            ->and($product->wholesale_price_minor)->toBeInstanceOf(Money::class)
-            ->and($product->wholesale_price_minor->minorUnits)->toBe(249000)
-            ->and($product->base_cost_minor->minorUnits)->toBe(180000);
+            ->and($product->wholesale_price)->toBeInstanceOf(Money::class)
+            ->and($product->wholesale_price->toDecimal())->toBe('2490.00')
+            ->and($product->base_cost->toDecimal())->toBe('1800.00');
     });
 
-    it('converts Taka form input to exact minor units', function () {
+    it('converts Taka form input to an exact flat-Taka decimal', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), catalogProductPayload([
                 'sku' => 'fw-rc-taka',
-                'wholesale_price_minor' => '2490.50',
-                'base_cost_minor' => '1800.25',
+                'wholesale_price' => '2490.50',
+                'base_cost' => '1800.25',
             ]))
             ->assertSessionHasNoErrors();
 
         $product = Product::query()->where('sku', 'FW-RC-TAKA')->firstOrFail();
 
-        expect($product->wholesale_price_minor->minorUnits)->toBe(249050)
-            ->and($product->base_cost_minor->minorUnits)->toBe(180025);
+        expect($product->wholesale_price->toDecimal())->toBe('2490.50')
+            ->and($product->base_cost->toDecimal())->toBe('1800.25');
     });
 });
 
@@ -154,7 +155,7 @@ describe('validation and database constraints', function () {
     it('requires a name, a SKU, a category and both figures', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), [])
-            ->assertSessionHasErrors(['name', 'sku', 'category_id', 'base_cost_minor', 'wholesale_price_minor']);
+            ->assertSessionHasErrors(['name', 'sku', 'category_id', 'base_cost', 'wholesale_price']);
     });
 
     it('refuses a price with more than two decimal places, or that is negative', function () {
@@ -162,10 +163,10 @@ describe('validation and database constraints', function () {
         // nobody noticed.
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), catalogProductPayload([
-                'wholesale_price_minor' => '2490.505',
-                'base_cost_minor' => '-1',
+                'wholesale_price' => '2490.505',
+                'base_cost' => '-1',
             ]))
-            ->assertSessionHasErrors(['wholesale_price_minor', 'base_cost_minor']);
+            ->assertSessionHasErrors(['wholesale_price', 'base_cost']);
 
         expect(Product::query()->count())->toBe(0);
     });
@@ -202,7 +203,7 @@ describe('validation and database constraints', function () {
     });
 
     it('refuses a negative figure in the database, not only in the form', function () {
-        expect(fn () => catalogProduct(['wholesale_price_minor' => -100]))
+        expect(fn () => catalogProduct(['wholesale_price' => Money::fromDecimal('-1.00', Currency::BDT)]))
             ->toThrow(QueryException::class, 'products_wholesale_price_not_negative');
     });
 
@@ -246,7 +247,7 @@ describe('editing', function () {
             ->patch(route('admin.catalog.products.update', $product->public_id), catalogProductPayload([
                 'name' => 'Walton Rice Cooker (new model)',
                 'sku' => 'FW-RC-1',
-                'wholesale_price_minor' => '1990.00',
+                'wholesale_price' => '1990.00',
             ]))
             ->assertSessionHasNoErrors();
 
@@ -254,7 +255,7 @@ describe('editing', function () {
 
         expect($product->name)->toBe('Walton Rice Cooker (new model)')
             ->and($product->slug)->toBe($slug)
-            ->and($product->wholesale_price_minor->minorUnits)->toBe(199000);
+            ->and($product->wholesale_price->toDecimal())->toBe('1990.00');
     });
 
     it('lets a product keep its own SKU when saved', function () {
@@ -335,7 +336,7 @@ describe('the screens', function () {
                 ->component('admin/catalog/products/index')
                 ->has('products.data', 1)
                 ->where('products.data.0.sku', 'FW-BL-9')
-                ->where('products.data.0.wholesale_price.minor_units', 210000)
+                ->where('products.data.0.wholesale_price.amount', '2100.00')
                 ->where('products.data.0.wholesale_price.currency', 'BDT')
                 ->where('can.create', true),
             );
@@ -352,7 +353,7 @@ describe('the screens', function () {
                 ->component('admin/catalog/products/form')
                 ->where('product.category_id', $child->public_id)
                 ->where('product.brand_id', $this->brand->public_id)
-                ->where('product.wholesale_price.decimal', '2100.00')
+                ->where('product.wholesale_price.amount', '2100.00')
                 ->where('options.categories.1.label', 'Electronics › Kitchen')
                 ->where('options.brands.0.label', 'Walton'),
             );

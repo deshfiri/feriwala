@@ -22,6 +22,8 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Domain\Wholesale\Models\CartItem;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
@@ -51,7 +53,7 @@ beforeEach(function () {
     $this->dhaka = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
 
     $this->kettle = wholesaleCartProduct('FW-KT', 'Electric kettle', ['min_order_quantity' => 6, 'max_order_quantity' => 60]);
-    ProductPriceTier::create(['product_id' => $this->kettle->id, 'min_quantity' => 24, 'unit_price_minor' => 180000]);
+    ProductPriceTier::create(['product_id' => $this->kettle->id, 'min_quantity' => 24, 'currency_code' => 'BDT', 'unit_price' => Money::fromDecimal('1800.00', Currency::BDT)]);
     wholesaleCartStock($this->kettle, null, 100);
 
     // Never brought into inventory.
@@ -61,13 +63,13 @@ beforeEach(function () {
     $this->pot = wholesaleCartProduct('FW-POT', 'Steel pot');
     app(StockAllocations::class)->allocate(wholesaleCartStock($this->pot, null, 5), $this->karim, 5);
 
-    $this->shirt = wholesaleCartProduct('FW-SH', 'Polo shirt', ['wholesale_price_minor' => 100000]);
+    $this->shirt = wholesaleCartProduct('FW-SH', 'Polo shirt', ['wholesale_price' => Money::fromDecimal('1000.00', Currency::BDT)]);
     $this->medium = ProductVariant::create([
         'product_id' => $this->shirt->id,
         'sku' => 'FW-SH-M',
         'combination_key' => 'm',
-        'wholesale_price_minor' => 95000,
         'currency_code' => 'BDT',
+        'wholesale_price' => Money::fromDecimal('950.00', Currency::BDT),
         'is_active' => true,
     ]);
     $this->small = ProductVariant::create(['product_id' => $this->shirt->id, 'sku' => 'FW-SH-S', 'combination_key' => 's', 'is_active' => false]);
@@ -80,8 +82,8 @@ function wholesaleCartPackage(): Package
     return Package::create([
         'slug' => 'cart-'.Str::lower(Str::random(8)),
         'name' => 'Cart package',
-        'fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'is_active' => true,
         'is_public' => true,
     ]);
@@ -97,8 +99,8 @@ function wholesaleCartAccount(Package $package): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
         'currency_code' => 'BDT',
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
     ]);
 
     $account->forceFill(['current_user_package_id' => $subscription->id])->save();
@@ -115,8 +117,9 @@ function wholesaleCartProduct(string $sku, string $name, array $attributes = [])
         'name' => $name,
         'sku' => $sku,
         'category_id' => test()->kitchen->id,
-        'base_cost_minor' => 50000,
-        'wholesale_price_minor' => 200000,
+        'currency_code' => 'BDT',
+        'base_cost' => Money::fromDecimal('500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
         'package_scope' => PackageScope::AllPackages,
@@ -178,15 +181,14 @@ describe('setting a line', function () {
         wholesaleCartAdd($this->karim->owner, [
             'product' => $this->kettle->slug,
             'quantity' => 30,
-            'unit_price' => 1,
-            'unit_price_minor' => 1,
-            'unit_price_seen_minor' => 1,
-            'line_total' => 1,
-            'total' => 1,
-            'discount' => 999999,
+            'unit_price' => '0.01',
+            'unit_price_seen' => '0.01',
+            'line_total' => '0.01',
+            'total' => '0.01',
+            'discount' => '9999.99',
         ])->assertSessionHasNoErrors();
 
-        expect(wholesaleCartLinesOf($this->karim)->sole()->unit_price_seen_minor->minorUnits)->toBe(180000);
+        expect(wholesaleCartLinesOf($this->karim)->sole()->unit_price_seen->toDecimal())->toBe('1800.00');
 
         $this->actingAs($this->karim->owner)
             ->get(route('wholesale.cart.show'))
@@ -194,10 +196,10 @@ describe('setting a line', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('wholesale/cart')
                 ->where('facility_allowed', true)
-                ->where('cart.lines.0.unit_price.minor_units', 180000)
-                ->where('cart.lines.0.base_price.minor_units', 200000)
-                ->where('cart.lines.0.line_total.minor_units', 5400000)
-                ->where('cart.subtotal.minor_units', 5400000)
+                ->where('cart.lines.0.unit_price.amount', '1800.00')
+                ->where('cart.lines.0.base_price.amount', '2000.00')
+                ->where('cart.lines.0.line_total.amount', '54000.00')
+                ->where('cart.subtotal.amount', '54000.00')
                 ->missing('cart.lines.0.base_cost'));
     });
 
@@ -268,7 +270,7 @@ describe('setting a line', function () {
         $line = wholesaleCartLinesOf($this->karim)->sole();
 
         expect($line->product_variant_id)->toBe($this->medium->id)
-            ->and($line->unit_price_seen_minor->minorUnits)->toBe(95000);
+            ->and($line->unit_price_seen->toDecimal())->toBe('950.00');
     });
 
     it('changes and removes a line in the person\'s own cart', function () {

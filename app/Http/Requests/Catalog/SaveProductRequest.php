@@ -12,6 +12,7 @@ use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Support\Money\DecimalAmount;
+use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
@@ -21,20 +22,11 @@ use Illuminate\Validation\Validator;
 class SaveProductRequest extends FormRequest
 {
     /**
-     * The largest figure a form may post, in minor units.
-     *
-     * Far above any real price (ten billion taka) and far below BIGINT, so an
-     * absurd entry is refused as a validation message rather than surfacing as a
-     * database overflow.
-     */
-    public const MAX_MINOR = 1_000_000_000_000;
-
-    /**
      * The protected central fields this form owns (§12).
      *
      * @var array<int, string>
      */
-    public const OWNED = ['sku', 'barcode', 'wholesale_price_minor', 'base_cost_minor'];
+    public const OWNED = ['sku', 'barcode', 'wholesale_price', 'base_cost'];
 
     /**
      * Refused before a single rule runs (§12).
@@ -115,13 +107,11 @@ class SaveProductRequest extends FormRequest
              * Entered in Taka, like every other human-facing amount (D4,
              * §36.1). `DecimalAmountRule` refuses excess precision outright
              * rather than rounding it, because a silently rounded price is a
-             * wrong price somebody did not notice. Converted to minor units
-             * in productAttributes() below, at this HTTP boundary — the
-             * *_minor field names stay the same because ManageProducts and
-             * the §12 owned-field list still key off them.
+             * wrong price somebody did not notice. Turned into an exact
+             * {@see \App\Support\Money\Money} in `productAttributes()` below.
              */
-            'base_cost_minor' => ['required', new DecimalAmountRule],
-            'wholesale_price_minor' => ['required', new DecimalAmountRule],
+            'base_cost' => ['required', new DecimalAmountRule],
+            'wholesale_price' => ['required', new DecimalAmountRule],
 
             /*
              * What partner websites put in the page head (§34.3), bounded to
@@ -161,9 +151,9 @@ class SaveProductRequest extends FormRequest
             'max_order_quantity' => ['nullable', 'integer', 'min:1', 'max:1000000'],
 
             // Selling-price guidance for partners (§15.1). Blank is no bound.
-            'suggested_selling_price_minor' => ['nullable', new DecimalAmountRule],
-            'minimum_selling_price_minor' => ['nullable', new DecimalAmountRule],
-            'maximum_selling_price_minor' => ['nullable', new DecimalAmountRule],
+            'suggested_selling_price' => ['nullable', new DecimalAmountRule],
+            'minimum_selling_price' => ['nullable', new DecimalAmountRule],
+            'maximum_selling_price' => ['nullable', new DecimalAmountRule],
 
             /*
              * The SKU and both figures are this form's to set; the lifecycle,
@@ -199,16 +189,16 @@ class SaveProductRequest extends FormRequest
                 $data = $validator->getData();
                 $number = fn (string $key): ?int => isset($data[$key]) && is_numeric($data[$key]) ? (int) $data[$key] : null;
 
-                // Money fields compare on parsed minor units, not a raw (int)
-                // cast of the Taka string a person typed — "2490.50" must
-                // compare as 249050, not truncate to 2490. Skipped when the
-                // field already failed DecimalAmountRule above.
-                $minorUnits = function (string $key) use ($validator, $data): ?int {
+                // Money fields compare on the parsed exact decimal, not a raw
+                // (int) cast of the Taka string a person typed — "2490.50"
+                // must compare as 2490.50, not truncate to 2490. Skipped when
+                // the field already failed DecimalAmountRule above.
+                $decimal = function (string $key) use ($validator, $data): ?string {
                     if ($validator->errors()->has($key)) {
                         return null;
                     }
 
-                    return DecimalAmount::parseOrNull($data[$key] ?? null)?->minorUnits;
+                    return DecimalAmount::parseOrNull($data[$key] ?? null)?->toDecimal();
                 };
 
                 $min = $number('min_order_quantity') ?? 1;
@@ -237,24 +227,24 @@ class SaveProductRequest extends FormRequest
                     }
                 }
 
-                $suggested = $minorUnits('suggested_selling_price_minor');
-                $floor = $minorUnits('minimum_selling_price_minor');
-                $ceiling = $minorUnits('maximum_selling_price_minor');
+                $suggested = $decimal('suggested_selling_price');
+                $floor = $decimal('minimum_selling_price');
+                $ceiling = $decimal('maximum_selling_price');
 
-                if ($floor !== null && $ceiling !== null && $floor > $ceiling) {
-                    $validator->errors()->add('minimum_selling_price_minor', __('catalog.products.bounds.selling_range'));
+                if ($floor !== null && $ceiling !== null && bccomp($floor, $ceiling, 2) > 0) {
+                    $validator->errors()->add('minimum_selling_price', __('catalog.products.bounds.selling_range'));
                 }
 
-                if ($suggested !== null && (($floor !== null && $suggested < $floor) || ($ceiling !== null && $suggested > $ceiling))) {
-                    $validator->errors()->add('suggested_selling_price_minor', __('catalog.products.bounds.suggested_outside'));
+                if ($suggested !== null && (($floor !== null && bccomp($suggested, $floor, 2) < 0) || ($ceiling !== null && bccomp($suggested, $ceiling, 2) > 0))) {
+                    $validator->errors()->add('suggested_selling_price', __('catalog.products.bounds.suggested_outside'));
                 }
             },
         ];
     }
 
     /**
-     * The validated data, with the Taka strings converted to minor units
-     * under the same field names ManageProducts already expects.
+     * The validated data, with the Taka strings normalised to the exact
+     * decimals ManageProducts turns into {@see Money}.
      *
      * @return array<string, mixed>
      */
@@ -262,15 +252,15 @@ class SaveProductRequest extends FormRequest
     {
         $validated = $this->validated();
 
-        foreach (['base_cost_minor', 'wholesale_price_minor'] as $field) {
+        foreach (['base_cost', 'wholesale_price'] as $field) {
             if (array_key_exists($field, $validated)) {
-                $validated[$field] = DecimalAmount::parse($validated[$field])->minorUnits;
+                $validated[$field] = DecimalAmount::parse($validated[$field])->toDecimal();
             }
         }
 
-        foreach (['suggested_selling_price_minor', 'minimum_selling_price_minor', 'maximum_selling_price_minor'] as $field) {
+        foreach (['suggested_selling_price', 'minimum_selling_price', 'maximum_selling_price'] as $field) {
             if (array_key_exists($field, $validated)) {
-                $validated[$field] = DecimalAmount::parseOrNull($validated[$field])?->minorUnits;
+                $validated[$field] = DecimalAmount::parseOrNull($validated[$field])?->toDecimal();
             }
         }
 
@@ -286,13 +276,13 @@ class SaveProductRequest extends FormRequest
             'sku' => 'SKU',
             'category_id' => 'category',
             'brand_id' => 'brand',
-            'base_cost_minor' => 'base cost',
-            'wholesale_price_minor' => 'wholesale price',
+            'base_cost' => 'base cost',
+            'wholesale_price' => 'wholesale price',
             'min_order_quantity' => 'minimum order quantity',
             'max_order_quantity' => 'maximum order quantity',
-            'suggested_selling_price_minor' => 'suggested selling price',
-            'minimum_selling_price_minor' => 'minimum selling price',
-            'maximum_selling_price_minor' => 'maximum selling price',
+            'suggested_selling_price' => 'suggested selling price',
+            'minimum_selling_price' => 'minimum selling price',
+            'maximum_selling_price' => 'maximum selling price',
         ];
     }
 }

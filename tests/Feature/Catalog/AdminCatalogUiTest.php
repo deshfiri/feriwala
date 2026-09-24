@@ -18,6 +18,8 @@ use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -52,8 +54,8 @@ function catalogUiProduct(string $sku, Category $category, array $overrides = []
         'name' => 'Product '.$sku,
         'sku' => $sku,
         'category_id' => $category->id,
-        'base_cost_minor' => 170000,
-        'wholesale_price_minor' => 210000,
+        'base_cost' => Money::fromDecimal('1700.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2100.00', Currency::BDT),
         ...$overrides,
     ]);
 }
@@ -204,7 +206,7 @@ describe('the product list', function () {
 describe('bulk actions', function () {
     it('activates what is ready, names what is not with its reason, and counts what already was', function () {
         $ready = catalogUiMove($this->manager, catalogUiProduct('FW-1', $this->kitchen), ProductStatus::PendingReview);
-        $unpriced = catalogUiMove($this->manager, catalogUiProduct('FW-2', $this->kitchen, ['wholesale_price_minor' => 0]), ProductStatus::PendingReview);
+        $unpriced = catalogUiMove($this->manager, catalogUiProduct('FW-2', $this->kitchen, ['wholesale_price' => Money::zero(Currency::BDT)]), ProductStatus::PendingReview);
         $live = catalogUiMove($this->manager, catalogUiProduct('FW-3', $this->kitchen), ProductStatus::PendingReview, ProductStatus::Active);
 
         $this->actingAs($this->manager)
@@ -359,7 +361,7 @@ describe('the variation builder', function () {
         $variants = $this->product->variants()->get();
 
         expect($variants->pluck('sku')->sort()->values()->all())->toBe(['FW-1043-L-NAVY', 'FW-1043-L-RED', 'FW-1043-M-NAVY', 'FW-1043-M-RED'])
-            ->and($variants->every(fn (ProductVariant $variant) => $variant->wholesale_price_minor === null && $variant->is_active))->toBeTrue();
+            ->and($variants->every(fn (ProductVariant $variant) => $variant->wholesale_price === null && $variant->is_active))->toBeTrue();
     });
 
     it('skips combinations that exist, so building again creates only what is new', function () {
@@ -447,8 +449,8 @@ it('confirms a catalogue change with a toast the page shows', function () {
             'name' => 'Renamed',
             'sku' => 'FW-1',
             'category_id' => $this->kitchen->public_id,
-            'base_cost_minor' => 170000,
-            'wholesale_price_minor' => 210000,
+            'base_cost' => '1700.00',
+            'wholesale_price' => '2100.00',
         ])
         ->assertInertiaFlash('toast.type', 'success')
         ->assertInertiaFlash('toast.message', 'Renamed saved.');

@@ -6,6 +6,8 @@ use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCategory;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 
 /**
  * A storefront reading what it sells (contract §5.1, §5.2, P5-22).
@@ -38,7 +40,7 @@ function storefrontSelection(Website $website, array $attributes = [], array $pr
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
         ...$attributes,
     ]);
@@ -59,14 +61,18 @@ describe('products', function () {
 
     it('sells at the website\'s own price, with a promotion shown against the regular price', function () {
         $selection = storefrontSelection($this->website, [
-            'price_minor' => 300000,
-            'promotional_price_minor' => 270000,
+            'price' => Money::fromDecimal('3000.00', Currency::BDT),
+            'promotional_price' => Money::fromDecimal('2700.00', Currency::BDT),
             'promo_title' => 'Eid offer',
         ]);
 
         storefrontCall($this->credential, $this->secret, 'products/'.$selection->product->public_id)
             ->assertOk()
+            // Both the flat-Taka `amount` and the frozen contract's legacy
+            // `minor_units` compatibility key are carried (§4.1).
+            ->assertJsonPath('variants.0.price.amount', '2700.00')
             ->assertJsonPath('variants.0.price.minor_units', 270000)
+            ->assertJsonPath('variants.0.compare_at_price.amount', '3000.00')
             ->assertJsonPath('variants.0.compare_at_price.minor_units', 300000)
             ->assertJsonPath('promo_title', 'Eid offer');
     });
@@ -78,12 +84,12 @@ describe('products', function () {
             ->assertOk()
             ->getContent();
 
-        foreach (['wholesale', 'base_cost', 'cost_minor', 'margin', 'minimum_selling', 'maximum_selling'] as $forbidden) {
+        foreach (['wholesale', 'base_cost', 'margin', 'minimum_selling', 'maximum_selling'] as $forbidden) {
             expect($body)->not->toContain($forbidden);
         }
 
-        // 150,000 is the product's wholesale price in the fixture.
-        expect($body)->not->toContain('150000');
+        // 1,500.00 Taka is the product's wholesale price in the fixture.
+        expect($body)->not->toContain('1500.00');
     });
 
     it('answers only what changed since a moment', function () {

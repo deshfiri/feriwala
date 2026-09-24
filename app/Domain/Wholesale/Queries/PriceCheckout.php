@@ -129,8 +129,8 @@ class PriceCheckout
 
     /**
      * The discount shared across the lines in proportion to what each costs,
-     * without losing or inventing a poisha — so tax is charged on what each line
-     * actually sells for.
+     * without losing or inventing a smallest unit — so tax is charged on what
+     * each line actually sells for.
      *
      * @param  array<int, Money>  $lineTotals
      * @return array<int, Money>
@@ -141,17 +141,32 @@ class PriceCheckout
             return array_map(fn (Money $total) => Money::zero($total->currency), $lineTotals);
         }
 
-        $weights = array_map(fn (Money $total) => $total->minorUnits, $lineTotals);
+        $weights = array_map(fn (Money $total) => $this->smallestUnitCount($total), $lineTotals);
         $sum = array_sum($weights);
+
+        if ($sum <= 0) {
+            return array_map(fn (Money $total) => Money::zero($total->currency), $lineTotals);
+        }
 
         // Money::allocate multiplies the amount by each weight. Past what an
         // integer holds, weigh in millionths of the subtotal instead.
-        if ($discount->minorUnits > intdiv(PHP_INT_MAX, max(1, $sum))) {
+        if ($this->smallestUnitCount($discount) > intdiv(PHP_INT_MAX, max(1, $sum))) {
             $step = intdiv($sum, self::SHARE_PARTS) + 1;
             $weights = array_map(fn (int $weight) => intdiv($weight, $step), $weights);
         }
 
         return array_values($discount->allocate($weights));
+    }
+
+    /**
+     * The exact count of this amount's own smallest currency units, for use
+     * as an integer allocation ratio into {@see Money::allocate()} — never a
+     * bare ×100, since a currency's scale is its own to state through
+     * {@see Currency::smallestUnit()} (D26).
+     */
+    protected function smallestUnitCount(Money $amount): int
+    {
+        return (int) bcdiv($amount->toDecimal(), $amount->currency->smallestUnit(), 0);
     }
 
     /**

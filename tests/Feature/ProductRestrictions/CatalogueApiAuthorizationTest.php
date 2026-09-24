@@ -180,8 +180,8 @@ function catalogueApiFixtures(): array
         'sku' => 'FW-RC',
         'category_id' => $category->id,
         'brand_id' => $brand->id,
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 210000,
+        'base_cost' => Money::fromDecimal('1800.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2100.00', Currency::BDT),
     ]);
     $attribute = ProductAttribute::create(['name' => 'Size']);
     $value = $attribute->values()->create(['value' => 'Large']);
@@ -347,7 +347,7 @@ describe('no way into the catalogue except the administration', function () {
             'product' => $product->public_id,
             'name' => 'My own product',
             'sku' => 'MINE-0001',
-            'wholesale_price_minor' => 100,
+            'wholesale_price' => '1.00',
         ])->assertSessionHasNoErrors();
 
         $selection = WebsiteProduct::query()->where('website_id', $website->id)->firstOrFail();
@@ -386,7 +386,7 @@ describe('no way into the catalogue except the administration', function () {
             'status' => WebsiteProductStatus::Published,
             'sync_status' => WebsiteSyncStatus::Pending,
             'currency_code' => 'BDT',
-            'price_minor' => 260000,
+            'price' => Money::fromDecimal('2600.00', Currency::BDT),
             'published_at' => now(),
         ]);
 
@@ -396,7 +396,7 @@ describe('no way into the catalogue except the administration', function () {
 
         FeeRule::create([
             'fee_type' => FeeType::WebsiteDelivery->value,
-            'amount_minor' => 6000,
+            'amount' => Money::fromDecimal('60.00', Currency::BDT),
             'currency_code' => 'BDT',
             'effective_from' => now()->subDay(),
         ]);
@@ -408,7 +408,7 @@ describe('no way into the catalogue except the administration', function () {
         $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
 
         $before = catalogueApiFingerprint();
-        $money = fn (int $minor) => Money::of($minor, Currency::BDT);
+        $money = fn (string $amount) => Money::fromDecimal($amount, Currency::BDT);
 
         $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
 
@@ -419,13 +419,13 @@ describe('no way into the catalogue except the administration', function () {
             shippingAddress: $address,
             billingAddress: $address,
             items: [['sku' => $product->sku, 'quantity' => 2]],
-            claimedUnitPrices: [$money(260000)],
+            claimedUnitPrices: [$money('2600.00')],
             claimedTotals: [
-                'subtotal' => $money(520000),
-                'discount' => $money(0),
-                'shipping' => $money(6000),
-                'tax' => $money(0),
-                'grand_total' => $money(526000),
+                'subtotal' => $money('5200.00'),
+                'discount' => $money('0.00'),
+                'shipping' => $money('60.00'),
+                'tax' => $money('0.00'),
+                'grand_total' => $money('5260.00'),
             ],
             paymentMethod: 'online',
         ));

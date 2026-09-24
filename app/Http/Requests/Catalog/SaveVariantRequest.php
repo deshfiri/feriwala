@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Support\Money\DecimalAmount;
+use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
@@ -80,9 +81,9 @@ class SaveVariantRequest extends FormRequest
             'values.*' => ['string', 'distinct', Rule::exists(ProductAttributeValue::class, 'public_id')],
 
             // Blank means the product's own figure applies. Entered in Taka
-            // and converted to minor units in variantAttributes() below.
-            'wholesale_price_minor' => ['nullable', new DecimalAmountRule],
-            'base_cost_minor' => ['nullable', new DecimalAmountRule],
+            // and normalised to an exact decimal in variantAttributes() below.
+            'wholesale_price' => ['nullable', new DecimalAmountRule],
+            'base_cost' => ['nullable', new DecimalAmountRule],
 
             'is_active' => ['boolean'],
 
@@ -100,8 +101,8 @@ class SaveVariantRequest extends FormRequest
     }
 
     /**
-     * The validated data, with the Taka strings converted to minor units
-     * under the same field names ManageVariants already expects.
+     * The validated data, with the Taka strings normalised to the exact
+     * decimals ManageVariants turns into {@see Money}.
      *
      * @return array<string, mixed>
      */
@@ -109,9 +110,9 @@ class SaveVariantRequest extends FormRequest
     {
         $validated = $this->validated();
 
-        foreach (['wholesale_price_minor', 'base_cost_minor'] as $field) {
+        foreach (['wholesale_price', 'base_cost'] as $field) {
             if (array_key_exists($field, $validated)) {
-                $validated[$field] = DecimalAmount::parseOrNull($validated[$field])?->minorUnits;
+                $validated[$field] = DecimalAmount::parseOrNull($validated[$field])?->toDecimal();
             }
         }
 
@@ -126,8 +127,8 @@ class SaveVariantRequest extends FormRequest
         return [
             'sku' => 'SKU',
             'values' => 'combination',
-            'wholesale_price_minor' => 'wholesale price',
-            'base_cost_minor' => 'base cost',
+            'wholesale_price' => 'wholesale price',
+            'base_cost' => 'base cost',
         ];
     }
 }

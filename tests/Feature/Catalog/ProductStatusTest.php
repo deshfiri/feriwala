@@ -11,6 +11,8 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -36,7 +38,7 @@ beforeEach(function () {
         'name' => 'Rice cooker',
         'sku' => 'FW-RC',
         'category_id' => Category::create(['name' => 'Kitchen'])->id,
-        'wholesale_price_minor' => 250000,
+        'wholesale_price' => Money::fromDecimal('2500.00', Currency::BDT),
     ]);
 });
 
@@ -144,7 +146,7 @@ describe('ready to activate', function () {
     });
 
     it('refuses a product without a wholesale price', function () {
-        $this->product->forceFill(['wholesale_price_minor' => 0])->save();
+        $this->product->forceFill(['wholesale_price' => Money::zero(Currency::BDT)])->save();
 
         expect(fn () => app(TransitionProduct::class)->handle($this->manager, $this->product, ProductStatus::Active))
             ->toThrow(CatalogRefused::class, 'no wholesale price');

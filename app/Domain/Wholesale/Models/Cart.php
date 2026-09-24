@@ -2,9 +2,11 @@
 
 namespace App\Domain\Wholesale\Models;
 
+use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Models\User;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -31,7 +33,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $payment_method
  * @property CarbonImmutable|null $confirmed_at
  * @property string|null $confirmed_fingerprint
- * @property int|null $confirmed_total_minor
+ * @property Money|null $confirmed_total
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read User $user
@@ -51,7 +53,7 @@ class Cart extends Model
     {
         return [
             'confirmed_at' => 'immutable_datetime',
-            'confirmed_total_minor' => 'integer',
+            'confirmed_total' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\ProductSeo;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
@@ -39,8 +40,8 @@ beforeEach(function () {
         'short_description' => 'A non-stick rice cooker that keeps rice warm for up to twelve hours without drying it out, with a steamer tray for vegetables and fish, a measuring cup, and a cool-touch handle for carrying it to the table.',
         'category_id' => $this->cookware->id,
         'brand_id' => Brand::create(['name' => 'Walton'])->id,
-        'base_cost_minor' => 170000,
-        'wholesale_price_minor' => 210000,
+        'base_cost' => Money::fromDecimal('1700.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2100.00', Currency::BDT),
     ]);
 });
 
@@ -50,8 +51,8 @@ function catalogSeoPayload(Product $product, array $overrides = []): array
         'name' => $product->name,
         'sku' => $product->sku,
         'category_id' => Category::query()->where('id', $product->category_id)->value('public_id'),
-        'base_cost_minor' => 170000,
-        'wholesale_price_minor' => 210000,
+        'base_cost' => '1700.00',
+        'wholesale_price' => '2100.00',
         ...$overrides,
     ];
 }
@@ -172,7 +173,7 @@ describe('the product schema', function () {
         $this->product->forceFill(['mpn' => 'WRC-28'])->save();
         catalogSeoImage($this->product, 1, 'Front');
 
-        $schema = $this->seo->schema($this->product->refresh(), '/products/walton-rice-cooker', Money::of(249000));
+        $schema = $this->seo->schema($this->product->refresh(), '/products/walton-rice-cooker', Money::fromDecimal('2490.00'));
 
         expect($schema['@type'])->toBe('Product')
             ->and($schema['sku'])->toBe('FW-RC-28')
@@ -186,7 +187,7 @@ describe('the product schema', function () {
     });
 
     it('never carries the wholesale price or the base cost', function () {
-        $json = json_encode($this->seo->schema($this->product, '/p', Money::of(249000)));
+        $json = json_encode($this->seo->schema($this->product, '/p', Money::fromDecimal('2490.00')));
 
         expect($json)->not->toContain('2100')
             ->and($json)->not->toContain('1700')
@@ -197,8 +198,8 @@ describe('the product schema', function () {
     it('has no offer without a selling price, and no availability until stock is known', function () {
         expect($this->seo->schema($this->product, '/p'))->not->toHaveKey('offers');
 
-        $unknown = $this->seo->schema($this->product, '/p', Money::of(249000));
-        $known = $this->seo->schema($this->product, '/p', Money::of(249000), inStock: false);
+        $unknown = $this->seo->schema($this->product, '/p', Money::fromDecimal('2490.00'));
+        $known = $this->seo->schema($this->product, '/p', Money::fromDecimal('2490.00'), inStock: false);
 
         expect($unknown['offers'])->not->toHaveKey('availability')
             ->and($known['offers']['availability'])->toBe('https://schema.org/OutOfStock');
@@ -223,7 +224,7 @@ describe('the product schema', function () {
     });
 
     it('previews both on the editor, built by the server', function () {
-        $this->product->forceFill(['suggested_selling_price_minor' => 249000])->save();
+        $this->product->forceFill(['suggested_selling_price' => Money::fromDecimal('2490.00', Currency::BDT)])->save();
 
         $this->actingAs($this->manager)
             ->get(route('admin.catalog.products.edit', $this->product->public_id))

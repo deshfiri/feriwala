@@ -15,6 +15,8 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -49,8 +51,8 @@ beforeEach(function () {
     // Dropshipping only.
     $this->hose = catalogBrowseProduct('FW-HOSE', 'Garden hose', $this->garden, [
         'dropshipping_status' => ProductStatus::DropshippingEnabled,
-        'suggested_selling_price_minor' => 99000,
-        'minimum_selling_price_minor' => 90000,
+        'suggested_selling_price' => Money::fromDecimal('990.00', Currency::BDT),
+        'minimum_selling_price' => Money::fromDecimal('900.00', Currency::BDT),
     ]);
 
     // Wholesale, but offered to a different package.
@@ -66,7 +68,7 @@ function catalogBrowsePackage(array $features = []): Package
     $package = Package::create([
         'slug' => 'browse-'.Str::lower(Str::random(8)),
         'name' => 'Browse package',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -89,7 +91,7 @@ function catalogBrowseAccount(Package $package, AccountStatus $status = AccountS
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 
@@ -104,8 +106,8 @@ function catalogBrowseProduct(string $sku, string $name, Category $category, arr
         'name' => $name,
         'sku' => $sku,
         'category_id' => $category->id,
-        'base_cost_minor' => 150000,
-        'wholesale_price_minor' => 200000,
+        'base_cost' => Money::fromDecimal('1500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'status' => ProductStatus::Active,
         'package_scope' => PackageScope::AllPackages,
         ...$attributes,
@@ -123,7 +125,7 @@ describe('two separate catalogues', function () {
                 ->where('facility_allowed', true)
                 ->has('products.data', 1)
                 ->where('products.data.0.sku', 'FW-POT')
-                ->where('products.data.0.wholesale_price.minor_units', 200000)
+                ->where('products.data.0.wholesale_price.amount', '2000.00')
                 ->where('products.data.0.min_order_quantity', 6)
                 ->missing('products.data.0.base_cost')
                 ->missing('products.data.0.suggested_selling_price'),
@@ -138,7 +140,7 @@ describe('two separate catalogues', function () {
                 ->where('channel', 'dropshipping')
                 ->has('products.data', 1)
                 ->where('products.data.0.sku', 'FW-HOSE')
-                ->where('products.data.0.suggested_selling_price.minor_units', 99000)
+                ->where('products.data.0.suggested_selling_price.amount', '990.00')
                 ->where('products.data.0.maximum_selling_price', null)
                 ->missing('products.data.0.wholesale_price')
                 ->missing('products.data.0.base_cost'),
@@ -146,7 +148,7 @@ describe('two separate catalogues', function () {
     });
 
     it('opens a product only on the channel it is offered on, and is a 404 everywhere else', function () {
-        ProductPriceTier::create(['product_id' => $this->pot->id, 'min_quantity' => 24, 'unit_price_minor' => 180000]);
+        ProductPriceTier::create(['product_id' => $this->pot->id, 'min_quantity' => 24, 'unit_price' => Money::fromDecimal('1800.00', Currency::BDT)]);
 
         $owner = $this->account->owner;
 
@@ -157,7 +159,7 @@ describe('two separate catalogues', function () {
                 ->component('catalog/show')
                 ->where('product.sku', 'FW-POT')
                 ->where('product.quantity_pricing.0.min_quantity', 24)
-                ->where('product.quantity_pricing.0.unit_price.minor_units', 180000)
+                ->where('product.quantity_pricing.0.unit_price.amount', '1800.00')
                 ->missing('product.base_cost')
                 ->missing('product.suggested_selling_price'),
             );

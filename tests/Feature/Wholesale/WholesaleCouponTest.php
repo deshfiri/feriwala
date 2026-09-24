@@ -51,8 +51,8 @@ beforeEach(function () {
         'name' => 'Electric kettle',
         'sku' => 'FW-KT',
         'category_id' => $category->id,
-        'base_cost_minor' => 50000,
-        'wholesale_price_minor' => 200000,
+        'base_cost' => Money::fromDecimal('500.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2000.00', Currency::BDT),
         'min_order_quantity' => 1,
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
@@ -72,7 +72,7 @@ function wholesaleCouponPackage(string $slug): Package
     return Package::create([
         'slug' => $slug.'-'.Str::lower(Str::random(6)),
         'name' => Str::title($slug),
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -89,7 +89,7 @@ function wholesaleCouponAccount(Package $package): BusinessAccount
         'status' => UserPackageStatus::Active,
         'started_at' => now()->subDay(),
         'expires_at' => now()->addYear(),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 
@@ -144,12 +144,12 @@ describe('applying a code', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('wholesale/checkout')
                 ->where('checkout.lines.0.quantity', 10)
-                ->where('checkout.lines.0.unit_price.minor_units', 200000)
-                ->where('checkout.subtotal.minor_units', 2000000)
+                ->where('checkout.lines.0.unit_price.amount', '2000.00')
+                ->where('checkout.subtotal.amount', '20000.00')
                 ->where('checkout.coupon.accepted', true)
                 ->where('checkout.coupon.code', $coupon->code)
-                ->where('checkout.discount.minor_units', 200000)
-                ->where('checkout.total.minor_units', 1800000)
+                ->where('checkout.discount.amount', '2000.00')
+                ->where('checkout.total.amount', '18000.00')
                 ->missing('checkout.lines.0.base_cost'));
     });
 
@@ -168,9 +168,9 @@ describe('applying a code', function () {
 
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('checkout.subtotal.minor_units', 2000000)
-                ->where('checkout.discount.minor_units', 50000)
-                ->where('checkout.total.minor_units', 1950000));
+                ->where('checkout.subtotal.amount', '20000.00')
+                ->where('checkout.discount.amount', '500.00')
+                ->where('checkout.total.amount', '19500.00'));
     });
 
     it('refuses a code that does not apply, says why, and keeps nothing', function (Closure $makeCoupon, string $reason) {
@@ -187,12 +187,12 @@ describe('applying a code', function () {
         'an activation code' => [fn () => wholesaleCouponCode(['applies_to' => CouponScope::Fees])->code, 'billing.coupons.refused.not_for_wholesale'],
         'another package' => [fn () => wholesaleCouponCode(['package_id' => test()->otherPackage->id])->code, 'billing.coupons.refused.other_package'],
         'another currency' => [fn () => wholesaleCouponCode(['currency_code' => 'USD'])->code, 'billing.coupons.refused.currency'],
-        'below the minimum spend' => [fn () => wholesaleCouponCode(['minimum_spend_minor' => 2000001])->code, 'billing.coupons.refused.minimum_spend'],
+        'below the minimum spend' => [fn () => wholesaleCouponCode(['minimum_spend' => Money::fromDecimal('20000.01', Currency::BDT)])->code, 'billing.coupons.refused.minimum_spend'],
         'used up' => [fn () => wholesaleCouponCode(['usage_limit' => 1, 'redeemed_count' => 1])->code, 'billing.coupons.refused.exhausted'],
     ]);
 
     it('accepts a code restricted to the package the account is on, and a minimum spend met exactly', function () {
-        $coupon = wholesaleCouponCode(['package_id' => $this->package->id, 'minimum_spend_minor' => 2000000]);
+        $coupon = wholesaleCouponCode(['package_id' => $this->package->id, 'minimum_spend' => Money::fromDecimal('20000.00', Currency::BDT)]);
 
         wholesaleCouponApply(['code' => $coupon->code])->assertSessionHasNoErrors();
 
@@ -238,8 +238,8 @@ describe('applying a code', function () {
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('checkout.coupon', null)
-                ->where('checkout.discount.minor_units', 0)
-                ->where('checkout.total.minor_units', 2000000));
+                ->where('checkout.discount.amount', '0.00')
+                ->where('checkout.total.amount', '20000.00'));
     });
 });
 
@@ -256,8 +256,8 @@ describe('a code checked again on every render', function () {
                 ->where('checkout.coupon.entered', $coupon->code)
                 ->where('checkout.coupon.accepted', false)
                 ->where('checkout.coupon.reason', __('billing.coupons.refused.expired'))
-                ->where('checkout.discount.minor_units', 0)
-                ->where('checkout.total.minor_units', 2000000));
+                ->where('checkout.discount.amount', '0.00')
+                ->where('checkout.total.amount', '20000.00'));
     });
 
     it('works a percentage out again when the quantity changes', function () {
@@ -269,9 +269,9 @@ describe('a code checked again on every render', function () {
 
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('checkout.subtotal.minor_units', 1000000)
-                ->where('checkout.discount.minor_units', 100000)
-                ->where('checkout.total.minor_units', 900000));
+                ->where('checkout.subtotal.amount', '10000.00')
+                ->where('checkout.discount.amount', '1000.00')
+                ->where('checkout.total.amount', '9000.00'));
     });
 
     it('never takes more off than the subtotal', function () {
@@ -280,8 +280,8 @@ describe('a code checked again on every render', function () {
 
         $this->get(route('wholesale.checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('checkout.discount.minor_units', 2000000)
-                ->where('checkout.total.minor_units', 0));
+                ->where('checkout.discount.amount', '20000.00')
+                ->where('checkout.total.amount', '0.00'));
     });
 });
 
@@ -341,8 +341,8 @@ describe('the one coupon engine', function () {
             $coupon->code,
             $this->karim,
             $this->package,
-            Money::of(100000, Currency::BDT),
-            Money::of(500000, Currency::BDT),
+            Money::fromDecimal('1000.00', Currency::BDT),
+            Money::fromDecimal('5000.00', Currency::BDT),
         );
 
         expect($outcome->isAccepted)->toBeFalse()
@@ -354,7 +354,7 @@ describe('the one coupon engine', function () {
 
         UserPackage::query()->where('business_account_id', $this->karim->id)->update(['expires_at' => now()->subMinute()]);
 
-        $outcome = app(CouponValidator::class)->validateForWholesale($coupon->code, $this->karim->refresh(), Money::of(2000000, Currency::BDT));
+        $outcome = app(CouponValidator::class)->validateForWholesale($coupon->code, $this->karim->refresh(), Money::fromDecimal('20000.00', Currency::BDT));
 
         expect($outcome->reason)->toBe('billing.coupons.refused.other_package');
     });

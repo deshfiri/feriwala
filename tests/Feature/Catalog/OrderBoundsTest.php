@@ -7,6 +7,7 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductPriceTier;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
@@ -30,8 +31,8 @@ beforeEach(function () {
         'name' => 'Rice cooker',
         'sku' => 'FW-RC',
         'category_id' => Category::create(['name' => 'Kitchen'])->id,
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 250000,
+        'base_cost' => Money::fromDecimal('1800.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2500.00', Currency::BDT),
     ]);
 });
 
@@ -41,8 +42,8 @@ function catalogBoundsPayload(Product $product, array $overrides = []): array
         'name' => $product->name,
         'sku' => $product->sku,
         'category_id' => Category::query()->value('public_id'),
-        'base_cost_minor' => '1800.00',
-        'wholesale_price_minor' => '2500.00',
+        'base_cost' => '1800.00',
+        'wholesale_price' => '2500.00',
         ...$overrides,
     ];
 }
@@ -53,9 +54,9 @@ describe('saving the bounds', function () {
             ->patch(route('admin.catalog.products.update', $this->product->public_id), catalogBoundsPayload($this->product, [
                 'min_order_quantity' => 6,
                 'max_order_quantity' => 120,
-                'minimum_selling_price_minor' => '2800.00',
-                'suggested_selling_price_minor' => '2990.00',
-                'maximum_selling_price_minor' => '3500.00',
+                'minimum_selling_price' => '2800.00',
+                'suggested_selling_price' => '2990.00',
+                'maximum_selling_price' => '3500.00',
             ]))
             ->assertSessionHasNoErrors();
 
@@ -63,8 +64,8 @@ describe('saving the bounds', function () {
 
         expect($this->product->min_order_quantity)->toBe(6)
             ->and($this->product->max_order_quantity)->toBe(120)
-            ->and($this->product->suggested_selling_price_minor)->toBeInstanceOf(Money::class)
-            ->and($this->product->suggested_selling_price_minor?->minorUnits)->toBe(299000);
+            ->and($this->product->suggested_selling_price)->toBeInstanceOf(Money::class)
+            ->and($this->product->suggested_selling_price?->toDecimal())->toBe('2990.00');
     });
 
     it('treats blank as no bound, never as zero', function () {
@@ -72,7 +73,7 @@ describe('saving the bounds', function () {
             ->patch(route('admin.catalog.products.update', $this->product->public_id), catalogBoundsPayload($this->product, [
                 'min_order_quantity' => '',
                 'max_order_quantity' => '',
-                'minimum_selling_price_minor' => '',
+                'minimum_selling_price' => '',
             ]))
             ->assertSessionHasNoErrors();
 
@@ -80,17 +81,17 @@ describe('saving the bounds', function () {
 
         expect($this->product->min_order_quantity)->toBe(1)
             ->and($this->product->max_order_quantity)->toBeNull()
-            ->and($this->product->minimum_selling_price_minor)->toBeNull();
+            ->and($this->product->minimum_selling_price)->toBeNull();
     });
 
     it('is not something a business account can change (§12)', function () {
         $this->actingAs(testBusinessAccount(AccountStatus::Active)->owner)
             ->patch(route('admin.catalog.products.update', $this->product->public_id), catalogBoundsPayload($this->product, [
-                'minimum_selling_price_minor' => '0.01',
+                'minimum_selling_price' => '0.01',
             ]))
             ->assertForbidden();
 
-        expect($this->product->refresh()->minimum_selling_price_minor)->toBeNull();
+        expect($this->product->refresh()->minimum_selling_price)->toBeNull();
     });
 });
 
@@ -109,19 +110,19 @@ describe('the bounds keep their order', function () {
 
         $this->actingAs($this->manager)
             ->patch($url, catalogBoundsPayload($this->product, [
-                'minimum_selling_price_minor' => '4000.00',
-                'maximum_selling_price_minor' => '3000.00',
+                'minimum_selling_price' => '4000.00',
+                'maximum_selling_price' => '3000.00',
             ]))
-            ->assertSessionHasErrors('minimum_selling_price_minor');
+            ->assertSessionHasErrors('minimum_selling_price');
 
         $this->actingAs($this->manager)
             ->patch($url, catalogBoundsPayload($this->product, [
-                'minimum_selling_price_minor' => '2800.00',
-                'suggested_selling_price_minor' => '2700.00',
+                'minimum_selling_price' => '2800.00',
+                'suggested_selling_price' => '2700.00',
             ]))
-            ->assertSessionHasErrors('suggested_selling_price_minor');
+            ->assertSessionHasErrors('suggested_selling_price');
 
-        expect($this->product->refresh()->minimum_selling_price_minor)->toBeNull();
+        expect($this->product->refresh()->minimum_selling_price)->toBeNull();
     });
 
     it('holds the order-quantity range in the database', function () {
@@ -131,8 +132,8 @@ describe('the bounds keep their order', function () {
 
     it('holds the selling-price range in the database', function () {
         expect(fn () => $this->product->forceFill([
-            'minimum_selling_price_minor' => 300000,
-            'suggested_selling_price_minor' => 200000,
+            'minimum_selling_price' => Money::fromDecimal('3000.00', Currency::BDT),
+            'suggested_selling_price' => Money::fromDecimal('2000.00', Currency::BDT),
         ])->save())->toThrow(QueryException::class, 'products_selling_price_range');
     });
 
@@ -144,7 +145,7 @@ describe('the bounds keep their order', function () {
 
 describe('tiers nobody could reach', function () {
     it('refuses a maximum order quantity below an existing tier', function () {
-        ProductPriceTier::create(['product_id' => $this->product->id, 'min_quantity' => 50, 'unit_price_minor' => 220000]);
+        ProductPriceTier::create(['product_id' => $this->product->id, 'min_quantity' => 50, 'unit_price' => Money::fromDecimal('2200.00', Currency::BDT)]);
 
         $this->actingAs($this->manager)
             ->patch(route('admin.catalog.products.update', $this->product->public_id), catalogBoundsPayload($this->product, [
@@ -159,7 +160,7 @@ describe('tiers nobody could reach', function () {
         $this->product->forceFill(['max_order_quantity' => 40])->save();
 
         expect(fn () => app(SetPriceTiers::class)->handle($this->manager, $this->product, null, [
-            ['min_quantity' => 50, 'unit_price_minor' => 220000],
+            ['min_quantity' => 50, 'unit_price' => '2200.00'],
         ]))->toThrow(CatalogRefused::class, 'can never apply');
 
         expect(ProductPriceTier::query()->count())->toBe(0);
@@ -183,7 +184,7 @@ describe('using the bounds', function () {
     it('shows the bounds on the editor with the server’s rendering of each price', function () {
         $this->product->forceFill([
             'min_order_quantity' => 6,
-            'suggested_selling_price_minor' => 299000,
+            'suggested_selling_price' => Money::fromDecimal('2990.00', Currency::BDT),
         ])->save();
 
         $this->actingAs($this->manager)
@@ -192,7 +193,7 @@ describe('using the bounds', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->where('product.min_order_quantity', 6)
                 ->where('product.max_order_quantity', null)
-                ->where('product.suggested_selling_price.decimal', '2990.00')
+                ->where('product.suggested_selling_price.amount', '2990.00')
                 ->where('product.minimum_selling_price', null),
             );
     });

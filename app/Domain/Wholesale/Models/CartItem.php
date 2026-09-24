@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * One stockable unit in a cart, and how many are wanted (§14, P4-3).
  *
  * The unit is the product itself when it has no variations, or one variation
- * when it does. `unit_price_seen_minor` is what the person was last shown for
+ * when it does. `unit_price_seen` is what the person was last shown for
  * this line — kept to point out a price that has changed since, never charged.
  *
  * @property int $id
@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $product_id
  * @property int|null $product_variant_id
  * @property int $quantity
- * @property Money|null $unit_price_seen_minor
+ * @property Money|null $unit_price_seen
  * @property string $currency_code
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
@@ -45,7 +45,7 @@ class CartItem extends Model
     {
         return [
             'quantity' => 'integer',
-            'unit_price_seen_minor' => MoneyCast::class,
+            'unit_price_seen' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
