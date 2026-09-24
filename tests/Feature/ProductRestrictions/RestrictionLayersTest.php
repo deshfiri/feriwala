@@ -10,6 +10,8 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Http\Requests\Catalog\SaveProductRequest;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -43,8 +45,8 @@ beforeEach(function () {
         'name' => 'Rice cooker',
         'sku' => 'FW-RC',
         'category_id' => $this->category->id,
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 210000,
+        'base_cost' => Money::fromDecimal('1800.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2100.00', Currency::BDT),
     ]);
 
     /*
@@ -68,8 +70,8 @@ function restrictionLayersProductPayload(array $overrides = []): array
         'name' => 'Imported kettle',
         'sku' => 'EXT-KT',
         'category_id' => Category::query()->value('public_id'),
-        'base_cost_minor' => 100000,
-        'wholesale_price_minor' => 120000,
+        'base_cost' => '1000.00',
+        'wholesale_price' => '1200.00',
         ...$overrides,
     ];
 }
@@ -112,7 +114,7 @@ describe('every act §12 forbids a regular user is refused, in the browser and t
         'create a product variation' => ['POST', fn ($test) => route('admin.catalog.products.variants.store', $test->product->public_id), fn () => ['sku' => 'FW-RC-XL', 'values' => []]],
         'modify the central SKU' => ['PATCH', fn ($test) => route('admin.catalog.products.update', $test->product->public_id), fn () => restrictionLayersProductPayload(['sku' => 'MINE-1'])],
         'modify central stock' => ['PATCH', fn ($test) => route('admin.catalog.products.update', $test->product->public_id), fn () => restrictionLayersProductPayload(['sku' => 'FW-RC', 'stock' => 999])],
-        'modify the central wholesale price' => ['PATCH', fn ($test) => route('admin.catalog.products.update', $test->product->public_id), fn () => restrictionLayersProductPayload(['sku' => 'FW-RC', 'wholesale_price_minor' => 1])],
+        'modify the central wholesale price' => ['PATCH', fn ($test) => route('admin.catalog.products.update', $test->product->public_id), fn () => restrictionLayersProductPayload(['sku' => 'FW-RC', 'wholesale_price' => '0.01'])],
         'modify locked product information' => ['PATCH', fn ($test) => route('admin.catalog.products.status.update', $test->product->public_id), fn () => ['status' => 'active']],
         'import external products' => ['POST', fn ($test) => route('admin.catalog.products.bulk'), fn ($test) => ['products' => [$test->product->public_id], 'action' => 'feature', 'enable' => true]],
     ]);
@@ -153,8 +155,8 @@ describe('each layer refuses creating a product on its own', function () {
             'name' => 'Imported kettle',
             'sku' => 'EXT-KT',
             'category_id' => $this->category->id,
-            'base_cost_minor' => 100000,
-            'wholesale_price_minor' => 120000,
+            'base_cost' => '1000.00',
+            'wholesale_price' => '1200.00',
         ]))->toThrow(AuthorizationException::class);
 
         expect(Product::query()->where('sku', 'EXT-KT')->exists())->toBeFalse();

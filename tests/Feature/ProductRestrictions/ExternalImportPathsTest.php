@@ -39,7 +39,7 @@ beforeEach(function () {
  */
 function importPathsSpreadsheet(): UploadedFile
 {
-    return UploadedFile::fake()->createWithContent('products.csv', "sku,name,wholesale_price_minor\nEXT-1,Imported kettle,1000\n");
+    return UploadedFile::fake()->createWithContent('products.csv', "sku,name,wholesale_price\nEXT-1,Imported kettle,10.00\n");
 }
 
 /**
@@ -53,8 +53,8 @@ function importPathsProductPayload(array $overrides = []): array
         'name' => 'Kettle',
         'sku' => 'FW-KT',
         'category_id' => Category::query()->value('public_id'),
-        'base_cost_minor' => 100000,
-        'wholesale_price_minor' => 120000,
+        'base_cost' => '1000.00',
+        'wholesale_price' => '1200.00',
         ...$overrides,
     ];
 }

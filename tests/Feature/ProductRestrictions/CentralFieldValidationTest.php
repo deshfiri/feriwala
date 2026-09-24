@@ -7,6 +7,8 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -31,8 +33,8 @@ beforeEach(function () {
         'name' => 'Rice cooker',
         'sku' => 'FW-RC',
         'category_id' => $this->category->id,
-        'base_cost_minor' => 180000,
-        'wholesale_price_minor' => 210000,
+        'base_cost' => Money::fromDecimal('1800.00', Currency::BDT),
+        'wholesale_price' => Money::fromDecimal('2100.00', Currency::BDT),
     ]);
 });
 
@@ -47,8 +49,8 @@ function centralFieldsProductPayload(array $overrides = []): array
         'name' => 'Rice cooker',
         'sku' => 'FW-RC',
         'category_id' => Category::query()->value('public_id'),
-        'base_cost_minor' => '1800.00',
-        'wholesale_price_minor' => '2100.00',
+        'base_cost' => '1800.00',
+        'wholesale_price' => '2100.00',
         ...$overrides,
     ];
 }
@@ -65,8 +67,8 @@ function centralFieldsSnapshot(Product $product): array
     return [
         'sku' => $product->sku,
         'status' => $product->status,
-        'wholesale_price_minor' => $product->wholesale_price_minor->minorUnits,
-        'base_cost_minor' => $product->base_cost_minor->minorUnits,
+        'wholesale_price' => $product->wholesale_price->toDecimal(),
+        'base_cost' => $product->base_cost->toDecimal(),
         'currency_code' => $product->currency_code,
         'public_id' => $product->public_id,
         'is_featured' => $product->is_featured,
@@ -101,7 +103,7 @@ describe('the product form', function () {
         'currency' => ['currency_code', 'USD'],
         'public identifier' => ['public_id', '01JZZZZZZZZZZZZZZZZZZZZZZZ'],
         'row identifier' => ['id', 999],
-        'quantity pricing' => ['tiers', [['min_quantity' => 10, 'unit_price_minor' => 1]]],
+        'quantity pricing' => ['tiers', [['min_quantity' => 10, 'unit_price' => '0.01']]],
         'stock' => ['stock', 50],
         'available stock' => ['available_stock', 50],
         'stock quantity' => ['stock_quantity', 50],
@@ -111,12 +113,12 @@ describe('the product form', function () {
         $this->actingAs($this->manager)
             ->patch(
                 route('admin.catalog.products.update', $this->product->public_id),
-                centralFieldsProductPayload(['sku' => 'FW-RC-2', 'wholesale_price_minor' => '1990.00']),
+                centralFieldsProductPayload(['sku' => 'FW-RC-2', 'wholesale_price' => '1990.00']),
             )
             ->assertSessionHasNoErrors();
 
         expect($this->product->refresh()->sku)->toBe('FW-RC-2')
-            ->and($this->product->wholesale_price_minor->minorUnits)->toBe(199000);
+            ->and($this->product->wholesale_price->toDecimal())->toBe('1990.00');
     });
 
     it('refuses the same fields when creating, so a new product cannot start live', function () {
@@ -186,9 +188,9 @@ describe('every other product endpoint owns only its own field', function () {
         $this->actingAs($this->manager)
             ->patch(route('admin.catalog.products.status.update', $this->product->public_id), [
                 'status' => ProductStatus::PendingReview->value,
-                'wholesale_price_minor' => 1,
+                'wholesale_price' => '0.01',
             ])
-            ->assertSessionHasErrors('wholesale_price_minor');
+            ->assertSessionHasErrors('wholesale_price');
 
         expect(centralFieldsSnapshot($this->product))->toBe($before);
     });
@@ -214,10 +216,10 @@ describe('every other product endpoint owns only its own field', function () {
                 'products' => [$this->product->public_id],
                 'action' => 'feature',
                 'enable' => true,
-                'wholesale_price_minor' => 1,
+                'wholesale_price' => '0.01',
                 'sku' => 'HIJACKED',
             ])
-            ->assertSessionHasErrors(['wholesale_price_minor', 'sku']);
+            ->assertSessionHasErrors(['wholesale_price', 'sku']);
 
         expect(centralFieldsSnapshot($this->product))->toBe($before);
     });
@@ -239,8 +241,8 @@ describe('every other product endpoint owns only its own field', function () {
             ->assertSessionHasErrors('status');
 
         $this->actingAs($this->manager)
-            ->patch(route('admin.catalog.products.featured.update', $id), ['featured' => true, 'wholesale_price_minor' => 1])
-            ->assertSessionHasErrors('wholesale_price_minor');
+            ->patch(route('admin.catalog.products.featured.update', $id), ['featured' => true, 'wholesale_price' => '0.01'])
+            ->assertSessionHasErrors('wholesale_price');
 
         expect(centralFieldsSnapshot($this->product))->toBe($before);
     });
@@ -249,12 +251,12 @@ describe('every other product endpoint owns only its own field', function () {
         $this->actingAs($this->manager)
             ->put(route('admin.catalog.products.price-tiers.update', $this->product->public_id), [
                 'variant_id' => null,
-                'tiers' => [['min_quantity' => 10, 'unit_price_minor' => 200000]],
-                'wholesale_price_minor' => 1,
+                'tiers' => [['min_quantity' => 10, 'unit_price' => '2000.00']],
+                'wholesale_price' => '0.01',
             ])
-            ->assertSessionHasErrors('wholesale_price_minor');
+            ->assertSessionHasErrors('wholesale_price');
 
-        expect($this->product->refresh()->wholesale_price_minor->minorUnits)->toBe(210000)
+        expect($this->product->refresh()->wholesale_price->toDecimal())->toBe('2100.00')
             ->and($this->product->priceTiers()->count())->toBe(0);
     });
 
@@ -289,7 +291,7 @@ describe('authorisation still answers first', function () {
         $this->actingAs($owner)
             ->patchJson(route('admin.catalog.products.status.update', $this->product->public_id), [
                 'status' => 'active',
-                'wholesale_price_minor' => 1,
+                'wholesale_price' => '0.01',
             ])
             ->assertForbidden()
             ->assertJsonMissingPath('errors');

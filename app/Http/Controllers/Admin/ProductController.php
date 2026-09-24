@@ -55,7 +55,7 @@ class ProductController extends Controller
      * Columns the list may sort by. Anything else is ignored rather than passed
      * to `orderBy`, because a sort parameter is somebody's input.
      */
-    public const SORTABLE = ['name', 'sku', 'wholesale_price_minor', 'updated_at'];
+    public const SORTABLE = ['name', 'sku', 'wholesale_price', 'updated_at'];
 
     public function __construct(
         protected ManageProducts $products,
@@ -284,7 +284,7 @@ class ProductController extends Controller
             'seo_preview' => [
                 'metadata' => $this->seo->metadata($record),
                 'schema' => json_encode(
-                    $this->seo->schema($record, '/products/'.$record->slug, $record->suggested_selling_price_minor),
+                    $this->seo->schema($record, '/products/'.$record->slug, $record->suggested_selling_price),
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
                 ),
             ],
@@ -427,7 +427,7 @@ class ProductController extends Controller
             'sku' => $product->sku,
             'category' => $product->category->name,
             'brand' => $product->brand?->name,
-            'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
+            'wholesale_price' => $product->wholesale_price->jsonSerialize(),
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
             'is_featured' => $product->is_featured,
@@ -462,8 +462,8 @@ class ProductController extends Controller
 
             // The server's own rendering of the amount; the form edits its
             // .decimal string and the server converts back on submit (§36.1).
-            'base_cost' => $product->base_cost_minor->jsonSerialize(),
-            'wholesale_price' => $product->wholesale_price_minor->jsonSerialize(),
+            'base_cost' => $product->base_cost->jsonSerialize(),
+            'wholesale_price' => $product->wholesale_price->jsonSerialize(),
 
             'meta_title' => $product->meta_title,
             'meta_description' => $product->meta_description,
@@ -474,9 +474,9 @@ class ProductController extends Controller
 
             'min_order_quantity' => $product->min_order_quantity,
             'max_order_quantity' => $product->max_order_quantity,
-            'suggested_selling_price' => $product->suggested_selling_price_minor?->jsonSerialize(),
-            'minimum_selling_price' => $product->minimum_selling_price_minor?->jsonSerialize(),
-            'maximum_selling_price' => $product->maximum_selling_price_minor?->jsonSerialize(),
+            'suggested_selling_price' => $product->suggested_selling_price?->jsonSerialize(),
+            'minimum_selling_price' => $product->minimum_selling_price?->jsonSerialize(),
+            'maximum_selling_price' => $product->maximum_selling_price?->jsonSerialize(),
 
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
@@ -573,8 +573,8 @@ class ProductController extends Controller
                 'tiers' => $own
                     ->map(fn (ProductPriceTier $tier) => [
                         'min_quantity' => $tier->min_quantity,
-                        'unit_price' => $tier->unit_price_minor->jsonSerialize(),
-                        'applies' => $tier->unit_price_minor->lessThanOrEqualTo($base),
+                        'unit_price' => $tier->unit_price->jsonSerialize(),
+                        'applies' => $tier->unit_price->lessThanOrEqualTo($base),
                     ])
                     ->all(),
             ];
@@ -671,10 +671,10 @@ class ProductController extends Controller
             // re-posting it unchanged (e.g. on activation toggle) — never the
             // effective price, which falls back to the product's own figure
             // and would turn "no override" into an explicit one if resent.
-            'wholesale_price_override' => $variant->wholesale_price_minor?->jsonSerialize(),
-            'base_cost_override' => $variant->base_cost_minor?->jsonSerialize(),
+            'wholesale_price_override' => $variant->wholesale_price?->jsonSerialize(),
+            'base_cost_override' => $variant->base_cost?->jsonSerialize(),
             'wholesale_price' => $variant->effectiveWholesalePrice()->jsonSerialize(),
-            'overrides_price' => $variant->wholesale_price_minor !== null,
+            'overrides_price' => $variant->wholesale_price !== null,
             'is_active' => $variant->is_active,
         ];
     }

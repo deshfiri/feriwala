@@ -44,17 +44,17 @@ class ProductPriceTierController extends Controller
             'variant_id' => ['nullable', 'string'],
 
             // Empty clears the table: the base price then applies at every quantity.
-            // Entered in Taka; converted to minor units below, at this HTTP
-            // boundary — SetPriceTiers still receives an integer per tier.
+            // Entered in Taka; normalised to an exact decimal below, at this
+            // HTTP boundary — SetPriceTiers receives that decimal per tier.
             'tiers' => ['nullable', 'array', 'max:'.SetPriceTiers::MAX_TIERS],
             'tiers.*.min_quantity' => ['required', 'integer', 'min:2', 'max:1000000', 'distinct'],
-            'tiers.*.unit_price_minor' => ['required', new DecimalAmountRule],
+            'tiers.*.unit_price' => ['required', new DecimalAmountRule],
 
             // The bands are this endpoint's; the base figures belong to the product form (§12).
             ...CentralProductFields::rules(['tiers'], $request->all()),
         ], CentralProductFields::messages($request->all()), [
             'tiers.*.min_quantity' => 'starting quantity',
-            'tiers.*.unit_price_minor' => 'unit price',
+            'tiers.*.unit_price' => 'unit price',
         ]);
 
         $variant = null;
@@ -67,10 +67,10 @@ class ProductPriceTierController extends Controller
                 ->firstOrFail();
         }
 
-        /** @var array<int, array{min_quantity: int|string, unit_price_minor: int|string}> $tiers */
+        /** @var array<int, array{min_quantity: int|string, unit_price: int|string}> $tiers */
         $tiers = array_map(fn (array $tier) => [
             'min_quantity' => $tier['min_quantity'],
-            'unit_price_minor' => DecimalAmount::parse($tier['unit_price_minor'])->minorUnits,
+            'unit_price' => DecimalAmount::parse($tier['unit_price'])->toDecimal(),
         ], array_values($validated['tiers'] ?? []));
 
         try {
