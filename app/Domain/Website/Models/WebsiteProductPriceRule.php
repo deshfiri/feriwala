@@ -35,9 +35,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $package_id
  * @property bool $allows_user_pricing
  * @property string $currency_code
- * @property Money|null $min_price_minor
- * @property Money|null $max_price_minor
- * @property Money|null $suggested_price_minor
+ * @property Money|null $min_price
+ * @property Money|null $max_price
+ * @property Money|null $suggested_price
  * @property int|null $max_margin_percent
  * @property array<int, string> $locked_fields
  * @property CarbonImmutable $effective_from
@@ -80,9 +80,9 @@ class WebsiteProductPriceRule extends Model
     {
         return [
             'allows_user_pricing' => 'boolean',
-            'min_price_minor' => MoneyCast::class,
-            'max_price_minor' => MoneyCast::class,
-            'suggested_price_minor' => MoneyCast::class,
+            'min_price' => MoneyCast::class,
+            'max_price' => MoneyCast::class,
+            'suggested_price' => MoneyCast::class,
             'locked_fields' => 'array',
             'effective_from' => 'immutable_datetime',
             'effective_to' => 'immutable_datetime',

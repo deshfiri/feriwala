@@ -6,6 +6,8 @@ use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCategory;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -41,7 +43,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Synced,
         'currency_code' => 'BDT',
-        'price_minor' => 390000,
+        'price' => Money::fromDecimal('3900.00', Currency::BDT),
         'published_at' => now(),
     ]);
 
@@ -75,16 +77,52 @@ it('shows each shop only its own price for a product both of them sell', functio
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Synced,
         'currency_code' => 'BDT',
-        'price_minor' => 250000,
+        'price' => Money::fromDecimal('2500.00', Currency::BDT),
         'published_at' => now(),
     ]);
 
     $body = storefrontCall($this->credential, $this->secret, 'products/'.$this->theirProduct->public_id)
         ->assertOk()
+        // Both the flat-Taka `amount` and the frozen contract's legacy
+        // `minor_units` compatibility key are carried (§4.1).
+        ->assertJsonPath('variants.0.price.amount', '2500.00')
         ->assertJsonPath('variants.0.price.minor_units', 250000)
         ->getContent();
 
-    expect($body)->not->toContain('390000');
+    expect($body)->not->toContain('3900.00')
+        ->and($body)->not->toContain('390000');
+});
+
+it('never carries a Supplier\'s identity or rate through stock or a product page', function () {
+    $product = websiteTestProduct();
+    $offer = supplierTestOffer(product: $product, supplierRate: '900.00', preferred: true);
+
+    WebsiteProduct::create([
+        'website_id' => $this->mine->id,
+        'business_account_id' => $this->mine->business_account_id,
+        'product_id' => $product->id,
+        'status' => WebsiteProductStatus::Published,
+        'sync_status' => WebsiteSyncStatus::Synced,
+        'currency_code' => 'BDT',
+        'price' => Money::fromDecimal('2500.00', Currency::BDT),
+        'published_at' => now(),
+    ]);
+
+    $productBody = storefrontCall($this->credential, $this->secret, 'products/'.$product->public_id)
+        ->assertOk()
+        ->assertJsonPath('variants.0.availability.quantity', 10)
+        ->getContent();
+
+    $inventoryBody = storefrontCall($this->credential, $this->secret, 'inventory/'.$product->sku)
+        ->assertOk()
+        ->assertJsonPath('quantity', 10)
+        ->getContent();
+
+    foreach ([$productBody, $inventoryBody] as $body) {
+        expect(mb_strtolower($body))->not->toContain('supplier')
+            ->and($body)->not->toContain($offer->supplier->business_name)
+            ->and($body)->not->toContain('900.00');
+    }
 });
 
 it('answers another website\'s category and stock as not found', function () {

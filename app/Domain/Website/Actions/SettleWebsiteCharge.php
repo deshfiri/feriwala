@@ -94,7 +94,7 @@ class SettleWebsiteCharge
         $website = $current->website;
         $wallet = $this->guard->walletFor($website->businessAccount);
 
-        if ($wallet === null || $wallet->usableBalance()->lessThan($current->amount_minor)) {
+        if ($wallet === null || $wallet->usableBalance()->lessThan($current->amount)) {
             $this->askForADeposit($website);
 
             throw WebsiteRefused::insufficientBalance();
@@ -105,7 +105,7 @@ class SettleWebsiteCharge
                 $transaction = $this->wallet->debit(
                     $wallet,
                     $current->type->ledgerType(),
-                    $current->amount_minor,
+                    $current->amount,
                     new PostingContext(
                         source: 'website',
                         description: $current->type->label().' — '.$website->name,
@@ -141,7 +141,7 @@ class SettleWebsiteCharge
             auditableId: $paid->id,
             after: [
                 'type' => $paid->type->value,
-                'amount_minor' => $paid->amount_minor->minorUnits,
+                'amount' => $paid->amount->jsonSerialize(),
                 'currency' => $paid->currency_code,
                 'wallet_transaction_id' => $paid->wallet_transaction_id,
             ],

@@ -38,9 +38,9 @@ class ResolveWebsitePriceRule
 
             // The rule first, then what the catalogue itself says about this
             // product, then nothing. `??` reads a missing rule as null.
-            minimum: $rule->min_price_minor ?? $product->minimum_selling_price_minor,
-            maximum: $rule->max_price_minor ?? $product->maximum_selling_price_minor,
-            suggested: $rule->suggested_price_minor ?? $product->suggested_selling_price_minor,
+            minimum: $rule->min_price ?? $product->minimum_selling_price,
+            maximum: $rule->max_price ?? $product->maximum_selling_price,
+            suggested: $rule->suggested_price ?? $product->suggested_selling_price,
             maxMarginPercent: $rule?->max_margin_percent,
             lockedFields: $this->lockedFields($rule),
         );

@@ -10,6 +10,7 @@ use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Support\Money\Money;
 
 /**
  * One published product, as a storefront receives it (contract §5.1, P5-22).
@@ -29,6 +30,11 @@ use App\Domain\Website\Models\WebsiteProduct;
  *
  * Availability is advisory (contract §5.2). The binding check is at order
  * submission; a storefront that trusts this figure will oversell.
+ *
+ * Every money object on this frozen surface is the documented compatibility
+ * adapter of contract §4.1: `amount` (flat Taka) alongside the legacy
+ * `minor_units` and `decimal` keys, for the duration of the compatibility
+ * period. Nothing behind {@see self::moneyPayload()} carries minor units.
  */
 class StorefrontProductPayload
 {
@@ -44,7 +50,7 @@ class StorefrontProductPayload
     {
         $product = $selection->product;
         $price = $selection->sellingPrice();
-        $compareAt = $selection->promotional_price_minor !== null ? $selection->price_minor : null;
+        $compareAt = $selection->promotional_price !== null ? $selection->price : null;
 
         $availability = collect($this->stock->forProduct($product, $website->businessAccount))->keyBy('sku');
 
@@ -123,21 +129,46 @@ class StorefrontProductPayload
         string $id,
         string $sku,
         array $attributes,
-        mixed $price,
-        mixed $compareAt,
+        ?Money $price,
+        ?Money $compareAt,
         ?array $availability,
     ): array {
         return [
             'id' => $id,
             'sku' => $sku,
             'attributes' => (object) $attributes,
-            'price' => $price?->jsonSerialize(),
-            'compare_at_price' => $compareAt?->jsonSerialize(),
+            'price' => $this->moneyPayload($price),
+            'compare_at_price' => $this->moneyPayload($compareAt),
             'availability' => [
                 'in_stock' => $availability['in_stock'] ?? false,
                 'quantity' => $availability['quantity'] ?? 0,
                 'backorderable' => false,
             ],
+        ];
+    }
+
+    /**
+     * A money object as this frozen surface still sends it (contract §4.1's
+     * minor-unit compatibility period): `Money::jsonSerialize()`'s own
+     * `amount`/`currency`/`formatted`, plus the legacy `minor_units` and
+     * `decimal` keys existing integrations still read. Exact — `amount`
+     * always has two decimal places here, so ×100 never truncates anything
+     * the ERP computed.
+     *
+     * @return array{amount: string, currency: string, formatted: string, minor_units: int, decimal: string}|null
+     */
+    protected function moneyPayload(?Money $money): ?array
+    {
+        if ($money === null) {
+            return null;
+        }
+
+        $amount = $money->toDecimal();
+
+        return [
+            ...$money->jsonSerialize(),
+            'minor_units' => (int) bcmul($amount, '100', 0),
+            'decimal' => $amount,
         ];
     }
 }

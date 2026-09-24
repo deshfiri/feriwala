@@ -31,7 +31,7 @@ class CodTerms
     public const ENABLED = 'orders.website_cod_enabled';
 
     /** The most one cash-on-delivery order may come to, platform-wide. */
-    public const MAXIMUM = 'orders.website_cod_maximum_minor';
+    public const MAXIMUM = 'orders.website_cod_maximum_amount';
 
     public function __construct(
         protected SettingsRepository $settings,
@@ -53,10 +53,10 @@ class CodTerms
      */
     public function maximumFor(Website $website, Currency $currency): ?Money
     {
-        $own = $website->payment_config['cod']['maximum_minor'] ?? null;
+        $own = $website->payment_config['cod']['maximum_amount'] ?? null;
 
-        if (is_int($own) || (is_string($own) && ctype_digit($own))) {
-            return Money::of((int) $own, $currency);
+        if (is_numeric($own)) {
+            return Money::fromDecimal((string) $own, $currency);
         }
 
         $platform = $this->settings->get(self::MAXIMUM);
@@ -65,7 +65,7 @@ class CodTerms
             return $platform;
         }
 
-        return is_numeric($platform) ? Money::of((int) $platform, $currency) : null;
+        return is_numeric($platform) ? Money::fromDecimal((string) $platform, $currency) : null;
     }
 
     /**

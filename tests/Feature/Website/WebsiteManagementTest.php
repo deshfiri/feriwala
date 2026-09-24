@@ -171,7 +171,7 @@ describe('products through website management', function () {
                 'product' => 'MY-OWN-PRODUCT-PAYLOAD-01',
                 'name' => 'My own product',
                 'sku' => 'MINE-0001',
-                'wholesale_price_minor' => 100,
+                'wholesale_price' => '1.00',
             ])
             ->assertSessionHasErrors('product');
 

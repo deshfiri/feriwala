@@ -25,6 +25,8 @@ use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Domain\Website\Models\WebsiteWebhookEndpoint;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
@@ -66,7 +68,7 @@ function webhookTestSelection(Website $website): WebsiteProduct
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
 }

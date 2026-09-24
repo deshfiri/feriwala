@@ -78,7 +78,7 @@ class SelectProductForWebsite
                 // What Feriwala suggests, where it suggests anything. The
                 // partner may change it within the bounds; nothing is on sale
                 // until they publish it.
-                'price_minor' => $terms->suggested,
+                'price' => $terms->suggested,
                 'created_by' => $actor->id,
             ]));
         } catch (UniqueConstraintViolationException) {

@@ -85,15 +85,15 @@ class RequestWebsite
                     'subdomain' => $subdomain,
                     'status' => WebsiteStatus::SetupPending,
                     'currency_code' => $currency->value,
-                    'setup_fee_minor' => $charges[WebsiteChargeType::Setup->value],
-                    'domain_fee_minor' => $charges[WebsiteChargeType::Domain->value],
-                    'hosting_fee_minor' => $charges[WebsiteChargeType::Hosting->value],
-                    'required_deposit_minor' => $rule === null
+                    'setup_fee' => $charges[WebsiteChargeType::Setup->value],
+                    'domain_fee' => $charges[WebsiteChargeType::Domain->value],
+                    'hosting_fee' => $charges[WebsiteChargeType::Hosting->value],
+                    'required_deposit' => $rule === null
                         ? Money::zero($currency)
-                        : $rule->required_initial_deposit_minor,
-                    'minimum_balance_minor' => $rule === null
+                        : $rule->required_initial_deposit,
+                    'minimum_balance' => $rule === null
                         ? Money::zero($currency)
-                        : $rule->minimum_balance_minor,
+                        : $rule->minimum_balance,
                     'created_by' => $requestedBy->id,
                 ]);
 
@@ -117,7 +117,7 @@ class RequestWebsite
                         'type' => WebsiteChargeType::from($type),
                         'status' => WebsiteChargeStatus::Due,
                         'currency_code' => $currency->value,
-                        'amount_minor' => $amount,
+                        'amount' => $amount,
                         'due_at' => $now,
                         'created_by' => $requestedBy->id,
                     ]);

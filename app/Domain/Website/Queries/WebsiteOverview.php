@@ -139,11 +139,11 @@ class WebsiteOverview
             ],
 
             'charges_summary' => [
-                'setup' => $website->setup_fee_minor->jsonSerialize(),
-                'domain' => $website->domain_fee_minor->jsonSerialize(),
-                'hosting' => $website->hosting_fee_minor->jsonSerialize(),
-                'required_deposit' => $website->required_deposit_minor->jsonSerialize(),
-                'minimum_balance' => $website->minimum_balance_minor->jsonSerialize(),
+                'setup' => $website->setup_fee->jsonSerialize(),
+                'domain' => $website->domain_fee->jsonSerialize(),
+                'hosting' => $website->hosting_fee->jsonSerialize(),
+                'required_deposit' => $website->required_deposit->jsonSerialize(),
+                'minimum_balance' => $website->minimum_balance->jsonSerialize(),
             ],
 
             'lifecycle' => [
@@ -174,7 +174,7 @@ class WebsiteOverview
                     'type_label' => __('website.charge_types.'.$charge->type->value),
                     'status' => $charge->status->value,
                     'status_label' => __('website.charge_statuses.'.$charge->status->value),
-                    'amount' => $charge->amount_minor->jsonSerialize(),
+                    'amount' => $charge->amount->jsonSerialize(),
                     'due_at' => $charge->due_at->toIso8601String(),
                     'paid_at' => $charge->paid_at?->toIso8601String(),
                     'period_start' => $charge->period_start?->toIso8601String(),
@@ -193,7 +193,7 @@ class WebsiteOverview
                     'expires_at' => $domain->expires_at?->toIso8601String(),
                     'days_remaining' => $domain->daysRemaining($now),
                     'auto_renew' => $domain->auto_renew,
-                    'fee' => $domain->fee_minor->jsonSerialize(),
+                    'fee' => $domain->fee->jsonSerialize(),
 
                     // Feriwala's supplier, not the partner's business.
                     'registrar' => $forStaff ? $domain->registrar : null,
@@ -211,7 +211,7 @@ class WebsiteOverview
                     'expires_at' => $hosting->expires_at?->toIso8601String(),
                     'days_remaining' => $hosting->daysRemaining($now),
                     'auto_renew' => $hosting->auto_renew,
-                    'fee' => $hosting->fee_minor->jsonSerialize(),
+                    'fee' => $hosting->fee->jsonSerialize(),
                     'provider' => $forStaff ? $hosting->provider : null,
                 ])
                 ->values()

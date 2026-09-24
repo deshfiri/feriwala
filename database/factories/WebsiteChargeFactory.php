@@ -6,6 +6,7 @@ use App\Domain\Website\Enums\WebsiteChargeStatus;
 use App\Domain\Website\Enums\WebsiteChargeType;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCharge;
+use App\Support\Money\Money;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -30,7 +31,7 @@ class WebsiteChargeFactory extends Factory
             'type' => WebsiteChargeType::Setup,
             'status' => WebsiteChargeStatus::Due,
             'currency_code' => 'BDT',
-            'amount_minor' => 500000,
+            'amount' => Money::fromDecimal('5000.00'),
             'due_at' => now(),
         ];
     }

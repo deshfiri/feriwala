@@ -33,7 +33,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property WebsiteChargeType $type
  * @property WebsiteChargeStatus $status
  * @property string $currency_code
- * @property Money $amount_minor
+ * @property Money $amount
  * @property CarbonImmutable|null $period_start
  * @property CarbonImmutable|null $period_end
  * @property int|null $website_domain_id
@@ -67,7 +67,7 @@ class WebsiteCharge extends Model
         return [
             'type' => WebsiteChargeType::class,
             'status' => WebsiteChargeStatus::class,
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'period_start' => 'immutable_datetime',
             'period_end' => 'immutable_datetime',
             'due_at' => 'immutable_datetime',

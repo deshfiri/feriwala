@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteDomain;
+use App\Support\Money\Money;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -27,7 +28,7 @@ class WebsiteDomainFactory extends Factory
             'domain' => Str::lower(Str::random(10)).'.example',
             'status' => WebsiteServiceStatus::Active,
             'currency_code' => 'BDT',
-            'fee_minor' => 150000,
+            'fee' => Money::fromDecimal('1500.00'),
             'registered_at' => now()->subMonths(6),
             'expires_at' => now()->addMonths(6),
         ];

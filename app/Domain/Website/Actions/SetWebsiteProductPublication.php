@@ -67,7 +67,7 @@ class SetWebsiteProductPublication
             throw WebsiteRefused::statusDoesNotAllow();
         }
 
-        if ($selection->price_minor === null) {
+        if ($selection->price === null) {
             throw WebsiteRefused::priceRequired();
         }
 

@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $provider
  * @property WebsiteServiceStatus $status
  * @property string $currency_code
- * @property Money $fee_minor
+ * @property Money $fee
  * @property CarbonImmutable|null $started_at
  * @property CarbonImmutable|null $expires_at
  * @property bool $auto_renew
@@ -51,7 +51,7 @@ class WebsiteHosting extends Model
     {
         return [
             'status' => WebsiteServiceStatus::class,
-            'fee_minor' => MoneyCast::class,
+            'fee' => MoneyCast::class,
             'started_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
             'auto_renew' => 'boolean',

@@ -20,7 +20,6 @@ use App\Domain\Website\Queries\WebsiteOverview;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
-use App\Support\Money\DecimalAmount;
 use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -147,9 +146,9 @@ class WebsiteProductController extends Controller
 
         $validated = $request->validate([
             // Entered in Taka, because money is never a float and the browser
-            // never computes one (§36.1). Converted to minor units below, at
-            // this HTTP boundary — UpdateWebsiteProduct still receives exactly
-            // what it always expected: an integer minor-unit value per field.
+            // never computes one (§36.1). UpdateWebsiteProduct parses the
+            // decimal string itself, against the selection's own currency
+            // (§36.1's server-side-only arithmetic).
             'price' => ['sometimes', new DecimalAmountRule],
             'promotional_price' => ['sometimes', 'nullable', new DecimalAmountRule],
             'promo_title' => ['sometimes', 'nullable', 'string', 'max:120'],
@@ -158,14 +157,6 @@ class WebsiteProductController extends Controller
             'display_order' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'is_featured' => ['sometimes', 'boolean'],
         ]);
-
-        if (array_key_exists('price', $validated)) {
-            $validated['price'] = DecimalAmount::parse($validated['price'])->minorUnits;
-        }
-
-        if (array_key_exists('promotional_price', $validated)) {
-            $validated['promotional_price'] = DecimalAmount::parseOrNull($validated['promotional_price'])?->minorUnits;
-        }
 
         $this->attempt(fn () => $update->handle($chosen, $this->person($request), $validated));
 

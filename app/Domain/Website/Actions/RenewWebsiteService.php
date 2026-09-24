@@ -140,7 +140,7 @@ class RenewWebsiteService
             'type' => $type,
             'status' => WebsiteChargeStatus::Due,
             'currency_code' => $currency->value,
-            'amount_minor' => $this->fees->websiteCharge($type->feeType(), $subscription?->package, $currency),
+            'amount' => $this->fees->websiteCharge($type->feeType(), $subscription?->package, $currency),
             'period_start' => $start,
             'period_end' => $end,
             'due_at' => CarbonImmutable::now(),

@@ -38,8 +38,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $is_featured
  * @property int $display_order
  * @property string $currency_code
- * @property Money|null $price_minor
- * @property Money|null $promotional_price_minor
+ * @property Money|null $price
+ * @property Money|null $promotional_price
  * @property string|null $promo_title
  * @property string|null $marketing_description
  * @property WebsiteSyncStatus $sync_status
@@ -72,8 +72,8 @@ class WebsiteProduct extends Model
             'status' => WebsiteProductStatus::class,
             'sync_status' => WebsiteSyncStatus::class,
             'is_featured' => 'boolean',
-            'price_minor' => MoneyCast::class,
-            'promotional_price_minor' => MoneyCast::class,
+            'price' => MoneyCast::class,
+            'promotional_price' => MoneyCast::class,
             'last_synced_at' => 'immutable_datetime',
             'synced_availability' => 'array',
             'published_at' => 'immutable_datetime',
@@ -126,7 +126,7 @@ class WebsiteProduct extends Model
      */
     public function sellingPrice(): ?Money
     {
-        return $this->promotional_price_minor ?? $this->price_minor;
+        return $this->promotional_price ?? $this->price;
     }
 
     /**

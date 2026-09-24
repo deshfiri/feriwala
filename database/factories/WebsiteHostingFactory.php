@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteHosting;
+use App\Support\Money\Money;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -27,7 +28,7 @@ class WebsiteHostingFactory extends Factory
             'provider' => 'Internal',
             'status' => WebsiteServiceStatus::Active,
             'currency_code' => 'BDT',
-            'fee_minor' => 200000,
+            'fee' => Money::fromDecimal('2000.00'),
             'started_at' => now()->subMonths(6),
             'expires_at' => now()->addMonths(6),
         ];

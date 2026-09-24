@@ -43,11 +43,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $domain
  * @property WebsiteStatus $status
  * @property string $currency_code
- * @property Money $setup_fee_minor
- * @property Money $domain_fee_minor
- * @property Money $hosting_fee_minor
- * @property Money $required_deposit_minor
- * @property Money $minimum_balance_minor
+ * @property Money $setup_fee
+ * @property Money $domain_fee
+ * @property Money $hosting_fee
+ * @property Money $required_deposit
+ * @property Money $minimum_balance
  * @property string|null $tagline
  * @property string|null $about
  * @property string|null $logo_path
@@ -98,11 +98,11 @@ class Website extends Model
             'status' => WebsiteStatus::class,
             'theme' => WebsiteTheme::class,
             'connection_health' => WebsiteConnectionHealth::class,
-            'setup_fee_minor' => MoneyCast::class,
-            'domain_fee_minor' => MoneyCast::class,
-            'hosting_fee_minor' => MoneyCast::class,
-            'required_deposit_minor' => MoneyCast::class,
-            'minimum_balance_minor' => MoneyCast::class,
+            'setup_fee' => MoneyCast::class,
+            'domain_fee' => MoneyCast::class,
+            'hosting_fee' => MoneyCast::class,
+            'required_deposit' => MoneyCast::class,
+            'minimum_balance' => MoneyCast::class,
             'payment_config' => 'array',
             'shipping_config' => 'array',
             'api_connected_at' => 'immutable_datetime',

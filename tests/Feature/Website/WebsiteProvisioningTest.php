@@ -10,6 +10,8 @@ use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCharge;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
 
@@ -47,7 +49,7 @@ describe('asking for a website', function () {
         expect($website->status)->toBe(WebsiteStatus::SetupPending)
             ->and($website->business_account_id)->toBe($account->id)
             ->and($website->subdomain)->toBe('nasrin-fashion')
-            ->and($website->setup_fee_minor->minorUnits)->toBe(500000)
+            ->and($website->setup_fee->toDecimal())->toBe('5000.00')
             // The first status is recorded like every other: a history that
             // starts at the first change cannot say where it began.
             ->and($website->statusHistory()->count())->toBe(1);
@@ -71,8 +73,8 @@ describe('asking for a website', function () {
 
         $website = Website::query()->firstOrFail();
 
-        expect($website->domain_fee_minor->minorUnits)->toBe(0)
-            ->and($website->hosting_fee_minor->minorUnits)->toBe(0)
+        expect($website->domain_fee->toDecimal())->toBe('0.00')
+            ->and($website->hosting_fee->toDecimal())->toBe('0.00')
             ->and(WebsiteCharge::query()->where('website_id', $website->id)->pluck('type')->all())
             ->toEqual([WebsiteChargeType::Setup]);
     });
@@ -154,7 +156,7 @@ describe('paying for a website', function () {
                 ->assertRedirect(route('websites.show', $website->public_id));
         }
 
-        // 850,000 of charges against a million.
+        // 8,500.00 of charges against 10,000.00.
         expect($wallet->refresh()->total->toDecimal())->toBe('1500.00')
             ->and($website->refresh()->status)->toBe(WebsiteStatus::Development)
             ->and(WebsiteCharge::query()->where('website_id', $website->id)->outstanding()->count())->toBe(0);
@@ -168,7 +170,7 @@ describe('paying for a website', function () {
         $charge = WebsiteCharge::factory()->create([
             'website_id' => $website->id,
             'business_account_id' => $account->id,
-            'amount_minor' => 500000,
+            'amount' => Money::fromDecimal('5000.00', Currency::BDT),
         ]);
 
         foreach (range(1, 3) as $ignored) {
@@ -189,7 +191,7 @@ describe('paying for a website', function () {
         $charge = WebsiteCharge::factory()->create([
             'website_id' => $website->id,
             'business_account_id' => $account->id,
-            'amount_minor' => 500000,
+            'amount' => Money::fromDecimal('5000.00', Currency::BDT),
         ]);
 
         $this->actingAs($account->owner)
@@ -247,7 +249,7 @@ describe('reading a website', function () {
             'status' => 'active',
             'registrar' => 'Internal registrar',
             'currency_code' => 'BDT',
-            'fee_minor' => 150000,
+            'fee' => Money::fromDecimal('1500.00', Currency::BDT),
             'registered_at' => now()->subMonth(),
             'expires_at' => now()->addYear(),
         ]);
@@ -257,7 +259,7 @@ describe('reading a website', function () {
             'provider' => 'Secret host',
             'status' => 'active',
             'currency_code' => 'BDT',
-            'fee_minor' => 200000,
+            'fee' => Money::fromDecimal('2000.00', Currency::BDT),
             'started_at' => now()->subMonth(),
             'expires_at' => now()->addYear(),
         ]);

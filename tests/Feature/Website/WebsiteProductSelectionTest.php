@@ -10,6 +10,8 @@ use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCategory;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Domain\Website\Models\WebsiteProductPriceRule;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 
 /**
@@ -41,7 +43,7 @@ describe('choosing a product', function () {
 
         expect($selection->status)->toBe(WebsiteProductStatus::Selected)
             ->and($selection->sync_status)->toBe(WebsiteSyncStatus::Pending)
-            ->and($selection->price_minor?->minorUnits)->toBe(250000)
+            ->and($selection->price?->toDecimal())->toBe('2500.00')
             ->and($selection->business_account_id)->toBe($this->account->id);
     });
 
@@ -90,7 +92,7 @@ describe('pricing it', function () {
             'status' => WebsiteProductStatus::Selected,
             'sync_status' => WebsiteSyncStatus::Synced,
             'currency_code' => 'BDT',
-            'price_minor' => 250000,
+            'price' => Money::fromDecimal('2500.00', Currency::BDT),
         ]);
     });
 
@@ -109,7 +111,7 @@ describe('pricing it', function () {
             ])
             ->assertSessionHasErrors('price');
 
-        expect($this->selection->refresh()->price_minor->minorUnits)->toBe(250000);
+        expect($this->selection->refresh()->price->toDecimal())->toBe('2500.00');
     });
 
     it('honours the administrator\'s rule over the product\'s bounds', function () {
@@ -117,14 +119,14 @@ describe('pricing it', function () {
             'product_id' => $this->product->id,
             'allows_user_pricing' => true,
             'currency_code' => 'BDT',
-            'min_price_minor' => 300000,
-            'max_price_minor' => 320000,
+            'min_price' => Money::fromDecimal('3000.00', Currency::BDT),
+            'max_price' => Money::fromDecimal('3200.00', Currency::BDT),
             'locked_fields' => [],
             'effective_from' => now()->subDay(),
         ]);
 
-        // 250,000 was fine under the product's own floor of 200,000; the rule
-        // moves the floor to 300,000 and this is now below it.
+        // 2,500.00 was fine under the product's own floor of 2,000.00; the
+        // rule moves the floor to 3,000.00 and this is now below it.
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
             ->patch(route('websites.products.update', [$this->website->public_id, $this->selection->public_id]), [
@@ -138,7 +140,7 @@ describe('pricing it', function () {
             ])
             ->assertRedirect();
 
-        expect($this->selection->refresh()->price_minor->minorUnits)->toBe(310000);
+        expect($this->selection->refresh()->price->toDecimal())->toBe('3100.00');
     });
 
     it('caps a price by the allowed margin', function () {
@@ -146,8 +148,8 @@ describe('pricing it', function () {
             'product_id' => $this->product->id,
             'allows_user_pricing' => true,
             'currency_code' => 'BDT',
-            'min_price_minor' => 200000,
-            // 20% above the floor: 240,000.
+            'min_price' => Money::fromDecimal('2000.00', Currency::BDT),
+            // 20% above the floor: 2,400.00.
             'max_margin_percent' => 20,
             'locked_fields' => [],
             'effective_from' => now()->subDay(),
@@ -166,7 +168,7 @@ describe('pricing it', function () {
             ])
             ->assertRedirect();
 
-        expect($this->selection->refresh()->price_minor->minorUnits)->toBe(240000);
+        expect($this->selection->refresh()->price->toDecimal())->toBe('2400.00');
     });
 
     it('refuses any price at all where Feriwala sets it', function () {
@@ -263,7 +265,7 @@ describe('putting it on sale', function () {
             'status' => WebsiteProductStatus::Selected,
             'sync_status' => WebsiteSyncStatus::Pending,
             'currency_code' => 'BDT',
-            'price_minor' => 250000,
+            'price' => Money::fromDecimal('2500.00', Currency::BDT),
         ]);
     });
 
@@ -290,7 +292,7 @@ describe('putting it on sale', function () {
     });
 
     it('refuses to publish without a price', function () {
-        $this->selection->forceFill(['price_minor' => null])->save();
+        $this->selection->forceFill(['price' => null])->save();
 
         $this->actingAs($this->account->owner)
             ->from(route('websites.products.index', $this->website->public_id))
@@ -314,7 +316,7 @@ describe('putting it on sale', function () {
                 'status' => WebsiteProductStatus::Published,
                 'sync_status' => WebsiteSyncStatus::Synced,
                 'currency_code' => 'BDT',
-                'price_minor' => 250000,
+                'price' => Money::fromDecimal('2500.00', Currency::BDT),
                 'published_at' => now()->subDays($index + 1),
             ]);
         }
@@ -362,8 +364,8 @@ describe('the administrator\'s bounds', function () {
             ->post(route('admin.website-pricing.store'), [
                 'product' => $this->product->public_id,
                 'allows_user_pricing' => true,
-                'min_price_minor' => 210000,
-                'max_price_minor' => 390000,
+                'min_price' => '2100.00',
+                'max_price' => '3900.00',
                 'max_margin_percent' => 25,
                 'locked_fields' => ['promo_title'],
                 'effective_from' => now()->subDay()->toDateString(),
@@ -460,7 +462,7 @@ describe('the shop\'s own arrangement', function () {
             'status' => WebsiteProductStatus::Selected,
             'sync_status' => WebsiteSyncStatus::Pending,
             'currency_code' => 'BDT',
-            'price_minor' => 250000,
+            'price' => Money::fromDecimal('2500.00', Currency::BDT),
         ]);
 
         $this->actingAs($this->account->owner)

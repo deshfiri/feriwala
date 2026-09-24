@@ -19,6 +19,13 @@ use App\Support\Money\Money;
 readonly class WebsitePricingTerms
 {
     /**
+     * Working precision for the margin ratio, well past the currency's own
+     * scale, so truncating to it can only ever discard digits that were
+     * genuinely insignificant.
+     */
+    private const RATIO_GUARD_SCALE = 20;
+
+    /**
      * @param  array<int, string>  $lockedFields  §15.1 settings the partner may not touch
      */
     public function __construct(
@@ -52,10 +59,25 @@ readonly class WebsitePricingTerms
             return null;
         }
 
-        return Money::of(
-            (int) floor($this->minimum->minorUnits * (100 + $this->maxMarginPercent) / 100),
-            $this->minimum->currency,
-        );
+        return $this->flooredMargin($this->minimum, $this->maxMarginPercent);
+    }
+
+    /**
+     * `$minimum × (100 + $percent) ÷ 100`, floored to the currency's own
+     * scale by computing the exact quotient at guard precision and
+     * truncating — bcmath's own truncation is exactly a floor for a
+     * non-negative value.
+     */
+    private function flooredMargin(Money $minimum, int $percent): Money
+    {
+        $currency = $minimum->currency;
+        $scale = $currency->scale();
+
+        $product = bcmul($minimum->toDecimal(), (string) (100 + $percent), self::RATIO_GUARD_SCALE);
+        $exact = bcdiv($product, '100', self::RATIO_GUARD_SCALE);
+        $floored = bcadd($exact, '0', $scale);
+
+        return Money::fromDecimal($floored, $currency);
     }
 
     /**

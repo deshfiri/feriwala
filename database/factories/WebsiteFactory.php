@@ -7,6 +7,7 @@ use App\Domain\Website\Actions\RequestWebsite;
 use App\Domain\Website\Enums\WebsiteConnectionHealth;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Models\Website;
+use App\Support\Money\Money;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -38,9 +39,9 @@ class WebsiteFactory extends Factory
             'subdomain' => Str::lower(Str::random(10)),
             'status' => WebsiteStatus::SetupPending,
             'currency_code' => 'BDT',
-            'setup_fee_minor' => 500000,
-            'domain_fee_minor' => 150000,
-            'hosting_fee_minor' => 200000,
+            'setup_fee' => Money::fromDecimal('5000.00'),
+            'domain_fee' => Money::fromDecimal('1500.00'),
+            'hosting_fee' => Money::fromDecimal('2000.00'),
             'connection_health' => WebsiteConnectionHealth::Unknown,
         ];
     }

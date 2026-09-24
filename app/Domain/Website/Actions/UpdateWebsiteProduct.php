@@ -67,13 +67,13 @@ class UpdateWebsiteProduct
         $changes = [];
 
         if (array_key_exists('price', $attributes)) {
-            $changes['price_minor'] = $this->price($terms, $currency, $attributes['price'], 'price');
+            $changes['price'] = $this->price($terms, $currency, $attributes['price'], 'price');
         }
 
         if (array_key_exists('promotional_price', $attributes)) {
             $promotion = $attributes['promotional_price'];
 
-            $changes['promotional_price_minor'] = $promotion === null
+            $changes['promotional_price'] = $promotion === null
                 ? null
                 : $this->price($terms, $currency, $promotion, 'promotional_price');
         }
@@ -120,7 +120,7 @@ class UpdateWebsiteProduct
         // Only a product on sale is worth telling the storefront about; one
         // that is merely selected is not on the shop to be out of date.
         if ($selection->status === WebsiteProductStatus::Published) {
-            $priceChanged = array_key_exists('price_minor', $changes) || array_key_exists('promotional_price_minor', $changes);
+            $priceChanged = array_key_exists('price', $changes) || array_key_exists('promotional_price', $changes);
 
             $this->sync->handle(
                 $selection,
@@ -140,7 +140,7 @@ class UpdateWebsiteProduct
     {
         $this->assertUnlocked($terms, $field);
 
-        $amount = Money::of((int) $value, $currency);
+        $amount = Money::fromDecimal((string) $value, $currency);
         $refusal = $terms->refusalFor($amount);
 
         if ($refusal !== null) {
@@ -186,10 +186,10 @@ class UpdateWebsiteProduct
      */
     protected function assertPromotionIsAReduction(WebsiteProduct $selection, array $changes): void
     {
-        $price = $changes['price_minor'] ?? $selection->price_minor;
-        $promotion = array_key_exists('promotional_price_minor', $changes)
-            ? $changes['promotional_price_minor']
-            : $selection->promotional_price_minor;
+        $price = $changes['price'] ?? $selection->price;
+        $promotion = array_key_exists('promotional_price', $changes)
+            ? $changes['promotional_price']
+            : $selection->promotional_price;
 
         if (! $promotion instanceof Money) {
             return;
