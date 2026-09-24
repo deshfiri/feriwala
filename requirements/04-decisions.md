@@ -651,3 +651,10 @@ changed under this rule on 2026-09-19 — see D24.)
 
 I will treat a request touching any of these as a stop-and-confirm point rather than an
 instruction to proceed.
+
+**Implementation status: complete and verified, 2026-09-24.** A coding session applying this
+decision was interrupted mid-work on 2026-09-23; the recovery that carried it to completion is
+recorded in [TODO.md](TODO.md)'s revision log under that date. Every layer in the table above —
+form input, database, API payload, calculation, display — was confirmed against the shipped code by
+static analysis, the full Pest and Vitest suites, and a bounded live-browser pass, with no
+regression to the D4/D24-frozen boundaries this decision does not touch.

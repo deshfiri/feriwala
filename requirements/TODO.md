@@ -964,6 +964,50 @@ increment by hand; a progress table that has drifted is worse than none.
 
 ### Revision log
 
+- **2026-09-24** — D26 flat-Taka recovery completed and fully verified, closing out the gap the
+  2026-09-23 entry below left open (Website, Order/Checkout and Package/Billing, the source of that
+  entry's 51 failures). A coding session applying the 2026-09-23 conversion was interrupted
+  mid-work; the working tree was preserved as evidence
+  (`~/feriwala-verification/d26-abandoned-session/`), a clean recovery branch
+  (`recovery/d26-flat-taka-20260923`) was opened from the last good commit, and the abandoned diff
+  was carried forward unit by unit rather than discarded, each unit reviewed, tested and committed
+  on its own: (1) Billing and Package — found and fixed the `SettingType::Money` 100x-inflation bug
+  (a stored `100.00` was returning as `10,000.00`) in 11 test files; (2) Account activation and
+  dashboard; (3) Catalog and Wholesale — found a `MoneyCast`-rejects-a-bare-string bug across many
+  direct-create test fixtures, distinct from the leftover-`_minor` bug the diff was mostly fixing;
+  (4) Orders, checkout, tax and delivery — production code here was already correct; added the one
+  missing regression test for the frozen Storefront API rejecting a payload naming both `amount` and
+  `minor_units`; (5) Referral/MLM — the configurable N-level system's own logic was already correct
+  and exact (bcmath throughout, capped to base, compensating-entry reversals); fixed the same two
+  bug classes in its real-process concurrency test and one test fixture, and one stale "minor units"
+  doc comment; (6) Website pricing and Storefront API; (7) Account/wallet-integrity/notification/
+  gateway — including a previously-undiscovered `Money::of()`/`->minorUnits` bug in the real
+  six-worker wallet-settlement concurrency test; (8) a repository-wide audit, which found the unit's
+  one large defect: the shared frontend `resources/js/lib/money.ts` `Money` type and ~40 consuming
+  pages/tests read `minor_units`/`decimal` fields that do not exist on the real
+  `Money::jsonSerialize()` shape (`{amount, currency, formatted}`) — silently blanking money-edit
+  form defaults and breaking zero/negative detection on every screen built on it, invisible to
+  backend tests because nothing renders React and invisible to the frontend's own tests because they
+  mocked the same wrong shape their components expected; fixed at the root and every consumer, and
+  guarded against recurrence by a new `tests/Unit/Support/Money/MoneySourceGuardTest.php`; (9) full
+  integration verification. Also corrected a package-form label that literally told an administrator
+  "Prices are in minor units — 50000 is ৳500.00" (EN and BN), which would have caused a live 100x
+  entry error. Final state: `composer types:check` 0 errors; `vendor/bin/pint` clean across `app/`,
+  `database/`, `tests/`; `vp check` and `tsc --noEmit` clean; full Vitest suite 136 tests passed;
+  bounded live-browser verification of 8 representative money boundaries (package fee, wallet
+  top-up, wholesale price, website selling price with its Storefront `amount`/`minor_units`
+  derivation, Supplier/Platform rate scoping, Supplier withdrawal, referral fixed reward, and
+  zero/negative/blank handling) all passed, EN/BN and Light/Dark, no console errors, no raw
+  minor-unit leakage outside the one documented Storefront compatibility field; one full
+  `vendor/bin/pest` run against the exact committed code: 3437 passed, 16,299 assertions, 0
+  failures. The D26 rule itself (flat Taka everywhere, `NUMERIC(19,2)`, exact bcmath, no internal
+  minor-unit convention, the Storefront `minor_units` compatibility key derived from `amount` and
+  never authoritative) was already fully and correctly stated in
+  [04-decisions.md](04-decisions.md)'s D26 entry and needed no correction. No developer database or
+  preserved verification schema was touched at any point; nothing was pushed. No `[ ]`/`[~]` counts
+  above change: this closes out a storage-and-display correctness pass across already-`[x]` work,
+  not new feature scope.
+
 - **2026-09-23** — Read-only repository/branch audit, then the Client/Partner and Supplier wallet
   legs of the D26 flat-Taka conversion. Branch audit: `feature/supplier-beta` and
   `feature/p1-78-identity-business-account` are both fully merged into `main` (0 commits ahead of
