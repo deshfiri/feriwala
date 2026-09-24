@@ -6,6 +6,8 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 
 /**
  * @param  array<string, bool|int|string|null>  $features
@@ -14,7 +16,7 @@ function packageWith(array $features = [], array $attributes = []): Package
 {
     $package = Package::create([
         'name' => 'Growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         ...$attributes,
     ]);
 
@@ -232,8 +234,8 @@ describe('package availability', function () {
 });
 
 it('stores package money as Money, never a float', function () {
-    $package = packageWith([], ['fee_minor' => 500000]);
+    $package = packageWith([], ['fee' => Money::fromDecimal('5000.00', Currency::BDT)]);
 
-    expect($package->fee_minor->minorUnits)->toBe(500000)
-        ->and($package->fee_minor->format())->toBe('৳5,000.00');
+    expect($package->fee->toDecimal())->toBe('5000.00')
+        ->and($package->fee->format())->toBe('৳5,000.00');
 });

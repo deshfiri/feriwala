@@ -13,6 +13,8 @@ use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Notifications\Package\SubscriptionCancelled;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use App\Notifications\Package\SubscriptionExpired;
 use App\Notifications\Package\SubscriptionExpiring;
 use Illuminate\Support\Facades\Notification;
@@ -30,13 +32,13 @@ function lifecyclePackage(?int $staffLimit = null, int $graceDays = 14): Package
     $package = Package::create([
         'slug' => 'life-'.Str::lower(Str::random(8)),
         'name' => 'Growth',
-        'fee_minor' => 500000,
-        'renewal_fee_minor' => 400000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
+        'renewal_fee' => Money::fromDecimal('4000.00', Currency::BDT),
         'renewal_frequency' => 'yearly',
         'validity_days' => 365,
         'grace_period_days' => $graceDays,
-        'required_deposit_minor' => 0,
-        'minimum_balance_minor' => 0,
+        'required_deposit' => Money::zero(Currency::BDT),
+        'minimum_balance' => Money::zero(Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -71,7 +73,7 @@ function lifecycleTerm(
         'started_at' => now()->subDays(300),
         'expires_at' => $expiresAt === null ? null : now()->modify($expiresAt),
         'grace_ends_at' => $graceEndsAt === null ? null : now()->modify($graceEndsAt),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'terms' => SubscriptionTerms::capture($package)->toArray(),
         'terms_captured_at' => now(),
@@ -203,7 +205,7 @@ describe('the daily sweep', function () {
             'source' => SubscriptionSource::Renewal,
             'started_at' => now()->subHour(),
             'expires_at' => now()->addDays(365),
-            'paid_fee_minor' => 400000,
+            'paid_fee' => Money::fromDecimal('4000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'terms' => SubscriptionTerms::capture($package)->toArray(),
             'terms_captured_at' => now(),

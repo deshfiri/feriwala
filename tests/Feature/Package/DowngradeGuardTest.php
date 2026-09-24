@@ -6,6 +6,8 @@ use App\Domain\Package\DowngradeGuard;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Models\Package;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
@@ -29,7 +31,7 @@ function downgradeTestPackage(array $limits): Package
     $package = Package::create([
         'slug' => 'small-'.Str::lower(Str::random(8)),
         'name' => 'Starter',
-        'fee_minor' => 100000,
+        'fee' => Money::fromDecimal('1000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,

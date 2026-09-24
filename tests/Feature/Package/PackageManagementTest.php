@@ -12,6 +12,8 @@ use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Exceptions\PackageInUse;
 use App\Domain\Package\Models\Package;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -55,10 +57,10 @@ function packageTestPayload(array $overrides = []): array
         'name' => 'Growth',
         'slug' => 'growth',
         'short_description' => 'For a shop finding its feet.',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
-        'required_deposit_minor' => 0,
-        'minimum_balance_minor' => 0,
+        'required_deposit' => Money::zero(Currency::BDT),
+        'minimum_balance' => Money::zero(Currency::BDT),
         'is_active' => '1',
         'is_public' => '1',
         ...$overrides,
@@ -94,13 +96,13 @@ describe('creating and editing', function () {
             [
                 'name' => 'Growth',
                 'slug' => 'growth',
-                'fee_minor' => 500000,
+                'fee' => Money::fromDecimal('5000.00', Currency::BDT),
                 'currency_code' => 'BDT',
                 'is_active' => true,
                 'is_public' => true,
             ],
             [PackageFeature::StaffLimit->value => '5'],
-            [['charge_type' => 'website_setup', 'amount_minor' => 200000]],
+            [['charge_type' => 'website_setup', 'amount' => Money::fromDecimal('2000.00', Currency::BDT)]],
             $this->admin,
         );
 
@@ -117,7 +119,7 @@ describe('creating and editing', function () {
         $manage = app(ManagePackages::class);
 
         $package = $manage->create(
-            ['name' => 'Growth', 'slug' => 'growth', 'fee_minor' => 500000, 'currency_code' => 'BDT', 'is_active' => true, 'is_public' => true],
+            ['name' => 'Growth', 'slug' => 'growth', 'fee' => Money::fromDecimal('5000.00', Currency::BDT), 'currency_code' => 'BDT', 'is_active' => true, 'is_public' => true],
             [
                 PackageFeature::StaffLimit->value => '5',
                 PackageFeature::ApiAccess->value => '1',
@@ -139,14 +141,14 @@ describe('creating and editing', function () {
         $manage = app(ManagePackages::class);
 
         $unlimited = $manage->create(
-            ['name' => 'A', 'slug' => 'a', 'fee_minor' => 1, 'currency_code' => 'BDT', 'is_active' => true, 'is_public' => true],
+            ['name' => 'A', 'slug' => 'a', 'fee' => Money::fromDecimal('0.01', Currency::BDT), 'currency_code' => 'BDT', 'is_active' => true, 'is_public' => true],
             [PackageFeature::StaffLimit->value => ''],
             [],
             $this->admin,
         );
 
         $none = $manage->create(
-            ['name' => 'B', 'slug' => 'b', 'fee_minor' => 1, 'currency_code' => 'BDT', 'is_active' => true, 'is_public' => true],
+            ['name' => 'B', 'slug' => 'b', 'fee' => Money::fromDecimal('0.01', Currency::BDT), 'currency_code' => 'BDT', 'is_active' => true, 'is_public' => true],
             [PackageFeature::StaffLimit->value => '0'],
             [],
             $this->admin,
@@ -360,9 +362,9 @@ describe('the admin screen', function () {
 
         $package = Package::query()->where('slug', 'growth')->firstOrFail();
 
-        expect($package->fee_minor->minorUnits)->toBe(50050)
-            ->and($package->registration_fee_minor->minorUnits)->toBe(25025)
-            ->and($package->charges->first()->amount_minor->minorUnits)->toBe(19999);
+        expect($package->fee->toDecimal())->toBe('500.50')
+            ->and($package->registration_fee->toDecimal())->toBe('250.25')
+            ->and($package->charges->first()->amount->toDecimal())->toBe('199.99');
     });
 
     it('refuses a form amount with more than two decimal places', function () {
@@ -417,10 +419,10 @@ describe('the admin screen', function () {
 
         $package->refresh();
 
-        expect($package->fee_minor->minorUnits)->toBe(1500000)
-            ->and($package->renewal_fee_minor->minorUnits)->toBe(1500000)
-            ->and($package->registration_fee_minor)->toBeNull()
-            ->and($package->required_deposit_minor->minorUnits)->toBe(0);
+        expect($package->fee->toDecimal())->toBe('15000.00')
+            ->and($package->renewal_fee->toDecimal())->toBe('15000.00')
+            ->and($package->registration_fee)->toBeNull()
+            ->and($package->required_deposit->isZero())->toBeTrue();
     });
 
     it('refuses a renewal fee with no frequency', function () {

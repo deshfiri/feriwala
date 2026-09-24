@@ -16,6 +16,8 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
 use App\Notifications\Package\SubscriptionRenewed;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -33,20 +35,20 @@ use Inertia\Testing\AssertableInertia as Assert;
  *
  * @return array{0: BusinessAccount, 1: Package, 2: UserPackage}
  */
-function renewalTestAccount(int $days = 10, int $renewalFeeMinor = 400000): array
+function renewalTestAccount(int $days = 10, string $renewalFee = '4000.00'): array
 {
     $account = BusinessAccount::factory()->create(['status' => AccountStatus::Active]);
 
     $package = Package::create([
         'slug' => 'renewal-'.Str::lower(Str::random(8)),
         'name' => 'Growth',
-        'fee_minor' => 500000,
-        'renewal_fee_minor' => $renewalFeeMinor,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
+        'renewal_fee' => Money::fromDecimal($renewalFee, Currency::BDT),
         'renewal_frequency' => 'yearly',
         'validity_days' => 365,
         'grace_period_days' => 14,
-        'required_deposit_minor' => 0,
-        'minimum_balance_minor' => 0,
+        'required_deposit' => Money::zero(Currency::BDT),
+        'minimum_balance' => Money::zero(Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -60,7 +62,7 @@ function renewalTestAccount(int $days = 10, int $renewalFeeMinor = 400000): arra
         'started_at' => now()->subDays(355),
         'expires_at' => now()->addDays($days),
         'grace_ends_at' => now()->addDays($days + 14),
-        'paid_fee_minor' => 500000,
+        'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'terms' => SubscriptionTerms::capture($package)->toArray(),
         'terms_captured_at' => now(),
@@ -149,13 +151,13 @@ describe('opening a renewal', function () {
          */
         [$account, $package, $current] = renewalTestAccount();
 
-        $package->forceFill(['renewal_fee_minor' => 650000, 'validity_days' => 400])->save();
+        $package->forceFill(['renewal_fee' => Money::fromDecimal('6500.00', Currency::BDT), 'validity_days' => 400])->save();
 
         $renewal = app(OpenRenewal::class)->handle($account, $current->refresh());
 
-        expect($renewal->terms()?->renewalFeeMinor)->toBe(650000)
+        expect($renewal->terms()?->renewalFee?->toDecimal())->toBe('6500.00')
             ->and($renewal->terms()?->validityDays)->toBe(400)
-            ->and($renewal->paid_fee_minor?->minorUnits)->toBe(650000)
+            ->and($renewal->paid_fee?->toDecimal())->toBe('6500.00')
             // And the term being renewed is unchanged.
             ->and($current->refresh()->terms()?->validityDays)->toBe(365);
     });
@@ -200,26 +202,26 @@ describe('opening a renewal', function () {
 
 describe('what a renewal costs', function () {
     it('charges the renewal fee, not the package fee', function () {
-        [$account, , $current] = renewalTestAccount(renewalFeeMinor: 400000);
+        [$account, , $current] = renewalTestAccount(renewalFee: '4000.00');
 
         $renewal = app(OpenRenewal::class)->handle($account, $current);
         $quote = app(CalculateRenewalQuote::class)
             ->handle($renewal->terms(), $account);
 
-        expect($quote->total()->minorUnits)->toBe(400000);
+        expect($quote->total()->toDecimal())->toBe('4000.00');
     });
 
     it('falls back to the package fee where no renewal fee is set', function () {
         // §8.1 lists the renewal fee as its own optional field. Silence there
         // means no separate renewal price, not a free year.
         [$account, $package, $current] = renewalTestAccount();
-        $package->forceFill(['renewal_fee_minor' => null])->save();
+        $package->forceFill(['renewal_fee' => null])->save();
 
         $renewal = app(OpenRenewal::class)->handle($account, $current->refresh());
         $quote = app(CalculateRenewalQuote::class)
             ->handle($renewal->terms(), $account);
 
-        expect($quote->total()->minorUnits)->toBe(500000);
+        expect($quote->total()->toDecimal())->toBe('5000.00');
     });
 
     it('charges no registration fee', function () {
@@ -360,7 +362,7 @@ describe('the renewal screen', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('settings/renewal')
                 ->where('renewal.package', 'Growth')
-                ->where('quote.total.minor_units', 400000),
+                ->where('quote.total.amount', '4000.00'),
             );
     });
 

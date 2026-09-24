@@ -14,6 +14,8 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Str;
 
@@ -34,26 +36,26 @@ beforeEach(function () {
 /**
  * @param  array<string, string>  $features
  */
-function termsTestPackage(array $features = [], int $fee = 500000): Package
+function termsTestPackage(array $features = [], string $fee = '5000.00'): Package
 {
     return app(ManagePackages::class)->create(
         [
             'name' => 'Growth',
             'slug' => 'growth-'.Str::lower(Str::random(6)),
-            'fee_minor' => $fee,
-            'registration_fee_minor' => 100000,
-            'renewal_fee_minor' => $fee,
+            'fee' => Money::fromDecimal($fee, Currency::BDT),
+            'registration_fee' => Money::fromDecimal('1000.00', Currency::BDT),
+            'renewal_fee' => Money::fromDecimal($fee, Currency::BDT),
             'renewal_frequency' => 'yearly',
             'validity_days' => 365,
             'grace_period_days' => 14,
-            'required_deposit_minor' => 200000,
-            'minimum_balance_minor' => 50000,
+            'required_deposit' => Money::fromDecimal('2000.00', Currency::BDT),
+            'minimum_balance' => Money::fromDecimal('500.00', Currency::BDT),
             'currency_code' => 'BDT',
             'is_active' => true,
             'is_public' => true,
         ],
         $features,
-        [['charge_type' => 'website_setup', 'amount_minor' => 300000, 'frequency' => 'once']],
+        [['charge_type' => 'website_setup', 'amount' => Money::fromDecimal('3000.00', Currency::BDT), 'frequency' => 'once']],
         test()->admin,
     );
 }
@@ -68,14 +70,14 @@ describe('capturing the terms', function () {
 
         expect($subscription->hasCapturedTerms())->toBeTrue()
             ->and($terms->name)->toBe('Growth')
-            ->and($terms->feeMinor)->toBe(500000)
-            ->and($terms->registrationFeeMinor)->toBe(100000)
-            ->and($terms->renewalFeeMinor)->toBe(500000)
+            ->and($terms->fee->toDecimal())->toBe('5000.00')
+            ->and($terms->registrationFee->toDecimal())->toBe('1000.00')
+            ->and($terms->renewalFee->toDecimal())->toBe('5000.00')
             ->and($terms->renewalFrequency)->toBe('yearly')
             ->and($terms->validityDays)->toBe(365)
             ->and($terms->gracePeriodDays)->toBe(14)
-            ->and($terms->requiredDepositMinor)->toBe(200000)
-            ->and($terms->minimumBalanceMinor)->toBe(50000)
+            ->and($terms->requiredDeposit->toDecimal())->toBe('2000.00')
+            ->and($terms->minimumBalance->toDecimal())->toBe('500.00')
             ->and($terms->currencyCode)->toBe('BDT')
             ->and($terms->charges)->toHaveCount(1)
             ->and($terms->feature(PackageFeature::StaffLimit))->toBe(5);
@@ -153,32 +155,32 @@ describe('an edit after the sale', function () {
     });
 
     it('does not change the price a subscription was quoted', function () {
-        $package = termsTestPackage(fee: 500000);
+        $package = termsTestPackage(fee: '5000.00');
         $account = testBusinessAccount(AccountStatus::PackageSelectionPending);
 
         $subscription = app(SelectPackage::class)->handle($account, $package);
 
-        app(ManagePackages::class)->update($package, ['fee_minor' => 900000], [], [], $this->admin);
+        app(ManagePackages::class)->update($package, ['fee' => Money::fromDecimal('9000.00', Currency::BDT)], [], [], $this->admin);
 
-        expect($subscription->refresh()->paid_fee_minor->minorUnits)->toBe(500000)
-            ->and($subscription->terms()->feeMinor)->toBe(500000);
+        expect($subscription->refresh()->paid_fee->toDecimal())->toBe('5000.00')
+            ->and($subscription->terms()->fee->toDecimal())->toBe('5000.00');
     });
 
     it('leaves a settled payment calculating nothing again', function () {
         // §36.2: an invoice reads its own allocations, never the package row.
-        $package = termsTestPackage(fee: 500000);
+        $package = termsTestPackage(fee: '5000.00');
         $account = testBusinessAccount(AccountStatus::PaymentVerificationPending);
 
         $quote = app(CalculateActivationQuote::class)->handle($package, account: $account);
         $payment = app(RecordPaymentFromQuote::class)->handle($account, $quote, PaymentPurpose::Activation);
 
-        $before = $payment->allocatedTo(AllocationType::PackageFee)->minorUnits;
+        $before = $payment->allocatedTo(AllocationType::PackageFee)->toDecimal();
 
-        app(ManagePackages::class)->update($package, ['fee_minor' => 900000], [], [], $this->admin);
+        app(ManagePackages::class)->update($package, ['fee' => Money::fromDecimal('9000.00', Currency::BDT)], [], [], $this->admin);
 
-        expect($payment->fresh()->allocatedTo(AllocationType::PackageFee)->minorUnits)
+        expect($payment->fresh()->allocatedTo(AllocationType::PackageFee)->toDecimal())
             ->toBe($before)
-            ->toBe(500000);
+            ->toBe('5000.00');
     });
 
     it('survives the package being archived entirely', function () {
@@ -213,7 +215,7 @@ describe('subscriptions from before snapshots existed', function () {
             'package_id' => $package->id,
             'status' => UserPackageStatus::Active,
             'source' => 'purchase',
-            'paid_fee_minor' => 500000,
+            'paid_fee' => Money::fromDecimal('5000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'started_at' => now()->subMonth(),
             'expires_at' => now()->addYear(),

@@ -11,6 +11,8 @@ use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Str;
@@ -36,13 +38,13 @@ function recordTestPackage(int $validityDays = 365, int $graceDays = 14): Packag
         [
             'name' => 'Growth',
             'slug' => 'growth-'.Str::lower(Str::random(6)),
-            'fee_minor' => 500000,
-            'renewal_fee_minor' => 500000,
+            'fee' => Money::fromDecimal('5000.00', Currency::BDT),
+            'renewal_fee' => Money::fromDecimal('5000.00', Currency::BDT),
             'renewal_frequency' => 'yearly',
             'validity_days' => $validityDays,
             'grace_period_days' => $graceDays,
-            'required_deposit_minor' => 0,
-            'minimum_balance_minor' => 0,
+            'required_deposit' => Money::zero(Currency::BDT),
+            'minimum_balance' => Money::zero(Currency::BDT),
             'currency_code' => 'BDT',
             'is_active' => true,
             'is_public' => true,

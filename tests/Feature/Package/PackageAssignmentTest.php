@@ -14,6 +14,8 @@ use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Notifications\Package\PackageAssigned;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
@@ -27,18 +29,18 @@ use Inertia\Testing\AssertableInertia as Assert;
  * it from a sale, and the only honest way is to record it as what it is.
  */
 
-function assignTestPackage(int $feeMinor = 500000, ?int $staffLimit = null): Package
+function assignTestPackage(string $fee = '5000.00', ?int $staffLimit = null): Package
 {
     $package = Package::create([
         'slug' => 'grant-'.Str::lower(Str::random(8)),
         'name' => 'Enterprise',
-        'fee_minor' => $feeMinor,
-        'renewal_fee_minor' => $feeMinor,
+        'fee' => Money::fromDecimal($fee, Currency::BDT),
+        'renewal_fee' => Money::fromDecimal($fee, Currency::BDT),
         'renewal_frequency' => 'yearly',
         'validity_days' => 365,
         'grace_period_days' => 14,
-        'required_deposit_minor' => 0,
-        'minimum_balance_minor' => 0,
+        'required_deposit' => Money::zero(Currency::BDT),
+        'minimum_balance' => Money::zero(Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -77,7 +79,7 @@ describe('granting a package', function () {
         expect($granted->status)->toBe(UserPackageStatus::Active)
             ->and($granted->source)->toBe(SubscriptionSource::Manual)
             ->and($granted->source->isPaid())->toBeFalse()
-            ->and($granted->paid_fee_minor?->minorUnits)->toBe(0)
+            ->and($granted->paid_fee?->isZero())->toBeTrue()
             ->and($granted->entitlesNow())->toBeTrue();
     });
 
@@ -230,8 +232,8 @@ describe('granting a package', function () {
 
 describe('what a grant replaces', function () {
     it('closes the term the account was on when it starts now', function () {
-        $held = assignTestPackage(300000);
-        $granted = assignTestPackage(900000);
+        $held = assignTestPackage('3000.00');
+        $granted = assignTestPackage('9000.00');
 
         $current = UserPackage::create([
             'business_account_id' => $this->account->id,
@@ -240,7 +242,7 @@ describe('what a grant replaces', function () {
             'source' => SubscriptionSource::Purchase,
             'started_at' => now()->subDays(10),
             'expires_at' => now()->addDays(300),
-            'paid_fee_minor' => 300000,
+            'paid_fee' => Money::fromDecimal('3000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'terms' => SubscriptionTerms::capture($held)->toArray(),
             'terms_captured_at' => now(),
@@ -262,8 +264,8 @@ describe('what a grant replaces', function () {
     });
 
     it('leaves the current term running when the grant is dated ahead', function () {
-        $held = assignTestPackage(300000);
-        $granted = assignTestPackage(900000);
+        $held = assignTestPackage('3000.00');
+        $granted = assignTestPackage('9000.00');
 
         $current = UserPackage::create([
             'business_account_id' => $this->account->id,
@@ -272,7 +274,7 @@ describe('what a grant replaces', function () {
             'source' => SubscriptionSource::Purchase,
             'started_at' => now()->subDays(10),
             'expires_at' => now()->addDays(300),
-            'paid_fee_minor' => 300000,
+            'paid_fee' => Money::fromDecimal('3000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'terms' => SubscriptionTerms::capture($held)->toArray(),
             'terms_captured_at' => now(),

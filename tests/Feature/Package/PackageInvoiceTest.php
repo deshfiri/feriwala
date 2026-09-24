@@ -25,9 +25,9 @@ use Inertia\Testing\AssertableInertia as Assert;
 function invoiceTestQuote(): ActivationQuote
 {
     return new ActivationQuote([
-        new QuoteLine(AllocationType::RenewalFee, Money::of(400000, Currency::BDT), 'Growth package renewal'),
-        new QuoteLine(AllocationType::Discount, Money::of(50000, Currency::BDT), 'Loyalty credit'),
-        new QuoteLine(AllocationType::Tax, Money::of(52500, Currency::BDT), 'VAT (15%)'),
+        new QuoteLine(AllocationType::RenewalFee, Money::fromDecimal('4000.00', Currency::BDT), 'Growth package renewal'),
+        new QuoteLine(AllocationType::Discount, Money::fromDecimal('500.00', Currency::BDT), 'Loyalty credit'),
+        new QuoteLine(AllocationType::Tax, Money::fromDecimal('525.00', Currency::BDT), 'VAT (15%)'),
     ], Currency::BDT);
 }
 
@@ -53,7 +53,7 @@ describe('issuing', function () {
 
         $invoice = Invoice::query()->where('payment_id', $payment->id)->firstOrFail();
 
-        expect($invoice->total_minor->minorUnits)->toBe($payment->amount_minor->minorUnits)
+        expect($invoice->total->toDecimal())->toBe($payment->amount->toDecimal())
             ->and($invoice->purpose)->toBe(PaymentPurpose::PackageRenewal)
             ->and($invoice->number)->toStartWith('INV-');
     });
@@ -81,8 +81,8 @@ describe('issuing', function () {
         $payment = invoiceTestPayment($this->account);
         $invoice = Invoice::query()->firstOrFail();
 
-        expect($invoice->subtotal_minor->minorUnits)->toBe(400000)
-            ->and($invoice->total_minor->minorUnits)->toBe($payment->amount_minor->minorUnits);
+        expect($invoice->subtotal->toDecimal())->toBe('4000.00')
+            ->and($invoice->total->toDecimal())->toBe($payment->amount->toDecimal());
     });
 
     it('issues one invoice per payment, however many times it is asked', function () {
@@ -115,7 +115,7 @@ describe('immutability', function () {
         invoiceTestPayment($this->account);
         $invoice = Invoice::query()->firstOrFail();
 
-        expect(fn () => $invoice->forceFill(['total_minor' => 1])->save())
+        expect(fn () => $invoice->forceFill(['total' => Money::fromDecimal('1.00', Currency::BDT)])->save())
             ->toThrow(RuntimeException::class);
     });
 
@@ -130,7 +130,7 @@ describe('immutability', function () {
         invoiceTestPayment($this->account);
         $line = Invoice::query()->with('lines')->firstOrFail()->lines->first();
 
-        expect(fn () => $line->forceFill(['amount_minor' => 1])->save())
+        expect(fn () => $line->forceFill(['amount' => Money::fromDecimal('1.00', Currency::BDT)])->save())
             ->toThrow(RuntimeException::class)
             ->and(fn () => $line->delete())->toThrow(RuntimeException::class);
     });
@@ -181,7 +181,7 @@ describe('the account\'s own invoices', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('settings/invoice')
                 ->has('invoice.lines', 3)
-                ->where('invoice.subtotal.minor_units', 400000),
+                ->where('invoice.subtotal.amount', '4000.00'),
             );
     });
 

@@ -45,18 +45,18 @@ beforeEach(function () {
 /**
  * A package with a fee and an optional staff limit.
  */
-function changeTestPackage(int $feeMinor, ?int $staffLimit = null, int $depositMinor = 0): Package
+function changeTestPackage(string $fee, ?int $staffLimit = null, string $deposit = '0.00'): Package
 {
     $package = Package::create([
         'slug' => 'plan-'.Str::lower(Str::random(8)),
-        'name' => 'Plan '.$feeMinor,
-        'fee_minor' => $feeMinor,
-        'renewal_fee_minor' => $feeMinor,
+        'name' => 'Plan '.$fee,
+        'fee' => Money::fromDecimal($fee, Currency::BDT),
+        'renewal_fee' => Money::fromDecimal($fee, Currency::BDT),
         'renewal_frequency' => 'yearly',
         'validity_days' => 365,
         'grace_period_days' => 14,
-        'required_deposit_minor' => $depositMinor,
-        'minimum_balance_minor' => 0,
+        'required_deposit' => Money::fromDecimal($deposit, Currency::BDT),
+        'minimum_balance' => Money::zero(Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -89,7 +89,7 @@ function changeTestAccount(Package $package, int $daysUsed = 180): array
         'started_at' => now()->subDays($daysUsed),
         'expires_at' => now()->addDays(365 - $daysUsed),
         'grace_ends_at' => now()->addDays(365 - $daysUsed + 14),
-        'paid_fee_minor' => $package->fee_minor->minorUnits,
+        'paid_fee' => $package->fee,
         'currency_code' => 'BDT',
         'terms' => SubscriptionTerms::capture($package)->toArray(),
         'terms_captured_at' => now(),
@@ -102,8 +102,8 @@ function changeTestAccount(Package $package, int $daysUsed = 180): array
 
 describe('which way the change goes', function () {
     it('reads a bigger fee as an upgrade and applies it now', function () {
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [, $current] = changeTestAccount($small);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $large);
@@ -118,8 +118,8 @@ describe('which way the change goes', function () {
     it('reads a smaller fee as a downgrade and waits for the term to end', function () {
         // The account has already paid for what it holds; taking capacity away
         // mid-term would remove something already bought.
-        $large = changeTestPackage(900000);
-        $small = changeTestPackage(500000);
+        $large = changeTestPackage('9000.00');
+        $small = changeTestPackage('5000.00');
         [, $current] = changeTestAccount($large);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $small);
@@ -136,16 +136,16 @@ describe('what an upgrade costs', function () {
     it('credits the unused part of the current term', function () {
         // §8.3's prorated charges: half a 5,000 term used, so half is credited
         // against the 9,000 plan.
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [, $current] = changeTestAccount($small, daysUsed: 180);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $large);
 
-        expect($plan->grossFee->minorUnits)->toBe(900000)
-            // 185 of 365 days left, floored: 500000 * 185 / 365.
-            ->and($plan->credit->minorUnits)->toBe(253424)
-            ->and($plan->payable()->minorUnits)->toBe(646576);
+        expect($plan->grossFee->toDecimal())->toBe('9000.00')
+            // 185 of 365 days left, floored: 5000.00 * 185 / 365.
+            ->and($plan->credit->toDecimal())->toBe('2534.24')
+            ->and($plan->payable()->toDecimal())->toBe('6465.76');
     });
 
     it('never turns a large credit into a payout', function () {
@@ -159,55 +159,55 @@ describe('what an upgrade costs', function () {
          * larger — but "cannot happen" is exactly the kind of guard that stops
          * being true when somebody changes how the credit is worked out.
          */
-        $package = changeTestPackage(500000);
+        $package = changeTestPackage('5000.00');
         [, $current] = changeTestAccount($package);
 
         $plan = new PackageChangePlan(
             direction: SubscriptionSource::Upgrade,
             effectiveFrom: CarbonImmutable::instance(now()),
             expiresAt: null,
-            credit: Money::of(900000, Currency::BDT),
-            grossFee: Money::of(500000, Currency::BDT),
+            credit: Money::fromDecimal('9000.00', Currency::BDT),
+            grossFee: Money::fromDecimal('5000.00', Currency::BDT),
             additionalDeposit: Money::zero(Currency::BDT),
             downgrade: DowngradeAssessment::allowed(),
             terms: $current->terms(),
         );
 
-        expect($plan->payable()->minorUnits)->toBe(0)
+        expect($plan->payable()->isZero())->toBeTrue()
             ->and($plan->payable()->isNegative())->toBeFalse();
     });
 
     it('credits nothing on a term that has no unused part', function () {
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [, $current] = changeTestAccount($small, daysUsed: 365);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $large);
 
-        expect($plan->credit->minorUnits)->toBe(0);
+        expect($plan->credit->isZero())->toBeTrue();
     });
 
     it('asks only for the difference in deposit', function () {
         // §8.3's additional deposit requirement. An account that has already
         // lodged the smaller package's deposit is not asked for it twice.
-        $small = changeTestPackage(500000, depositMinor: 200000);
-        $large = changeTestPackage(900000, depositMinor: 500000);
+        $small = changeTestPackage('5000.00', deposit: '2000.00');
+        $large = changeTestPackage('9000.00', deposit: '5000.00');
         [, $current] = changeTestAccount($small);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $large);
 
-        expect($plan->additionalDeposit->minorUnits)->toBe(300000);
+        expect($plan->additionalDeposit->toDecimal())->toBe('3000.00');
     });
 
     it('never refunds a deposit through a downgrade', function () {
         // Releasing a deposit is its own decision with its own approval.
-        $large = changeTestPackage(900000, depositMinor: 500000);
-        $small = changeTestPackage(500000, depositMinor: 200000);
+        $large = changeTestPackage('9000.00', deposit: '5000.00');
+        $small = changeTestPackage('5000.00', deposit: '2000.00');
         [, $current] = changeTestAccount($large);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $small);
 
-        expect($plan->additionalDeposit->minorUnits)->toBe(0);
+        expect($plan->additionalDeposit->isZero())->toBeTrue();
     });
 });
 
@@ -218,8 +218,8 @@ describe('the itemised quote', function () {
          * before deducting the credit would charge tax on days the account is
          * not buying.
          */
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [$account, $current] = changeTestAccount($small);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $large);
@@ -229,14 +229,14 @@ describe('the itemised quote', function () {
 
         expect($types)->toContain('package_fee')
             ->and($types)->toContain('discount')
-            ->and($quote->total()->minorUnits)->toBe($plan->payable()->minorUnits);
+            ->and($quote->total()->toDecimal())->toBe($plan->payable()->toDecimal());
     });
 });
 
 describe('opening a change', function () {
     it('creates a new subscription that grants nothing yet', function () {
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [$account, $current] = changeTestAccount($small);
 
         $change = app(OpenPackageChange::class)->handle($account, $current, $large);
@@ -253,8 +253,8 @@ describe('opening a change', function () {
     it('stores the dates that were quoted', function () {
         // Recomputing them at settlement would move the effective date by
         // however long the payment took.
-        $large = changeTestPackage(900000);
-        $small = changeTestPackage(500000);
+        $large = changeTestPackage('9000.00');
+        $small = changeTestPackage('5000.00');
         [$account, $current] = changeTestAccount($large);
 
         $change = app(OpenPackageChange::class)->handle($account, $current, $small);
@@ -269,8 +269,8 @@ describe('opening a change', function () {
          * the way rather than silently unpublishing somebody's bestsellers on a
          * billing change.
          */
-        $large = changeTestPackage(900000, staffLimit: 10);
-        $small = changeTestPackage(500000, staffLimit: 1);
+        $large = changeTestPackage('9000.00', staffLimit: 10);
+        $small = changeTestPackage('5000.00', staffLimit: 1);
         [$account, $current] = changeTestAccount($large);
 
         $plan = app(PackageChangePlanner::class)->plan($current, $small, [
@@ -289,9 +289,9 @@ describe('opening a change', function () {
     });
 
     it('replaces an earlier unpaid change rather than queueing a second', function () {
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
-        $larger = changeTestPackage(1200000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
+        $larger = changeTestPackage('12000.00');
         [$account, $current] = changeTestAccount($small);
 
         $first = app(OpenPackageChange::class)->handle($account, $current, $large);
@@ -302,7 +302,7 @@ describe('opening a change', function () {
     });
 
     it('refuses a package the account is already on', function () {
-        $package = changeTestPackage(500000);
+        $package = changeTestPackage('5000.00');
         [$account, $current] = changeTestAccount($package);
 
         expect(fn () => app(OpenPackageChange::class)->handle($account, $current, $package))
@@ -310,8 +310,8 @@ describe('opening a change', function () {
     });
 
     it('refuses a subscription belonging to somebody else', function () {
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [$account] = changeTestAccount($small);
         [, $theirs] = changeTestAccount($small);
 
@@ -324,8 +324,8 @@ describe('when the change is paid for', function () {
     it('ends the term an upgrade replaces', function () {
         // Cancelled rather than expired: it did not run out, it was ended early
         // by a change the account asked for.
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [$account, $current] = changeTestAccount($small);
 
         $change = app(OpenPackageChange::class)->handle($account, $current, $large);
@@ -338,8 +338,8 @@ describe('when the change is paid for', function () {
     });
 
     it('leaves the current term running when a downgrade is scheduled', function () {
-        $large = changeTestPackage(900000, staffLimit: 10);
-        $small = changeTestPackage(500000, staffLimit: 2);
+        $large = changeTestPackage('9000.00', staffLimit: 10);
+        $small = changeTestPackage('5000.00', staffLimit: 2);
         [$account, $current] = changeTestAccount($large);
 
         $change = app(OpenPackageChange::class)->handle($account, $current, $small);
@@ -355,8 +355,8 @@ describe('when the change is paid for', function () {
          * back to whichever term entitles *now* — so the account keeps what it
          * paid for until the day it ends.
          */
-        $large = changeTestPackage(900000, staffLimit: 10);
-        $small = changeTestPackage(500000, staffLimit: 2);
+        $large = changeTestPackage('9000.00', staffLimit: 10);
+        $small = changeTestPackage('5000.00', staffLimit: 2);
         [$account, $current] = changeTestAccount($large);
 
         $change = app(OpenPackageChange::class)->handle($account, $current, $small);
@@ -369,8 +369,8 @@ describe('when the change is paid for', function () {
     });
 
     it('runs once however many times the gateway says so', function () {
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [$account, $current] = changeTestAccount($small);
 
         $change = app(OpenPackageChange::class)->handle($account, $current, $large);
@@ -387,8 +387,8 @@ describe('when the change is paid for', function () {
     it('tells the account holder when it applies', function () {
         Notification::fake();
 
-        $small = changeTestPackage(500000);
-        $large = changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        $large = changeTestPackage('9000.00');
         [$account, $current] = changeTestAccount($small);
 
         $change = app(OpenPackageChange::class)->handle($account, $current, $large);
@@ -400,8 +400,8 @@ describe('when the change is paid for', function () {
 
 describe('the change screen', function () {
     it('lists what each plan would cost and when it applies', function () {
-        $small = changeTestPackage(500000);
-        changeTestPackage(900000);
+        $small = changeTestPackage('5000.00');
+        changeTestPackage('9000.00');
         [$account] = changeTestAccount($small);
 
         $this->actingAs($account->owner)
@@ -418,8 +418,8 @@ describe('the change screen', function () {
 
     it('shows a plan the account is over rather than hiding it', function () {
         // D16 again: the three figures, on the screen, not a refusal.
-        $large = changeTestPackage(900000, staffLimit: 10);
-        changeTestPackage(500000, staffLimit: 0);
+        $large = changeTestPackage('9000.00', staffLimit: 10);
+        changeTestPackage('5000.00', staffLimit: 0);
         [$account] = changeTestAccount($large);
 
         $this->actingAs($account->owner)
@@ -433,7 +433,7 @@ describe('the change screen', function () {
     });
 
     it('counts what the account actually holds', function () {
-        $package = changeTestPackage(500000);
+        $package = changeTestPackage('5000.00');
         [$account] = changeTestAccount($package);
 
         expect(app(AccountHoldings::class)->counts($account))

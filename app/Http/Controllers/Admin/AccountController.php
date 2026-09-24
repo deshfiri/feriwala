@@ -69,7 +69,7 @@ class AccountController extends Controller
              */
             'assignable_packages' => Package::query()
                 ->available()
-                ->orderBy('fee_minor')
+                ->orderBy('fee')
                 ->get()
                 // Asked of each package, because the policy refuses an archived
                 // one on its own terms — a single class-level answer would
