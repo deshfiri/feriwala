@@ -84,8 +84,8 @@ class OpenPackageChange
                 'status' => UserPackageStatus::PendingPayment,
                 'source' => $plan->direction,
 
-                'paid_fee_minor' => $plan->payable(),
                 'currency_code' => $plan->payable()->currency->value,
+                'paid_fee' => $plan->payable(),
 
                 'terms' => $plan->terms->toArray(),
                 'terms_captured_at' => now(),

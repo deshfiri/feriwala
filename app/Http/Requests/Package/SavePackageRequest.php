@@ -7,6 +7,7 @@ use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Models\Package;
 use App\Support\Money\Currency;
 use App\Support\Money\DecimalAmount;
+use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -110,7 +111,7 @@ class SavePackageRequest extends FormRequest
                 ? null
                 : DecimalAmount::parseOrNull($data['renewal_fee'] ?? null);
 
-            if ($renewalFee !== null && $renewalFee->minorUnits > 0 && blank($frequency)) {
+            if ($renewalFee !== null && $renewalFee->isPositive() && blank($frequency)) {
                 $validator->errors()->add(
                     'renewal_frequency',
                     __('A renewal fee needs a renewal frequency.'),
@@ -127,9 +128,9 @@ class SavePackageRequest extends FormRequest
      * message this form produces.
      *
      * The Taka strings the administrator typed are converted to {@see Money}
-     * here, at the HTTP boundary — {@see ManagePackages}
-     * still receives exactly what it always expected: minor-unit columns
-     * (MoneyCast accepts a Money instance directly).
+     * here, at the HTTP boundary — {@see ManagePackages} receives exactly
+     * what the columns expect: a {@see Money} instance MoneyCast accepts
+     * directly (D26).
      *
      * @return array<string, mixed>
      */
@@ -140,11 +141,11 @@ class SavePackageRequest extends FormRequest
 
         return [
             ...$attributes,
-            'fee_minor' => DecimalAmount::parse($this->validated('fee'), $currency),
-            'registration_fee_minor' => DecimalAmount::parseOrNull($this->validated('registration_fee'), $currency),
-            'renewal_fee_minor' => DecimalAmount::parseOrNull($this->validated('renewal_fee'), $currency),
-            'required_deposit_minor' => DecimalAmount::parseOrNull($this->validated('required_deposit'), $currency),
-            'minimum_balance_minor' => DecimalAmount::parseOrNull($this->validated('minimum_balance'), $currency),
+            'fee' => DecimalAmount::parse($this->validated('fee'), $currency),
+            'registration_fee' => DecimalAmount::parseOrNull($this->validated('registration_fee'), $currency),
+            'renewal_fee' => DecimalAmount::parseOrNull($this->validated('renewal_fee'), $currency),
+            'required_deposit' => DecimalAmount::parseOrNull($this->validated('required_deposit'), $currency),
+            'minimum_balance' => DecimalAmount::parseOrNull($this->validated('minimum_balance'), $currency),
         ];
     }
 
@@ -173,7 +174,7 @@ class SavePackageRequest extends FormRequest
 
             return [
                 ...$charge,
-                'amount_minor' => $amount === null ? 0 : $amount->minorUnits,
+                'amount' => $amount ?? Money::zero($currency),
             ];
         }, $charges);
     }

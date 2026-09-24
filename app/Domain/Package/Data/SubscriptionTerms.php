@@ -5,6 +5,8 @@ namespace App\Domain\Package\Data;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\PackageCharge;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 
 /**
  * What an account actually bought (§8.1, §8.3).
@@ -25,20 +27,20 @@ readonly class SubscriptionTerms
 {
     /**
      * @param  array<string, bool|int|string|null>  $features  keyed by PackageFeature
-     * @param  array<int, array{charge_type: string, amount_minor: int, frequency: string}>  $charges
+     * @param  array<int, array{charge_type: string, amount: array<string, mixed>, frequency: string}>  $charges
      */
     public function __construct(
         public string $packagePublicId,
         public string $slug,
         public string $name,
-        public int $feeMinor,
-        public ?int $registrationFeeMinor,
-        public ?int $renewalFeeMinor,
+        public Money $fee,
+        public ?Money $registrationFee,
+        public ?Money $renewalFee,
         public ?string $renewalFrequency,
         public ?int $validityDays,
         public ?int $gracePeriodDays,
-        public int $requiredDepositMinor,
-        public int $minimumBalanceMinor,
+        public Money $requiredDeposit,
+        public Money $minimumBalance,
         public string $currencyCode,
         public array $features,
         public array $charges,
@@ -63,19 +65,19 @@ readonly class SubscriptionTerms
             packagePublicId: $package->public_id,
             slug: $package->slug,
             name: $package->name,
-            feeMinor: $package->fee_minor->minorUnits,
-            registrationFeeMinor: $package->registration_fee_minor?->minorUnits,
-            renewalFeeMinor: $package->renewal_fee_minor?->minorUnits,
+            fee: $package->fee,
+            registrationFee: $package->registration_fee,
+            renewalFee: $package->renewal_fee,
             renewalFrequency: $package->renewal_frequency,
             validityDays: $package->validity_days,
             gracePeriodDays: $package->grace_period_days,
-            requiredDepositMinor: $package->required_deposit_minor->minorUnits,
-            minimumBalanceMinor: $package->minimum_balance_minor->minorUnits,
+            requiredDeposit: $package->required_deposit,
+            minimumBalance: $package->minimum_balance,
             currencyCode: $package->currency_code,
             features: $features,
             charges: $package->charges->map(fn (PackageCharge $charge) => [
                 'charge_type' => (string) $charge->charge_type,
-                'amount_minor' => $charge->amount_minor->minorUnits,
+                'amount' => $charge->amount->jsonSerialize(),
                 'frequency' => (string) $charge->frequency,
             ])->values()->all(),
         );
@@ -89,26 +91,28 @@ readonly class SubscriptionTerms
         /** @var array<string, bool|int|string|null> $features */
         $features = $stored['features'] ?? [];
 
-        /** @var array<int, array{charge_type: string, amount_minor: int, frequency: string}> $charges */
+        /** @var array<int, array{charge_type: string, amount: array<string, mixed>, frequency: string}> $charges */
         $charges = $stored['charges'] ?? [];
+
+        $currency = Currency::tryFrom((string) ($stored['currency_code'] ?? '')) ?? Currency::base();
 
         return new self(
             packagePublicId: (string) ($stored['package_public_id'] ?? ''),
             slug: (string) ($stored['slug'] ?? ''),
             name: (string) ($stored['name'] ?? ''),
-            feeMinor: (int) ($stored['fee_minor'] ?? 0),
-            registrationFeeMinor: isset($stored['registration_fee_minor'])
-                ? (int) $stored['registration_fee_minor']
+            fee: Money::fromDecimal((string) ($stored['fee'] ?? '0'), $currency),
+            registrationFee: isset($stored['registration_fee'])
+                ? Money::fromDecimal((string) $stored['registration_fee'], $currency)
                 : null,
-            renewalFeeMinor: isset($stored['renewal_fee_minor'])
-                ? (int) $stored['renewal_fee_minor']
+            renewalFee: isset($stored['renewal_fee'])
+                ? Money::fromDecimal((string) $stored['renewal_fee'], $currency)
                 : null,
             renewalFrequency: $stored['renewal_frequency'] ?? null,
             validityDays: isset($stored['validity_days']) ? (int) $stored['validity_days'] : null,
             gracePeriodDays: isset($stored['grace_period_days']) ? (int) $stored['grace_period_days'] : null,
-            requiredDepositMinor: (int) ($stored['required_deposit_minor'] ?? 0),
-            minimumBalanceMinor: (int) ($stored['minimum_balance_minor'] ?? 0),
-            currencyCode: (string) ($stored['currency_code'] ?? 'BDT'),
+            requiredDeposit: Money::fromDecimal((string) ($stored['required_deposit'] ?? '0'), $currency),
+            minimumBalance: Money::fromDecimal((string) ($stored['minimum_balance'] ?? '0'), $currency),
+            currencyCode: $currency->value,
             features: $features,
             charges: $charges,
         );
@@ -141,14 +145,14 @@ readonly class SubscriptionTerms
             'package_public_id' => $this->packagePublicId,
             'slug' => $this->slug,
             'name' => $this->name,
-            'fee_minor' => $this->feeMinor,
-            'registration_fee_minor' => $this->registrationFeeMinor,
-            'renewal_fee_minor' => $this->renewalFeeMinor,
+            'fee' => $this->fee->toDecimal(),
+            'registration_fee' => $this->registrationFee?->toDecimal(),
+            'renewal_fee' => $this->renewalFee?->toDecimal(),
             'renewal_frequency' => $this->renewalFrequency,
             'validity_days' => $this->validityDays,
             'grace_period_days' => $this->gracePeriodDays,
-            'required_deposit_minor' => $this->requiredDepositMinor,
-            'minimum_balance_minor' => $this->minimumBalanceMinor,
+            'required_deposit' => $this->requiredDeposit->toDecimal(),
+            'minimum_balance' => $this->minimumBalance->toDecimal(),
             'currency_code' => $this->currencyCode,
             'features' => $this->features,
             'charges' => $this->charges,

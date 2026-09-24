@@ -246,8 +246,8 @@ class ManagePackages
 
             $package->charges()->create([
                 'charge_type' => $charge['charge_type'],
-                'amount_minor' => (int) ($charge['amount_minor'] ?? 0),
                 'currency_code' => $package->currency_code,
+                'amount' => $charge['amount'],
                 'frequency' => $charge['frequency'] ?? 'once',
             ]);
         }

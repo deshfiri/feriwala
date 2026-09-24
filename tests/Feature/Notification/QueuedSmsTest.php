@@ -72,7 +72,7 @@ describe('composing a message', function () {
          */
         Bus::fake([DeliverSmsMessage::class]);
 
-        $this->recipient->notify(new PaymentReceived('PAY-1', Money::of(600000, Currency::BDT)));
+        $this->recipient->notify(new PaymentReceived('PAY-1', Money::fromDecimal('6000.00', Currency::BDT)));
 
         $record = SmsMessageRecord::query()->firstOrFail();
 
@@ -138,10 +138,10 @@ describe('composing a message', function () {
          */
         Bus::fake([DeliverSmsMessage::class]);
 
-        $notification = new PaymentReceived('PAY-1', Money::of(600000, Currency::BDT));
+        $notification = new PaymentReceived('PAY-1', Money::fromDecimal('6000.00', Currency::BDT));
 
         $this->recipient->notify($notification);
-        $this->recipient->notify(new PaymentReceived('PAY-1', Money::of(600000, Currency::BDT)));
+        $this->recipient->notify(new PaymentReceived('PAY-1', Money::fromDecimal('6000.00', Currency::BDT)));
 
         expect(SmsMessageRecord::query()->count())->toBe(1);
     });
@@ -149,8 +149,8 @@ describe('composing a message', function () {
     it('treats a different payment as a different message', function () {
         Bus::fake([DeliverSmsMessage::class]);
 
-        $this->recipient->notify(new PaymentReceived('PAY-1', Money::of(600000, Currency::BDT)));
-        $this->recipient->notify(new PaymentReceived('PAY-2', Money::of(700000, Currency::BDT)));
+        $this->recipient->notify(new PaymentReceived('PAY-1', Money::fromDecimal('6000.00', Currency::BDT)));
+        $this->recipient->notify(new PaymentReceived('PAY-2', Money::fromDecimal('7000.00', Currency::BDT)));
 
         expect(SmsMessageRecord::query()->count())->toBe(2);
     });
@@ -234,7 +234,7 @@ describe('the switches', function () {
         app(SmsEventSwitch::class)->set('account.activated', false);
 
         $this->recipient->notify(new AccountActivated);
-        $this->recipient->notify(new PaymentReceived('PAY-1', Money::of(1000, Currency::BDT)));
+        $this->recipient->notify(new PaymentReceived('PAY-1', Money::fromDecimal('10.00', Currency::BDT)));
 
         $activation = SmsMessageRecord::query()->where('event', 'account.activated')->firstOrFail();
         $payment = SmsMessageRecord::query()->where('event', 'payment.received')->firstOrFail();

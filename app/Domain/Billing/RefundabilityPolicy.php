@@ -123,7 +123,7 @@ class RefundabilityPolicy
      */
     public function refundableTotal(Payment $payment): Money
     {
-        $total = Money::zero($payment->amount_minor->currency);
+        $total = Money::zero($payment->amount->currency);
 
         foreach ($this->evaluateAll($payment) as $eligibility) {
             $total = $total->plus($eligibility->refundableAmount);

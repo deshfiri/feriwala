@@ -109,7 +109,7 @@ class ApplyRefundReversal
             $transaction = $this->wallet->debit(
                 $wallet,
                 LedgerTransactionType::RefundDebit,
-                $refund->amount_minor,
+                $refund->amount,
                 new PostingContext(
                     source: 'refund',
                     description: 'Refund — '.$payment->reference,
@@ -132,7 +132,7 @@ class ApplyRefundReversal
                 'refund' => $refund->public_id,
                 'payment' => $payment->reference,
                 'business_account' => $payment->business_account_id,
-                'amount_minor' => $refund->amount_minor->minorUnits,
+                'amount' => $refund->amount->toDecimal(),
                 'error' => $throwable->getMessage(),
             ]);
 

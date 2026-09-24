@@ -71,8 +71,8 @@ class RecordPaymentFromQuote
             'business_account_id' => $account->id,
             'purpose' => $purpose,
             'status' => PaymentStatus::Draft,
-            'amount_minor' => $quote->total(),
-            'revenue_minor' => $quote->revenue(),
+            'amount' => $quote->total(),
+            'revenue' => $quote->revenue(),
             'currency_code' => $quote->paymentCurrency()->value,
             'idempotency_key' => $idempotencyKey,
 
@@ -94,8 +94,8 @@ class RecordPaymentFromQuote
         foreach ($quote->paymentLines() as $index => $line) {
             $payment->allocations()->create([
                 'type' => $line->type,
-                'amount_minor' => $line->amount,
                 'currency_code' => $line->amount->currency->value,
+                'amount' => $line->amount,
                 'description' => $line->description,
                 // Preserves the order shown at checkout, so the receipt reads
                 // the same as the quote did.

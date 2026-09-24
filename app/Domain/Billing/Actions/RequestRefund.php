@@ -68,8 +68,8 @@ class RequestRefund
                     'payment_id' => $locked->id,
                     'business_account_id' => $locked->business_account_id,
                     'allocation_type' => $type,
-                    'amount_minor' => $eligibility->refundableAmount,
                     'currency_code' => $eligibility->refundableAmount->currency->value,
+                    'amount' => $eligibility->refundableAmount,
                     'refundability' => $eligibility->rule,
                     'status' => RefundStatus::Requested,
                     'reason' => trim($reason),
@@ -91,7 +91,7 @@ class RequestRefund
                 auditableId: $request->id,
                 after: [
                     'allocation_type' => $type->value,
-                    'amount_minor' => $eligibility->refundableAmount->minorUnits,
+                    'amount' => $eligibility->refundableAmount->jsonSerialize(),
                     'refundability' => $eligibility->rule->value,
                 ],
                 reason: $request->reason,

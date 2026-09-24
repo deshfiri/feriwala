@@ -12,6 +12,8 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Models\User;
 use App\Notifications\Package\PackageAssigned;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
@@ -24,7 +26,7 @@ use InvalidArgumentException;
  * renewal quotes, refund eligibility — has to be able to tell it from a sale,
  * and the only honest way is to record it as what it is. So there is no payment
  * here, fake or otherwise: {@see SubscriptionSource::isPaid()} answers false for
- * both sources, `paid_fee_minor` is zero, and nothing invents a transaction that
+ * both sources, `paid_fee` is zero, and nothing invents a transaction that
  * never happened.
  *
  * **The dates are given, not derived.** §8.3 lists an effective date among the
@@ -86,10 +88,11 @@ class AssignPackage
                     ? SubscriptionSource::Promotional
                     : SubscriptionSource::Manual,
 
+                'currency_code' => $terms->currencyCode,
+
                 // Nothing was paid, and the record says so rather than carrying
                 // the package's price as though it had been.
-                'paid_fee_minor' => 0,
-                'currency_code' => $terms->currencyCode,
+                'paid_fee' => Money::zero(Currency::from($terms->currencyCode)),
 
                 'terms' => $terms->toArray(),
                 'terms_captured_at' => now(),

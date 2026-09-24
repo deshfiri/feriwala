@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $public_id
  * @property FeeType $fee_type
  * @property int|null $package_id
- * @property Money $amount_minor
+ * @property Money $amount
  * @property CarbonImmutable $effective_from
  * @property CarbonImmutable|null $effective_until
  * @property bool $is_active
@@ -45,7 +45,7 @@ class FeeRule extends Model
     {
         return [
             'fee_type' => FeeType::class,
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'effective_from' => 'immutable_datetime',
             'effective_until' => 'immutable_datetime',
             'is_active' => 'boolean',

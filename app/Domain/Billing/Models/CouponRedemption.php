@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $business_account_id
  * @property int|null $payment_id
  * @property RedemptionStatus $status
- * @property Money $amount_minor
+ * @property Money $amount
  * @property CarbonImmutable|null $reserved_at
  * @property CarbonImmutable|null $redeemed_at
  * @property CarbonImmutable|null $released_at
@@ -39,7 +39,7 @@ class CouponRedemption extends Model
     {
         return [
             'status' => RedemptionStatus::class,
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'reserved_at' => 'immutable_datetime',
             'redeemed_at' => 'immutable_datetime',
             'released_at' => 'immutable_datetime',

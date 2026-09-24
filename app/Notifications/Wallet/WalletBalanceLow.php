@@ -84,7 +84,7 @@ class WalletBalanceLow extends Notification implements ShouldQueue
      */
     public function smsDedupeKey(): string
     {
-        return 'wallet.balance_low:'.$this->state->value.':'.$this->shortfall->minorUnits;
+        return 'wallet.balance_low:'.$this->state->value.':'.$this->shortfall->toDecimal();
     }
 
     /**
@@ -95,8 +95,8 @@ class WalletBalanceLow extends Notification implements ShouldQueue
         return [
             'event' => 'wallet.balance_low',
             'state' => $this->state->value,
-            'shortfall_minor' => $this->shortfall->minorUnits,
-            'required_minor' => $this->required->minorUnits,
+            'shortfall' => $this->shortfall->jsonSerialize(),
+            'required' => $this->required->jsonSerialize(),
             'currency' => $this->shortfall->currency->value,
             'grace_ends_at' => $this->graceEndsAt?->toIso8601String(),
         ];

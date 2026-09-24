@@ -8,6 +8,7 @@ use App\Domain\Billing\Enums\CouponScope;
 use App\Domain\Billing\Enums\DiscountType;
 use App\Domain\Billing\Enums\RedemptionStatus;
 use App\Domain\Package\Models\Package;
+use App\Domain\Referral\Data\RewardRule;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use RoundingMode;
 
 /**
  * A coupon or promotional discount (§9).
@@ -28,8 +30,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $currency_code
  * @property CouponScope $applies_to
  * @property int|null $package_id
- * @property Money|null $minimum_spend_minor
- * @property Money|null $maximum_discount_minor
+ * @property Money|null $minimum_spend
+ * @property Money|null $maximum_discount
  * @property int|null $usage_limit
  * @property int|null $per_account_limit
  * @property int $redeemed_count
@@ -53,8 +55,8 @@ class Coupon extends Model
             'discount_type' => DiscountType::class,
             'applies_to' => CouponScope::class,
             'value' => 'integer',
-            'minimum_spend_minor' => MoneyCast::class,
-            'maximum_discount_minor' => MoneyCast::class,
+            'minimum_spend' => MoneyCast::class,
+            'maximum_discount' => MoneyCast::class,
             'usage_limit' => 'integer',
             'per_account_limit' => 'integer',
             'redeemed_count' => 'integer',
@@ -135,8 +137,10 @@ class Coupon extends Model
     /**
      * What this coupon takes off a given base.
      *
-     * Percentages are worked out in minor units and **rounded down**, so a
-     * discount is never a unit more generous than the rate says. A cap applies
+     * `value` is dual-purpose and, per D24, is untouched by D26's flat-Taka
+     * conversion: basis points for a percentage coupon (10 000 = 100%), still
+     * poisha for a fixed one. Percentages are **rounded down**, so a discount
+     * is never a unit more generous than the rate says. A cap applies
      * afterwards, and the result never exceeds the base — a coupon cannot turn
      * a sale into a payout.
      */
@@ -145,16 +149,29 @@ class Coupon extends Model
         $currency = $base->currency;
 
         $raw = $this->discount_type === DiscountType::Percentage
-            ? Money::of(intdiv($base->minorUnits * $this->value, 10000), $currency)
-            : Money::of($this->value, $currency);
+            ? $base->percentage(self::percentFromBasisPoints($this->value), RoundingMode::TowardsZero)
+            // The one deliberate poisha-to-Taka boundary D24 still calls for:
+            // `value` for a fixed coupon is still stored in minor units.
+            : Money::fromDecimal(bcdiv((string) $this->value, '100', $currency->scale()), $currency);
 
-        $cap = $this->maximum_discount_minor;
+        $cap = $this->maximum_discount;
 
         if ($cap !== null && $cap->isPositive() && $raw->greaterThan($cap)) {
-            $raw = Money::of($cap->minorUnits, $currency);
+            $raw = $cap;
         }
 
         return $raw->greaterThan($base) ? $base : $raw;
+    }
+
+    /**
+     * A basis-point count as a percent decimal string, e.g. `1234` → `"12.34"`,
+     * without a float — {@see Money::percentage()} divides by 100 itself, so
+     * this only needs to place the decimal point two digits from bps' own
+     * scale. Mirrors {@see RewardRule}.
+     */
+    private static function percentFromBasisPoints(int $basisPoints): string
+    {
+        return sprintf('%d.%02d', intdiv($basisPoints, 100), $basisPoints % 100);
     }
 
     public function currency(): Currency

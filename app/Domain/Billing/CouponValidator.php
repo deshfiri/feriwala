@@ -161,7 +161,7 @@ class CouponValidator
      */
     protected function limitRefusal(Coupon $coupon, BusinessAccount $account, Money $spend): ?CouponOutcome
     {
-        $minimum = $coupon->minimum_spend_minor;
+        $minimum = $coupon->minimum_spend;
 
         if ($minimum !== null && $minimum->isPositive() && $spend->lessThan($minimum)) {
             return CouponOutcome::refused('billing.coupons.refused.minimum_spend', $coupon);

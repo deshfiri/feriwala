@@ -126,7 +126,7 @@ class DecideRefund
             before: ['status' => $from->value],
             after: [
                 'status' => $to->value,
-                'amount_minor' => $request->amount_minor->minorUnits,
+                'amount' => $request->amount->jsonSerialize(),
                 'allocation_type' => $request->allocation_type->value,
             ],
             reason: $request->reason,

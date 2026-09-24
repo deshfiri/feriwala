@@ -74,7 +74,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 130000,
+        'price' => Money::fromDecimal('1300.00', Currency::BDT),
         'published_at' => now(),
     ]);
 
@@ -140,7 +140,7 @@ describe('payable settlement', function () {
             'status' => WebsiteProductStatus::Published,
             'sync_status' => WebsiteSyncStatus::Pending,
             'currency_code' => 'BDT',
-            'price_minor' => 70000,
+            'price' => Money::fromDecimal('700.00', Currency::BDT),
             'published_at' => now(),
         ]);
         $this->offer = $secondOffer;

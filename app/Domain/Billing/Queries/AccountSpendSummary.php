@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -21,10 +22,14 @@ use Illuminate\Support\Collection;
  * redirect page and is not money here — putting it on the chart would tell an
  * account holder they had spent something they may yet not.
  *
- * Every figure stays in integer minor units the whole way through, including the
- * values handed to the chart and the y-axis ticks. The front end plots the
- * integer and prints the string beside it; nothing divides by a hundred in
- * JavaScript (§36.1, D4).
+ * The chart contract (`resources/js/lib/chart.ts`) plots an integer `value` and
+ * prints a server-formatted `formatted` string beside it — nothing divides or
+ * multiplies money by a hundred in JavaScript (§36.1). Under D26, `Money` itself
+ * holds exact decimal Taka rather than an integer, so the plottable `value` here
+ * is a **chart geometry figure**, not a monetary one: an exact count of the
+ * currency's own smallest unit, produced by bcmath and never a float, purely so
+ * the browser has something to compute pixel positions from. It is converted
+ * back to `Money` only to be formatted for the label a person reads.
  */
 class AccountSpendSummary
 {
@@ -106,7 +111,7 @@ class AccountSpendSummary
                 continue;
             }
 
-            $buckets[$key]['amount'] = $buckets[$key]['amount']->plus($payment->amount_minor);
+            $buckets[$key]['amount'] = $buckets[$key]['amount']->plus($payment->amount);
         }
 
         return array_values($buckets);
@@ -120,7 +125,7 @@ class AccountSpendSummary
     {
         return array_map(fn (array $month) => [
             'label' => $month['label'],
-            'value' => $month['amount']->minorUnits,
+            'value' => $this->plottable($month['amount']),
             'formatted' => $month['amount']->format(),
         ], $monthly);
     }
@@ -166,7 +171,7 @@ class AccountSpendSummary
             return [['value' => 0, 'label' => Money::zero()->format()]];
         }
 
-        $step = $this->niceStep((int) ceil($peak->minorUnits / self::TICK_COUNT));
+        $step = $this->niceStep((int) ceil($this->plottable($peak) / self::TICK_COUNT));
 
         $ticks = [];
 
@@ -175,7 +180,7 @@ class AccountSpendSummary
 
             $ticks[] = [
                 'value' => $value,
-                'label' => Money::of($value, $peak->currency)->format(),
+                'label' => $this->fromPlottable($value, $peak->currency)->format(),
             ];
         }
 
@@ -183,10 +188,29 @@ class AccountSpendSummary
     }
 
     /**
+     * A `Money` as an exact count of its currency's smallest unit — a chart
+     * geometry figure, computed by bcmath and never a float, so the browser has
+     * an integer to lay out pixels from (`resources/js/lib/chart.ts`).
+     */
+    protected function plottable(Money $amount): int
+    {
+        return (int) bcdiv($amount->toDecimal(), $amount->currency->smallestUnit(), 0);
+    }
+
+    /**
+     * The inverse of {@see plottable()} — back to `Money`, only so a tick's
+     * plotted value can be formatted for the label a person reads.
+     */
+    protected function fromPlottable(int $value, Currency $currency): Money
+    {
+        return Money::fromDecimal(bcmul((string) $value, $currency->smallestUnit(), $currency->scale()), $currency);
+    }
+
+    /**
      * Round a step up to one or two significant figures.
      *
-     * Integer arithmetic throughout — this operates on minor units, and a float
-     * here would be the one place money drifted (D4).
+     * Integer arithmetic throughout — this operates on the chart's plottable
+     * integer, never `Money` or a float (D4, D26).
      */
     protected function niceStep(int $step): int
     {
@@ -209,10 +233,10 @@ class AccountSpendSummary
 
         foreach ($payments as $payment) {
             $key = $payment->purpose->value;
-            $totals[$key] = ($totals[$key] ?? Money::zero())->plus($payment->amount_minor);
+            $totals[$key] = ($totals[$key] ?? Money::zero())->plus($payment->amount);
         }
 
-        uasort($totals, fn (Money $a, Money $b) => $b->minorUnits <=> $a->minorUnits);
+        uasort($totals, fn (Money $a, Money $b) => bccomp($b->toDecimal(), $a->toDecimal(), $b->currency->scale()));
 
         $slices = [];
 
@@ -220,7 +244,7 @@ class AccountSpendSummary
             $slices[] = [
                 'key' => $key,
                 'label' => PaymentPurpose::from($key)->label(),
-                'value' => $amount->minorUnits,
+                'value' => $this->plottable($amount),
                 'formatted' => $amount->format(),
             ];
         }

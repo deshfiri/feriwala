@@ -34,10 +34,10 @@ class RefundableAmount
      */
     public function handle(Payment $payment, ?RefundRequest $excluding = null): Money
     {
-        $remaining = $payment->amount_minor->minus($this->claimed($payment, $excluding));
+        $remaining = $payment->amount->minus($this->claimed($payment, $excluding));
 
         return $remaining->isNegative()
-            ? Money::of(0, $payment->amount_minor->currency)
+            ? Money::zero($payment->amount->currency)
             : $remaining;
     }
 
@@ -50,13 +50,13 @@ class RefundableAmount
      */
     public function claimed(Payment $payment, ?RefundRequest $excluding = null): Money
     {
-        $minor = (int) RefundRequest::query()
+        $sum = RefundRequest::query()
             ->where('payment_id', $payment->id)
             ->whereIn('status', $this->holdingStatuses())
             ->unless($excluding === null, fn ($query) => $query->whereKeyNot($excluding?->id))
-            ->sum('amount_minor');
+            ->sum('amount');
 
-        return Money::of($minor, Currency::from($payment->currency_code));
+        return Money::fromDecimal((string) $sum, Currency::from($payment->currency_code));
     }
 
     /**
@@ -79,12 +79,15 @@ class RefundableAmount
      */
     public function isFullyRefunded(Payment $payment): bool
     {
-        $processed = (int) RefundRequest::query()
+        $processed = RefundRequest::query()
             ->where('payment_id', $payment->id)
             ->where('status', RefundStatus::Processed)
-            ->sum('amount_minor');
+            ->sum('amount');
 
-        return $processed >= $payment->amount_minor->minorUnits;
+        // Compared as exact decimals, never cast through int or float: a sum
+        // this close to the payment's own amount is exactly where a rounding
+        // slip would hide.
+        return bccomp((string) $processed, $payment->amount->toDecimal(), $payment->amount->currency->scale()) >= 0;
     }
 
     /**

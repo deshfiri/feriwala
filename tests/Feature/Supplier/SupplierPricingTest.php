@@ -12,6 +12,8 @@ use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Models\User;
 use App\Notifications\Supplier\SupplierOfferSuspended;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Notification;
@@ -141,7 +143,7 @@ test('a partner website\'s storefront api never carries the supplier rate, margi
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
 

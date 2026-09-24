@@ -62,13 +62,13 @@ class PackageSelectionController extends Controller
                     'slug' => $package->slug,
                     'name' => $package->name,
                     'short_description' => $package->short_description,
-                    'fee' => $package->fee_minor->jsonSerialize(),
+                    'fee' => $package->fee->jsonSerialize(),
 
                     // What they will actually pay today.
                     'activation_total' => $quote->total()->jsonSerialize(),
 
                     'validity_days' => $package->validity_days,
-                    'required_deposit' => $package->required_deposit_minor->jsonSerialize(),
+                    'required_deposit' => $package->required_deposit->jsonSerialize(),
 
                     'features' => array_map(fn (PackageFeature $feature) => [
                         'key' => $feature->value,

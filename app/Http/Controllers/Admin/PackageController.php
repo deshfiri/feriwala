@@ -51,11 +51,11 @@ class PackageController extends Controller
 
                 // Rendered by MoneyAmount for display, and by MoneyInput's
                 // `.decimal` for the edit form's default value (§36.1).
-                'fee' => $package->fee_minor->jsonSerialize(),
-                'registration_fee' => $package->registration_fee_minor?->jsonSerialize(),
-                'renewal_fee' => $package->renewal_fee_minor?->jsonSerialize(),
-                'required_deposit' => $package->required_deposit_minor->jsonSerialize(),
-                'minimum_balance' => $package->minimum_balance_minor->jsonSerialize(),
+                'fee' => $package->fee->jsonSerialize(),
+                'registration_fee' => $package->registration_fee?->jsonSerialize(),
+                'renewal_fee' => $package->renewal_fee?->jsonSerialize(),
+                'required_deposit' => $package->required_deposit->jsonSerialize(),
+                'minimum_balance' => $package->minimum_balance->jsonSerialize(),
                 'currency_code' => $package->currency_code,
 
                 'validity_days' => $package->validity_days,
@@ -78,7 +78,7 @@ class PackageController extends Controller
 
                 'charges' => $package->charges->map(fn (PackageCharge $charge) => [
                     'charge_type' => $charge->charge_type,
-                    'amount' => $charge->amount_minor->jsonSerialize(),
+                    'amount' => $charge->amount->jsonSerialize(),
                     'frequency' => $charge->frequency,
                 ])->values(),
 

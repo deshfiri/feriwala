@@ -78,12 +78,13 @@ class OpenRenewal
                 'status' => UserPackageStatus::PendingPayment,
                 'source' => SubscriptionSource::Renewal,
 
+                'currency_code' => $package->fee->currency->value,
+
                 // What renewing costs, at the price quoted. The renewal fee
                 // where the package sets one; the package fee where it does not
                 // (§8.1) — silence there means no separate renewal price, not a
                 // free year.
-                'paid_fee_minor' => $package->renewal_fee_minor ?? $package->fee_minor,
-                'currency_code' => $package->fee_minor->currency->value,
+                'paid_fee' => $package->renewal_fee ?? $package->fee,
 
                 'terms' => $terms->toArray(),
                 'terms_captured_at' => now(),

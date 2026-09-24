@@ -53,11 +53,12 @@ class SelectPackage
                 'package_id' => $package->id,
                 'status' => UserPackageStatus::PendingPayment,
                 'source' => SubscriptionSource::Purchase,
+                'currency_code' => $package->fee->currency->value,
+
                 // The price at the moment of choosing. An administrator editing
                 // the package afterwards must not silently change what this
                 // applicant was quoted.
-                'paid_fee_minor' => $package->fee_minor,
-                'currency_code' => $package->fee_minor->currency->value,
+                'paid_fee' => $package->fee,
 
                 /*
                  * And everything else the package says, for the same reason

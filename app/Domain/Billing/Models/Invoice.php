@@ -28,8 +28,8 @@ use RuntimeException;
  * @property string $public_id
  * @property string $number
  * @property PaymentPurpose $purpose
- * @property Money $subtotal_minor
- * @property Money $total_minor
+ * @property Money $subtotal
+ * @property Money $total
  * @property CarbonImmutable $issued_at
  * @property-read Payment|null $payment
  */
@@ -46,8 +46,8 @@ class Invoice extends Model
     {
         return [
             'purpose' => PaymentPurpose::class,
-            'subtotal_minor' => MoneyCast::class,
-            'total_minor' => MoneyCast::class,
+            'subtotal' => MoneyCast::class,
+            'total' => MoneyCast::class,
             'issued_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',

@@ -101,7 +101,7 @@ class ReserveCoupon
             'status' => RedemptionStatus::Reserved,
             // Snapshotted: the coupon can be edited afterwards and this has to
             // go on reconciling with the payment allocation it produced.
-            'amount_minor' => $amount,
+            'amount' => $amount,
             'currency_code' => $amount->currency->value,
             'reserved_at' => now(),
         ]);

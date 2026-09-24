@@ -9,8 +9,6 @@ use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Support\Money\Currency;
-use App\Support\Money\Money;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -34,7 +32,7 @@ use Inertia\Response;
 class PaymentLogController extends Controller
 {
     /** Columns the table may sort by. A whitelist, not the parameter itself. */
-    protected const SORTABLE = ['created_at', 'amount_minor', 'status'];
+    protected const SORTABLE = ['created_at', 'amount', 'status'];
 
     public const PER_PAGE = 25;
 
@@ -150,9 +148,7 @@ class PaymentLogController extends Controller
             'payment' => array_merge($this->summary($record), [
                 'purpose_label' => $record->purpose->label(),
                 // Formatted server-side, like every other amount (§36.1).
-                'settled_amount' => $record->settled_amount_minor === null || $record->settled_currency_code === null
-                    ? null
-                    : Money::of((int) $record->settled_amount_minor, Currency::from($record->settled_currency_code))->jsonSerialize(),
+                'settled_amount' => $record->settled_amount?->jsonSerialize(),
                 'initiated_at' => $record->initiated_at?->toIso8601String(),
                 'expires_at' => $record->expires_at?->toIso8601String(),
                 'failed_at' => $record->failed_at?->toIso8601String(),
@@ -180,8 +176,8 @@ class PaymentLogController extends Controller
             // support desk, and the thing to search for when they quote it back.
             'gateway_reference' => $payment->gateway_reference,
 
-            'amount' => $payment->amount_minor->jsonSerialize(),
-            'currency' => $payment->amount_minor->currency->value,
+            'amount' => $payment->amount->jsonSerialize(),
+            'currency' => $payment->amount->currency->value,
             'status' => $payment->status->value,
             'status_label' => $payment->status->label(),
             'status_tone' => $payment->status->tone(),

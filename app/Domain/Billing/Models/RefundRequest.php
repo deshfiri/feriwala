@@ -32,7 +32,7 @@ use RuntimeException;
  *
  * @property string $public_id
  * @property AllocationType $allocation_type
- * @property Money $amount_minor
+ * @property Money $amount
  * @property Refundability $refundability
  * @property RefundStatus $status
  * @property string $reason
@@ -85,7 +85,7 @@ class RefundRequest extends Model
             'allocation_type' => AllocationType::class,
             'refundability' => Refundability::class,
             'status' => RefundStatus::class,
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'decided_at' => 'immutable_datetime',
             'submitted_at' => 'immutable_datetime',
             'processed_at' => 'immutable_datetime',

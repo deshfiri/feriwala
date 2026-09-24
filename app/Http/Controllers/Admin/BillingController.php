@@ -75,7 +75,7 @@ class BillingController extends Controller
                     'fee_type' => $rule->fee_type->value,
                     'fee_type_label' => $rule->fee_type->label(),
                     'package' => $rule->package?->name,
-                    'amount' => $rule->amount_minor->jsonSerialize(),
+                    'amount' => $rule->amount->jsonSerialize(),
                     'effective_from' => $rule->effective_from->toIso8601String(),
                     'effective_until' => $rule->effective_until?->toIso8601String(),
                     'is_active' => $rule->is_active,
@@ -113,7 +113,9 @@ class BillingController extends Controller
                     'discount_type' => $coupon->discount_type->value,
                     'discount_label' => $coupon->discount_type === DiscountType::Percentage
                         ? number_format($coupon->value / 100, 2).'%'
-                        : Money::of($coupon->value, $coupon->currency())->format(),
+                        // `value` for a fixed coupon is still stored in minor
+                        // units (D24) — the one boundary D26 left untouched.
+                        : Money::fromDecimal(bcdiv((string) $coupon->value, '100', 2), $coupon->currency())->format(),
                     'applies_to' => $coupon->applies_to->value,
                     'applies_to_label' => $coupon->applies_to->label(),
                     'package' => $coupon->package?->name,
@@ -379,7 +381,12 @@ class BillingController extends Controller
 
         $type = DiscountType::from($validated['discount_type']);
         $value = $type === DiscountType::Fixed
-            ? DecimalAmount::parse($validated['value'])->minorUnits
+            // A fixed coupon's `value` is still stored in minor units (D24) —
+            // the one boundary D26's migration deliberately left untouched,
+            // since the column is shared with the percentage path's basis
+            // points. The administrator types Taka (§36.1); this is the one
+            // place it is turned back into that stored integer.
+            ? (int) bcmul(DecimalAmount::parse($validated['value'])->toDecimal(), '100', 0)
             : (int) $validated['value'];
 
         try {

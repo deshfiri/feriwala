@@ -62,8 +62,8 @@ class ManageFeeRules
             $rule = FeeRule::create([
                 'fee_type' => $type,
                 'package_id' => $packageId,
-                'amount_minor' => $amount,
                 'currency_code' => $amount->currency->value,
+                'amount' => $amount,
                 'effective_from' => $effectiveFrom,
                 'effective_until' => $effectiveUntil,
                 'is_active' => true,
@@ -79,7 +79,7 @@ class ManageFeeRules
                 after: [
                     'fee_type' => $type->value,
                     'package_id' => $packageId,
-                    'amount_minor' => $amount->minorUnits,
+                    'amount' => $amount->jsonSerialize(),
                     'effective_from' => $effectiveFrom->toIso8601String(),
                     'effective_until' => $effectiveUntil?->toIso8601String(),
                 ],

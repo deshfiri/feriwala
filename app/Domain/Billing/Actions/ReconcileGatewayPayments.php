@@ -189,7 +189,7 @@ class ReconcileGatewayPayments
      */
     protected function checkSettled(Payment $payment, GatewayResult $result): string
     {
-        if ($result->isPaid() && $result->matchesAmount($payment->amount_minor)) {
+        if ($result->isPaid() && $result->matchesAmount($payment->amount)) {
             // Agreed. Recorded so the sweep stops asking about this one.
             $payment->forceFill([
                 'reconciliation_checked_at' => now(),
@@ -204,8 +204,8 @@ class ReconcileGatewayPayments
             'gateway' => $payment->gateway,
             'our_status' => $payment->status->value,
             'their_status' => $result->outcome->value,
-            'our_amount_minor' => $payment->amount_minor->minorUnits,
-            'their_amount_minor' => $result->amount?->minorUnits,
+            'our_amount' => $payment->amount->toDecimal(),
+            'their_amount' => $result->amount?->toDecimal(),
             'their_currency' => $result->amount?->currency->value,
         ]);
 

@@ -47,7 +47,7 @@ class FeeRuleResolver
     /**
      * The registration fee for a package at a moment (§9).
      *
-     * The package's own `registration_fee_minor` is still the package-specific
+     * The package's own `registration_fee` is still the package-specific
      * override — it is edited where the rest of the package is, and moving it
      * here would mean two screens that can disagree. A package-scoped rule sits
      * above it for the case §9 actually describes: a dated change to one plan's
@@ -61,18 +61,18 @@ class FeeRuleResolver
             $scoped = $this->ruleFor(FeeType::Registration, $package->id, $at);
 
             if ($scoped !== null) {
-                return $scoped->amount_minor;
+                return $scoped->amount;
             }
 
-            if ($package->registration_fee_minor !== null) {
-                return $package->registration_fee_minor;
+            if ($package->registration_fee !== null) {
+                return $package->registration_fee;
             }
         }
 
         $global = $this->ruleFor(FeeType::Registration, null, $at);
 
         if ($global !== null) {
-            return $global->amount_minor;
+            return $global->amount;
         }
 
         return $this->legacyFee($currency);
@@ -97,17 +97,17 @@ class FeeRuleResolver
             return Money::zero($currency);
         }
 
-        if ($rule->amount_minor->currency !== $currency) {
+        if ($rule->amount->currency !== $currency) {
             Log::warning('Wholesale delivery rule is priced in another currency.', [
                 'fee_rule' => $rule->id,
-                'rule_currency' => $rule->amount_minor->currency->value,
+                'rule_currency' => $rule->amount->currency->value,
                 'currency' => $currency->value,
             ]);
 
             return Money::zero($currency);
         }
 
-        return $rule->amount_minor;
+        return $rule->amount;
     }
 
     /**
@@ -133,18 +133,18 @@ class FeeRuleResolver
             return Money::zero($currency);
         }
 
-        if ($rule->amount_minor->currency !== $currency) {
+        if ($rule->amount->currency !== $currency) {
             Log::warning('Website charge rule is priced in another currency.', [
                 'fee_rule' => $rule->id,
                 'fee_type' => $type->value,
-                'rule_currency' => $rule->amount_minor->currency->value,
+                'rule_currency' => $rule->amount->currency->value,
                 'currency' => $currency->value,
             ]);
 
             return Money::zero($currency);
         }
 
-        return $rule->amount_minor;
+        return $rule->amount;
     }
 
     /**
@@ -181,6 +181,6 @@ class FeeRuleResolver
             return $configured;
         }
 
-        return Money::of((int) ($configured ?? 0), $currency);
+        return Money::fromDecimal((string) ($configured ?? '0'), $currency);
     }
 }

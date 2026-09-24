@@ -18,7 +18,7 @@ use RuntimeException;
  *
  * @property string $type
  * @property string $label
- * @property Money $amount_minor
+ * @property Money $amount
  * @property bool $is_deduction
  */
 class InvoiceLine extends Model
@@ -33,7 +33,7 @@ class InvoiceLine extends Model
     protected function casts(): array
     {
         return [
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
             'is_deduction' => 'boolean',
         ];
     }
@@ -66,7 +66,7 @@ class InvoiceLine extends Model
     public function signedAmount(): Money
     {
         return $this->is_deduction
-            ? $this->amount_minor->negated()
-            : $this->amount_minor;
+            ? $this->amount->negated()
+            : $this->amount;
     }
 }

@@ -77,12 +77,12 @@ class InvoiceController extends Controller
                     'id' => $order->public_id,
                     'reference' => $order->reference,
                 ] : null,
-                'subtotal' => $record->subtotal_minor->jsonSerialize(),
+                'subtotal' => $record->subtotal->jsonSerialize(),
                 'lines' => $record->lines
                     ->map(fn (InvoiceLine $line) => [
                         'type' => $line->type,
                         'label' => $line->label,
-                        'amount' => $line->amount_minor->jsonSerialize(),
+                        'amount' => $line->amount->jsonSerialize(),
                         'is_deduction' => $line->is_deduction,
                     ])
                     ->all(),
@@ -117,8 +117,8 @@ class InvoiceController extends Controller
                 'label' => $line->label,
                 'rate' => $line->formattedRate(),
                 'is_inclusive' => $line->mode->isInclusive(),
-                'net' => $line->taxable_amount_minor->jsonSerialize(),
-                'tax' => $line->tax_amount_minor->jsonSerialize(),
+                'net' => $line->taxable_amount->jsonSerialize(),
+                'tax' => $line->tax_amount->jsonSerialize(),
             ])
             ->all();
     }
@@ -133,7 +133,7 @@ class InvoiceController extends Controller
             'number' => $invoice->number,
             'purpose' => $invoice->purpose->value,
             'purpose_label' => $invoice->purpose->label(),
-            'total' => $invoice->total_minor->jsonSerialize(),
+            'total' => $invoice->total->jsonSerialize(),
             'issued_at' => $invoice->issued_at->toIso8601String(),
 
             // From the payment, not from a column here.

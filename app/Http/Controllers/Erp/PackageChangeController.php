@@ -67,7 +67,7 @@ class PackageChangeController extends Controller
             ->available()
             ->with(['features', 'charges'])
             ->whereKeyNot($current->package_id)
-            ->orderBy('fee_minor')
+            ->orderBy('fee')
             ->get()
             ->map(function (Package $package) use ($current, $counts, $account) {
                 $plan = $this->planner->plan($current, $package, $counts);

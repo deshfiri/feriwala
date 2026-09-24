@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A service charge attached to a package (§8.1, §16.2).
  *
- * @property Money $amount_minor
+ * @property Money $amount
  */
 class PackageCharge extends Model
 {
@@ -19,7 +19,7 @@ class PackageCharge extends Model
     protected function casts(): array
     {
         return [
-            'amount_minor' => MoneyCast::class,
+            'amount' => MoneyCast::class,
         ];
     }
 

@@ -86,7 +86,7 @@ beforeEach(function () {
 
     $this->supplier = Supplier::factory()->create();
     $this->product = websiteTestProduct();
-    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: 100000, platformRate: 130000, preferred: true);
+    $this->offer = supplierTestOffer($this->supplier, $this->product, supplierRate: '1000.00', platformRate: '1300.00', preferred: true);
     supplierTestOfferPriceVersion($this->offer);
 
     $this->selection = WebsiteProduct::create([
@@ -96,7 +96,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 130000,
+        'price' => Money::fromDecimal('1300.00', Currency::BDT),
         'published_at' => now(),
     ]);
 
@@ -117,8 +117,8 @@ function supplierWalletTestPay(Order $order): void
 {
     $payment = $order->refresh()->payment()->firstOrFail();
 
-    test()->validation['currency_amount'] = $payment->amount_minor->toDecimal();
-    test()->validation['currency_type'] = $payment->amount_minor->currency->value;
+    test()->validation['currency_amount'] = $payment->amount->toDecimal();
+    test()->validation['currency_type'] = $payment->amount->currency->value;
 
     $valId = 'val-'.Str::random(12);
     $fields = ['tran_id' => (string) $payment->reference, 'val_id' => $valId, 'status' => 'VALID'];
@@ -157,11 +157,11 @@ describe('settlement', function () {
             ->and($settled->settlement_reference)->not->toBeNull();
 
         $wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
-        expect($wallet->total_minor->minorUnits)->toBe(200000)
-            ->and($wallet->availableBalance()->minorUnits)->toBe(200000);
+        expect($wallet->total->toDecimal())->toBe('2000.00')
+            ->and($wallet->availableBalance()->toDecimal())->toBe('2000.00');
 
         $entry = SupplierLedgerEntry::query()->where('supplier_wallet_id', $wallet->id)->sole();
-        expect($entry->credit_minor->minorUnits)->toBe(200000)
+        expect($entry->credit->toDecimal())->toBe('2000.00')
             ->and($entry->reference)->toBe($settled->settlement_reference)
             ->and($entry->supplier_payable_id)->toBe($payable->id);
 
@@ -189,7 +189,7 @@ describe('settlement', function () {
         $good = supplierWalletTestEligiblePayable(1);
 
         $secondSupplier = Supplier::factory()->create();
-        $secondOffer = supplierTestOffer($secondSupplier, supplierRate: 50000, platformRate: 70000, preferred: true);
+        $secondOffer = supplierTestOffer($secondSupplier, supplierRate: '500.00', platformRate: '700.00', preferred: true);
         supplierTestOfferPriceVersion($secondOffer);
         $secondSelection = WebsiteProduct::create([
             'website_id' => $this->website->id,
@@ -198,7 +198,7 @@ describe('settlement', function () {
             'status' => WebsiteProductStatus::Published,
             'sync_status' => WebsiteSyncStatus::Pending,
             'currency_code' => 'BDT',
-            'price_minor' => 70000,
+            'price' => Money::fromDecimal('700.00', Currency::BDT),
             'published_at' => now(),
         ]);
         $this->selection = $secondSelection;
@@ -226,7 +226,7 @@ describe('reversal after settlement', function () {
         app(SettleSupplierPayable::class)->handle($payable, $this->manager->id);
 
         $wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
-        expect($wallet->total_minor->minorUnits)->toBe(300000);
+        expect($wallet->total->toDecimal())->toBe('3000.00');
 
         $order = $payable->order;
         $sku = $order->items()->sole()->sku;
@@ -247,8 +247,8 @@ describe('reversal after settlement', function () {
         );
 
         $wallet->refresh();
-        expect($wallet->total_minor->minorUnits)->toBe(200000)
-            ->and($wallet->recovery_minor->minorUnits)->toBe(0);
+        expect($wallet->total->toDecimal())->toBe('2000.00')
+            ->and($wallet->recovery->toDecimal())->toBe('0.00');
     });
 
     it('records recovery instead of a negative balance when a reversal exceeds what is available', function () {
@@ -264,9 +264,9 @@ describe('reversal after settlement', function () {
             'Primary bKash',
             ['account_name' => 'Test Supplier', 'account_number' => '01711112222'],
         );
-        app(RequestSupplierWithdrawal::class)->handle($this->supplier, $method, Money::of(150000, Currency::BDT), 'wallet-test:withdrawal:1');
+        app(RequestSupplierWithdrawal::class)->handle($this->supplier, $method, Money::fromDecimal('1500.00', Currency::BDT), 'wallet-test:withdrawal:1');
 
-        expect($wallet->fresh()->availableBalance()->minorUnits)->toBe(50000);
+        expect($wallet->fresh()->availableBalance()->toDecimal())->toBe('500.00');
 
         $order = $payable->order;
         $sku = $order->items()->sole()->sku;
@@ -288,13 +288,13 @@ describe('reversal after settlement', function () {
 
         $wallet->refresh();
 
-        // 200000 owed back, only 50000 was available: 50000 debited off
-        // total (200000 -> 150000), 150000 recorded as recovery, never a
+        // 2000.00 owed back, only 500.00 was available: 500.00 debited off
+        // total (2000.00 -> 1500.00), 1500.00 recorded as recovery, never a
         // negative available balance.
-        expect($wallet->total_minor->minorUnits)->toBe(150000)
-            ->and($wallet->reserved_minor->minorUnits)->toBe(150000)
-            ->and($wallet->recovery_minor->minorUnits)->toBe(150000)
-            ->and($wallet->availableBalance()->minorUnits)->toBe(0);
+        expect($wallet->total->toDecimal())->toBe('1500.00')
+            ->and($wallet->reserved->toDecimal())->toBe('1500.00')
+            ->and($wallet->recovery->toDecimal())->toBe('1500.00')
+            ->and($wallet->availableBalance()->toDecimal())->toBe('0.00');
     });
 });
 
@@ -321,7 +321,7 @@ describe('payout methods', function () {
         $payable = supplierWalletTestEligiblePayable(1);
         app(SettleSupplierPayable::class)->handle($payable, $this->manager->id);
 
-        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $method, Money::of(50000, Currency::BDT), 'wallet-test:snapshot');
+        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $method, Money::fromDecimal('500.00', Currency::BDT), 'wallet-test:snapshot');
         $snapshotBefore = $withdrawal->payout_snapshot;
 
         // Renaming the method afterwards changes nothing about the snapshot
@@ -353,26 +353,26 @@ describe('withdrawals', function () {
     });
 
     it('reserves the requested amount and refuses below the configured minimum', function () {
-        app(SetSupplierWithdrawalLimits::class)->setDefault(User::factory()->create(), 10000, null);
+        app(SetSupplierWithdrawalLimits::class)->setDefault(User::factory()->create(), '100.00', null);
 
-        expect(fn () => app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::of(5000, Currency::BDT), 'wallet-test:below-min'))
+        expect(fn () => app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::fromDecimal('50.00', Currency::BDT), 'wallet-test:below-min'))
             ->toThrow(SupplierWithdrawalRefused::class);
 
-        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::of(100000, Currency::BDT), 'wallet-test:withdrawal-a');
+        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::fromDecimal('1000.00', Currency::BDT), 'wallet-test:withdrawal-a');
 
         expect($withdrawal->status)->toBe(SupplierWithdrawalStatus::Requested)
-            ->and($this->wallet->fresh()->reserved_minor->minorUnits)->toBe(100000)
+            ->and($this->wallet->fresh()->reserved->toDecimal())->toBe('1000.00')
             ->and($withdrawal->payout_snapshot['masked_number'])->toBe('••••2222');
     });
 
     it('refuses to reserve more than is available', function () {
-        expect(fn () => app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::of(400000, Currency::BDT), 'wallet-test:too-much'))
+        expect(fn () => app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::fromDecimal('4000.00', Currency::BDT), 'wallet-test:too-much'))
             ->toThrow(SupplierWalletOperationRefused::class);
     });
 
     it('runs the full approve -> processing -> paid lifecycle, consuming the reservation once', function () {
         $staff = User::factory()->create();
-        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::of(100000, Currency::BDT), 'wallet-test:paid-flow');
+        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::fromDecimal('1000.00', Currency::BDT), 'wallet-test:paid-flow');
 
         $withdrawal = app(AdvanceSupplierWithdrawalStatus::class)->handle($withdrawal, SupplierWithdrawalStatus::UnderReview, $staff->id);
         $withdrawal = app(AdvanceSupplierWithdrawalStatus::class)->handle($withdrawal, SupplierWithdrawalStatus::Approved, $staff->id);
@@ -381,27 +381,27 @@ describe('withdrawals', function () {
 
         expect($withdrawal->status)->toBe(SupplierWithdrawalStatus::Paid)
             ->and($withdrawal->external_reference)->toBe('BKASH-TXN-1')
-            ->and($this->wallet->fresh()->total_minor->minorUnits)->toBe(200000)
-            ->and($this->wallet->fresh()->reserved_minor->minorUnits)->toBe(0);
+            ->and($this->wallet->fresh()->total->toDecimal())->toBe('2000.00')
+            ->and($this->wallet->fresh()->reserved->toDecimal())->toBe('0.00');
 
         // Paying again is refused — the state machine has no move left.
         expect(fn () => app(PaySupplierWithdrawal::class)->handle($withdrawal->fresh(), 'BKASH-TXN-2', $staff->id))
             ->toThrow(SupplierWithdrawalRefused::class);
-        expect($this->wallet->fresh()->total_minor->minorUnits)->toBe(200000);
+        expect($this->wallet->fresh()->total->toDecimal())->toBe('2000.00');
     });
 
     it('releases the reservation exactly once on rejection', function () {
         $staff = User::factory()->create();
-        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::of(100000, Currency::BDT), 'wallet-test:rejected-flow');
+        $withdrawal = app(RequestSupplierWithdrawal::class)->handle($this->supplier, $this->method, Money::fromDecimal('1000.00', Currency::BDT), 'wallet-test:rejected-flow');
 
         $withdrawal = app(RejectOrFailSupplierWithdrawal::class)->handle($withdrawal, SupplierWithdrawalStatus::Rejected, 'Fixture rejection.', $staff->id);
 
         expect($withdrawal->status)->toBe(SupplierWithdrawalStatus::Rejected)
-            ->and($this->wallet->fresh()->reserved_minor->minorUnits)->toBe(0)
-            ->and($this->wallet->fresh()->total_minor->minorUnits)->toBe(300000);
+            ->and($this->wallet->fresh()->reserved->toDecimal())->toBe('0.00')
+            ->and($this->wallet->fresh()->total->toDecimal())->toBe('3000.00');
 
         expect(fn () => app(RejectOrFailSupplierWithdrawal::class)->handle($withdrawal->fresh(), SupplierWithdrawalStatus::Rejected, 'Again.', $staff->id))
             ->toThrow(SupplierWithdrawalRefused::class);
-        expect($this->wallet->fresh()->reserved_minor->minorUnits)->toBe(0);
+        expect($this->wallet->fresh()->reserved->toDecimal())->toBe('0.00');
     });
 });

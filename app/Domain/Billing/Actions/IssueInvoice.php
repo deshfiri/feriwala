@@ -61,15 +61,15 @@ class IssueInvoice
     {
         $payment->loadMissing('allocations');
 
-        $currency = $payment->amount_minor->currency;
+        $currency = $payment->amount->currency;
 
         $invoice = Invoice::create([
             'business_account_id' => $payment->business_account_id,
             'payment_id' => $payment->id,
             'purpose' => $payment->purpose,
             'currency_code' => $currency->value,
-            'subtotal_minor' => $this->subtotal($payment, $currency),
-            'total_minor' => $payment->amount_minor,
+            'subtotal' => $this->subtotal($payment, $currency),
+            'total' => $payment->amount,
             'issued_at' => now(),
 
             // Filled in below, once the row has an id to derive it from. The
@@ -90,8 +90,8 @@ class IssueInvoice
             $invoice->lines()->create([
                 'type' => $allocation->type->value,
                 'label' => $allocation->description ?? $allocation->type->label(),
-                'amount_minor' => $allocation->amount_minor,
-                'currency_code' => $allocation->amount_minor->currency->value,
+                'currency_code' => $allocation->amount->currency->value,
+                'amount' => $allocation->amount,
                 'is_deduction' => $allocation->type->isDeduction(),
                 'sort_order' => $allocation->sort_order ?? $index,
             ]);
@@ -117,7 +117,7 @@ class IssueInvoice
                 continue;
             }
 
-            $total = $total->plus($allocation->amount_minor);
+            $total = $total->plus($allocation->amount);
         }
 
         return $total;

@@ -146,11 +146,11 @@ class ProcessRefund
              */
             $remaining = $this->refundable->handle($payment, excluding: $locked);
 
-            if ($locked->amount_minor->greaterThan($remaining)) {
-                throw RefundRefused::exceedsRemaining($locked->amount_minor, $remaining);
+            if ($locked->amount->greaterThan($remaining)) {
+                throw RefundRefused::exceedsRemaining($locked->amount, $remaining);
             }
 
-            $capability = $locked->amount_minor->equals($payment->amount_minor)
+            $capability = $locked->amount->equals($payment->amount)
                 ? GatewayCapability::RefundFull
                 : GatewayCapability::RefundPartial;
 
@@ -165,7 +165,7 @@ class ProcessRefund
              * available balance nobody authorised — and unlike the provider
              * call, this is a question we can answer for certain first.
              */
-            $this->reversal->assertPossible($payment, $locked->amount_minor);
+            $this->reversal->assertPossible($payment, $locked->amount);
 
             $locked->forceFill([
                 'gateway' => $gateway,
@@ -205,8 +205,8 @@ class ProcessRefund
              * reference for providers that carry only one.
              */
             gatewayReference: $this->addressFor($payment),
-            amount: $request->amount_minor,
-            originalAmount: $payment->amount_minor,
+            amount: $request->amount,
+            originalAmount: $payment->amount,
             reason: $request->reason,
             idempotencyKey: (string) $request->idempotency_key,
         );
@@ -344,7 +344,7 @@ class ProcessRefund
             auditableId: $processed->id,
             after: [
                 'payment' => $payment->reference,
-                'amount_minor' => $processed->amount_minor->minorUnits,
+                'amount' => $processed->amount->jsonSerialize(),
                 'currency' => $processed->currency_code,
                 'gateway' => $processed->gateway,
                 'gateway_refund_reference' => $processed->gateway_refund_reference,
@@ -412,7 +412,7 @@ class ProcessRefund
             payment: $payment,
             reference: $payment->reference,
             gatewayReference: $request->gateway_refund_reference,
-            amount: $request->amount_minor,
+            amount: $request->amount,
             outcome: $outcome,
             context: $context,
         );

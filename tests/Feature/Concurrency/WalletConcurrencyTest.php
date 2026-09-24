@@ -143,7 +143,7 @@ it('cannot be made to overdraw by parallel debits', function () {
     walletRaceService()->credit(
         walletRaceWallet(),
         LedgerTransactionType::TopUpCredit,
-        Money::of(10000, Currency::BDT),
+        Money::fromDecimal('100.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );
 
@@ -151,7 +151,7 @@ it('cannot be made to overdraw by parallel debits', function () {
         walletRaceService()->debit(
             walletRaceWallet(),
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(3000, Currency::BDT),
+            Money::fromDecimal('30.00', Currency::BDT),
             new PostingContext(
                 source: 'test',
                 description: 'Charge '.$worker,
@@ -163,7 +163,7 @@ it('cannot be made to overdraw by parallel debits', function () {
     $wallet = walletRaceWallet();
 
     // Three succeeded, two were refused, and the balance says exactly that.
-    expect($wallet->total_minor->minorUnits)->toBe(1000)
+    expect($wallet->total->toDecimal())->toBe('10.00')
         ->and($wallet->usableBalance()->isNegative())->toBeFalse()
         ->and(walletRaceEntries())->toBe(4);
 });
@@ -179,7 +179,7 @@ it('loses none of a burst of parallel credits', function () {
         walletRaceService()->credit(
             walletRaceWallet(),
             LedgerTransactionType::TopUpCredit,
-            Money::of(2500, Currency::BDT),
+            Money::fromDecimal('25.00', Currency::BDT),
             new PostingContext(
                 source: 'test',
                 description: 'Top-up '.$worker,
@@ -188,7 +188,7 @@ it('loses none of a burst of parallel credits', function () {
         );
     });
 
-    expect(walletRaceWallet()->total_minor->minorUnits)->toBe(15000)
+    expect(walletRaceWallet()->total->toDecimal())->toBe('150.00')
         ->and(walletRaceEntries())->toBe(6);
 });
 
@@ -204,7 +204,7 @@ it('posts one command once however many workers send it', function () {
         walletRaceService()->credit(
             walletRaceWallet(),
             LedgerTransactionType::TopUpCredit,
-            Money::of(7500, Currency::BDT),
+            Money::fromDecimal('75.00', Currency::BDT),
             new PostingContext(
                 source: 'test',
                 description: 'The same top-up',
@@ -213,7 +213,7 @@ it('posts one command once however many workers send it', function () {
         );
     });
 
-    expect(walletRaceWallet()->total_minor->minorUnits)->toBe(7500)
+    expect(walletRaceWallet()->total->toDecimal())->toBe('75.00')
         ->and(walletRaceEntries())->toBe(1)
         ->and(WalletTransaction::query()->where('idempotency_key', 'race:one-command')->count())->toBe(1);
 });
@@ -226,14 +226,14 @@ it('captures a reservation exactly once', function () {
     walletRaceService()->credit(
         walletRaceWallet(),
         LedgerTransactionType::TopUpCredit,
-        Money::of(20000, Currency::BDT),
+        Money::fromDecimal('200.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );
 
     $claim = walletRaceService()->reserve(
         walletRaceWallet(),
         LedgerTransactionType::ServiceFeeDebit,
-        Money::of(5000, Currency::BDT),
+        Money::fromDecimal('50.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Reserved for a charge'),
     );
 
@@ -243,8 +243,8 @@ it('captures a reservation exactly once', function () {
 
     $wallet = walletRaceWallet();
 
-    expect($wallet->total_minor->minorUnits)->toBe(15000)
-        ->and($wallet->reserved_minor->minorUnits)->toBe(0)
+    expect($wallet->total->toDecimal())->toBe('150.00')
+        ->and($wallet->reserved->toDecimal())->toBe('0.00')
         ->and(walletRaceEntries())->toBe(2);
 });
 
@@ -259,7 +259,7 @@ it('leaves a ledger that still adds up after a race', function () {
         walletRaceService()->credit(
             walletRaceWallet(),
             LedgerTransactionType::TopUpCredit,
-            Money::of(1000 * ($worker + 1), Currency::BDT),
+            Money::fromDecimal((string) (($worker + 1) * 10), Currency::BDT),
             new PostingContext(
                 source: 'test',
                 description: 'Top-up '.$worker,
@@ -269,5 +269,5 @@ it('leaves a ledger that still adds up after a race', function () {
     });
 
     expect(app(VerifyLedgerIntegrity::class)->problemsFor(walletRaceWallet()))->toBe([])
-        ->and(walletRaceWallet()->total_minor->minorUnits)->toBe(15000);
+        ->and(walletRaceWallet()->total->toDecimal())->toBe('150.00');
 });

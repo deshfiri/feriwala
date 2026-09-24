@@ -96,12 +96,9 @@ class AccountSubscription
             'days_remaining' => $this->daysRemaining($subscription),
             'in_grace_period' => $subscription->isInGracePeriod(),
 
-            'paid' => $subscription->paid_fee_minor?->jsonSerialize(),
+            'paid' => $subscription->paid_fee?->jsonSerialize(),
 
-            'renewal_fee' => $terms?->renewalFeeMinor === null ? null : [
-                'minor_units' => $terms->renewalFeeMinor,
-                'currency' => $terms->currencyCode,
-            ],
+            'renewal_fee' => $terms?->renewalFee?->jsonSerialize(),
             'renewal_frequency' => $terms?->renewalFrequency,
         ];
 

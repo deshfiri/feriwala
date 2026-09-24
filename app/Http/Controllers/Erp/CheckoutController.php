@@ -255,7 +255,7 @@ class CheckoutController extends Controller
                 direction: PaymentLog::OUTBOUND,
                 event: 'initiate',
                 payment: $payment,
-                amount: $payment->amount_minor,
+                amount: $payment->amount,
                 outcome: 'unavailable',
                 context: ['error' => $e->getMessage()],
                 request: $request,
@@ -272,7 +272,7 @@ class CheckoutController extends Controller
             event: 'initiate',
             payment: $payment,
             gatewayReference: $redirect->gatewayReference,
-            amount: $payment->amount_minor,
+            amount: $payment->amount,
             outcome: 'session_created',
             request: $request,
         );

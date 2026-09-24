@@ -6,8 +6,6 @@ use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentAllocation;
 use App\Domain\Billing\Models\RefundRequest;
-use App\Support\Money\Currency;
-use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 
 /**
@@ -105,7 +103,7 @@ readonly class PaymentReceipt
             purpose: $payment->purpose->label(),
             paidAt: $paidAt,
             lines: self::linesFor($payment),
-            amount: $payment->amount_minor->jsonSerialize(),
+            amount: $payment->amount->jsonSerialize(),
             settled: self::settlementFor($payment),
             gateway: (string) $payment->gateway,
             isSandbox: $payment->gateway_mode === 'sandbox',
@@ -140,7 +138,7 @@ readonly class PaymentReceipt
             ->map(fn (PaymentAllocation $allocation) => [
                 'type' => $allocation->type->value,
                 'label' => $allocation->description ?? $allocation->type->label(),
-                'amount' => $allocation->amount_minor->jsonSerialize(),
+                'amount' => $allocation->amount->jsonSerialize(),
                 'is_deduction' => $allocation->type->isDeduction(),
             ])
             ->all();
@@ -154,18 +152,18 @@ readonly class PaymentReceipt
     protected static function settlementFor(Payment $payment): ?array
     {
         $currency = $payment->settled_currency_code;
-        $minor = $payment->settled_amount_minor;
+        $settled = $payment->settled_amount;
 
-        if ($currency === null || $minor === null) {
+        if ($currency === null || $settled === null) {
             return null;
         }
 
         // Same money, said twice. Nothing to show.
-        if ($currency === $payment->currency_code && (int) $minor === $payment->amount_minor->minorUnits) {
+        if ($currency === $payment->currency_code && $settled->equals($payment->amount)) {
             return null;
         }
 
-        return Money::of((int) $minor, Currency::from($currency))->jsonSerialize();
+        return $settled->jsonSerialize();
     }
 
     /**
@@ -191,8 +189,8 @@ readonly class PaymentReceipt
 
         $total = $refunds->reduce(
             fn ($carry, RefundRequest $refund) => $carry === null
-                ? $refund->amount_minor
-                : $carry->plus($refund->amount_minor),
+                ? $refund->amount
+                : $carry->plus($refund->amount),
         );
 
         return [
@@ -203,7 +201,7 @@ readonly class PaymentReceipt
                      * reason, not the decision note, not the internal note —
                      * those are written by staff for staff (§7.3).
                      */
-                    'amount' => $refund->amount_minor->jsonSerialize(),
+                    'amount' => $refund->amount->jsonSerialize(),
                     'processed_at' => $refund->processed_at?->toIso8601String(),
                 ])
                 ->all(),
