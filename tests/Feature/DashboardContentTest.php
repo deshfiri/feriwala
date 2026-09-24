@@ -6,6 +6,8 @@ use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -36,7 +38,7 @@ function dashboardOwner(AccountStatus $status = AccountStatus::Active): User
  */
 function dashboardSettledPayment(
     int $accountId,
-    int $minorUnits,
+    string $amount,
     int $monthsAgo = 0,
     PaymentPurpose $purpose = PaymentPurpose::Activation,
 ): Payment {
@@ -44,8 +46,8 @@ function dashboardSettledPayment(
         'business_account_id' => $accountId,
         'purpose' => $purpose,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => $minorUnits,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal($amount, Currency::BDT),
         'completed_at' => now()->subMonths($monthsAgo),
     ]);
 }
@@ -128,7 +130,7 @@ describe('an account holder', function () {
         $user = dashboardOwner();
         $accountId = $user->businessAccount->id;
 
-        dashboardSettledPayment($accountId, 600000);
+        dashboardSettledPayment($accountId, '6000.00');
 
         // Pending money looks like success on a gateway's redirect page and is
         // not money here. Counting it would tell someone they had spent
@@ -137,7 +139,7 @@ describe('an account holder', function () {
             'business_account_id' => $accountId,
             'purpose' => PaymentPurpose::PackageRenewal,
             'status' => PaymentStatus::Pending,
-            'amount_minor' => 999900,
+            'amount' => Money::fromDecimal('9999.00', Currency::BDT),
             'currency_code' => 'BDT',
         ]);
 
@@ -147,7 +149,7 @@ describe('an account holder', function () {
                 // Deferred: absent from the first response by design.
                 ->missing('spend')
                 ->loadDeferredProps(fn (Assert $loaded) => $loaded
-                    ->where('spend.total.minor_units', 600000)
+                    ->where('spend.total.amount', '6000.00')
                     ->where('spend.total.currency', 'BDT'),
                 ),
             );
@@ -155,7 +157,7 @@ describe('an account holder', function () {
 
     it('keeps a month with no payments on the axis', function () {
         $user = dashboardOwner();
-        dashboardSettledPayment($user->businessAccount->id, 250000);
+        dashboardSettledPayment($user->businessAccount->id, '2500.00');
 
         $this->actingAs($user)
             ->get(route('dashboard'))
@@ -172,7 +174,7 @@ describe('an account holder', function () {
 
     it('sends the y-axis labels already formatted as money', function () {
         $user = dashboardOwner();
-        dashboardSettledPayment($user->businessAccount->id, 400000);
+        dashboardSettledPayment($user->businessAccount->id, '4000.00');
 
         $this->actingAs($user)
             ->get(route('dashboard'))
@@ -191,8 +193,8 @@ describe('an account holder', function () {
         $user = dashboardOwner();
         $accountId = $user->businessAccount->id;
 
-        dashboardSettledPayment($accountId, 100000, 0, PaymentPurpose::Activation);
-        dashboardSettledPayment($accountId, 400000, 1, PaymentPurpose::PackageRenewal);
+        dashboardSettledPayment($accountId, '1000.00', 0, PaymentPurpose::Activation);
+        dashboardSettledPayment($accountId, '4000.00', 1, PaymentPurpose::PackageRenewal);
 
         $this->actingAs($user)
             ->get(route('dashboard'))
@@ -210,7 +212,7 @@ describe('an account holder', function () {
         $mine = dashboardOwner();
         $theirs = dashboardOwner();
 
-        dashboardSettledPayment($theirs->businessAccount->id, 5000000);
+        dashboardSettledPayment($theirs->businessAccount->id, '50000.00');
 
         // Self-scoped by construction (§31.3): the account comes from the
         // signed-in person's membership, so there is no parameter to tamper
@@ -219,7 +221,7 @@ describe('an account holder', function () {
             ->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page
                 ->loadDeferredProps(fn (Assert $loaded) => $loaded
-                    ->where('spend.total.minor_units', 0),
+                    ->where('spend.total.amount', '0.00'),
                 ),
             );
     });
@@ -229,7 +231,7 @@ describe('an account holder', function () {
             ->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page
                 ->loadDeferredProps(fn (Assert $loaded) => $loaded
-                    ->where('spend.total.minor_units', 0)
+                    ->where('spend.total.amount', '0.00')
                     ->where('spend.breakdown', [])
                     // One tick at zero: an axis, not an empty array the chart
                     // would have to guess a scale from.

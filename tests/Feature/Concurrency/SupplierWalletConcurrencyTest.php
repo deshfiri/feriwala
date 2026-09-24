@@ -144,8 +144,8 @@ it('settles a payable exactly once when two workers race to settle it', function
         'business_account_id' => $businessAccount->id,
         'customer' => ['contact_name' => 'Race fixture', 'email' => 'race@test.example', 'mobile' => '01700000000'],
         'currency_code' => 'BDT',
-        'subtotal_minor' => 130000,
-        'total_minor' => 130000,
+        'subtotal' => Money::fromDecimal('1300.00', Currency::BDT),
+        'total' => Money::fromDecimal('1300.00', Currency::BDT),
         'placed_at' => now(),
     ]);
 
@@ -156,9 +156,9 @@ it('settles a payable exactly once when two workers race to settle it', function
         'product_name' => 'Race fixture product',
         'quantity' => 1,
         'currency_code' => 'BDT',
-        'unit_price_minor' => $priceChange->platform_rate,
-        'line_subtotal_minor' => $priceChange->platform_rate,
-        'line_total_minor' => $priceChange->platform_rate,
+        'unit_price' => $priceChange->platform_rate,
+        'line_subtotal' => $priceChange->platform_rate,
+        'line_total' => $priceChange->platform_rate,
         'supplier_id' => $offer->supplier_id,
         'supplier_offer_id' => $offer->id,
         'supplier_offer_price_change_id' => $priceChange->id,

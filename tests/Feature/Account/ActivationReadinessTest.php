@@ -12,6 +12,8 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
@@ -44,7 +46,7 @@ function settleApplicantActivationPayment(): Payment
         'business_account_id' => test()->applicant->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'completed_at' => now(),
     ]);

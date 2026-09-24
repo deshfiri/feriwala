@@ -13,6 +13,8 @@ use App\Domain\Kyc\Models\KycSubmission;
 use App\Models\User;
 use App\Notifications\Account\AccountSuspended;
 use App\Notifications\Account\KycResubmissionRequested;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -72,7 +74,7 @@ describe('the queue', function () {
             'business_account_id' => $account->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Paid,
-            'amount_minor' => 600000,
+            'amount' => Money::fromDecimal('6000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'completed_at' => now(),
         ]);
@@ -125,7 +127,7 @@ describe('the queue', function () {
             'business_account_id' => $account->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Pending,
-            'amount_minor' => 600000,
+            'amount' => Money::fromDecimal('6000.00', Currency::BDT),
             'currency_code' => 'BDT',
         ]);
 
