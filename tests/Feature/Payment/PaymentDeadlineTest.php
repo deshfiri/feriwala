@@ -49,7 +49,7 @@ function deadlineTestPayment(
         'business_account_id' => $account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => $status,
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'expires_at' => $expiresAt === null ? null : now()->modify($expiresAt),
     ]);
@@ -73,7 +73,7 @@ function deadlineTestCoupon(): Coupon
 
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -85,7 +85,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
     ]);
 });
@@ -207,7 +207,7 @@ describe('what an expired checkout gives back', function () {
         $coupon = deadlineTestCoupon();
         $payment = deadlineTestPayment($this->account);
 
-        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
 
         app(ExpireUnpaidPayments::class)->handle();
 
@@ -225,10 +225,10 @@ describe('what an expired checkout gives back', function () {
 
         $other = testBusinessAccount(AccountStatus::PaymentPending);
         $live = deadlineTestPayment($other, expiresAt: '+2 hours');
-        app(ReserveCoupon::class)->handle($coupon, $other, $live, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $other, $live, Money::fromDecimal('600.00', Currency::BDT));
 
         $overdue = deadlineTestPayment($this->account);
-        app(ReserveCoupon::class)->handle($coupon->refresh(), $this->account, $overdue, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon->refresh(), $this->account, $overdue, Money::fromDecimal('600.00', Currency::BDT));
 
         app(ExpireUnpaidPayments::class)->handle();
 
@@ -243,7 +243,7 @@ describe('what an expired checkout gives back', function () {
         $coupon = deadlineTestCoupon();
         $payment = deadlineTestPayment($this->account);
 
-        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
 
         $sweep = app(ExpireUnpaidPayments::class);
         $sweep->handle();

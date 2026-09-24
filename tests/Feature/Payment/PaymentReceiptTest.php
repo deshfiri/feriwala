@@ -9,6 +9,8 @@ use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentAllocation;
 use App\Domain\Billing\Models\RefundRequest;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
@@ -31,8 +33,8 @@ function receiptPayment(array $attributes = []): Payment
         'business_account_id' => $account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => 600000,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'gateway' => 'sslcommerz',
         'gateway_reference' => 'val-1',
         'gateway_mode' => 'live',
@@ -43,8 +45,8 @@ function receiptPayment(array $attributes = []): Payment
     PaymentAllocation::create([
         'payment_id' => $payment->id,
         'type' => AllocationType::RegistrationFee,
-        'amount_minor' => 100000,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal('1000.00', Currency::BDT),
         'description' => 'Registration fee',
         'sort_order' => 1,
     ]);
@@ -52,8 +54,8 @@ function receiptPayment(array $attributes = []): Payment
     PaymentAllocation::create([
         'payment_id' => $payment->id,
         'type' => AllocationType::PackageFee,
-        'amount_minor' => 500000,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal('5000.00', Currency::BDT),
         'description' => 'Growth package',
         'sort_order' => 2,
     ]);
@@ -70,7 +72,7 @@ describe('what a receipt is issued for', function () {
         $receipt = PaymentReceipt::forPayment(receiptPayment());
 
         expect($receipt)->not->toBeNull()
-            ->and($receipt->amount['minor_units'])->toBe(600000)
+            ->and($receipt->amount['amount'])->toBe('6000.00')
             ->and($receipt->lines)->toHaveCount(2);
     });
 
@@ -149,8 +151,8 @@ describe('what a receipt never carries', function () {
             'payment_id' => $payment->id,
             'business_account_id' => $this->account->id,
             'status' => RefundStatus::Processed,
-            'amount_minor' => 100000,
             'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal('1000.00', Currency::BDT),
             'reason' => 'Customer complained about the onboarding call.',
             'decision_note' => 'Goodwill only. Do not repeat for this account.',
             'processed_at' => now(),
@@ -160,7 +162,7 @@ describe('what a receipt never carries', function () {
         $serialised = json_encode($receipt->toArray());
 
         expect($receipt->refunds)->toHaveCount(1)
-            ->and($receipt->refunds[0]['amount']['minor_units'])->toBe(100000)
+            ->and($receipt->refunds[0]['amount']['amount'])->toBe('1000.00')
             ->and($serialised)->not->toContain('Goodwill only')
             ->and($serialised)->not->toContain('onboarding call');
     });
@@ -175,8 +177,8 @@ describe('what a receipt never carries', function () {
             'payment_id' => $payment->id,
             'business_account_id' => $this->account->id,
             'status' => RefundStatus::Approved,
-            'amount_minor' => 100000,
             'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal('1000.00', Currency::BDT),
         ]);
 
         expect(PaymentReceipt::forPayment($payment)->refunds)->toBe([]);
@@ -192,14 +194,13 @@ describe('currency', function () {
          */
         $payment = receiptPayment([
             'settled_currency_code' => 'USD',
-            'settled_amount_minor' => 5000,
+            'settled_amount' => Money::fromDecimal('50.00', Currency::USD),
         ]);
 
         expect(PaymentReceipt::forPayment($payment)->settled)
             ->toBe([
-                'minor_units' => 5000,
+                'amount' => '50.00',
                 'currency' => 'USD',
-                'decimal' => '50.00',
                 'formatted' => '$50.00',
             ]);
     });
@@ -207,7 +208,7 @@ describe('currency', function () {
     it('says nothing when the settlement is the same money said twice', function () {
         $payment = receiptPayment([
             'settled_currency_code' => 'BDT',
-            'settled_amount_minor' => 600000,
+            'settled_amount' => Money::fromDecimal('6000.00', Currency::BDT),
         ]);
 
         expect(PaymentReceipt::forPayment($payment)->settled)->toBeNull();
@@ -268,8 +269,8 @@ describe('an account sees only its own', function () {
             'business_account_id' => $other->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Paid,
-            'amount_minor' => 900000,
             'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal('9000.00', Currency::BDT),
             'gateway' => 'sslcommerz',
             'gateway_reference' => 'val-other',
             'completed_at' => now(),
@@ -287,8 +288,8 @@ describe('an account sees only its own', function () {
             'business_account_id' => $other->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Paid,
-            'amount_minor' => 900000,
             'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal('9000.00', Currency::BDT),
             'gateway' => 'sslcommerz',
             'gateway_reference' => 'val-other-2',
             'completed_at' => now(),

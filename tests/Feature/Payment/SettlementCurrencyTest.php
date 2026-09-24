@@ -11,6 +11,7 @@ use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -47,7 +48,7 @@ beforeEach(function () {
         'business_account_id' => $this->account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Initiated,
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'gateway' => 'sslcommerz',
     ]);
@@ -76,7 +77,7 @@ describe('what was charged is never rewritten', function () {
 
         $this->payment->refresh();
 
-        expect($this->payment->amount_minor->minorUnits)->toBe(600000)
+        expect($this->payment->amount->toDecimal())->toBe('6000.00')
             ->and($this->payment->currency_code)->toBe('BDT');
     });
 
@@ -87,9 +88,9 @@ describe('what was charged is never rewritten', function () {
 
         $this->payment->refresh();
 
-        expect($this->payment->settled_amount_minor)->toBe(600000)
+        expect($this->payment->settled_amount->toDecimal())->toBe('6000.00')
             ->and($this->payment->settled_currency_code)->toBe('BDT')
-            ->and($this->payment->amount_minor->minorUnits)->toBe(600000);
+            ->and($this->payment->amount->toDecimal())->toBe('6000.00');
     });
 });
 
@@ -107,11 +108,11 @@ describe('the fee the provider kept', function () {
 
         $this->payment->refresh();
 
-        expect($this->payment->gateway_fee_minor)->toBe(15000)
+        expect($this->payment->gateway_fee->toDecimal())->toBe('150.00')
             ->and($this->payment->gateway_fee_currency_code)->toBe('BDT')
 
             // Untouched. The customer still paid six thousand.
-            ->and($this->payment->amount_minor->minorUnits)->toBe(600000);
+            ->and($this->payment->amount->toDecimal())->toBe('6000.00');
     });
 
     it('records nothing when the provider does not report one', function () {
@@ -120,7 +121,7 @@ describe('the fee the provider kept', function () {
 
         app(SettlePayment::class)->handle($this->payment, 'val-1');
 
-        expect($this->payment->refresh()->gateway_fee_minor)->toBeNull();
+        expect($this->payment->refresh()->gateway_fee)->toBeNull();
     });
 
     it('records nothing when the provider credits more than was charged', function () {
@@ -129,7 +130,7 @@ describe('the fee the provider kept', function () {
 
         app(SettlePayment::class)->handle($this->payment, 'val-1');
 
-        expect($this->payment->refresh()->gateway_fee_minor)->toBeNull();
+        expect($this->payment->refresh()->gateway_fee)->toBeNull();
     });
 });
 
@@ -139,7 +140,7 @@ describe('no exchange-rate accounting (D4)', function () {
             'business_account_id' => $this->account->id,
             'purpose' => PaymentPurpose::WalletTopUp,
             'status' => PaymentStatus::Initiated,
-            'amount_minor' => 250000,
+            'amount' => Money::fromDecimal('2500.00', Currency::BDT),
             'currency_code' => 'BDT',
             'gateway' => 'sslcommerz',
         ]);

@@ -7,6 +7,8 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -20,7 +22,7 @@ beforeEach(function () {
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Initiated,
         'gateway' => 'sslcommerz',
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 });
@@ -71,7 +73,7 @@ describe('settling', function () {
 
         settle();
 
-        expect($this->payment->fresh()->settled_amount_minor)->toBe(600000)
+        expect($this->payment->fresh()->settled_amount->toDecimal())->toBe('6000.00')
             ->and($this->payment->fresh()->settled_currency_code)->toBe('BDT');
     });
 });

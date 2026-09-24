@@ -46,7 +46,7 @@ function bkashIntent(): PaymentIntent
 {
     return new PaymentIntent(
         reference: 'PAY-260901-K7M3QX9P',
-        amount: Money::of(600000),
+        amount: Money::fromDecimal('6000.00'),
         customerName: 'Nusrat Jahan',
         customerEmail: 'nusrat@example.test',
         customerMobile: '+8801712345678',
@@ -76,8 +76,8 @@ function bkashRefund(?Money $amount = null, string $reference = 'TR001:TRX998'):
     return new RefundIntent(
         reference: 'PAY-260901-K7M3QX9P',
         gatewayReference: $reference,
-        amount: $amount ?? Money::of(600000),
-        originalAmount: Money::of(600000),
+        amount: $amount ?? Money::fromDecimal('6000.00'),
+        originalAmount: Money::fromDecimal('6000.00'),
         reason: 'Duplicate payment',
         idempotencyKey: 'refund:PAY-260901-K7M3QX9P:1',
     );
@@ -188,7 +188,7 @@ describe('execute is the verification', function () {
         $result = $this->gateway->verify('TR0011abc');
 
         expect($result->isPaid())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(600000)
+            ->and($result->amount->toDecimal())->toBe('6000.00')
             ->and($result->reference)->toBe('PAY-260901-K7M3QX9P')
             // trxID is half of what a refund is addressed to, so it is kept now
             // rather than looked up when somebody is already owed their money.
@@ -253,7 +253,7 @@ describe('refunds (§26.3)', function () {
         expect($result->isSucceeded())->toBeTrue()
             ->and($result->outcome->isSettled())->toBeTrue()
             ->and($result->gatewayRefundReference)->toBe('RFND001')
-            ->and($result->amount->minorUnits)->toBe(600000);
+            ->and($result->amount->toDecimal())->toBe('6000.00');
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/refund/payment/transaction')
             && $request['paymentId'] === 'TR001'
@@ -270,7 +270,7 @@ describe('refunds (§26.3)', function () {
             'currency' => 'BDT',
         ]);
 
-        expect($this->gateway->refund(bkashRefund(Money::of(150000)))->isSucceeded())->toBeTrue();
+        expect($this->gateway->refund(bkashRefund(Money::fromDecimal('1500.00')))->isSucceeded())->toBeTrue();
 
         Http::assertSent(fn ($request) => ! str_contains($request->url(), '/refund/')
             || $request['refundAmount'] === '1500.00');
@@ -337,7 +337,7 @@ describe('refund status', function () {
         $result = $this->gateway->refundStatus('TR001:TRX998:RFND001');
 
         expect($result->isSucceeded())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(600000);
+            ->and($result->amount->toDecimal())->toBe('6000.00');
     });
 
     it('stays pending when bKash knows the payment but not this refund', function () {

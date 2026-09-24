@@ -89,7 +89,7 @@ function anIntent(): PaymentIntent
 {
     return new PaymentIntent(
         reference: 'PAY-260901-K7M3QX9P',
-        amount: Money::of(600000),
+        amount: Money::fromDecimal('6000.00'),
         customerName: 'Nusrat Jahan',
         customerEmail: 'nusrat@example.test',
         customerMobile: '+8801712345678',
@@ -158,8 +158,8 @@ function aRefund(?Money $amount = null): RefundIntent
     return new RefundIntent(
         reference: 'PAY-260901-K7M3QX9P',
         gatewayReference: 'BANK-778899',
-        amount: $amount ?? Money::of(600000),
-        originalAmount: Money::of(600000),
+        amount: $amount ?? Money::fromDecimal('6000.00'),
+        originalAmount: Money::fromDecimal('6000.00'),
         reason: 'Duplicate payment',
         idempotencyKey: 'refund:PAY-260901-K7M3QX9P:1',
     );
@@ -346,8 +346,8 @@ describe('server-side verification', function () {
         $result = $this->gateway->verify('VAL123456');
 
         expect($result->isPaid())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(600000)
-            ->and($result->matchesAmount(Money::of(600000)))->toBeTrue();
+            ->and($result->amount->toDecimal())->toBe('6000.00')
+            ->and($result->matchesAmount(Money::fromDecimal('6000.00')))->toBeTrue();
     });
 
     it('detects an amount that does not match what was expected', function () {
@@ -365,7 +365,7 @@ describe('server-side verification', function () {
         $result = $this->gateway->verify('VAL123456');
 
         expect($result->isPaid())->toBeTrue()
-            ->and($result->matchesAmount(Money::of(600000)))->toBeFalse();
+            ->and($result->matchesAmount(Money::fromDecimal('6000.00')))->toBeFalse();
     });
 
     it('reports a pending payment as pending', function () {
@@ -549,7 +549,7 @@ describe('refunds (§26.3)', function () {
             ]),
         ]);
 
-        $result = $this->gateway->refund(aRefund(Money::of(150000)));
+        $result = $this->gateway->refund(aRefund(Money::fromDecimal('1500.00')));
 
         expect($result->isPending())->toBeTrue();
 

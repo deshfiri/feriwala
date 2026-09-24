@@ -12,6 +12,8 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Tax\Models\TaxRate;
 use App\Domain\Tax\Models\TaxRule;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -42,7 +44,7 @@ function activationInvoiceCheckout(array $overrides = []): Payment
 
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -54,7 +56,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
     ]);
 });
@@ -69,8 +71,8 @@ describe('what the invoice says', function () {
         $package = $invoice->lines->firstWhere('type', 'package_fee');
 
         expect($invoice->lines)->toHaveCount(2)
-            ->and($registration?->amount_minor->minorUnits)->toBe(100000)
-            ->and($package?->amount_minor->minorUnits)->toBe(500000)
+            ->and($registration?->amount->toDecimal())->toBe('1000.00')
+            ->and($package?->amount->toDecimal())->toBe('5000.00')
             ->and($package?->label)->toBe('Growth package');
     });
 
@@ -97,11 +99,11 @@ describe('what the invoice says', function () {
         $invoice = Invoice::query()->with('lines')->firstOrFail();
         $discount = $invoice->lines->firstWhere('type', 'discount');
 
-        expect($discount?->amount_minor->minorUnits)->toBe(60000)
+        expect($discount?->amount->toDecimal())->toBe('600.00')
             ->and($discount?->is_deduction)->toBeTrue()
             // The fees are still billed in full beside it.
-            ->and($invoice->lines->firstWhere('type', 'package_fee')?->amount_minor->minorUnits)
-            ->toBe(500000);
+            ->and($invoice->lines->firstWhere('type', 'package_fee')?->amount->toDecimal())
+            ->toBe('5000.00');
     });
 
     it('gives tax its own line and its own per-rate breakdown', function () {
@@ -113,8 +115,8 @@ describe('what the invoice says', function () {
 
         $invoice = Invoice::query()->with('lines')->firstOrFail();
 
-        expect($invoice->lines->firstWhere('type', 'tax')?->amount_minor->minorUnits)->toBe(90000)
-            ->and($invoice->total_minor->minorUnits)->toBe(690000);
+        expect($invoice->lines->firstWhere('type', 'tax')?->amount->toDecimal())->toBe('900.00')
+            ->and($invoice->total->toDecimal())->toBe('6900.00');
 
         $this->actingAs($this->applicant)
             ->get(route('subscription.invoices.show', $invoice->public_id))
@@ -122,8 +124,8 @@ describe('what the invoice says', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->has('invoice.tax', 1)
                 ->where('invoice.tax.0.rate', '15%')
-                ->where('invoice.tax.0.net.minor_units', 600000)
-                ->where('invoice.tax.0.tax.minor_units', 90000),
+                ->where('invoice.tax.0.net.amount', '6000.00')
+                ->where('invoice.tax.0.tax.amount', '900.00'),
             );
     });
 });
@@ -139,19 +141,19 @@ describe('reconciliation', function () {
         $invoice = Invoice::query()->with('lines')->firstOrFail();
 
         $lineTotal = $invoice->lines->reduce(
-            fn (int $carry, InvoiceLine $line) => $line->is_deduction
-                ? $carry - $line->amount_minor->minorUnits
-                : $carry + $line->amount_minor->minorUnits,
-            0,
+            fn (string $carry, InvoiceLine $line) => $line->is_deduction
+                ? bcsub($carry, $line->amount->toDecimal(), 2)
+                : bcadd($carry, $line->amount->toDecimal(), 2),
+            '0.00',
         );
 
         $shown = $this->actingAs($this->applicant)
             ->get(route('checkout.show'))
-            ->viewData('page')['props']['quote']['total']['minor_units'];
+            ->viewData('page')['props']['quote']['total']['amount'];
 
-        expect($invoice->total_minor->minorUnits)->toBe($payment->amount_minor->minorUnits)
-            ->and($lineTotal)->toBe($payment->amount_minor->minorUnits)
-            ->and($shown)->toBe($payment->amount_minor->minorUnits)
+        expect($invoice->total->toDecimal())->toBe($payment->amount->toDecimal())
+            ->and($lineTotal)->toBe($payment->amount->toDecimal())
+            ->and($shown)->toBe($payment->amount->toDecimal())
             ->and($payment->allocationsBalance())->toBeTrue();
     });
 
@@ -175,16 +177,16 @@ describe('reconciliation', function () {
         $invoice = Invoice::query()->with('lines')->firstOrFail();
 
         $lineTotal = $invoice->lines->reduce(
-            fn (int $carry, InvoiceLine $line) => $line->is_deduction
-                ? $carry - $line->amount_minor->minorUnits
-                : $carry + $line->amount_minor->minorUnits,
-            0,
+            fn (string $carry, InvoiceLine $line) => $line->is_deduction
+                ? bcsub($carry, $line->amount->toDecimal(), 2)
+                : bcadd($carry, $line->amount->toDecimal(), 2),
+            '0.00',
         );
 
-        // 600,000 fees − 75,000 = 525,000 taxable; 15% = 78,750.
-        expect($payment->amount_minor->minorUnits)->toBe(603750)
-            ->and($lineTotal)->toBe(603750)
-            ->and($invoice->total_minor->minorUnits)->toBe(603750);
+        // 6,000.00 fees − 750.00 = 5,250.00 taxable; 15% = 787.50.
+        expect($payment->amount->toDecimal())->toBe('6037.50')
+            ->and($lineTotal)->toBe('6037.50')
+            ->and($invoice->total->toDecimal())->toBe('6037.50');
     });
 
     it('keeps saying what it said after the fee changes', function () {
@@ -192,10 +194,10 @@ describe('reconciliation', function () {
         activationInvoiceCheckout();
         $invoice = Invoice::query()->with('lines')->firstOrFail();
 
-        app(SettingsRepository::class)->set('billing.registration_fee', 250000);
+        app(SettingsRepository::class)->set('billing.registration_fee', '2500.00');
 
         expect($invoice->fresh()->load('lines')->lines->firstWhere('type', 'registration_fee')
-            ?->amount_minor->minorUnits)->toBe(100000);
+            ?->amount->toDecimal())->toBe('1000.00');
     });
 });
 

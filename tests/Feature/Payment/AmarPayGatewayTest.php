@@ -34,7 +34,7 @@ function amarPayIntent(): PaymentIntent
 {
     return new PaymentIntent(
         reference: 'PAY-260901-K7M3QX9P',
-        amount: Money::of(600000),
+        amount: Money::fromDecimal('6000.00'),
         customerName: 'Nusrat Jahan',
         customerEmail: 'nusrat@example.test',
         customerMobile: '+8801712345678',
@@ -133,7 +133,7 @@ describe('verification is the authoritative answer', function () {
         $result = $this->gateway->verify('PAY-260901-K7M3QX9P');
 
         expect($result->isPaid())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(600000)
+            ->and($result->amount->toDecimal())->toBe('6000.00')
             // aamarPay's own transaction id, kept as evidence of which provider
             // transaction this was — it is not what the lookup is addressed by.
             ->and($result->settlementReference)->toBe('AP998877');

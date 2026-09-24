@@ -12,6 +12,7 @@ use App\Domain\Billing\Queries\ResolveNotifiedPayment;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Data\GatewayResult;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Log\LogManager;
 use Illuminate\Support\Facades\Http;
@@ -76,7 +77,7 @@ function notificationPayment(string $gateway = 'sslcommerz', ?string $gatewayRef
         'business_account_id' => $account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Initiated,
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'gateway' => $gateway,
         'gateway_reference' => $gatewayReference,
@@ -421,7 +422,7 @@ describe('one provider transaction, one payment', function () {
         app(SettlePayment::class)->handle($payment, 'val-1');
 
         expect($payment->refresh()->status)->toBe(PaymentStatus::Failed)
-            ->and($payment->amount_minor->minorUnits)->toBe(600000);
+            ->and($payment->amount->toDecimal())->toBe('6000.00');
     });
 
     it('refuses a currency the gateway reports differently', function () {
@@ -453,7 +454,7 @@ describe('the browser return is never settlement evidence', function () {
             'business_account_id' => $account->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Initiated,
-            'amount_minor' => Money::of(600000)->minorUnits,
+            'amount' => Money::fromDecimal('6000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'gateway' => 'sslcommerz',
         ]);

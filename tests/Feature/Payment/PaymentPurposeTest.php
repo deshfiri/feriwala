@@ -9,6 +9,8 @@ use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Wallet\Models\Wallet;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 
 /*
@@ -39,13 +41,13 @@ beforeEach(function () {
         ]));
 });
 
-function purposePayment(PaymentPurpose $purpose, int $amountMinor = 600000): Payment
+function purposePayment(PaymentPurpose $purpose, string $amount = '6000.00'): Payment
 {
     return Payment::create([
         'business_account_id' => test()->account->id,
         'purpose' => $purpose,
         'status' => PaymentStatus::Initiated,
-        'amount_minor' => $amountMinor,
+        'amount' => Money::fromDecimal($amount, Currency::BDT),
         'currency_code' => 'BDT',
         'gateway' => 'sslcommerz',
     ]);
@@ -56,7 +58,7 @@ function settlePurpose(Payment $payment): void
     Http::fake(['*' => Http::response([
         'status' => 'VALID',
         'tran_id' => $payment->reference,
-        'currency_amount' => $payment->amount_minor->toDecimal(),
+        'currency_amount' => $payment->amount->toDecimal(),
         'currency_type' => 'BDT',
     ])]);
 
@@ -115,29 +117,29 @@ it('credits a wallet for exactly two of them', function () {
 describe('settling each purpose', function () {
     it('credits the wallet for a top-up', function () {
         $wallet = $this->wallet;
-        $before = $wallet->refresh()->total_minor->minorUnits;
+        $before = $wallet->refresh()->total->toDecimal();
 
-        settlePurpose(purposePayment(PaymentPurpose::WalletTopUp, 250000));
+        settlePurpose(purposePayment(PaymentPurpose::WalletTopUp, '2500.00'));
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe($before + 250000);
+        expect($wallet->refresh()->total->toDecimal())->toBe(bcadd($before, '2500.00', 2));
     });
 
     it('credits the wallet for a deposit', function () {
         $wallet = $this->wallet;
-        $before = $wallet->refresh()->total_minor->minorUnits;
+        $before = $wallet->refresh()->total->toDecimal();
 
-        settlePurpose(purposePayment(PaymentPurpose::WalletDeposit, 300000));
+        settlePurpose(purposePayment(PaymentPurpose::WalletDeposit, '3000.00'));
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe($before + 300000);
+        expect($wallet->refresh()->total->toDecimal())->toBe(bcadd($before, '3000.00', 2));
     });
 
     it('does not credit a wallet for an activation fee', function () {
         $wallet = $this->wallet;
-        $before = $wallet->refresh()->total_minor->minorUnits;
+        $before = $wallet->refresh()->total->toDecimal();
 
         settlePurpose(purposePayment(PaymentPurpose::Activation));
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe($before);
+        expect($wallet->refresh()->total->toDecimal())->toBe($before);
     });
 
     it('settles a purpose whose module is not built, and says so', function () {

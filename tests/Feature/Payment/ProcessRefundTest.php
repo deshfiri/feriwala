@@ -25,6 +25,7 @@ use App\Domain\Wallet\Data\PostingContext;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\Wallet;
 use App\Domain\Wallet\WalletService;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Http;
@@ -57,8 +58,8 @@ beforeEach(function () {
         'business_account_id' => $this->account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => 600000,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'gateway' => 'sslcommerz',
         'gateway_reference' => 'val-1',
         'gateway_settlement_reference' => 'BANK-1',
@@ -71,7 +72,7 @@ beforeEach(function () {
  */
 function approvedRefund(
     Payment $payment,
-    int $amountMinor = 600000,
+    string $amount = '6000.00',
     AllocationType $type = AllocationType::PackageFee,
 ): RefundRequest {
     return RefundRequest::factory()
@@ -80,8 +81,8 @@ function approvedRefund(
             'payment_id' => $payment->id,
             'business_account_id' => $payment->business_account_id,
             'allocation_type' => $type,
-            'amount_minor' => $amountMinor,
             'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal($amount, Currency::BDT),
         ]);
 }
 
@@ -126,7 +127,7 @@ function refundSettled(): array
 /**
  * A wallet for an account, and money in it.
  */
-function walletWith(int $creditMinor, string $key): Wallet
+function walletWith(string $credit, string $key): Wallet
 {
     $wallet = Wallet::query()
         ->where('business_account_id', test()->account->id)
@@ -135,11 +136,11 @@ function walletWith(int $creditMinor, string $key): Wallet
             'currency_code' => 'BDT',
         ]));
 
-    if ($creditMinor > 0) {
+    if ($credit !== '0.00') {
         app(WalletService::class)->credit(
             $wallet,
             LedgerTransactionType::TopUpCredit,
-            Money::of($creditMinor),
+            Money::fromDecimal($credit, Currency::BDT),
             new PostingContext(source: 'test', description: 'Top-up', idempotencyKey: $key),
         );
     }
@@ -150,14 +151,14 @@ function walletWith(int $creditMinor, string $key): Wallet
 /**
  * A settled top-up, which is one of the two purposes that credit a wallet.
  */
-function topUpPayment(int $amountMinor, string $reference): Payment
+function topUpPayment(string $amount, string $reference): Payment
 {
     return Payment::create([
         'business_account_id' => test()->account->id,
         'purpose' => PaymentPurpose::WalletTopUp,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => $amountMinor,
         'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal($amount, Currency::BDT),
         'gateway' => 'sslcommerz',
         'gateway_reference' => $reference,
         'completed_at' => now(),
@@ -310,8 +311,8 @@ describe('provider confirmation before any reversal', function () {
     it('takes back the referral commissions a refunded activation paid, once the money went back (D24)', function () {
         [$referrer] = referralTestChain(1);
         app(AttachReferrer::class)->atRegistration($this->account, $referrer, null);
-        $this->payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'amount_minor' => 100000, 'currency_code' => 'BDT']);
-        $this->payment->allocations()->create(['type' => AllocationType::PackageFee, 'amount_minor' => 500000, 'currency_code' => 'BDT']);
+        $this->payment->allocations()->create(['type' => AllocationType::RegistrationFee, 'currency_code' => 'BDT', 'amount' => Money::fromDecimal('1000.00', Currency::BDT)]);
+        $this->payment->allocations()->create(['type' => AllocationType::PackageFee, 'currency_code' => 'BDT', 'amount' => Money::fromDecimal('5000.00', Currency::BDT)]);
 
         referralTestSwitchOn();
         referralTestPlan([['percentage', '10']]);
@@ -331,7 +332,7 @@ describe('provider confirmation before any reversal', function () {
 
         expect($commission->refresh()->status)->toBe(CommissionStatus::Reversed)
             ->and($commission->reversal_cause)->toBe(ReversalCause::Refund)
-            ->and(Wallet::query()->where('business_account_id', $referrer->id)->firstOrFail()->total_minor->minorUnits)->toBe(0);
+            ->and(Wallet::query()->where('business_account_id', $referrer->id)->firstOrFail()->total->toDecimal())->toBe('0.00');
     });
 
     it('leaves an in-flight refund exactly where it was', function () {
@@ -353,7 +354,7 @@ describe('provider confirmation before any reversal', function () {
 
             // The decision stands and the money is refundable again, without
             // anything having had to remember to release it.
-            ->and(app(RefundableAmount::class)->handle($this->payment)->minorUnits)->toBe(600000);
+            ->and(app(RefundableAmount::class)->handle($this->payment)->toDecimal())->toBe('6000.00');
     });
 
     it('leaves the refund sendable when the gateway cannot be reached', function () {
@@ -371,7 +372,7 @@ describe('provider confirmation before any reversal', function () {
 
 describe('never more than what is left', function () {
     it('refuses a refund larger than the payment', function () {
-        $refund = approvedRefund($this->payment, amountMinor: 700000);
+        $refund = approvedRefund($this->payment, amount: '7000.00');
 
         Http::fake();
 
@@ -387,11 +388,11 @@ describe('never more than what is left', function () {
          * The second reads what the first one claimed — which is why approved,
          * not just processed, holds the amount.
          */
-        approvedRefund($this->payment, amountMinor: 400000, type: AllocationType::PackageFee);
+        approvedRefund($this->payment, amount: '4000.00', type: AllocationType::PackageFee);
 
-        expect(app(RefundableAmount::class)->handle($this->payment)->minorUnits)->toBe(200000);
+        expect(app(RefundableAmount::class)->handle($this->payment)->toDecimal())->toBe('2000.00');
 
-        $second = approvedRefund($this->payment, amountMinor: 400000, type: AllocationType::RegistrationFee);
+        $second = approvedRefund($this->payment, amount: '4000.00', type: AllocationType::RegistrationFee);
 
         Http::fake();
 
@@ -402,12 +403,12 @@ describe('never more than what is left', function () {
     it('allows two partial refunds that fit', function () {
         refundAnswers([refundAcceptance('REF-A'), refundAcceptance('REF-B')]);
 
-        $first = processRefund(approvedRefund($this->payment, 200000, AllocationType::RegistrationFee));
-        $second = processRefund(approvedRefund($this->payment, 400000, AllocationType::PackageFee));
+        $first = processRefund(approvedRefund($this->payment, '2000.00', AllocationType::RegistrationFee));
+        $second = processRefund(approvedRefund($this->payment, '4000.00', AllocationType::PackageFee));
 
         expect($first->gateway_refund_reference)->toBe('REF-A')
             ->and($second->gateway_refund_reference)->toBe('REF-B')
-            ->and(app(RefundableAmount::class)->handle($this->payment)->minorUnits)->toBe(0);
+            ->and(app(RefundableAmount::class)->handle($this->payment)->toDecimal())->toBe('0.00');
     });
 
     it('reports a payment as partially refunded until all of it has gone back', function () {
@@ -418,12 +419,12 @@ describe('never more than what is left', function () {
             refundSettled(),
         ]);
 
-        $first = processRefund(approvedRefund($this->payment, 200000, AllocationType::RegistrationFee));
+        $first = processRefund(approvedRefund($this->payment, '2000.00', AllocationType::RegistrationFee));
         app(SettleRefund::class)->handle($first);
 
         expect($this->payment->refresh()->status)->toBe(PaymentStatus::PartiallyRefunded);
 
-        $second = processRefund(approvedRefund($this->payment, 400000, AllocationType::PackageFee));
+        $second = processRefund(approvedRefund($this->payment, '4000.00', AllocationType::PackageFee));
         app(SettleRefund::class)->handle($second);
 
         expect($this->payment->refresh()->status)->toBe(PaymentStatus::Refunded);
@@ -440,7 +441,7 @@ describe('a refund is a new operation, not an edit', function () {
         $this->payment->refresh();
 
         // The status moved. The figures did not.
-        expect($this->payment->amount_minor->minorUnits)->toBe(600000)
+        expect($this->payment->amount->toDecimal())->toBe('6000.00')
             ->and($this->payment->gateway_reference)->toBe('val-1')
             ->and($this->payment->completed_at)->not->toBeNull()
             ->and($this->payment->status)->toBe(PaymentStatus::Refunded);
@@ -472,20 +473,20 @@ describe('the wallet is never silently overdrawn', function () {
          * account spends it, and somebody refunds the top-up. Taking it back
          * would leave a negative available balance nobody authorised.
          */
-        $topUp = topUpPayment(500000, 'val-topup');
-        $wallet = walletWith(500000, 'test:topup');
+        $topUp = topUpPayment('5000.00', 'val-topup');
+        $wallet = walletWith('5000.00', 'test:topup');
 
         // Spent on something else.
         app(WalletService::class)->debit(
             $wallet,
             LedgerTransactionType::ServiceFeeDebit,
-            Money::of(450000),
+            Money::fromDecimal('4500.00', Currency::BDT),
             new PostingContext(source: 'test', description: 'Service', idempotencyKey: 'test:spend'),
         );
 
         Http::fake();
 
-        expect(fn () => processRefund(approvedRefund($topUp, amountMinor: 500000)))
+        expect(fn () => processRefund(approvedRefund($topUp, amount: '5000.00')))
             ->toThrow(RefundRefused::class, 'overdraw this wallet');
 
         // Refused before the provider was asked, not after the money had gone.
@@ -493,26 +494,26 @@ describe('the wallet is never silently overdrawn', function () {
     });
 
     it('takes the money back out when the wallet can carry it', function () {
-        $topUp = topUpPayment(500000, 'val-topup-2');
-        $wallet = walletWith(500000, 'test:topup-2');
+        $topUp = topUpPayment('5000.00', 'val-topup-2');
+        $wallet = walletWith('5000.00', 'test:topup-2');
 
-        $before = $wallet->total_minor->minorUnits;
+        $before = $wallet->total->toDecimal();
 
         refundAnswers([refundAcceptance('REF-TOPUP'), refundSettled()]);
 
-        $refund = processRefund(approvedRefund($topUp, amountMinor: 500000));
+        $refund = processRefund(approvedRefund($topUp, amount: '5000.00'));
         $settled = app(SettleRefund::class)->handle($refund);
 
         expect($settled->status)->toBe(RefundStatus::Processed)
             ->and($settled->wallet_transaction_id)->not->toBeNull()
-            ->and($wallet->refresh()->total_minor->minorUnits)->toBe($before - 500000);
+            ->and($wallet->refresh()->total->toDecimal())->toBe(bcsub($before, '5000.00', 2));
     });
 
     it('does not touch a wallet for a payment that never credited one', function () {
         // An activation fee is money paid *to* Feriwala. Refunding it reverses
         // nothing in a wallet, because nothing was ever credited to one.
-        $wallet = walletWith(200000, 'test:unrelated');
-        $before = $wallet->total_minor->minorUnits;
+        $wallet = walletWith('2000.00', 'test:unrelated');
+        $before = $wallet->total->toDecimal();
 
         refundAnswers([refundAcceptance(), refundSettled()]);
 
@@ -521,14 +522,14 @@ describe('the wallet is never silently overdrawn', function () {
 
         expect($settled->status)->toBe(RefundStatus::Processed)
             ->and($settled->wallet_transaction_id)->toBeNull()
-            ->and($wallet->refresh()->total_minor->minorUnits)->toBe($before);
+            ->and($wallet->refresh()->total->toDecimal())->toBe($before);
     });
 
     it('reverses a wallet exactly once however often the confirmation arrives', function () {
-        $topUp = topUpPayment(300000, 'val-topup-3');
-        $wallet = walletWith(300000, 'test:topup-3');
+        $topUp = topUpPayment('3000.00', 'val-topup-3');
+        $wallet = walletWith('3000.00', 'test:topup-3');
 
-        $before = $wallet->total_minor->minorUnits;
+        $before = $wallet->total->toDecimal();
 
         refundAnswers([
             refundAcceptance('REF-ONCE'),
@@ -537,13 +538,13 @@ describe('the wallet is never silently overdrawn', function () {
             refundSettled(),
         ]);
 
-        $refund = processRefund(approvedRefund($topUp, amountMinor: 300000));
+        $refund = processRefund(approvedRefund($topUp, amount: '3000.00'));
 
         app(SettleRefund::class)->handle($refund->refresh());
         app(SettleRefund::class)->handle($refund->refresh());
         app(SettleRefund::class)->handle($refund->refresh());
 
-        expect($wallet->refresh()->total_minor->minorUnits)->toBe($before - 300000);
+        expect($wallet->refresh()->total->toDecimal())->toBe(bcsub($before, '3000.00', 2));
     });
 });
 
@@ -580,7 +581,7 @@ describe('the record', function () {
         $entry = PaymentLog::query()->where('event', 'refund')->firstOrFail();
 
         expect($entry->direction)->toBe(PaymentLog::OUTBOUND)
-            ->and($entry->amount_minor)->toBe(600000);
+            ->and($entry->amount->toDecimal())->toBe('6000.00');
 
         // The store password is a parameter on every SSLCommerz call and must
         // not survive into evidence either (§42).

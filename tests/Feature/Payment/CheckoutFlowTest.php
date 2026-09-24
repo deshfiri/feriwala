@@ -9,12 +9,14 @@ use App\Domain\Package\Models\UserPackage;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -27,7 +29,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
     ]);
 });
@@ -41,8 +43,8 @@ describe('choosing a package', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('onboarding/packages')
-                ->where('packages.0.fee.minor_units', 500000)
-                ->where('packages.0.activation_total.minor_units', 600000),
+                ->where('packages.0.fee.amount', '5000.00')
+                ->where('packages.0.activation_total.amount', '6000.00'),
             );
     });
 
@@ -56,7 +58,7 @@ describe('choosing a package', function () {
     });
 
     it('replaces an earlier unpaid choice rather than stacking them', function () {
-        $other = Package::create(['name' => 'Starter', 'slug' => 'starter', 'fee_minor' => 200000]);
+        $other = Package::create(['name' => 'Starter', 'slug' => 'starter', 'fee' => Money::fromDecimal('2000.00', Currency::BDT)]);
 
         $this->actingAs($this->applicant)->post(route('packages.select', $this->package));
         $this->actingAs($this->applicant)->post(route('packages.select', $other));
@@ -71,7 +73,7 @@ describe('choosing a package', function () {
 
     it('keeps the superseded choice rather than deleting it', function () {
         // Deleting rows a payment might reference is how orphans happen.
-        $other = Package::create(['name' => 'Starter', 'slug' => 'starter', 'fee_minor' => 200000]);
+        $other = Package::create(['name' => 'Starter', 'slug' => 'starter', 'fee' => Money::fromDecimal('2000.00', Currency::BDT)]);
 
         $this->actingAs($this->applicant)->post(route('packages.select', $this->package));
         $this->actingAs($this->applicant)->post(route('packages.select', $other));
@@ -83,7 +85,7 @@ describe('choosing a package', function () {
         Package::create([
             'name' => 'Retired',
             'slug' => 'retired',
-            'fee_minor' => 100000,
+            'fee' => Money::fromDecimal('1000.00', Currency::BDT),
             'is_active' => false,
         ]);
 
@@ -107,7 +109,7 @@ describe('checkout', function () {
                 ->has('quote.lines', 2)
                 ->where('quote.lines.0.type', 'registration_fee')
                 ->where('quote.lines.1.type', 'package_fee')
-                ->where('quote.total.minor_units', 600000),
+                ->where('quote.total.amount', '6000.00'),
             );
     });
 
@@ -130,7 +132,7 @@ describe('checkout', function () {
 
         $payment = Payment::first();
 
-        expect($payment->amount_minor->minorUnits)->toBe(600000)
+        expect($payment->amount->toDecimal())->toBe('6000.00')
             ->and($payment->status)->toBe(PaymentStatus::Initiated)
             ->and($payment->gateway)->toBe('sslcommerz')
             ->and($payment->allocations)->toHaveCount(2);
@@ -177,7 +179,7 @@ describe('checkout', function () {
             'total' => 1,
         ]);
 
-        expect(Payment::first()->amount_minor->minorUnits)->toBe(600000);
+        expect(Payment::first()->amount->toDecimal())->toBe('6000.00');
     });
 });
 

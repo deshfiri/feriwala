@@ -8,6 +8,8 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Integrations\Payment\GatewayNavigation;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -24,7 +26,7 @@ use Symfony\Component\Finder\Finder;
  */
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
     $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
@@ -41,7 +43,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth-'.Str::lower(Str::random(6)),
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
     ]);
 
@@ -84,7 +86,7 @@ describe('opening the gateway', function () use ($inertia) {
 
         $this->actingAs($account->owner)
             ->withHeaders($inertia)
-            ->post(route('wallet.top-up.store'), ['amount_minor' => 500000, 'gateway' => 'sslcommerz'])
+            ->post(route('wallet.top-up.store'), ['amount' => '5000.00', 'gateway' => 'sslcommerz'])
             ->assertStatus(409)
             ->assertHeader('X-Inertia-Location', 'https://sandbox.sslcommerz.com/EasyCheckOut/abc');
     });

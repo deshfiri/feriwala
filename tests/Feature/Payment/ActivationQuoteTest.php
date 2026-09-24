@@ -7,12 +7,13 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Tax\Models\TaxRate;
 use App\Domain\Tax\Models\TaxRule;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 
 beforeEach(function () {
     $this->settings = app(SettingsRepository::class);
 
-    $this->settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $this->settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $this->settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
 });
 
@@ -21,7 +22,7 @@ function quoteFor(array $packageAttributes = [], ...$args)
     $package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth-'.uniqid(),
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         ...$packageAttributes,
     ]);
 
@@ -44,9 +45,9 @@ describe('the combined activation payment (§5.1)', function () {
     it('adds the registration fee and the package fee', function () {
         $quote = quoteFor();
 
-        expect($quote->amountFor(AllocationType::RegistrationFee)->minorUnits)->toBe(100000)
-            ->and($quote->amountFor(AllocationType::PackageFee)->minorUnits)->toBe(500000)
-            ->and($quote->total()->minorUnits)->toBe(600000);
+        expect($quote->amountFor(AllocationType::RegistrationFee)->toDecimal())->toBe('1000.00')
+            ->and($quote->amountFor(AllocationType::PackageFee)->toDecimal())->toBe('5000.00')
+            ->and($quote->total()->toDecimal())->toBe('6000.00');
     });
 
     it('keeps the two fees as separate lines, never merged', function () {
@@ -59,14 +60,14 @@ describe('the combined activation payment (§5.1)', function () {
     });
 
     it('lets a package override the global registration fee', function () {
-        $quote = quoteFor(['registration_fee_minor' => 50000]);
+        $quote = quoteFor(['registration_fee' => Money::fromDecimal('500.00', Currency::BDT)]);
 
-        expect($quote->amountFor(AllocationType::RegistrationFee)->minorUnits)->toBe(50000)
-            ->and($quote->total()->minorUnits)->toBe(550000);
+        expect($quote->amountFor(AllocationType::RegistrationFee)->toDecimal())->toBe('500.00')
+            ->and($quote->total()->toDecimal())->toBe('5500.00');
     });
 
     it('omits a zero registration fee rather than showing an empty line', function () {
-        $this->settings->set('billing.registration_fee', 0);
+        $this->settings->set('billing.registration_fee', '0.00');
 
         expect(quoteFor()->amountFor(AllocationType::RegistrationFee)->isZero())->toBeTrue()
             ->and(quoteFor()->lines)->toHaveCount(1);
@@ -75,31 +76,31 @@ describe('the combined activation payment (§5.1)', function () {
 
 describe('discount', function () {
     it('comes off the total', function () {
-        $quote = quoteFor([], discount: Money::of(50000));
+        $quote = quoteFor([], discount: Money::fromDecimal('500.00'));
 
-        expect($quote->total()->minorUnits)->toBe(550000);
+        expect($quote->total()->toDecimal())->toBe('5500.00');
     });
 
     it('is stored positive with a deduction flag, not as a negative', function () {
         // So a report summing "discount given" never has to flip a sign.
-        $quote = quoteFor([], discount: Money::of(50000));
+        $quote = quoteFor([], discount: Money::fromDecimal('500.00'));
 
-        expect($quote->amountFor(AllocationType::Discount)->minorUnits)->toBe(50000)
+        expect($quote->amountFor(AllocationType::Discount)->toDecimal())->toBe('500.00')
             ->and(AllocationType::Discount->isDeduction())->toBeTrue();
     });
 
     it('is capped at the fees so the total can never go negative', function () {
         // A generous coupon must not turn a sale into a payout.
-        $quote = quoteFor([], discount: Money::of(9_999_999));
+        $quote = quoteFor([], discount: Money::fromDecimal('99999.99'));
 
-        expect($quote->total()->minorUnits)->toBe(0)
+        expect($quote->total()->isZero())->toBeTrue()
             ->and($quote->total()->isNegative())->toBeFalse();
     });
 
     it('makes a fully discounted activation non-payable', function () {
         // A promotional or administratively granted package must not be sent
         // to a gateway for zero.
-        $quote = quoteFor([], discount: Money::of(600000));
+        $quote = quoteFor([], discount: Money::fromDecimal('6000.00'));
 
         expect($quote->isPayable())->toBeFalse();
     });
@@ -114,44 +115,44 @@ describe('tax', function () {
         $quote = quoteFor();
 
         // 15% of 6,000.00
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(90000)
-            ->and($quote->total()->minorUnits)->toBe(690000);
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('900.00')
+            ->and($quote->total()->toDecimal())->toBe('6900.00');
     });
 
     it('is charged after the discount, not before', function () {
         // Taxing before the discount would overcharge the customer.
-        $quote = quoteFor([], discount: Money::of(100000));
+        $quote = quoteFor([], discount: Money::fromDecimal('1000.00'));
 
         // 15% of (6,000 - 1,000) = 750.00
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(75000)
-            ->and($quote->total()->minorUnits)->toBe(575000);
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('750.00')
+            ->and($quote->total()->toDecimal())->toBe('5750.00');
     });
 
     it('is not charged on a wallet deposit', function () {
         // A deposit is the partner's own money going onto their account —
         // taxing it would be charging VAT on someone's savings.
-        $quote = quoteFor([], walletDeposit: Money::of(1000000));
+        $quote = quoteFor([], walletDeposit: Money::fromDecimal('10000.00'));
 
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(90000)
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('900.00')
             ->and(AllocationType::WalletDeposit->isTaxable())->toBeFalse();
     });
 });
 
 describe('wallet deposit', function () {
     it('is added to the total', function () {
-        $quote = quoteFor([], walletDeposit: Money::of(1000000));
+        $quote = quoteFor([], walletDeposit: Money::fromDecimal('10000.00'));
 
-        expect($quote->amountFor(AllocationType::WalletDeposit)->minorUnits)->toBe(1000000)
-            ->and($quote->total()->minorUnits)->toBe(1600000);
+        expect($quote->amountFor(AllocationType::WalletDeposit)->toDecimal())->toBe('10000.00')
+            ->and($quote->total()->toDecimal())->toBe('16000.00');
     });
 
     it('is not counted as revenue', function () {
         // It stays the partner's money. Counting it as revenue would overstate
         // earnings and understate what Feriwala owes.
-        $quote = quoteFor([], walletDeposit: Money::of(1000000));
+        $quote = quoteFor([], walletDeposit: Money::fromDecimal('10000.00'));
 
-        expect($quote->revenue()->minorUnits)->toBe(600000)
-            ->and($quote->total()->minorUnits)->toBe(1600000);
+        expect($quote->revenue()->toDecimal())->toBe('6000.00')
+            ->and($quote->total()->toDecimal())->toBe('16000.00');
     });
 });
 
@@ -159,17 +160,17 @@ describe('gateway charge', function () {
     it('is applied to what is actually transacted', function () {
         $this->settings->set('billing.gateway_charge_percent', '2');
 
-        $quote = quoteFor([], walletDeposit: Money::of(400000));
+        $quote = quoteFor([], walletDeposit: Money::fromDecimal('4000.00'));
 
         // 2% of (6,000 + 4,000)
-        expect($quote->amountFor(AllocationType::GatewayCharge)->minorUnits)->toBe(20000)
-            ->and($quote->total()->minorUnits)->toBe(1020000);
+        expect($quote->amountFor(AllocationType::GatewayCharge)->toDecimal())->toBe('200.00')
+            ->and($quote->total()->toDecimal())->toBe('10200.00');
     });
 
     it('is not applied when nothing is payable', function () {
         $this->settings->set('billing.gateway_charge_percent', '2');
 
-        $quote = quoteFor([], discount: Money::of(600000));
+        $quote = quoteFor([], discount: Money::fromDecimal('6000.00'));
 
         expect($quote->amountFor(AllocationType::GatewayCharge)->isZero())->toBeTrue();
     });
@@ -180,7 +181,7 @@ describe('the full breakdown', function () {
         quoteTestStandardRate();
         $this->settings->set('billing.gateway_charge_percent', '2');
 
-        $quote = quoteFor([], walletDeposit: Money::of(1000000), discount: Money::of(50000));
+        $quote = quoteFor([], walletDeposit: Money::fromDecimal('10000.00'), discount: Money::fromDecimal('500.00'));
 
         $types = array_map(fn ($line) => $line->type->value, $quote->lines);
 
@@ -197,7 +198,7 @@ describe('the full breakdown', function () {
     it('has a total equal to the sum of its signed lines', function () {
         quoteTestStandardRate();
 
-        $quote = quoteFor([], walletDeposit: Money::of(1000000), discount: Money::of(50000));
+        $quote = quoteFor([], walletDeposit: Money::fromDecimal('10000.00'), discount: Money::fromDecimal('500.00'));
 
         $sum = Money::zero();
 
@@ -205,7 +206,7 @@ describe('the full breakdown', function () {
             $sum = $sum->plus($line->signedAmount());
         }
 
-        expect($sum->minorUnits)->toBe($quote->total()->minorUnits);
+        expect($sum->toDecimal())->toBe($quote->total()->toDecimal());
     });
 
     it('serialises for the client without exposing arithmetic', function () {

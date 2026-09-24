@@ -42,7 +42,7 @@ function stripeIntent(?Money $amount = null): PaymentIntent
 {
     return new PaymentIntent(
         reference: 'PAY-260901-K7M3QX9P',
-        amount: $amount ?? Money::of(12500, Currency::USD),
+        amount: $amount ?? Money::fromDecimal('125.00', Currency::USD),
         customerName: 'Nusrat Jahan',
         customerEmail: 'nusrat@example.test',
         customerMobile: '+8801712345678',
@@ -247,7 +247,7 @@ describe('verification is the authoritative answer', function () {
         $result = $this->gateway->verify('cs_test_abc');
 
         expect($result->isPaid())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(12500)
+            ->and($result->amount->toDecimal())->toBe('125.00')
             ->and($result->amount->currency)->toBe(Currency::USD)
             ->and($result->reference)->toBe('PAY-260901-K7M3QX9P')
             // The PaymentIntent, which is what a refund is addressed to.
@@ -299,15 +299,15 @@ describe('refunds (§26.3)', function () {
         $result = $this->gateway->refund(new RefundIntent(
             reference: 'PAY-260901-K7M3QX9P',
             gatewayReference: 'pi_test_999',
-            amount: Money::of(12500, Currency::USD),
-            originalAmount: Money::of(12500, Currency::USD),
+            amount: Money::fromDecimal('125.00', Currency::USD),
+            originalAmount: Money::fromDecimal('125.00', Currency::USD),
             reason: 'Duplicate payment',
             idempotencyKey: 'refund:PAY-260901-K7M3QX9P:1',
         ));
 
         expect($result->isSucceeded())->toBeTrue()
             ->and($result->gatewayRefundReference)->toBe('re_test_1')
-            ->and($result->amount->minorUnits)->toBe(12500);
+            ->and($result->amount->toDecimal())->toBe('125.00');
 
         Http::assertSent(function ($request) {
             return str_contains($request->url(), '/v1/refunds')
@@ -353,8 +353,8 @@ describe('refunds (§26.3)', function () {
         $result = $this->gateway->refund(new RefundIntent(
             reference: 'PAY-1',
             gatewayReference: 'pi_test_999',
-            amount: Money::of(100, Currency::USD),
-            originalAmount: Money::of(100, Currency::USD),
+            amount: Money::fromDecimal('1.00', Currency::USD),
+            originalAmount: Money::fromDecimal('1.00', Currency::USD),
             reason: 'Test',
             idempotencyKey: 'refund:PAY-1:1',
         ));

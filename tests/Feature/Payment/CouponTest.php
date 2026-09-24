@@ -52,7 +52,7 @@ function couponTestPayment(BusinessAccount $account): Payment
         'business_account_id' => $account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Draft,
-        'amount_minor' => 540000,
+        'amount' => Money::fromDecimal('5400.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 }
@@ -64,12 +64,12 @@ function couponTestPayment(BusinessAccount $account): Payment
  */
 function couponTestFees(): array
 {
-    return [Money::of(100000, Currency::BDT), Money::of(500000, Currency::BDT)];
+    return [Money::fromDecimal('1000.00', Currency::BDT), Money::fromDecimal('5000.00', Currency::BDT)];
 }
 
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -81,7 +81,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
     ]);
 });
@@ -102,7 +102,7 @@ describe('what a coupon is worth', function () {
 
         expect($outcome->isAccepted)->toBeTrue()
             // 20% of the package fee alone, not of the 600,000 total.
-            ->and($outcome->discount?->minorUnits)->toBe(100000);
+            ->and($outcome->discount?->toDecimal())->toBe('1000.00');
     });
 
     it('rounds a percentage down', function () {
@@ -113,12 +113,12 @@ describe('what a coupon is worth', function () {
             $coupon->code,
             $this->account,
             $this->package,
-            Money::of(0, Currency::BDT),
-            Money::of(999, Currency::BDT),
+            Money::zero(Currency::BDT),
+            Money::fromDecimal('9.99', Currency::BDT),
         );
 
-        // 999 × 12.34% = 123.28…
-        expect($outcome->discount?->minorUnits)->toBe(123);
+        // 9.99 × 12.34% = 1.2328…
+        expect($outcome->discount?->toDecimal())->toBe('1.23');
     });
 
     it('takes a fixed amount off as given', function () {
@@ -130,16 +130,16 @@ describe('what a coupon is worth', function () {
         $outcome = app(CouponValidator::class)
             ->validate($coupon->code, $this->account, $this->package, ...couponTestFees());
 
-        expect($outcome->discount?->minorUnits)->toBe(75000);
+        expect($outcome->discount?->toDecimal())->toBe('750.00');
     });
 
     it('caps a percentage at the configured maximum', function () {
-        $coupon = couponTestCoupon(['value' => 5000, 'maximum_discount_minor' => 50000]);
+        $coupon = couponTestCoupon(['value' => 5000, 'maximum_discount' => Money::fromDecimal('500.00', Currency::BDT)]);
 
         $outcome = app(CouponValidator::class)
             ->validate($coupon->code, $this->account, $this->package, ...couponTestFees());
 
-        expect($outcome->discount?->minorUnits)->toBe(50000);
+        expect($outcome->discount?->toDecimal())->toBe('500.00');
     });
 
     it('never discounts more than the base', function () {
@@ -149,7 +149,7 @@ describe('what a coupon is worth', function () {
         $outcome = app(CouponValidator::class)
             ->validate($coupon->code, $this->account, $this->package, ...couponTestFees());
 
-        expect($outcome->discount?->minorUnits)->toBe(600000);
+        expect($outcome->discount?->toDecimal())->toBe('6000.00');
     });
 
     it('is case-insensitive about the code somebody typed', function () {
@@ -185,11 +185,11 @@ describe('refusing a code, and saying why', function () {
                 'package_id' => Package::create([
                     'name' => 'Enterprise',
                     'slug' => 'enterprise',
-                    'fee_minor' => 900000,
+                    'fee' => Money::fromDecimal('9000.00', Currency::BDT),
                 ])->id,
             ])->code,
             'billing.coupons.refused.minimum_spend' => couponTestCoupon([
-                'minimum_spend_minor' => 900000,
+                'minimum_spend' => Money::fromDecimal('9000.00', Currency::BDT),
             ])->code,
         ];
 
@@ -217,7 +217,7 @@ describe('refusing a code, and saying why', function () {
             'coupon_id' => $coupon->id,
             'business_account_id' => $this->account->id,
             'status' => RedemptionStatus::Redeemed,
-            'amount_minor' => 50000,
+            'amount' => Money::fromDecimal('500.00', Currency::BDT),
             'currency_code' => 'BDT',
             'redeemed_at' => now(),
         ]);
@@ -243,7 +243,7 @@ describe('refusing a code, and saying why', function () {
         $coupon = couponTestCoupon(['per_account_limit' => 1]);
         $payment = couponTestPayment($this->account);
 
-        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
         app(SettleCouponRedemption::class)->release($payment);
 
         $outcome = app(CouponValidator::class)
@@ -262,7 +262,7 @@ describe('holding and spending a use', function () {
             $coupon,
             $this->account,
             $payment,
-            Money::of(60000, Currency::BDT),
+            Money::fromDecimal('600.00', Currency::BDT),
         );
 
         expect($reservation->status)->toBe(RedemptionStatus::Reserved)
@@ -275,8 +275,8 @@ describe('holding and spending a use', function () {
         $payment = couponTestPayment($this->account);
         $reserve = app(ReserveCoupon::class);
 
-        $first = $reserve->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
-        $second = $reserve->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        $first = $reserve->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
+        $second = $reserve->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
 
         expect($second->id)->toBe($first->id)
             ->and($coupon->refresh()->redeemed_count)->toBe(1);
@@ -287,7 +287,7 @@ describe('holding and spending a use', function () {
         $coupon = couponTestCoupon(['usage_limit' => 1]);
         $reserve = app(ReserveCoupon::class);
 
-        $reserve->handle($coupon, $this->account, couponTestPayment($this->account), Money::of(60000, Currency::BDT));
+        $reserve->handle($coupon, $this->account, couponTestPayment($this->account), Money::fromDecimal('600.00', Currency::BDT));
 
         $other = testBusinessAccount(AccountStatus::PaymentPending);
 
@@ -295,7 +295,7 @@ describe('holding and spending a use', function () {
             $coupon->refresh(),
             $other,
             couponTestPayment($other),
-            Money::of(60000, Currency::BDT),
+            Money::fromDecimal('600.00', Currency::BDT),
         ))->toThrow(RuntimeException::class);
     });
 
@@ -309,7 +309,7 @@ describe('holding and spending a use', function () {
             $coupon,
             $this->account,
             $payment,
-            Money::of(60000, Currency::BDT),
+            Money::fromDecimal('600.00', Currency::BDT),
         ))->toThrow(RuntimeException::class);
     });
 
@@ -317,7 +317,7 @@ describe('holding and spending a use', function () {
         $coupon = couponTestCoupon();
         $payment = couponTestPayment($this->account);
 
-        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
         app(SettleCouponRedemption::class)->redeem($payment);
 
         $redemption = CouponRedemption::query()->firstOrFail();
@@ -331,7 +331,7 @@ describe('holding and spending a use', function () {
         $coupon = couponTestCoupon(['usage_limit' => 1]);
         $payment = couponTestPayment($this->account);
 
-        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
         app(SettleCouponRedemption::class)->release($payment);
 
         $redemption = CouponRedemption::query()->firstOrFail();
@@ -347,7 +347,7 @@ describe('holding and spending a use', function () {
         $payment = couponTestPayment($this->account);
         $settle = app(SettleCouponRedemption::class);
 
-        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
 
         $settle->release($payment);
         $settle->release($payment);
@@ -361,7 +361,7 @@ describe('holding and spending a use', function () {
         $payment = couponTestPayment($this->account);
         $settle = app(SettleCouponRedemption::class);
 
-        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $this->account, $payment, Money::fromDecimal('600.00', Currency::BDT));
         $settle->release($payment);
         $settle->redeem($payment);
 
@@ -389,9 +389,9 @@ describe('the checkout', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('onboarding/checkout')
                 ->where('coupon.accepted', true)
-                // 10% of the 600,000 in fees.
-                ->where('coupon.discount.minor_units', 60000)
-                ->where('quote.total.minor_units', 540000),
+                // 10% of the 6,000.00 in fees.
+                ->where('coupon.discount.amount', '600.00')
+                ->where('quote.total.amount', '5400.00'),
             );
 
         expect(CouponRedemption::query()->count())->toBe(0)
@@ -414,7 +414,7 @@ describe('the checkout', function () {
                 ->where('quote.lines.0.type', 'registration_fee')
                 ->where('quote.lines.1.type', 'package_fee')
                 ->where('quote.lines.2.type', 'discount')
-                ->where('quote.lines.2.amount.minor_units', 60000)
+                ->where('quote.lines.2.amount.amount', '600.00')
                 ->where('quote.lines.2.is_deduction', true),
             );
     });
@@ -431,7 +431,7 @@ describe('the checkout', function () {
                 ->where('coupon.accepted', false)
                 ->whereNot('coupon.reason', null)
                 // Refused means not applied: the total is the undiscounted one.
-                ->where('quote.total.minor_units', 600000),
+                ->where('quote.total.amount', '6000.00'),
             );
     });
 
@@ -446,7 +446,7 @@ describe('the checkout', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('coupon', null)
-                ->where('quote.total.minor_units', 600000),
+                ->where('quote.total.amount', '6000.00'),
             );
     });
 
@@ -462,7 +462,7 @@ describe('the checkout', function () {
 
         $payment = Payment::query()->firstOrFail();
 
-        expect($payment->amount_minor->minorUnits)->toBe(540000)
+        expect($payment->amount->toDecimal())->toBe('5400.00')
             ->and($coupon->refresh()->redeemed_count)->toBe(1);
 
         $redemption = CouponRedemption::query()->firstOrFail();
@@ -471,7 +471,7 @@ describe('the checkout', function () {
             ->and($redemption->payment_id)->toBe($payment->id)
             // Snapshotted: the coupon can be edited afterwards and this still
             // has to reconcile with the allocation it produced.
-            ->and($redemption->amount_minor->minorUnits)->toBe(60000);
+            ->and($redemption->amount->toDecimal())->toBe('600.00');
     });
 
     it('charges the full amount when the last slot went while the page was open', function () {
@@ -490,13 +490,13 @@ describe('the checkout', function () {
 
         $other = testBusinessAccount(AccountStatus::PaymentPending);
         $taken = couponTestPayment($other);
-        app(ReserveCoupon::class)->handle($coupon, $other, $taken, Money::of(60000, Currency::BDT));
+        app(ReserveCoupon::class)->handle($coupon, $other, $taken, Money::fromDecimal('600.00', Currency::BDT));
 
         $this->actingAs($this->applicant)->post(route('checkout.pay'), ['gateway' => 'sslcommerz']);
 
         $payment = Payment::query()->where('business_account_id', $this->account->id)->firstOrFail();
 
-        expect($payment->amount_minor->minorUnits)->toBe(600000)
+        expect($payment->amount->toDecimal())->toBe('6000.00')
             // Still the one hold the other account took, and no second.
             ->and($coupon->refresh()->redeemed_count)->toBe(1)
             ->and(CouponRedemption::query()->where('payment_id', $payment->id)->exists())->toBeFalse();
@@ -558,8 +558,8 @@ describe('managing coupons', function () {
         $coupon = Coupon::query()->where('code', 'FIXED500')->firstOrFail();
 
         expect($coupon->value)->toBe(50050)
-            ->and($coupon->minimum_spend_minor->minorUnits)->toBe(100000)
-            ->and($coupon->maximum_discount_minor->minorUnits)->toBe(50050);
+            ->and($coupon->minimum_spend->toDecimal())->toBe('1000.00')
+            ->and($coupon->maximum_discount->toDecimal())->toBe('500.50');
     });
 
     it('refuses a percentage above one hundred', function () {

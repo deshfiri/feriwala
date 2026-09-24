@@ -8,6 +8,8 @@ use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -48,7 +50,7 @@ const RETURN_SAFETY_PAGES = [
 
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -56,7 +58,7 @@ beforeEach(function () {
 
     $this->account = testBusinessAccount(AccountStatus::PackageSelectionPending);
     $this->applicant = $this->account->owner;
-    $this->package = Package::create(['name' => 'Growth', 'slug' => 'growth', 'fee_minor' => 500000, 'validity_days' => 365]);
+    $this->package = Package::create(['name' => 'Growth', 'slug' => 'growth', 'fee' => Money::fromDecimal('5000.00', Currency::BDT), 'validity_days' => 365]);
 
     // What each gateway answers when asked, changeable through test().
     $this->validation = new ArrayObject(['status' => 'VALID', 'currency_amount' => '6000.00', 'currency_type' => 'BDT']);
@@ -311,7 +313,7 @@ describe('a provider that does not sign its returns (aamarPay)', function () {
             'business_account_id' => $this->account->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Initiated,
-            'amount_minor' => 600000,
+            'amount' => Money::fromDecimal('6000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'gateway' => 'amarpay',
         ]);

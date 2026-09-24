@@ -114,14 +114,14 @@ describe('when a gateway is offered', function () {
 describe('the checkout', function () {
     it('offers nothing to pay with while no gateway is credentialled', function () {
         $settings = app(SettingsRepository::class);
-        $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+        $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
         $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
 
         $account = testBusinessAccount(AccountStatus::PackageSelectionPending);
         $package = Package::create([
             'name' => 'Growth',
             'slug' => 'growth',
-            'fee_minor' => 500000,
+            'fee' => Money::fromDecimal('5000.00', Currency::BDT),
             'validity_days' => 365,
         ]);
 
@@ -437,8 +437,8 @@ describe('what a gateway says it can do', function () {
             ->and(fn () => $driver->refund(new RefundIntent(
                 reference: 'PAY-1',
                 gatewayReference: 'BANK-1',
-                amount: Money::of(100),
-                originalAmount: Money::of(100),
+                amount: Money::fromDecimal('1.00'),
+                originalAmount: Money::fromDecimal('1.00'),
                 reason: 'Test',
                 idempotencyKey: 'refund:PAY-1:1',
             )))->toThrow(GatewayCapabilityMissing::class)

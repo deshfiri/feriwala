@@ -12,6 +12,8 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -29,7 +31,7 @@ function paymentLogSettings(): void
 {
     $settings = app(SettingsRepository::class);
 
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -96,7 +98,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
     ]);
 
@@ -192,7 +194,7 @@ describe('what gets written', function () {
         expect($entry->payment_id)->toBe($payment->id)
             ->and($entry->direction)->toBe(PaymentLog::OUTBOUND)
             ->and($entry->outcome)->toBe('session_created')
-            ->and($entry->amount_minor)->toBe(600000)
+            ->and($entry->amount->toDecimal())->toBe('6000.00')
             ->and($entry->currency_code)->toBe('BDT');
     });
 
@@ -324,7 +326,7 @@ describe('the administration screen', function () {
                 ->has('payments.data', 1)
                 ->where('payments.data.0.reference', $payment->reference)
                 ->where('payments.data.0.gateway', 'sslcommerz')
-                ->where('payments.data.0.amount.minor_units', 600000)
+                ->where('payments.data.0.amount.amount', '6000.00')
                 ->where('payments.data.0.currency', 'BDT')
                 ->where('payments.data.0.status', 'initiated')
                 ->has('payments.data.0.status_label')
@@ -365,7 +367,7 @@ describe('the administration screen', function () {
             'business_account_id' => $this->account->id,
             'purpose' => $payment->purpose,
             'status' => PaymentStatus::Draft,
-            'amount_minor' => 100,
+            'amount' => Money::fromDecimal('1.00', Currency::BDT),
             'currency_code' => 'BDT',
         ]);
 

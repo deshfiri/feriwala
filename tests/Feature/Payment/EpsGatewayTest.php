@@ -42,7 +42,7 @@ it('refuses every operation rather than guessing at the protocol', function () {
 
     $intent = new PaymentIntent(
         reference: 'PAY-1',
-        amount: Money::of(100000),
+        amount: Money::fromDecimal('1000.00'),
         customerName: 'Test',
         customerEmail: 'test@example.test',
         customerMobile: null,

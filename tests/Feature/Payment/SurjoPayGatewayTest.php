@@ -34,7 +34,7 @@ function surjoPayIntent(): PaymentIntent
 {
     return new PaymentIntent(
         reference: 'PAY-260901-K7M3QX9P',
-        amount: Money::of(600000),
+        amount: Money::fromDecimal('6000.00'),
         customerName: 'Nusrat Jahan',
         customerEmail: 'nusrat@example.test',
         customerMobile: '+8801712345678',
@@ -178,7 +178,7 @@ describe('verification is the authoritative answer', function () {
         $result = $this->gateway->verify('sp6405c8f848b27');
 
         expect($result->isPaid())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(600000)
+            ->and($result->amount->toDecimal())->toBe('6000.00')
             ->and($result->reference)->toBe('PAY-260901-K7M3QX9P')
             ->and($result->settlementReference)->toBe('BNK-5566');
     });

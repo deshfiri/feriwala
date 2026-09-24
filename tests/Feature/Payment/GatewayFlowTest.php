@@ -13,6 +13,8 @@ use App\Domain\Package\Models\UserPackage;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -30,7 +32,7 @@ function gatewayFlowSettings(string $storePassword = 'pass'): void
 {
     $settings = app(SettingsRepository::class);
 
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
     $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -75,7 +77,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
     ]);
 
@@ -136,7 +138,7 @@ describe('starting a payment', function () {
         Http::assertSent(fn ($request) => str_contains($request->url(), 'gwprocess')
             && $request['total_amount'] === '6000.00');
 
-        expect(Payment::query()->firstOrFail()->amount_minor->minorUnits)->toBe(600000);
+        expect(Payment::query()->firstOrFail()->amount->toDecimal())->toBe('6000.00');
     });
 
     it('gives the gateway three separate places to send somebody back to', function () {
@@ -372,7 +374,7 @@ describe('the IPN', function () {
             'business_account_id' => $other->id,
             'purpose' => $first->purpose,
             'status' => PaymentStatus::Initiated,
-            'amount_minor' => 600000,
+            'amount' => Money::fromDecimal('6000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'gateway' => 'sslcommerz',
         ]);
@@ -462,7 +464,7 @@ describe('a success that arrives too late', function () {
             ->and($payment->needsReconciliation())->toBeTrue()
             // The verified event is persisted, not merely logged.
             ->and($payment->gateway_reference)->toBe('val-1')
-            ->and((int) $payment->settled_amount_minor)->toBe(600000)
+            ->and($payment->settled_amount->toDecimal())->toBe('6000.00')
             ->and($payment->settled_currency_code)->toBe('BDT')
             ->and($payment->reconciliation_required_at)->not->toBeNull()
             ->and($payment->reconciliation_reason)->toContain('after the checkout');
@@ -482,14 +484,14 @@ describe('a success that arrives too late', function () {
         // The document is not rewritten to match a payment that came too late.
         $payment = ($this->start)();
         $invoice = Invoice::query()->firstOrFail();
-        $before = $invoice->total_minor->minorUnits;
+        $before = $invoice->total->toDecimal();
 
         Payment::query()->update(['expires_at' => now()->subHour()]);
         app(ExpireUnpaidPayments::class)->handle();
 
         $this->post(route('webhooks.payment', 'sslcommerz'), gatewayFlowSignedIpn($payment->reference));
 
-        expect($invoice->fresh()->total_minor->minorUnits)->toBe($before)
+        expect($invoice->fresh()->total->toDecimal())->toBe($before)
             ->and($invoice->fresh()->load('payment')->isPaid())->toBeFalse();
     });
 

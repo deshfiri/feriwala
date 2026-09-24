@@ -11,6 +11,7 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Tax\Models\TaxRate;
 use App\Domain\Tax\Models\TaxRule;
+use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use App\Support\References\Reference;
 use App\Support\References\ReferencePrefix;
@@ -18,7 +19,7 @@ use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 
 beforeEach(function () {
     $settings = app(SettingsRepository::class);
-    $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+    $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
 
     // Tax is configuration, not a setting string (D19).
     TaxRate::factory()->percent(15)->create();
@@ -31,7 +32,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
     ]);
 });
 
@@ -62,13 +63,13 @@ describe('recording', function () {
     });
 
     it('keeps every component as its own allocation (§5.1)', function () {
-        $payment = recordActivation(deposit: Money::of(1000000));
+        $payment = recordActivation(deposit: Money::fromDecimal('10000.00'));
 
         expect($payment->allocations)->toHaveCount(4)
-            ->and($payment->allocatedTo(AllocationType::RegistrationFee)->minorUnits)->toBe(100000)
-            ->and($payment->allocatedTo(AllocationType::PackageFee)->minorUnits)->toBe(500000)
-            ->and($payment->allocatedTo(AllocationType::Tax)->minorUnits)->toBe(90000)
-            ->and($payment->allocatedTo(AllocationType::WalletDeposit)->minorUnits)->toBe(1000000);
+            ->and($payment->allocatedTo(AllocationType::RegistrationFee)->toDecimal())->toBe('1000.00')
+            ->and($payment->allocatedTo(AllocationType::PackageFee)->toDecimal())->toBe('5000.00')
+            ->and($payment->allocatedTo(AllocationType::Tax)->toDecimal())->toBe('900.00')
+            ->and($payment->allocatedTo(AllocationType::WalletDeposit)->toDecimal())->toBe('10000.00');
     });
 
     it('makes the two fees separately reportable', function () {
@@ -79,21 +80,21 @@ describe('recording', function () {
         $registrationTotal = Payment::query()
             ->join('payment_allocations', 'payments.id', '=', 'payment_allocations.payment_id')
             ->where('payment_allocations.type', AllocationType::RegistrationFee->value)
-            ->sum('payment_allocations.amount_minor');
+            ->sum('payment_allocations.amount');
 
-        expect((int) $registrationTotal)->toBe(100000);
+        expect((string) $registrationTotal)->toBe('1000.00');
     });
 
     it('records revenue separately from the amount charged', function () {
         // A deposit is the partner's money, not Feriwala's earnings.
-        $payment = recordActivation(deposit: Money::of(1000000));
+        $payment = recordActivation(deposit: Money::fromDecimal('10000.00'));
 
-        expect($payment->amount_minor->minorUnits)->toBe(1690000)
-            ->and($payment->revenue_minor->minorUnits)->toBe(600000);
+        expect($payment->amount->toDecimal())->toBe('16900.00')
+            ->and($payment->revenue->toDecimal())->toBe('6000.00');
     });
 
     it('preserves the order the user saw at checkout', function () {
-        $payment = recordActivation(deposit: Money::of(1000000));
+        $payment = recordActivation(deposit: Money::fromDecimal('10000.00'));
 
         expect($payment->allocations->pluck('type')->map->value->all())->toBe([
             'registration_fee',
@@ -110,7 +111,7 @@ describe('recording', function () {
     });
 
     it('has allocations that sum to the amount charged', function () {
-        $payment = recordActivation(deposit: Money::of(1000000));
+        $payment = recordActivation(deposit: Money::fromDecimal('10000.00'));
 
         expect($payment->allocationsBalance())->toBeTrue();
     });

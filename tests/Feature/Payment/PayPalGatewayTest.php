@@ -41,7 +41,7 @@ function payPalIntent(): PaymentIntent
 {
     return new PaymentIntent(
         reference: 'PAY-260901-K7M3QX9P',
-        amount: Money::of(12500, Currency::USD),
+        amount: Money::fromDecimal('125.00', Currency::USD),
         customerName: 'Nusrat Jahan',
         customerEmail: 'nusrat@example.test',
         customerMobile: '+8801712345678',
@@ -159,7 +159,7 @@ describe('capture is part of verification', function () {
         $result = $this->gateway->verify('5O190127TN364715T');
 
         expect($result->isPaid())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(12500)
+            ->and($result->amount->toDecimal())->toBe('125.00')
             ->and($result->amount->currency)->toBe(Currency::USD)
             ->and($result->reference)->toBe('PAY-260901-K7M3QX9P')
             // The capture id, which is what a refund is addressed to.
@@ -314,15 +314,15 @@ describe('refunds (§26.3)', function () {
         $result = $this->gateway->refund(new RefundIntent(
             reference: 'PAY-260901-K7M3QX9P',
             gatewayReference: '3C679366HH908993F',
-            amount: Money::of(12500, Currency::USD),
-            originalAmount: Money::of(12500, Currency::USD),
+            amount: Money::fromDecimal('125.00', Currency::USD),
+            originalAmount: Money::fromDecimal('125.00', Currency::USD),
             reason: 'Duplicate payment',
             idempotencyKey: 'refund:PAY-260901-K7M3QX9P:1',
         ));
 
         expect($result->isSucceeded())->toBeTrue()
             ->and($result->gatewayRefundReference)->toBe('1JU08902781691411')
-            ->and($result->amount->minorUnits)->toBe(12500);
+            ->and($result->amount->toDecimal())->toBe('125.00');
 
         Http::assertSent(fn ($request) => ! str_contains($request->url(), '/refund')
             || (str_contains($request->url(), '/v2/payments/captures/3C679366HH908993F/refund')
@@ -340,14 +340,14 @@ describe('refunds (§26.3)', function () {
         $result = $this->gateway->refund(new RefundIntent(
             reference: 'PAY-1',
             gatewayReference: '3C679366HH908993F',
-            amount: Money::of(2500, Currency::USD),
-            originalAmount: Money::of(12500, Currency::USD),
+            amount: Money::fromDecimal('25.00', Currency::USD),
+            originalAmount: Money::fromDecimal('125.00', Currency::USD),
             reason: 'Partial',
             idempotencyKey: 'refund:PAY-1:1',
         ));
 
         expect($result->isSucceeded())->toBeTrue()
-            ->and($result->amount->minorUnits)->toBe(2500);
+            ->and($result->amount->toDecimal())->toBe('25.00');
     });
 
     it('treats anything short of COMPLETED as still in flight', function () {

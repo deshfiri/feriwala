@@ -8,6 +8,8 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -47,7 +49,7 @@ function stalePayment(array $attributes = []): Payment
         'business_account_id' => test()->account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Initiated,
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'gateway' => 'sslcommerz',
         ...$attributes,
@@ -143,7 +145,7 @@ describe('finding money the notifications missed', function () {
             'business_account_id' => $this->account->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Initiated,
-            'amount_minor' => 600000,
+            'amount' => Money::fromDecimal('6000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'gateway' => 'sslcommerz',
         ]);
@@ -191,7 +193,7 @@ describe('never downgrading what is already settled', function () {
         $summary = app(ReconcileGatewayPayments::class)->handle();
 
         expect($summary['mismatched'])->toBe(1)
-            ->and($payment->refresh()->amount_minor->minorUnits)->toBe(600000)
+            ->and($payment->refresh()->amount->toDecimal())->toBe('6000.00')
             ->and($payment->status)->toBe(PaymentStatus::Paid);
     });
 

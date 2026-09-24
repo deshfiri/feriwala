@@ -13,6 +13,8 @@ use App\Domain\Billing\RefundabilityPolicy;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 
 /*
  * Fee refundability (P1-73, D17).
@@ -35,22 +37,22 @@ function refundTestPayment(
         'business_account_id' => $account->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => $status,
-        'amount_minor' => 600000,
-        'revenue_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
+        'revenue' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'completed_at' => $status->isSettled() ? now() : null,
     ]);
 
     $payment->allocations()->create([
         'type' => AllocationType::RegistrationFee,
-        'amount_minor' => 100000,
+        'amount' => Money::fromDecimal('1000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'sort_order' => 0,
     ]);
 
     $payment->allocations()->create([
         'type' => AllocationType::PackageFee,
-        'amount_minor' => 500000,
+        'amount' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'sort_order' => 1,
     ]);
@@ -79,7 +81,7 @@ describe('the defaults (D17)', function () {
 
         expect($eligibility->rule)->toBe(Refundability::BeforeActivation)
             ->and($eligibility->isRefundable)->toBeTrue()
-            ->and($eligibility->refundableAmount->minorUnits)->toBe(500000)
+            ->and($eligibility->refundableAmount->toDecimal())->toBe('5000.00')
             // Never automatic: D17 makes every refund an administrative decision.
             ->and($eligibility->requiresApproval())->toBeTrue();
     });
@@ -179,8 +181,8 @@ describe('the whole payment', function () {
     it('totals only what could actually be given back', function () {
         $payment = refundTestPayment(AccountStatus::PaymentVerificationPending);
 
-        expect(app(RefundabilityPolicy::class)->refundableTotal($payment)->minorUnits)
-            ->toBe(500000);
+        expect(app(RefundabilityPolicy::class)->refundableTotal($payment)->toDecimal())
+            ->toBe('5000.00');
     });
 });
 
@@ -200,7 +202,7 @@ describe('requesting', function () {
 
         expect($request->status)->toBe(RefundStatus::Requested)
             ->and($request->refundability)->toBe(Refundability::BeforeActivation)
-            ->and($request->amount_minor->minorUnits)->toBe(500000);
+            ->and($request->amount->toDecimal())->toBe('5000.00');
 
         $this->assertDatabaseHas('audit_logs', ['action' => 'billing.refund_requested']);
     });
