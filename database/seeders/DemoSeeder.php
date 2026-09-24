@@ -18,6 +18,7 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
+use App\Support\Money\Money;
 use App\Support\Security\SessionPolicy;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -95,13 +96,13 @@ class DemoSeeder extends Seeder
      */
     protected function packages(): void
     {
-        $this->package('starter', 'Starter', 150000, [
+        $this->package('starter', 'Starter', '1500.00', [
             PackageFeature::StaffLimit->value => '0',
             PackageFeature::ProductPublishLimit->value => '25',
             PackageFeature::DedicatedWebsite->value => '0',
         ]);
 
-        $this->package('growth', 'Growth', 500000, [
+        $this->package('growth', 'Growth', '5000.00', [
             PackageFeature::StaffLimit->value => '5',
             PackageFeature::ProductPublishLimit->value => '250',
             PackageFeature::DedicatedWebsite->value => '1',
@@ -110,7 +111,7 @@ class DemoSeeder extends Seeder
 
         // No staff limit row at all: unlimited is the absence of a cap, and
         // seeding it proves the distinction survives a round trip (§8.1).
-        $this->package('enterprise', 'Enterprise', 1500000, [
+        $this->package('enterprise', 'Enterprise', '15000.00', [
             PackageFeature::ProductPublishLimit->value => '5000',
             PackageFeature::DedicatedWebsite->value => '1',
             PackageFeature::CourierEnabled->value => '1',
@@ -122,7 +123,7 @@ class DemoSeeder extends Seeder
     /**
      * @param  array<string, string>  $features
      */
-    protected function package(string $slug, string $name, int $feeMinor, array $features): Package
+    protected function package(string $slug, string $name, string $fee, array $features): Package
     {
         /** @var Package $package */
         $package = Package::query()->updateOrCreate(
@@ -130,14 +131,14 @@ class DemoSeeder extends Seeder
             [
                 'name' => $name,
                 'short_description' => $name.' plan',
-                'fee_minor' => $feeMinor,
+                'fee' => Money::fromDecimal($fee),
                 'currency_code' => 'BDT',
                 'validity_days' => 365,
-                'renewal_fee_minor' => $feeMinor,
+                'renewal_fee' => Money::fromDecimal($fee),
                 'renewal_frequency' => 'yearly',
                 'grace_period_days' => 14,
-                'required_deposit_minor' => 0,
-                'minimum_balance_minor' => 0,
+                'required_deposit' => Money::zero(),
+                'minimum_balance' => Money::zero(),
                 'is_active' => true,
                 'is_public' => true,
             ],

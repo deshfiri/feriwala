@@ -32,11 +32,11 @@ describe('casting stored strings', function () {
             ->and(SettingType::Decimal->cast('2.5'))->toBeString();
     });
 
-    it('casts money to a Money object in minor units', function () {
-        $fee = SettingType::Money->cast('50000');
+    it('casts money to a Money object holding exact flat Taka', function () {
+        $fee = SettingType::Money->cast('500.00');
 
         expect($fee)->toBeInstanceOf(Money::class)
-            ->and($fee->minorUnits)->toBe(50000)
+            ->and($fee->toDecimal())->toBe('500.00')
             ->and($fee->format())->toBe('৳500.00');
     });
 
@@ -66,16 +66,16 @@ describe('serialising typed values', function () {
     });
 
     it('round-trips money without losing a poisha', function () {
-        $original = Money::of(123456);
+        $original = Money::fromDecimal('1234.56');
 
         $restored = SettingType::Money->cast(SettingType::Money->serialise($original));
 
-        expect($restored->minorUnits)->toBe(123456)
+        expect($restored->toDecimal())->toBe('1234.56')
             ->and($restored->equals($original))->toBeTrue();
     });
 
-    it('accepts raw minor units for money as well as a Money object', function () {
-        expect(SettingType::Money->serialise(50000))->toBe('50000');
+    it('accepts a raw decimal string for money as well as a Money object', function () {
+        expect(SettingType::Money->serialise('500.00'))->toBe('500.00');
     });
 
     it('stores booleans as 1 and 0', function () {

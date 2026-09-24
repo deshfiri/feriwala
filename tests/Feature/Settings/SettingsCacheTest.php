@@ -21,7 +21,7 @@ beforeEach(function () {
     CacheFacade::forget(SettingsRepository::CACHE_KEY);
 
     $this->settings = app(SettingsRepository::class);
-    $this->settings->define('billing.registration_fee', 'billing', SettingType::Money, 150000);
+    $this->settings->define('billing.registration_fee', 'billing', SettingType::Money, '1500.00');
     $this->settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'a-secret', isEncrypted: true);
 });
 
@@ -34,7 +34,7 @@ it('caches nothing but plain values', function () {
     $objects = collect($cached)->flatten(1)->filter(fn (mixed $value) => is_object($value));
 
     expect($objects)->toBeEmpty()
-        ->and($cached['billing.registration_fee'])->toBe(['type' => 'money', 'value' => '150000']);
+        ->and($cached['billing.registration_fee'])->toBe(['type' => 'money', 'value' => '1500.00']);
 });
 
 it('reads a money setting back as money in the request that only has the cache', function () {
@@ -46,7 +46,45 @@ it('reads a money setting back as money in the request that only has the cache',
     $fee = $later->get('billing.registration_fee');
 
     expect($fee)->toBeInstanceOf(Money::class)
-        ->and($fee->minorUnits)->toBe(150000);
+        ->and($fee->toDecimal())->toBe('1500.00');
+});
+
+/*
+ * D26 regression: a Money setting is stored and cached as a decimal-string
+ * Taka amount now, not a poisha-style integer. A caller that still treated
+ * the cached value as minor units — dividing by 100 on the way in, or
+ * multiplying by 100 on the way out — would silently turn a BDT 100.00 fee
+ * into BDT 10,000.00 or BDT 1.00. These pin the exact figure through a
+ * define → cache → cold-read round trip, for a whole amount and a fractional
+ * one, so that regression cannot creep back in unnoticed.
+ */
+it('never inflates a stored money setting by a hundred through the cache', function () {
+    CacheFacade::forget(SettingsRepository::CACHE_KEY);
+    $settings = app(SettingsRepository::class);
+    $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Money, '100.00');
+
+    $settings->get('billing.gateway_charge_percent');
+    $later = new SettingsRepository(app(Cache::class));
+    $fee = $later->get('billing.gateway_charge_percent');
+
+    expect($fee)->toBeInstanceOf(Money::class)
+        ->and($fee->toDecimal())->toBe('100.00')
+        ->and($fee->toDecimal())->not->toBe('10000.00')
+        ->and($fee->toDecimal())->not->toBe('1.00')
+        ->and($fee->format())->toBe('৳100.00');
+});
+
+it('keeps a fractional money setting exact through the cache', function () {
+    CacheFacade::forget(SettingsRepository::CACHE_KEY);
+    $settings = app(SettingsRepository::class);
+    $settings->define('billing.sample_fractional_fee', 'billing', SettingType::Money, '500.50');
+
+    $settings->get('billing.sample_fractional_fee');
+    $later = new SettingsRepository(app(Cache::class));
+    $fee = $later->get('billing.sample_fractional_fee');
+
+    expect($fee->toDecimal())->toBe('500.50')
+        ->and($fee->format())->toBe('৳500.50');
 });
 
 it('survives a cache that refuses to unserialize any class at all', function () {
