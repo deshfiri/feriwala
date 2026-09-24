@@ -26,10 +26,10 @@ const controlClass =
  * should change — so the screen says what it is about to do before it offers the
  * button, and the button stays out of reach until that has been acknowledged.
  *
- * The amount is asked for in **minor units**, as every other money form in the
- * panel asks for it. Nothing here converts: a browser that turned "25.00" into
- * 2500 would be doing arithmetic on money, and §36.1 keeps that on the server
- * where the ledger can vouch for it.
+ * The amount is asked for in flat Taka and submitted exactly as typed ("25.00"
+ * is BDT 25.00, D26), as every other money form in the panel does. Nothing here
+ * converts or scales it: a browser doing arithmetic on money is a total the
+ * ledger cannot vouch for, and §36.1 keeps that on the server.
  *
  * The reason is required by the server as well as here. It goes to the audit log
  * with the administrator's name, because a balance that changed for no recorded

@@ -253,8 +253,8 @@ export default function WebsiteProducts({
                         <MoneyInput
                             id={`price-${row.id}`}
                             name="price"
-                            label={t('website.products.price_minor')}
-                            defaultValue={row.price?.decimal}
+                            label={t('website.products.price')}
+                            defaultValue={row.price?.amount}
                             disabled={
                                 !row.terms.allows_user_pricing ||
                                 row.terms.locked_fields.includes('price')
@@ -265,10 +265,8 @@ export default function WebsiteProducts({
                         <MoneyInput
                             id={`promo-${row.id}`}
                             name="promotional_price"
-                            label={t(
-                                'website.products.promotional_price_minor',
-                            )}
-                            defaultValue={row.promotional_price?.decimal}
+                            label={t('website.products.promotional_price')}
+                            defaultValue={row.promotional_price?.amount}
                             disabled={row.terms.locked_fields.includes(
                                 'promotional_price',
                             )}

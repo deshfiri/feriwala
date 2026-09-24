@@ -184,7 +184,7 @@ class ListingController extends Controller
 
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
-            'items.*.supplier_rate_minor' => ['required', new DecimalAmountRule],
+            'items.*.supplier_rate' => ['required', new DecimalAmountRule],
             'items.*.currency_code' => ['nullable', 'string', 'size:3'],
             'items.*.available_quantity' => ['required', 'integer', 'min:0'],
             'items.*.minimum_supply_quantity' => ['nullable', 'integer', 'min:1'],
@@ -198,7 +198,7 @@ class ListingController extends Controller
                 ? Currency::from($item['currency_code'])
                 : Currency::base();
 
-            $item['supplier_rate_minor'] = DecimalAmount::parse($item['supplier_rate_minor'], $currency);
+            $item['supplier_rate'] = DecimalAmount::parse($item['supplier_rate'], $currency);
 
             return $item;
         }, $data['items']));

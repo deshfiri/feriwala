@@ -52,8 +52,8 @@ type Props = {
  * window each price applied to. A screen that offered "change the fee" would be
  * offering to rewrite what past quotes were built from.
  *
- * Every amount is entered and displayed in minor units server-side; nothing
- * here computes a total (§36.1).
+ * Every amount is entered in flat Taka and displayed as the server formats it
+ * (D26); nothing here computes a total (§36.1).
  */
 export default function Billing({
     fee_rules: feeRules,

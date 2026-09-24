@@ -34,11 +34,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: Checkout } = await import('./checkout');
 
-const money = (minor: number): Money => ({
-    minor_units: minor,
+const money = (amount: string): Money => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const page = (
@@ -49,16 +48,16 @@ const page = (
                 {
                     type: 'package_fee',
                     label: 'Package fee',
-                    amount: money(500000),
+                    amount: money('5000.00'),
                     is_deduction: false,
                 },
             ],
-            subtotal: money(500000),
-            total: money(500000),
+            subtotal: money('5000.00'),
+            total: money('5000.00'),
             currency: 'BDT',
             is_payable: true,
             tax: [],
-            tax_included: money(0),
+            tax_included: money('0.00'),
         }}
         coupon={null}
         deadline={{

@@ -11,6 +11,8 @@ use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Models\KycSubmissionRequirement;
 use App\Domain\Package\Models\Package;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -304,7 +306,7 @@ describe('the admin screen', function () {
         $package = Package::create([
             'slug' => 'enterprise',
             'name' => 'Enterprise',
-            'fee_minor' => 500000,
+            'fee' => Money::fromDecimal('5000.00', Currency::BDT),
             'currency_code' => 'BDT',
             'is_active' => true,
             'is_public' => true,

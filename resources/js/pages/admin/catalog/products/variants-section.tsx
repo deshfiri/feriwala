@@ -79,9 +79,8 @@ export default function VariantsSection({
             {
                 sku: variant.sku,
                 barcode: variant.barcode,
-                wholesale_price_minor:
-                    variant.wholesale_price_override?.decimal ?? '',
-                base_cost_minor: variant.base_cost_override?.decimal ?? '',
+                wholesale_price: variant.wholesale_price_override?.amount ?? '',
+                base_cost: variant.base_cost_override?.amount ?? '',
                 is_active: !variant.is_active,
             },
             { preserveScroll: true },
@@ -648,16 +647,16 @@ function VariantDialog({
                                     hint={t(
                                         'catalog.variants.wholesale_price_help',
                                     )}
-                                    error={errors.wholesale_price_minor}
+                                    error={errors.wholesale_price}
                                 >
                                     {(field) => (
                                         <MoneyField
                                             {...field}
-                                            name="wholesale_price_minor"
+                                            name="wholesale_price"
                                             defaultValue={
                                                 variant
                                                     ?.wholesale_price_override
-                                                    ?.decimal
+                                                    ?.amount
                                             }
                                         />
                                     )}
@@ -666,15 +665,15 @@ function VariantDialog({
                                 <FormField
                                     label={t('catalog.variants.base_cost')}
                                     hint={t('catalog.variants.base_cost_help')}
-                                    error={errors.base_cost_minor}
+                                    error={errors.base_cost}
                                 >
                                     {(field) => (
                                         <MoneyField
                                             {...field}
-                                            name="base_cost_minor"
+                                            name="base_cost"
                                             defaultValue={
                                                 variant?.base_cost_override
-                                                    ?.decimal
+                                                    ?.amount
                                             }
                                         />
                                     )}

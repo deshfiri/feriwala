@@ -239,7 +239,9 @@ it('is not empty, and covers the major money tables', function () {
         ->and($inventory)->toHaveKey('payments')
         ->and($inventory)->toHaveKey('wallets')
         ->and($inventory)->toHaveKey('ledger_entries')
-        ->and(array_sum(array_map('count', $inventory)))->toBeGreaterThan(100);
+        // D26's conversion map: 125 columns across 47 tables. It may grow when
+        // a money column is added; it must never quietly shrink below this.
+        ->and(array_sum(array_map('count', $inventory)))->toBeGreaterThanOrEqual(125);
 });
 
 it('gives every inventoried money column an exact NUMERIC(19,2) type', function () {

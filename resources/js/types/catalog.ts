@@ -22,9 +22,10 @@ export type ProductStatusChangeRow = {
 /**
  * Central catalogue shapes, as the administration screens receive them (§11).
  *
- * Figures arrive twice where a form edits them: the integer minor units the
- * field posts back, and the server's own rendering as {@see Money}. The page
- * shows the second and never formats the first itself (§36.1).
+ * Every figure arrives as the server's own {@see Money} rendering (D26): its
+ * exact flat-Taka `amount` is what a form field edits and posts back exactly as
+ * typed, and its `formatted` string is what the page shows. The page never
+ * formats or scales a figure itself (§36.1).
  */
 
 export type CatalogOption = {

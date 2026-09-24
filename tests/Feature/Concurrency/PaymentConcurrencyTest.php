@@ -10,6 +10,8 @@ use App\Domain\Settings\SettingsRepository;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -45,7 +47,7 @@ beforeEach(function () {
         'business_account_id' => $this->account->id,
         'purpose' => PaymentPurpose::WalletTopUp,
         'status' => PaymentStatus::Initiated,
-        'amount_minor' => 250000,
+        'amount' => Money::fromDecimal('2500.00', Currency::BDT),
         'currency_code' => 'BDT',
         'gateway' => 'sslcommerz',
     ]);
@@ -176,7 +178,7 @@ it('settles once when six notifications arrive at the same moment', function () 
     expect($payment->status)->toBe(PaymentStatus::Paid)
 
         // Credited once, not six times.
-        ->and($wallet->total_minor->minorUnits)->toBe(250000)
+        ->and($wallet->total->toDecimal())->toBe('2500.00')
         ->and($credits)->toBe(1);
 });
 
@@ -191,7 +193,7 @@ it('lets only one payment claim a provider transaction under a race', function (
         'business_account_id' => $this->account->id,
         'purpose' => PaymentPurpose::WalletTopUp,
         'status' => PaymentStatus::Initiated,
-        'amount_minor' => 250000,
+        'amount' => Money::fromDecimal('2500.00', Currency::BDT),
         'currency_code' => 'BDT',
         'gateway' => 'sslcommerz',
     ]);

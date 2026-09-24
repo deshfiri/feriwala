@@ -68,7 +68,7 @@ type ItemDecision = {
     item_id: string;
     decision: 'skip' | 'approve' | 'reject' | 'correction';
     variant_id: string;
-    /** Whole taka typed by the reviewer; converted to minor units on submit. */
+    /** Flat-Taka decimal typed by the reviewer, submitted exactly as typed. */
     platform_rate: string;
     wholesale_enabled: boolean;
     dropshipping_enabled: boolean;
@@ -140,8 +140,8 @@ export default function AdminSupplierListingShow({
                     decision: item.decision,
                     variant_id: item.variant_id || null,
                     // The Taka string exactly as typed; the server is the
-                    // only place that converts it to minor units (§36.1).
-                    platform_rate_minor:
+                    // only place that parses it (§36.1).
+                    platform_rate:
                         item.decision === 'approve' ? item.platform_rate : null,
                     wholesale_enabled: item.wholesale_enabled,
                     dropshipping_enabled: item.dropshipping_enabled,
@@ -565,7 +565,7 @@ export default function AdminSupplierListingShow({
                                                             'supplier.admin.listings.platform_rate',
                                                         )}
                                                         error={errorFor(
-                                                            `items.${index}.platform_rate_minor`,
+                                                            `items.${index}.platform_rate`,
                                                         )}
                                                         required
                                                     >

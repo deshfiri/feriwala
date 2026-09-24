@@ -18,6 +18,8 @@ use App\Domain\Inventory\StockAllocations;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Inventory\StockReservations;
 use App\Notifications\Inventory\StockRunningLow;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
 
@@ -41,7 +43,7 @@ beforeEach(function () {
         'name' => 'Kettle',
         'sku' => 'FW-KT',
         'category_id' => $category->id,
-        'wholesale_price_minor' => 120000,
+        'wholesale_price' => Money::fromDecimal('1200.00', Currency::BDT),
         'status' => ProductStatus::Active,
     ]);
     $this->warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);

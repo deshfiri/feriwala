@@ -46,7 +46,7 @@ export default function MoneyAmount({
             // The exact decimal is available to assistive tech and to anyone
             // inspecting the page, without the formatted value losing its
             // separators.
-            title={`${amount.decimal} ${amount.currency}`}
+            title={`${amount.amount} ${amount.currency}`}
         >
             {showSign ? signed(amount, direction) : amount.formatted}
         </span>

@@ -34,7 +34,7 @@ function supplierListingTestPayload(array $overrides = []): array
         'items' => [[
             'variant_label' => null,
             'supplier_sku' => 'PJ-001',
-            'supplier_rate_minor' => '1000.00',
+            'supplier_rate' => '1000.00',
             'currency_code' => 'BDT',
             'available_quantity' => 40,
             'minimum_supply_quantity' => 2,
@@ -95,8 +95,8 @@ test('a listing needs at least one variation and a valid non-negative rate', fun
     $this->post(route('supplier.listings.store'), supplierListingTestPayload(['items' => []]))->assertSessionHasErrors('items');
 
     $bad = supplierListingTestPayload();
-    $bad['items'][0]['supplier_rate_minor'] = -5;
-    $this->post(route('supplier.listings.store'), $bad)->assertSessionHasErrors('items.0.supplier_rate_minor');
+    $bad['items'][0]['supplier_rate'] = -5;
+    $this->post(route('supplier.listings.store'), $bad)->assertSessionHasErrors('items.0.supplier_rate');
 });
 
 test('a supplier can archive a draft but not a submitted listing', function () {
@@ -174,7 +174,7 @@ test('full approval creates a Central Product through the catalogue action and o
         'items' => [[
             'item_id' => $item->public_id,
             'decision' => 'approve',
-            'platform_rate_minor' => '1300.00',
+            'platform_rate' => '1300.00',
             'wholesale_enabled' => true,
             'dropshipping_enabled' => false,
         ]],
@@ -212,7 +212,7 @@ test('creating a product needs the catalogue create permission on top of listing
     $this->actingAs($staff)->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Try.', 'create_product' => true, 'sku' => 'X-1',
         'category_id' => $category,
-        'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate_minor' => '1300.00']],
+        'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertForbidden();
 
     expect(Product::query()->count())->toBe($before)
@@ -228,7 +228,7 @@ test('a reviewer who cannot set pricing cannot approve, but can still reject', f
 
     $this->actingAs($reviewer)->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Ok', 'connect_product_id' => websiteTestProduct()->public_id,
-        'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate_minor' => '1300.00']],
+        'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertForbidden();
 
     $this->post(route('admin.supplier-listings.decision.store', $listing), [
@@ -249,7 +249,7 @@ test('partial approval approves some variations and leaves the rest without offe
         'reason' => 'One is fine.',
         'connect_product_id' => $product->public_id,
         'items' => [
-            ['item_id' => $first->public_id, 'decision' => 'approve', 'platform_rate_minor' => '1200.00'],
+            ['item_id' => $first->public_id, 'decision' => 'approve', 'platform_rate' => '1200.00'],
             ['item_id' => $second->public_id, 'decision' => 'reject', 'note' => 'Priced too high.'],
         ],
     ])->assertSessionHasNoErrors();
@@ -281,7 +281,7 @@ test('a platform rate below the supplier rate is refused and nothing is written'
 
     $this->actingAs(supplierListingTestReviewer())->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Try.', 'connect_product_id' => $product->public_id,
-        'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate_minor' => '999.99']],
+        'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate' => '999.99']],
     ])->assertSessionHasErrors('reason');
 
     expect(SupplierOffer::query()->count())->toBe(0)
@@ -291,22 +291,22 @@ test('a platform rate below the supplier rate is refused and nothing is written'
 test('connecting to an existing product changes none of its catalogue data', function () {
     $product = websiteTestProduct(['name' => 'Original name', 'description' => 'Original description']);
     $before = $product->only(['name', 'description', 'sku', 'status']);
-    $before['wholesale_price_minor'] = $product->wholesale_price->toDecimal();
-    $before['suggested_selling_price_minor'] = $product->suggested_selling_price->toDecimal();
+    $before['wholesale_price'] = $product->wholesale_price->toDecimal();
+    $before['suggested_selling_price'] = $product->suggested_selling_price->toDecimal();
 
     $listing = supplierTestListing(Supplier::factory()->create());
 
     $this->actingAs(supplierListingTestReviewer())->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Connect.', 'connect_product_id' => $product->public_id,
-        'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate_minor' => '1300.00']],
+        'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertSessionHasNoErrors();
 
     $after = $product->refresh();
 
     expect($after->name)->toBe($before['name'])
         ->and($after->description)->toBe($before['description'])
-        ->and($after->wholesale_price->toDecimal())->toBe($before['wholesale_price_minor'])
-        ->and($after->suggested_selling_price->toDecimal())->toBe($before['suggested_selling_price_minor'])
+        ->and($after->wholesale_price->toDecimal())->toBe($before['wholesale_price'])
+        ->and($after->suggested_selling_price->toDecimal())->toBe($before['suggested_selling_price'])
         ->and($listing->refresh()->connected_product_id)->toBe($product->id);
 });
 
@@ -319,7 +319,7 @@ test('two suppliers on one product keep separate offers and the second never ove
 
         test()->actingAs($reviewer)->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approve.', 'connect_product_id' => $product->public_id,
-            'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate_minor' => $platformRate]],
+            'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate' => $platformRate]],
         ])->assertSessionHasNoErrors();
 
         return SupplierOffer::query()->where('supplier_id', $supplier->id)->firstOrFail();

@@ -44,11 +44,10 @@ const { default: AdminReturn } = await import('./show');
 
 type Props = ComponentProps<typeof AdminReturn>;
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const none = {
@@ -93,7 +92,7 @@ function props(overrides: Partial<Props> = {}): Props {
                     disposition: null,
                     warehouse: null,
                     restored: false,
-                    unit_price: money(260000),
+                    unit_price: money('2600.00'),
                     refund_amount: null,
                 },
             ],
@@ -192,7 +191,7 @@ describe('admin return page', () => {
                         refund: {
                             state: 'manual_review',
                             tone: 'warning',
-                            amount: money(260000),
+                            amount: money('2600.00'),
                             note: 'Paid on delivery: the money never came through a gateway.',
                             refunded_at: null,
                             request: null,

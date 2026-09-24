@@ -20,6 +20,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import { isPositive } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { show as invoiceShow } from '@/routes/subscription/invoices';
 import { index } from '@/routes/wholesale/orders';
@@ -120,10 +121,9 @@ export default function WholesaleOrder({
                                                             .formatted,
                                                     },
                                                 )}
-                                                {line.discount.minor_units >
-                                                    0 &&
+                                                {isPositive(line.discount) &&
                                                     ` · ${t('orders.lines.discount', { amount: line.discount.formatted })}`}
-                                                {line.tax.minor_units > 0 &&
+                                                {isPositive(line.tax) &&
                                                     ` · ${t('orders.lines.tax', { amount: line.tax.formatted })}`}
                                             </p>
                                         </div>
@@ -337,7 +337,7 @@ function Summary({ order }: Props) {
                 <Row label={t('orders.summary.subtotal')}>
                     <MoneyAmount amount={totals.subtotal} />
                 </Row>
-                {totals.discount.minor_units > 0 && (
+                {isPositive(totals.discount) && (
                     <Row
                         label={
                             order.coupon_code
@@ -356,7 +356,7 @@ function Summary({ order }: Props) {
                 <Row label={t('orders.summary.delivery')}>
                     <MoneyAmount amount={totals.delivery} />
                 </Row>
-                {totals.tax.minor_units > 0 && (
+                {isPositive(totals.tax) && (
                     <Row label={t('orders.summary.tax')}>
                         <MoneyAmount amount={totals.tax} />
                     </Row>
@@ -368,7 +368,7 @@ function Summary({ order }: Props) {
                     </dd>
                 </div>
             </dl>
-            {totals.tax_included.minor_units > 0 && (
+            {isPositive(totals.tax_included) && (
                 <p className="text-muted-foreground mt-3 text-xs">
                     {t('orders.summary.tax_included', {
                         amount: totals.tax_included.formatted,

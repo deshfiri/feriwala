@@ -259,8 +259,8 @@ function CartLineRow({ line }: { line: CartLine }) {
                             amount: line.unit_price.formatted,
                         })}
                         {line.base_price &&
-                            line.base_price.minor_units !==
-                                line.unit_price.minor_units && (
+                            line.base_price.amount !==
+                                line.unit_price.amount && (
                                 <span className="text-muted-foreground ml-2 text-xs">
                                     {t('wholesale.cart.quantity_price', {
                                         amount: line.base_price.formatted,

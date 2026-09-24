@@ -59,11 +59,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: WebsiteIntegration } = await import('./integration');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const website = {
@@ -89,11 +88,11 @@ const website = {
     banner_url: null,
     contact: { email: null, phone: null, address: null },
     charges_summary: {
-        setup: money(0),
-        domain: money(0),
-        hosting: money(0),
-        required_deposit: money(0),
-        minimum_balance: money(0),
+        setup: money('0.00'),
+        domain: money('0.00'),
+        hosting: money('0.00'),
+        required_deposit: money('0.00'),
+        minimum_balance: money('0.00'),
     },
     lifecycle: {
         activated_at: null,

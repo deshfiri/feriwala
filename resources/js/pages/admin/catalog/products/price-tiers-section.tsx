@@ -19,7 +19,7 @@ type Props = {
     canEdit: boolean;
 };
 
-type Row = { key: number; min_quantity: string; unit_price_minor: string };
+type Row = { key: number; min_quantity: string; unit_price: string };
 
 const selectClass =
     'border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-72';
@@ -48,7 +48,7 @@ export default function PriceTiersSection({ product, scopes, canEdit }: Props) {
         (source?.tiers ?? []).map((tier) => ({
             key: nextKey.current++,
             min_quantity: String(tier.min_quantity),
-            unit_price_minor: tier.unit_price.decimal,
+            unit_price: tier.unit_price.amount,
         }));
 
     const [rows, setRows] = useState<Row[]>(() => toRows(scope));
@@ -88,7 +88,7 @@ export default function PriceTiersSection({ product, scopes, canEdit }: Props) {
                 variant_id: scope.variant_id,
                 tiers: rows.map((row) => ({
                     min_quantity: row.min_quantity,
-                    unit_price_minor: row.unit_price_minor,
+                    unit_price: row.unit_price,
                 })),
             },
             {
@@ -223,11 +223,11 @@ export default function PriceTiersSection({ product, scopes, canEdit }: Props) {
                                             pattern="^\d+(\.\d{1,2})?$"
                                             placeholder="0.00"
                                             className="pl-7 tabular-nums"
-                                            value={row.unit_price_minor}
+                                            value={row.unit_price}
                                             onChange={(event) =>
                                                 update(
                                                     row.key,
-                                                    'unit_price_minor',
+                                                    'unit_price',
                                                     event.target.value,
                                                 )
                                             }
@@ -235,9 +235,7 @@ export default function PriceTiersSection({ product, scopes, canEdit }: Props) {
                                     </div>
                                     <InputError
                                         message={
-                                            errors[
-                                                `tiers.${index}.unit_price_minor`
-                                            ]
+                                            errors[`tiers.${index}.unit_price`]
                                         }
                                     />
                                 </div>
@@ -272,7 +270,7 @@ export default function PriceTiersSection({ product, scopes, canEdit }: Props) {
                                         {
                                             key: nextKey.current++,
                                             min_quantity: '',
-                                            unit_price_minor: '',
+                                            unit_price: '',
                                         },
                                     ])
                                 }

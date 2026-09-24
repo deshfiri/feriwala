@@ -42,11 +42,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: ReferralSettings } = await import('./referral-settings');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const version: PlanVersion = {
@@ -86,7 +85,7 @@ const version: PlanVersion = {
             level: 3,
             reward: {
                 type: 'fixed',
-                amount: money(10000),
+                amount: money('100.00'),
                 percent: null,
                 cap: null,
             },
@@ -97,7 +96,7 @@ const version: PlanVersion = {
     ],
     joining_reward: null,
     holding_days: 7,
-    minimum_qualifying_payment: money(0),
+    minimum_qualifying_payment: money('0.00'),
     qualifies: {
         suspended: false,
         restricted: true,

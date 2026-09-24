@@ -6,6 +6,7 @@ import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
+import { isZero } from '@/lib/money';
 import type { Column, Paginator } from '@/types';
 import type {
     WalletFilterOptions,
@@ -106,7 +107,7 @@ export default function WalletStatementTable({
             header: t('wallet.columns.debit'),
             align: 'end',
             cell: (row) =>
-                row.debit === null || row.debit.minor_units === 0 ? (
+                row.debit === null || isZero(row.debit) ? (
                     <span className="text-muted-foreground">—</span>
                 ) : (
                     <MoneyAmount
@@ -121,7 +122,7 @@ export default function WalletStatementTable({
             header: t('wallet.columns.credit'),
             align: 'end',
             cell: (row) =>
-                row.credit === null || row.credit.minor_units === 0 ? (
+                row.credit === null || isZero(row.credit) ? (
                     <span className="text-muted-foreground">—</span>
                 ) : (
                     <MoneyAmount

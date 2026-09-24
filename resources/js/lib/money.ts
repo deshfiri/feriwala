@@ -6,22 +6,35 @@
  * this module only chooses which representation to render.
  */
 export type Money = {
-    minor_units: number;
     currency: string;
     /** Exact decimal string, e.g. "1234.56". Never parse this into a float. */
-    decimal: string;
+    amount: string;
     /** Display string with symbol and separators, e.g. "৳1,234.56". */
     formatted: string;
 };
 
 export type MoneyDirection = 'credit' | 'debit' | 'neutral';
 
+/**
+ * Whether a decimal string is exactly zero, by pattern rather than by parsing
+ * it into a float (D26, §36.1). The server never sends a negative zero
+ * (Money::normalize() collapses it), so `-0.00` is not a case this needs to
+ * handle, but the pattern tolerates a leading sign anyway.
+ */
+function isZeroDecimal(decimal: string): boolean {
+    return /^-?0+(\.0+)?$/.test(decimal);
+}
+
 export function isZero(amount: Money): boolean {
-    return amount.minor_units === 0;
+    return isZeroDecimal(amount.amount);
 }
 
 export function isNegative(amount: Money): boolean {
-    return amount.minor_units < 0;
+    return !isZeroDecimal(amount.amount) && amount.amount.startsWith('-');
+}
+
+export function isPositive(amount: Money): boolean {
+    return !isZeroDecimal(amount.amount) && !amount.amount.startsWith('-');
 }
 
 /**
@@ -32,9 +45,9 @@ export function isNegative(amount: Money): boolean {
  * knows it, and fall back to the sign only when it does not.
  */
 export function directionOf(amount: Money): MoneyDirection {
-    if (amount.minor_units === 0) return 'neutral';
+    if (isZero(amount)) return 'neutral';
 
-    return amount.minor_units > 0 ? 'credit' : 'debit';
+    return isNegative(amount) ? 'debit' : 'credit';
 }
 
 /**

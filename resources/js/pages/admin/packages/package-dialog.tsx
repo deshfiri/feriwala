@@ -41,9 +41,9 @@ type Props = {
 /**
  * Create or edit one package (§8.1).
  *
- * Prices are entered and displayed in **Taka**, as a decimal string; the
- * server is the only place that converts to minor units, through
- * `DecimalAmount::parse()` (D4, §36.1). Nothing here does arithmetic on a
+ * Prices are entered and displayed in **Taka**, as a decimal string submitted
+ * exactly as typed; the server is the only place that parses it, through
+ * `DecimalAmount::parse()` (D26, §36.1). Nothing here does arithmetic on a
  * price.
  *
  * Entitlements and charges are edited here rather than on screens of their own:
@@ -68,7 +68,7 @@ export default function PackageDialog({
             setCharges(
                 (row?.charges ?? []).map((charge) => ({
                     charge_type: charge.charge_type,
-                    amount: charge.amount.decimal,
+                    amount: charge.amount.amount,
                     frequency: charge.frequency,
                 })),
             );
@@ -146,7 +146,7 @@ export default function PackageDialog({
                                         id="fee"
                                         name="fee"
                                         label={t('package.form.fee')}
-                                        defaultValue={row?.fee.decimal}
+                                        defaultValue={row?.fee.amount}
                                         error={errors.fee}
                                         required
                                     />
@@ -160,7 +160,7 @@ export default function PackageDialog({
                                             'package.form.registration_fee_help',
                                         )}
                                         defaultValue={
-                                            row?.registration_fee?.decimal
+                                            row?.registration_fee?.amount
                                         }
                                         error={errors.registration_fee}
                                     />
@@ -168,7 +168,7 @@ export default function PackageDialog({
                                         id="renewal_fee"
                                         name="renewal_fee"
                                         label={t('package.form.renewal_fee')}
-                                        defaultValue={row?.renewal_fee?.decimal}
+                                        defaultValue={row?.renewal_fee?.amount}
                                         error={errors.renewal_fee}
                                     />
 
@@ -253,7 +253,7 @@ export default function PackageDialog({
                                             'package.form.required_deposit',
                                         )}
                                         defaultValue={
-                                            row?.required_deposit.decimal ?? '0'
+                                            row?.required_deposit.amount ?? '0'
                                         }
                                         error={errors.required_deposit}
                                     />
@@ -264,7 +264,7 @@ export default function PackageDialog({
                                             'package.form.minimum_balance',
                                         )}
                                         defaultValue={
-                                            row?.minimum_balance.decimal ?? '0'
+                                            row?.minimum_balance.amount ?? '0'
                                         }
                                         error={errors.minimum_balance}
                                     />

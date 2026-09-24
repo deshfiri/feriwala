@@ -42,11 +42,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: ReferralEvent } = await import('./event');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const commission = (level: number, status: string, canReverse: boolean) => ({
@@ -60,7 +59,7 @@ const commission = (level: number, status: string, canReverse: boolean) => ({
     },
     level,
     is_joining_reward: false,
-    amount: money(level === 1 ? 65000 : 0),
+    amount: money(level === 1 ? '650.00' : '0.00'),
     rule: {
         type: 'percentage' as const,
         percent: level === 1 ? '10' : '5',
@@ -84,7 +83,7 @@ const event: EventDetail = {
     status: 'recorded',
     source: { id: '01SOURCE', name: 'Tania Textiles' },
     payment: 'PAY-260919-ABCDEFGH',
-    base: money(650000),
+    base: money('6500.00'),
     plan: {
         id: '01PLAN',
         max_depth: 3,

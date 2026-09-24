@@ -52,8 +52,8 @@ class SavePackageRequest extends FormRequest
             'short_description' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
 
-            // Entered in Taka by the administrator; converted to minor units in
-            // packageAttributes() below, at this HTTP boundary (D4, §36.1).
+            // Entered in Taka by the administrator; parsed into exact Money in
+            // packageAttributes() below, at this HTTP boundary (D26, §36.1).
             'fee' => ['required', new DecimalAmountRule],
             'registration_fee' => ['nullable', new DecimalAmountRule],
             'renewal_fee' => ['nullable', new DecimalAmountRule],

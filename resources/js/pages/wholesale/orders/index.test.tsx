@@ -38,9 +38,8 @@ const summary = (
     payment_state: 'paid',
     placed_at: '2026-09-15T10:00:00+06:00',
     total: {
-        minor_units: 2000000,
+        amount: '20000.00',
         currency: 'BDT',
-        decimal: '20000.00',
         formatted: '৳20,000.00',
     },
     item_count: 2,

@@ -180,15 +180,15 @@ class SupplierListingController extends Controller
 
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
-            'items.*.platform_rate_minor' => ['nullable', new DecimalAmountRule],
+            'items.*.platform_rate' => ['nullable', new DecimalAmountRule],
             'items.*.wholesale_enabled' => ['nullable', 'boolean'],
             'items.*.dropshipping_enabled' => ['nullable', 'boolean'],
             'items.*.note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $validated['items'] = array_values(array_map(function (array $item) {
-            if (isset($item['platform_rate_minor'])) {
-                $item['platform_rate_minor'] = DecimalAmount::parse($item['platform_rate_minor']);
+            if (isset($item['platform_rate'])) {
+                $item['platform_rate'] = DecimalAmount::parse($item['platform_rate']);
             }
 
             return $item;

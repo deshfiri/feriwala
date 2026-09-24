@@ -19,6 +19,8 @@ use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Inventory\StockReservations;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -43,7 +45,7 @@ beforeEach(function () {
         'name' => 'Kettle',
         'sku' => 'FW-KT',
         'category_id' => $this->category->id,
-        'wholesale_price_minor' => 120000,
+        'wholesale_price' => Money::fromDecimal('1200.00', Currency::BDT),
         'status' => ProductStatus::Active,
     ]);
     $this->warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
@@ -96,7 +98,7 @@ describe('out-of-stock protection', function () {
     });
 
     it('takes a product straight back off sale when it is activated with none of its tracked stock available', function () {
-        $blender = Product::create(['name' => 'Blender', 'sku' => 'FW-BL', 'category_id' => $this->category->id, 'wholesale_price_minor' => 90000]);
+        $blender = Product::create(['name' => 'Blender', 'sku' => 'FW-BL', 'category_id' => $this->category->id, 'wholesale_price' => Money::fromDecimal('900.00', Currency::BDT)]);
         app(TrackStock::class)->handle($this->inventoryManager, $this->warehouse, $blender);
 
         app(TransitionProduct::class)->handle($this->productManager, $blender, ProductStatus::PendingReview);

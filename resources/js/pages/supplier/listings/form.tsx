@@ -9,6 +9,7 @@ import SectionCard from '@/components/section-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import type { Money } from '@/lib/money';
 import { store, update } from '@/routes/supplier/listings';
 
 type ItemInput = {
@@ -16,7 +17,7 @@ type ItemInput = {
     id: string;
     variant_label: string;
     supplier_sku: string;
-    /** Whole taka typed by the Supplier; converted to minor units on submit. */
+    /** Flat-Taka decimal typed by the Supplier, submitted exactly as typed. */
     supplier_rate: string;
     available_quantity: string;
     minimum_supply_quantity: string;
@@ -38,7 +39,7 @@ type Listing = {
         id: string;
         variant_label: string | null;
         supplier_sku: string;
-        supplier_rate: { minor_units: number; decimal: string };
+        supplier_rate: Money;
         available_quantity: number;
         minimum_supply_quantity: number;
         lead_time_days: number | null;
@@ -83,7 +84,7 @@ export default function SupplierListingForm({
             id: item.id,
             variant_label: item.variant_label ?? '',
             supplier_sku: item.supplier_sku,
-            supplier_rate: item.supplier_rate.decimal,
+            supplier_rate: item.supplier_rate.amount,
             available_quantity: String(item.available_quantity),
             minimum_supply_quantity: String(item.minimum_supply_quantity),
             lead_time_days:
@@ -111,8 +112,8 @@ export default function SupplierListingForm({
                 variant_label: item.variant_label || null,
                 supplier_sku: item.supplier_sku,
                 // The Taka string exactly as typed; the server is the only
-                // place that converts it to minor units (§36.1).
-                supplier_rate_minor: item.supplier_rate,
+                // place that parses it (§36.1).
+                supplier_rate: item.supplier_rate,
                 currency_code: 'BDT',
                 available_quantity: Number.parseInt(
                     item.available_quantity || '0',
@@ -389,9 +390,7 @@ export default function SupplierListingForm({
                             </FormField>
                             <FormField
                                 label={t('supplier.listings.supplier_rate')}
-                                error={errorFor(
-                                    `items.${index}.supplier_rate_minor`,
-                                )}
+                                error={errorFor(`items.${index}.supplier_rate`)}
                                 required
                             >
                                 {(field) => (

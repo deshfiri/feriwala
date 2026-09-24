@@ -149,7 +149,7 @@ export default function AdminProducts({
             cell: (row) => <ChannelPills row={row} />,
         },
         {
-            key: 'wholesale_price_minor',
+            key: 'wholesale_price',
             header: t('catalog.products.columns.wholesale_price'),
             align: 'end',
             sortable: true,

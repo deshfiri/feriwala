@@ -5,6 +5,8 @@ use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycDocumentTypeScope;
 use App\Domain\Package\Models\Package;
 use App\Support\Localization\Countries;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -28,7 +30,7 @@ function scopeTestPackage(string $name = 'Enterprise'): Package
     return Package::create([
         'slug' => Str::slug($name),
         'name' => $name,
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,

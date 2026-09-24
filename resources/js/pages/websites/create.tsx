@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import WebsiteController from '@/actions/App/Http/Controllers/Erp/WebsiteController';
-import type { Money } from '@/lib/money';
+import { isPositive, type Money } from '@/lib/money';
 import { index } from '@/routes/websites';
 import type { WebsiteEntitlement, WebsiteWallet } from '@/types/website';
 
@@ -38,8 +38,8 @@ export default function RequestWebsite({
     const { t } = useTranslation();
     const [subdomain, setSubdomain] = useState('');
 
-    const chargeRows = Object.entries(charges).filter(
-        ([, amount]) => amount.minor_units > 0,
+    const chargeRows = Object.entries(charges).filter(([, amount]) =>
+        isPositive(amount),
     );
 
     return (

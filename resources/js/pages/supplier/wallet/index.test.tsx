@@ -50,11 +50,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: SupplierWalletIndex } = await import('./index');
 
-const money = (minorUnits: number) => ({
-    minor_units: minorUnits,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minorUnits / 100).toFixed(2),
-    formatted: `৳${(minorUnits / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 describe('supplier wallet dashboard', () => {
@@ -63,9 +62,9 @@ describe('supplier wallet dashboard', () => {
             <SupplierWalletIndex
                 wallet={null}
                 payable_totals={{
-                    pending: money(0),
-                    eligible: money(0),
-                    settled: money(0),
+                    pending: money('0.00'),
+                    eligible: money('0.00'),
+                    settled: money('0.00'),
                 }}
                 recent_entries={[]}
             />,
@@ -80,16 +79,16 @@ describe('supplier wallet dashboard', () => {
                 wallet={{
                     id: 'wlt_1',
                     currency: 'BDT',
-                    total: money(150000),
-                    available: money(0),
-                    reserved: money(150000),
-                    recovery: money(150000),
+                    total: money('1500.00'),
+                    available: money('0.00'),
+                    reserved: money('1500.00'),
+                    recovery: money('1500.00'),
                     has_outstanding_recovery: true,
                 }}
                 payable_totals={{
-                    pending: money(0),
-                    eligible: money(0),
-                    settled: money(300000),
+                    pending: money('0.00'),
+                    eligible: money('0.00'),
+                    settled: money('3000.00'),
                 }}
                 recent_entries={[]}
             />,
@@ -106,16 +105,16 @@ describe('supplier wallet dashboard', () => {
                 wallet={{
                     id: 'wlt_1',
                     currency: 'BDT',
-                    total: money(200000),
-                    available: money(200000),
-                    reserved: money(0),
-                    recovery: money(0),
+                    total: money('2000.00'),
+                    available: money('2000.00'),
+                    reserved: money('0.00'),
+                    recovery: money('0.00'),
                     has_outstanding_recovery: false,
                 }}
                 payable_totals={{
-                    pending: money(0),
-                    eligible: money(0),
-                    settled: money(200000),
+                    pending: money('0.00'),
+                    eligible: money('0.00'),
+                    settled: money('2000.00'),
                 }}
                 recent_entries={[]}
             />,

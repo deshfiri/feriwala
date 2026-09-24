@@ -52,7 +52,7 @@ class DecideSupplierListing
 
     /**
      * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string}
-     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate_minor?: Money, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string}
+     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate?: Money, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string}
      */
     public function handle(
         SupplierProductListing $listing,
@@ -207,15 +207,15 @@ class DecideSupplierListing
             ? ProductVariant::query()->where('public_id', $itemDecision['variant_id'])->where('product_id', $product->id)->firstOrFail()
             : null;
 
-        if (! isset($itemDecision['platform_rate_minor'])) {
+        if (! isset($itemDecision['platform_rate'])) {
             throw new InvalidArgumentException('A Platform Rate is required to approve a listing item.');
         }
 
         $currency = Currency::from($item->currency_code);
         $supplierRate = $item->supplier_rate;
-        $platformRate = $itemDecision['platform_rate_minor'] instanceof Money
-            ? $itemDecision['platform_rate_minor']
-            : Money::fromDecimal((string) $itemDecision['platform_rate_minor'], $currency);
+        $platformRate = $itemDecision['platform_rate'] instanceof Money
+            ? $itemDecision['platform_rate']
+            : Money::fromDecimal((string) $itemDecision['platform_rate'], $currency);
 
         if ($platformRate->lessThan($supplierRate)) {
             throw new InvalidArgumentException('The Platform Rate cannot be lower than the Supplier Rate.');

@@ -43,7 +43,7 @@ export default function AdminWalletsIndex({
             ),
         },
         {
-            key: 'total_minor',
+            key: 'total',
             header: t('wallet.columns.total'),
             align: 'end',
             cell: (row) => <MoneyAmount amount={row.total} />,

@@ -44,11 +44,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: WholesaleOrder } = await import('./show');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 function order(
@@ -64,7 +63,7 @@ function order(
         paid_at: null,
         cancelled_at: null,
         placed_by: 'Karim Uddin',
-        total: money(2000000),
+        total: money('20000.00'),
         item_count: 1,
         lines: [
             {
@@ -73,20 +72,20 @@ function order(
                 sku: 'FW-KT-17',
                 variant: null,
                 quantity: 10,
-                unit_price: money(200000),
-                subtotal: money(2000000),
-                discount: money(0),
-                tax: money(0),
-                total: money(2000000),
+                unit_price: money('2000.00'),
+                subtotal: money('20000.00'),
+                discount: money('0.00'),
+                tax: money('0.00'),
+                total: money('20000.00'),
             },
         ],
         totals: {
-            subtotal: money(2000000),
-            discount: money(0),
-            delivery: money(0),
-            tax: money(0),
-            tax_included: money(0),
-            total: money(2000000),
+            subtotal: money('20000.00'),
+            discount: money('0.00'),
+            delivery: money('0.00'),
+            tax: money('0.00'),
+            tax_included: money('0.00'),
+            total: money('20000.00'),
         },
         coupon_code: null,
         customer_note: null,

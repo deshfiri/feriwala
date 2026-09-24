@@ -8,6 +8,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
+import { isPositive } from '@/lib/money';
 import { index, show } from '@/routes/admin/wallets';
 import ReverseMovementDialog from '@/pages/admin/wallets/reverse-movement-dialog';
 import type { WalletMovementDetail, WalletSummary } from '@/types/wallet';
@@ -197,12 +198,12 @@ export default function AdminWalletTransaction({
                                     <div className="text-end">
                                         <MoneyAmount
                                             amount={
-                                                entry.credit.minor_units > 0
+                                                isPositive(entry.credit)
                                                     ? entry.credit
                                                     : entry.debit
                                             }
                                             direction={
-                                                entry.credit.minor_units > 0
+                                                isPositive(entry.credit)
                                                     ? 'credit'
                                                     : 'debit'
                                             }

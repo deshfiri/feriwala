@@ -345,9 +345,9 @@ describe('the admin screen', function () {
             ->toBe(3);
     });
 
-    it('converts Taka form input to exact minor units, including a charge row', function () {
-        // §36.1: the administrator types Taka; the server is the only place
-        // that converts to the integer minor units the column stores.
+    it('stores Taka form input as exact flat-Taka amounts, including a charge row', function () {
+        // §36.1 / D26: the administrator types Taka; the server parses it once
+        // and stores exactly what was typed (500.50 stays 500.50).
         $this->actingAs($this->admin)
             ->from(route('admin.packages.index'))
             ->post(route('admin.packages.store'), packageTestFormPayload([

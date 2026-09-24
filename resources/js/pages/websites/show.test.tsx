@@ -44,11 +44,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: WebsiteShow } = await import('./show');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 function website(overrides: Partial<WebsiteDetail> = {}): WebsiteDetail {
@@ -75,11 +74,11 @@ function website(overrides: Partial<WebsiteDetail> = {}): WebsiteDetail {
         banner_url: null,
         contact: { email: null, phone: null, address: null },
         charges_summary: {
-            setup: money(500000),
-            domain: money(150000),
-            hosting: money(200000),
-            required_deposit: money(0),
-            minimum_balance: money(0),
+            setup: money('5000.00'),
+            domain: money('1500.00'),
+            hosting: money('2000.00'),
+            required_deposit: money('0.00'),
+            minimum_balance: money('0.00'),
         },
         lifecycle: {
             activated_at: null,
@@ -103,7 +102,7 @@ function website(overrides: Partial<WebsiteDetail> = {}): WebsiteDetail {
                 type_label: 'Website setup',
                 status: 'due',
                 status_label: 'Due',
-                amount: money(500000),
+                amount: money('5000.00'),
                 due_at: '2026-09-16T10:00:00+06:00',
                 paid_at: null,
                 period_start: null,
@@ -130,7 +129,7 @@ function website(overrides: Partial<WebsiteDetail> = {}): WebsiteDetail {
     };
 }
 
-const wallet = { available: money(1000000), currency: 'BDT' };
+const wallet = { available: money('10000.00'), currency: 'BDT' };
 
 describe('a partner’s own website', () => {
     it('leads with where it stands and what it is waiting for', () => {
@@ -249,7 +248,7 @@ describe('a partner’s own website', () => {
                     expires_at: '2027-09-01T00:00:00+06:00',
                     days_remaining: 350,
                     auto_renew: false,
-                    fee: money(150000),
+                    fee: money('1500.00'),
                     // The partner's props carry no supplier at all (§16.3).
                     registrar: null,
                 },
@@ -264,7 +263,7 @@ describe('a partner’s own website', () => {
                     expires_at: '2027-09-01T00:00:00+06:00',
                     days_remaining: 350,
                     auto_renew: false,
-                    fee: money(200000),
+                    fee: money('2000.00'),
                     provider: null,
                 },
             ],

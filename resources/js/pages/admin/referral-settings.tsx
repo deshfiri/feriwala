@@ -450,7 +450,7 @@ export default function ReferralSettings({
                                                             id={`level-${i}-amount`}
                                                             name={`levels[${i}][amount]`}
                                                             label={t(
-                                                                'referral.settings.amount_minor',
+                                                                'referral.settings.amount_label',
                                                             )}
                                                             required
                                                         />
@@ -460,7 +460,7 @@ export default function ReferralSettings({
                                                         id={`level-${i}-cap`}
                                                         name={`levels[${i}][cap]`}
                                                         label={t(
-                                                            'referral.settings.cap_minor',
+                                                            'referral.settings.cap_label',
                                                         )}
                                                     />
 
@@ -596,7 +596,7 @@ export default function ReferralSettings({
                                                     id="joining-amount"
                                                     name="joining_amount"
                                                     label={t(
-                                                        'referral.settings.amount_minor',
+                                                        'referral.settings.amount_label',
                                                     )}
                                                     required
                                                     className="gap-0"
@@ -607,7 +607,7 @@ export default function ReferralSettings({
                                                     id="joining-cap"
                                                     name="joining_cap"
                                                     label={t(
-                                                        'referral.settings.cap_minor',
+                                                        'referral.settings.cap_label',
                                                     )}
                                                     className="gap-0"
                                                 />

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import { isPositive } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { show } from '@/routes/wholesale/checkout';
@@ -224,7 +225,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                 >
                                     <MoneyAmount amount={checkout.subtotal} />
                                 </SummaryRow>
-                                {checkout.discount.minor_units > 0 && (
+                                {isPositive(checkout.discount) && (
                                     <SummaryRow
                                         label={t('wholesale.checkout.discount')}
                                     >
@@ -239,7 +240,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                 >
                                     <MoneyAmount amount={checkout.delivery} />
                                 </SummaryRow>
-                                {checkout.tax_added.minor_units > 0 && (
+                                {isPositive(checkout.tax_added) && (
                                     <SummaryRow
                                         label={t('wholesale.checkout.tax')}
                                     >

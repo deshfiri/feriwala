@@ -29,11 +29,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: AdminOrder } = await import('./show');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
@@ -57,7 +56,7 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
         customer_note: null,
         intended_resale_channel: null,
         coupon_code: null,
-        totals: { total: money(2000000) },
+        totals: { total: money('20000.00') },
         lines: [],
         payment: {
             reference: 'PAY-260915-TEST0001',

@@ -48,7 +48,7 @@ return [
     'form' => [
         'create_title' => 'New package',
         'edit_title' => 'Edit package',
-        'description' => 'Prices are in minor units — 50000 is ৳500.00.',
+        'description' => 'Prices are in Taka — 500 is ৳500.00, and 500.50 is ৳500.50.',
 
         'name' => 'Name',
         'slug' => 'Slug',

@@ -14,6 +14,8 @@ use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 
 beforeEach(function () {
     $this->admin = User::factory()->staff()->create();
@@ -21,7 +23,7 @@ beforeEach(function () {
     $this->package = Package::create([
         'name' => 'Growth',
         'slug' => 'growth',
-        'fee_minor' => 500000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
         'validity_days' => 365,
         'grace_period_days' => 14,
     ]);
@@ -44,7 +46,7 @@ function settleActivationPayment(): Payment
         'business_account_id' => test()->applicant->id,
         'purpose' => PaymentPurpose::Activation,
         'status' => PaymentStatus::Paid,
-        'amount_minor' => 600000,
+        'amount' => Money::fromDecimal('6000.00', Currency::BDT),
         'currency_code' => 'BDT',
     ]);
 }
@@ -96,7 +98,7 @@ describe('the three conditions (§5.1, §44)', function () {
             'business_account_id' => $this->applicant->id,
             'purpose' => PaymentPurpose::Activation,
             'status' => PaymentStatus::Pending,
-            'amount_minor' => 600000,
+            'amount' => Money::fromDecimal('6000.00', Currency::BDT),
             'currency_code' => 'BDT',
         ]);
 

@@ -43,11 +43,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: WholesaleCheckout } = await import('./checkout');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const address = {
@@ -70,7 +69,7 @@ function checkout(overrides: Partial<CheckoutSummary> = {}): CheckoutSummary {
             status: 'confirmed',
             payment_method: { name: 'sslcommerz', label: 'SSLCommerz' },
             confirmed_at: '2026-09-15T10:00:00+06:00',
-            total: money(2000000),
+            total: money('20000.00'),
         },
         lines: [
             {
@@ -79,17 +78,17 @@ function checkout(overrides: Partial<CheckoutSummary> = {}): CheckoutSummary {
                 sku: 'FW-KT',
                 variant: null,
                 quantity: 10,
-                unit_price: money(200000),
-                line_total: money(2000000),
+                unit_price: money('2000.00'),
+                line_total: money('20000.00'),
             },
         ],
-        subtotal: money(2000000),
+        subtotal: money('20000.00'),
         coupon: null,
-        discount: money(0),
-        delivery: money(0),
+        discount: money('0.00'),
+        delivery: money('0.00'),
         tax: [],
-        tax_added: money(0),
-        total: money(2000000),
+        tax_added: money('0.00'),
+        total: money('20000.00'),
         addresses: { billing: address, shipping: address },
         ready_to_confirm: true,
         pending_order: null,
@@ -184,7 +183,7 @@ describe('wholesale checkout payment', () => {
                             label: 'SSLCommerz',
                         },
                         confirmed_at: '2026-09-15T10:00:00+06:00',
-                        total: money(1800000),
+                        total: money('18000.00'),
                     },
                 })}
             />,

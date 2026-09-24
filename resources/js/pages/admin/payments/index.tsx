@@ -110,7 +110,7 @@ export default function AdminPaymentsIndex({
             ),
         },
         {
-            key: 'amount_minor',
+            key: 'amount',
             header: t('payments.columns.amount'),
             sortable: true,
             align: 'end',

@@ -42,11 +42,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: WebsiteOrder } = await import('./order');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const order: WebsiteOrderDetail = {
@@ -59,7 +58,7 @@ const order: WebsiteOrderDetail = {
     status_tone: 'warning',
     payment_state: 'awaiting',
     payment_method: 'online',
-    total: money(526000),
+    total: money('5260.00'),
     placed_at: '2026-09-20T10:00:00+06:00',
     customer_details: {
         name: 'Ayesha Rahman',
@@ -83,11 +82,11 @@ const order: WebsiteOrderDetail = {
     paid_at: null,
     cancelled_at: null,
     totals: {
-        subtotal: money(520000),
-        discount: money(0),
-        delivery: money(6000),
-        tax: money(0),
-        total: money(526000),
+        subtotal: money('5200.00'),
+        discount: money('0.00'),
+        delivery: money('60.00'),
+        tax: money('0.00'),
+        total: money('5260.00'),
     },
     lines: [
         {
@@ -96,8 +95,8 @@ const order: WebsiteOrderDetail = {
             sku: 'FW-1043-NVY-M',
             variant: 'Navy / M',
             quantity: 2,
-            unit_price: money(260000),
-            total: money(520000),
+            unit_price: money('2600.00'),
+            total: money('5200.00'),
             reservation: {
                 status: 'active',
                 status_label: 'Held',
@@ -291,7 +290,7 @@ describe('one website order', function () {
                         ],
                         refund: {
                             state: 'manual_review',
-                            amount: money(260000),
+                            amount: money('2600.00'),
                             refunded_at: null,
                         },
                         timeline: [

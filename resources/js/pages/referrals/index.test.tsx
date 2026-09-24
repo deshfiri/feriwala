@@ -28,11 +28,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: Referrals } = await import('./index');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 const paginator = <T,>(data: T[]) => ({
@@ -49,7 +48,7 @@ const earning = (overrides: Partial<Earning>): Earning => ({
     id: '01EARNING',
     level: 2,
     is_joining_reward: false,
-    amount: money(32500),
+    amount: money('325.00'),
     rule: { type: 'percentage', percent: '5', amount: null },
     status: 'paid',
     status_label: 'Paid',
@@ -64,9 +63,9 @@ const earning = (overrides: Partial<Earning>): Earning => ({
 const summary = {
     direct: 1,
     direct_active: 1,
-    paid: money(32500),
-    pending: money(0),
-    reversed: money(0),
+    paid: money('325.00'),
+    pending: money('0.00'),
+    reversed: money('0.00'),
 };
 
 const referred: ReferredBusiness = {
@@ -123,7 +122,7 @@ describe("an account's own referrals", () => {
                         id: '01JOIN',
                         level: 0,
                         is_joining_reward: true,
-                        amount: money(5000),
+                        amount: money('50.00'),
                     }),
                 ])}
             />,
@@ -147,7 +146,7 @@ describe("an account's own referrals", () => {
                     ...summary,
                     direct: 0,
                     direct_active: 0,
-                    paid: money(0),
+                    paid: money('0.00'),
                 }}
                 direct={paginator([])}
                 earnings={paginator([])}

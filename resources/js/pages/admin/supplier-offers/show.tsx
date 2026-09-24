@@ -177,10 +177,10 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                 id="supplier-rate"
                                                 name="supplier_rate"
                                                 label={t(
-                                                    'supplier.admin.offers.supplier_rate_minor',
+                                                    'supplier.admin.offers.supplier_rate',
                                                 )}
                                                 defaultValue={
-                                                    offer.supplier_rate.decimal
+                                                    offer.supplier_rate.amount
                                                 }
                                                 required
                                                 error={errors.supplier_rate}
@@ -189,10 +189,10 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                 id="platform-rate"
                                                 name="platform_rate"
                                                 label={t(
-                                                    'supplier.admin.offers.platform_rate_minor',
+                                                    'supplier.admin.offers.platform_rate',
                                                 )}
                                                 defaultValue={
-                                                    offer.platform_rate.decimal
+                                                    offer.platform_rate.amount
                                                 }
                                                 required
                                                 error={errors.platform_rate}

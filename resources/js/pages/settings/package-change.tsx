@@ -6,7 +6,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { store } from '@/routes/subscription/change';
-import type { Money } from '@/lib/money';
+import { isPositive, type Money } from '@/lib/money';
 
 type Excess = {
     feature: string;
@@ -131,7 +131,7 @@ export default function PackageChange({ current, options, gateways }: Props) {
                                         </dd>
                                     </div>
 
-                                    {option.credit.minor_units > 0 && (
+                                    {isPositive(option.credit) && (
                                         <div>
                                             <dt className="text-muted-foreground text-xs">
                                                 {t('package.change.credit')}
@@ -157,8 +157,7 @@ export default function PackageChange({ current, options, gateways }: Props) {
                                         </dd>
                                     </div>
 
-                                    {option.additional_deposit.minor_units >
-                                        0 && (
+                                    {isPositive(option.additional_deposit) && (
                                         <div>
                                             <dt className="text-muted-foreground text-xs">
                                                 {t('package.change.deposit')}

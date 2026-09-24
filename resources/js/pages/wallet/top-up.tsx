@@ -12,7 +12,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import WalletTopUpController from '@/actions/App/Http/Controllers/Erp/WalletTopUpController';
 import { show } from '@/routes/wallet';
-import type { Money } from '@/lib/money';
+import { isPositive, type Money } from '@/lib/money';
 import type { WalletBalances } from '@/types/wallet';
 
 type Props = {
@@ -63,7 +63,7 @@ export default function WalletTopUp({
                     }
                 />
 
-                {suggested.minor_units > 0 && (
+                {isPositive(suggested) && (
                     <div
                         className="border-warning bg-warning-subtle rounded-xl border p-4"
                         role="status"
@@ -92,8 +92,8 @@ export default function WalletTopUp({
                                     label={t('wallet.top_up.amount')}
                                     required
                                     defaultValue={
-                                        suggested.minor_units > 0
-                                            ? suggested.decimal
+                                        isPositive(suggested)
+                                            ? suggested.amount
                                             : undefined
                                     }
                                     helpText={t('wallet.top_up.minimum', {

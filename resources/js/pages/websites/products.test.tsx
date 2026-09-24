@@ -47,11 +47,10 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: WebsiteProducts } = await import('./products');
 
-const money = (minor: number) => ({
-    minor_units: minor,
+const money = (amount: string) => ({
+    amount,
     currency: 'BDT',
-    decimal: (minor / 100).toFixed(2),
-    formatted: `৳${(minor / 100).toFixed(2)}`,
+    formatted: `৳${amount}`,
 });
 
 function selection(
@@ -71,7 +70,7 @@ function selection(
         sync_label: 'Waiting to synchronise',
         last_synced_at: null,
         sync_error: null,
-        price: money(250000),
+        price: money('2500.00'),
         promotional_price: null,
         promo_title: null,
         marketing_description: null,
@@ -80,9 +79,9 @@ function selection(
         category: null,
         terms: {
             allows_user_pricing: true,
-            minimum: money(200000),
-            maximum: money(400000),
-            suggested: money(250000),
+            minimum: money('2000.00'),
+            maximum: money('4000.00'),
+            suggested: money('2500.00'),
             max_margin_percent: null,
             margin_ceiling: null,
             locked_fields: [],

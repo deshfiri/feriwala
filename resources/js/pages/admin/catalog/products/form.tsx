@@ -70,9 +70,10 @@ const textareaClass =
  * different one, so "what does this product say" has one answer for everybody —
  * and the refusal that matters is the server's, not the disabled fieldset.
  *
- * Prices are posted as integer minor units, like every amount this application
- * accepts, and the saved figure is shown beneath each field in the server's own
- * formatting so a misplaced zero is visible before anybody buys at it.
+ * Prices are posted as flat-Taka decimal strings exactly as typed (D26), like
+ * every amount this application accepts, and the saved figure is shown beneath
+ * each field in the server's own formatting so a misplaced zero is visible
+ * before anybody buys at it.
  */
 export default function ProductForm({
     product,
@@ -429,16 +430,16 @@ export default function ProductForm({
                                                   )
                                                 : undefined
                                         }
-                                        error={errors.wholesale_price_minor}
+                                        error={errors.wholesale_price}
                                         required
                                     >
                                         {(field) => (
                                             <MoneyField
                                                 {...field}
-                                                name="wholesale_price_minor"
+                                                name="wholesale_price"
                                                 defaultValue={
                                                     product?.wholesale_price
-                                                        .decimal
+                                                        .amount
                                                 }
                                             />
                                         )}
@@ -463,15 +464,15 @@ export default function ProductForm({
                                                   )
                                                 : undefined
                                         }
-                                        error={errors.base_cost_minor}
+                                        error={errors.base_cost}
                                         required
                                     >
                                         {(field) => (
                                             <MoneyField
                                                 {...field}
-                                                name="base_cost_minor"
+                                                name="base_cost"
                                                 defaultValue={
-                                                    product?.base_cost.decimal
+                                                    product?.base_cost.amount
                                                 }
                                             />
                                         )}
@@ -540,32 +541,23 @@ export default function ProductForm({
 
                                     {(
                                         [
-                                            [
-                                                'suggested_selling_price_minor',
-                                                'suggested_selling_price',
-                                            ],
-                                            [
-                                                'minimum_selling_price_minor',
-                                                'minimum_selling_price',
-                                            ],
-                                            [
-                                                'maximum_selling_price_minor',
-                                                'maximum_selling_price',
-                                            ],
+                                            'suggested_selling_price',
+                                            'minimum_selling_price',
+                                            'maximum_selling_price',
                                         ] as const
-                                    ).map(([name, rendered]) => (
+                                    ).map((name) => (
                                         <FormField
                                             key={name}
                                             label={t(
-                                                `catalog.products.fields.${rendered}`,
+                                                `catalog.products.fields.${name}`,
                                             )}
                                             hint={
-                                                product?.[rendered]
+                                                product?.[name]
                                                     ? t(
                                                           'catalog.products.fields.saved_as',
                                                           {
                                                               amount: product[
-                                                                  rendered
+                                                                  name
                                                               ].formatted,
                                                           },
                                                       )
@@ -580,8 +572,7 @@ export default function ProductForm({
                                                     {...field}
                                                     name={name}
                                                     defaultValue={
-                                                        product?.[rendered]
-                                                            ?.decimal
+                                                        product?.[name]?.amount
                                                     }
                                                 />
                                             )}
