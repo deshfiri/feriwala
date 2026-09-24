@@ -81,7 +81,7 @@ class OrderController extends Controller
                 'payment_status' => $order->payment?->status->value,
                 'needs_attention' => $order->status === OrderStatus::OnHold
                     || ($order->payment?->status->needsReconciliation() ?? false),
-                'total' => $order->total_minor->jsonSerialize(),
+                'total' => $order->total->jsonSerialize(),
                 'placed_at' => $order->placed_at->toIso8601String(),
             ]);
 
@@ -143,12 +143,12 @@ class OrderController extends Controller
                 'intended_resale_channel' => $record->intended_resale_channel?->value,
                 'coupon_code' => $record->coupon_code,
                 'totals' => [
-                    'subtotal' => $record->subtotal_minor->jsonSerialize(),
-                    'discount' => $record->discount_minor->jsonSerialize(),
-                    'delivery' => $record->delivery_minor->jsonSerialize(),
-                    'tax' => $record->tax_minor->jsonSerialize(),
-                    'tax_included' => $record->tax_included_minor->jsonSerialize(),
-                    'total' => $record->total_minor->jsonSerialize(),
+                    'subtotal' => $record->subtotal->jsonSerialize(),
+                    'discount' => $record->discount->jsonSerialize(),
+                    'delivery' => $record->delivery->jsonSerialize(),
+                    'tax' => $record->tax->jsonSerialize(),
+                    'tax_included' => $record->tax_included->jsonSerialize(),
+                    'total' => $record->total->jsonSerialize(),
                 ],
                 'lines' => $record->items->map(fn (OrderItem $item) => [
                     'id' => $item->public_id,
@@ -156,10 +156,10 @@ class OrderController extends Controller
                     'sku' => $item->sku,
                     'variant' => $item->variant_label,
                     'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_price_minor->jsonSerialize(),
-                    'discount' => $item->discount_minor->jsonSerialize(),
-                    'tax' => $item->tax_minor->jsonSerialize(),
-                    'total' => $item->line_total_minor->jsonSerialize(),
+                    'unit_price' => $item->unit_price->jsonSerialize(),
+                    'discount' => $item->discount->jsonSerialize(),
+                    'tax' => $item->tax->jsonSerialize(),
+                    'total' => $item->line_total->jsonSerialize(),
                     'reservation' => $item->stockReservation === null ? null : [
                         'reference' => $item->stockReservation->reference,
                         'status' => $item->stockReservation->status->value,

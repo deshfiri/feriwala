@@ -34,6 +34,8 @@ use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Notifications\Orders\WebsiteOrderPaid;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\DB;
@@ -106,7 +108,10 @@ function websiteOrderSelection(Website $website, int $priceMinor, array $product
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => $priceMinor,
+        // `$priceMinor` keeps its old poisha-shorthand name so call sites do
+        // not all need to change, but it is converted to exact Taka once,
+        // here, via bcmath — never scaled at the column or the cast (D26).
+        'price' => Money::fromDecimal(bcdiv((string) $priceMinor, '100', 2), Currency::BDT),
         'published_at' => now(),
     ]);
 }
@@ -127,7 +132,7 @@ function websiteOrderStock(WebsiteProduct $selection, int $units): StockItem
  */
 function websiteOrderBody(array $overrides = []): array
 {
-    $money = fn (int $minor) => ['minor_units' => $minor, 'currency' => 'BDT'];
+    $money = fn (string $amount) => ['amount' => $amount, 'currency' => 'BDT'];
 
     return array_replace_recursive([
         'storefront_order_reference' => 'SF-2026-000481',
@@ -147,14 +152,14 @@ function websiteOrderBody(array $overrides = []): array
             'country' => 'BD',
         ],
         'items' => [
-            ['sku' => test()->selection->product->sku, 'quantity' => 2, 'unit_price' => $money(260000)],
+            ['sku' => test()->selection->product->sku, 'quantity' => 2, 'unit_price' => $money('2600.00')],
         ],
         'totals' => [
-            'subtotal' => $money(520000),
-            'discount' => $money(0),
-            'shipping' => $money(6000),
-            'tax' => $money(0),
-            'grand_total' => $money(526000),
+            'subtotal' => $money('5200.00'),
+            'discount' => $money('0.00'),
+            'shipping' => $money('60.00'),
+            'tax' => $money('0.00'),
+            'grand_total' => $money('5260.00'),
         ],
         'payment' => ['method' => 'online'],
     ], $overrides);
@@ -204,6 +209,9 @@ describe('taking the order', function () {
         $response->assertCreated()
             ->assertJsonPath('status', OrderStatus::PaymentPending->value)
             ->assertJsonPath('storefront_order_reference', 'SF-2026-000481')
+            // The response carries both the flat-Taka `amount` and the frozen
+            // contract's legacy `minor_units` compatibility key (§4.1).
+            ->assertJsonPath('totals.grand_total.amount', '5260.00')
             ->assertJsonPath('totals.grand_total.minor_units', 526000)
             ->assertJsonPath('payment.redirect_url', 'https://pay.test/go')
             ->assertJsonPath('items.0.quantity', 2);
@@ -219,9 +227,9 @@ describe('taking the order', function () {
             ->and($order->business_account_id)->toBe($this->account->id)
             ->and($order->placed_by)->toBeNull()
             ->and($order->cart_id)->toBeNull()
-            ->and($order->subtotal_minor->minorUnits)->toBe(520000)
-            ->and($order->delivery_minor->minorUnits)->toBe(6000)
-            ->and($order->total_minor->minorUnits)->toBe(526000)
+            ->and($order->subtotal->toDecimal())->toBe('5200.00')
+            ->and($order->delivery->toDecimal())->toBe('60.00')
+            ->and($order->total->toDecimal())->toBe('5260.00')
             ->and($order->customer['mobile'])->toBe('+8801712345678')
             ->and($order->shipping_address['city'])->toBe('Dhaka')
             // Nothing was sent, so the billing address is the shipping one.
@@ -229,15 +237,15 @@ describe('taking the order', function () {
 
         expect($line->sku)->toBe($this->selection->product->sku)
             ->and($line->website_product_id)->toBe($this->selection->id)
-            ->and($line->unit_price_minor->minorUnits)->toBe(260000)
-            ->and($line->line_total_minor->minorUnits)->toBe(520000)
+            ->and($line->unit_price->toDecimal())->toBe('2600.00')
+            ->and($line->line_total->toDecimal())->toBe('5200.00')
             ->and($line->stockReservation->status)->toBe(StockReservationStatus::Active)
             ->and($line->stockReservation->quantity)->toBe(2);
 
         expect($payment)->not->toBeNull()
             ->and($payment->purpose)->toBe(PaymentPurpose::WebsiteOrder)
             ->and($payment->business_account_id)->toBe($this->account->id)
-            ->and($payment->amount_minor->minorUnits)->toBe(526000)
+            ->and($payment->amount->toDecimal())->toBe('5260.00')
             ->and($payment->gateway)->toBe('sslcommerz')
             ->and($payment->expires_at)->not->toBeNull()
             // An order nobody has paid for carries no invoice yet (P4-11).
@@ -275,20 +283,48 @@ describe('taking the order', function () {
     });
 
     it('refuses a total that differs by a single poisha, and says what the figures really are', function () {
-        $response = websiteOrderSubmit(['totals' => ['grand_total' => ['minor_units' => 525999]]]);
+        /*
+         * Deliberately submitted through the frozen contract's legacy
+         * `minor_units` request shape (§4.1) — one Taka is still 100 minor
+         * units on the way in. The whole `grand_total` object is replaced
+         * (rather than merged over the default `amount` one) because the two
+         * money shapes are mutually exclusive per field. The refusal's own
+         * money objects, though, never pass through the response's
+         * legacy-key adapter, so they carry only the flat-Taka `amount`.
+         */
+        $body = websiteOrderBody();
+        $body['totals']['grand_total'] = ['minor_units' => 525999, 'currency' => 'BDT'];
+
+        $response = websiteOrderSubmit(body: $body);
 
         $response->assertStatus(422)
             ->assertJsonPath('error.code', 'price_mismatch')
-            ->assertJsonPath('error.details.authoritative.grand_total.minor_units', 526000)
-            ->assertJsonPath('error.details.submitted_grand_total.minor_units', 525999);
+            ->assertJsonPath('error.details.authoritative.grand_total.amount', '5260.00')
+            ->assertJsonPath('error.details.submitted_grand_total.amount', '5259.99');
+
+        expect(Order::query()->count())->toBe(0);
+    });
+
+    it('refuses a money object naming both the flat-Taka amount and the legacy minor_units key', function () {
+        $body = websiteOrderBody();
+        $body['totals']['grand_total'] = ['amount' => '5260.00', 'minor_units' => 525999, 'currency' => 'BDT'];
+
+        $response = websiteOrderSubmit(body: $body);
+
+        $response->assertStatus(422)->assertJsonPath('error.code', 'validation_failed');
+
+        expect($response->json('error.details.fields'))->toHaveKeys([
+            'totals.grand_total.amount',
+            'totals.grand_total.minor_units',
+        ]);
 
         expect(Order::query()->count())->toBe(0);
     });
 
     it('refuses a price the storefront made up, and never sells at it', function () {
         $response = websiteOrderSubmit([
-            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 2, 'unit_price' => ['minor_units' => 100, 'currency' => 'BDT']]],
-            'totals' => ['subtotal' => ['minor_units' => 200], 'grand_total' => ['minor_units' => 6200]],
+            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 2, 'unit_price' => ['amount' => '1.00', 'currency' => 'BDT']]],
+            'totals' => ['subtotal' => ['amount' => '2.00'], 'grand_total' => ['amount' => '62.00']],
         ]);
 
         $response->assertStatus(422)->assertJsonPath('error.code', 'price_mismatch');
@@ -296,7 +332,7 @@ describe('taking the order', function () {
     });
 
     it('refuses a product this website does not sell, and one it has unpublished', function () {
-        websiteOrderSubmit(['items' => [['sku' => 'NOT-A-SKU', 'quantity' => 1, 'unit_price' => ['minor_units' => 260000, 'currency' => 'BDT']]]])
+        websiteOrderSubmit(['items' => [['sku' => 'NOT-A-SKU', 'quantity' => 1, 'unit_price' => ['amount' => '2600.00', 'currency' => 'BDT']]]])
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'product_unavailable');
 
@@ -309,8 +345,8 @@ describe('taking the order', function () {
 
     it('refuses more units than the stock holds, and says how many are left', function () {
         websiteOrderSubmit([
-            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 50, 'unit_price' => ['minor_units' => 260000, 'currency' => 'BDT']]],
-            'totals' => ['subtotal' => ['minor_units' => 13000000], 'grand_total' => ['minor_units' => 13006000]],
+            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 50, 'unit_price' => ['amount' => '2600.00', 'currency' => 'BDT']]],
+            'totals' => ['subtotal' => ['amount' => '130000.00'], 'grand_total' => ['amount' => '130060.00']],
         ])
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'insufficient_stock')
@@ -407,7 +443,7 @@ describe('never twice (contract §4.7, §17.3, P5-21)', function () {
         websiteOrderStock($selection, 10);
         $credential = storefrontCredential($other, [CredentialScope::OrdersWrite, CredentialScope::OrdersRead]);
 
-        $body = websiteOrderBody(['items' => [['sku' => $selection->product->sku, 'quantity' => 2, 'unit_price' => ['minor_units' => 260000, 'currency' => 'BDT']]]]);
+        $body = websiteOrderBody(['items' => [['sku' => $selection->product->sku, 'quantity' => 2, 'unit_price' => ['amount' => '2600.00', 'currency' => 'BDT']]]]);
 
         websiteOrderSubmit(body: $body, credential: $credential)->assertCreated();
 

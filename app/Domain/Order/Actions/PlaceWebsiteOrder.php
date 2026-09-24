@@ -218,7 +218,7 @@ class PlaceWebsiteOrder
             idempotencyKey: 'website-payment:'.Str::after($key, 'website-order:'),
         );
 
-        if (! $payment->amount_minor->equals($quote->total)) {
+        if (! $payment->amount->equals($quote->total)) {
             throw new LogicException('A website order payment must come to the order total.');
         }
 
@@ -301,13 +301,13 @@ class PlaceWebsiteOrder
             'billing_address' => $submission->billingAddress,
             'shipping_address' => $submission->shippingAddress,
             'currency_code' => $quote->currency->value,
-            'subtotal_minor' => $quote->subtotal,
-            'discount_minor' => $quote->discount,
-            'delivery_minor' => $quote->delivery,
-            'tax_minor' => $quote->tax->addedTotal(),
-            'tax_included_minor' => $quote->tax->includedTotal(),
-            'cod_fee_minor' => Money::zero($quote->currency),
-            'total_minor' => $quote->total,
+            'subtotal' => $quote->subtotal,
+            'discount' => $quote->discount,
+            'delivery' => $quote->delivery,
+            'tax' => $quote->tax->addedTotal(),
+            'tax_included' => $quote->tax->includedTotal(),
+            'cod_fee' => Money::zero($quote->currency),
+            'total' => $quote->total,
             'customer_note' => $note === '' ? null : $note,
             'placed_at' => CarbonImmutable::now(),
         ]);
@@ -403,12 +403,12 @@ class PlaceWebsiteOrder
                     ->implode(' / '),
                 'quantity' => $line->quantity,
                 'currency_code' => $line->subtotal->currency->value,
-                'unit_price_minor' => $line->unitPrice,
-                'line_subtotal_minor' => $line->subtotal,
-                'discount_minor' => $line->discount,
-                'tax_minor' => $line->addedTax(),
-                'tax_included_minor' => $line->includedTax(),
-                'line_total_minor' => $line->total(),
+                'unit_price' => $line->unitPrice,
+                'line_subtotal' => $line->subtotal,
+                'discount' => $line->discount,
+                'tax' => $line->addedTax(),
+                'tax_included' => $line->includedTax(),
+                'line_total' => $line->total(),
                 'tax_code' => $taxed ? $line->tax->code : null,
                 'tax_rate_basis_points' => $taxed ? $line->tax->rateBasisPoints : null,
                 'tax_mode' => $taxed ? $line->tax->mode->value : null,

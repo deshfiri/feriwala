@@ -13,6 +13,7 @@ use App\Domain\Tax\Models\TaxRule;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
+use RoundingMode;
 
 /**
  * The single place tax is worked out (D19, §9, §36.1).
@@ -43,6 +44,13 @@ use Illuminate\Support\Facades\Log;
  */
 class TaxEngine
 {
+    /**
+     * Working precision for the inclusive-extraction quotient, well past the
+     * currency's own scale, so rounding to it discards only digits that were
+     * genuinely insignificant.
+     */
+    private const GUARD_SCALE = 20;
+
     public function __construct(
         protected TaxRuleResolver $rules,
     ) {}
@@ -195,9 +203,9 @@ class TaxEngine
      */
     protected function addExclusive(Money $net, int $basisPoints): array
     {
-        $tax = Money::of(
-            (int) round($net->minorUnits * $basisPoints / TaxRate::BASIS_POINTS_WHOLE),
-            $net->currency,
+        $tax = $net->percentage(
+            self::percentFromBasisPoints($basisPoints),
+            RoundingMode::HalfAwayFromZero,
         );
 
         return [$net, $tax];
@@ -216,13 +224,27 @@ class TaxEngine
      */
     protected function extractInclusive(Money $gross, int $basisPoints): array
     {
-        $divisor = TaxRate::BASIS_POINTS_WHOLE + $basisPoints;
+        $currency = $gross->currency;
+        $divisor = (string) (TaxRate::BASIS_POINTS_WHOLE + $basisPoints);
 
-        $net = Money::of(
-            (int) round($gross->minorUnits * TaxRate::BASIS_POINTS_WHOLE / $divisor),
-            $gross->currency,
-        );
+        // `gross × whole ÷ (whole + basisPoints)`, computed at guard precision
+        // first — the same shape as Money's own percentage(), just against a
+        // divisor Money's API has no method for. fromDecimal() rounds the
+        // exact quotient to the currency's own scale.
+        $product = bcmul($gross->toDecimal(), (string) TaxRate::BASIS_POINTS_WHOLE, self::GUARD_SCALE);
+        $exact = bcdiv($product, $divisor, self::GUARD_SCALE);
+        $net = Money::fromDecimal($exact, $currency, RoundingMode::HalfAwayFromZero);
 
         return [$net, $gross->minus($net)];
+    }
+
+    /**
+     * A basis-point count as a percent decimal string, without a float —
+     * {@see Money::percentage()} divides by 100 itself, so this only needs to
+     * place the decimal point two digits from bps' own scale.
+     */
+    private static function percentFromBasisPoints(int $basisPoints): string
+    {
+        return sprintf('%d.%02d', intdiv($basisPoints, 100), $basisPoints % 100);
     }
 }

@@ -98,7 +98,7 @@ class RefundOrderReturn
             after: [
                 'reference' => $refunded->reference,
                 'refund_state' => $refunded->refund_state->value,
-                'amount_minor' => $refunded->refund_amount_minor?->minorUnits,
+                'amount' => $refunded->refund_amount?->toDecimal(),
                 'currency' => $refunded->currency_code,
                 'refund_request' => $refunded->refundRequest?->public_id,
             ],
@@ -136,7 +136,7 @@ class RefundOrderReturn
         foreach ($locked->items as $item) {
             $line = $amounts['lines'][$item->id];
             $item->forceFill([
-                'refund_amount_minor' => $line,
+                'refund_amount' => $line,
                 'currency_code' => $line->currency->value,
             ])->save();
         }
@@ -144,7 +144,7 @@ class RefundOrderReturn
         $total = $amounts['total'];
 
         $locked->forceFill([
-            'refund_amount_minor' => $total,
+            'refund_amount' => $total,
             'currency_code' => $total->currency->value,
         ]);
 
@@ -197,7 +197,9 @@ class RefundOrderReturn
             'allocation_type' => $payment->purpose === PaymentPurpose::WholesaleOrder
                 ? AllocationType::WholesaleGoods
                 : AllocationType::WebsiteGoods,
-            'amount_minor' => $return->refund_amount_minor,
+            // RefundRequest::amount is Billing domain (D26); this call site is
+            // written against its post-migration column name.
+            'amount' => $return->refund_amount,
             'currency_code' => $return->currency_code,
             'refundability' => Refundability::Always,
             'status' => RefundStatus::Requested,

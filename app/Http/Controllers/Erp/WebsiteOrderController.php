@@ -243,7 +243,7 @@ class WebsiteOrderController extends Controller
             'status_tone' => $order->status->tone(),
             'payment_state' => OrderPaymentState::of($order->payment)?->value,
             'payment_method' => $order->isCashOnDelivery() ? 'cod' : 'online',
-            'total' => $order->total_minor->jsonSerialize(),
+            'total' => $order->total->jsonSerialize(),
             'placed_at' => $order->placed_at->toIso8601String(),
         ];
     }
@@ -270,11 +270,11 @@ class WebsiteOrderController extends Controller
             'paid_at' => $order->paid_at?->toIso8601String(),
             'cancelled_at' => $order->cancelled_at?->toIso8601String(),
             'totals' => [
-                'subtotal' => $order->subtotal_minor->jsonSerialize(),
-                'discount' => $order->discount_minor->jsonSerialize(),
-                'delivery' => $order->delivery_minor->jsonSerialize(),
-                'tax' => $order->tax_minor->jsonSerialize(),
-                'total' => $order->total_minor->jsonSerialize(),
+                'subtotal' => $order->subtotal->jsonSerialize(),
+                'discount' => $order->discount->jsonSerialize(),
+                'delivery' => $order->delivery->jsonSerialize(),
+                'tax' => $order->tax->jsonSerialize(),
+                'total' => $order->total->jsonSerialize(),
             ],
             'lines' => $order->items->map(fn (OrderItem $item) => [
                 'id' => $item->public_id,
@@ -282,8 +282,8 @@ class WebsiteOrderController extends Controller
                 'sku' => $item->sku,
                 'variant' => $item->variant_label,
                 'quantity' => $item->quantity,
-                'unit_price' => $item->unit_price_minor->jsonSerialize(),
-                'total' => $item->line_total_minor->jsonSerialize(),
+                'unit_price' => $item->unit_price->jsonSerialize(),
+                'total' => $item->line_total->jsonSerialize(),
                 // How long the stock is held, and nothing about where it is.
                 'reservation' => $item->stockReservation === null ? null : [
                     'status' => $item->stockReservation->status->value,

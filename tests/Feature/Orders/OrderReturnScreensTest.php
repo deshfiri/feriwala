@@ -67,7 +67,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00'),
         'published_at' => now(),
     ]);
 
@@ -82,7 +82,9 @@ beforeEach(function () {
  */
 function returnScreensDeliveredOrder(): Order
 {
-    $money = fn (int $minor) => Money::of($minor, Currency::BDT);
+    // Kept as a poisha-shorthand closure so the call sites below need no
+    // change: converted to exact Taka once, here, via bcmath (D26).
+    $money = fn (int $minor) => Money::fromDecimal(bcdiv((string) $minor, '100', 2), Currency::BDT);
     $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
 
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(

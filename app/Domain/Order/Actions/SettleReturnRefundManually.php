@@ -115,7 +115,7 @@ class SettleReturnRefundManually
             auditableId: $settled->id,
             after: [
                 'reference' => $settled->reference,
-                'amount_minor' => $settled->refund_amount_minor?->minorUnits,
+                'amount' => $settled->refund_amount?->toDecimal(),
                 'currency' => $settled->currency_code,
             ],
             reason: $how,

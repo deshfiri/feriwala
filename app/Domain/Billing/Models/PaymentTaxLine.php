@@ -25,8 +25,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $label
  * @property int $rate_basis_points
  * @property TaxMode $mode
- * @property Money $taxable_amount_minor
- * @property Money $tax_amount_minor
+ * @property Money $taxable_amount
+ * @property Money $tax_amount
  * @property string $currency_code
  * @property-read Payment $payment
  */
@@ -42,8 +42,8 @@ class PaymentTaxLine extends Model
         return [
             'mode' => TaxMode::class,
             'rate_basis_points' => 'integer',
-            'taxable_amount_minor' => MoneyCast::class,
-            'tax_amount_minor' => MoneyCast::class,
+            'taxable_amount' => MoneyCast::class,
+            'tax_amount' => MoneyCast::class,
         ];
     }
 

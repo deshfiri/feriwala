@@ -19,15 +19,22 @@ use App\Support\Money\Money;
  * performed, and giving it back is a decision a person takes on the refund
  * itself, not something a return implies.
  *
- * **Never loses a poisha, never invents one.** Integer minor units throughout.
- * A line of three sold for 1000 does not refund 333 per unit and strand the
- * last poisha: the refund for this return is what the units returned *so far*
- * are worth, minus what earlier returns of the line already refunded — so
- * however a line comes back, in one return or several, the total refunded
- * for the whole line is exactly its line total.
+ * **Never loses a poisha, never invents one.** Exact decimal Taka throughout
+ * (D26), via bcmath. A line of three sold for 1000.00 does not refund 333.33
+ * per unit and strand the last poisha: the refund for this return is what the
+ * units returned *so far* are worth, minus what earlier returns of the line
+ * already refunded — so however a line comes back, in one return or several,
+ * the total refunded for the whole line is exactly its line total.
  */
 class ReturnRefundAmount
 {
+    /**
+     * Working precision for the per-unit share ratio, well past the
+     * currency's own scale, so truncating to it can only ever discard digits
+     * that were genuinely insignificant.
+     */
+    private const RATIO_GUARD_SCALE = 20;
+
     /**
      * @return array{total: Money, lines: array<int, Money>} lines keyed by returned-line id
      */
@@ -59,23 +66,30 @@ class ReturnRefundAmount
 
         $before = $this->alreadyRefundedUnits($item);
 
-        return Money::of(
-            $this->worth($orderItem, $before + $item->received_quantity) - $this->worth($orderItem, $before),
-            $currency,
-        );
+        return $this->worth($orderItem, $before + $item->received_quantity)
+            ->minus($this->worth($orderItem, $before));
     }
 
     /**
-     * What `$units` of this line are worth, rounded down to the poisha.
+     * What `$units` of this line are worth, floored to the currency's scale.
      *
      * Rounded the same way every time, so the difference of two of these is
-     * exact: the whole line is worth exactly its total.
+     * exact: the whole line is worth exactly its total. Computed as
+     * `line_total × units ÷ quantity` at guard precision, then truncated to
+     * scale — bcmath's own truncation is exactly a floor for a non-negative
+     * value.
      */
-    protected function worth(OrderItem $line, int $units): int
+    protected function worth(OrderItem $line, int $units): Money
     {
         $units = min($units, $line->quantity);
+        $currency = $line->line_total->currency;
+        $scale = $currency->scale();
 
-        return intdiv($line->line_total_minor->minorUnits * $units, $line->quantity);
+        $product = bcmul($line->line_total->toDecimal(), (string) $units, self::RATIO_GUARD_SCALE);
+        $exact = bcdiv($product, (string) $line->quantity, self::RATIO_GUARD_SCALE);
+        $floored = bcadd($exact, '0', $scale);
+
+        return Money::fromDecimal($floored, $currency);
     }
 
     /**

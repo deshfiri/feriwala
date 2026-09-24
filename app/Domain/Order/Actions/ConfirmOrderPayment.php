@@ -73,7 +73,7 @@ class ConfirmOrderPayment
             $this->log->channel('payment')->critical('Settled an order payment with no order', [
                 'payment' => $payment->reference,
                 'business_account' => $payment->business_account_id,
-                'amount_minor' => $payment->amount_minor->minorUnits,
+                'amount' => $payment->amount->toDecimal(),
             ]);
 
             $this->record($payment, 'order_missing');
@@ -232,7 +232,7 @@ class ConfirmOrderPayment
             'order' => $order->reference,
             'payment' => $payment->reference,
             'business_account' => $payment->business_account_id,
-            'amount_minor' => $payment->amount_minor->minorUnits,
+            'amount' => $payment->amount->toDecimal(),
             'problem' => $problem,
         ]);
 
@@ -249,7 +249,7 @@ class ConfirmOrderPayment
             direction: PaymentLog::OUTBOUND,
             event: 'settle',
             payment: $payment,
-            amount: $payment->amount_minor,
+            amount: $payment->amount,
             outcome: $outcome,
             context: $context,
         );

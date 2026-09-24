@@ -65,7 +65,7 @@ class ReturnEligibility
                 'sold' => $item->quantity,
                 'returned' => $returned,
                 'returnable' => max(0, $item->quantity - $returned),
-                'unit_price' => $item->unit_price_minor->jsonSerialize(),
+                'unit_price' => $item->unit_price->jsonSerialize(),
             ];
         }
 

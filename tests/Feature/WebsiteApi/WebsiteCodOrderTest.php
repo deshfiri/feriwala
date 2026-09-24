@@ -29,6 +29,8 @@ use App\Domain\Website\Models\WebsiteProduct;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
 use App\Integrations\Sms\Data\SmsResult;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -104,7 +106,7 @@ function codTestSelection(Website $website): WebsiteProduct
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
 }
@@ -125,19 +127,19 @@ function codTestStock(WebsiteProduct $selection, int $units): StockItem
  */
 function codTestBody(array $overrides = []): array
 {
-    $money = fn (int $minor) => ['minor_units' => $minor, 'currency' => 'BDT'];
+    $money = fn (string $amount) => ['amount' => $amount, 'currency' => 'BDT'];
 
     return array_replace_recursive([
         'storefront_order_reference' => 'SF-COD-'.Str::upper(Str::random(5)),
         'customer' => ['name' => 'Ayesha Rahman', 'phone' => '01712-345678', 'is_guest' => true],
         'shipping_address' => ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'],
-        'items' => [['sku' => test()->selection->product->sku, 'quantity' => 2, 'unit_price' => $money(260000)]],
+        'items' => [['sku' => test()->selection->product->sku, 'quantity' => 2, 'unit_price' => $money('2600.00')]],
         'totals' => [
-            'subtotal' => $money(520000),
-            'discount' => $money(0),
-            'shipping' => $money(6000),
-            'tax' => $money(0),
-            'grand_total' => $money(526000),
+            'subtotal' => $money('5200.00'),
+            'discount' => $money('0.00'),
+            'shipping' => $money('60.00'),
+            'tax' => $money('0.00'),
+            'grand_total' => $money('5260.00'),
         ],
         'payment' => ['method' => 'cod'],
     ], $overrides);
@@ -227,18 +229,18 @@ describe('taking a cash-on-delivery order', function () {
     });
 
     it('refuses an order above what may be taken on delivery', function () {
-        $this->website->forceFill(['payment_config' => ['cod' => ['maximum_minor' => 500000]]])->save();
+        $this->website->forceFill(['payment_config' => ['cod' => ['maximum_amount' => '5000.00']]])->save();
 
         codTestSubmit()
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'cod_limit_exceeded')
-            ->assertJsonPath('error.details.maximum.minor_units', 500000);
+            ->assertJsonPath('error.details.maximum.amount', '5000.00');
 
         expect(Order::query()->count())->toBe(0);
     });
 
     it('prices and stocks it exactly as any other order', function () {
-        codTestSubmit(['totals' => ['grand_total' => ['minor_units' => 999]]])
+        codTestSubmit(['totals' => ['grand_total' => ['amount' => '9.99']]])
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'price_mismatch');
 
@@ -247,8 +249,8 @@ describe('taking a cash-on-delivery order', function () {
             ->assertJsonPath('error.code', 'invalid_mobile_number');
 
         codTestSubmit([
-            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 50, 'unit_price' => ['minor_units' => 260000, 'currency' => 'BDT']]],
-            'totals' => ['subtotal' => ['minor_units' => 13000000], 'grand_total' => ['minor_units' => 13006000]],
+            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 50, 'unit_price' => ['amount' => '2600.00', 'currency' => 'BDT']]],
+            'totals' => ['subtotal' => ['amount' => '130000.00'], 'grand_total' => ['amount' => '130060.00']],
         ])
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'insufficient_stock');

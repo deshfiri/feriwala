@@ -161,13 +161,13 @@ class OrderReturnController extends Controller
                     'disposition' => $item->disposition?->value,
                     'warehouse' => $item->warehouse === null ? null : $item->warehouse->code.' · '.$item->warehouse->name,
                     'restored' => $item->isRestored(),
-                    'unit_price' => $item->orderItem->unit_price_minor->jsonSerialize(),
-                    'refund_amount' => $item->refund_amount_minor?->jsonSerialize(),
+                    'unit_price' => $item->orderItem->unit_price->jsonSerialize(),
+                    'refund_amount' => $item->refund_amount?->jsonSerialize(),
                 ])->all(),
                 'refund' => [
                     'state' => $record->refund_state->value,
                     'tone' => $record->refund_state->tone(),
-                    'amount' => $record->refund_amount_minor?->jsonSerialize(),
+                    'amount' => $record->refund_amount?->jsonSerialize(),
                     // A key when the system wrote it, a person's words when a person did.
                     'note' => $record->refund_note === null ? null : (string) __($record->refund_note),
                     'refunded_at' => $record->refunded_at?->toIso8601String(),

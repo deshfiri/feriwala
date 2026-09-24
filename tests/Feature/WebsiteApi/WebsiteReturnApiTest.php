@@ -63,7 +63,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
 
@@ -77,7 +77,7 @@ beforeEach(function () {
  */
 function returnApiDeliveredOrder(bool $deliver = true): Order
 {
-    $money = fn (int $minor) => Money::of($minor, Currency::BDT);
+    $money = fn (string $decimal) => Money::fromDecimal($decimal, Currency::BDT);
     $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
 
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
@@ -87,13 +87,13 @@ function returnApiDeliveredOrder(bool $deliver = true): Order
         shippingAddress: $address,
         billingAddress: $address,
         items: [['sku' => test()->selection->product->sku, 'quantity' => 2]],
-        claimedUnitPrices: [$money(260000)],
+        claimedUnitPrices: [$money('2600.00')],
         claimedTotals: [
-            'subtotal' => $money(520000),
-            'discount' => $money(0),
-            'shipping' => $money(0),
-            'tax' => $money(0),
-            'grand_total' => $money(520000),
+            'subtotal' => $money('5200.00'),
+            'discount' => $money('0.00'),
+            'shipping' => $money('0.00'),
+            'tax' => $money('0.00'),
+            'grand_total' => $money('5200.00'),
         ],
         paymentMethod: 'cod',
     ));

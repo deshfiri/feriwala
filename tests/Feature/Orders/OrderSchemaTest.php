@@ -18,6 +18,7 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Wholesale\Models\Cart;
+use App\Support\Money\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -38,7 +39,7 @@ function orderSchemaProduct(): Product
         'name' => 'Electric kettle',
         'sku' => 'FW-KT-'.Str::upper(Str::random(6)),
         'category_id' => Category::create(['name' => 'Kitchen '.Str::random(6)])->id,
-        'wholesale_price_minor' => 200000,
+        'wholesale_price' => Money::fromDecimal('2000.00'),
         'status' => ProductStatus::Active,
         'wholesale_status' => ProductStatus::WholesaleEnabled,
         'package_scope' => PackageScope::AllPackages,
@@ -60,11 +61,11 @@ function orderSchemaLine(Order $order, Product $product, array $overrides = []):
         'product_name' => $product->name,
         'quantity' => 10,
         'currency_code' => 'BDT',
-        'unit_price_minor' => 10000,
-        'line_subtotal_minor' => 100000,
-        'discount_minor' => 5000,
-        'tax_minor' => 14250,
-        'line_total_minor' => 109250,
+        'unit_price' => '100.00',
+        'line_subtotal' => '1000.00',
+        'discount' => '50.00',
+        'tax' => '142.50',
+        'line_total' => '1092.50',
         'created_at' => now(),
         ...$overrides,
     ];
@@ -84,7 +85,7 @@ it('keeps every field §18 makes mandatory on a wholesale order', function () {
         ->and($order->customer)->toHaveKeys(['business_name', 'contact_name', 'email', 'mobile'])
         ->and($order->billing_address)->toHaveKey('city', 'Dhaka')
         ->and($order->shipping_address)->toHaveKey('country', 'BD')
-        ->and($order->total_minor->minorUnits)->toBe(100000)
+        ->and($order->total->toDecimal())->toBe('1000.00')
         ->and($order->fulfillment_status)->toBe(OrderFulfillmentStatus::Unfulfilled)
         ->and($order->courier_status)->toBe(OrderCourierStatus::Unassigned)
         ->and($order->delivery_status)->toBe(OrderDeliveryStatus::NotShipped)
@@ -179,8 +180,8 @@ describe('one payment, one order', function () {
             'business_account_id' => $order->business_account_id,
             'purpose' => PaymentPurpose::WholesaleOrder,
             'status' => PaymentStatus::Draft,
-            'amount_minor' => 100000,
             'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal('1000.00'),
             'payable_type' => $order->getMorphClass(),
             'payable_id' => $order->id,
         ]))->toThrow(QueryException::class, 'payments_one_wholesale_payment_per_order');
@@ -221,9 +222,9 @@ describe('the figures', function () {
     it('refuses totals that do not add up, and negative amounts', function (array $figures, string $constraint) {
         expect(fn () => Order::factory()->create($figures))->toThrow(QueryException::class, $constraint);
     })->with([
-        'a total that is not the sum' => [['subtotal_minor' => 100000, 'total_minor' => 99999], 'orders_total_adds_up'],
-        'a discount above the subtotal' => [['subtotal_minor' => 100000, 'discount_minor' => 100001, 'total_minor' => 0], 'orders_discount_within_subtotal'],
-        'a negative delivery charge' => [['delivery_minor' => -1, 'total_minor' => 99999], 'orders_amounts_not_negative'],
+        'a total that is not the sum' => [['subtotal' => Money::fromDecimal('1000.00'), 'total' => Money::fromDecimal('999.99')], 'orders_total_adds_up'],
+        'a discount above the subtotal' => [['subtotal' => Money::fromDecimal('1000.00'), 'discount' => Money::fromDecimal('1000.01'), 'total' => Money::zero()], 'orders_discount_within_subtotal'],
+        'a negative delivery charge' => [['delivery' => Money::fromDecimal('-0.01'), 'total' => Money::fromDecimal('999.99')], 'orders_amounts_not_negative'],
     ]);
 
     it('fixes what was bought, for how much and where it goes, once the order is placed', function (array $change) {
@@ -232,7 +233,7 @@ describe('the figures', function () {
         expect(fn () => DB::table('orders')->where('id', $order->id)->update($change))
             ->toThrow(QueryException::class, 'cannot be changed once written');
     })->with([
-        'the total' => [['subtotal_minor' => 1, 'total_minor' => 1]],
+        'the total' => [['subtotal' => '0.01', 'total' => '0.01']],
         'the shipping address' => [['shipping_address' => json_encode(['city' => 'Elsewhere'])]],
         'the payment' => [['payment_id' => null]],
         'the source' => [['source' => 'website', 'payment_id' => null]],
@@ -294,10 +295,10 @@ describe('order lines', function () {
         $line = $order->items()->sole();
 
         expect($line->quantity)->toBe(10)
-            ->and($line->line_total_minor->minorUnits)->toBe(109250)
+            ->and($line->line_total->toDecimal())->toBe('1092.50')
             ->and(fn () => $line->forceFill(['quantity' => 11])->save())->toThrow(LogicException::class)
             // Each refusal inside its own savepoint, so one does not abort the next.
-            ->and(fn () => DB::transaction(fn () => DB::table('order_items')->where('id', $line->id)->update(['unit_price_minor' => 1])))->toThrow(QueryException::class, 'snapshot')
+            ->and(fn () => DB::transaction(fn () => DB::table('order_items')->where('id', $line->id)->update(['unit_price' => '0.01'])))->toThrow(QueryException::class, 'snapshot')
             ->and(fn () => DB::transaction(fn () => DB::table('order_items')->where('id', $line->id)->delete()))->toThrow(QueryException::class, 'snapshot');
     });
 
@@ -308,9 +309,9 @@ describe('order lines', function () {
         expect(fn () => DB::table('order_items')->insert(orderSchemaLine($order, $product, $overrides($product))))
             ->toThrow(QueryException::class, $constraint);
     })->with([
-        'no units' => [fn () => ['quantity' => 0, 'line_subtotal_minor' => 0, 'discount_minor' => 0, 'tax_minor' => 0, 'line_total_minor' => 0], 'order_items_quantity_positive'],
-        'a subtotal that is not quantity times price' => [fn () => ['line_subtotal_minor' => 100001], 'order_items_subtotal_adds_up'],
-        'a total that is not the sum' => [fn () => ['line_total_minor' => 109251], 'order_items_total_adds_up'],
+        'no units' => [fn () => ['quantity' => 0, 'line_subtotal' => '0.00', 'discount' => '0.00', 'tax' => '0.00', 'line_total' => '0.00'], 'order_items_quantity_positive'],
+        'a subtotal that is not quantity times price' => [fn () => ['line_subtotal' => '1000.01'], 'order_items_subtotal_adds_up'],
+        'a total that is not the sum' => [fn () => ['line_total' => '1092.51'], 'order_items_total_adds_up'],
         'a variation of another product' => [function () {
             $other = orderSchemaProduct();
             $variant = ProductVariant::create(['product_id' => $other->id, 'sku' => $other->sku.'-M', 'combination_key' => 'm', 'is_active' => true]);

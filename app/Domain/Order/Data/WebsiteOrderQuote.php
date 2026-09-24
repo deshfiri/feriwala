@@ -80,6 +80,6 @@ readonly class WebsiteOrderQuote
     /** Equal amounts in the same currency; one poisha is a difference. */
     protected function same(Money $claimed, Money $actual): bool
     {
-        return $claimed->currency === $actual->currency && $claimed->minorUnits === $actual->minorUnits;
+        return $claimed->currency === $actual->currency && $claimed->equals($actual);
     }
 }

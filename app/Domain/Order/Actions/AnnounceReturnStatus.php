@@ -54,7 +54,7 @@ class AnnounceReturnStatus
                 'status' => $return->status->value,
                 'reason' => $return->reason->value,
                 'refund_state' => $return->refund_state->value,
-                'refund_amount' => $return->refund_amount_minor?->jsonSerialize(),
+                'refund_amount' => $return->refund_amount?->jsonSerialize(),
                 'updated_at' => $return->updated_at?->toIso8601String(),
                 'lines' => $return->items->map(fn (OrderReturnItem $item) => [
                     'sku' => $item->orderItem->sku,

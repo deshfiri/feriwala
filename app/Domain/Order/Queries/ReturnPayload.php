@@ -47,7 +47,7 @@ class ReturnPayload
             ])->all(),
             'refund' => [
                 'state' => $return->refund_state->value,
-                'amount' => $return->refund_amount_minor?->jsonSerialize(),
+                'amount' => $return->refund_amount?->jsonSerialize(),
                 'refunded_at' => $return->refunded_at?->toIso8601String(),
             ],
             'timeline' => $return->statusHistory

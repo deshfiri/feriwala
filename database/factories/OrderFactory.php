@@ -9,6 +9,7 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
+use App\Support\Money\Money;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -51,8 +52,8 @@ class OrderFactory extends Factory
                 'business_account_id' => $attributes['business_account_id'],
                 'purpose' => PaymentPurpose::WholesaleOrder,
                 'status' => PaymentStatus::Draft,
-                'amount_minor' => 100000,
                 'currency_code' => 'BDT',
+                'amount' => Money::fromDecimal('1000.00'),
             ])->id,
             'idempotency_key' => fn () => 'wholesale-order:'.Str::ulid(),
             'customer' => fn (array $attributes) => [
@@ -64,8 +65,8 @@ class OrderFactory extends Factory
             'billing_address' => $address,
             'shipping_address' => $address,
             'currency_code' => 'BDT',
-            'subtotal_minor' => 100000,
-            'total_minor' => 100000,
+            'subtotal' => Money::fromDecimal('1000.00'),
+            'total' => Money::fromDecimal('1000.00'),
             'placed_at' => now(),
         ];
     }

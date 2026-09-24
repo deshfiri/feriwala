@@ -39,7 +39,7 @@ use RuntimeException;
  * @property int|null $stock_movement_id
  * @property int|null $supplier_stock_movement_id
  * @property CarbonImmutable|null $restored_at
- * @property Money|null $refund_amount_minor
+ * @property Money|null $refund_amount
  * @property string $currency_code
  * @property-read OrderReturn $orderReturn
  * @property-read OrderItem $orderItem
@@ -70,7 +70,7 @@ class OrderReturnItem extends Model
             'approved_quantity' => 'integer',
             'received_quantity' => 'integer',
             'disposition' => ReturnDisposition::class,
-            'refund_amount_minor' => MoneyCast::class,
+            'refund_amount' => MoneyCast::class,
             'restored_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',

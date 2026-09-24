@@ -82,7 +82,7 @@ function websiteOrderScreensSelection(Website $website): WebsiteProduct
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
 
@@ -98,7 +98,7 @@ function websiteOrderScreensSelection(Website $website): WebsiteProduct
 function websiteOrderScreensOrder(Website $website, string $reference, string $paymentMethod = 'online'): Order
 {
     $selection = WebsiteProduct::query()->where('website_id', $website->id)->firstOrFail();
-    $money = fn (int $minor) => Money::of($minor, Currency::BDT);
+    $money = fn (string $decimal) => Money::fromDecimal($decimal, Currency::BDT);
 
     $address = [
         'line1' => 'House 12, Road 5',
@@ -120,13 +120,13 @@ function websiteOrderScreensOrder(Website $website, string $reference, string $p
         shippingAddress: $address,
         billingAddress: $address,
         items: [['sku' => $selection->product->sku, 'quantity' => 2]],
-        claimedUnitPrices: [$money(260000)],
+        claimedUnitPrices: [$money('2600.00')],
         claimedTotals: [
-            'subtotal' => $money(520000),
-            'discount' => $money(0),
-            'shipping' => $money(6000),
-            'tax' => $money(0),
-            'grand_total' => $money(526000),
+            'subtotal' => $money('5200.00'),
+            'discount' => $money('0.00'),
+            'shipping' => $money('60.00'),
+            'tax' => $money('0.00'),
+            'grand_total' => $money('5260.00'),
         ],
         paymentMethod: $paymentMethod,
         customerNote: 'Please call before delivery.',
@@ -169,7 +169,7 @@ describe('the list', function () {
                 ->where('order.reference', $this->order->reference)
                 ->where('order.customer_details.mobile', $this->order->customer['mobile'])
                 ->where('order.shipping_address.city', 'Dhaka')
-                ->where('order.totals.total.minor_units', 526000)
+                ->where('order.totals.total.amount', '5260.00')
                 ->has('order.lines', 1)
                 ->where('order.lines.0.quantity', 2)
                 ->where('order.lines.0.reservation.status', 'active')

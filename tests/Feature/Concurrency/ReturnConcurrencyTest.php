@@ -98,8 +98,8 @@ beforeEach(function () {
 
     $this->fee = FeeRule::create([
         'fee_type' => FeeType::WebsiteDelivery->value,
-        'amount_minor' => 0,
         'currency_code' => 'BDT',
+        'amount' => Money::zero(),
         'effective_from' => now()->subDay(),
     ]);
 
@@ -115,7 +115,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00'),
         'published_at' => now(),
     ]);
 
@@ -211,7 +211,9 @@ afterEach(function () {
  */
 function returnRaceApprovedReturn(): OrderReturn
 {
-    $money = fn (int $minor) => Money::of($minor, Currency::BDT);
+    // Kept as a poisha-shorthand closure so the call sites below need no
+    // change: converted to exact Taka once, here, via bcmath (D26).
+    $money = fn (int $minor) => Money::fromDecimal(bcdiv((string) $minor, '100', 2), Currency::BDT);
     $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
 
     /** @var Order $order */
@@ -367,7 +369,7 @@ it('opens one refund for a return, however many workers start it', function () {
 
     // One request for 5,200 taka — two of the three — never two, never 10,400.
     expect($refunds)->toHaveCount(1)
-        ->and((int) $refunds->first()->amount_minor)->toBe(520000)
+        ->and((string) $refunds->first()->amount)->toBe('5200.00')
         ->and($return->refund_state)->toBe(ReturnRefundState::Pending)
         ->and($return->refund_request_id)->toBe($refunds->first()->id)
         ->and(DB::table('audit_logs')->where('action', 'order_return.refund_started')->where('auditable_id', $return->id)->count())->toBe(1);

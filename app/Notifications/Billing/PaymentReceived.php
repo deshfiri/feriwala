@@ -79,7 +79,7 @@ class PaymentReceived extends Notification implements ShouldQueue
         return [
             'event' => 'payment.received',
             'reference' => $this->reference,
-            'amount_minor' => $this->amount->minorUnits,
+            'amount' => $this->amount->toDecimal(),
             'currency' => $this->amount->currency->value,
         ];
     }

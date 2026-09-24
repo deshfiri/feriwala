@@ -12,6 +12,8 @@ use App\Domain\Tax\Enums\TaxMode;
 use App\Domain\Tax\Enums\TaxScope;
 use App\Domain\Tax\Models\TaxRate;
 use App\Domain\Tax\Models\TaxRule;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Log;
@@ -31,8 +33,8 @@ function taxSettingsPackage(): Package
     return Package::create([
         'slug' => 'tax-'.Str::lower(Str::random(8)),
         'name' => 'Growth',
-        'fee_minor' => 500000,
-        'registration_fee_minor' => 100000,
+        'fee' => Money::fromDecimal('5000.00', Currency::BDT),
+        'registration_fee' => Money::fromDecimal('1000.00', Currency::BDT),
         'currency_code' => 'BDT',
         'is_active' => true,
         'is_public' => true,
@@ -51,8 +53,8 @@ describe('never applying a rule that does not stand', function () {
 
         $quote = app(CalculateActivationQuote::class)->handle(taxSettingsPackage());
 
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(0)
-            ->and($quote->total()->minorUnits)->toBe(600000);
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('0.00')
+            ->and($quote->total()->toDecimal())->toBe('6000.00');
     });
 
     it('charges nothing for a rule that has not started', function () {
@@ -61,7 +63,7 @@ describe('never applying a rule that does not stand', function () {
 
         $quote = app(CalculateActivationQuote::class)->handle(taxSettingsPackage());
 
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(0);
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('0.00');
     });
 
     it('charges nothing for a rule whose window has closed', function () {
@@ -70,7 +72,7 @@ describe('never applying a rule that does not stand', function () {
 
         $quote = app(CalculateActivationQuote::class)->handle(taxSettingsPackage());
 
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(0);
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('0.00');
     });
 
     it('says so when a live rule names a rate that is no longer in force', function () {
@@ -86,7 +88,7 @@ describe('never applying a rule that does not stand', function () {
 
         $quote = app(CalculateActivationQuote::class)->handle(taxSettingsPackage());
 
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(0);
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('0.00');
 
         Log::shouldHaveReceived('warning')
             ->withArgs(fn (string $message) => str_contains($message, 'no rate in force'));
@@ -104,8 +106,8 @@ describe('never applying a rule that does not stand', function () {
         $now = $quotes->handle($package);
         $then = $quotes->handle($package, at: CarbonImmutable::instance(now())->subDays(60));
 
-        expect($now->amountFor(AllocationType::Tax)->minorUnits)->toBe(72000)
-            ->and($then->amountFor(AllocationType::Tax)->minorUnits)->toBe(90000);
+        expect($now->amountFor(AllocationType::Tax)->toDecimal())->toBe('720.00')
+            ->and($then->amountFor(AllocationType::Tax)->toDecimal())->toBe('900.00');
     });
 });
 
@@ -225,8 +227,8 @@ describe('managing rules', function () {
 
         $quote = app(CalculateActivationQuote::class)->handle(taxSettingsPackage());
 
-        // Registration at 5% = 5,000; package at 15% = 75,000.
-        expect($quote->amountFor(AllocationType::Tax)->minorUnits)->toBe(80000);
+        // Registration at 5% = 50.00; package at 15% = 750.00.
+        expect($quote->amountFor(AllocationType::Tax)->toDecimal())->toBe('800.00');
     });
 
     it('closes a rule by dating it rather than deleting it', function () {
@@ -318,7 +320,7 @@ describe('the billing screen', function () {
 describe('the applicant checkout', function () {
     beforeEach(function () {
         $settings = app(SettingsRepository::class);
-        $settings->define('billing.registration_fee', 'billing', SettingType::Money, 100000);
+        $settings->define('billing.registration_fee', 'billing', SettingType::Money, '1000.00');
         $settings->define('billing.gateway_charge_percent', 'billing', SettingType::Decimal, '0');
 
         $this->account = testBusinessAccount(AccountStatus::PackageSelectionPending);
@@ -327,7 +329,7 @@ describe('the applicant checkout', function () {
         $this->package = Package::create([
             'name' => 'Growth',
             'slug' => 'growth',
-            'fee_minor' => 500000,
+            'fee' => Money::fromDecimal('5000.00', Currency::BDT),
             'validity_days' => 365,
         ]);
 
@@ -347,9 +349,9 @@ describe('the applicant checkout', function () {
                 ->component('onboarding/checkout')
                 ->has('quote.tax', 1)
                 ->where('quote.tax.0.label', 'VAT (15%)')
-                ->where('quote.tax.0.net.minor_units', 600000)
-                ->where('quote.tax.0.tax.minor_units', 90000)
-                ->where('quote.total.minor_units', 690000),
+                ->where('quote.tax.0.net.amount', '6000.00')
+                ->where('quote.tax.0.tax.amount', '900.00')
+                ->where('quote.total.amount', '6900.00'),
             );
     });
 
@@ -359,7 +361,7 @@ describe('the applicant checkout', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->has('quote.tax', 0)
-                ->where('quote.total.minor_units', 600000),
+                ->where('quote.total.amount', '6000.00'),
             );
     });
 
@@ -372,8 +374,8 @@ describe('the applicant checkout', function () {
             ->get(route('checkout.show'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('quote.tax', 1)
-                ->where('quote.total.minor_units', 600000)
-                ->where('quote.tax_included.minor_units', 78260),
+                ->where('quote.total.amount', '6000.00')
+                ->where('quote.tax_included.amount', '782.60'),
             );
     });
 });

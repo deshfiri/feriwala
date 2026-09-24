@@ -59,7 +59,7 @@ use RuntimeException;
  * @property CarbonImmutable|null $cancelled_at
  * @property ReturnRefundState $refund_state
  * @property int|null $refund_request_id
- * @property Money|null $refund_amount_minor
+ * @property Money|null $refund_amount
  * @property string $currency_code
  * @property string|null $refund_note
  * @property string|null $idempotency_key
@@ -101,7 +101,7 @@ class OrderReturn extends Model
             'reason' => ReturnReason::class,
             'refund_state' => ReturnRefundState::class,
             'evidence' => 'array',
-            'refund_amount_minor' => MoneyCast::class,
+            'refund_amount' => MoneyCast::class,
             'requested_at' => 'immutable_datetime',
             'decided_at' => 'immutable_datetime',
             'received_at' => 'immutable_datetime',

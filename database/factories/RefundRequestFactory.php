@@ -6,6 +6,7 @@ use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\Refundability;
 use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\RefundRequest;
+use App\Support\Money\Money;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -22,8 +23,8 @@ class RefundRequestFactory extends Factory
     {
         return [
             'allocation_type' => AllocationType::PackageFee,
-            'amount_minor' => 500000,
             'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal('5000.00'),
             'refundability' => Refundability::BeforeActivation,
             'status' => RefundStatus::Requested,
             'reason' => 'Changed their mind before activation.',

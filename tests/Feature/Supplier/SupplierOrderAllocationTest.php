@@ -114,7 +114,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 130000,
+        'price' => Money::fromDecimal('1300.00', Currency::BDT),
         'published_at' => now(),
     ]);
 });
@@ -126,9 +126,9 @@ beforeEach(function () {
  */
 function supplierOrderPlace(WebsiteProduct $selection, int $quantity = 1, string $method = 'online', ?string $reference = null): Order
 {
-    $unit = $selection->price_minor->minorUnits;
-    $subtotal = $unit * $quantity;
-    $delivery = 6000;
+    $unit = $selection->price;
+    $subtotal = $unit->multipliedBy($quantity);
+    $delivery = Money::fromDecimal('60.00', Currency::BDT);
 
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
         reference: $reference ?? 'SF-ALLOC-'.Str::upper(Str::random(6)),
@@ -137,13 +137,13 @@ function supplierOrderPlace(WebsiteProduct $selection, int $quantity = 1, string
         shippingAddress: ['line1' => 'House 4', 'city' => 'Dhaka', 'country' => 'BD'],
         billingAddress: ['line1' => 'House 4', 'city' => 'Dhaka', 'country' => 'BD'],
         items: [['sku' => $selection->product->sku, 'quantity' => $quantity]],
-        claimedUnitPrices: [Money::of($unit, Currency::BDT)],
+        claimedUnitPrices: [$unit],
         claimedTotals: [
-            'subtotal' => Money::of($subtotal, Currency::BDT),
-            'discount' => Money::of(0, Currency::BDT),
-            'shipping' => Money::of($delivery, Currency::BDT),
-            'tax' => Money::of(0, Currency::BDT),
-            'grand_total' => Money::of($subtotal + $delivery, Currency::BDT),
+            'subtotal' => $subtotal,
+            'discount' => Money::zero(Currency::BDT),
+            'shipping' => $delivery,
+            'tax' => Money::zero(Currency::BDT),
+            'grand_total' => $subtotal->plus($delivery),
         ],
         paymentMethod: $method,
     ));
@@ -173,8 +173,8 @@ function supplierOrderPay(Order $order): void
     // The gateway is asked to confirm this exact payment's amount — set here
     // so the fake in beforeEach answers with the figure this order actually
     // comes to, whatever quantity a given test placed.
-    test()->validation['currency_amount'] = $payment->amount_minor->toDecimal();
-    test()->validation['currency_type'] = $payment->amount_minor->currency->value;
+    test()->validation['currency_amount'] = $payment->amount->toDecimal();
+    test()->validation['currency_type'] = $payment->amount->currency->value;
 
     test()->post(route('webhooks.payment', 'sslcommerz'), supplierOrderIpn((string) $payment->reference));
 }
@@ -295,14 +295,14 @@ describe('allocation', function () {
             'status' => WebsiteProductStatus::Published,
             'sync_status' => WebsiteSyncStatus::Pending,
             'currency_code' => 'BDT',
-            'price_minor' => 70000,
+            'price' => Money::fromDecimal('700.00', Currency::BDT),
             'published_at' => now(),
         ]);
 
-        $unit1 = $this->selection->price_minor->minorUnits;
-        $unit2 = $secondSelection->price_minor->minorUnits;
-        $subtotal = $unit1 + $unit2;
-        $delivery = 6000;
+        $unit1 = $this->selection->price;
+        $unit2 = $secondSelection->price;
+        $subtotal = $unit1->plus($unit2);
+        $delivery = Money::fromDecimal('60.00', Currency::BDT);
 
         [$order] = app(PlaceWebsiteOrder::class)->handle($this->website, new WebsiteOrderSubmission(
             reference: 'SF-MULTI-'.Str::upper(Str::random(6)),
@@ -314,13 +314,13 @@ describe('allocation', function () {
                 ['sku' => $this->product->sku, 'quantity' => 1],
                 ['sku' => $secondProduct->sku, 'quantity' => 1],
             ],
-            claimedUnitPrices: [Money::of($unit1, Currency::BDT), Money::of($unit2, Currency::BDT)],
+            claimedUnitPrices: [$unit1, $unit2],
             claimedTotals: [
-                'subtotal' => Money::of($subtotal, Currency::BDT),
-                'discount' => Money::of(0, Currency::BDT),
-                'shipping' => Money::of($delivery, Currency::BDT),
-                'tax' => Money::of(0, Currency::BDT),
-                'grand_total' => Money::of($subtotal + $delivery, Currency::BDT),
+                'subtotal' => $subtotal,
+                'discount' => Money::zero(Currency::BDT),
+                'shipping' => $delivery,
+                'tax' => Money::zero(Currency::BDT),
+                'grand_total' => $subtotal->plus($delivery),
             ],
             paymentMethod: 'online',
         ));
@@ -348,14 +348,14 @@ describe('allocation', function () {
             'status' => WebsiteProductStatus::Published,
             'sync_status' => WebsiteSyncStatus::Pending,
             'currency_code' => 'BDT',
-            'price_minor' => 50000,
+            'price' => Money::fromDecimal('500.00', Currency::BDT),
             'published_at' => now(),
         ]);
 
-        $unit1 = $this->selection->price_minor->minorUnits;
-        $unit2 = $centralSelection->price_minor->minorUnits;
-        $subtotal = $unit1 + $unit2;
-        $delivery = 6000;
+        $unit1 = $this->selection->price;
+        $unit2 = $centralSelection->price;
+        $subtotal = $unit1->plus($unit2);
+        $delivery = Money::fromDecimal('60.00', Currency::BDT);
 
         [$order] = app(PlaceWebsiteOrder::class)->handle($this->website, new WebsiteOrderSubmission(
             reference: 'SF-LEGACY-'.Str::upper(Str::random(6)),
@@ -367,13 +367,13 @@ describe('allocation', function () {
                 ['sku' => $this->product->sku, 'quantity' => 1],
                 ['sku' => $centralProduct->sku, 'quantity' => 1],
             ],
-            claimedUnitPrices: [Money::of($unit1, Currency::BDT), Money::of($unit2, Currency::BDT)],
+            claimedUnitPrices: [$unit1, $unit2],
             claimedTotals: [
-                'subtotal' => Money::of($subtotal, Currency::BDT),
-                'discount' => Money::of(0, Currency::BDT),
-                'shipping' => Money::of($delivery, Currency::BDT),
-                'tax' => Money::of(0, Currency::BDT),
-                'grand_total' => Money::of($subtotal + $delivery, Currency::BDT),
+                'subtotal' => $subtotal,
+                'discount' => Money::zero(Currency::BDT),
+                'shipping' => $delivery,
+                'tax' => Money::zero(Currency::BDT),
+                'grand_total' => $subtotal->plus($delivery),
             ],
             paymentMethod: 'online',
         ));

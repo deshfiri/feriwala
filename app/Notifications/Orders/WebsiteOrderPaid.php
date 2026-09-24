@@ -32,7 +32,7 @@ class WebsiteOrderPaid extends Notification implements ShouldQueue
         $this->order = $order->public_id;
         $this->reference = $order->reference;
         $this->status = $order->status->value;
-        $this->total = $order->total_minor->jsonSerialize();
+        $this->total = $order->total->jsonSerialize();
     }
 
     /**

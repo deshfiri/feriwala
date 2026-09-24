@@ -88,7 +88,7 @@ class InitiateOrderPayment
 
         $gateway = (string) $payment->gateway;
 
-        if (! in_array($gateway, $this->gateways->availableFor($payment->amount_minor->currency), true)) {
+        if (! in_array($gateway, $this->gateways->availableFor($payment->amount->currency), true)) {
             throw OrderRefused::paymentMethodUnavailable();
         }
 
@@ -114,7 +114,7 @@ class InitiateOrderPayment
                 direction: PaymentLog::OUTBOUND,
                 event: 'initiate',
                 payment: $payment,
-                amount: $payment->amount_minor,
+                amount: $payment->amount,
                 outcome: 'unavailable',
                 context: ['error' => $exception->getMessage(), 'order' => $order->reference],
                 request: $request,
@@ -131,7 +131,7 @@ class InitiateOrderPayment
             event: 'initiate',
             payment: $payment,
             gatewayReference: $redirect->gatewayReference,
-            amount: $payment->amount_minor,
+            amount: $payment->amount,
             outcome: 'session_created',
             context: ['order' => $order->reference],
             request: $request,

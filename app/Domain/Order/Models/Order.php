@@ -64,13 +64,13 @@ use LogicException;
  * @property array<string, string|null>|null $billing_address
  * @property array<string, string|null>|null $shipping_address
  * @property string $currency_code
- * @property Money $subtotal_minor
- * @property Money $discount_minor
- * @property Money $delivery_minor
- * @property Money $tax_minor
- * @property Money $tax_included_minor
- * @property Money $cod_fee_minor
- * @property Money $total_minor
+ * @property Money $subtotal
+ * @property Money $discount
+ * @property Money $delivery
+ * @property Money $tax
+ * @property Money $tax_included
+ * @property Money $cod_fee
+ * @property Money $total
  * @property string|null $coupon_code
  * @property OrderFulfillmentStatus $fulfillment_status
  * @property OrderCourierStatus $courier_status
@@ -116,13 +116,13 @@ class Order extends Model
             'customer' => 'array',
             'billing_address' => 'array',
             'shipping_address' => 'array',
-            'subtotal_minor' => MoneyCast::class,
-            'discount_minor' => MoneyCast::class,
-            'delivery_minor' => MoneyCast::class,
-            'tax_minor' => MoneyCast::class,
-            'tax_included_minor' => MoneyCast::class,
-            'cod_fee_minor' => MoneyCast::class,
-            'total_minor' => MoneyCast::class,
+            'subtotal' => MoneyCast::class,
+            'discount' => MoneyCast::class,
+            'delivery' => MoneyCast::class,
+            'tax' => MoneyCast::class,
+            'tax_included' => MoneyCast::class,
+            'cod_fee' => MoneyCast::class,
+            'total' => MoneyCast::class,
             'placed_at' => 'immutable_datetime',
             'paid_at' => 'immutable_datetime',
             'cancelled_at' => 'immutable_datetime',

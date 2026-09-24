@@ -103,7 +103,7 @@ beforeEach(function () {
         'status' => WebsiteProductStatus::Published,
         'sync_status' => WebsiteSyncStatus::Pending,
         'currency_code' => 'BDT',
-        'price_minor' => 260000,
+        'price' => Money::fromDecimal('2600.00'),
         'published_at' => now(),
     ]);
 
@@ -123,7 +123,9 @@ beforeEach(function () {
  */
 function returnTestDeliveredOrder(string $method = 'online'): Order
 {
-    $money = fn (int $minor) => Money::of($minor, Currency::BDT);
+    // Kept as a poisha-shorthand closure so the call sites below need no
+    // change: converted to exact Taka once, here, via bcmath (D26).
+    $money = fn (int $minor) => Money::fromDecimal(bcdiv((string) $minor, '100', 2), Currency::BDT);
     $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
 
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
@@ -226,13 +228,13 @@ describe('asking for a return', function () {
             shippingAddress: ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'],
             billingAddress: ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'],
             items: [['sku' => $this->selection->product->sku, 'quantity' => 1]],
-            claimedUnitPrices: [Money::of(260000, Currency::BDT)],
+            claimedUnitPrices: [Money::fromDecimal('2600.00', Currency::BDT)],
             claimedTotals: [
-                'subtotal' => Money::of(260000, Currency::BDT),
-                'discount' => Money::of(0, Currency::BDT),
-                'shipping' => Money::of(6000, Currency::BDT),
-                'tax' => Money::of(0, Currency::BDT),
-                'grand_total' => Money::of(266000, Currency::BDT),
+                'subtotal' => Money::fromDecimal('2600.00', Currency::BDT),
+                'discount' => Money::zero(Currency::BDT),
+                'shipping' => Money::fromDecimal('60.00', Currency::BDT),
+                'tax' => Money::zero(Currency::BDT),
+                'grand_total' => Money::fromDecimal('2660.00', Currency::BDT),
             ],
             paymentMethod: 'cod',
         ));
@@ -454,8 +456,8 @@ describe('the money', function () {
             ->and($again->refund_request_id)->toBe($refund->id)
             ->and($refund->status)->toBe(RefundStatus::Requested)
             ->and($refund->allocation_type)->toBe(AllocationType::WebsiteGoods)
-            ->and($refund->amount_minor->minorUnits)->toBe(520000)
-            ->and($return->refund_amount_minor?->minorUnits)->toBe(520000)
+            ->and($refund->amount->toDecimal())->toBe('5200.00')
+            ->and($return->refund_amount?->toDecimal())->toBe('5200.00')
             // Started once, said once: the repeat changed nothing.
             ->and(DB::table('audit_logs')->where('action', 'order_return.refund_started')->count())->toBe(1);
 
@@ -480,7 +482,7 @@ describe('the money', function () {
         // unit price divides into — the case rounding has to get right.
         $order = returnTestDeliveredOrder();
         DB::statement('ALTER TABLE order_items DISABLE TRIGGER USER');
-        DB::table('order_items')->where('order_id', $order->id)->update(['discount_minor' => 1, 'line_total_minor' => 779999]);
+        DB::table('order_items')->where('order_id', $order->id)->update(['discount' => '0.01', 'line_total' => '7799.99']);
         DB::statement('ALTER TABLE order_items ENABLE TRIGGER USER');
 
         $amounts = [];
@@ -493,7 +495,7 @@ describe('the money', function () {
             ], $this->warehouse);
             app(RefundOrderReturn::class)->handle($this->manager, $return);
 
-            $amounts[] = $return->refresh()->refund_amount_minor?->minorUnits;
+            $amounts[] = $return->refresh()->refund_amount?->toDecimal();
 
             // Settle it so the next one is not blocked by an open request.
             $refund = $return->refundRequest;
@@ -502,8 +504,8 @@ describe('the money', function () {
         }
 
         // The first return takes the rounding down; the line still totals exactly.
-        expect($amounts)->toBe([259999, 520000])
-            ->and(array_sum($amounts))->toBe(779999);
+        expect($amounts)->toBe(['2599.99', '5200.00'])
+            ->and(bcadd($amounts[0], $amounts[1], 2))->toBe('7799.99');
     });
 
     it('marks a cash-on-delivery refund for a person, and never opens a gateway refund', function () {
@@ -517,7 +519,7 @@ describe('the money', function () {
         app(RefundOrderReturn::class)->handle($this->manager, $return);
 
         expect($return->refresh()->refund_state)->toBe(ReturnRefundState::ManualReview)
-            ->and($return->refund_amount_minor?->minorUnits)->toBe(260000)
+            ->and($return->refund_amount?->toDecimal())->toBe('2600.00')
             ->and($return->refund_note)->toBe('returns.refund_notes.cash_on_delivery')
             ->and(__($return->refund_note, [], 'bn'))->not->toBe('returns.refund_notes.cash_on_delivery')
             ->and(RefundRequest::query()->count())->toBe(0);

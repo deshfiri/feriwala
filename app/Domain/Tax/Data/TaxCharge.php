@@ -85,9 +85,9 @@ readonly class TaxCharge
             'label' => $this->label,
             'rate_basis_points' => $this->rateBasisPoints,
             'mode' => $this->mode->value,
-            'taxable_amount_minor' => $this->net->minorUnits,
-            'tax_amount_minor' => $this->tax->minorUnits,
             'currency_code' => $this->net->currency->value,
+            'taxable_amount' => $this->net,
+            'tax_amount' => $this->tax,
         ];
     }
 
