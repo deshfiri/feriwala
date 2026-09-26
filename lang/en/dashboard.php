@@ -33,12 +33,26 @@ return [
         'title' => 'Overview',
         'description' => 'What is waiting on you across the platform.',
         'empty' => 'Nothing is waiting on your permissions right now.',
+        'hero' => [
+            'attention' => ':count waiting across your queues.',
+            'clear' => 'Nothing needs your attention right now.',
+        ],
         'cards' => [
             'kyc' => 'KYC applications awaiting review',
             'activations' => 'Business activations pending',
             'orders' => 'Orders awaiting confirmation',
             'supplier_kyc' => 'Supplier applications awaiting review',
             'supplier_listings' => 'Supplier listings awaiting review',
+        ],
+        'trend' => [
+            'orders' => 'Orders',
+            'title' => 'Orders placed',
+            'description' => 'The last :days days.',
+            'empty' => 'No orders yet in this window.',
+        ],
+        'breakdown' => [
+            'title' => 'What is waiting, by queue',
+            'empty' => 'Nothing to break down yet.',
         ],
     ],
 

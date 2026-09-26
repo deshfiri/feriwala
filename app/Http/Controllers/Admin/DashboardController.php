@@ -10,6 +10,7 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Queries\DailyOrderVolume;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
@@ -36,22 +37,35 @@ use Inertia\Response;
  * own. There is no money figure here yet: a platform-wide revenue aggregate is
  * a real, separate query to get right (§36.1) rather than one assembled for
  * the first cut of this screen.
+ *
+ * The trend chart and the breakdown are real data, not invented analytics:
+ * the trend is a straight day-by-day order count ({@see DailyOrderVolume}),
+ * shown only to someone who already holds `order.view`; the breakdown is the
+ * same five card counts reshaped as a proportion of what is waiting on this
+ * viewer, so it can never disagree with the cards above it.
  */
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, PendingActivationQuery $pendingActivations): Response
+    public function __invoke(Request $request, PendingActivationQuery $pendingActivations, DailyOrderVolume $orderVolume): Response
     {
         $user = $this->actor($request);
 
+        $cards = array_values(array_filter([
+            $this->kycCard($user),
+            $this->activationsCard($user, $pendingActivations),
+            $this->ordersCard($user),
+            $this->supplierKycCard($user),
+            $this->supplierListingsCard($user),
+        ]));
+
         return Inertia::render('admin/dashboard', [
             'greeting' => $this->greeting($user),
-            'cards' => array_values(array_filter([
-                $this->kycCard($user),
-                $this->activationsCard($user, $pendingActivations),
-                $this->ordersCard($user),
-                $this->supplierKycCard($user),
-                $this->supplierListingsCard($user),
-            ])),
+            'attention' => array_sum(array_column($cards, 'value')),
+            'cards' => $cards,
+            'trend' => $user->can(PermissionCatalogue::name(PermissionModule::Order, PermissionAction::View))
+                ? [$orderVolume->series()]
+                : null,
+            'breakdown' => $this->breakdown($cards),
         ]);
     }
 
@@ -182,5 +196,28 @@ class DashboardController extends Controller
             'value' => $count,
             'href' => route('admin.supplier-listings.index'),
         ];
+    }
+
+    /**
+     * The visible cards, reshaped as a proportion of what is waiting on this
+     * viewer — the same numbers, never a separate figure that could drift
+     * from them.
+     *
+     * @param  array<int, array{key: string, label: string, value: int, href: string}>  $cards
+     * @return array<int, array{key: string, label: string, value: int, formatted: string, tone: int}>
+     */
+    protected function breakdown(array $cards): array
+    {
+        return array_map(
+            fn (array $card, int $index) => [
+                'key' => $card['key'],
+                'label' => $card['label'],
+                'value' => $card['value'],
+                'formatted' => (string) $card['value'],
+                'tone' => ($index % 5) + 1,
+            ],
+            $cards,
+            array_keys($cards),
+        );
     }
 }
