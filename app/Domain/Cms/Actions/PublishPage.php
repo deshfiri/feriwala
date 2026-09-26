@@ -23,9 +23,14 @@ use Illuminate\Support\Facades\DB;
  */
 class PublishPage
 {
-    public function handle(Page $page, ?User $actor = null, ?string $reason = null, ?CarbonInterface $publishAt = null): PageRevision
-    {
-        return DB::transaction(function () use ($page, $actor, $reason, $publishAt) {
+    public function handle(
+        Page $page,
+        ?User $actor = null,
+        ?string $reason = null,
+        ?CarbonInterface $publishAt = null,
+        ?int $restoredFromId = null,
+    ): PageRevision {
+        return DB::transaction(function () use ($page, $actor, $reason, $publishAt, $restoredFromId) {
             $page = Page::query()->whereKey($page->id)->lockForUpdate()->firstOrFail();
 
             $publishAt ??= now();
@@ -43,6 +48,7 @@ class PublishPage
                 'published_at' => $isImmediate ? $publishAt : null,
                 'created_by' => $actor?->id,
                 'reason' => $reason,
+                'restored_from_id' => $restoredFromId,
             ]);
 
             if ($isImmediate) {
@@ -51,14 +57,24 @@ class PublishPage
                         ->update(['publication_state' => RevisionPublicationState::Superseded]);
                 }
 
+                // Publishing again while already published is a no-op move,
+                // not a transition — transitionTo() refuses a state to
+                // itself, so it is only asked when the state is actually
+                // changing (§ statuses move through transitionTo()).
+                if ($page->publication_state !== PagePublicationState::Published) {
+                    $page->transitionTo(PagePublicationState::Published);
+                }
+
                 $page->forceFill([
                     'current_published_revision_id' => $revision->id,
-                    'publication_state' => PagePublicationState::Published,
                     'updated_by' => $actor?->id,
                 ])->save();
             } else {
+                if ($page->publication_state !== PagePublicationState::Scheduled) {
+                    $page->transitionTo(PagePublicationState::Scheduled);
+                }
+
                 $page->forceFill([
-                    'publication_state' => PagePublicationState::Scheduled,
                     'scheduled_publish_at' => $publishAt,
                     'updated_by' => $actor?->id,
                 ])->save();
@@ -88,19 +104,19 @@ class PublishPage
             'content' => $section->content->getArrayCopy(),
         ])->all();
 
+        $overrides = $page->seo_overrides?->getArrayCopy() ?? [];
+
         return [
             'sections' => $sections,
-            // No per-page title/description yet: null here, deliberately,
-            // so the reader's fallback chain reaches the real
-            // cms_seo_settings default rather than a placeholder value that
-            // would outrank it. Stage 7's editing UI is what gives a page
-            // its own override, once it exists.
+            // Null fields fall through to PublishedPageReader::seo()'s
+            // global cms_seo_settings default rather than a placeholder
+            // value that would outrank it.
             'seo' => [
-                'title' => null,
-                'description' => null,
-                'canonical_url' => null,
-                'og_image_url' => null,
-                'robots' => 'index, follow',
+                'title' => $overrides['title'] ?? null,
+                'description' => $overrides['description'] ?? null,
+                'canonical_url' => $overrides['canonical_url'] ?? null,
+                'og_image_url' => $overrides['og_image_url'] ?? null,
+                'robots' => $overrides['robots'] ?? 'index, follow',
             ],
         ];
     }

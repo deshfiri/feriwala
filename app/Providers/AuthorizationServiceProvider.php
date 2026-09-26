@@ -11,6 +11,10 @@ use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Account\Policies\UserPolicy;
 use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Cms\Models\SeoSetting;
+use App\Domain\Cms\Policies\CmsModelPolicy;
+use App\Domain\Cms\Policies\CmsPolicy;
+use App\Domain\Cms\Policies\SeoSettingPolicy;
 use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
@@ -80,6 +84,18 @@ class AuthorizationServiceProvider extends ServiceProvider
         foreach (CatalogPolicy::MODELS as $model) {
             Gate::policy($model, CatalogModelPolicy::class);
         }
+
+        /*
+         * The public landing page and its supporting CMS records (§4, §34)
+         * all answer to one permission set, the same way the catalogue does.
+         */
+        foreach (CmsPolicy::MODELS as $model) {
+            Gate::policy($model, CmsModelPolicy::class);
+        }
+
+        // Global SEO defaults are their own permission set, separate from
+        // ordinary page content (see SeoSettingPolicy's own doc comment).
+        Gate::policy(SeoSetting::class, SeoSettingPolicy::class);
 
         // An order is seen by the account that placed it and by staff who may
         // see orders (§18.4, §18.5).

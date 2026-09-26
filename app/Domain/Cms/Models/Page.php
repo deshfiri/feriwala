@@ -3,17 +3,21 @@
 namespace App\Domain\Cms\Models;
 
 use App\Concerns\HasPublicId;
+use App\Concerns\HasStateMachine;
 use App\Domain\Cms\Enums\PagePublicationState;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Casts\ArrayObject;
+use Illuminate\Database\Eloquent\Casts\AsArrayObject;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * A public-site page (§4, §34). Its own row tracks identity and lifecycle
- * only — everything a visitor reads lives in whichever revision
- * `currentPublishedRevision` points at (see {@see PageRevision}).
+ * A public-site page (§4, §34). Its own row tracks identity, lifecycle, and
+ * a draft-side SEO override only — everything else a visitor reads lives in
+ * whichever revision `currentPublishedRevision` points at (see
+ * {@see PageRevision}).
  *
  * @property int $id
  * @property string $public_id
@@ -24,10 +28,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $scheduled_publish_at
  * @property CarbonImmutable|null $scheduled_unpublish_at
  * @property int|null $current_published_revision_id
+ * @property ArrayObject<string, mixed>|null $seo_overrides
  */
 class Page extends Model
 {
     use HasPublicId;
+    use HasStateMachine;
 
     protected $table = 'cms_pages';
 
@@ -39,6 +45,7 @@ class Page extends Model
         'scheduled_publish_at',
         'scheduled_unpublish_at',
         'current_published_revision_id',
+        'seo_overrides',
         'created_by',
         'updated_by',
     ];
@@ -49,7 +56,13 @@ class Page extends Model
             'publication_state' => PagePublicationState::class,
             'scheduled_publish_at' => 'immutable_datetime',
             'scheduled_unpublish_at' => 'immutable_datetime',
+            'seo_overrides' => AsArrayObject::class,
         ];
+    }
+
+    public function stateAttribute(): string
+    {
+        return 'publication_state';
     }
 
     /**

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Cms\Enums;
 
+use App\Domain\Package\Enums\PackageFeature;
+
 /**
  * Every section kind the public landing page's schema supports (§4, §34).
  *
@@ -64,5 +66,39 @@ enum SectionKind: string
     public function hasRenderer(): bool
     {
         return in_array($this, self::implemented(), true);
+    }
+
+    /**
+     * A human-readable name for the admin section picker (Stage 7). Plain
+     * English, like {@see PackageFeature::label()}
+     * — an editor's-eyes-only label for choosing a kind, not content a
+     * visitor ever reads.
+     */
+    public function label(): string
+    {
+        return match ($this) {
+            self::HeaderNav => 'Header navigation',
+            self::AnnouncementStrip => 'Announcement strip',
+            self::Hero => 'Hero',
+            self::PlatformIntroduction => 'Platform introduction',
+            self::About => 'About',
+            self::Benefits => 'Benefits',
+            self::HowItWorks => 'How it works',
+            self::Dropshipping => 'Dropshipping',
+            self::Wholesale => 'Wholesale',
+            self::PartnerWebsites => 'Dedicated Partner Websites',
+            self::SupplierOpportunity => 'Supplier opportunity',
+            self::PackagePreview => 'Package preview',
+            self::FeatureGrid => 'Feature grid',
+            self::Statistics => 'Statistics',
+            self::Video => 'Video',
+            self::Testimonials => 'Testimonials',
+            self::ClientsPartners => 'Clients & partners',
+            self::Faq => 'FAQ',
+            self::Contact => 'Contact',
+            self::Cta => 'Call to action',
+            self::LegalLinks => 'Legal links',
+            self::Footer => 'Footer',
+        };
     }
 }

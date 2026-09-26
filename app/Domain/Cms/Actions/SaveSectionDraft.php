@@ -28,6 +28,8 @@ class SaveSectionDraft
         array $content,
         int $sortOrder = 0,
         bool $isEnabled = true,
+        bool $visibleOnDesktop = true,
+        bool $visibleOnMobile = true,
         ?string $variant = null,
     ): PageSection {
         $validated = $this->validator->validate($kind, $content);
@@ -38,6 +40,8 @@ class SaveSectionDraft
                 'kind' => $kind,
                 'sort_order' => $sortOrder,
                 'is_enabled' => $isEnabled,
+                'visible_on_desktop' => $visibleOnDesktop,
+                'visible_on_mobile' => $visibleOnMobile,
                 'variant' => $variant,
                 'content' => $validated,
             ],

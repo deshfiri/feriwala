@@ -38,6 +38,16 @@ enum PagePublicationState: string implements TransitionableState
         return false;
     }
 
+    public function tone(): string
+    {
+        return match ($this) {
+            self::Draft => 'neutral',
+            self::Scheduled => 'info',
+            self::Published => 'success',
+            self::Unpublished => 'warning',
+        };
+    }
+
     protected static function statusLabelGroup(): string
     {
         return 'cms_page';

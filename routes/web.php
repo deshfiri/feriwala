@@ -7,6 +7,14 @@ use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\Cms\MediaController as CmsMediaController;
+use App\Http\Controllers\Admin\Cms\MenuController as CmsMenuController;
+use App\Http\Controllers\Admin\Cms\MenuItemController as CmsMenuItemController;
+use App\Http\Controllers\Admin\Cms\PageController as CmsPageController;
+use App\Http\Controllers\Admin\Cms\PageRevisionController as CmsPageRevisionController;
+use App\Http\Controllers\Admin\Cms\PageSectionController as CmsPageSectionController;
+use App\Http\Controllers\Admin\Cms\RedirectController as CmsRedirectController;
+use App\Http\Controllers\Admin\Cms\SeoSettingController as CmsSeoSettingController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
@@ -818,6 +826,59 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.brands.position');
         Route::delete('catalog/brands/{brand}', [BrandController::class, 'destroy'])
             ->name('catalog.brands.destroy');
+
+        /*
+         * The public landing page and its supporting CMS records (§4, §34).
+         * A page's live sections are drafts until PageController::publish()
+         * freezes them into a new revision — nothing under `pages/{page}`
+         * except `publish`/`unpublish`/`revisions/*` changes what a visitor
+         * sees.
+         */
+        Route::prefix('cms')->name('cms.')->group(function () {
+            Route::get('pages', [CmsPageController::class, 'index'])->name('pages.index');
+            Route::get('pages/{page}', [CmsPageController::class, 'edit'])->name('pages.edit');
+            Route::patch('pages/{page}/meta', [CmsPageController::class, 'updateMeta'])->name('pages.meta.update');
+            Route::post('pages/{page}/publish', [CmsPageController::class, 'publish'])->name('pages.publish');
+            Route::post('pages/{page}/unpublish', [CmsPageController::class, 'unpublish'])->name('pages.unpublish');
+
+            Route::post('pages/{page}/sections', [CmsPageSectionController::class, 'store'])
+                ->name('pages.sections.store');
+            Route::patch('pages/{page}/sections/{section}', [CmsPageSectionController::class, 'update'])
+                ->name('pages.sections.update');
+            Route::post('pages/{page}/sections/reorder', [CmsPageSectionController::class, 'reorder'])
+                ->name('pages.sections.reorder');
+            Route::delete('pages/{page}/sections/{section}', [CmsPageSectionController::class, 'destroy'])
+                ->name('pages.sections.destroy');
+
+            Route::post('pages/{page}/revisions/{revision}/restore', [CmsPageRevisionController::class, 'restore'])
+                ->name('pages.revisions.restore');
+
+            Route::get('menus', [CmsMenuController::class, 'index'])->name('menus.index');
+            Route::post('menus/{location}/items', [CmsMenuItemController::class, 'store'])
+                ->name('menus.items.store');
+            Route::patch('menus/{location}/items/{item}', [CmsMenuItemController::class, 'update'])
+                ->name('menus.items.update');
+            Route::post('menus/{location}/items/reorder', [CmsMenuItemController::class, 'reorder'])
+                ->name('menus.items.reorder');
+            Route::delete('menus/{location}/items/{item}', [CmsMenuItemController::class, 'destroy'])
+                ->name('menus.items.destroy');
+
+            Route::get('redirects', [CmsRedirectController::class, 'index'])->name('redirects.index');
+            Route::post('redirects', [CmsRedirectController::class, 'store'])->name('redirects.store');
+            Route::patch('redirects/{redirect}', [CmsRedirectController::class, 'update'])->name('redirects.update');
+            Route::patch('redirects/{redirect}/active', [CmsRedirectController::class, 'setEnabled'])
+                ->name('redirects.active');
+            Route::delete('redirects/{redirect}', [CmsRedirectController::class, 'destroy'])
+                ->name('redirects.destroy');
+
+            Route::get('media', [CmsMediaController::class, 'index'])->name('media.index');
+            Route::post('media', [CmsMediaController::class, 'store'])->name('media.store');
+            Route::patch('media/{media}', [CmsMediaController::class, 'update'])->name('media.update');
+            Route::delete('media/{media}', [CmsMediaController::class, 'destroy'])->name('media.destroy');
+
+            Route::get('seo', [CmsSeoSettingController::class, 'index'])->name('seo.index');
+            Route::patch('seo/{locale}', [CmsSeoSettingController::class, 'update'])->name('seo.update');
+        });
 
         /*
          * Central products (§11.1, §12). The editor is a page of its own, and

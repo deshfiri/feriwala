@@ -38,6 +38,15 @@ enum RevisionPublicationState: string implements TransitionableState
         return $this === self::Superseded;
     }
 
+    public function tone(): string
+    {
+        return match ($this) {
+            self::Scheduled => 'info',
+            self::Published => 'success',
+            self::Superseded => 'neutral',
+        };
+    }
+
     protected static function statusLabelGroup(): string
     {
         return 'cms_revision';

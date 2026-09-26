@@ -32,6 +32,33 @@ class ManageRedirect
     }
 
     /**
+     * Changes where an existing redirect points, refusing the same chains a
+     * new one would be refused for — checked against every other row, this
+     * one excepted, since a row cannot chain into itself.
+     */
+    public function update(Redirect $redirect, string $toPath, int $statusCode = 301): Redirect
+    {
+        if ($this->wouldChain($redirect->from_path, $toPath, exceptId: $redirect->id)) {
+            throw CmsRedirectRefused::wouldChain($redirect->from_path, $toPath);
+        }
+
+        $redirect->update(['to_path' => $toPath, 'status_code' => $statusCode]);
+
+        return $redirect;
+    }
+
+    /**
+     * Switches a redirect on or off without deleting its row — an operator
+     * who needs it back does not have to remember the exact original values.
+     */
+    public function setEnabled(Redirect $redirect, bool $enabled): Redirect
+    {
+        $redirect->update(['is_enabled' => $enabled]);
+
+        return $redirect;
+    }
+
+    /**
      * Every redirect must point at a real destination, never at another
      * redirect — so a later edit to that other row can never turn this one
      * into a loop. Refused whenever an existing row would put this new one
@@ -40,10 +67,11 @@ class ManageRedirect
      * the degenerate case of that), or an existing redirect already lands on
      * this source (a chain through it backward).
      */
-    protected function wouldChain(string $fromPath, string $toPath): bool
+    protected function wouldChain(string $fromPath, string $toPath, ?int $exceptId = null): bool
     {
         return Redirect::query()
             ->where('is_enabled', true)
+            ->when($exceptId !== null, fn ($query) => $query->whereKeyNot($exceptId))
             ->where(fn ($query) => $query
                 ->where('from_path', $toPath)
                 ->orWhere('to_path', $fromPath))
