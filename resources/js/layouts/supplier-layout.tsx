@@ -21,7 +21,7 @@ import BrandingHead from '@/components/branding-head';
 import LanguageSwitcher from '@/components/language-switcher';
 import StatusPill from '@/components/status-pill';
 import { useTranslation } from '@/hooks/use-translation';
-import { cn } from '@/lib/utils';
+import { cn, toUrl } from '@/lib/utils';
 import { dashboard, logout } from '@/routes/supplier';
 import { index as allocations } from '@/routes/supplier/allocations';
 import { create as kyc } from '@/routes/supplier/kyc';
@@ -35,6 +35,7 @@ import { edit as security } from '@/routes/supplier/security';
 import { index as stock } from '@/routes/supplier/stock';
 import { show as wallet } from '@/routes/supplier/wallet';
 import { index as withdrawals } from '@/routes/supplier/withdrawals';
+import type { NavItem } from '@/types';
 
 type SupplierAccount = {
     business_name: string;
@@ -60,15 +61,22 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
     const currentPath =
         typeof window === 'undefined' ? '' : window.location.pathname;
 
-    const items = [
+    const unreadNotifications = account?.unread_notifications ?? 0;
+
+    /*
+     * Typed against the same `NavItem` the Admin/Staff and Client/Partner
+     * sidebars use (§ shared navigation registry) — a flat top nav rather than
+     * grouped, so `NavGroup` doesn't apply here, but the item shape (and the
+     * badge convention: label + tone, never colour alone, §33.9) is the one
+     * canonical shape across every portal.
+     */
+    const items: NavItem[] = [
         {
-            id: 'dashboard',
             title: t('supplier.nav.dashboard'),
             href: dashboard(),
             icon: LayoutGrid,
         },
         {
-            id: 'application',
             title: t('supplier.nav.application'),
             href: kyc(),
             icon: ShieldCheck,
@@ -76,55 +84,46 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
         ...(account?.operational
             ? [
                   {
-                      id: 'listings',
                       title: t('supplier.nav.listings'),
                       href: listings(),
                       icon: ClipboardList,
                   },
                   {
-                      id: 'products',
                       title: t('supplier.nav.products'),
                       href: offers(),
                       icon: PackageCheck,
                   },
                   {
-                      id: 'rates',
                       title: t('supplier.nav.rates'),
                       href: offers(),
                       icon: Coins,
                   },
                   {
-                      id: 'stock',
                       title: t('supplier.nav.stock'),
                       href: stock(),
                       icon: Boxes,
                   },
                   {
-                      id: 'allocations',
                       title: t('supplier.nav.allocations'),
                       href: allocations(),
                       icon: PackageSearch,
                   },
                   {
-                      id: 'payables',
                       title: t('supplier.nav.payables'),
                       href: payables(),
                       icon: Coins,
                   },
                   {
-                      id: 'wallet',
                       title: t('supplier.nav.wallet'),
                       href: wallet(),
                       icon: Wallet,
                   },
                   {
-                      id: 'payout-methods',
                       title: t('supplier.nav.payout_methods'),
                       href: payoutMethods(),
                       icon: CreditCard,
                   },
                   {
-                      id: 'withdrawals',
                       title: t('supplier.nav.withdrawals'),
                       href: withdrawals(),
                       icon: Banknote,
@@ -132,19 +131,20 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
               ]
             : []),
         {
-            id: 'notifications',
             title: t('supplier.nav.notifications'),
             href: notifications(),
             icon: Bell,
+            badge:
+                unreadNotifications > 0
+                    ? { label: String(unreadNotifications), tone: 'brand' }
+                    : undefined,
         },
         {
-            id: 'profile',
             title: t('supplier.nav.profile'),
             href: profile(),
             icon: UserCog,
         },
         {
-            id: 'security',
             title: t('supplier.nav.security'),
             href: security(),
             icon: ShieldCheck,
@@ -209,7 +209,7 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                         className="mx-auto max-w-6xl overflow-x-auto px-4 sm:px-6"
                     >
                         <ul className="flex min-w-max gap-1 pb-2">
-                            {items.map((item) => {
+                            {items.map((item, index) => {
                                 const href =
                                     typeof item.href === 'string'
                                         ? item.href
@@ -217,7 +217,7 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                                 const active = currentPath === href;
 
                                 return (
-                                    <li key={item.id}>
+                                    <li key={`${toUrl(item.href)}-${index}`}>
                                         <Link
                                             href={item.href}
                                             aria-current={
@@ -230,20 +230,18 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                                                     : 'hover:bg-background/60 text-muted-foreground',
                                             )}
                                         >
-                                            <item.icon
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
+                                            {item.icon && (
+                                                <item.icon
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                            )}
                                             {item.title}
-                                            {item.id === 'notifications' &&
-                                                (account?.unread_notifications ??
-                                                    0) > 0 && (
-                                                    <span className="bg-brand text-brand-foreground rounded-full px-1.5 text-xs">
-                                                        {
-                                                            account?.unread_notifications
-                                                        }
-                                                    </span>
-                                                )}
+                                            {item.badge && (
+                                                <span className="bg-brand text-brand-foreground rounded-full px-1.5 text-xs">
+                                                    {item.badge.label}
+                                                </span>
+                                            )}
                                         </Link>
                                     </li>
                                 );
