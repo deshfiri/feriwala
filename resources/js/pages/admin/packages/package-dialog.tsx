@@ -211,8 +211,8 @@ export default function PackageDialog({
                                             row?.validity_days === null
                                                 ? ''
                                                 : String(
-                                                      row?.validity_days ?? '',
-                                                  )
+                                                    row?.validity_days ?? '',
+                                                )
                                         }
                                         error={errors.validity_days}
                                     />
@@ -226,9 +226,9 @@ export default function PackageDialog({
                                             row?.grace_period_days === null
                                                 ? ''
                                                 : String(
-                                                      row?.grace_period_days ??
-                                                          '',
-                                                  )
+                                                    row?.grace_period_days ??
+                                                    '',
+                                                )
                                         }
                                         error={errors.grace_period_days}
                                     />
@@ -326,7 +326,7 @@ export default function PackageDialog({
                                             }
                                             error={
                                                 errors[
-                                                    `features.${feature.key}`
+                                                `features.${feature.key}`
                                                 ]
                                             }
                                         />
