@@ -137,4 +137,17 @@ return [
         'processed' => 'অর্থ ফেরত দেওয়া হয়েছে',
         'failed' => 'অর্থ ফেরত ব্যর্থ',
     ],
+
+    'cms_page' => [
+        'draft' => 'খসড়া',
+        'scheduled' => 'নির্ধারিত',
+        'published' => 'প্রকাশিত',
+        'unpublished' => 'অপ্রকাশিত',
+    ],
+
+    'cms_revision' => [
+        'scheduled' => 'নির্ধারিত',
+        'published' => 'প্রকাশিত',
+        'superseded' => 'প্রতিস্থাপিত',
+    ],
 ];

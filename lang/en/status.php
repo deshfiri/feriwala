@@ -147,4 +147,17 @@ return [
         'processed' => 'Refunded',
         'failed' => 'Refund failed',
     ],
+
+    'cms_page' => [
+        'draft' => 'Draft',
+        'scheduled' => 'Scheduled',
+        'published' => 'Published',
+        'unpublished' => 'Unpublished',
+    ],
+
+    'cms_revision' => [
+        'scheduled' => 'Scheduled',
+        'published' => 'Published',
+        'superseded' => 'Superseded',
+    ],
 ];
