@@ -7,6 +7,14 @@ type SectionMediaProps = {
     fit?: CmsMediaFit;
     /** Only the primary hero image should ever set this — everything else is below the fold. */
     priority?: boolean;
+    /**
+     * True only for a `background`-positioned image sitting behind copy that
+     * already says everything the image shows — the library's own alt text
+     * describes the picture, not "background", so announcing it here would
+     * be redundant with the heading a screen reader just read. Every other
+     * use is genuine content and keeps its alt text.
+     */
+    decorative?: boolean;
     className?: string;
 };
 
@@ -22,6 +30,7 @@ export default function SectionMedia({
     mobileMedia,
     fit,
     priority = false,
+    decorative = false,
     className,
 }: SectionMediaProps) {
     const dimensions = mobileMedia ?? media;
@@ -29,7 +38,8 @@ export default function SectionMedia({
     const img = (
         <img
             src={mobileMedia ? mobileMedia.url : media.url}
-            alt={media.alt}
+            alt={decorative ? '' : media.alt}
+            aria-hidden={decorative || undefined}
             width={dimensions.width ?? undefined}
             height={dimensions.height ?? undefined}
             loading={priority ? 'eager' : 'lazy'}

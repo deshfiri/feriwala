@@ -162,6 +162,72 @@ it('serves a freshly published revision immediately, never a stale cached one', 
     expect($second['sections'][0]['content']['heading'])->toBe('Second version');
 });
 
+it('always includes a WebSite structured data entry', function () {
+    $page = cmsTestPage();
+    app(SaveSectionDraft::class)->handle($page, 'hero', SectionKind::Hero, cmsTestHeroContent());
+    app(PublishPage::class)->handle($page);
+
+    $result = app(PublishedPageReader::class)->render('home', 'en');
+
+    $website = collect($result['structured_data'])->firstWhere('@type', 'WebSite');
+
+    expect($website)->not->toBeNull()
+        ->and($website['url'])->toBe(url('/'));
+});
+
+it('includes an Organization structured data entry only when the global default names one', function () {
+    $page = cmsTestPage();
+    app(SaveSectionDraft::class)->handle($page, 'hero', SectionKind::Hero, cmsTestHeroContent());
+    app(PublishPage::class)->handle($page);
+
+    $withoutOrg = app(PublishedPageReader::class)->render('home', 'en');
+    expect(collect($withoutOrg['structured_data'])->firstWhere('@type', 'Organization'))->toBeNull();
+
+    SeoSetting::query()->create([
+        'locale' => 'en',
+        'default_title' => 'Feriwala',
+        'organization_name' => 'Feriwala Ltd',
+        'organization_url' => 'https://feriwala.example',
+    ]);
+
+    // A fresh publish is a new revision id -- a new cache key -- so this
+    // read is never the first call's stale, cached result.
+    app(PublishPage::class)->handle($page);
+
+    $withOrg = app(PublishedPageReader::class)->render('home', 'en');
+    $organization = collect($withOrg['structured_data'])->firstWhere('@type', 'Organization');
+
+    expect($organization)->not->toBeNull()
+        ->and($organization['name'])->toBe('Feriwala Ltd')
+        ->and($organization['url'])->toBe('https://feriwala.example');
+});
+
+it('includes a FAQPage structured data entry only for an enabled faq section', function () {
+    $page = cmsTestPage();
+    $save = app(SaveSectionDraft::class);
+
+    $save->handle($page, 'hero', SectionKind::Hero, cmsTestHeroContent());
+    $save->handle($page, 'faq', SectionKind::Faq, [
+        'heading' => ['en' => 'FAQ', 'bn' => 'প্রশ্নোত্তর'],
+        'items' => [['question' => ['en' => 'Is it real?', 'bn' => 'প্র'], 'answer' => ['en' => 'Yes.', 'bn' => 'উ']]],
+    ], isEnabled: false);
+
+    app(PublishPage::class)->handle($page);
+
+    $disabled = app(PublishedPageReader::class)->render('home', 'en');
+    expect(collect($disabled['structured_data'])->firstWhere('@type', 'FAQPage'))->toBeNull();
+
+    $page->sections()->where('section_key', 'faq')->first()->update(['is_enabled' => true]);
+    app(PublishPage::class)->handle($page);
+
+    $enabled = app(PublishedPageReader::class)->render('home', 'en');
+    $faqSchema = collect($enabled['structured_data'])->firstWhere('@type', 'FAQPage');
+
+    expect($faqSchema)->not->toBeNull()
+        ->and($faqSchema['mainEntity'][0]['name'])->toBe('Is it real?')
+        ->and($faqSchema['mainEntity'][0]['acceptedAnswer']['text'])->toBe('Yes.');
+});
+
 it('never writes a scheduled-but-not-yet-live revision into the public cache', function () {
     $page = cmsTestPage();
     app(SaveSectionDraft::class)->handle($page, 'hero', SectionKind::Hero, cmsTestHeroContent());

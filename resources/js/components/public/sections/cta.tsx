@@ -69,6 +69,7 @@ export default function Cta({ content }: { content: CtaContent }) {
                         <SectionMedia
                             media={content.media}
                             fit={content.media_fit ?? 'cover'}
+                            decorative
                         />
                         <div
                             className="bg-background/75 absolute inset-0"

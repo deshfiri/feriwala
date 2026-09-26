@@ -4,9 +4,7 @@ import { resolveVideoEmbedUrl, videoProviderLabel } from './cms-video';
 describe('resolveVideoEmbedUrl', () => {
     it('resolves a YouTube watch URL to the privacy-enhanced embed URL', () => {
         expect(
-            resolveVideoEmbedUrl(
-                'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-            ),
+            resolveVideoEmbedUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
         ).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0');
     });
 
@@ -44,7 +42,9 @@ describe('resolveVideoEmbedUrl', () => {
 
     it('returns null for a host outside the allow-list', () => {
         expect(
-            resolveVideoEmbedUrl('https://evil.example.com/watch?v=abcdefghijk'),
+            resolveVideoEmbedUrl(
+                'https://evil.example.com/watch?v=abcdefghijk',
+            ),
         ).toBeNull();
     });
 
@@ -55,9 +55,9 @@ describe('resolveVideoEmbedUrl', () => {
 
 describe('videoProviderLabel', () => {
     it('labels YouTube and Vimeo hosts by name', () => {
-        expect(
-            videoProviderLabel('https://www.youtube.com/watch?v=x'),
-        ).toBe('YouTube');
+        expect(videoProviderLabel('https://www.youtube.com/watch?v=x')).toBe(
+            'YouTube',
+        );
         expect(videoProviderLabel('https://vimeo.com/1')).toBe('Vimeo');
     });
 

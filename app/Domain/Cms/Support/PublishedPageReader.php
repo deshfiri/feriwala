@@ -34,8 +34,8 @@ class PublishedPageReader
     public function __construct(protected LocalizedContentResolver $resolver) {}
 
     /**
-     * @return array{seo: array<string, mixed>, sections: array<int, array<string, mixed>>, menus: array<string, array<int, array<string, mixed>>>}|null
-     *                                                                                                                                                   null when nothing is live to show for this slug right now.
+     * @return array{seo: array<string, mixed>, sections: array<int, array<string, mixed>>, structured_data: array<int, array<string, mixed>>, menus: array<string, array<int, array<string, mixed>>>}|null
+     *                                                                                                                                                                                                      null when nothing is live to show for this slug right now.
      */
     public function render(string $slug, string $locale): ?array
     {
@@ -82,7 +82,7 @@ class PublishedPageReader
     }
 
     /**
-     * @return array{seo: array<string, mixed>, sections: array<int, array<string, mixed>>}
+     * @return array{seo: array<string, mixed>, sections: array<int, array<string, mixed>>, structured_data: array<int, array<string, mixed>>}
      */
     protected function resolveRevision(PageRevision $revision, string $locale): array
     {
@@ -109,7 +109,70 @@ class PublishedPageReader
 
         $seo = $this->seo($snapshot['seo'] ?? [], $locale);
 
-        return ['seo' => $seo, 'sections' => $sections];
+        return [
+            'seo' => $seo,
+            'sections' => $sections,
+            'structured_data' => $this->structuredData($seo, $sections),
+        ];
+    }
+
+    /**
+     * schema.org JSON-LD for the page (§34, Stage 8 completion): a WebSite
+     * entry always, an Organization entry whenever the global SEO defaults
+     * name one, and a FAQPage entry whenever an enabled `faq` section is
+     * actually present in `$sections` — which, by the time this runs, is
+     * already filtered to enabled sections from a published revision only
+     * (see `resolveRevision()` above), so a disabled or draft FAQ can never
+     * reach this.
+     *
+     * @param  array<string, mixed>  $seo
+     * @param  array<int, array<string, mixed>>  $sections
+     * @return array<int, array<string, mixed>>
+     */
+    protected function structuredData(array $seo, array $sections): array
+    {
+        $schemas = [
+            [
+                '@context' => 'https://schema.org',
+                '@type' => 'WebSite',
+                'name' => $seo['organization_name'] ?? $seo['title'],
+                'url' => url('/'),
+            ],
+        ];
+
+        if ($seo['organization_name'] !== null) {
+            $organization = [
+                '@context' => 'https://schema.org',
+                '@type' => 'Organization',
+                'name' => $seo['organization_name'],
+                'url' => $seo['organization_url'] ?? url('/'),
+            ];
+
+            if ($seo['organization_logo_url'] !== null) {
+                $organization['logo'] = $seo['organization_logo_url'];
+            }
+
+            $schemas[] = $organization;
+        }
+
+        $faqItems = collect($sections)->firstWhere('kind', 'faq')['content']['items'] ?? [];
+
+        if ($faqItems !== []) {
+            $schemas[] = [
+                '@context' => 'https://schema.org',
+                '@type' => 'FAQPage',
+                'mainEntity' => array_map(fn (array $item) => [
+                    '@type' => 'Question',
+                    'name' => $item['question'],
+                    'acceptedAnswer' => [
+                        '@type' => 'Answer',
+                        'text' => $item['answer'],
+                    ],
+                ], $faqItems),
+            ];
+        }
+
+        return $schemas;
     }
 
     /**
@@ -127,6 +190,7 @@ class PublishedPageReader
         $organizationName = $defaults instanceof SeoSetting ? $defaults->organization_name : null;
         $organizationUrl = $defaults instanceof SeoSetting ? $defaults->organization_url : null;
         $organizationLogo = $defaults instanceof SeoSetting ? $defaults->organizationLogoUrl() : null;
+        $twitterHandle = $defaults instanceof SeoSetting ? $defaults->twitter_handle : null;
 
         return [
             'title' => $pageSeo['title'][$locale] ?? $pageSeo['title']['en'] ?? $defaultTitle,
@@ -140,6 +204,7 @@ class PublishedPageReader
             'organization_name' => $organizationName,
             'organization_url' => $organizationUrl,
             'organization_logo_url' => $organizationLogo,
+            'twitter_handle' => $twitterHandle,
         ];
     }
 

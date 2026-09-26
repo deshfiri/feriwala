@@ -43,6 +43,7 @@ class LandingPageController extends Controller
             'seo' => $page['seo'],
             'sections' => $sections,
             'menus' => $page['menus'],
+            'structuredData' => $page['structured_data'],
         ]);
     }
 }

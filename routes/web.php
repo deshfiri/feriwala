@@ -85,13 +85,19 @@ use App\Http\Controllers\Erp\WholesaleCheckoutController;
 use App\Http\Controllers\Erp\WholesaleOrderController;
 use App\Http\Controllers\Erp\WholesaleOrderPaymentReturnController;
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\Public\CmsRobotsController;
+use App\Http\Controllers\Public\CmsSitemapController;
 use App\Http\Controllers\Public\LandingPageController;
+use App\Http\Controllers\Public\PublicRedirectController;
 use App\Http\Controllers\Webhook\GatewayReturnController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', LandingPageController::class)->name('home');
+
+Route::get('sitemap.xml', CmsSitemapController::class)->name('sitemap');
+Route::get('robots.txt', CmsRobotsController::class)->name('robots');
 
 // Language switching is available to guests as well, so the public site and the
 // login screen can be read in Bangla before an account exists (D6).
@@ -1195,3 +1201,12 @@ require __DIR__.'/settings.php';
 // The Supplier account domain's own routes (D25, P13-1) — a separate tree,
 // on the `supplier` guard throughout, never mixed into the group above.
 require __DIR__.'/supplier.php';
+
+/*
+ * The public site's last resort (§34.1, Stage 8 completion). Registered
+ * last so every real route above — including every admin, ERP and Supplier
+ * route just required in — gets first refusal; only once nothing else
+ * matched does this check for an admin-managed Redirect on the exact path,
+ * falling through to a plain 404 when there is none.
+ */
+Route::fallback(PublicRedirectController::class);

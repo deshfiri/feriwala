@@ -52,6 +52,7 @@ export type CmsSeo = {
     organization_name?: string | null;
     organization_url?: string | null;
     organization_logo_url?: string | null;
+    twitter_handle?: string | null;
 };
 
 export type CmsMenuItem = {

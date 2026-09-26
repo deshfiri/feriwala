@@ -21,7 +21,17 @@ type Props = {
     seo: CmsSeo;
     sections: (CmsSection & { packages?: CmsPackagePreview[] })[];
     menus: CmsMenus;
+    structuredData: Record<string, unknown>[];
 };
+
+/**
+ * `<script>` never breaks out of itself: a stray literal "</script>" inside
+ * an FAQ answer or any other schema string field would otherwise end the
+ * tag early and let the rest render as visible page markup.
+ */
+function safeJsonLd(schema: Record<string, unknown>): string {
+    return JSON.stringify(schema).replace(/</g, '\\u003c');
+}
 
 /**
  * Every kind with a renderer today (App\Domain\Cms\Enums\SectionKind::
@@ -53,7 +63,12 @@ const RENDERERS: Record<string, ComponentType<any>> = {
  * enabled to show; this component only lays it out, it never decides who
  * may see what.
  */
-export default function Landing({ seo, sections, menus }: Props) {
+export default function Landing({
+    seo,
+    sections,
+    menus,
+    structuredData,
+}: Props) {
     const footerSection = sections.find((section) => section.kind === 'footer');
     const footerContent = (footerSection?.content ?? {}) as {
         tagline?: string;
@@ -78,6 +93,35 @@ export default function Landing({ seo, sections, menus }: Props) {
                     <meta property="og:image" content={seo.og_image_url} />
                 )}
                 <meta property="og:type" content="website" />
+                <meta
+                    name="twitter:card"
+                    content={
+                        seo.og_image_url ? 'summary_large_image' : 'summary'
+                    }
+                />
+                <meta name="twitter:title" content={seo.title} />
+                {seo.description && (
+                    <meta
+                        name="twitter:description"
+                        content={seo.description}
+                    />
+                )}
+                {seo.og_image_url && (
+                    <meta name="twitter:image" content={seo.og_image_url} />
+                )}
+                {seo.twitter_handle && (
+                    <meta name="twitter:site" content={seo.twitter_handle} />
+                )}
+                {structuredData.map((schema, index) => (
+                    // eslint-disable-next-line react/no-danger
+                    <script
+                        key={index}
+                        type="application/ld+json"
+                        dangerouslySetInnerHTML={{
+                            __html: safeJsonLd(schema),
+                        }}
+                    />
+                ))}
             </Head>
 
             <div className="bg-background text-foreground min-h-svh">

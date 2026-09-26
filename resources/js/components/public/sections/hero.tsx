@@ -94,6 +94,7 @@ export default function Hero({ content }: { content: HeroContent }) {
                         mobileMedia={content.mobile_media}
                         fit={content.media_fit ?? 'cover'}
                         priority
+                        decorative
                     />
                     <div
                         className="bg-background/75 absolute inset-0"
