@@ -20,6 +20,7 @@ import AppearanceToggleTab from '@/components/appearance-tabs';
 import BrandingHead from '@/components/branding-head';
 import LanguageSwitcher from '@/components/language-switcher';
 import StatusPill from '@/components/status-pill';
+import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn, toUrl } from '@/lib/utils';
 import { dashboard, logout } from '@/routes/supplier';
@@ -58,8 +59,13 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
     const { t } = useTranslation();
     const page = usePage<{ supplierAccount?: SupplierAccount | null }>();
     const account = page.props.supplierAccount ?? null;
-    const currentPath =
-        typeof window === 'undefined' ? '' : window.location.pathname;
+    /*
+     * From Inertia's own shared page URL, not `window.location` — that read
+     * `''` during SSR and the real path once hydrated, so the very first
+     * client render disagreed with the markup the server had just sent and
+     * React logged a hydration mismatch on every load of this page.
+     */
+    const { isCurrentUrl } = useCurrentUrl();
 
     const unreadNotifications = account?.unread_notifications ?? 0;
 
@@ -210,11 +216,7 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                     >
                         <ul className="flex min-w-max gap-1 pb-2">
                             {items.map((item, index) => {
-                                const href =
-                                    typeof item.href === 'string'
-                                        ? item.href
-                                        : item.href.url;
-                                const active = currentPath === href;
+                                const active = isCurrentUrl(item.href);
 
                                 return (
                                     <li key={`${toUrl(item.href)}-${index}`}>

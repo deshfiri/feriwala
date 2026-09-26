@@ -52,6 +52,7 @@ const bangla = {
 };
 
 const page = {
+    url: '/supplier/dashboard',
     props: {
         translations: english as unknown,
         supplierAccount: null as unknown,
@@ -109,6 +110,7 @@ const OPERATIONAL_ONLY = [
 ];
 
 afterEach(() => {
+    page.url = '/supplier/dashboard';
     page.props.translations = english;
     page.props.supplierAccount = null;
 });
@@ -223,5 +225,27 @@ describe('the supplier portal navigation', () => {
             screen.getByRole('link', { name: 'Skip to content' }),
         ).toHaveAttribute('href', '#supplier-main');
         expect(screen.getByRole('main')).toHaveAttribute('id', 'supplier-main');
+    });
+
+    /*
+     * Reads the current path from Inertia's own shared page.url, not
+     * `window.location` — the latter is empty during SSR and only real once
+     * hydrated, which made React log a hydration mismatch on every load of
+     * this page (caught in browser verification, not by an earlier version
+     * of this test suite, which never asserted on the active state at all).
+     */
+    it('marks the current page active from the page URL, not window.location', () => {
+        page.props.supplierAccount = account();
+        page.url = '/supplier/dashboard';
+
+        render(<SupplierLayout>content</SupplierLayout>);
+
+        expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
+            'aria-current',
+            'page',
+        );
+        expect(
+            screen.getByRole('link', { name: 'Profile' }),
+        ).not.toHaveAttribute('aria-current');
     });
 });
