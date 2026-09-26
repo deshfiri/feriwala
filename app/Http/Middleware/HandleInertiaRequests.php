@@ -126,6 +126,12 @@ class HandleInertiaRequests extends Middleware
         // Supplier withdrawals (D25, P13-24), reusing the existing
         // Client/Partner Withdrawal module rather than a Supplier-specific one.
         [PermissionModule::Withdrawal, PermissionAction::View],
+
+        // The landing-page CMS (§34, Stage 7/8) and its own, separate SEO
+        // defaults screen — seeing one never implies the other, exactly like
+        // every other module pair above.
+        [PermissionModule::Cms, PermissionAction::View],
+        [PermissionModule::Seo, PermissionAction::View],
     ];
 
     /**

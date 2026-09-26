@@ -143,6 +143,43 @@ it('sends an order manager the order ability and not the payment one', function 
         ->and($permissions['payment.view'])->toBeFalse();
 });
 
+it('sends a Content Manager the CMS and SEO abilities', function () {
+    // Editing the landing page and browsing the SEO defaults are the same
+    // navigation section, and ContentManager holds both (§34).
+    $permissions = navPermissionsFor(
+        testPlatformStaff(PlatformRole::ContentManager),
+        'admin.cms.pages.index',
+    );
+
+    expect($permissions['cms.view'])->toBeTrue()
+        ->and($permissions['seo.view'])->toBeTrue()
+        ->and($permissions['payment.view'])->toBeFalse();
+});
+
+it('sends an SEO Manager the SEO ability, and the CMS one too since it holds cms.edit', function () {
+    // Not a bug: an SEO manager reaches the page workspace to browse into a
+    // page and pick its OG image override (SeoSettingController's own doc
+    // comment) — cms.view is genuinely held, not merely implied.
+    $permissions = navPermissionsFor(
+        testPlatformStaff(PlatformRole::SeoManager),
+        'admin.cms.seo.index',
+    );
+
+    expect($permissions['seo.view'])->toBeTrue()
+        ->and($permissions['cms.view'])->toBeTrue()
+        ->and($permissions['payment.view'])->toBeFalse();
+});
+
+it('never sends a role outside the CMS the cms/seo navigation abilities', function () {
+    $permissions = navPermissionsFor(
+        testPlatformStaff(PlatformRole::PackageManager),
+        'admin.packages.index',
+    );
+
+    expect($permissions['cms.view'])->toBeFalse()
+        ->and($permissions['seo.view'])->toBeFalse();
+});
+
 it('sends a business owner no order administration, whose own orders have their own door', function () {
     $account = testBusinessAccount(AccountStatus::Active);
 
