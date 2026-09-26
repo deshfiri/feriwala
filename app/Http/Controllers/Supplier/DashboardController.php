@@ -2,7 +2,12 @@
 
 namespace App\Http\Controllers\Supplier;
 
+use App\Domain\Supplier\Enums\ListingStatus;
+use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierProductListing;
+use App\Domain\Supplier\Models\SupplierWallet;
+use App\Domain\Supplier\Models\SupplierWithdrawal;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureSupplierIsOperational;
 use Illuminate\Http\Request;
@@ -15,7 +20,14 @@ use Inertia\Response;
  * Reachable regardless of application status — a Draft or Suspended Supplier
  * needs to see where their application stands. Operational actions (listing
  * submission, rates, stock) are their own routes, gated separately by
- * {@see EnsureSupplierIsOperational}.
+ * {@see EnsureSupplierIsOperational}; the snapshot cards below follow the same
+ * boundary; a Supplier that is not yet operational sees none of them, since
+ * every underlying screen already refuses it.
+ *
+ * Every figure is scoped by this Supplier's own `supplier_id` and nothing
+ * else, matching every other Supplier-guarded controller (self-scoping is a
+ * query concern, §31.3) — the wallet balance is read straight off
+ * {@see SupplierWallet::availableBalance()}, never recomputed here.
  */
 class DashboardController extends Controller
 {
@@ -28,6 +40,29 @@ class DashboardController extends Controller
             'status' => $supplier->status,
             'statusLabel' => $supplier->status->label(),
             'isOperational' => $supplier->isOperational(),
+            'snapshot' => $supplier->isOperational() ? $this->snapshot($supplier) : null,
         ]);
+    }
+
+    /**
+     * @return array{active_listings: int, withdrawals_pending: int, wallet_available: array<string, mixed>|null}
+     */
+    protected function snapshot(Supplier $supplier): array
+    {
+        $wallet = SupplierWallet::query()->where('supplier_id', $supplier->id)->first();
+
+        return [
+            'active_listings' => SupplierProductListing::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereIn('status', [ListingStatus::Approved->value, ListingStatus::PartiallyApproved->value])
+                ->count(),
+
+            'withdrawals_pending' => SupplierWithdrawal::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereIn('status', [SupplierWithdrawalStatus::Requested->value, SupplierWithdrawalStatus::UnderReview->value])
+                ->count(),
+
+            'wallet_available' => $wallet?->availableBalance()->jsonSerialize(),
+        ];
     }
 }

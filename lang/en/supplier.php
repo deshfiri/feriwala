@@ -89,6 +89,11 @@ return [
             'suspended' => 'Your account is suspended. Contact support to restore access.',
             'closed' => 'This account is closed.',
         ],
+        'snapshot' => [
+            'active_listings' => 'Active listings',
+            'withdrawals_pending' => 'Withdrawals awaiting a decision',
+            'wallet_available' => 'Wallet available balance',
+        ],
     ],
 
     'kyc' => [

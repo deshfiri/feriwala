@@ -1,12 +1,19 @@
 import { Head, Link } from '@inertiajs/react';
+import { Banknote, ClipboardList, Coins } from 'lucide-react';
+import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
+import StatCard, { StatCardGrid } from '@/components/stat-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
+import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import { create as kyc } from '@/routes/supplier/kyc';
 import { index as listings } from '@/routes/supplier/listings';
+import { show as wallet } from '@/routes/supplier/wallet';
+import { index as withdrawals } from '@/routes/supplier/withdrawals';
 import { mobile } from '@/routes/supplier/verification';
 
 const TONES: Record<string, StatusTone> = {
@@ -21,14 +28,22 @@ const TONES: Record<string, StatusTone> = {
     draft: 'neutral',
 };
 
+type Snapshot = {
+    active_listings: number;
+    withdrawals_pending: number;
+    wallet_available: Money | null;
+};
+
 export default function SupplierDashboard({
     status,
     statusLabel,
     isOperational,
+    snapshot,
 }: {
     status: string;
     statusLabel: string;
     isOperational: boolean;
+    snapshot: Snapshot | null;
 }) {
     const { t } = useTranslation();
 
@@ -36,7 +51,7 @@ export default function SupplierDashboard({
         <>
             <Head title={t('supplier.dashboard.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader title={t('supplier.dashboard.title')} />
 
                 <SectionCard title={t('supplier.dashboard.status')}>
@@ -85,7 +100,62 @@ export default function SupplierDashboard({
                         </div>
                     </div>
                 </SectionCard>
-            </div>
+
+                {snapshot && (
+                    <StatCardGrid className="sm:grid-cols-3 lg:grid-cols-3">
+                        <Link
+                            href={listings()}
+                            className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                            <StatCard
+                                label={t(
+                                    'supplier.dashboard.snapshot.active_listings',
+                                )}
+                                value={snapshot.active_listings}
+                                icon={ClipboardList}
+                                className="hover:bg-accent/50 transition-colors"
+                            />
+                        </Link>
+
+                        <Link
+                            href={withdrawals()}
+                            className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                            <StatCard
+                                label={t(
+                                    'supplier.dashboard.snapshot.withdrawals_pending',
+                                )}
+                                value={snapshot.withdrawals_pending}
+                                icon={Banknote}
+                                className="hover:bg-accent/50 transition-colors"
+                            />
+                        </Link>
+
+                        <Link
+                            href={wallet()}
+                            className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                            <StatCard
+                                label={t(
+                                    'supplier.dashboard.snapshot.wallet_available',
+                                )}
+                                value={
+                                    snapshot.wallet_available ? (
+                                        <MoneyAmount
+                                            amount={snapshot.wallet_available}
+                                            size="large"
+                                        />
+                                    ) : (
+                                        '—'
+                                    )
+                                }
+                                icon={Coins}
+                                className="hover:bg-accent/50 transition-colors"
+                            />
+                        </Link>
+                    </StatCardGrid>
+                )}
+            </PageContainer>
         </>
     );
 }
