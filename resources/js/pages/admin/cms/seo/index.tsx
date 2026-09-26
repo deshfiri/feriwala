@@ -1,5 +1,6 @@
 import { Form, Head } from '@inertiajs/react';
 import SeoSettingController from '@/actions/App/Http/Controllers/Admin/Cms/SeoSettingController';
+import MediaPicker, { type MediaPickerItem } from '@/components/admin/cms/media-picker';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -13,7 +14,8 @@ import type { CmsAdminSeoSetting } from '@/types';
 
 type Props = {
     settings: CmsAdminSeoSetting[];
-    can: { update: boolean };
+    media: MediaPickerItem[];
+    can: { update: boolean; view_media: boolean; manage_media: boolean };
 };
 
 const LOCALE_LABEL: Record<string, string> = { en: 'English', bn: 'বাংলা' };
@@ -23,7 +25,7 @@ const LOCALE_LABEL: Record<string, string> = { en: 'English', bn: 'বাংল�
  * to (§34, Stage 7) — a separate `seo.*` permission set from ordinary page
  * content, per PermissionCatalogue.
  */
-export default function CmsSeoIndex({ settings, can }: Props) {
+export default function CmsSeoIndex({ settings, media, can }: Props) {
     const { t } = useTranslation();
 
     return (
@@ -135,6 +137,27 @@ export default function CmsSeoIndex({ settings, can }: Props) {
                                                 }
                                             />
                                         </div>
+                                    </div>
+
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <MediaPicker
+                                            name="default_og_image_id"
+                                            label={t(
+                                                'cms.seo_index.default_og_image',
+                                            )}
+                                            value={setting.default_og_image_id}
+                                            media={media}
+                                            canManage={can.manage_media}
+                                        />
+                                        <MediaPicker
+                                            name="organization_logo_id"
+                                            label={t(
+                                                'cms.seo_index.organization_logo',
+                                            )}
+                                            value={setting.organization_logo_id}
+                                            media={media}
+                                            canManage={can.manage_media}
+                                        />
                                     </div>
 
                                     <div className="grid gap-3 sm:grid-cols-2">

@@ -49,7 +49,7 @@ export type CmsAdminSeoOverride = {
     title: { en: string | null; bn: string | null };
     description: { en: string | null; bn: string | null };
     canonical_url: string | null;
-    og_image_url: string | null;
+    og_image_id: string | null;
     robots: string | null;
 };
 
@@ -109,9 +109,9 @@ export type CmsAdminSeoSetting = {
     locale: string;
     default_title: string | null;
     default_description: string | null;
-    default_og_image_path: string | null;
+    default_og_image_id: string | null;
     organization_name: string | null;
-    organization_logo_path: string | null;
+    organization_logo_id: string | null;
     organization_url: string | null;
     robots_default: string;
     twitter_handle: string | null;

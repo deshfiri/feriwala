@@ -1,6 +1,7 @@
 import { Form } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import PageSectionController from '@/actions/App/Http/Controllers/Admin/Cms/PageSectionController';
+import type { MediaPickerItem } from '@/components/admin/cms/media-picker';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -25,6 +26,8 @@ type Props = {
     /** Null creates a new section; a row edits it. */
     section: CmsAdminSection | null;
     sectionKinds: { value: string; label: string }[];
+    media: MediaPickerItem[];
+    canManageMedia: boolean;
 };
 
 /**
@@ -41,6 +44,8 @@ export default function SectionDialog({
     pageId,
     section,
     sectionKinds,
+    media,
+    canManageMedia,
 }: Props) {
     const { t } = useTranslation();
     const [kind, setKind] = useState(
@@ -139,6 +144,8 @@ export default function SectionDialog({
                                 kind={kind}
                                 content={section?.content ?? {}}
                                 errors={errors}
+                                media={media}
+                                canManageMedia={canManageMedia}
                             />
 
                             <div className="grid gap-3 sm:grid-cols-3">
