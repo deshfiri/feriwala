@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
@@ -459,6 +460,12 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
+        // The platform staff overview (§33.3-equivalent for the Admin portal).
+        // Every card is gated on the same permission the screen it links to
+        // already requires, so it never shows a figure its viewer could not
+        // otherwise reach.
+        Route::get('dashboard', AdminDashboardController::class)->name('dashboard');
+
         /*
          * The requirement catalogue (§7.2).
          *

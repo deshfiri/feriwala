@@ -45,3 +45,17 @@ export type DashboardSpend = {
     ticks: ChartAxisTick[];
     breakdown: ChartSlice[];
 };
+
+/**
+ * One overview figure on the Admin/Staff dashboard.
+ *
+ * The backend only ever sends a card the viewer already holds the
+ * permission for — an absent card, not a zero or a disabled one, is how a
+ * queue the viewer cannot open stays invisible.
+ */
+export type AdminDashboardCard = {
+    key: string;
+    label: string;
+    value: number;
+    href: string;
+};

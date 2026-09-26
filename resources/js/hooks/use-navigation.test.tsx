@@ -577,3 +577,62 @@ describe('referral navigation', () => {
         expect(titles).not.toContain('nav.referrals');
     });
 });
+
+/**
+ * The Overview group's single Dashboard entry (§ shared navigation registry).
+ * It used to point at the ERP `/dashboard` for everyone, which 403s for
+ * platform staff — they have no business account (D23) and are sent
+ * elsewhere by `business.activated`. It must resolve to each identity's own
+ * dashboard instead.
+ */
+describe('the overview dashboard link', () => {
+    let root: Root;
+    let hrefs: string[] = [];
+
+    function HrefHarness() {
+        hrefs = useNavigation()
+            .sidebarGroups.flatMap((group) => group.items)
+            .map((item) =>
+                typeof item.href === 'string' ? item.href : item.href.url,
+            );
+
+        return null;
+    }
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<HrefHarness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        hrefs = [];
+    });
+
+    it('sends a business identity to the ERP dashboard', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: false,
+                allowsDropshipping: false,
+                managesStaff: false,
+            },
+        });
+
+        expect(hrefs).toContain('/dashboard');
+        expect(hrefs).not.toContain('/admin/dashboard');
+    });
+
+    it('sends platform staff to the admin dashboard, not the ERP one', () => {
+        renderFor({ permissions: {}, account: null });
+
+        expect(hrefs).toContain('/admin/dashboard');
+        expect(hrefs).not.toContain('/dashboard');
+    });
+});

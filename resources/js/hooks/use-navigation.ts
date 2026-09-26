@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
+import { dashboard as adminDashboard } from '@/routes/admin';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
@@ -114,8 +115,12 @@ export function useNavigation(): {
             items: [
                 {
                     title: t('nav.dashboard'),
-                    // One dashboard at one address (D1): no account segment.
-                    href: dashboard(),
+                    /*
+                     * A business identity gets the ERP dashboard; platform
+                     * staff have no account (D23) and get their own overview
+                     * instead — otherwise this link would 403 for them.
+                     */
+                    href: account ? dashboard() : adminDashboard(),
                     icon: LayoutGrid,
                 },
             ],

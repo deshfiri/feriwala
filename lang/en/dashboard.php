@@ -29,4 +29,17 @@ return [
         'breakdown_empty' => 'Nothing to break down yet.',
     ],
 
+    'admin' => [
+        'title' => 'Overview',
+        'description' => 'What is waiting on you across the platform.',
+        'empty' => 'Nothing is waiting on your permissions right now.',
+        'cards' => [
+            'kyc' => 'KYC applications awaiting review',
+            'activations' => 'Business activations pending',
+            'orders' => 'Orders awaiting confirmation',
+            'supplier_kyc' => 'Supplier applications awaiting review',
+            'supplier_listings' => 'Supplier listings awaiting review',
+        ],
+    ],
+
 ];
