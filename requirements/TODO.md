@@ -779,32 +779,32 @@ sized accordingly rather than as one line item under provisioning.
 
 ## P10.A CMS (§4)
 
-- [ ] **P10-1** `pages` + `page_sections` + section type registry (§4.2)
-- [ ] **P10-2** Section CRUD: create, edit, reorder, enable/disable (§4.2)
-- [ ] **P10-3** Draft / published status + scheduled publication (§4.2)
-- [ ] **P10-4** Content editing: text, images, videos, buttons/links, colours (§4.2)
-- [ ] **P10-5** Desktop / mobile visibility toggles (§4.2)
-- [ ] **P10-6** Preview before publication (§4.2)
-- [ ] **P10-7** `page_revisions` with restore (§4.2)
-- [ ] **P10-8** Role-based CMS access (§4.2)
-- [ ] **P10-9** `menus` + `menu_items` for header and footer navigation (§4.1)
-- [ ] **P10-10** Media library with alt text and optimized variants (§4.2, §39)
+- [x] **P10-1** `pages` + `page_sections` + section type registry (§4.2) — `f9ece87`/`ea11044` (Stage 7), 17 kinds registered in `SectionKind::implemented()`
+- [x] **P10-2** Section CRUD: create, edit, reorder, enable/disable (§4.2) — `f9ece87`
+- [x] **P10-3** Draft / published status + scheduled publication (§4.2) — `7453907` (schedule), `3b8ee5e` (cancel/reschedule UI)
+- [~] **P10-4** Content editing: text, images, videos, buttons/links, colours (§4.2) — text/images/video/buttons done (`7453907`, `4e7d2dc`); no per-section colour override exists
+- [x] **P10-5** Desktop / mobile visibility toggles (§4.2) — `f9ece87`
+- [ ] **P10-6** Preview before publication (§4.2) — no preview route exists; an editor only ever sees the draft in the admin workspace itself, never a rendered public-page preview
+- [x] **P10-7** `page_revisions` with restore (§4.2) — `f9ece87`
+- [x] **P10-8** Role-based CMS access (§4.2) — `06a500f`, full permission-boundary + nav-visibility proof (also fixed an existing nav-ability regression)
+- [x] **P10-9** `menus` + `menu_items` for header and footer navigation (§4.1) — `f9ece87` (also legal-links menu)
+- [~] **P10-10** Media library with alt text and optimized variants (§4.2, §39) — library + mandatory alt text done (`7453907`); no automatic optimized/responsive variant generation on upload (an editor may attach a separate hand-picked mobile image instead)
 
 ## P10.B Public site (§4.1, §4.3)
 
-- [ ] **P10-11** Landing sections: header, nav, hero, about, benefits, dropshipping info, wholesale info, package previews, how it works, features, statistics, testimonials, FAQ, contact, CTA buttons, legal links, footer, social links, custom sections (§4.1)
-- [ ] **P10-12** Public pages: home, about, packages, how it works, FAQ, contact, terms, privacy, refund policy, login, registration, password reset, plus admin-created pages (§4.3)
-- [ ] **P10-13** **Verify no product catalog, pricing, cart, checkout, or order placement is publicly reachable** (§4, §44)
-- [ ] **P10-14** Public site performance: lazy loading, responsive images, minification, code splitting (§39)
+- [~] **P10-11** Landing sections: header, nav, hero, about, benefits, dropshipping info, wholesale info, package previews, how it works, testimonials, FAQ, CTA buttons, footer done (`f9ece87`, `7453907`, `ce3c828`); `feature_grid`/`statistics`/`contact`/`legal_links`-as-a-section/social-links declared in `SectionKind` but have no schema or renderer yet
+- [ ] **P10-12** Public pages: home, about, packages, how it works, FAQ, contact, terms, privacy, refund policy, login, registration, password reset, plus admin-created pages (§4.3) — only `home` (the one landing page, all sections in one place) is publicly routable; `Page` supports other slugs but nothing serves them yet
+- [x] **P10-13** **Verify no product catalog, pricing, cart, checkout, or order placement is publicly reachable** (§4, §44) — proven by `tests/Feature/Cms/LandingPageControllerTest.php`
+- [x] **P10-14** Public site performance: lazy loading, responsive images, minification, code splitting (§39) — `ce3c828`; verified separate, small public bundle in a production build
 
 ## P10.C SEO (§34)
 
-- [ ] **P10-15** Landing SEO: friendly URLs, meta title/description, canonical, Open Graph, social image, organization schema, FAQ schema (§34.1)
-- [ ] **P10-16** XML sitemap generation (scheduled) + robots.txt (§34.1, §41)
-- [ ] **P10-17** Image alt text enforcement + 301 `redirects` management (§34.1)
-- [ ] **P10-18** ERP privacy: no-index directives, no sensitive data in URLs, no DB IDs in public URLs (§34.2)
-- [ ] **P10-19** Partner website SEO: product/category slugs, metadata, canonical, Open Graph, product + organization + breadcrumb schema, sitemap, robots, alt text, 301s, custom 404 (§34.3)
-- [ ] **P10-20** Tests: SEO slugs, ERP no-index rules (§43)
+- [x] **P10-15** Landing SEO: friendly URLs, meta title/description, canonical, Open Graph, social image, organization schema, FAQ schema (§34.1) — `e471b63`
+- [x] **P10-16** XML sitemap generation + robots.txt (§34.1, §41) — `e471b63`; sitemap reflects live publication state on every request rather than a separate scheduled job, since there is exactly one public page today
+- [x] **P10-17** Image alt text enforcement + 301 `redirects` management (§34.1) — alt text `7453907`; redirects were manageable but never actually served to a visitor until `e471b63`
+- [ ] **P10-18** ERP privacy: no-index directives, no sensitive data in URLs, no DB IDs in public URLs (§34.2) — true for every CMS route checked this pass, but this is an app-wide item and was not re-verified outside the CMS surface
+- [ ] **P10-19** Partner website SEO: product/category slugs, metadata, canonical, Open Graph, product + organization + breadcrumb schema, sitemap, robots, alt text, 301s, custom 404 (§34.3) — a different subsystem (partner storefronts), out of this pass's scope
+- [~] **P10-20** Tests: SEO slugs, ERP no-index rules (§43) — CMS SEO/structured-data covered (`e471b63`); ERP no-index rule testing outside CMS not part of this pass
 
 ---
 
@@ -956,13 +956,41 @@ increment by hand; a progress table that has drifted is worse than none.
 | P7 Commission, Referral, Withdrawal, Settlement | 44      | 8       | 1       |
 | P8 Notifications & SMS                          | 18      | 0       | 0       |
 | P9 Reports                                      | 23      | 0       | 0       |
-| P10 CMS & SEO                                   | 20      | 0       | 0       |
+| P10 CMS & SEO                                   | 20      | 12      | 4       |
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
 | P13 Supplier Account System                     | 29      | 24      | 2       |
-| **Total**                                       | **489** | **250** | **25**  |
+| **Total**                                       | **489** | **262** | **29**  |
 
 ### Revision log
+
+- **2026-09-26** — Stage 7 addendum + Stage 8 completed for the landing-page CMS: typed media fields
+  on every applicable section, one reusable `MediaPicker` wired into every section-content form and
+  both SEO-image screens, publish-time media snapshotting (a published revision keeps rendering
+  identically even after the underlying Media row is edited or deleted) with deletion-protection
+  scanning every draft/revision/global-SEO reference, and a full scheduled-publish lifecycle
+  (cancel/reschedule/promote/sweep) with audit logging — `7453907`, `4e7d2dc`, `ce3c828`, `3b8ee5e`.
+  Found and fixed one dead field along the way: Hero's `media_alt_override` was validated and stored
+  since Stage 7 but never actually applied to the frozen snapshot. Public rendering caught up to the
+  media schema across every section renderer, plus four new renderers (About, Video, Testimonials,
+  ClientsPartners) that had schemas but no public component at all — `ce3c828`. An RBAC audit found
+  and fixed a real, already-red regression: `cms.view`/`seo.view` were missing from
+  `HandleInertiaRequests::NAVIGATION_ABILITIES`, so the CMS/SEO sidebar links were invisible to every
+  role including Super Admin; added the missing boundary tests (edit-without-publish, SEO-manager's
+  real edit-but-not-publish grant, Client/Partner and Supplier both refused) — `06a500f`. SEO/sitemap/
+  robots/redirects: found that admin-managed redirects were never actually served to a visitor (no
+  route ever checked them) and fixed it with a `Route::fallback()`; added `/sitemap.xml`, `/robots.txt`,
+  Organization/WebSite/FAQPage JSON-LD, and the Twitter Card meta tags that had a field
+  (`twitter_handle`) but no output anywhere — `e471b63`. A targeted accessibility audit of every public
+  section and admin CMS form found the overall structure sound (heading order, landmarks, dialog focus
+  trap/restoration, reduced-motion) and turned up concrete, fixed gaps: no skip link on the public page,
+  a mobile-nav toggle with no `aria-controls` target, a hardcoded-English footer label, `InputError`
+  never wired to `aria-invalid`/`aria-describedby` anywhere in the CMS admin forms, several unlabeled
+  repeatable-item fields, and a `MediaPicker` trigger whose accessible name didn't distinguish which
+  field it belonged to — `e0dbfdb`. Not fixed, and recorded rather than rushed: `RepeatableSection`'s
+  per-item fields have no validation-error display at all (pre-existing, structural); no preview route
+  for a draft page exists yet; CMS pages beyond `home` have no public route to be served from.
+  P10 CMS & SEO moved from 0/20 to 12 done + 4 started.
 
 - **2026-09-24** — D26 flat-Taka recovery completed and fully verified, closing out the gap the
   2026-09-23 entry below left open (Website, Order/Checkout and Package/Billing, the source of that
