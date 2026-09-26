@@ -12,6 +12,7 @@ import { useState } from 'react';
 import PageController from '@/actions/App/Http/Controllers/Admin/Cms/PageController';
 import PageRevisionController from '@/actions/App/Http/Controllers/Admin/Cms/PageRevisionController';
 import PageSectionController from '@/actions/App/Http/Controllers/Admin/Cms/PageSectionController';
+import MediaPicker, { type MediaPickerItem } from '@/components/admin/cms/media-picker';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -30,11 +31,14 @@ type Props = {
     sections: CmsAdminSection[];
     revisions: CmsAdminRevision[];
     section_kinds: { value: string; label: string }[];
+    media: MediaPickerItem[];
     can: {
         edit: boolean;
         publish: boolean;
         unpublish: boolean;
         delete: boolean;
+        view_media: boolean;
+        manage_media: boolean;
     };
 };
 
@@ -49,6 +53,7 @@ export default function PageEdit({
     sections,
     revisions,
     section_kinds: sectionKinds,
+    media,
     can,
 }: Props) {
     const { t } = useTranslation();
@@ -95,6 +100,18 @@ export default function PageEdit({
 
         router.post(
             PageController.unpublish.url(page.id),
+            {},
+            { preserveScroll: true },
+        );
+    };
+
+    const cancelSchedule = () => {
+        if (!window.confirm(t('cms.page_edit.cancel_schedule_confirm'))) {
+            return;
+        }
+
+        router.post(
+            PageController.cancelSchedule.url(page.id),
             {},
             { preserveScroll: true },
         );
@@ -345,6 +362,14 @@ export default function PageEdit({
                                     </div>
                                 </div>
 
+                                <MediaPicker
+                                    name="og_image_id"
+                                    label={t('cms.page_edit.seo_og_image')}
+                                    value={page.seo_overrides.og_image_id}
+                                    media={media}
+                                    canManage={can.manage_media}
+                                />
+
                                 <div className="flex justify-end">
                                     <Button
                                         type="submit"
@@ -363,6 +388,17 @@ export default function PageEdit({
                     title={t('cms.page_edit.publish_title')}
                     description={t('cms.page_edit.publish_description')}
                 >
+                    {page.publication_state.value === 'scheduled' &&
+                        page.scheduled_publish_at && (
+                            <p className="text-muted-foreground mb-3 text-sm">
+                                {t('cms.page_edit.currently_scheduled_for', {
+                                    when: new Date(
+                                        page.scheduled_publish_at,
+                                    ).toLocaleString(),
+                                })}
+                            </p>
+                        )}
+
                     <div className="flex flex-wrap items-center gap-3">
                         {can.publish && (
                             <Form
@@ -384,9 +420,22 @@ export default function PageEdit({
                                 variant="outline"
                                 onClick={() => setScheduling((value) => !value)}
                             >
-                                {t('cms.page_edit.schedule')}
+                                {page.publication_state.value === 'scheduled'
+                                    ? t('cms.page_edit.reschedule')
+                                    : t('cms.page_edit.schedule')}
                             </Button>
                         )}
+
+                        {can.publish &&
+                            page.publication_state.value === 'scheduled' && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={cancelSchedule}
+                                >
+                                    {t('cms.page_edit.cancel_schedule')}
+                                </Button>
+                            )}
 
                         {can.unpublish &&
                             page.publication_state.value === 'published' && (
@@ -524,6 +573,8 @@ export default function PageEdit({
                     pageId={page.id}
                     section={editingSection}
                     sectionKinds={sectionKinds}
+                    media={media}
+                    canManageMedia={can.manage_media}
                 />
             )}
         </>
