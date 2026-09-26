@@ -7,6 +7,7 @@ import ChartSkeleton, {
 import HeroCard from '@/components/dashboard/hero-card';
 import Panel from '@/components/dashboard/panel';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
 import type {
@@ -43,7 +44,7 @@ export default function Dashboard({ greeting, standing, spend }: Props) {
         <>
             <Head title={t('dashboard.title')} />
 
-            <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
+            <PageContainer>
                 <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
                     <div className="lg:col-span-2">
                         <HeroCard greeting={greeting} standing={standing} />
@@ -112,7 +113,7 @@ export default function Dashboard({ greeting, standing, spend }: Props) {
                         </Deferred>
                     </Panel>
                 </div>
-            </div>
+            </PageContainer>
         </>
     );
 }
