@@ -3,6 +3,7 @@
 namespace App\Domain\Supplier\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * A Product Listing Request's lifecycle (D25, contract-equivalent §11/§12,
@@ -17,6 +18,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum ListingStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Draft = 'draft';
     case Submitted = 'submitted';
     case UnderReview = 'under_review';
@@ -56,19 +59,9 @@ enum ListingStatus: string implements TransitionableState
         return $this === self::Archived;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Draft => 'Draft',
-            self::Submitted => 'Submitted',
-            self::UnderReview => 'Under review',
-            self::CorrectionRequired => 'Correction required',
-            self::Approved => 'Approved',
-            self::PartiallyApproved => 'Partially approved',
-            self::Rejected => 'Rejected',
-            self::Suspended => 'Suspended',
-            self::Archived => 'Archived',
-        };
+        return 'listing';
     }
 
     public function tone(): string

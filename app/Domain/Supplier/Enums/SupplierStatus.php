@@ -3,6 +3,7 @@
 namespace App\Domain\Supplier\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * A Supplier's lifecycle (D25, P13-1).
@@ -14,6 +15,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum SupplierStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Draft = 'draft';
     case VerificationPending = 'verification_pending';
     case KycPending = 'kyc_pending';
@@ -59,19 +62,9 @@ enum SupplierStatus: string implements TransitionableState
         return $this === self::Closed;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Draft => 'Draft',
-            self::VerificationPending => 'Verification pending',
-            self::KycPending => 'KYC pending',
-            self::UnderReview => 'Under review',
-            self::CorrectionRequired => 'Correction required',
-            self::Approved => 'Approved',
-            self::Rejected => 'Rejected',
-            self::Suspended => 'Suspended',
-            self::Closed => 'Closed',
-        };
+        return 'supplier';
     }
 
     public function tone(): string

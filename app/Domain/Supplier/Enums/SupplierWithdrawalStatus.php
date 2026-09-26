@@ -3,6 +3,7 @@
 namespace App\Domain\Supplier\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where a Supplier withdrawal request stands (D25, P13-24).
@@ -17,6 +18,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum SupplierWithdrawalStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     /** Submitted by the Supplier; reservation made, waiting for staff. */
     case Requested = 'requested';
 
@@ -71,18 +74,9 @@ enum SupplierWithdrawalStatus: string implements TransitionableState
         return in_array($this, [self::Requested, self::UnderReview, self::Approved, self::Processing], true);
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Requested => 'Requested',
-            self::UnderReview => 'Under review',
-            self::Approved => 'Approved',
-            self::Rejected => 'Rejected',
-            self::Processing => 'Processing',
-            self::Paid => 'Paid',
-            self::Failed => 'Failed',
-            self::Reversed => 'Reversed',
-        };
+        return 'withdrawal';
     }
 
     public function tone(): string

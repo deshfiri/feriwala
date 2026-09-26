@@ -3,6 +3,7 @@
 namespace App\Domain\Billing\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where a refund request has got to (D17).
@@ -18,6 +19,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum RefundStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     /** Waiting on an administrator (D17 makes every refund a decision). */
     case Requested = 'requested';
 
@@ -51,15 +54,9 @@ enum RefundStatus: string implements TransitionableState
         };
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Requested => 'Awaiting decision',
-            self::Approved => 'Approved',
-            self::Rejected => 'Rejected',
-            self::Processed => 'Refunded',
-            self::Failed => 'Refund failed',
-        };
+        return 'refund';
     }
 
     public function isDecided(): bool

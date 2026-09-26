@@ -3,12 +3,15 @@
 namespace App\Domain\Billing\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * The lifecycle of a payment (§26.4).
  */
 enum PaymentStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     /** Quoted but not yet sent to a gateway. */
     case Draft = 'draft';
 
@@ -105,19 +108,9 @@ enum PaymentStatus: string implements TransitionableState
         return $this === self::ReconciliationRequired;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Draft => 'Draft',
-            self::Initiated => 'Initiated',
-            self::Pending => 'Pending',
-            self::Paid => 'Paid',
-            self::Failed => 'Failed',
-            self::Cancelled => 'Cancelled',
-            self::Refunded => 'Refunded',
-            self::PartiallyRefunded => 'Partially refunded',
-            self::ReconciliationRequired => 'Needs reconciliation',
-        };
+        return 'payment';
     }
 
     public function tone(): string

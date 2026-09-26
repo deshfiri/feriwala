@@ -3,6 +3,7 @@
 namespace App\Domain\Account\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * The twenty-two account statuses from requirements.txt §5.3.
@@ -19,6 +20,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum AccountStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     // Registration and verification
     case Registered = 'registered';
     case MobileVerificationPending = 'mobile_verification_pending';
@@ -212,32 +215,9 @@ enum AccountStatus: string implements TransitionableState
         return $this === self::Closed;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Registered => 'Registered',
-            self::MobileVerificationPending => 'Mobile verification pending',
-            self::EmailVerificationPending => 'Email verification pending',
-            self::KycPending => 'KYC pending',
-            self::KycSubmitted => 'KYC submitted',
-            self::KycUnderReview => 'KYC under review',
-            self::KycResubmissionRequired => 'KYC resubmission required',
-            self::KycApproved => 'KYC approved',
-            self::KycRejected => 'KYC rejected',
-            self::PackageSelectionPending => 'Package selection pending',
-            self::PaymentPending => 'Payment pending',
-            self::PaymentVerificationPending => 'Payment verification pending',
-            self::ApprovalPending => 'Approval pending',
-            self::Active => 'Active',
-            self::PackageRenewalDue => 'Package renewal due',
-            self::PackageExpired => 'Package expired',
-            self::LowWalletBalance => 'Low wallet balance',
-            self::WalletTopupRequired => 'Wallet top-up required',
-            self::TemporarilyRestricted => 'Temporarily restricted',
-            self::TemporarilyDisabled => 'Temporarily disabled',
-            self::Suspended => 'Suspended',
-            self::Closed => 'Closed',
-        };
+        return 'account';
     }
 
     /**

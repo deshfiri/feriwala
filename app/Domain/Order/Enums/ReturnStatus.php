@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where a return has got to (§18.2, §26.3, contract §6.3, P6-12).
@@ -25,6 +26,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum ReturnStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Requested = 'requested';
     case Approved = 'approved';
     case Rejected = 'rejected';
@@ -49,16 +52,9 @@ enum ReturnStatus: string implements TransitionableState
         };
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Requested => 'Requested',
-            self::Approved => 'Approved',
-            self::Rejected => 'Rejected',
-            self::Received => 'Received',
-            self::Refunded => 'Refunded',
-            self::Cancelled => 'Cancelled',
-        };
+        return 'return';
     }
 
     public function isTerminal(): bool

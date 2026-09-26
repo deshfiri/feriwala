@@ -1,0 +1,150 @@
+<?php
+
+/*
+ * Every status label shown to a reader, keyed exactly the way
+ * App\Support\Status\HasTranslatedLabel looks them up: status.<group>.<value>.
+ *
+ * <value> is each enum's own ->value — never translate the value itself,
+ * only what is read here. A status introduced without a line here still
+ * displays (the trait falls back to a humanized version of the value), so
+ * this file is a completeness aid, not a hard dependency.
+ */
+
+return [
+    'account' => [
+        'registered' => 'Registered',
+        'mobile_verification_pending' => 'Mobile verification pending',
+        'email_verification_pending' => 'Email verification pending',
+        'kyc_pending' => 'KYC pending',
+        'kyc_submitted' => 'KYC submitted',
+        'kyc_under_review' => 'KYC under review',
+        'kyc_resubmission_required' => 'KYC resubmission required',
+        'kyc_approved' => 'KYC approved',
+        'kyc_rejected' => 'KYC rejected',
+        'package_selection_pending' => 'Package selection pending',
+        'payment_pending' => 'Payment pending',
+        'payment_verification_pending' => 'Payment verification pending',
+        'approval_pending' => 'Approval pending',
+        'active' => 'Active',
+        'package_renewal_due' => 'Package renewal due',
+        'package_expired' => 'Package expired',
+        'low_wallet_balance' => 'Low wallet balance',
+        'wallet_topup_required' => 'Wallet top-up required',
+        'temporarily_restricted' => 'Temporarily restricted',
+        'temporarily_disabled' => 'Temporarily disabled',
+        'suspended' => 'Suspended',
+        'closed' => 'Closed',
+    ],
+
+    'order' => [
+        'draft' => 'Draft',
+        'new' => 'New',
+        'pending_confirmation' => 'Pending confirmation',
+        'customer_verification_pending' => 'Customer verification pending',
+        'confirmed' => 'Confirmed',
+        'payment_pending' => 'Payment pending',
+        'paid' => 'Paid',
+        'processing' => 'Processing',
+        'stock_reserved' => 'Stock reserved',
+        'ready_for_fulfillment' => 'Ready for fulfillment',
+        'picking' => 'Picking',
+        'packing' => 'Packing',
+        'ready_for_pickup' => 'Ready for pickup',
+        'courier_assigned' => 'Courier assigned',
+        'shipped' => 'Shipped',
+        'in_transit' => 'In transit',
+        'delivered' => 'Delivered',
+        'completed' => 'Completed',
+        'delivery_failed' => 'Delivery failed',
+        'on_hold' => 'On hold',
+        'cancelled' => 'Cancelled',
+        'return_requested' => 'Return requested',
+        'return_approved' => 'Return approved',
+        'returning' => 'Returning',
+        'returned' => 'Returned',
+        'refund_pending' => 'Refund pending',
+        'partially_refunded' => 'Partially refunded',
+        'refunded' => 'Refunded',
+    ],
+
+    'payment' => [
+        'draft' => 'Draft',
+        'initiated' => 'Initiated',
+        'pending' => 'Pending',
+        'paid' => 'Paid',
+        'failed' => 'Failed',
+        'cancelled' => 'Cancelled',
+        'refunded' => 'Refunded',
+        'partially_refunded' => 'Partially refunded',
+        'reconciliation_required' => 'Needs reconciliation',
+    ],
+
+    'website' => [
+        'setup_pending' => 'Setup pending',
+        'deposit_pending' => 'Deposit pending',
+        'development' => 'In development',
+        'api_connection_pending' => 'API connection pending',
+        'active' => 'Active',
+        'low_wallet_balance' => 'Low wallet balance',
+        'grace_period' => 'Grace period',
+        'temporarily_disabled' => 'Temporarily disabled',
+        'package_expired' => 'Package expired',
+        'domain_renewal_pending' => 'Domain renewal pending',
+        'hosting_renewal_pending' => 'Hosting renewal pending',
+        'suspended' => 'Suspended',
+        'maintenance' => 'Maintenance',
+        'closed' => 'Closed',
+    ],
+
+    'supplier' => [
+        'draft' => 'Draft',
+        'verification_pending' => 'Verification pending',
+        'kyc_pending' => 'KYC pending',
+        'under_review' => 'Under review',
+        'correction_required' => 'Correction required',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'suspended' => 'Suspended',
+        'closed' => 'Closed',
+    ],
+
+    'listing' => [
+        'draft' => 'Draft',
+        'submitted' => 'Submitted',
+        'under_review' => 'Under review',
+        'correction_required' => 'Correction required',
+        'approved' => 'Approved',
+        'partially_approved' => 'Partially approved',
+        'rejected' => 'Rejected',
+        'suspended' => 'Suspended',
+        'archived' => 'Archived',
+    ],
+
+    'withdrawal' => [
+        'requested' => 'Requested',
+        'under_review' => 'Under review',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'processing' => 'Processing',
+        'paid' => 'Paid',
+        'failed' => 'Failed',
+        'reversed' => 'Reversed',
+    ],
+
+    'return' => [
+        'requested' => 'Requested',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'received' => 'Received',
+        'refunded' => 'Refunded',
+        'cancelled' => 'Cancelled',
+    ],
+
+    'refund' => [
+        'requested' => 'Awaiting decision',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'processed' => 'Refunded',
+        'failed' => 'Refund failed',
+    ],
+];

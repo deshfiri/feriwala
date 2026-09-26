@@ -3,6 +3,7 @@
 namespace App\Domain\Website\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where a dedicated website stands: every status §16.4 names (P5-9).
@@ -28,6 +29,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum WebsiteStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case SetupPending = 'setup_pending';
     case DepositPending = 'deposit_pending';
     case Development = 'development';
@@ -147,24 +150,9 @@ enum WebsiteStatus: string implements TransitionableState
         return $this->isLive() || $this === self::Maintenance || $this === self::ApiConnectionPending;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::SetupPending => 'Setup pending',
-            self::DepositPending => 'Deposit pending',
-            self::Development => 'In development',
-            self::ApiConnectionPending => 'API connection pending',
-            self::Active => 'Active',
-            self::LowWalletBalance => 'Low wallet balance',
-            self::GracePeriod => 'Grace period',
-            self::TemporarilyDisabled => 'Temporarily disabled',
-            self::PackageExpired => 'Package expired',
-            self::DomainRenewalPending => 'Domain renewal pending',
-            self::HostingRenewalPending => 'Hosting renewal pending',
-            self::Suspended => 'Suspended',
-            self::Maintenance => 'Maintenance',
-            self::Closed => 'Closed',
-        };
+        return 'website';
     }
 
     /**

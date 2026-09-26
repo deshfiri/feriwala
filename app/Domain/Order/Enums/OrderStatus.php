@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * The order lifecycle: every system status §18.2 names (P6-3, P6-5).
@@ -21,6 +22,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum OrderStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Draft = 'draft';
     case New = 'new';
     case PendingConfirmation = 'pending_confirmation';
@@ -125,38 +128,9 @@ enum OrderStatus: string implements TransitionableState
         return in_array($this, [self::Cancelled, self::Refunded], true);
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Draft => 'Draft',
-            self::New => 'New',
-            self::PendingConfirmation => 'Pending confirmation',
-            self::CustomerVerificationPending => 'Customer verification pending',
-            self::Confirmed => 'Confirmed',
-            self::PaymentPending => 'Payment pending',
-            self::Paid => 'Paid',
-            self::Processing => 'Processing',
-            self::StockReserved => 'Stock reserved',
-            self::ReadyForFulfillment => 'Ready for fulfillment',
-            self::Picking => 'Picking',
-            self::Packing => 'Packing',
-            self::ReadyForPickup => 'Ready for pickup',
-            self::CourierAssigned => 'Courier assigned',
-            self::Shipped => 'Shipped',
-            self::InTransit => 'In transit',
-            self::Delivered => 'Delivered',
-            self::Completed => 'Completed',
-            self::DeliveryFailed => 'Delivery failed',
-            self::OnHold => 'On hold',
-            self::Cancelled => 'Cancelled',
-            self::ReturnRequested => 'Return requested',
-            self::ReturnApproved => 'Return approved',
-            self::Returning => 'Returning',
-            self::Returned => 'Returned',
-            self::RefundPending => 'Refund pending',
-            self::PartiallyRefunded => 'Partially refunded',
-            self::Refunded => 'Refunded',
-        };
+        return 'order';
     }
 
     /**
