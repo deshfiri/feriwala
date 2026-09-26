@@ -1,6 +1,8 @@
 import { Plus, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import MediaPicker, { type MediaPickerItem } from '@/components/admin/cms/media-picker';
+import { useEffect, useId, useState } from 'react';
+import MediaPicker, {
+    type MediaPickerItem,
+} from '@/components/admin/cms/media-picker';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,7 +73,9 @@ function asMediaId(value: unknown): string | null {
  */
 function errorKey(name: string): string {
     const withoutPrefix = name.replace(/^content/, '');
-    const segments = [...withoutPrefix.matchAll(/\[([^\]]*)\]/g)].map((match) => match[1]);
+    const segments = [...withoutPrefix.matchAll(/\[([^\]]*)\]/g)].map(
+        (match) => match[1],
+    );
 
     return segments.join('.');
 }
@@ -92,6 +96,8 @@ function LocalizedField({
     multiline?: boolean;
 }) {
     const { t } = useTranslation();
+    const enError = error?.[`${errorKey(name)}.en`];
+    const bnError = error?.[`${errorKey(name)}.bn`];
 
     return (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -106,6 +112,10 @@ function LocalizedField({
                         rows={3}
                         defaultValue={defaultValue.en}
                         required={required}
+                        aria-invalid={Boolean(enError)}
+                        aria-describedby={
+                            enError ? `${name}-en-error` : undefined
+                        }
                         className="border-input bg-background rounded-md border px-3 py-2 text-sm"
                     />
                 ) : (
@@ -114,9 +124,13 @@ function LocalizedField({
                         name={`${name}[en]`}
                         defaultValue={defaultValue.en}
                         required={required}
+                        aria-invalid={Boolean(enError)}
+                        aria-describedby={
+                            enError ? `${name}-en-error` : undefined
+                        }
                     />
                 )}
-                <InputError message={error?.[`${errorKey(name)}.en`]} />
+                <InputError id={`${name}-en-error`} message={enError} />
             </div>
             <div className="grid gap-1.5">
                 <Label htmlFor={`${name}-bn`}>
@@ -128,6 +142,10 @@ function LocalizedField({
                         name={`${name}[bn]`}
                         rows={3}
                         defaultValue={defaultValue.bn ?? ''}
+                        aria-invalid={Boolean(bnError)}
+                        aria-describedby={
+                            bnError ? `${name}-bn-error` : undefined
+                        }
                         className="border-input bg-background rounded-md border px-3 py-2 text-sm"
                     />
                 ) : (
@@ -135,9 +153,13 @@ function LocalizedField({
                         id={`${name}-bn`}
                         name={`${name}[bn]`}
                         defaultValue={defaultValue.bn ?? ''}
+                        aria-invalid={Boolean(bnError)}
+                        aria-describedby={
+                            bnError ? `${name}-bn-error` : undefined
+                        }
                     />
                 )}
-                <InputError message={error?.[`${errorKey(name)}.bn`]} />
+                <InputError id={`${name}-bn-error`} message={bnError} />
             </div>
         </div>
     );
@@ -157,6 +179,7 @@ function CtaFieldGroup({
     required?: boolean;
 }) {
     const { t } = useTranslation();
+    const hrefError = error?.[`${errorKey(name)}.href`];
 
     return (
         <fieldset className="space-y-3 rounded-lg border p-3">
@@ -178,8 +201,12 @@ function CtaFieldGroup({
                     defaultValue={defaultValue.href}
                     required={required}
                     placeholder="register"
+                    aria-invalid={Boolean(hrefError)}
+                    aria-describedby={
+                        hrefError ? `${name}-href-error` : undefined
+                    }
                 />
-                <InputError message={error?.[`${errorKey(name)}.href`]} />
+                <InputError id={`${name}-href-error`} message={hrefError} />
             </div>
         </fieldset>
     );
@@ -203,14 +230,18 @@ function MediaPositionSelect({
 
     return (
         <div className="grid gap-1.5">
-            <Label htmlFor={name}>{t('cms.section_fields.media_position')}</Label>
+            <Label htmlFor={name}>
+                {t('cms.section_fields.media_position')}
+            </Label>
             <select
                 id={name}
                 name={name}
                 defaultValue={current}
                 className="border-input bg-background h-9 rounded-md border px-2 text-sm"
             >
-                <option value="">{t('cms.section_fields.media_position_default')}</option>
+                <option value="">
+                    {t('cms.section_fields.media_position_default')}
+                </option>
                 {options.map((option) => (
                     <option key={option} value={option}>
                         {t(`cms.section_fields.media_position_${option}`)}
@@ -221,7 +252,13 @@ function MediaPositionSelect({
     );
 }
 
-function MediaFitSelect({ name, defaultValue }: { name: string; defaultValue: unknown }) {
+function MediaFitSelect({
+    name,
+    defaultValue,
+}: {
+    name: string;
+    defaultValue: unknown;
+}) {
     const { t } = useTranslation();
     const current = typeof defaultValue === 'string' ? defaultValue : '';
 
@@ -234,9 +271,15 @@ function MediaFitSelect({ name, defaultValue }: { name: string; defaultValue: un
                 defaultValue={current}
                 className="border-input bg-background h-9 rounded-md border px-2 text-sm"
             >
-                <option value="">{t('cms.section_fields.media_fit_default')}</option>
-                <option value="cover">{t('cms.section_fields.media_fit_cover')}</option>
-                <option value="contain">{t('cms.section_fields.media_fit_contain')}</option>
+                <option value="">
+                    {t('cms.section_fields.media_fit_default')}
+                </option>
+                <option value="cover">
+                    {t('cms.section_fields.media_fit_cover')}
+                </option>
+                <option value="contain">
+                    {t('cms.section_fields.media_fit_contain')}
+                </option>
             </select>
         </div>
     );
@@ -346,15 +389,17 @@ function ControlledLocalizedField({
     multiline?: boolean;
 }) {
     const { t } = useTranslation();
+    const id = useId();
 
     return (
         <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1">
-                <Label className="text-xs">
+                <Label htmlFor={`${id}-en`} className="text-xs">
                     {label} ({t('cms.locale.en')})
                 </Label>
                 {multiline ? (
                     <textarea
+                        id={`${id}-en`}
                         rows={2}
                         value={value.en}
                         onChange={(e) =>
@@ -364,6 +409,7 @@ function ControlledLocalizedField({
                     />
                 ) : (
                     <Input
+                        id={`${id}-en`}
                         value={value.en}
                         onChange={(e) =>
                             onChange({ ...value, en: e.target.value })
@@ -372,11 +418,12 @@ function ControlledLocalizedField({
                 )}
             </div>
             <div className="grid gap-1">
-                <Label className="text-xs">
+                <Label htmlFor={`${id}-bn`} className="text-xs">
                     {label} ({t('cms.locale.bn')})
                 </Label>
                 {multiline ? (
                     <textarea
+                        id={`${id}-bn`}
                         rows={2}
                         value={value.bn ?? ''}
                         onChange={(e) =>
@@ -386,6 +433,7 @@ function ControlledLocalizedField({
                     />
                 ) : (
                     <Input
+                        id={`${id}-bn`}
                         value={value.bn ?? ''}
                         onChange={(e) =>
                             onChange({ ...value, bn: e.target.value })
@@ -496,7 +544,9 @@ export function SectionContentFields({
                         <LocalizedField
                             name="content[media_alt_override]"
                             label={t('cms.section_fields.media_alt_override')}
-                            defaultValue={asLocalized(content.media_alt_override)}
+                            defaultValue={asLocalized(
+                                content.media_alt_override,
+                            )}
                             error={errors}
                         />
                     </fieldset>
@@ -533,7 +583,10 @@ export function SectionContentFields({
                         defaultValue={content.media_position}
                         options={['left', 'right']}
                     />
-                    <MediaFitSelect name="content[media_fit]" defaultValue={content.media_fit} />
+                    <MediaFitSelect
+                        name="content[media_fit]"
+                        defaultValue={content.media_fit}
+                    />
                 </>
             );
 
@@ -623,14 +676,25 @@ export function SectionContentFields({
                         <Input
                             id="video_url"
                             name="content[video_url]"
-                            defaultValue={typeof content.video_url === 'string' ? content.video_url : ''}
+                            defaultValue={
+                                typeof content.video_url === 'string'
+                                    ? content.video_url
+                                    : ''
+                            }
                             required
                             placeholder="https://www.youtube.com/watch?v=..."
+                            aria-invalid={Boolean(errors.video_url)}
+                            aria-describedby={
+                                errors.video_url ? 'video_url-error' : undefined
+                            }
                         />
                         <p className="text-muted-foreground text-xs">
                             {t('cms.section_fields.video_url_help')}
                         </p>
-                        <InputError message={errors.video_url} />
+                        <InputError
+                            id="video_url-error"
+                            message={errors.video_url}
+                        />
                     </div>
                     <MediaPicker
                         name="content[poster_media_id]"
@@ -833,7 +897,10 @@ function ValuePropositionFields({
                 defaultValue={content.media_position}
                 options={['left', 'right']}
             />
-            <MediaFitSelect name="content[media_fit]" defaultValue={content.media_fit} />
+            <MediaFitSelect
+                name="content[media_fit]"
+                defaultValue={content.media_fit}
+            />
         </>
     );
 }
@@ -849,7 +916,12 @@ function BenefitsFields({
 } & MediaProps) {
     const { t } = useTranslation();
     const [items, setItems] = useState<
-        { icon: string; heading: LocalizedValue; body: LocalizedValue; media_id: string | null }[]
+        {
+            icon: string;
+            heading: LocalizedValue;
+            body: LocalizedValue;
+            media_id: string | null;
+        }[]
     >([]);
 
     useEffect(() => {
@@ -973,7 +1045,11 @@ function HowItWorksFields({
 } & MediaProps) {
     const { t } = useTranslation();
     const [steps, setSteps] = useState<
-        { heading: LocalizedValue; body: LocalizedValue; media_id: string | null }[]
+        {
+            heading: LocalizedValue;
+            body: LocalizedValue;
+            media_id: string | null;
+        }[]
     >([]);
 
     useEffect(() => {
@@ -986,8 +1062,16 @@ function HowItWorksFields({
                       media_id: asMediaId(step.media_id),
                   }))
                 : [
-                      { heading: emptyLocalized(), body: emptyLocalized(), media_id: null },
-                      { heading: emptyLocalized(), body: emptyLocalized(), media_id: null },
+                      {
+                          heading: emptyLocalized(),
+                          body: emptyLocalized(),
+                          media_id: null,
+                      },
+                      {
+                          heading: emptyLocalized(),
+                          body: emptyLocalized(),
+                          media_id: null,
+                      },
                   ],
         );
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1083,7 +1167,10 @@ function TestimonialsFields({
             raw.length > 0
                 ? raw.map((item: Content) => ({
                       quote: asLocalized(item.quote),
-                      author_name: typeof item.author_name === 'string' ? item.author_name : '',
+                      author_name:
+                          typeof item.author_name === 'string'
+                              ? item.author_name
+                              : '',
                       author_role: asLocalized(item.author_role),
                       media_id: asMediaId(item.media_id),
                   }))
@@ -1129,12 +1216,18 @@ function TestimonialsFields({
                             multiline
                         />
                         <div className="grid gap-1">
-                            <Label className="text-xs">
+                            <Label
+                                htmlFor={`testimonial-author-name-${index}`}
+                                className="text-xs"
+                            >
                                 {t('cms.section_fields.author_name')}
                             </Label>
                             <Input
+                                id={`testimonial-author-name-${index}`}
                                 value={item.author_name}
-                                onChange={(e) => update({ author_name: e.target.value })}
+                                onChange={(e) =>
+                                    update({ author_name: e.target.value })
+                                }
                             />
                         </div>
                         <ControlledLocalizedField
@@ -1155,7 +1248,10 @@ function TestimonialsFields({
 
             {items.map((item, index) => (
                 <div key={index}>
-                    {hiddenLocalized(`content[items][${index}][quote]`, item.quote)}
+                    {hiddenLocalized(
+                        `content[items][${index}][quote]`,
+                        item.quote,
+                    )}
                     <input
                         type="hidden"
                         name={`content[items][${index}][author_name]`}
@@ -1181,7 +1277,9 @@ function ClientsPartnersFields({
     errors: Errors;
 } & MediaProps) {
     const { t } = useTranslation();
-    const [items, setItems] = useState<{ name: string; media_id: string | null }[]>([]);
+    const [items, setItems] = useState<
+        { name: string; media_id: string | null }[]
+    >([]);
 
     useEffect(() => {
         const raw = Array.isArray(content.items) ? content.items : [];
@@ -1215,10 +1313,18 @@ function ClientsPartnersFields({
                 renderItem={(item, update, index) => (
                     <>
                         <div className="grid gap-1">
-                            <Label className="text-xs">{t('cms.section_fields.client_name')}</Label>
+                            <Label
+                                htmlFor={`client-name-${index}`}
+                                className="text-xs"
+                            >
+                                {t('cms.section_fields.client_name')}
+                            </Label>
                             <Input
+                                id={`client-name-${index}`}
                                 value={item.name}
-                                onChange={(e) => update({ name: e.target.value })}
+                                onChange={(e) =>
+                                    update({ name: e.target.value })
+                                }
                             />
                         </div>
                         <MediaPicker

@@ -48,7 +48,14 @@ type Props = {
  * inside `SectionDialog`'s own Inertia `Form`, and HTML forms cannot
  * nest. The upload goes through `router.post` directly instead.
  */
-export default function MediaPicker({ name, label, value, media, canManage, clearable = true }: Props) {
+export default function MediaPicker({
+    name,
+    label,
+    value,
+    media,
+    canManage,
+    clearable = true,
+}: Props) {
     const { t } = useTranslation();
     const [selected, setSelected] = useState(value);
     const [open, setOpen] = useState(false);
@@ -80,7 +87,8 @@ export default function MediaPicker({ name, label, value, media, canManage, clea
             preserveScroll: true,
             preserveState: true,
             onSuccess: (page) => {
-                const freshMedia = (page.props.media as MediaPickerItem[] | undefined) ?? [];
+                const freshMedia =
+                    (page.props.media as MediaPickerItem[] | undefined) ?? [];
                 if (freshMedia[0]) {
                     setSelected(freshMedia[0].id);
                 }
@@ -112,7 +120,13 @@ export default function MediaPicker({ name, label, value, media, canManage, clea
                                 : current.mime_type}
                         </p>
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`${t('cms.media_picker.change')} — ${label}`}
+                        onClick={() => setOpen(true)}
+                    >
                         {t('cms.media_picker.change')}
                     </Button>
                     {clearable && (
@@ -128,7 +142,12 @@ export default function MediaPicker({ name, label, value, media, canManage, clea
                     )}
                 </div>
             ) : (
-                <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+                <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={`${t('cms.media_picker.choose')} — ${label}`}
+                    onClick={() => setOpen(true)}
+                >
                     <ImageIcon className="size-4" />
                     {t('cms.media_picker.choose')}
                 </Button>

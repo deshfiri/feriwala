@@ -65,6 +65,7 @@ export default function PublicHeader({ items }: { items: CmsMenuItem[] }) {
                     type="button"
                     className="focus-visible:ring-ring ms-auto rounded-md p-2 focus-visible:ring-2 md:hidden"
                     aria-expanded={open}
+                    aria-controls="public-header-mobile-menu"
                     aria-label={t('public.nav.menu')}
                     onClick={() => setOpen((value) => !value)}
                 >
@@ -75,7 +76,11 @@ export default function PublicHeader({ items }: { items: CmsMenuItem[] }) {
             </div>
 
             {open && (
-                <div className="border-border space-y-3 border-t px-4 py-4 md:hidden">
+                <nav
+                    id="public-header-mobile-menu"
+                    aria-label={t('public.nav.menu')}
+                    className="border-border space-y-3 border-t px-4 py-4 md:hidden"
+                >
                     {items.map((item) => (
                         <a
                             key={item.key}
@@ -103,7 +108,7 @@ export default function PublicHeader({ items }: { items: CmsMenuItem[] }) {
                             </Link>
                         </Button>
                     </div>
-                </div>
+                </nav>
             )}
         </header>
     );

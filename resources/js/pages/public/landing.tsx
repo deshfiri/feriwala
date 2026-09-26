@@ -14,6 +14,7 @@ import PlatformIntroduction from '@/components/public/sections/platform-introduc
 import Testimonials from '@/components/public/sections/testimonials';
 import ValueProposition from '@/components/public/sections/value-proposition';
 import Video from '@/components/public/sections/video';
+import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { CmsMenus, CmsPackagePreview, CmsSection, CmsSeo } from '@/types';
 
@@ -69,6 +70,7 @@ export default function Landing({
     menus,
     structuredData,
 }: Props) {
+    const { t } = useTranslation();
     const footerSection = sections.find((section) => section.kind === 'footer');
     const footerContent = (footerSection?.content ?? {}) as {
         tagline?: string;
@@ -125,9 +127,16 @@ export default function Landing({
             </Head>
 
             <div className="bg-background text-foreground min-h-svh">
+                <a
+                    href="#main-content"
+                    className="bg-background focus:ring-ring sr-only rounded-md px-3 py-2 focus:not-sr-only focus:absolute focus:z-50 focus:ring-2"
+                >
+                    {t('common.nav.skip')}
+                </a>
+
                 <PublicHeader items={menus.header} />
 
-                <main>
+                <main id="main-content">
                     {sections
                         .filter(
                             (section) =>

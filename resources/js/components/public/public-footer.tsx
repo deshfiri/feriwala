@@ -1,4 +1,5 @@
 import AppLogo from '@/components/app-logo';
+import { useTranslation } from '@/hooks/use-translation';
 import type { CmsMenuItem } from '@/types';
 
 /**
@@ -19,6 +20,8 @@ export default function PublicFooter({
     footerLinks: CmsMenuItem[];
     legalLinks: CmsMenuItem[];
 }) {
+    const { t } = useTranslation();
+
     return (
         <footer className="border-border border-t">
             <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-center md:justify-between">
@@ -32,7 +35,7 @@ export default function PublicFooter({
                 </div>
 
                 <nav
-                    aria-label="Footer"
+                    aria-label={t('public.nav.footer')}
                     className="flex flex-wrap items-center gap-x-6 gap-y-2"
                 >
                     {[...footerLinks, ...legalLinks].map((item) => (

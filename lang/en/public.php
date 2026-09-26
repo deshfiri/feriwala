@@ -4,6 +4,7 @@ return [
     'nav' => [
         'label' => 'Main navigation',
         'menu' => 'Menu',
+        'footer' => 'Footer',
         'sign_in' => 'Sign in',
         'register' => 'Create your account',
     ],
