@@ -388,6 +388,23 @@ describe('the owner', function () {
         expect(fn () => app(ManageStaff::class)->changeRole($membership, AccountRole::Owner, $account->owner))
             ->toThrow(InvalidArgumentException::class, 'Ownership is not granted');
     });
+
+    /*
+     * The owner's immunity is enforced twice on purpose: once here, in the
+     * policy the "Remove"/"Change role" buttons and their routes both check,
+     * and again inside ManageStaff so the endpoint refuses it even if it were
+     * ever reached another way. The tests above cover the ManageStaff copy;
+     * this covers the policy copy directly, so a regression in either one
+     * fails a test instead of only being caught by the other.
+     */
+    it('is refused by the policy itself, not only by ManageStaff', function () {
+        $account = staffTestOwner();
+        $manager = User::factory()->staffOf($account, AccountRole::Manager)->create();
+        $ownerMembership = $account->memberships()->where('role', AccountRole::Owner)->first();
+
+        expect($manager->can('remove', $ownerMembership))->toBeFalse()
+            ->and($manager->can('changeRole', $ownerMembership))->toBeFalse();
+    });
 });
 
 describe('managing staff', function () {
