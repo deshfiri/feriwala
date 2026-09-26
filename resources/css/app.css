@@ -55,6 +55,10 @@
     --color-popover: var(--popover);
     --color-popover-foreground: var(--popover-foreground);
 
+    /* One step above --card: dropdowns, popovers and toolbars floating over a card. */
+    --color-elevated: var(--elevated);
+    --color-elevated-foreground: var(--elevated-foreground);
+
     --color-primary: var(--primary);
     --color-primary-foreground: var(--primary-foreground);
 
@@ -123,6 +127,19 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+
+    /*
+     * Restrained shadow scale (§33.1 — no glow, no glassmorphism). These override
+     * Tailwind's defaults so `shadow-xs`/`shadow-sm`/`shadow-md` stay this quiet
+     * everywhere, instead of every card/menu re-deciding its own elevation.
+     */
+    --shadow-xs: 0 1px 2px oklch(0.2 0 0 / 0.04);
+    --shadow-sm:
+        0 1px 3px oklch(0.2 0 0 / 0.06), 0 1px 2px oklch(0.2 0 0 / 0.04);
+    --shadow-md:
+        0 4px 8px oklch(0.2 0 0 / 0.06), 0 2px 4px oklch(0.2 0 0 / 0.04);
+    --shadow-lg:
+        0 8px 16px oklch(0.2 0 0 / 0.08), 0 2px 6px oklch(0.2 0 0 / 0.04);
 }
 
 :root {
@@ -148,6 +165,10 @@
     --card-foreground: oklch(0.203 0.004 55);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.203 0.004 55);
+
+    /* Floats a fraction above --card so a menu reads as raised over the panel beneath it. */
+    --elevated: oklch(1 0 0);
+    --elevated-foreground: oklch(0.203 0.004 55);
 
     /* Near-black carries primary actions; orange is the accent, not the workhorse. */
     --primary: oklch(0.203 0.004 55);
@@ -222,6 +243,10 @@
     --card-foreground: oklch(0.955 0.003 75);
     --popover: oklch(0.225 0.004 60);
     --popover-foreground: oklch(0.955 0.003 75);
+
+    /* Dark mode elevation reads as lighter, not darker — a raised surface catches more light. */
+    --elevated: oklch(0.265 0.004 60);
+    --elevated-foreground: oklch(0.955 0.003 75);
 
     --primary: oklch(0.955 0.003 75);
     --primary-foreground: oklch(0.203 0.004 55);
@@ -306,5 +331,17 @@
     :focus-visible {
         @apply outline-2 outline-offset-2;
         outline-color: var(--ring);
+    }
+
+    /* A user who asked the OS for less motion gets it everywhere, not per-component. */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
     }
 }

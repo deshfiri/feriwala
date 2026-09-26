@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'nav' => [
+        'skip' => 'Skip to content',
+    ],
+
     'actions' => [
         'save' => 'Save',
         'cancel' => 'Cancel',
