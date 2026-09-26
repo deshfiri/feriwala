@@ -17,4 +17,10 @@ return [
         'title' => 'This page is not available right now',
         'description' => 'Please check back soon.',
     ],
+
+    'video' => [
+        'title' => 'Video',
+        'play' => 'Play video',
+        'watch_on' => 'Watch on :provider',
+    ],
 ];

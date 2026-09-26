@@ -1,8 +1,15 @@
 import SectionContainer from '@/components/public/section-container';
+import SectionMedia from '@/components/public/sections/section-media';
+import type { CmsMedia } from '@/types';
 
 type HowItWorksContent = {
     heading: string;
-    steps: { step_number: number; heading: string; body?: string | null }[];
+    steps: {
+        step_number: number;
+        heading: string;
+        body?: string | null;
+        media?: CmsMedia | null;
+    }[];
 };
 
 /**
@@ -33,12 +40,21 @@ export default function HowItWorks({
                         >
                             {step.step_number}
                         </span>
-                        <div>
-                            <h3 className="font-semibold">{step.heading}</h3>
-                            {step.body && (
-                                <p className="text-muted-foreground mt-1 text-sm">
-                                    {step.body}
-                                </p>
+                        <div className="flex flex-1 items-start gap-4">
+                            <div>
+                                <h3 className="font-semibold">
+                                    {step.heading}
+                                </h3>
+                                {step.body && (
+                                    <p className="text-muted-foreground mt-1 text-sm">
+                                        {step.body}
+                                    </p>
+                                )}
+                            </div>
+                            {step.media && (
+                                <div className="aspect-square w-20 shrink-0 overflow-hidden rounded-lg sm:w-24">
+                                    <SectionMedia media={step.media} />
+                                </div>
                             )}
                         </div>
                     </li>

@@ -76,6 +76,24 @@ it('keeps serving the frozen metadata after the media row is edited', function (
         ->and($hero['content']['media']['width'])->toBe(1200);
 });
 
+it('replaces the frozen alt text with the section media_alt_override when present', function () {
+    $page = cmsTestPage();
+    $media = mediaSnapshotTestMedia();
+
+    app(SaveSectionDraft::class)->handle($page, 'hero', SectionKind::Hero, [
+        ...cmsTestHeroContent(),
+        'media_id' => $media->public_id,
+        'media_alt_override' => ['en' => 'Context-specific alt text', 'bn' => null],
+    ]);
+
+    app(PublishPage::class)->handle($page);
+
+    $result = app(PublishedPageReader::class)->render('home', 'en');
+    $hero = collect($result['sections'])->firstWhere('kind', 'hero');
+
+    expect($hero['content']['media']['alt'])->toBe('Context-specific alt text');
+});
+
 it('refuses to delete media still referenced by a current draft section', function () {
     $page = cmsTestPage();
     $media = mediaSnapshotTestMedia();

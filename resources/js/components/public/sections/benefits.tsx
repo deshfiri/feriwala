@@ -14,6 +14,8 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import SectionContainer from '@/components/public/section-container';
+import SectionMedia from '@/components/public/sections/section-media';
+import type { CmsMedia } from '@/types';
 
 /** Mirrors App\Domain\Cms\Support\SectionContentValidator::ALLOWED_ICONS exactly. */
 const ICONS: Record<string, LucideIcon> = {
@@ -33,7 +35,12 @@ const ICONS: Record<string, LucideIcon> = {
 
 type BenefitsContent = {
     heading: string;
-    items: { icon: string; heading: string; body?: string | null }[];
+    items: {
+        icon: string;
+        heading: string;
+        body?: string | null;
+        media?: CmsMedia | null;
+    }[];
 };
 
 export default function Benefits({ content }: { content: BenefitsContent }) {
@@ -52,9 +59,18 @@ export default function Benefits({ content }: { content: BenefitsContent }) {
                             key={index}
                             className="bg-card border-border rounded-xl border p-5"
                         >
-                            <div className="bg-brand-subtle text-brand inline-flex size-10 items-center justify-center rounded-lg">
-                                <Icon aria-hidden="true" className="size-5" />
-                            </div>
+                            {item.media ? (
+                                <div className="size-10 overflow-hidden rounded-lg">
+                                    <SectionMedia media={item.media} />
+                                </div>
+                            ) : (
+                                <div className="bg-brand-subtle text-brand inline-flex size-10 items-center justify-center rounded-lg">
+                                    <Icon
+                                        aria-hidden="true"
+                                        className="size-5"
+                                    />
+                                </div>
+                            )}
                             <h3 className="mt-4 font-semibold">
                                 {item.heading}
                             </h3>

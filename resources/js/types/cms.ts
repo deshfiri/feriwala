@@ -11,6 +11,28 @@ export type CmsCta = {
     href: string;
 };
 
+/**
+ * A media reference, already frozen into immutable metadata at publish
+ * time and locale-resolved (`alt` is a plain string, not `{en, bn}`) —
+ * Stage 7 addendum. Never a storage path, always the CMS's own public
+ * URL. `width`/`height` may be null for a file whose dimensions could not
+ * be read.
+ */
+export type CmsMedia = {
+    public_id: string;
+    url: string;
+    width: number | null;
+    height: number | null;
+    mime_type: string;
+    alt: string;
+};
+
+/** Mirrors App\Domain\Cms\Support\SectionContentValidator's `media_position` rule. */
+export type CmsMediaPosition = 'left' | 'right' | 'background' | null;
+
+/** Mirrors App\Domain\Cms\Support\SectionContentValidator's `media_fit` rule. */
+export type CmsMediaFit = 'cover' | 'contain' | null;
+
 export type CmsSection = {
     key: string;
     kind: string;
@@ -29,6 +51,7 @@ export type CmsSeo = {
     robots?: string;
     organization_name?: string | null;
     organization_url?: string | null;
+    organization_logo_url?: string | null;
 };
 
 export type CmsMenuItem = {

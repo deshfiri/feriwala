@@ -20,6 +20,11 @@ use Illuminate\Support\Str;
  * deletion protection); the resolved metadata is added alongside it under
  * the same name with `_id` dropped — `poster_media_id` gets a sibling
  * `poster_media`, `media_id` gets `media`.
+ *
+ * A sibling `{name}_alt_override` localized field (only `media_alt_override`
+ * exists in a schema today, on Hero) replaces the frozen `alt` when present —
+ * this is how a section can say "the image's own library alt text isn't
+ * right in this context" without editing the shared Media row.
  */
 class MediaSnapshotResolver
 {
@@ -69,8 +74,15 @@ class MediaSnapshotResolver
             if ($key === 'media_id' || str_ends_with($key, '_media_id')) {
                 $resolvedKey = $key === 'media_id' ? 'media' : Str::beforeLast($key, '_id');
                 $item = $media->get($value);
+                $snapshot = $item === null ? null : $this->snapshot($item);
 
-                $result[$resolvedKey] = $item === null ? null : $this->snapshot($item);
+                $override = $content["{$resolvedKey}_alt_override"] ?? null;
+
+                if ($snapshot !== null && is_array($override) && (filled($override['en'] ?? null) || filled($override['bn'] ?? null))) {
+                    $snapshot['alt'] = $override;
+                }
+
+                $result[$resolvedKey] = $snapshot;
             }
         }
 

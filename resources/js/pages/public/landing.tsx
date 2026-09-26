@@ -2,14 +2,18 @@ import { Head } from '@inertiajs/react';
 import type { ComponentType } from 'react';
 import PublicFooter from '@/components/public/public-footer';
 import PublicHeader from '@/components/public/public-header';
+import About from '@/components/public/sections/about';
 import Benefits from '@/components/public/sections/benefits';
+import ClientsPartners from '@/components/public/sections/clients-partners';
 import Cta from '@/components/public/sections/cta';
 import Faq from '@/components/public/sections/faq';
 import Hero from '@/components/public/sections/hero';
 import HowItWorks from '@/components/public/sections/how-it-works';
 import PackagePreview from '@/components/public/sections/package-preview';
 import PlatformIntroduction from '@/components/public/sections/platform-introduction';
+import Testimonials from '@/components/public/sections/testimonials';
 import ValueProposition from '@/components/public/sections/value-proposition';
+import Video from '@/components/public/sections/video';
 import { cn } from '@/lib/utils';
 import type { CmsMenus, CmsPackagePreview, CmsSection, CmsSeo } from '@/types';
 
@@ -28,6 +32,7 @@ type Props = {
 const RENDERERS: Record<string, ComponentType<any>> = {
     hero: Hero,
     platform_introduction: PlatformIntroduction,
+    about: About,
     benefits: Benefits,
     how_it_works: HowItWorks,
     dropshipping: ValueProposition,
@@ -35,6 +40,9 @@ const RENDERERS: Record<string, ComponentType<any>> = {
     partner_websites: ValueProposition,
     supplier_opportunity: ValueProposition,
     package_preview: PackagePreview,
+    video: Video,
+    testimonials: Testimonials,
+    clients_partners: ClientsPartners,
     faq: Faq,
     cta: Cta,
 };
