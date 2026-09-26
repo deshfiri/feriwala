@@ -2,6 +2,7 @@ export type * from './activation';
 export type * from './auth';
 export type * from './catalog';
 export type * from './chart';
+export type * from './cms';
 export type * from './dashboard';
 export type * from './data-table';
 export type * from './kyc';
