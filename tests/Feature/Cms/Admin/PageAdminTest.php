@@ -97,6 +97,44 @@ it('refuses to unpublish a page that was never published', function () {
         ->assertSessionHasErrors('page');
 });
 
+it('cancels a scheduled publish back to draft over HTTP', function () {
+    $page = cmsTestPage();
+    app(SaveSectionDraft::class)->handle($page, 'hero', SectionKind::Hero, cmsTestHeroContent());
+    $this->actingAs($this->manager)
+        ->post(route('admin.cms.pages.publish', $page->public_id), [
+            'publish_at' => now()->addDay()->toIso8601String(),
+        ]);
+
+    $this->actingAs($this->manager)
+        ->post(route('admin.cms.pages.cancel-schedule', $page->public_id))
+        ->assertRedirect();
+
+    expect($page->fresh()->publication_state->value)->toBe('draft');
+});
+
+it('refuses to cancel a schedule that does not exist over HTTP', function () {
+    $page = cmsTestPage();
+
+    $this->actingAs($this->manager)
+        ->post(route('admin.cms.pages.cancel-schedule', $page->public_id))
+        ->assertSessionHasErrors('page');
+});
+
+it('refuses cancel-schedule to staff without publish permission', function () {
+    $page = cmsTestPage();
+    app(SaveSectionDraft::class)->handle($page, 'hero', SectionKind::Hero, cmsTestHeroContent());
+    $this->actingAs($this->manager)
+        ->post(route('admin.cms.pages.publish', $page->public_id), [
+            'publish_at' => now()->addDay()->toIso8601String(),
+        ]);
+
+    $outsider = testPlatformStaff(PlatformRole::PackageManager);
+
+    $this->actingAs($outsider)
+        ->post(route('admin.cms.pages.cancel-schedule', $page->public_id))
+        ->assertForbidden();
+});
+
 it('saves an SEO override as a draft without publishing it', function () {
     $page = cmsTestPage();
 

@@ -8,10 +8,12 @@ use App\Support\Status\HasTranslatedLabel;
 /**
  * One immutable revision's own fate (§34.1) — never edited once created,
  * only moved on: a scheduled revision becomes published when its moment
- * arrives, and a published revision becomes superseded the instant a newer
- * one takes its place. There is no path back to `Scheduled` or forward out
- * of `Superseded`; a rollback creates a brand new revision via
- * `restored_from_id` rather than reviving an old one in place.
+ * arrives (or superseded directly, without ever going live, if its
+ * schedule is cancelled or replaced — Stage 7 addendum), and a published
+ * revision becomes superseded the instant a newer one takes its place.
+ * There is no path back to `Scheduled` or forward out of `Superseded`; a
+ * rollback creates a brand new revision via `restored_from_id` rather than
+ * reviving an old one in place.
  */
 enum RevisionPublicationState: string implements TransitionableState
 {
@@ -27,7 +29,7 @@ enum RevisionPublicationState: string implements TransitionableState
     public function transitionsTo(): array
     {
         return match ($this) {
-            self::Scheduled => [self::Published],
+            self::Scheduled => [self::Published, self::Superseded],
             self::Published => [self::Superseded],
             self::Superseded => [],
         };

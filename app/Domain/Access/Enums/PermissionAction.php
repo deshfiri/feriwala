@@ -43,6 +43,23 @@ enum PermissionAction: string
     /** Working a queue item — requesting a correction or refusing it — short of the stronger approval verb (D25). */
     case Review = 'review';
 
+    /**
+     * Browsing the CMS media library to pick an existing asset for a
+     * section or an SEO image — separate from `Edit`, so an SEO manager
+     * can source an Open Graph image without holding ordinary CMS edit
+     * rights, and separate from `MediaManage`, so browsing never implies
+     * upload rights (Stage 7 addendum).
+     */
+    case MediaView = 'media.view';
+
+    /**
+     * Uploading, editing or removing a CMS media asset — its own
+     * authority from ordinary CMS content editing, so the person who
+     * writes section copy is not automatically the person who may
+     * introduce new files onto the server (Stage 7 addendum).
+     */
+    case MediaManage = 'media.manage';
+
     public function label(): string
     {
         return match ($this) {
@@ -69,6 +86,8 @@ enum PermissionAction: string
             self::ViewSettings => 'View settings',
             self::Suspend => 'Suspend',
             self::Review => 'Review',
+            self::MediaView => 'View media library',
+            self::MediaManage => 'Manage media library',
         };
     }
 

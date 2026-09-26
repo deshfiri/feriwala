@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin\Cms;
 
 use App\Domain\Cms\Actions\SaveSeoSetting;
+use App\Domain\Cms\Models\Media;
 use App\Domain\Cms\Models\SeoSetting;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cms\SaveSeoSettingRequest;
@@ -34,17 +35,32 @@ class SeoSettingController extends Controller
                     'locale' => $locale->value,
                     'default_title' => $setting?->default_title,
                     'default_description' => $setting?->default_description,
-                    'default_og_image_path' => $setting?->default_og_image_path,
+                    'default_og_image_id' => $setting?->default_og_image_id,
                     'organization_name' => $setting?->organization_name,
-                    'organization_logo_path' => $setting?->organization_logo_path,
+                    'organization_logo_id' => $setting?->organization_logo_id,
                     'organization_url' => $setting?->organization_url,
                     'robots_default' => $setting === null ? 'index, follow' : $setting->robots_default,
                     'twitter_handle' => $setting?->twitter_handle,
                 ];
             })->values(),
 
+            'media' => Gate::allows('viewAny', Media::class)
+                ? Media::query()->orderByDesc('id')->get()->map(fn (Media $item) => [
+                    'id' => $item->public_id,
+                    'url' => $item->url(),
+                    'original_filename' => $item->original_filename,
+                    'mime_type' => $item->mime_type,
+                    'width' => $item->width,
+                    'height' => $item->height,
+                    'alt_text_en' => $item->alt_text_en,
+                    'alt_text_bn' => $item->alt_text_bn,
+                ])
+                : [],
+
             'can' => [
                 'update' => Gate::allows('update', SeoSetting::class),
+                'view_media' => Gate::allows('viewAny', Media::class),
+                'manage_media' => Gate::allows('create', Media::class),
             ],
         ]);
     }

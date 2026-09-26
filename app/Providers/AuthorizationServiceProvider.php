@@ -11,7 +11,9 @@ use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Account\Policies\UserPolicy;
 use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Cms\Models\Media;
 use App\Domain\Cms\Models\SeoSetting;
+use App\Domain\Cms\Policies\CmsMediaPolicy;
 use App\Domain\Cms\Policies\CmsModelPolicy;
 use App\Domain\Cms\Policies\CmsPolicy;
 use App\Domain\Cms\Policies\SeoSettingPolicy;
@@ -96,6 +98,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // Global SEO defaults are their own permission set, separate from
         // ordinary page content (see SeoSettingPolicy's own doc comment).
         Gate::policy(SeoSetting::class, SeoSettingPolicy::class);
+
+        // The media library answers to cms.media.* -- its own authority
+        // from ordinary CMS content editing (Stage 7 addendum).
+        Gate::policy(Media::class, CmsMediaPolicy::class);
 
         // An order is seen by the account that placed it and by staff who may
         // see orders (§18.4, §18.5).

@@ -6,10 +6,12 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
 
 describe('the specification', function () {
-    it('defines exactly the twenty-three permission verbs in §32.2', function () {
-        // Twenty from the original list, View settings added by D24, and
-        // Suspend and Review added by D25 for the Supplier account domain.
-        expect(PermissionAction::cases())->toHaveCount(23);
+    it('defines exactly the twenty-five permission verbs in §32.2', function () {
+        // Twenty from the original list, View settings added by D24,
+        // Suspend and Review added by D25 for the Supplier account domain,
+        // and MediaView/MediaManage added by the Stage 7 addendum to
+        // separate CMS media authority from ordinary content editing.
+        expect(PermissionAction::cases())->toHaveCount(25);
     });
 
     it('defines exactly the twenty-one administrative roles in §32.1', function () {

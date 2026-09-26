@@ -40,6 +40,9 @@ class PermissionCatalogue
             Module::Cms->value => [
                 ...self::crud(),
                 Action::Publish, Action::Unpublish, Action::Archive,
+                // Their own authority from ordinary content editing (Stage 7
+                // addendum) — see PermissionAction::MediaView/MediaManage.
+                Action::MediaView, Action::MediaManage,
             ],
 
             Module::Account->value => [

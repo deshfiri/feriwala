@@ -188,7 +188,10 @@ enum PlatformRole: string
             ],
 
             self::ContentManager => [
-                Module::Cms->value => [...$manage, Action::Publish, Action::Unpublish, Action::Archive],
+                Module::Cms->value => [
+                    ...$manage, Action::Publish, Action::Unpublish, Action::Archive,
+                    Action::MediaView, Action::MediaManage,
+                ],
                 Module::Seo->value => [Action::View, Action::Edit],
             ],
 
@@ -314,7 +317,12 @@ enum PlatformRole: string
 
             self::SeoManager => [
                 Module::Seo->value => [Action::View, Action::Edit, Action::ManageSettings],
-                Module::Cms->value => [Action::View, Action::Edit],
+                Module::Cms->value => [
+                    Action::View, Action::Edit,
+                    // Browsing existing media to pick an Open Graph image --
+                    // never upload rights, which stay with MediaManage.
+                    Action::MediaView,
+                ],
             ],
 
             // Reads reports but not the sensitive columns inside them.

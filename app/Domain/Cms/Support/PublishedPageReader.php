@@ -122,19 +122,24 @@ class PublishedPageReader
 
         $defaultTitle = $defaults instanceof SeoSetting ? $defaults->default_title : config('app.name');
         $defaultDescription = $defaults instanceof SeoSetting ? $defaults->default_description : null;
-        $defaultOgImage = $defaults instanceof SeoSetting ? $defaults->default_og_image_path : null;
+        $defaultOgImage = $defaults instanceof SeoSetting ? $defaults->ogImageUrl() : null;
         $defaultRobots = $defaults instanceof SeoSetting ? $defaults->robots_default : 'index, follow';
         $organizationName = $defaults instanceof SeoSetting ? $defaults->organization_name : null;
         $organizationUrl = $defaults instanceof SeoSetting ? $defaults->organization_url : null;
+        $organizationLogo = $defaults instanceof SeoSetting ? $defaults->organizationLogoUrl() : null;
 
         return [
             'title' => $pageSeo['title'][$locale] ?? $pageSeo['title']['en'] ?? $defaultTitle,
             'description' => $pageSeo['description'][$locale] ?? $pageSeo['description']['en'] ?? $defaultDescription,
             'canonical_url' => $pageSeo['canonical_url'] ?? null,
+            // Already a resolved public URL, frozen at publish time by
+            // PublishPage::snapshot() -- this reader never queries the
+            // media table for a page-level override (Stage 7 addendum).
             'og_image_url' => $pageSeo['og_image_url'] ?? $defaultOgImage,
             'robots' => $pageSeo['robots'] ?? $defaultRobots,
             'organization_name' => $organizationName,
             'organization_url' => $organizationUrl,
+            'organization_logo_url' => $organizationLogo,
         ];
     }
 

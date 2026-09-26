@@ -3,6 +3,7 @@
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Billing\Actions\SettleRefund;
+use App\Domain\Cms\Actions\SweepScheduledCmsPublishes;
 use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
@@ -359,3 +360,21 @@ Schedule::call(fn () => app(ReleaseDueReferralCommissions::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Pay due referral commissions and retry owed reversals (D24)');
+
+/*
+ * The public landing CMS's own clock (§34.1, Stage 7 addendum): puts a
+ * scheduled page live the moment its publish time arrives.
+ *
+ * Every minute, for the same reason as the reservation/order sweeps above:
+ * an admin who schedules a page for a specific minute should see it appear
+ * within a minute, not up to an hour late. Idempotent and race-safe on its
+ * own, not only by the lock — each page is re-read and row-locked inside
+ * PromoteScheduledRevision, which finds nothing left to do if the schedule
+ * was already promoted or cancelled since this query ran.
+ */
+Schedule::call(fn () => app(SweepScheduledCmsPublishes::class)->handle())
+    ->name('cms-scheduled-publish-sweep')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Put scheduled CMS pages live the moment their time arrives (§34.1)');

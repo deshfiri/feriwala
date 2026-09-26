@@ -840,6 +840,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             Route::patch('pages/{page}/meta', [CmsPageController::class, 'updateMeta'])->name('pages.meta.update');
             Route::post('pages/{page}/publish', [CmsPageController::class, 'publish'])->name('pages.publish');
             Route::post('pages/{page}/unpublish', [CmsPageController::class, 'unpublish'])->name('pages.unpublish');
+            Route::post('pages/{page}/cancel-schedule', [CmsPageController::class, 'cancelSchedule'])
+                ->name('pages.cancel-schedule');
 
             Route::post('pages/{page}/sections', [CmsPageSectionController::class, 'store'])
                 ->name('pages.sections.store');

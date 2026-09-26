@@ -8,23 +8,21 @@ class CmsMediaRefused extends RuntimeException
 {
     public static function typeNotAccepted(string $mime): self
     {
-        return new self(sprintf(
-            'A %s cannot be used as a CMS image. Accepted formats: JPEG, PNG and WebP.',
-            $mime === '' ? 'file of that type' : $mime,
-        ));
+        return new self("The file's real type ({$mime}) is not an accepted image format.");
     }
 
     public static function tooLarge(int $bytes, int $maxBytes): self
     {
-        return new self(sprintf(
-            'That image is %d KB. CMS images go up to %d KB.',
-            (int) round($bytes / 1024),
-            (int) round($maxBytes / 1024),
-        ));
+        $mb = fn (int $value) => round($value / (1024 * 1024), 1);
+
+        return new self("The file is {$mb($bytes)} MB, over the {$mb($maxBytes)} MB limit.");
     }
 
-    public static function altTextRequired(): self
+    public static function stillReferenced(string $filename, string $reason): self
     {
-        return new self('This image needs alt text in both English and Bangla before it can be placed on a published page.');
+        return new self(
+            "\"{$filename}\" cannot be deleted -- it is still used by {$reason}. ".
+            'Remove that reference first, or archive the image instead of deleting it.'
+        );
     }
 }

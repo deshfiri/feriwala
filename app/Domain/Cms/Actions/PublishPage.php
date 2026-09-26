@@ -4,8 +4,10 @@ namespace App\Domain\Cms\Actions;
 
 use App\Domain\Cms\Enums\PagePublicationState;
 use App\Domain\Cms\Enums\RevisionPublicationState;
+use App\Domain\Cms\Models\Media;
 use App\Domain\Cms\Models\Page;
 use App\Domain\Cms\Models\PageRevision;
+use App\Domain\Cms\Support\MediaSnapshotResolver;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,8 @@ use Illuminate\Support\Facades\DB;
  */
 class PublishPage
 {
+    public function __construct(protected MediaSnapshotResolver $mediaResolver) {}
+
     public function handle(
         Page $page,
         ?User $actor = null,
@@ -35,6 +39,15 @@ class PublishPage
 
             $publishAt ??= now();
             $isImmediate = $publishAt->lessThanOrEqualTo(now());
+
+            // Whatever this page was waiting for is superseded before the
+            // new revision is written — publishing again (immediately, or
+            // on a new schedule) always replaces a still-pending schedule
+            // rather than leaving it to accumulate, and this must happen
+            // first: the new revision below is itself briefly `scheduled`
+            // in the non-immediate branch, and would supersede itself if
+            // this ran after it existed.
+            $this->supersedePendingScheduled($page);
 
             $nextVersion = 1 + (int) PageRevision::query()->where('cms_page_id', $page->id)->max('version');
 
@@ -53,8 +66,7 @@ class PublishPage
 
             if ($isImmediate) {
                 if ($previousRevisionId !== null) {
-                    PageRevision::query()->whereKey($previousRevisionId)
-                        ->update(['publication_state' => RevisionPublicationState::Superseded]);
+                    $this->supersede(PageRevision::query()->whereKey($previousRevisionId)->firstOrFail());
                 }
 
                 // Publishing again while already published is a no-op move,
@@ -67,6 +79,7 @@ class PublishPage
 
                 $page->forceFill([
                     'current_published_revision_id' => $revision->id,
+                    'scheduled_publish_at' => null,
                     'updated_by' => $actor?->id,
                 ])->save();
             } else {
@@ -85,6 +98,26 @@ class PublishPage
     }
 
     /**
+     * Any revision still waiting for its moment never gets a second chance
+     * to reach it once this page moves on — publishing again (immediately
+     * or on a new schedule) always supersedes whatever was pending, so at
+     * most one `scheduled` revision ever exists per page at a time.
+     */
+    protected function supersedePendingScheduled(Page $page): void
+    {
+        PageRevision::query()
+            ->where('cms_page_id', $page->id)
+            ->where('publication_state', RevisionPublicationState::Scheduled)
+            ->get()
+            ->each(fn (PageRevision $pending) => $this->supersede($pending));
+    }
+
+    protected function supersede(PageRevision $revision): void
+    {
+        $revision->transitionTo(RevisionPublicationState::Superseded)->save();
+    }
+
+    /**
      * The full export a publish takes: every section in order (enabled or
      * not — the reader decides visibility, not this snapshot), the page's
      * own SEO fields, and nothing from any other page's data.
@@ -93,6 +126,10 @@ class PublishPage
      */
     protected function snapshot(Page $page): array
     {
+        // Every media reference a section's content holds is frozen into
+        // immutable metadata here — url, dimensions, alt text — so the
+        // revision keeps rendering identically even if the Media row is
+        // later edited or its underlying file replaced (Stage 7 addendum).
         $sections = $page->sections()->get()->map(fn ($section) => [
             'section_key' => $section->section_key,
             'kind' => $section->kind->value,
@@ -101,10 +138,11 @@ class PublishPage
             'visible_on_desktop' => $section->visible_on_desktop,
             'visible_on_mobile' => $section->visible_on_mobile,
             'variant' => $section->variant,
-            'content' => $section->content->getArrayCopy(),
+            'content' => $this->mediaResolver->resolve($section->content->getArrayCopy()),
         ])->all();
 
         $overrides = $page->seo_overrides?->getArrayCopy() ?? [];
+        $ogImageId = $overrides['og_image_id'] ?? null;
 
         return [
             'sections' => $sections,
@@ -115,7 +153,13 @@ class PublishPage
                 'title' => $overrides['title'] ?? null,
                 'description' => $overrides['description'] ?? null,
                 'canonical_url' => $overrides['canonical_url'] ?? null,
-                'og_image_url' => $overrides['og_image_url'] ?? null,
+                // og_image_id survives alongside the resolved URL so
+                // DeleteCmsMedia can still find the reference by id even
+                // though the reader only ever needs the URL.
+                'og_image_id' => $ogImageId,
+                'og_image_url' => $ogImageId === null
+                    ? null
+                    : Media::query()->wherePublicId($ogImageId)->first()?->url(),
                 'robots' => $overrides['robots'] ?? 'index, follow',
             ],
         ];

@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Admin\Cms;
 
+use App\Domain\Cms\Actions\CancelScheduledPublish;
 use App\Domain\Cms\Actions\PublishPage;
 use App\Domain\Cms\Actions\UnpublishPage;
 use App\Domain\Cms\Actions\UpdatePageMeta;
 use App\Domain\Cms\Enums\SectionKind;
+use App\Domain\Cms\Exceptions\CmsSchedulingRefused;
+use App\Domain\Cms\Models\Media;
 use App\Domain\Cms\Models\Page;
 use App\Domain\Cms\Models\PageRevision;
 use App\Http\Controllers\Controller;
@@ -72,7 +75,7 @@ class PageController extends Controller
                     'title' => $overrides['title'] ?? ['en' => null, 'bn' => null],
                     'description' => $overrides['description'] ?? ['en' => null, 'bn' => null],
                     'canonical_url' => $overrides['canonical_url'] ?? null,
-                    'og_image_url' => $overrides['og_image_url'] ?? null,
+                    'og_image_id' => $overrides['og_image_id'] ?? null,
                     'robots' => $overrides['robots'] ?? null,
                 ],
             ],
@@ -111,11 +114,30 @@ class PageController extends Controller
                 'label' => $kind->label(),
             ], SectionKind::implemented()),
 
+            // The media picker's own list -- omitted entirely, not just
+            // empty, for someone who cannot even browse the library
+            // (cms.media.view), so a picker that never got its data never
+            // renders rather than rendering confusingly empty.
+            'media' => Gate::allows('viewAny', Media::class)
+                ? Media::query()->orderByDesc('id')->get()->map(fn (Media $item) => [
+                    'id' => $item->public_id,
+                    'url' => $item->url(),
+                    'original_filename' => $item->original_filename,
+                    'mime_type' => $item->mime_type,
+                    'width' => $item->width,
+                    'height' => $item->height,
+                    'alt_text_en' => $item->alt_text_en,
+                    'alt_text_bn' => $item->alt_text_bn,
+                ])
+                : [],
+
             'can' => [
                 'edit' => Gate::allows('update', $page),
                 'publish' => Gate::allows('publish', $page),
                 'unpublish' => Gate::allows('unpublish', $page),
                 'delete' => Gate::allows('delete', $page),
+                'view_media' => Gate::allows('viewAny', Media::class),
+                'manage_media' => Gate::allows('create', Media::class),
             ],
         ]);
     }
@@ -142,11 +164,19 @@ class PageController extends Controller
             ? CarbonImmutable::parse($validated['publish_at'])
             : null;
 
+        // Calling this again while a schedule is already pending replaces
+        // it (see PublishPage::supersedePendingScheduled) -- this is what
+        // "change a future publication date" is, there is no separate
+        // reschedule endpoint.
+        $wasScheduled = $page->publication_state->value === 'scheduled';
+
         $publish->handle($page, $this->actor($request), $validated['reason'] ?? null, $publishAt);
 
-        return back()->with('success', $publishAt !== null
-            ? __('Publish scheduled.')
-            : __('Page published.'));
+        return back()->with('success', match (true) {
+            $publishAt !== null && $wasScheduled => __('Publish rescheduled.'),
+            $publishAt !== null => __('Publish scheduled.'),
+            default => __('Page published.'),
+        });
     }
 
     public function unpublish(Request $request, Page $page, UnpublishPage $unpublish): RedirectResponse
@@ -160,6 +190,21 @@ class PageController extends Controller
         }
 
         return back()->with('success', __('Page unpublished.'));
+    }
+
+    public function cancelSchedule(Request $request, Page $page, CancelScheduledPublish $cancel): RedirectResponse
+    {
+        Gate::authorize('publish', $page);
+
+        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
+
+        try {
+            $cancel->handle($page, $this->actor($request), $validated['reason'] ?? null);
+        } catch (CmsSchedulingRefused $refused) {
+            throw ValidationException::withMessages(['page' => $refused->getMessage()]);
+        }
+
+        return back()->with('success', __('Scheduled publish cancelled. The page is back to Draft.'));
     }
 
     protected function actor(Request $request): User

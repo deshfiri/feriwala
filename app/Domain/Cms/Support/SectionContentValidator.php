@@ -3,9 +3,13 @@
 namespace App\Domain\Cms\Support;
 
 use App\Domain\Cms\Enums\SectionKind;
+use App\Domain\Cms\Models\Media;
+use App\Domain\Cms\Rules\MediaHasRequiredAltText;
 use App\Domain\Cms\Rules\SafeCtaHref;
 use App\Domain\Cms\Rules\SafeMenuUrl;
+use App\Domain\Cms\Rules\SafeVideoUrl;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -22,6 +26,16 @@ use Illuminate\Validation\ValidationException;
  * cannot be used to send a visitor somewhere Feriwala does not control
  * (menus, which are allowed a safe external URL, go through
  * {@see SafeMenuUrl} instead).
+ *
+ * A media field (Stage 7 addendum) is always the CMS media library's own
+ * `public_id` — never a storage path or an unrestricted URL — validated
+ * against the live `cms_media` table so a stale or fabricated id is refused
+ * at save time, not discovered when the page fails to render. Fields follow
+ * one naming convention throughout, which is what lets
+ * {@see MediaReferenceWalker} and {@see MediaSnapshotResolver} work without
+ * a per-kind registry: `media_id` for the primary image/asset, and
+ * `<name>_media_id` for anything else (`mobile_media_id`,
+ * `poster_media_id`).
  */
 class SectionContentValidator
 {
@@ -59,6 +73,22 @@ class SectionContentValidator
             "{$prefix}.href" => [$required ? 'required' : 'nullable', 'string', 'max:255', new SafeCtaHref],
         ];
 
+        $media = fn (string $field = 'media_id', bool $required = false) => [
+            $field => [
+                $required ? 'required' : 'nullable', 'string',
+                Rule::exists(Media::class, 'public_id'),
+                new MediaHasRequiredAltText,
+            ],
+        ];
+
+        $mediaPosition = fn (array $allowed = ['left', 'right', 'background']) => [
+            'media_position' => ['nullable', 'string', Rule::in($allowed)],
+        ];
+
+        $mediaFit = [
+            'media_fit' => ['nullable', 'string', Rule::in(['cover', 'contain'])],
+        ];
+
         return match ($kind) {
             SectionKind::HeaderNav => [],
 
@@ -68,6 +98,19 @@ class SectionContentValidator
                 ...$localized('body', false),
                 ...$cta('primary_cta'),
                 ...$cta('secondary_cta', false),
+                ...$media(),
+                ...$media('mobile_media_id'),
+                ...$mediaPosition(),
+                ...$mediaFit,
+                ...$localized('media_alt_override', false),
+            ],
+
+            SectionKind::About => [
+                ...$localized('heading'),
+                ...$localized('body'),
+                ...$media(),
+                ...$mediaPosition(['left', 'right']),
+                ...$mediaFit,
             ],
 
             SectionKind::PlatformIntroduction, SectionKind::Dropshipping,
@@ -78,6 +121,9 @@ class SectionContentValidator
                 'bullets' => ['nullable', 'array', 'max:8'],
                 ...$localized('bullets.*', false),
                 ...$cta('cta', false),
+                ...$media(),
+                ...$mediaPosition(['left', 'right']),
+                ...$mediaFit,
             ],
 
             SectionKind::Benefits => [
@@ -86,6 +132,7 @@ class SectionContentValidator
                 'items.*.icon' => ['required', 'string', 'in:'.implode(',', self::ALLOWED_ICONS)],
                 ...$localized('items.*.heading'),
                 ...$localized('items.*.body', false),
+                ...$media('items.*.media_id'),
             ],
 
             SectionKind::HowItWorks => [
@@ -94,6 +141,7 @@ class SectionContentValidator
                 'steps.*.step_number' => ['required', 'integer', 'min:1', 'max:8'],
                 ...$localized('steps.*.heading'),
                 ...$localized('steps.*.body', false),
+                ...$media('steps.*.media_id'),
             ],
 
             SectionKind::PackagePreview => [
@@ -104,6 +152,29 @@ class SectionContentValidator
                 ...$localized('heading'),
                 ...$localized('body', false),
                 ...$cta('cta', false),
+            ],
+
+            SectionKind::Video => [
+                ...$localized('heading', false),
+                ...$localized('body', false),
+                'video_url' => ['required', 'string', 'max:500', new SafeVideoUrl],
+                ...$media('poster_media_id', required: true),
+            ],
+
+            SectionKind::Testimonials => [
+                ...$localized('heading', false),
+                'items' => ['required', 'array', 'min:1', 'max:12'],
+                ...$localized('items.*.quote'),
+                'items.*.author_name' => ['required', 'string', 'max:120'],
+                ...$localized('items.*.author_role', false),
+                ...$media('items.*.media_id'),
+            ],
+
+            SectionKind::ClientsPartners => [
+                ...$localized('heading', false),
+                'items' => ['required', 'array', 'min:1', 'max:24'],
+                'items.*.name' => ['required', 'string', 'max:120'],
+                ...$media('items.*.media_id', required: true),
             ],
 
             SectionKind::Faq => [
@@ -118,6 +189,9 @@ class SectionContentValidator
                 ...$localized('body', false),
                 ...$cta('primary_cta'),
                 ...$cta('secondary_cta', false),
+                ...$media(),
+                ...$mediaPosition(['left', 'right', 'background']),
+                ...$mediaFit,
             ],
 
             SectionKind::Footer => [
@@ -147,11 +221,13 @@ class SectionContentValidator
     protected function sanitizeRichFields(SectionKind $kind, array $validated): array
     {
         $bodyPaths = match ($kind) {
-            SectionKind::Hero, SectionKind::PlatformIntroduction,
+            SectionKind::Hero, SectionKind::About,
+            SectionKind::PlatformIntroduction,
             SectionKind::Dropshipping, SectionKind::Wholesale,
             SectionKind::PartnerWebsites, SectionKind::SupplierOpportunity,
-            SectionKind::PackagePreview, SectionKind::Cta => ['body'],
+            SectionKind::PackagePreview, SectionKind::Video, SectionKind::Cta => ['body'],
             SectionKind::Faq => ['items.*.answer'],
+            SectionKind::Testimonials => ['items.*.quote'],
             default => [],
         };
 

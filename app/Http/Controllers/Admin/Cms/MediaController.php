@@ -91,7 +91,11 @@ class MediaController extends Controller
     {
         Gate::authorize('delete', Media::class);
 
-        $delete->handle($this->mediaFor($media));
+        try {
+            $delete->handle($this->mediaFor($media));
+        } catch (CmsMediaRefused $refused) {
+            throw ValidationException::withMessages(['media' => $refused->getMessage()]);
+        }
 
         return back()->with('success', __('Image removed.'));
     }
