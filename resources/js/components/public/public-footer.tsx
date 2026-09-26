@@ -37,7 +37,7 @@ export default function PublicFooter({
                 >
                     {[...footerLinks, ...legalLinks].map((item) => (
                         <a
-                            key={item.href}
+                            key={item.key}
                             href={item.href}
                             target={
                                 item.target === 'blank' ? '_blank' : undefined

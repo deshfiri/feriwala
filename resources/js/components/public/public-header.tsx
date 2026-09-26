@@ -31,7 +31,7 @@ export default function PublicHeader({ items }: { items: CmsMenuItem[] }) {
                 >
                     {items.map((item) => (
                         <a
-                            key={item.href}
+                            key={item.key}
                             href={item.href}
                             target={
                                 item.target === 'blank' ? '_blank' : undefined
@@ -78,7 +78,7 @@ export default function PublicHeader({ items }: { items: CmsMenuItem[] }) {
                 <div className="border-border space-y-3 border-t px-4 py-4 md:hidden">
                     {items.map((item) => (
                         <a
-                            key={item.href}
+                            key={item.key}
                             href={item.href}
                             className="text-foreground block text-sm font-medium"
                         >

@@ -32,6 +32,7 @@ export type CmsSeo = {
 };
 
 export type CmsMenuItem = {
+    key: string;
     label: string;
     href: string;
     target: 'self' | 'blank';

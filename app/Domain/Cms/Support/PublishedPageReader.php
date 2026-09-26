@@ -163,6 +163,7 @@ class PublishedPageReader
         return $items
             ->filter(fn ($item) => $item->is_enabled)
             ->map(fn ($item) => [
+                'key' => $item->public_id,
                 'label' => $item->label($locale),
                 'href' => $item->href(),
                 'target' => $item->link_target,
