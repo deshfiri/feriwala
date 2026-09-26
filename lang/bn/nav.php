@@ -23,6 +23,11 @@ return [
 
     'kyc_review' => 'কেওয়াইসি পর্যালোচনা',
     'kyc_requirements' => 'যাচাইকরণের শর্তাবলি',
+    'cms_pages' => 'ল্যান্ডিং পেজ',
+    'cms_menus' => 'মেনু',
+    'cms_redirects' => 'রিডাইরেক্ট',
+    'cms_media' => 'মিডিয়া লাইব্রেরি',
+    'cms_seo' => 'এসইও ডিফল্ট',
     'packages' => 'প্যাকেজ',
     'products' => 'পণ্য',
     'product_categories' => 'পণ্যের ক্যাটেগরি',

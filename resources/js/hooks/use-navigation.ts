@@ -4,14 +4,19 @@ import {
     Boxes,
     ClipboardList,
     CreditCard,
+    FileText,
     FolderTree,
     Globe,
+    Image as ImageIcon,
     LayoutGrid,
+    Link2,
     ListChecks,
     Lock,
+    Menu as MenuIcon,
     MessageSquare,
     MonitorSmartphone,
     Network,
+    Search,
     Share2,
     Coins,
     Package as PackageIcon,
@@ -71,6 +76,11 @@ import { index as productBrands } from '@/routes/admin/catalog/brands';
 import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as productCategories } from '@/routes/admin/catalog/categories';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
+import { index as cmsPages } from '@/routes/admin/cms/pages';
+import { index as cmsMenus } from '@/routes/admin/cms/menus';
+import { index as cmsRedirects } from '@/routes/admin/cms/redirects';
+import { index as cmsMedia } from '@/routes/admin/cms/media';
+import { index as cmsSeo } from '@/routes/admin/cms/seo';
 import { index as packageCatalogue } from '@/routes/admin/packages';
 import { history as kycHistory } from '@/routes/kyc';
 import { edit as profileSettings } from '@/routes/profile';
@@ -299,6 +309,47 @@ export function useNavigation(): {
                               title: t('nav.packages'),
                               href: packageCatalogue(),
                               icon: PackageIcon,
+                          },
+                      ]
+                    : []),
+                /*
+                 * The public landing page and its supporting CMS records
+                 * (§4, §34). Its own permission set, `cms.*` — a business
+                 * account holds none of it, since there is no "my own"
+                 * landing page to author.
+                 */
+                ...(permissions['cms.view']
+                    ? [
+                          {
+                              title: t('nav.cms_pages'),
+                              href: cmsPages(),
+                              icon: FileText,
+                          },
+                          {
+                              title: t('nav.cms_menus'),
+                              href: cmsMenus(),
+                              icon: MenuIcon,
+                          },
+                          {
+                              title: t('nav.cms_redirects'),
+                              href: cmsRedirects(),
+                              icon: Link2,
+                          },
+                          {
+                              title: t('nav.cms_media'),
+                              href: cmsMedia(),
+                              icon: ImageIcon,
+                          },
+                      ]
+                    : []),
+                // Global SEO defaults answer to `seo.*`, deliberately separate
+                // from `cms.*` (SeoManager may hold one without the other).
+                ...(permissions['seo.view']
+                    ? [
+                          {
+                              title: t('nav.cms_seo'),
+                              href: cmsSeo(),
+                              icon: Search,
                           },
                       ]
                     : []),

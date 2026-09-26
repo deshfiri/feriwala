@@ -29,6 +29,11 @@ return [
 
     'kyc_review' => 'KYC review',
     'kyc_requirements' => 'Verification requirements',
+    'cms_pages' => 'Landing page',
+    'cms_menus' => 'Menus',
+    'cms_redirects' => 'Redirects',
+    'cms_media' => 'Media library',
+    'cms_seo' => 'SEO defaults',
     'packages' => 'Packages',
     'products' => 'Products',
     'product_categories' => 'Product categories',
