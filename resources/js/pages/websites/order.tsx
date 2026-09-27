@@ -355,7 +355,7 @@ export default function WebsiteOrder({
 WebsiteOrder.layout = {
     breadcrumbs: [
         {
-            title: 'Websites',
+            title: 'nav.websites',
             href: websitesIndex(),
         },
     ],

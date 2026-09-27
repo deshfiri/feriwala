@@ -152,5 +152,5 @@ export default function AdminSupplierAllocationShow({
 }
 
 AdminSupplierAllocationShow.layout = {
-    breadcrumbs: [{ title: 'Supplier allocations', href: index() }],
+    breadcrumbs: [{ title: 'nav.supplier_allocations', href: index() }],
 };

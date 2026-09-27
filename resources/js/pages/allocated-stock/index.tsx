@@ -116,7 +116,7 @@ export default function AllocatedStockIndex({
 AllocatedStockIndex.layout = {
     breadcrumbs: [
         {
-            title: 'Allocated stock',
+            title: 'nav.allocated_stock',
             href: index(),
         },
     ],

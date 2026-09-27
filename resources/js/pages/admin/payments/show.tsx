@@ -291,7 +291,7 @@ export default function AdminPaymentShow({ payment, logs }: Props) {
 AdminPaymentShow.layout = {
     breadcrumbs: [
         {
-            title: 'Payments',
+            title: 'nav.payments',
             href: index(),
         },
     ],

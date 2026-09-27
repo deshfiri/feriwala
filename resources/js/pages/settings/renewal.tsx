@@ -204,7 +204,7 @@ export default function Renewal({ current, renewal, quote, gateways }: Props) {
 
 Renewal.layout = {
     breadcrumbs: [
-        { title: 'Package', href: subscriptionShow() },
-        { title: 'Renew', href: pay() },
+        { title: 'common.settings.nav.package', href: subscriptionShow() },
+        { title: 'package.renewal.action', href: pay() },
     ],
 };

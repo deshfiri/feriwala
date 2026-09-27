@@ -549,7 +549,7 @@ export default function AdminDepositRules({
 AdminDepositRules.layout = {
     breadcrumbs: [
         {
-            title: 'Deposit rules',
+            title: 'nav.deposit_rules',
             href: index(),
         },
     ],

@@ -791,7 +791,7 @@ export default function WebsiteIntegration({
 WebsiteIntegration.layout = {
     breadcrumbs: [
         {
-            title: 'Websites',
+            title: 'nav.websites',
             href: websitesIndex(),
         },
     ],

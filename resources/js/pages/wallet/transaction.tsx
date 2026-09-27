@@ -182,7 +182,7 @@ export default function WalletTransactionDetail({
 WalletTransactionDetail.layout = {
     breadcrumbs: [
         {
-            title: 'Wallet',
+            title: 'nav.wallet',
             href: show(),
         },
     ],

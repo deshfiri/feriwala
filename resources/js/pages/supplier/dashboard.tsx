@@ -286,5 +286,5 @@ export default function SupplierDashboard({
 }
 
 SupplierDashboard.layout = {
-    breadcrumbs: [{ title: 'Dashboard', href: dashboard() }],
+    breadcrumbs: [{ title: 'supplier.nav.dashboard', href: dashboard() }],
 };

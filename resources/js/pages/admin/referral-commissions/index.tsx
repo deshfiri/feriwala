@@ -300,5 +300,5 @@ export default function ReferralCommissions({
 }
 
 ReferralCommissions.layout = {
-    breadcrumbs: [{ title: 'Referral commissions', href: index() }],
+    breadcrumbs: [{ title: 'nav.referral_commissions', href: index() }],
 };

@@ -368,5 +368,5 @@ export default function ReferralEvent({
 }
 
 ReferralEvent.layout = {
-    breadcrumbs: [{ title: 'Referral commissions', href: index() }],
+    breadcrumbs: [{ title: 'nav.referral_commissions', href: index() }],
 };

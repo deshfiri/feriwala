@@ -513,7 +513,7 @@ function Row({
 WholesaleOrder.layout = {
     breadcrumbs: [
         {
-            title: 'Wholesale orders',
+            title: 'nav.wholesale_orders',
             href: index(),
         },
     ],

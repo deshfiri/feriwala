@@ -169,7 +169,7 @@ export default function AdminWebsites({ websites, filters, statuses }: Props) {
 AdminWebsites.layout = {
     breadcrumbs: [
         {
-            title: 'Partner websites',
+            title: 'nav.partner_websites',
             href: index(),
         },
     ],

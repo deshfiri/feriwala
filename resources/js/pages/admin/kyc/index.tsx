@@ -201,7 +201,7 @@ export default function AdminKycIndex({
 AdminKycIndex.layout = {
     breadcrumbs: [
         {
-            title: 'KYC review',
+            title: 'nav.kyc_review',
             href: index(),
         },
     ],

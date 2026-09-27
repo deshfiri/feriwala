@@ -195,7 +195,7 @@ export default function AdminWarehouses({ warehouses, can }: Props) {
 AdminWarehouses.layout = {
     breadcrumbs: [
         {
-            title: 'Warehouses',
+            title: 'nav.warehouses',
             href: index(),
         },
     ],

@@ -139,5 +139,5 @@ export default function AdminSupplierWalletsIndex({
 }
 
 AdminSupplierWalletsIndex.layout = {
-    breadcrumbs: [{ title: 'Supplier wallets', href: index() }],
+    breadcrumbs: [{ title: 'nav.supplier_wallets', href: index() }],
 };

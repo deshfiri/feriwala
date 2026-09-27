@@ -553,7 +553,7 @@ export default function AdminReservations({
 AdminReservations.layout = {
     breadcrumbs: [
         {
-            title: 'Reservations',
+            title: 'nav.reservations',
             href: index(),
         },
     ],

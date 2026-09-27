@@ -275,5 +275,5 @@ export default function AdminSupplierPayableShow({
 }
 
 AdminSupplierPayableShow.layout = {
-    breadcrumbs: [{ title: 'Supplier payables', href: index() }],
+    breadcrumbs: [{ title: 'nav.supplier_payables', href: index() }],
 };

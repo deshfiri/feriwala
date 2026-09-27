@@ -465,7 +465,7 @@ export default function AdminWebsiteShow({ website, can, transitions }: Props) {
 AdminWebsiteShow.layout = {
     breadcrumbs: [
         {
-            title: 'Partner websites',
+            title: 'nav.partner_websites',
             href: index(),
         },
     ],

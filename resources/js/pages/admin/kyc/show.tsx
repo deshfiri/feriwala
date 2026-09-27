@@ -459,7 +459,7 @@ export default function AdminKycShow({
 AdminKycShow.layout = {
     breadcrumbs: [
         {
-            title: 'KYC review',
+            title: 'nav.kyc_review',
             href: index(),
         },
     ],

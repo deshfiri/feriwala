@@ -370,7 +370,7 @@ export default function WebsitePricing({
 WebsitePricing.layout = {
     breadcrumbs: [
         {
-            title: 'Website pricing',
+            title: 'nav.website_pricing',
             href: index(),
         },
     ],

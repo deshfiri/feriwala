@@ -154,5 +154,5 @@ export default function AdminDashboard({
 }
 
 AdminDashboard.layout = {
-    breadcrumbs: [{ title: 'Dashboard', href: dashboard() }],
+    breadcrumbs: [{ title: 'nav.dashboard', href: dashboard() }],
 };

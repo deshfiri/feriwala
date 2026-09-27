@@ -246,7 +246,7 @@ export default function AdminPaymentsIndex({
 AdminPaymentsIndex.layout = {
     breadcrumbs: [
         {
-            title: 'Payments',
+            title: 'nav.payments',
             href: index(),
         },
     ],

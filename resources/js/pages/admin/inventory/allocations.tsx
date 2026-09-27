@@ -234,7 +234,7 @@ export default function AdminStockAllocations({
 AdminStockAllocations.layout = {
     breadcrumbs: [
         {
-            title: 'Stock allocations',
+            title: 'nav.allocations',
             href: index(),
         },
     ],

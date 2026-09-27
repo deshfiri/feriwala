@@ -270,7 +270,7 @@ export default function AdminWalletShow({
 AdminWalletShow.layout = {
     breadcrumbs: [
         {
-            title: 'Account wallets',
+            title: 'nav.wallets',
             href: index(),
         },
     ],

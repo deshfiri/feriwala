@@ -194,7 +194,7 @@ export default function AdminAvailability({ products, filters }: Props) {
 AdminAvailability.layout = {
     breadcrumbs: [
         {
-            title: 'Website availability',
+            title: 'nav.availability',
             href: index(),
         },
     ],

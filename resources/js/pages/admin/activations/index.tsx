@@ -147,7 +147,7 @@ export default function AdminActivationsIndex({
 AdminActivationsIndex.layout = {
     breadcrumbs: [
         {
-            title: 'Activation approvals',
+            title: 'nav.activation_approvals',
             href: index(),
         },
     ],

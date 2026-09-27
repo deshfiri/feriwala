@@ -501,7 +501,7 @@ export default function WebsiteShow({ website, wallet, can }: Props) {
 WebsiteShow.layout = {
     breadcrumbs: [
         {
-            title: 'Websites',
+            title: 'nav.websites',
             href: index(),
         },
     ],

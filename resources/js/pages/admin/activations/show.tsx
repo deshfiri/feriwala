@@ -474,7 +474,7 @@ export default function AdminActivationsShow({
 AdminActivationsShow.layout = {
     breadcrumbs: [
         {
-            title: 'Activation approvals',
+            title: 'nav.activation_approvals',
             href: index(),
         },
     ],

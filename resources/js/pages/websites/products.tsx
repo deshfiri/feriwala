@@ -474,7 +474,7 @@ export default function WebsiteProducts({
 WebsiteProducts.layout = {
     breadcrumbs: [
         {
-            title: 'Websites',
+            title: 'nav.websites',
             href: websitesIndex(),
         },
     ],

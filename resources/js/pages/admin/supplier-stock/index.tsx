@@ -125,5 +125,5 @@ export default function AdminSupplierStockIndex({
 }
 
 AdminSupplierStockIndex.layout = {
-    breadcrumbs: [{ title: 'Supplier availability', href: index() }],
+    breadcrumbs: [{ title: 'nav.supplier_stock', href: index() }],
 };

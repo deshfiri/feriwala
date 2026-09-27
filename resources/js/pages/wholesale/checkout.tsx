@@ -875,7 +875,7 @@ function AddressCard({
 WholesaleCheckout.layout = {
     breadcrumbs: [
         {
-            title: 'Wholesale checkout',
+            title: 'wholesale.checkout.title',
             href: show(),
         },
     ],

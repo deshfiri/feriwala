@@ -391,7 +391,7 @@ function CartLineRow({ line }: { line: CartLine }) {
 WholesaleCart.layout = {
     breadcrumbs: [
         {
-            title: 'Wholesale cart',
+            title: 'wholesale.cart.title',
             href: show(),
         },
     ],

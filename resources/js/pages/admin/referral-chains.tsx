@@ -320,5 +320,5 @@ export default function ReferralChains({
 }
 
 ReferralChains.layout = {
-    breadcrumbs: [{ title: 'Referral chains', href: show() }],
+    breadcrumbs: [{ title: 'nav.referral_chains', href: show() }],
 };

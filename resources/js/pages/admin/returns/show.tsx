@@ -942,7 +942,7 @@ function Row({
 AdminReturn.layout = {
     breadcrumbs: [
         {
-            title: 'Returns',
+            title: 'nav.returns',
             href: index(),
         },
     ],

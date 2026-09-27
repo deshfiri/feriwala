@@ -32,7 +32,7 @@ export default function Appearance() {
 Appearance.layout = {
     breadcrumbs: [
         {
-            title: 'Appearance settings',
+            title: 'common.settings.nav.appearance',
             href: editAppearance(),
         },
     ],

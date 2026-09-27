@@ -34,6 +34,7 @@ return [
     'website_pricing' => 'ওয়েবসাইট মূল্য',
     'referral_settings' => 'রেফারেল সেটিংস',
     'referral_commissions' => 'রেফারেল কমিশন',
+    'referral_chains' => 'রেফারেল চেইন',
     'referrals' => 'রেফারেল',
     'activation_approvals' => 'অ্যাক্টিভেশন অনুমোদন',
     'billing_rules' => 'বিলিং নিয়ম',

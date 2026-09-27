@@ -170,7 +170,7 @@ export default function Websites({ websites, entitlement, can }: Props) {
 Websites.layout = {
     breadcrumbs: [
         {
-            title: 'Websites',
+            title: 'nav.websites',
             href: index(),
         },
     ],

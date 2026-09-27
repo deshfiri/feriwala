@@ -366,5 +366,5 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
 }
 
 AdminSupplierOfferShow.layout = {
-    breadcrumbs: [{ title: 'Supplier offers', href: index() }],
+    breadcrumbs: [{ title: 'nav.supplier_offers', href: index() }],
 };

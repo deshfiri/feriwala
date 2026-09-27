@@ -273,7 +273,7 @@ export default function AdminStock({
 AdminStock.layout = {
     breadcrumbs: [
         {
-            title: 'Stock',
+            title: 'nav.stock',
             href: index(),
         },
     ],

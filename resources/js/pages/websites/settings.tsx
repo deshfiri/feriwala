@@ -322,7 +322,7 @@ export default function WebsiteSettings({
 WebsiteSettings.layout = {
     breadcrumbs: [
         {
-            title: 'Websites',
+            title: 'nav.websites',
             href: index(),
         },
     ],

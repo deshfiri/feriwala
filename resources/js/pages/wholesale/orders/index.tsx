@@ -160,7 +160,7 @@ export default function WholesaleOrders({ orders }: Props) {
 WholesaleOrders.layout = {
     breadcrumbs: [
         {
-            title: 'Wholesale orders',
+            title: 'nav.wholesale_orders',
             href: index(),
         },
     ],

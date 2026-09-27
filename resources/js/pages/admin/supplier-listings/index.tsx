@@ -188,5 +188,5 @@ export default function AdminSupplierListingsIndex({
 }
 
 AdminSupplierListingsIndex.layout = {
-    breadcrumbs: [{ title: 'Supplier listings', href: index() }],
+    breadcrumbs: [{ title: 'nav.supplier_listings', href: index() }],
 };

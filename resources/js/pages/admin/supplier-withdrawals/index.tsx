@@ -207,5 +207,5 @@ export default function AdminSupplierWithdrawalsIndex({
 }
 
 AdminSupplierWithdrawalsIndex.layout = {
-    breadcrumbs: [{ title: 'Supplier withdrawals', href: index() }],
+    breadcrumbs: [{ title: 'nav.supplier_withdrawals', href: index() }],
 };

@@ -238,7 +238,7 @@ export default function AdminWalletTransaction({
 AdminWalletTransaction.layout = {
     breadcrumbs: [
         {
-            title: 'Account wallets',
+            title: 'nav.wallets',
             href: index(),
         },
     ],

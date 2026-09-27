@@ -206,7 +206,7 @@ export default function WebsiteCategories({ website, categories }: Props) {
 WebsiteCategories.layout = {
     breadcrumbs: [
         {
-            title: 'Websites',
+            title: 'nav.websites',
             href: websitesIndex(),
         },
     ],

@@ -238,7 +238,7 @@ export default function AdminOrders({
 AdminOrders.layout = {
     breadcrumbs: [
         {
-            title: 'Orders',
+            title: 'nav.orders',
             href: index(),
         },
     ],

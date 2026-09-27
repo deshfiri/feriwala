@@ -430,5 +430,5 @@ export default function AdminSupplierShow({
 }
 
 AdminSupplierShow.layout = {
-    breadcrumbs: [{ title: 'Suppliers', href: index() }],
+    breadcrumbs: [{ title: 'nav.suppliers', href: index() }],
 };

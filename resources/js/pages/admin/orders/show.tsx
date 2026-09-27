@@ -682,7 +682,7 @@ function Row({
 AdminOrder.layout = {
     breadcrumbs: [
         {
-            title: 'Orders',
+            title: 'nav.orders',
             href: index(),
         },
     ],

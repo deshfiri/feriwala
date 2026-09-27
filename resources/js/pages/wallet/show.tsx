@@ -175,7 +175,7 @@ export default function WalletShow({
 WalletShow.layout = {
     breadcrumbs: [
         {
-            title: 'Wallet',
+            title: 'nav.wallet',
             href: show(),
         },
     ],

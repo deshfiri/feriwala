@@ -40,6 +40,7 @@ return [
     'website_pricing' => 'Website pricing',
     'referral_settings' => 'Referral settings',
     'referral_commissions' => 'Referral commissions',
+    'referral_chains' => 'Referral chains',
     'referrals' => 'Referrals',
     'activation_approvals' => 'Activation approvals',
     'billing_rules' => 'Billing rules',

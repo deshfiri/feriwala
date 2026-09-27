@@ -211,7 +211,7 @@ export default function AdminReturns({ returns, filters, statuses }: Props) {
 AdminReturns.layout = {
     breadcrumbs: [
         {
-            title: 'Returns',
+            title: 'nav.returns',
             href: index(),
         },
     ],

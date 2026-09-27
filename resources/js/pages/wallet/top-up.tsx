@@ -186,7 +186,7 @@ export default function WalletTopUp({
 WalletTopUp.layout = {
     breadcrumbs: [
         {
-            title: 'Wallet',
+            title: 'nav.wallet',
             href: show(),
         },
     ],
