@@ -1,3 +1,8 @@
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ringPath, toneColor } from '@/lib/chart';
 import type { ChartSlice } from '@/types';
 
@@ -110,12 +115,25 @@ export default function RadialBreakdown({
                             className="size-2 shrink-0 rounded-full"
                             style={{ backgroundColor: toneFor(slice, index) }}
                         />
-                        <span
-                            title={slice.label}
-                            className="text-muted-foreground min-w-0 flex-1 truncate"
-                        >
-                            {slice.label}
-                        </span>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span
+                                    tabIndex={0}
+                                    title={slice.label}
+                                    className="text-muted-foreground focus-visible:ring-ring min-w-0 flex-1 truncate rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+                                >
+                                    {slice.label}
+                                </span>
+                            </TooltipTrigger>
+                            {/*
+                             * Only needed once the label is actually cut off —
+                             * a screen reader already gets the full text from
+                             * this same span regardless of CSS truncation, so
+                             * this is purely for a sighted mouse/keyboard user
+                             * who cannot see past the ellipsis.
+                             */}
+                            <TooltipContent>{slice.label}</TooltipContent>
+                        </Tooltip>
                         <span className="shrink-0 font-medium tabular-nums">
                             {slice.formatted}
                         </span>
