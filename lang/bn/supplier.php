@@ -3,6 +3,13 @@
 return [
     'portal_name' => 'সাপ্লায়ার পোর্টাল',
 
+    'nav_groups' => [
+        'overview' => 'সারসংক্ষেপ',
+        'operations' => 'কার্যক্রম',
+        'finance' => 'আর্থিক',
+        'account' => 'অ্যাকাউন্ট',
+    ],
+
     'nav' => [
         'dashboard' => 'ড্যাশবোর্ড',
         'application' => 'আবেদন ও কেওয়াইসি',
@@ -91,8 +98,19 @@ return [
         ],
         'snapshot' => [
             'active_listings' => 'সক্রিয় তালিকাভুক্তি',
+            'pending_listings' => ':count টি পর্যালোচনার অপেক্ষায়',
+            'active_offers' => 'অনুমোদিত অফার',
+            'stock_available' => 'উপলব্ধ মজুত',
             'withdrawals_pending' => 'সিদ্ধান্তের অপেক্ষায় থাকা উত্তোলন',
-            'wallet_available' => 'ওয়ালেটে ব্যবহারযোগ্য ব্যালেন্স',
+            'payables' => 'পাওনা',
+            'payables_pending' => 'অপেক্ষমাণ',
+            'payables_eligible' => 'যোগ্য',
+            'payables_settled' => 'নিষ্পত্তিকৃত',
+            'wallet' => 'ওয়ালেট',
+            'wallet_available' => 'ব্যবহারযোগ্য',
+            'wallet_reserved' => 'সংরক্ষিত',
+            'wallet_recovery' => 'পুনরুদ্ধার',
+            'wallet_none' => 'এখনও কোনো ওয়ালেট নেই।',
         ],
     ],
 

@@ -1,4 +1,3 @@
-import { Link, router, usePage } from '@inertiajs/react';
 import {
     Banknote,
     Bell,
@@ -7,23 +6,21 @@ import {
     Coins,
     CreditCard,
     LayoutGrid,
-    LogOut,
     PackageCheck,
     PackageSearch,
     ShieldCheck,
-    Truck,
     UserCog,
     Wallet,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import AppearanceToggleTab from '@/components/appearance-tabs';
+import { usePage } from '@inertiajs/react';
+import { AppContent } from '@/components/app-content';
+import { AppShell } from '@/components/app-shell';
 import BrandingHead from '@/components/branding-head';
-import LanguageSwitcher from '@/components/language-switcher';
-import StatusPill from '@/components/status-pill';
-import { useCurrentUrl } from '@/hooks/use-current-url';
+import { SupplierHeader } from '@/components/supplier/supplier-header';
+import { SupplierSidebar } from '@/components/supplier/supplier-sidebar';
 import { useTranslation } from '@/hooks/use-translation';
-import { cn, toUrl } from '@/lib/utils';
-import { dashboard, logout } from '@/routes/supplier';
+import { dashboard } from '@/routes/supplier';
 import { index as allocations } from '@/routes/supplier/allocations';
 import { create as kyc } from '@/routes/supplier/kyc';
 import { index as listings } from '@/routes/supplier/listings';
@@ -36,7 +33,7 @@ import { edit as security } from '@/routes/supplier/security';
 import { index as stock } from '@/routes/supplier/stock';
 import { show as wallet } from '@/routes/supplier/wallet';
 import { index as withdrawals } from '@/routes/supplier/withdrawals';
-import type { NavItem } from '@/types';
+import type { BreadcrumbItem as BreadcrumbItemType, NavGroup } from '@/types';
 
 type SupplierAccount = {
     business_name: string;
@@ -48,112 +45,134 @@ type SupplierAccount = {
 };
 
 /**
- * The Supplier portal shell (D25): its own header and navigation, visibly
- * separate from the Client/Partner ERP sidebar.
+ * The Supplier portal shell (D25). Same shared shell primitives
+ * (`Sidebar`/`AppShell`/`AppContent`) and the same `NavMain` renderer the
+ * Admin/Client ERP uses — one design system, not two — but every piece of
+ * *data* behind it comes from the Supplier's own guard session
+ * (`supplierAccount`, shared only for a `supplier` request) and its own
+ * route list, never `useNavigation()`'s permission-scoped registry. A
+ * Client/Partner account and a Supplier hold no navigation or session in
+ * common by construction, not by convention this file could drift from.
  *
- * Operational entries (listings, products, rates, stock) only appear once the
- * Supplier is approved. Hiding a link is a convenience — the server refuses
- * the routes regardless (`supplier.operational`).
+ * Operational entries (listings, products, rates, stock, payables, wallet,
+ * payout methods, withdrawals) only appear once the Supplier is approved.
+ * Hiding a link is a convenience — the server refuses the routes
+ * regardless (`supplier.operational`).
  */
-export default function SupplierLayout({ children }: { children: ReactNode }) {
+export default function SupplierLayout({
+    children,
+    breadcrumbs = [],
+}: {
+    children: ReactNode;
+    breadcrumbs?: BreadcrumbItemType[];
+}) {
     const { t } = useTranslation();
     const page = usePage<{ supplierAccount?: SupplierAccount | null }>();
     const account = page.props.supplierAccount ?? null;
-    /*
-     * From Inertia's own shared page URL, not `window.location` — that read
-     * `''` during SSR and the real path once hydrated, so the very first
-     * client render disagreed with the markup the server had just sent and
-     * React logged a hydration mismatch on every load of this page.
-     */
-    const { isCurrentUrl } = useCurrentUrl();
 
     const unreadNotifications = account?.unread_notifications ?? 0;
 
-    /*
-     * Typed against the same `NavItem` the Admin/Staff and Client/Partner
-     * sidebars use (§ shared navigation registry) — a flat top nav rather than
-     * grouped, so `NavGroup` doesn't apply here, but the item shape (and the
-     * badge convention: label + tone, never colour alone, §33.9) is the one
-     * canonical shape across every portal.
-     */
-    const items: NavItem[] = [
+    const groups: NavGroup[] = [
         {
-            title: t('supplier.nav.dashboard'),
-            href: dashboard(),
-            icon: LayoutGrid,
+            label: t('supplier.nav_groups.overview'),
+            items: [
+                {
+                    title: t('supplier.nav.dashboard'),
+                    href: dashboard(),
+                    icon: LayoutGrid,
+                },
+                {
+                    title: t('supplier.nav.application'),
+                    href: kyc(),
+                    icon: ShieldCheck,
+                },
+            ],
         },
         {
-            title: t('supplier.nav.application'),
-            href: kyc(),
-            icon: ShieldCheck,
-        },
-        ...(account?.operational
-            ? [
-                  {
-                      title: t('supplier.nav.listings'),
-                      href: listings(),
-                      icon: ClipboardList,
-                  },
-                  {
-                      title: t('supplier.nav.products'),
-                      href: offers(),
-                      icon: PackageCheck,
-                  },
-                  {
-                      title: t('supplier.nav.rates'),
-                      href: offers(),
-                      icon: Coins,
-                  },
-                  {
-                      title: t('supplier.nav.stock'),
-                      href: stock(),
-                      icon: Boxes,
-                  },
-                  {
-                      title: t('supplier.nav.allocations'),
-                      href: allocations(),
-                      icon: PackageSearch,
-                  },
-                  {
-                      title: t('supplier.nav.payables'),
-                      href: payables(),
-                      icon: Coins,
-                  },
-                  {
-                      title: t('supplier.nav.wallet'),
-                      href: wallet(),
-                      icon: Wallet,
-                  },
-                  {
-                      title: t('supplier.nav.payout_methods'),
-                      href: payoutMethods(),
-                      icon: CreditCard,
-                  },
-                  {
-                      title: t('supplier.nav.withdrawals'),
-                      href: withdrawals(),
-                      icon: Banknote,
-                  },
-              ]
-            : []),
-        {
-            title: t('supplier.nav.notifications'),
-            href: notifications(),
-            icon: Bell,
-            badge:
-                unreadNotifications > 0
-                    ? { label: String(unreadNotifications), tone: 'brand' }
-                    : undefined,
+            label: t('supplier.nav_groups.operations'),
+            items: account?.operational
+                ? [
+                      {
+                          title: t('supplier.nav.listings'),
+                          href: listings(),
+                          icon: ClipboardList,
+                      },
+                      {
+                          title: t('supplier.nav.products'),
+                          href: offers(),
+                          icon: PackageCheck,
+                      },
+                      {
+                          title: t('supplier.nav.rates'),
+                          href: offers(),
+                          icon: Coins,
+                      },
+                      {
+                          title: t('supplier.nav.stock'),
+                          href: stock(),
+                          icon: Boxes,
+                      },
+                      {
+                          title: t('supplier.nav.allocations'),
+                          href: allocations(),
+                          icon: PackageSearch,
+                      },
+                  ]
+                : [],
         },
         {
-            title: t('supplier.nav.profile'),
-            href: profile(),
-            icon: UserCog,
+            label: t('supplier.nav_groups.finance'),
+            items: account?.operational
+                ? [
+                      {
+                          title: t('supplier.nav.payables'),
+                          href: payables(),
+                          icon: Coins,
+                      },
+                      {
+                          title: t('supplier.nav.wallet'),
+                          href: wallet(),
+                          icon: Wallet,
+                      },
+                      {
+                          title: t('supplier.nav.payout_methods'),
+                          href: payoutMethods(),
+                          icon: CreditCard,
+                      },
+                      {
+                          title: t('supplier.nav.withdrawals'),
+                          href: withdrawals(),
+                          icon: Banknote,
+                      },
+                  ]
+                : [],
         },
         {
-            title: t('supplier.nav.security'),
-            href: security(),
-            icon: ShieldCheck,
+            label: t('supplier.nav_groups.account'),
+            items: [
+                {
+                    title: t('supplier.nav.notifications'),
+                    href: notifications(),
+                    icon: Bell,
+                    badge:
+                        unreadNotifications > 0
+                            ? {
+                                  label: String(unreadNotifications),
+                                  tone: 'brand',
+                              }
+                            : undefined,
+                },
+                {
+                    title: t('supplier.nav.profile'),
+                    href: profile(),
+                    icon: UserCog,
+                },
+                {
+                    title: t('supplier.nav.security'),
+                    href: security(),
+                    icon: ShieldCheck,
+                },
+            ],
         },
     ];
 
@@ -167,98 +186,20 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                 {t('supplier.nav.skip')}
             </a>
 
-            <div className="bg-background text-foreground flex min-h-svh flex-col">
-                <header className="bg-brand-subtle border-border border-b">
-                    <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-                        <div className="flex min-w-0 items-center gap-2">
-                            <Truck
-                                className="text-brand size-5 shrink-0"
-                                aria-hidden="true"
-                            />
-                            <div className="min-w-0">
-                                <p className="text-sm leading-tight font-semibold">
-                                    {t('supplier.portal_name')}
-                                </p>
-                                {account && (
-                                    <p className="text-muted-foreground truncate text-xs">
-                                        {account.business_name} ·{' '}
-                                        {account.reference}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="ms-auto flex flex-wrap items-center gap-2">
-                            {account && (
-                                <StatusPill
-                                    tone={
-                                        account.operational ? 'success' : 'info'
-                                    }
-                                    label={account.status_label}
-                                />
-                            )}
-                            <LanguageSwitcher />
-                            <AppearanceToggleTab iconOnly />
-                            <button
-                                type="button"
-                                onClick={() => router.post(logout().url)}
-                                className="hover:bg-muted inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm"
-                            >
-                                <LogOut className="size-4" aria-hidden="true" />
-                                {t('supplier.nav.sign_out')}
-                            </button>
-                        </div>
-                    </div>
-
-                    <nav
-                        aria-label={t('supplier.portal_name')}
-                        className="mx-auto max-w-6xl overflow-x-auto px-4 sm:px-6"
-                    >
-                        <ul className="flex min-w-max gap-1 pb-2">
-                            {items.map((item, index) => {
-                                const active = isCurrentUrl(item.href);
-
-                                return (
-                                    <li key={`${toUrl(item.href)}-${index}`}>
-                                        <Link
-                                            href={item.href}
-                                            aria-current={
-                                                active ? 'page' : undefined
-                                            }
-                                            className={cn(
-                                                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
-                                                active
-                                                    ? 'bg-background font-medium shadow-xs'
-                                                    : 'hover:bg-background/60 text-muted-foreground',
-                                            )}
-                                        >
-                                            {item.icon && (
-                                                <item.icon
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-                                            )}
-                                            {item.title}
-                                            {item.badge && (
-                                                <span className="bg-brand text-brand-foreground rounded-full px-1.5 text-xs">
-                                                    {item.badge.label}
-                                                </span>
-                                            )}
-                                        </Link>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    </nav>
-                </header>
-
-                <main
+            <AppShell>
+                <SupplierSidebar groups={groups} account={account} />
+                <AppContent
                     id="supplier-main"
-                    className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6"
+                    variant="sidebar"
+                    className="min-w-0"
                 >
-                    {children}
-                </main>
-            </div>
+                    <SupplierHeader
+                        breadcrumbs={breadcrumbs}
+                        account={account}
+                    />
+                    <div className="flex-1 p-4 md:p-6">{children}</div>
+                </AppContent>
+            </AppShell>
         </>
     );
 }

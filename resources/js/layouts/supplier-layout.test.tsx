@@ -1,11 +1,30 @@
 // @vitest-environment jsdom
 
 import { render, screen, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
+// `useIsMobile` (behind the shared Sidebar this layout now renders) reads
+// `window.matchMedia` once at module load time, not per render -- this has
+// to be in place before `./supplier-layout` is ever imported below, not in
+// a `beforeEach`.
+window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+});
 
 const english = {
+    common: { nav: { skip: 'Skip to content' } },
     supplier: {
         portal_name: 'Supplier portal',
+        nav_groups: {
+            overview: 'Overview',
+            operations: 'Operations',
+            finance: 'Finance',
+            account: 'Account',
+        },
         nav: {
             dashboard: 'Dashboard',
             application: 'Application & KYC',
@@ -28,8 +47,15 @@ const english = {
 };
 
 const bangla = {
+    common: { nav: { skip: 'মূল অংশে যান' } },
     supplier: {
         portal_name: 'সাপ্লায়ার পোর্টাল',
+        nav_groups: {
+            overview: 'সারসংক্ষেপ',
+            operations: 'কার্যক্রম',
+            finance: 'আর্থিক',
+            account: 'অ্যাকাউন্ট',
+        },
         nav: {
             dashboard: 'ড্যাশবোর্ড',
             application: 'আবেদন ও কেওয়াইসি',
@@ -56,6 +82,8 @@ const page = {
     props: {
         translations: english as unknown,
         supplierAccount: null as unknown,
+        sidebarOpen: true,
+        name: 'Feriwala',
     },
 };
 
@@ -84,6 +112,7 @@ vi.mock('@inertiajs/react', async () => {
 vi.mock('@/components/branding-head', () => ({ default: () => null }));
 vi.mock('@/components/language-switcher', () => ({ default: () => null }));
 vi.mock('@/components/appearance-tabs', () => ({ default: () => null }));
+vi.mock('@/components/app-logo-icon', () => ({ default: () => null }));
 
 const { default: SupplierLayout } = await import('./supplier-layout');
 
@@ -96,6 +125,19 @@ const account = (overrides: Record<string, unknown> = {}) => ({
     unread_notifications: 0,
     ...overrides,
 });
+
+/**
+ * `NavMain`'s collapsed-sidebar tooltips are real Radix `Tooltip`s, which
+ * throw without a `TooltipProvider` ancestor — the same wrapper `app.tsx`
+ * already provides around the whole app in production.
+ */
+function renderLayout(children: ReactNode = 'content') {
+    return render(
+        <TooltipProvider>
+            <SupplierLayout>{children}</SupplierLayout>
+        </TooltipProvider>,
+    );
+}
 
 const OPERATIONAL_ONLY = [
     'Product listings',
@@ -116,16 +158,18 @@ afterEach(() => {
 });
 
 /**
- * The Supplier portal shell (D25): its own header and navigation, separate from
- * the Client/Partner ERP sidebar. Hiding a link is only a convenience — the
- * server refuses the routes regardless — but the shell must not offer doors
- * that open onto a refusal.
+ * The Supplier portal shell (D25): its own sidebar and navigation, built on
+ * the same shared `Sidebar`/`NavMain` primitives the Admin/Client ERP uses,
+ * but reading from the Supplier's own guard session, not
+ * `useNavigation()`'s permission-scoped registry. Hiding a link is only a
+ * convenience — the server refuses the routes regardless — but the shell
+ * must not offer doors that open onto a refusal.
  */
 describe('the supplier portal navigation', () => {
     it('gives an applicant the application and account pages and no operational door', () => {
         page.props.supplierAccount = account();
 
-        render(<SupplierLayout>content</SupplierLayout>);
+        renderLayout();
 
         for (const name of [
             'Dashboard',
@@ -151,22 +195,34 @@ describe('the supplier portal navigation', () => {
             operational: true,
         });
 
-        render(<SupplierLayout>content</SupplierLayout>);
+        renderLayout();
 
         for (const name of OPERATIONAL_ONLY) {
             expect(screen.getByRole('link', { name })).toBeInTheDocument();
         }
     });
 
+    it('groups navigation into Overview, Operations, Finance and Account', () => {
+        page.props.supplierAccount = account({
+            status: 'approved',
+            status_label: 'Approved',
+            operational: true,
+        });
+
+        renderLayout();
+
+        for (const label of ['Overview', 'Operations', 'Finance', 'Account']) {
+            expect(screen.getByText(label)).toBeInTheDocument();
+        }
+    });
+
     it('shows whose portal this is, and how many notifications are unread', () => {
         page.props.supplierAccount = account({ unread_notifications: 3 });
 
-        render(<SupplierLayout>content</SupplierLayout>);
+        renderLayout();
 
-        expect(
-            screen.getByText('Zulu Traders Ltd · SUP-260921-ABCD'),
-        ).toBeInTheDocument();
-        expect(screen.getByText('KYC pending')).toBeInTheDocument();
+        expect(screen.getByText('Zulu Traders Ltd')).toBeInTheDocument();
+        expect(screen.getByText('SUP-260921-ABCD')).toBeInTheDocument();
         expect(
             within(
                 screen.getByRole('link', { name: /Notifications/ }),
@@ -178,7 +234,7 @@ describe('the supplier portal navigation', () => {
         page.props.translations = bangla;
         page.props.supplierAccount = account({ operational: true });
 
-        render(<SupplierLayout>content</SupplierLayout>);
+        renderLayout();
 
         for (const name of [
             'ড্যাশবোর্ড',
@@ -199,27 +255,13 @@ describe('the supplier portal navigation', () => {
         expect(
             screen.queryByRole('link', { name: 'Dashboard' }),
         ).not.toBeInTheDocument();
-        expect(screen.getByText('সাপ্লায়ার পোর্টাল')).toBeInTheDocument();
-    });
-
-    it('keeps a long navigation inside its own scroller rather than widening the page', () => {
-        page.props.supplierAccount = account({ operational: true });
-
-        render(<SupplierLayout>content</SupplierLayout>);
-
-        const nav = screen.getByRole('navigation', {
-            name: 'Supplier portal',
-        });
-
-        // The strip scrolls sideways on a phone; the page itself never does.
-        expect(nav.className).toContain('overflow-x-auto');
-        expect(nav.querySelector('ul')?.className).toContain('min-w-max');
+        expect(screen.getByText('সারসংক্ষেপ')).toBeInTheDocument();
     });
 
     it('offers a skip link to the main content', () => {
         page.props.supplierAccount = account();
 
-        render(<SupplierLayout>content</SupplierLayout>);
+        renderLayout();
 
         expect(
             screen.getByRole('link', { name: 'Skip to content' }),
@@ -233,19 +275,24 @@ describe('the supplier portal navigation', () => {
      * hydrated, which made React log a hydration mismatch on every load of
      * this page (caught in browser verification, not by an earlier version
      * of this test suite, which never asserted on the active state at all).
+     * The shared `NavMain`/`SidebarMenuButton` mark the active row with
+     * `data-active`, not `aria-current` — the same as the Admin/Client
+     * sidebar, so this asserts what the shared component actually does
+     * rather than a different convention invented for this one portal.
      */
     it('marks the current page active from the page URL, not window.location', () => {
         page.props.supplierAccount = account();
         page.url = '/supplier/dashboard';
 
-        render(<SupplierLayout>content</SupplierLayout>);
+        renderLayout();
 
         expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
-            'aria-current',
-            'page',
+            'data-active',
+            'true',
         );
-        expect(
-            screen.getByRole('link', { name: 'Profile' }),
-        ).not.toHaveAttribute('aria-current');
+        expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
+            'data-active',
+            'false',
+        );
     });
 });

@@ -3,13 +3,20 @@
 namespace App\Http\Controllers\Supplier;
 
 use App\Domain\Supplier\Enums\ListingStatus;
+use App\Domain\Supplier\Enums\OfferStatus;
+use App\Domain\Supplier\Enums\PayableStatus;
 use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierOfferStock;
+use App\Domain\Supplier\Models\SupplierPayable;
 use App\Domain\Supplier\Models\SupplierProductListing;
 use App\Domain\Supplier\Models\SupplierWallet;
 use App\Domain\Supplier\Models\SupplierWithdrawal;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureSupplierIsOperational;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -45,11 +52,12 @@ class DashboardController extends Controller
     }
 
     /**
-     * @return array{active_listings: int, withdrawals_pending: int, wallet_available: array<string, mixed>|null}
+     * @return array{active_listings: int, pending_listings: int, active_offers: int, stock_available: int, withdrawals_pending: int, payables: array<string, mixed>, wallet: array<string, mixed>|null}
      */
     protected function snapshot(Supplier $supplier): array
     {
         $wallet = SupplierWallet::query()->where('supplier_id', $supplier->id)->first();
+        $currency = Currency::BDT;
 
         return [
             'active_listings' => SupplierProductListing::query()
@@ -57,12 +65,55 @@ class DashboardController extends Controller
                 ->whereIn('status', [ListingStatus::Approved->value, ListingStatus::PartiallyApproved->value])
                 ->count(),
 
+            // Not yet decided either way — a correction request is still an
+            // open round, not a closed one.
+            'pending_listings' => SupplierProductListing::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereIn('status', [
+                    ListingStatus::Submitted->value,
+                    ListingStatus::UnderReview->value,
+                    ListingStatus::CorrectionRequired->value,
+                ])
+                ->count(),
+
+            'active_offers' => SupplierOffer::query()
+                ->where('supplier_id', $supplier->id)
+                ->where('status', OfferStatus::Active->value)
+                ->count(),
+
+            'stock_available' => (int) SupplierOfferStock::query()
+                ->whereHas('offer', fn ($query) => $query->where('supplier_id', $supplier->id))
+                ->sum('quantity'),
+
             'withdrawals_pending' => SupplierWithdrawal::query()
                 ->where('supplier_id', $supplier->id)
                 ->whereIn('status', [SupplierWithdrawalStatus::Requested->value, SupplierWithdrawalStatus::UnderReview->value])
                 ->count(),
 
-            'wallet_available' => $wallet?->availableBalance()->jsonSerialize(),
+            'payables' => $this->payableTotals($supplier, $currency),
+
+            'wallet' => $wallet?->toBalances(),
+        ];
+    }
+
+    /**
+     * The same eligible/settled figures {@see WalletController}
+     * shows on the dedicated wallet page — never a separate calculation.
+     *
+     * @return array<string, mixed>
+     */
+    protected function payableTotals(Supplier $supplier, Currency $currency): array
+    {
+        $base = fn (PayableStatus $status) => (string) (SupplierPayable::query()
+            ->where('supplier_id', $supplier->id)
+            ->where('currency_code', $currency->value)
+            ->where('status', $status)
+            ->sum('gross_amount') ?: '0');
+
+        return [
+            'pending' => Money::fromDecimal($base(PayableStatus::Pending), $currency)->jsonSerialize(),
+            'eligible' => Money::fromDecimal($base(PayableStatus::Eligible), $currency)->jsonSerialize(),
+            'settled' => Money::fromDecimal($base(PayableStatus::Settled), $currency)->jsonSerialize(),
         ];
     }
 }

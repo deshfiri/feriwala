@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { Banknote, ClipboardList, Coins } from 'lucide-react';
+import { Banknote, Boxes, ClipboardList, PackageCheck } from 'lucide-react';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -10,11 +10,15 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
+import { dashboard } from '@/routes/supplier';
 import { create as kyc } from '@/routes/supplier/kyc';
 import { index as listings } from '@/routes/supplier/listings';
+import { index as offers } from '@/routes/supplier/offers';
+import { index as payables } from '@/routes/supplier/payables';
+import { index as stock } from '@/routes/supplier/stock';
+import { mobile } from '@/routes/supplier/verification';
 import { show as wallet } from '@/routes/supplier/wallet';
 import { index as withdrawals } from '@/routes/supplier/withdrawals';
-import { mobile } from '@/routes/supplier/verification';
 
 const TONES: Record<string, StatusTone> = {
     approved: 'success',
@@ -30,8 +34,18 @@ const TONES: Record<string, StatusTone> = {
 
 type Snapshot = {
     active_listings: number;
+    pending_listings: number;
+    active_offers: number;
+    stock_available: number;
     withdrawals_pending: number;
-    wallet_available: Money | null;
+    payables: { pending: Money; eligible: Money; settled: Money };
+    wallet: {
+        total: Money;
+        available: Money;
+        reserved: Money;
+        recovery: Money;
+        has_outstanding_recovery: boolean;
+    } | null;
 };
 
 export default function SupplierDashboard({
@@ -102,63 +116,175 @@ export default function SupplierDashboard({
                 </SectionCard>
 
                 {snapshot && (
-                    <StatCardGrid className="sm:grid-cols-3 lg:grid-cols-3">
-                        <Link
-                            href={listings()}
-                            className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
-                        >
-                            <StatCard
-                                label={t(
-                                    'supplier.dashboard.snapshot.active_listings',
-                                )}
-                                value={snapshot.active_listings}
-                                icon={ClipboardList}
-                                tone="brand"
-                                className="hover:bg-accent/50 transition-colors"
-                            />
-                        </Link>
+                    <>
+                        <StatCardGrid>
+                            <Link
+                                href={listings()}
+                                className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                            >
+                                <StatCard
+                                    label={t(
+                                        'supplier.dashboard.snapshot.active_listings',
+                                    )}
+                                    value={snapshot.active_listings}
+                                    hint={t(
+                                        'supplier.dashboard.snapshot.pending_listings',
+                                        { count: snapshot.pending_listings },
+                                    )}
+                                    icon={ClipboardList}
+                                    tone="brand"
+                                    className="hover:bg-accent/50 transition-colors"
+                                />
+                            </Link>
 
-                        <Link
-                            href={withdrawals()}
-                            className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
-                        >
-                            <StatCard
-                                label={t(
-                                    'supplier.dashboard.snapshot.withdrawals_pending',
-                                )}
-                                value={snapshot.withdrawals_pending}
-                                icon={Banknote}
-                                tone="warning"
-                                className="hover:bg-accent/50 transition-colors"
-                            />
-                        </Link>
+                            <Link
+                                href={offers()}
+                                className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                            >
+                                <StatCard
+                                    label={t(
+                                        'supplier.dashboard.snapshot.active_offers',
+                                    )}
+                                    value={snapshot.active_offers}
+                                    icon={PackageCheck}
+                                    tone="info"
+                                    className="hover:bg-accent/50 transition-colors"
+                                />
+                            </Link>
 
-                        <Link
-                            href={wallet()}
-                            className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
-                        >
-                            <StatCard
-                                label={t(
-                                    'supplier.dashboard.snapshot.wallet_available',
-                                )}
-                                value={
-                                    snapshot.wallet_available ? (
-                                        <MoneyAmount
-                                            amount={snapshot.wallet_available}
-                                            size="large"
-                                        />
-                                    ) : (
-                                        '—'
-                                    )
-                                }
-                                icon={Coins}
-                                tone="success"
-                                className="hover:bg-accent/50 transition-colors"
-                            />
-                        </Link>
-                    </StatCardGrid>
+                            <Link
+                                href={stock()}
+                                className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                            >
+                                <StatCard
+                                    label={t(
+                                        'supplier.dashboard.snapshot.stock_available',
+                                    )}
+                                    value={snapshot.stock_available}
+                                    icon={Boxes}
+                                    tone="neutral"
+                                    className="hover:bg-accent/50 transition-colors"
+                                />
+                            </Link>
+
+                            <Link
+                                href={withdrawals()}
+                                className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                            >
+                                <StatCard
+                                    label={t(
+                                        'supplier.dashboard.snapshot.withdrawals_pending',
+                                    )}
+                                    value={snapshot.withdrawals_pending}
+                                    icon={Banknote}
+                                    tone="warning"
+                                    className="hover:bg-accent/50 transition-colors"
+                                />
+                            </Link>
+                        </StatCardGrid>
+
+                        <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
+                            <Link
+                                href={payables()}
+                                className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                            >
+                                <SectionCard
+                                    title={t(
+                                        'supplier.dashboard.snapshot.payables',
+                                    )}
+                                    className="hover:bg-accent/30 transition-colors"
+                                >
+                                    <dl className="grid grid-cols-3 gap-4">
+                                        {(
+                                            [
+                                                'pending',
+                                                'eligible',
+                                                'settled',
+                                            ] as const
+                                        ).map((key) => (
+                                            <div key={key}>
+                                                <dt className="text-muted-foreground text-xs">
+                                                    {t(
+                                                        `supplier.dashboard.snapshot.payables_${key}`,
+                                                    )}
+                                                </dt>
+                                                <dd className="tabular mt-1 font-semibold">
+                                                    <MoneyAmount
+                                                        amount={
+                                                            snapshot.payables[
+                                                                key
+                                                            ]
+                                                        }
+                                                    />
+                                                </dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                </SectionCard>
+                            </Link>
+
+                            <Link
+                                href={wallet()}
+                                className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                            >
+                                <SectionCard
+                                    title={t(
+                                        'supplier.dashboard.snapshot.wallet',
+                                    )}
+                                    className="hover:bg-accent/30 transition-colors"
+                                >
+                                    {(() => {
+                                        const walletBalances = snapshot.wallet;
+
+                                        if (!walletBalances) {
+                                            return (
+                                                <p className="text-muted-foreground text-sm">
+                                                    {t(
+                                                        'supplier.dashboard.snapshot.wallet_none',
+                                                    )}
+                                                </p>
+                                            );
+                                        }
+
+                                        return (
+                                            <dl className="grid grid-cols-3 gap-4">
+                                                {(
+                                                    [
+                                                        'available',
+                                                        'reserved',
+                                                        'recovery',
+                                                    ] as const
+                                                ).map((key) => (
+                                                    <div key={key}>
+                                                        <dt className="text-muted-foreground text-xs">
+                                                            {t(
+                                                                `supplier.dashboard.snapshot.wallet_${key}`,
+                                                            )}
+                                                        </dt>
+                                                        <dd className="tabular mt-1 font-semibold">
+                                                            <MoneyAmount
+                                                                amount={
+                                                                    walletBalances[
+                                                                        key
+                                                                    ]
+                                                                }
+                                                            />
+                                                        </dd>
+                                                    </div>
+                                                ))}
+                                            </dl>
+                                        );
+                                    })()}
+                                </SectionCard>
+                            </Link>
+                        </div>
+                    </>
                 )}
             </PageContainer>
         </>
     );
 }
+
+SupplierDashboard.layout = {
+    breadcrumbs: [{ title: 'Dashboard', href: dashboard() }],
+};

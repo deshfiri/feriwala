@@ -3,6 +3,13 @@
 return [
     'portal_name' => 'Supplier portal',
 
+    'nav_groups' => [
+        'overview' => 'Overview',
+        'operations' => 'Operations',
+        'finance' => 'Finance',
+        'account' => 'Account',
+    ],
+
     'nav' => [
         'dashboard' => 'Dashboard',
         'application' => 'Application & KYC',
@@ -91,8 +98,19 @@ return [
         ],
         'snapshot' => [
             'active_listings' => 'Active listings',
+            'pending_listings' => ':count awaiting review',
+            'active_offers' => 'Approved offers',
+            'stock_available' => 'Stock available',
             'withdrawals_pending' => 'Withdrawals awaiting a decision',
-            'wallet_available' => 'Wallet available balance',
+            'payables' => 'Payables',
+            'payables_pending' => 'Pending',
+            'payables_eligible' => 'Eligible',
+            'payables_settled' => 'Settled',
+            'wallet' => 'Wallet',
+            'wallet_available' => 'Available',
+            'wallet_reserved' => 'Reserved',
+            'wallet_recovery' => 'Recovery',
+            'wallet_none' => 'No wallet yet.',
         ],
     ],
 
