@@ -3,6 +3,7 @@
 namespace App\Domain\Supplier\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where a Supplier payable stands (D25, P13-22).
@@ -15,6 +16,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum PayableStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     /** Accrued when the order was placed; earned only on delivery *and* a settled payment. */
     case Pending = 'pending';
 
@@ -64,17 +67,9 @@ enum PayableStatus: string implements TransitionableState
         return in_array($this, [self::Pending, self::Eligible, self::PartiallyReversed, self::OnHold, self::Settled], true);
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Pending => 'Pending',
-            self::Eligible => 'Eligible',
-            self::Settled => 'Settled',
-            self::PartiallyReversed => 'Partially reversed',
-            self::Reversed => 'Reversed',
-            self::Cancelled => 'Cancelled',
-            self::OnHold => 'On hold',
-        };
+        return 'payable';
     }
 
     public function tone(): string

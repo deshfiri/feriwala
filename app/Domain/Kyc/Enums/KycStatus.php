@@ -4,6 +4,7 @@ namespace App\Domain\Kyc\Enums;
 
 use App\Domain\Account\Enums\AccountStatus;
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * The lifecycle of one KYC submission (§7.3).
@@ -15,6 +16,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum KycStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Draft = 'draft';
     case Submitted = 'submitted';
     case UnderReview = 'under_review';
@@ -57,16 +60,9 @@ enum KycStatus: string implements TransitionableState
         return $this === self::ResubmissionRequired;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Draft => 'Draft',
-            self::Submitted => 'Submitted',
-            self::UnderReview => 'Under review',
-            self::ResubmissionRequired => 'Resubmission required',
-            self::Approved => 'Approved',
-            self::Rejected => 'Rejected',
-        };
+        return 'kyc';
     }
 
     public function tone(): string

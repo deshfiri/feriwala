@@ -140,6 +140,48 @@ return [
         'cancelled' => 'Cancelled',
     ],
 
+    'payable' => [
+        'pending' => 'Pending',
+        'eligible' => 'Eligible',
+        'settled' => 'Settled',
+        'partially_reversed' => 'Partially reversed',
+        'reversed' => 'Reversed',
+        'cancelled' => 'Cancelled',
+        'on_hold' => 'On hold',
+    ],
+
+    'supplier_kyc' => [
+        'draft' => 'Draft',
+        'submitted' => 'Submitted',
+        'under_review' => 'Under review',
+        'correction_required' => 'Correction required',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+    ],
+
+    'commission' => [
+        'skipped' => 'Not paid',
+        'pending' => 'Pending',
+        'paid' => 'Paid',
+        'cancelled' => 'Cancelled',
+        'reversed' => 'Reversed',
+        'reversal_owed' => 'Reversal owed',
+    ],
+
+    'kyc' => [
+        'draft' => 'Draft',
+        'submitted' => 'Submitted',
+        'under_review' => 'Under review',
+        'resubmission_required' => 'Resubmission required',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+    ],
+
+    'offer' => [
+        'active' => 'Active',
+        'suspended' => 'Suspended',
+    ],
+
     'refund' => [
         'requested' => 'Awaiting decision',
         'approved' => 'Approved',

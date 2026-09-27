@@ -3,6 +3,7 @@
 namespace App\Domain\Referral\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where one referral commission stands (D24, P7-43).
@@ -20,6 +21,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum CommissionStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Skipped = 'skipped';
     case Pending = 'pending';
     case Paid = 'paid';
@@ -40,16 +43,9 @@ enum CommissionStatus: string implements TransitionableState
         };
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Skipped => 'Not paid',
-            self::Pending => 'Pending',
-            self::Paid => 'Paid',
-            self::Cancelled => 'Cancelled',
-            self::Reversed => 'Reversed',
-            self::ReversalOwed => 'Reversal owed',
-        };
+        return 'commission';
     }
 
     public function isTerminal(): bool

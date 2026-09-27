@@ -130,6 +130,48 @@ return [
         'cancelled' => 'বাতিল',
     ],
 
+    'payable' => [
+        'pending' => 'অপেক্ষমাণ',
+        'eligible' => 'যোগ্য',
+        'settled' => 'নিষ্পত্তিকৃত',
+        'partially_reversed' => 'আংশিক বিপরীত করা হয়েছে',
+        'reversed' => 'বিপরীত করা হয়েছে',
+        'cancelled' => 'বাতিল',
+        'on_hold' => 'স্থগিত রাখা হয়েছে',
+    ],
+
+    'supplier_kyc' => [
+        'draft' => 'খসড়া',
+        'submitted' => 'জমা দেওয়া হয়েছে',
+        'under_review' => 'পর্যালোচনাধীন',
+        'correction_required' => 'সংশোধন প্রয়োজন',
+        'approved' => 'অনুমোদিত',
+        'rejected' => 'প্রত্যাখ্যাত',
+    ],
+
+    'commission' => [
+        'skipped' => 'পরিশোধ হয়নি',
+        'pending' => 'অপেক্ষমাণ',
+        'paid' => 'পরিশোধিত',
+        'cancelled' => 'বাতিল',
+        'reversed' => 'বিপরীত করা হয়েছে',
+        'reversal_owed' => 'বিপরীতকরণ বাকি',
+    ],
+
+    'kyc' => [
+        'draft' => 'খসড়া',
+        'submitted' => 'জমা দেওয়া হয়েছে',
+        'under_review' => 'পর্যালোচনাধীন',
+        'resubmission_required' => 'পুনরায় জমা প্রয়োজন',
+        'approved' => 'অনুমোদিত',
+        'rejected' => 'প্রত্যাখ্যাত',
+    ],
+
+    'offer' => [
+        'active' => 'সক্রিয়',
+        'suspended' => 'স্থগিত',
+    ],
+
     'refund' => [
         'requested' => 'সিদ্ধান্তের অপেক্ষায়',
         'approved' => 'অনুমোদিত',

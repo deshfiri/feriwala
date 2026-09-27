@@ -2,21 +2,22 @@
 
 namespace App\Domain\Supplier\Enums;
 
+use App\Support\Status\HasTranslatedLabel;
+
 /**
  * Whether one Supplier's offer on one product/variation is currently
  * purchasable (D25, P13-14).
  */
 enum OfferStatus: string
 {
+    use HasTranslatedLabel;
+
     case Active = 'active';
     case Suspended = 'suspended';
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Active => 'Active',
-            self::Suspended => 'Suspended',
-        };
+        return 'offer';
     }
 
     public function tone(): string

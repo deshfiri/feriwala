@@ -3,6 +3,7 @@
 namespace App\Domain\Supplier\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * One round of Supplier KYC (D25, P13-7). Mirrors the shape of
@@ -12,6 +13,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum SupplierKycStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Draft = 'draft';
     case Submitted = 'submitted';
     case UnderReview = 'under_review';
@@ -38,16 +41,9 @@ enum SupplierKycStatus: string implements TransitionableState
         return in_array($this, [self::Approved, self::Rejected], true);
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Draft => 'Draft',
-            self::Submitted => 'Submitted',
-            self::UnderReview => 'Under review',
-            self::CorrectionRequired => 'Correction required',
-            self::Approved => 'Approved',
-            self::Rejected => 'Rejected',
-        };
+        return 'supplier_kyc';
     }
 
     public function isEditable(): bool
