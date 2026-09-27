@@ -46,11 +46,13 @@ class ActivateAccount
     ) {}
 
     /**
-     * @param  int  $approvedBy  the administrator taking responsibility
+     * @param  int|null  $approvedBy  the administrator taking responsibility, or
+     *                                null when the platform activated the account
+     *                                itself on the normal path (D27)
      *
      * @throws ActivationBlocked
      */
-    public function handle(BusinessAccount $account, int $approvedBy, ?string $note = null): BusinessAccount
+    public function handle(BusinessAccount $account, ?int $approvedBy, ?string $note = null): BusinessAccount
     {
         // Serialised per account. Two reviewers deciding at the same moment must
         // resolve to one outcome, and the requirements re-check below has to
@@ -72,7 +74,7 @@ class ActivateAccount
     /**
      * @throws ActivationBlocked
      */
-    protected function activate(BusinessAccount $account, int $approvedBy, ?string $note): BusinessAccount
+    protected function activate(BusinessAccount $account, ?int $approvedBy, ?string $note): BusinessAccount
     {
         return $this->database->transaction(function () use ($account, $approvedBy, $note) {
             /** @var BusinessAccount $locked */
@@ -89,6 +91,17 @@ class ActivateAccount
 
             $from = $locked->status;
 
+            /*
+             * Who is answering for this (D27). On the normal path nobody is:
+             * the conditions were met and the platform acted on them, and
+             * recording a member of staff who never looked would be a lie in
+             * the audit trail. A manual activation names its reviewer.
+             */
+            $isAutomatic = $approvedBy === null;
+            $reason = $isAutomatic
+                ? 'Activation conditions met; activated automatically.'
+                : 'Activation approved.';
+
             // §5.3 routes activation through approval. An account that reached
             // this point another way is moved onto the approved step first, so
             // the history shows the gate rather than skipping it.
@@ -97,7 +110,7 @@ class ActivateAccount
             $this->changeStatus->handle($locked, new AccountStatusChange(
                 to: AccountStatus::Active,
                 changedBy: $approvedBy,
-                reason: 'Activation approved.',
+                reason: $reason,
                 userVisibleNote: $note ?? 'Your account is now active.',
             ));
 
@@ -143,11 +156,12 @@ class ActivateAccount
             $this->audit->handle(new AuditEntry(
                 action: 'account.activated',
                 actorId: $approvedBy,
+                actorType: $isAutomatic ? 'system' : 'user',
                 auditableType: BusinessAccount::class,
                 auditableId: $locked->id,
                 before: ['status' => $from->value],
-                after: ['status' => AccountStatus::Active->value],
-                reason: 'Activation approved.',
+                after: ['status' => AccountStatus::Active->value, 'automatic' => $isAutomatic],
+                reason: $reason,
                 note: $note,
                 accountId: $locked->id,
                 module: 'account',

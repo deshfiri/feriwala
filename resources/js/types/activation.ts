@@ -43,6 +43,17 @@ export type ActivationAccount = {
     can_approve: boolean;
     can_request_resubmission: boolean;
     can_suspend: boolean;
+
+    /**
+     * Whether the platform has been stopped from activating this account on
+     * its own (D27). A hold turns off the automatic path only — a reviewer can
+     * still activate a held account by hand.
+     */
+    is_held: boolean;
+    hold_reason: string | null;
+    held_at: string | null;
+    held_by: string | null;
+    can_hold: boolean;
 };
 
 /** One of the three §5.1 conditions, with the evidence behind it. */

@@ -56,6 +56,9 @@ use Illuminate\Support\Carbon;
  * @property AccountStatus $status
  * @property CarbonImmutable|null $activated_at
  * @property CarbonImmutable|null $approval_pending_at
+ * @property string|null $activation_hold_reason
+ * @property CarbonImmutable|null $activation_held_at
+ * @property int|null $activation_held_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -102,6 +105,7 @@ class BusinessAccount extends Model
             'status' => AccountStatus::class,
             'activated_at' => 'immutable_datetime',
             'approval_pending_at' => 'immutable_datetime',
+            'activation_held_at' => 'immutable_datetime',
         ];
     }
 
@@ -228,6 +232,29 @@ class BusinessAccount extends Model
     public function isActivated(): bool
     {
         return $this->status->isActivated();
+    }
+
+    /**
+     * The member of staff who held this account's activation, if it is held
+     * (D27).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function activationHeldBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'activation_held_by');
+    }
+
+    /**
+     * Whether a member of staff has deliberately taken this account off the
+     * automatic activation path (D27).
+     *
+     * Stops only the automatic route. A reviewer with the authority can still
+     * activate a held account by hand, which is the point of holding it.
+     */
+    public function activationIsHeld(): bool
+    {
+        return $this->activation_held_at !== null;
     }
 
     public function canTransact(): bool

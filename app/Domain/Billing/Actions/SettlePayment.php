@@ -2,7 +2,7 @@
 
 namespace App\Domain\Billing\Actions;
 
-use App\Domain\Account\Actions\EvaluateActivationReadiness;
+use App\Domain\Account\Actions\ActivateAccountAutomatically;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
@@ -42,7 +42,7 @@ class SettlePayment
 {
     public function __construct(
         protected PaymentGatewayManager $gateways,
-        protected EvaluateActivationReadiness $readiness,
+        protected ActivateAccountAutomatically $automaticActivation,
         protected ActivateRenewal $renewals,
         protected ActivatePackageChange $packageChanges,
         protected SettleCouponRedemption $couponRedemptions,
@@ -633,6 +633,19 @@ class SettlePayment
         }
     }
 
+    /**
+     * The settled activation payment was the last condition (D27).
+     *
+     * Not merely "join the approval queue" any more: with KYC already approved
+     * and this payment verified against the exact amount owed, there is nothing
+     * left for a person to decide, so the account is activated here rather than
+     * waiting for one. The action still puts it at the gate first and still
+     * leaves it there — for a reviewer — when it is held or not yet ready.
+     *
+     * Never allowed to fail the settlement. This runs after the payment has
+     * committed, and money that genuinely arrived must not be rolled back
+     * because activation could not finish.
+     */
     protected function refreshActivationReadiness(Payment $payment): void
     {
         $account = $payment->businessAccount()->first();
@@ -642,7 +655,7 @@ class SettlePayment
         }
 
         try {
-            $this->readiness->handle($account, 'Activation payment settled.');
+            $this->automaticActivation->handle($account, 'Activation payment settled.');
         } catch (Throwable $throwable) {
             $this->log->channel('payment')->error('Could not re-evaluate activation readiness', [
                 'payment' => $payment->reference,

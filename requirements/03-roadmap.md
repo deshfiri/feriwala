@@ -48,9 +48,10 @@ it, and nothing downstream is testable until accounts can activate.
 **Done when:** a user can register (with referral code capture), verify mobile + email, submit
 dynamic KYC with privately-stored documents, select from N admin-created packages, see a checkout
 that itemises registration fee and package fee separately, pay through one gateway, and be
-activated after payment verification + KYC approval + admin approval — with the onboarding stepper
-showing the correct step at every point, and pre-activation access correctly restricted to the
-seven allowed areas (§5.4).
+**activated automatically** on payment verification + KYC approval (D27 — no second manual
+approval on the normal path; manual activation remains for accounts explicitly held for review) —
+with the onboarding stepper showing the correct step at every point, and pre-activation access
+correctly restricted to the seven allowed areas (§5.4).
 
 ## Phase 2 — Money Core
 

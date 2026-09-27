@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Actions\ActivateAccount;
+use App\Domain\Account\Actions\HoldAccountActivation;
 use App\Domain\Account\Actions\RequestKycResubmission;
 use App\Domain\Account\Actions\SuspendAccount;
 use App\Domain\Account\ActivationRequirements;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 /**
  * The activation approval queue (§5.1, §44).
@@ -119,6 +121,20 @@ class ActivationReviewController extends Controller
                 'can_approve' => $reviewer->can('approveActivation', $account),
                 'can_request_resubmission' => $reviewer->can('requestKycResubmission', $account),
                 'can_suspend' => $reviewer->can('suspend', $account),
+
+                /*
+                 * Whether the platform would have activated this account on
+                 * its own (D27). A reviewer looking at a ready account needs to
+                 * know why it is still here: because it is held, or because
+                 * this request arrived in the moment before the automatic path
+                 * ran. Holding is the same authority as approving, so it rides
+                 * on the same ability.
+                 */
+                'is_held' => $account->activationIsHeld(),
+                'hold_reason' => $account->activation_hold_reason,
+                'held_at' => $account->activation_held_at?->toIso8601String(),
+                'held_by' => $account->activationHeldBy?->name,
+                'can_hold' => $reviewer->can('approveActivation', $account),
             ],
 
             // The three §5.1 conditions, each with the evidence behind it. A
@@ -233,6 +249,50 @@ class ActivationReviewController extends Controller
 
         return to_route('admin.activations.index')
             ->with('success', 'Account suspended.');
+    }
+
+    /**
+     * Take this account off the automatic activation path, or put it back on
+     * (D27).
+     *
+     * Behind `approveActivation` rather than a permission of its own: holding
+     * decides whether the platform may activate without a person, which is the
+     * same authority as activating. Suspension stays separate — that one takes
+     * the ability to trade away, and this one does not.
+     *
+     * A hold does not activate or refuse anything. It turns the automatic path
+     * off so a reviewer decides instead, and the reviewer's own decision is
+     * still `approve`, `requestResubmission` or `suspend`.
+     */
+    public function hold(
+        Request $request,
+        BusinessAccount $account,
+        HoldAccountActivation $holds,
+    ): RedirectResponse {
+        Gate::authorize('approveActivation', $account);
+
+        /** @var User $reviewer */
+        $reviewer = $request->user();
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+            'release' => ['nullable', 'boolean'],
+        ]);
+
+        $isRelease = (bool) ($validated['release'] ?? false);
+
+        try {
+            $isRelease
+                ? $holds->release($account, $reviewer, $validated['reason'])
+                : $holds->hold($account, $reviewer, $validated['reason']);
+        } catch (InvalidArgumentException $refused) {
+            throw ValidationException::withMessages(['reason' => $refused->getMessage()]);
+        }
+
+        return back()->with(
+            'success',
+            $isRelease ? 'Hold released.' : 'Activation held for review.',
+        );
     }
 
     /**

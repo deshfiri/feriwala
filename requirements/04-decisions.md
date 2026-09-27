@@ -298,6 +298,12 @@ independently purchased wholesale stock is sold.
 
 ## D22 — Activation review outcomes and readiness (2026-09-03)
 
+> **Amended by [D27](#d27--activation-is-automatic-once-its-conditions-are-met-2026-09-27).** The
+> three reviewer outcomes below, the permissions, the concurrency rules and `approval_pending_at`
+> all stand. What changed is that reaching `ApprovalPending` no longer _waits_ for a reviewer on the
+> normal path: the platform activates the account itself once every §5.1 condition is met. Manual
+> activation remains, for accounts explicitly held for review.
+
 Refinements to the activation gate, approved after the first implementation of the approval queue.
 
 ### No generic Reject
@@ -641,6 +647,81 @@ a documented period; no new internal code reads or writes it. Tests prove a lega
 cannot produce a 100-times overcharge or undercharge. The migration strategy is written into
 [05-storefront-api-contract.md](05-storefront-api-contract.md) §4.1 rather than the contract being
 silently changed.
+
+## D27 — Activation is automatic once its conditions are met (2026-09-27)
+
+**Instructed directly by the Project Owner on 2026-09-27**, as a beta-critical correction. Amends
+[D22](#d22--activation-review-outcomes-and-readiness-2026-09-03). Does not touch any
+change-controlled area: who decides an activation is not the account structure, the ledger, or the
+direction money moves.
+
+### The rule
+
+An account becomes **Active automatically** — with no second manual approval — the moment all of
+the following hold:
+
+1. KYC is approved.
+2. The selected package is still valid and available.
+3. A payment for the exact server-calculated amount and currency has settled.
+4. That payment belongs to this account and this activation attempt.
+5. The payment is not expired, duplicated, reversed, or under reconciliation.
+6. Every other onboarding prerequisite is complete (owner email and mobile verified).
+7. There is **no explicit hold, risk or manual-review flag** on the account.
+
+Conditions 1–6 are the §5.1 requirements that `ActivationRequirements` has always checked; D22
+already required them to be re-checked under a row lock, and they still are. Nothing has been
+relaxed. Condition 7 is new, and is the whole of what replaces the old manual step.
+
+### What changed, and why
+
+D22 left `ApprovalPending` as a queue an account **waited in**. In practice, by the time an account
+reached it there was nothing left for a reviewer to weigh: a person had already approved the KYC,
+and the payment had already been verified server-side against the exact amount owed. The approval
+click added no judgement — it added office hours. An applicant who did everything right on a Friday
+evening could not trade until Sunday, and every such account sat in a queue whose only real function
+had become latency.
+
+So the decision moves to where the evidence is. `ActivateAccountAutomatically` re-evaluates
+readiness, and on a ready, unheld account calls the existing `ActivateAccount` with **no approver**.
+It is the same transaction, the same per-account lock, the same requirements re-check, the same
+wallet, deposit obligation, subscription activation and referral commissions. There is no second
+activation path; there is one path, now reachable without a human in front of it.
+
+### Holds preserve authorized manual review
+
+A hold is the exception, made explicit: `activation_hold_reason`, `activation_held_at` and
+`activation_held_by` on `business_accounts`, all three present or all three null, enforced by a
+CHECK. Setting one requires a named member of staff and a reason, and is audited as sensitive.
+
+A hold turns off the **automatic** path only. A held account still reaches `ApprovalPending` and
+still appears in the review queue — more prominently, since a person now has to look at it — and a
+reviewer with `account.approve` can still activate it through the ordinary manual route. The hold
+returns the decision to a person; it does not take it away from everyone. The first time the
+platform would have activated a held account and did not, it says so once in the audit trail, so a
+held account is distinguishable afterwards from one that was merely unlucky in a queue.
+
+`ActivationRequirements` deliberately does **not** know about holds. Those are the conditions §5.1
+requires of the account itself, and a reviewer must be able to satisfy themselves and activate
+without first unpicking the requirement list.
+
+### Idempotency and concurrency
+
+The same settlement is announced by the gateway's IPN, by the browser returning, and by the
+reconciliation sweep — three callers for one event, which may arrive at once. Whichever reaches the
+per-account lock first activates; the rest find an account that is already active and do nothing.
+Activation can therefore never run twice, and never produces a second wallet, deposit obligation,
+subscription term or referral commission.
+
+The automatic path never throws. It runs after the payment has committed, and a failure to
+activate — a notification queue down, a lock contended past its wait — must never roll back money
+that genuinely arrived. Such an account stays at the gate, where a reviewer can activate it in a
+moment.
+
+### Known gap
+
+An activation quote reduced to zero by a 100% discount never creates a payment at all, so it can
+never settle and can never trigger this path. Such an account still requires manual activation.
+Recorded rather than silently worked around; see [TODO.md](TODO.md).
 
 ## Change control 🔒
 

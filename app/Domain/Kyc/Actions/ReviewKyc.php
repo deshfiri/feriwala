@@ -2,8 +2,8 @@
 
 namespace App\Domain\Kyc\Actions;
 
+use App\Domain\Account\Actions\ActivateAccountAutomatically;
 use App\Domain\Account\Actions\ChangeAccountStatus;
-use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Kyc\Data\KycDecision;
@@ -28,7 +28,7 @@ class ReviewKyc
 {
     public function __construct(
         protected ChangeAccountStatus $changeAccountStatus,
-        protected EvaluateActivationReadiness $readiness,
+        protected ActivateAccountAutomatically $automaticActivation,
         protected LiftKycDeadlineRestriction $liftRestriction,
         protected DatabaseManager $database,
     ) {}
@@ -71,14 +71,25 @@ class ReviewKyc
         $account = $submission->businessAccount()->first();
 
         if ($account !== null) {
-            $this->readiness->handle($account, 'KYC decision recorded.');
-
             // The recovery path (§7.4). An account restricted for missing a
             // deadline gets that back the moment the reason is gone — a
             // restriction only a human could lift would be a trap, not a policy.
+            //
+            // Lifted before activation is considered, so an account whose only
+            // remaining problem was that restriction can go on to activate in
+            // this same pass instead of waiting for another trigger.
             if ($decision->outcome === KycStatus::Approved) {
                 $this->liftRestriction->handle($account);
             }
+
+            /*
+             * An approval landing on an account whose activation payment has
+             * already settled is the last condition (D27), so this activates
+             * rather than only queueing. A rejection or a withdrawal takes the
+             * same route: the action re-evaluates readiness either way, and an
+             * account that is no longer ready leaves the gate.
+             */
+            $this->automaticActivation->handle($account->refresh(), 'KYC decision recorded.');
         }
 
         return $review;

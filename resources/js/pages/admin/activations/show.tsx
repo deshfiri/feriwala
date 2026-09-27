@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     approve,
+    hold,
     index,
     requestResubmission,
     suspend,
@@ -162,6 +163,92 @@ export default function AdminActivationsShow({
                                 ))}
                             </ul>
                         </SectionCard>
+
+                        {/*
+                            Why this account is still here (D27). A ready
+                            account is normally activated by the platform
+                            itself, so a reviewer seeing one at the gate needs
+                            to know whether it is held — and by whom, and why.
+                        */}
+                        {account.can_hold && (
+                            <SectionCard
+                                title={t('activation.hold.title')}
+                                description={t(
+                                    account.is_held
+                                        ? 'activation.hold.held_help'
+                                        : 'activation.hold.open_help',
+                                )}
+                            >
+                                {account.is_held && (
+                                    <div className="border-warning/40 bg-warning/5 mb-4 flex gap-3 rounded-md border p-3">
+                                        <AlertTriangle
+                                            className="text-warning mt-0.5 size-4 shrink-0"
+                                            aria-hidden="true"
+                                        />
+                                        <div className="min-w-0 space-y-1 text-sm">
+                                            <p className="font-medium">
+                                                {t('activation.hold.held_by', {
+                                                    name:
+                                                        account.held_by ?? '—',
+                                                    at: formatDateTime(
+                                                        account.held_at,
+                                                    ),
+                                                })}
+                                            </p>
+                                            <p className="text-muted-foreground break-words">
+                                                {account.hold_reason}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Form
+                                    {...hold.form(account.id)}
+                                    className="space-y-3"
+                                >
+                                    {({ errors, processing }) => (
+                                        <>
+                                            <input
+                                                type="hidden"
+                                                name="release"
+                                                value={
+                                                    account.is_held ? '1' : '0'
+                                                }
+                                            />
+                                            <FormField
+                                                label={t(
+                                                    'activation.hold.reason',
+                                                )}
+                                                error={errors.reason}
+                                                required
+                                            >
+                                                {(field) => (
+                                                    <Input
+                                                        {...field}
+                                                        name="reason"
+                                                        required
+                                                    />
+                                                )}
+                                            </FormField>
+                                            <SubmitButton
+                                                processing={processing}
+                                                variant={
+                                                    account.is_held
+                                                        ? 'default'
+                                                        : 'outline'
+                                                }
+                                            >
+                                                {t(
+                                                    account.is_held
+                                                        ? 'activation.hold.release'
+                                                        : 'activation.hold.hold',
+                                                )}
+                                            </SubmitButton>
+                                        </>
+                                    )}
+                                </Form>
+                            </SectionCard>
+                        )}
 
                         <SectionCard title={t('activation.detail.history')}>
                             {history.length === 0 ? (

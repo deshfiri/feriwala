@@ -1070,6 +1070,11 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('activations.request-resubmission');
         Route::post('activations/{account}/suspend', [ActivationReviewController::class, 'suspend'])
             ->name('activations.suspend');
+        // Not a fourth outcome: a hold decides nothing about the account, it
+        // only takes it off the automatic path so a person decides instead
+        // (D27). Release is the same route with `release`.
+        Route::post('activations/{account}/hold', [ActivationReviewController::class, 'hold'])
+            ->name('activations.hold');
     });
 
 /*

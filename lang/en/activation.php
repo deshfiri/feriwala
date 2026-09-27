@@ -39,6 +39,16 @@ return [
         'unmet' => 'Not met',
     ],
 
+    'hold' => [
+        'title' => 'Manual review hold',
+        'open_help' => 'Accounts that meet every condition are activated automatically. Hold this one to decide it yourself instead.',
+        'held_help' => 'This account will not be activated automatically. You can still activate it yourself below.',
+        'held_by' => 'Held by :name on :at',
+        'reason' => 'Reason',
+        'hold' => 'Hold for review',
+        'release' => 'Release hold',
+    ],
+
     'decision' => [
         'title' => 'Decision',
         'description' => 'Recorded against your name. Activation is the point an account can begin trading.',
