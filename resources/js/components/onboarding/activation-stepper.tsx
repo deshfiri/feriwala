@@ -1,4 +1,5 @@
 import { AlertTriangle, Check } from 'lucide-react';
+import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { OnboardingStep, OnboardingStepState } from '@/types';
 
@@ -19,13 +20,15 @@ export default function ActivationStepper({
     steps: OnboardingStep[];
     className?: string;
 }) {
+    const { t } = useTranslation();
+
     return (
         <ol
             className={cn(
                 'flex flex-wrap items-start gap-x-2 gap-y-4',
                 className,
             )}
-            aria-label="Activation progress"
+            aria-label={t('onboarding.stepper.aria_label')}
         >
             {steps.map((step, index) => (
                 <li key={step.key} className="flex flex-1 items-start gap-2">
@@ -52,7 +55,9 @@ export default function ActivationStepper({
                         </span>
 
                         {/* Announced to screen readers; the marker carries it visually. */}
-                        <span className="sr-only">{describe(step.state)}</span>
+                        <span className="sr-only">
+                            {t(`onboarding.stepper.${step.state}`)}
+                        </span>
                     </div>
 
                     {index < steps.length - 1 && (
@@ -115,13 +120,4 @@ function StepMarker({
             {position}
         </span>
     );
-}
-
-function describe(state: OnboardingStepState): string {
-    return {
-        done: 'Completed',
-        current: 'In progress',
-        blocked: 'Needs your attention',
-        upcoming: 'Not started',
-    }[state];
 }

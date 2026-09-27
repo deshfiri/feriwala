@@ -4,9 +4,11 @@ import { useState } from 'react';
 import FileField from '@/components/forms/file-field';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { history as kycHistory } from '@/routes/kyc';
 
@@ -52,6 +54,8 @@ export default function KycForm({
     requirements: Requirement[];
     feedback: string | null;
 }) {
+    const { t } = useTranslation();
+
     const outstanding = requirements.filter(
         (requirement) =>
             requirement.is_required &&
@@ -61,13 +65,13 @@ export default function KycForm({
 
     return (
         <>
-            <Head title="KYC verification" />
+            <Head title={t('kyc.submission.page_title')} />
 
-            <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-10">
+            <PageContainer width="narrow">
                 <header className="space-y-2">
                     <div className="flex flex-wrap items-center gap-3">
                         <h1 className="text-xl font-semibold tracking-tight">
-                            Identity verification
+                            {t('kyc.submission.title')}
                         </h1>
                         <StatusPill
                             tone={submission.status_tone}
@@ -75,9 +79,9 @@ export default function KycForm({
                         />
                     </div>
                     <p className="text-muted-foreground text-sm">
-                        We need these before your account can be activated.
+                        {t('kyc.submission.help')}
                         {submission.round > 1 &&
-                            ` This is attempt ${submission.round}.`}
+                            ` ${t('kyc.submission.attempt', { round: submission.round })}`}
                     </p>
 
                     {/*
@@ -87,7 +91,9 @@ export default function KycForm({
                      * they have been sent back from.
                      */}
                     <Button variant="link" size="sm" className="px-0" asChild>
-                        <Link href={kycHistory()}>View my history</Link>
+                        <Link href={kycHistory()}>
+                            {t('kyc.submission.view_history')}
+                        </Link>
                     </Button>
                 </header>
 
@@ -98,11 +104,7 @@ export default function KycForm({
                         className="mt-0.5 size-4 shrink-0"
                         aria-hidden="true"
                     />
-                    <span>
-                        Your documents are encrypted and stored privately. Only
-                        authorised reviewers can open them, and every access is
-                        recorded.
-                    </span>
+                    <span>{t('kyc.submission.privacy')}</span>
                 </p>
 
                 {feedback && (
@@ -111,7 +113,7 @@ export default function KycForm({
                         role="alert"
                     >
                         <p className="text-sm font-semibold">
-                            Our reviewer asked for a change
+                            {t('kyc.submission.feedback_title')}
                         </p>
                         <p className="text-ink-2 text-sm">{feedback}</p>
                     </section>
@@ -124,14 +126,15 @@ export default function KycForm({
                             aria-hidden="true"
                         />
                         <p className="text-sm font-medium">
-                            Your documents are with our team.
+                            {t('kyc.submission.with_team_title')}
                         </p>
                         <p className="text-muted-foreground text-sm">
-                            Nothing more to do for now — we will let you know as
-                            soon as they have been checked.
+                            {t('kyc.submission.with_team_description')}
                         </p>
                         <Button asChild variant="outline" size="sm">
-                            <Link href="/onboarding">Back to status</Link>
+                            <Link href="/onboarding">
+                                {t('kyc.submission.back_to_status')}
+                            </Link>
                         </Button>
                     </section>
                 ) : (
@@ -155,8 +158,15 @@ export default function KycForm({
                                     <div className="min-w-0 flex-1 space-y-1">
                                         <p className="text-sm font-medium">
                                             {outstanding.length === 0
-                                                ? 'Everything we need is here.'
-                                                : `${outstanding.length} still needed`}
+                                                ? t(
+                                                      'kyc.submission.all_provided',
+                                                  )
+                                                : t(
+                                                      'kyc.submission.still_needed',
+                                                      {
+                                                          count: outstanding.length,
+                                                      },
+                                                  )}
                                         </p>
                                         {errors.submission && (
                                             <p className="text-danger text-xs font-medium">
@@ -174,22 +184,25 @@ export default function KycForm({
 
                                     <SubmitButton
                                         processing={processing}
-                                        processingLabel="Submitting…"
+                                        processingLabel={t(
+                                            'kyc.submission.submitting',
+                                        )}
                                         disabled={outstanding.length > 0}
                                     >
-                                        Submit for review
+                                        {t('kyc.submission.submit')}
                                     </SubmitButton>
                                 </>
                             )}
                         </Form>
                     </>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }
 
 function RequirementCard({ requirement }: { requirement: Requirement }) {
+    const { t } = useTranslation();
     const [progress, setProgress] = useState<number | null>(null);
     const isSupplied =
         requirement.uploaded !== null || requirement.value_preview !== null;
@@ -223,7 +236,7 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
                         {requirement.name}
                         {!requirement.is_required && (
                             <span className="text-muted-foreground text-xs font-normal">
-                                (optional)
+                                {t('kyc.submission.optional')}
                             </span>
                         )}
                     </h2>
@@ -238,15 +251,22 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
                     )}
                 </div>
 
-                {isSupplied && <StatusPill tone="success" label="Provided" />}
+                {isSupplied && (
+                    <StatusPill
+                        tone="success"
+                        label={t('kyc.submission.provided')}
+                    />
+                )}
             </div>
 
             {requirement.requires_file && (
                 <FileField
                     label={
                         requirement.uploaded
-                            ? `Replace ${requirement.uploaded.name}`
-                            : 'Upload'
+                            ? t('kyc.submission.replace', {
+                                  name: requirement.uploaded.name,
+                              })
+                            : t('kyc.submission.upload')
                     }
                     name="file"
                     accept={requirement.accepted_mime_types.join(',')}
@@ -271,12 +291,17 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
                                 value={requirement.key}
                             />
                             <FormField
-                                label={requirement.value_label ?? 'Number'}
+                                label={
+                                    requirement.value_label ??
+                                    t('kyc.submission.number')
+                                }
                                 required={requirement.is_required}
                                 error={errors.value}
                                 hint={
                                     requirement.value_preview
-                                        ? `Saved: ${requirement.value_preview}`
+                                        ? t('kyc.submission.saved', {
+                                              value: requirement.value_preview,
+                                          })
                                         : undefined
                                 }
                                 className="flex-1"
@@ -288,7 +313,7 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
                                 variant="outline"
                                 className="mb-0.5"
                             >
-                                Save
+                                {t('common.actions.save')}
                             </SubmitButton>
                         </>
                     )}

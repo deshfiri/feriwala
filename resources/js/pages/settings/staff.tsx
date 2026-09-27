@@ -46,11 +46,11 @@ export default function Staff({
     if (!account?.allowsStaff) {
         return (
             <>
-                <Head title={t('Staff')} />
+                <Head title={t('common.settings.staff.title')} />
                 <PermissionDeniedState
-                    title={t('Your package does not include staff')}
+                    title={t('common.settings.staff.no_package_title')}
                     description={t(
-                        'Upgrade to a package with staff to invite people into this account.',
+                        'common.settings.staff.no_package_description',
                     )}
                 />
             </>
@@ -59,25 +59,23 @@ export default function Staff({
 
     const seatsLeft =
         allowance.remaining === null
-            ? t('Unlimited staff')
-            : t(':used of :limit used', {
+            ? t('common.settings.staff.unlimited')
+            : t('common.settings.staff.seats_used', {
                   used: allowance.used,
                   limit: allowance.limit ?? 0,
               });
 
     return (
         <>
-            <Head title={t('Staff')} />
+            <Head title={t('common.settings.staff.title')} />
 
-            <h1 className="sr-only">{t('Staff')}</h1>
+            <h1 className="sr-only">{t('common.settings.staff.title')}</h1>
 
             <div className="space-y-6">
                 <Heading
                     variant="small"
-                    title={t('Staff')}
-                    description={t(
-                        'People who work in this account, and what they may do.',
-                    )}
+                    title={t('common.settings.staff.title')}
+                    description={t('common.settings.staff.description')}
                 />
 
                 <p className="text-muted-foreground text-sm">{seatsLeft}</p>
@@ -94,7 +92,7 @@ export default function Staff({
                                     {member.isYou ? (
                                         <span className="text-muted-foreground">
                                             {' '}
-                                            ({t('you')})
+                                            ({t('common.settings.staff.you')})
                                         </span>
                                     ) : null}
                                 </p>
@@ -136,7 +134,7 @@ export default function Staff({
                                             <SelectTrigger
                                                 className="w-36"
                                                 aria-label={t(
-                                                    'Permissions for :name',
+                                                    'common.settings.staff.permissions_for',
                                                     { name: member.name },
                                                 )}
                                             >
@@ -166,7 +164,7 @@ export default function Staff({
                                                 )
                                             }
                                         >
-                                            {t('Remove')}
+                                            {t('common.settings.staff.remove')}
                                         </Button>
                                     </>
                                 ) : null}
@@ -179,9 +177,9 @@ export default function Staff({
                     <div className="space-y-3">
                         <Heading
                             variant="small"
-                            title={t('Invitations')}
+                            title={t('common.settings.staff.invitations')}
                             description={t(
-                                'Sent but not yet accepted. Each one holds a place against your staff limit until it is used, withdrawn or expires.',
+                                'common.settings.staff.invitations_description',
                             )}
                         />
 
@@ -212,7 +210,7 @@ export default function Staff({
                                             )
                                         }
                                     >
-                                        {t('Withdraw')}
+                                        {t('common.settings.staff.withdraw')}
                                     </Button>
                                 </li>
                             ))}
@@ -223,9 +221,9 @@ export default function Staff({
                 {staff.length === 1 && invitations.length === 0 ? (
                     <EmptyState
                         icon={Users}
-                        title={t('You are the only person here')}
+                        title={t('common.settings.staff.only_person_title')}
                         description={t(
-                            'Invite someone to work in this account with you.',
+                            'common.settings.staff.only_person_description',
                         )}
                     />
                 ) : null}
@@ -236,9 +234,9 @@ export default function Staff({
 
                         <Heading
                             variant="small"
-                            title={t('Invite someone')}
+                            title={t('common.settings.staff.invite_title')}
                             description={t(
-                                'They receive an email with a link. Only the address you enter here can use it.',
+                                'common.settings.staff.invite_description',
                             )}
                         />
 
@@ -252,7 +250,9 @@ export default function Staff({
                                 <>
                                     <div className="grid gap-2">
                                         <Label htmlFor="email">
-                                            {t('Email address')}
+                                            {t(
+                                                'common.settings.staff.email_address',
+                                            )}
                                         </Label>
                                         <Input
                                             id="email"
@@ -266,7 +266,9 @@ export default function Staff({
 
                                     <div className="grid gap-2">
                                         <Label htmlFor="role">
-                                            {t('Permissions')}
+                                            {t(
+                                                'common.settings.staff.permissions',
+                                            )}
                                         </Label>
                                         <select
                                             id="role"
@@ -288,7 +290,9 @@ export default function Staff({
 
                                     <Button type="submit" disabled={processing}>
                                         <UserPlus className="size-4" />
-                                        {t('Send invitation')}
+                                        {t(
+                                            'common.settings.staff.send_invitation',
+                                        )}
                                     </Button>
                                 </>
                             )}

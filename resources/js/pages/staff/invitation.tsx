@@ -41,9 +41,9 @@ export default function StaffInvitationPage({
     if (!invitation) {
         return (
             <div className="mx-auto max-w-md p-6">
-                <Head title={t('Invitation')} />
+                <Head title={t('common.staff_invitation.title')} />
                 <Heading
-                    title={t('This invitation cannot be used')}
+                    title={t('common.staff_invitation.cannot_use')}
                     description={reason ?? undefined}
                 />
             </div>
@@ -55,17 +55,19 @@ export default function StaffInvitationPage({
 
     return (
         <div className="mx-auto max-w-md space-y-6 p-6">
-            <Head title={t('Invitation')} />
+            <Head title={t('common.staff_invitation.title')} />
 
             <Heading
-                title={t('Join :account', { account: invitation.account })}
+                title={t('common.staff_invitation.join', {
+                    account: invitation.account,
+                })}
                 description={
                     invitation.invitedBy
-                        ? t(':inviter invited you as :role.', {
+                        ? t('common.staff_invitation.invited_by', {
                               inviter: invitation.invitedBy,
                               role: invitation.roleLabel,
                           })
-                        : t('You have been invited as :role.', {
+                        : t('common.staff_invitation.invited_as', {
                               role: invitation.roleLabel,
                           })
                 }
@@ -73,18 +75,15 @@ export default function StaffInvitationPage({
 
             {wrongPerson ? (
                 <p className="text-muted-foreground text-sm">
-                    {t(
-                        'This invitation was sent to :email. Sign in as that person to accept it.',
-                        { email: invitation.email },
-                    )}
+                    {t('common.staff_invitation.wrong_person', {
+                        email: invitation.email,
+                    })}
                 </p>
             ) : null}
 
             {alreadyPlaced ? (
                 <p className="text-muted-foreground text-sm">
-                    {t(
-                        'You already work in another account. Leave that one before joining this.',
-                    )}
+                    {t('common.staff_invitation.already_placed')}
                 </p>
             ) : null}
 
@@ -102,7 +101,7 @@ export default function StaffInvitationPage({
                                 processing || wrongPerson || alreadyPlaced
                             }
                         >
-                            {t('Accept invitation')}
+                            {t('common.staff_invitation.accept')}
                         </Button>
                     </>
                 )}

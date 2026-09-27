@@ -1,8 +1,10 @@
 import { Head, Link } from '@inertiajs/react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import ActivationStepper from '@/components/onboarding/activation-stepper';
+import PageContainer from '@/components/page-container';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/hooks/use-translation';
 import type { OnboardingProgress } from '@/types';
 
 /**
@@ -17,23 +19,24 @@ export default function OnboardingStatus({
 }: {
     progress: OnboardingProgress;
 }) {
+    const { t } = useTranslation();
     const isBlocked = progress.blocked_reason !== null;
 
     return (
         <>
-            <Head title="Activation status" />
+            <Head title={t('onboarding.status.title')} />
 
-            <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-10">
+            <PageContainer width="narrow">
                 <header className="space-y-1.5 text-center">
                     <h1 className="text-xl font-semibold tracking-tight">
                         {progress.is_complete
-                            ? 'Your account is active'
-                            : 'Setting up your account'}
+                            ? t('onboarding.status.complete_heading')
+                            : t('onboarding.status.incomplete_heading')}
                     </h1>
                     <p className="text-muted-foreground text-sm">
                         {progress.is_complete
-                            ? 'Everything is ready. You can start using Feriwala.'
-                            : 'A few steps remain before you can start trading.'}
+                            ? t('onboarding.status.complete_description')
+                            : t('onboarding.status.incomplete_description')}
                     </p>
                 </header>
 
@@ -70,7 +73,7 @@ export default function OnboardingStatus({
                 <section className="bg-card border-border flex flex-wrap items-center gap-4 rounded-xl border p-5 shadow-sm">
                     <div className="min-w-0 flex-1 space-y-1">
                         <p className="text-muted-foreground text-xs font-medium">
-                            Current status
+                            {t('onboarding.status.current_status')}
                         </p>
                         <StatusPill
                             tone={progress.status.tone}
@@ -94,28 +97,28 @@ export default function OnboardingStatus({
                                 className="size-4"
                                 aria-hidden="true"
                             />
-                            Complete
+                            {t('onboarding.status.complete')}
                         </span>
                     ) : (
                         /* Saying "nothing to do" is better than a button that
                            does nothing. */
                         <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
                             <Clock className="size-4" aria-hidden="true" />
-                            Waiting for our review
+                            {t('onboarding.status.waiting')}
                         </span>
                     )}
                 </section>
 
                 <p className="text-muted-foreground text-center text-xs">
-                    Need help?{' '}
+                    {t('onboarding.status.help')}{' '}
                     <Link
                         href="/support"
                         className="text-foreground underline underline-offset-4"
                     >
-                        Contact support
+                        {t('onboarding.status.contact_support')}
                     </Link>
                 </p>
-            </div>
+            </PageContainer>
         </>
     );
 }

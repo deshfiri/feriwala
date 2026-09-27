@@ -87,6 +87,22 @@ return [
         'charge_frequency' => 'Frequency',
     ],
 
+    'choose' => [
+        'page_title' => 'Choose a package',
+        'title' => 'Choose your package',
+        'help' => 'You can change this later. Prices shown include the one-off registration fee.',
+        'empty' => 'No packages are available right now. Please contact support.',
+        'chosen' => 'Chosen',
+        'payable_today' => 'payable today',
+        'package_fee' => 'package fee :fee',
+        'for_days' => 'for :days days',
+        'continue' => 'Continue',
+        'choose_this' => 'Choose :name',
+        'included' => 'Included',
+        'not_included' => 'Not included',
+        'unlimited' => 'Unlimited',
+    ],
+
     'subscription' => [
         'title' => 'Your package',
         'description' => 'What you are on, what it grants, and when it renews.',

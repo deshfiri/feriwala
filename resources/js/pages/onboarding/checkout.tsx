@@ -3,6 +3,7 @@ import { Lock } from 'lucide-react';
 import { useState } from 'react';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,12 +83,12 @@ export default function Checkout({
 
     return (
         <>
-            <Head title="Checkout" />
+            <Head title={t('onboarding.checkout.title')} />
 
-            <div className="mx-auto w-full max-w-lg space-y-6 px-4 py-10">
+            <PageContainer width="narrow">
                 <header className="space-y-1">
                     <h1 className="text-xl font-semibold tracking-tight">
-                        Complete your activation
+                        {t('onboarding.checkout.heading')}
                     </h1>
                     <p className="text-muted-foreground text-sm">
                         {pkg.name}
@@ -152,7 +153,7 @@ export default function Checkout({
 
                         <div className="bg-muted flex items-center justify-between gap-4 px-4 py-3">
                             <dt className="text-sm font-semibold">
-                                Total payable
+                                {t('onboarding.checkout.total_payable')}
                             </dt>
                             <dd>
                                 <MoneyAmount
@@ -265,7 +266,7 @@ export default function Checkout({
                         <>
                             <fieldset className="space-y-2">
                                 <legend className="mb-2 text-sm font-medium">
-                                    How would you like to pay?
+                                    {t('onboarding.checkout.pay_with')}
                                 </legend>
 
                                 {gateways.map((option) => (
@@ -296,8 +297,7 @@ export default function Checkout({
 
                                 {gateways.length === 0 && (
                                     <p className="text-danger text-sm">
-                                        No payment method is available right
-                                        now. Please contact support.
+                                        {t('onboarding.checkout.no_gateway')}
                                     </p>
                                 )}
                             </fieldset>
@@ -312,7 +312,9 @@ export default function Checkout({
                                 last chance to notice it is wrong. */}
                             <SubmitButton
                                 processing={processing}
-                                processingLabel="Taking you to pay…"
+                                processingLabel={t(
+                                    'onboarding.checkout.processing',
+                                )}
                                 disabled={
                                     gateways.length === 0 ||
                                     !quote.is_payable ||
@@ -322,7 +324,9 @@ export default function Checkout({
                                 }
                                 className="w-full"
                             >
-                                Pay {quote.total.formatted}
+                                {t('onboarding.checkout.pay', {
+                                    amount: quote.total.formatted,
+                                })}
                             </SubmitButton>
 
                             {deadline.expires_at !== null && (
@@ -337,8 +341,7 @@ export default function Checkout({
 
                             <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs">
                                 <Lock className="size-3" aria-hidden="true" />
-                                You will be taken to your bank or wallet to
-                                complete this securely.
+                                {t('onboarding.checkout.redirect_notice')}
                             </p>
                         </>
                     )}
@@ -346,10 +349,12 @@ export default function Checkout({
 
                 <p className="text-center">
                     <Button asChild variant="ghost" size="sm">
-                        <Link href="/packages">Choose a different package</Link>
+                        <Link href="/packages">
+                            {t('onboarding.checkout.choose_different')}
+                        </Link>
                     </Button>
                 </p>
-            </div>
+            </PageContainer>
         </>
     );
 }

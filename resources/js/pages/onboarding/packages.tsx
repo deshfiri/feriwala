@@ -2,7 +2,9 @@ import { Form, Head } from '@inertiajs/react';
 import { Check, Infinity as InfinityIcon, Minus } from 'lucide-react';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import StatusPill from '@/components/status-pill';
+import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { Money } from '@/lib/money';
 
@@ -39,25 +41,25 @@ export default function Packages({
     packages: PackageOption[];
     selected_slug: string | null;
 }) {
+    const { t } = useTranslation();
+
     return (
         <>
-            <Head title="Choose a package" />
+            <Head title={t('package.choose.page_title')} />
 
-            <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-10">
+            <PageContainer className="mx-auto max-w-5xl">
                 <header className="space-y-1 text-center">
                     <h1 className="text-xl font-semibold tracking-tight">
-                        Choose your package
+                        {t('package.choose.title')}
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        You can change this later. Prices shown include the
-                        one-off registration fee.
+                        {t('package.choose.help')}
                     </p>
                 </header>
 
                 {packages.length === 0 ? (
                     <p className="text-muted-foreground py-10 text-center text-sm">
-                        No packages are available right now. Please contact
-                        support.
+                        {t('package.choose.empty')}
                     </p>
                 ) : (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -70,7 +72,7 @@ export default function Packages({
                         ))}
                     </div>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }
@@ -82,6 +84,8 @@ function PackageCard({
     option: PackageOption;
     isSelected: boolean;
 }) {
+    const { t } = useTranslation();
+
     return (
         <section
             className={cn(
@@ -93,7 +97,12 @@ function PackageCard({
         >
             <div className="flex items-start justify-between gap-2">
                 <h2 className="font-semibold">{option.name}</h2>
-                {isSelected && <StatusPill tone="info" label="Chosen" />}
+                {isSelected && (
+                    <StatusPill
+                        tone="info"
+                        label={t('package.choose.chosen')}
+                    />
+                )}
             </div>
 
             {option.short_description && (
@@ -105,9 +114,12 @@ function PackageCard({
             <div className="mt-4 space-y-0.5">
                 <MoneyAmount amount={option.activation_total} size="large" />
                 <p className="text-muted-foreground text-xs">
-                    payable today · package fee {option.fee.formatted}
+                    {t('package.choose.payable_today')} ·{' '}
+                    {t('package.choose.package_fee', {
+                        fee: option.fee.formatted,
+                    })}
                     {option.validity_days &&
-                        ` for ${option.validity_days} days`}
+                        ` ${t('package.choose.for_days', { days: option.validity_days })}`}
                 </p>
             </div>
 
@@ -138,7 +150,11 @@ function PackageCard({
                         variant={isSelected ? 'outline' : 'default'}
                         className="w-full"
                     >
-                        {isSelected ? 'Continue' : 'Choose ' + option.name}
+                        {isSelected
+                            ? t('package.choose.continue')
+                            : t('package.choose.choose_this', {
+                                  name: option.name,
+                              })}
                     </SubmitButton>
                 )}
             </Form>
@@ -147,16 +163,20 @@ function PackageCard({
 }
 
 function FeatureValue({ feature }: { feature: Feature }) {
+    const { t } = useTranslation();
+
     if (feature.type === 'boolean') {
         return feature.value ? (
             <span className="text-success inline-flex items-center gap-1">
                 <Check className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">Included</span>
+                <span className="sr-only">{t('package.choose.included')}</span>
             </span>
         ) : (
             <span className="text-muted-foreground inline-flex items-center gap-1">
                 <Minus className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">Not included</span>
+                <span className="sr-only">
+                    {t('package.choose.not_included')}
+                </span>
             </span>
         );
     }
@@ -167,7 +187,7 @@ function FeatureValue({ feature }: { feature: Feature }) {
         return feature.value === null ? (
             <span className="inline-flex items-center gap-1">
                 <InfinityIcon className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">Unlimited</span>
+                <span className="sr-only">{t('package.choose.unlimited')}</span>
             </span>
         ) : (
             <span className="tabular-nums">{String(feature.value)}</span>
