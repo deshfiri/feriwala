@@ -19,6 +19,10 @@ return [
         'renew_package' => 'Renew your package',
     ],
 
+    'wallet' => [
+        'usable' => 'Wallet balance',
+    ],
+
     'spend' => [
         'title' => 'What you have paid',
         'description' => 'Settled payments over the last :months months.',

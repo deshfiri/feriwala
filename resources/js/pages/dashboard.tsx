@@ -9,6 +9,7 @@ import Panel from '@/components/dashboard/panel';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import { useTranslation } from '@/hooks/use-translation';
+import type { Money } from '@/lib/money';
 import { dashboard } from '@/routes';
 import type {
     DashboardGreeting,
@@ -19,6 +20,8 @@ import type {
 type Props = {
     greeting: DashboardGreeting;
     standing: DashboardStanding;
+    /** What this account could spend right now — the wallet page's own "usable" figure. Null when no wallet exists yet. */
+    walletUsable: Money | null;
     /** Deferred — undefined until the follow-up request lands. */
     spend?: DashboardSpend;
 };
@@ -34,7 +37,12 @@ type Props = {
  * carries what changes over time, the narrow one carries the figure that
  * summarises it.
  */
-export default function Dashboard({ greeting, standing, spend }: Props) {
+export default function Dashboard({
+    greeting,
+    standing,
+    walletUsable,
+    spend,
+}: Props) {
     const { t } = useTranslation();
 
     const monthsCovered = spend?.months ?? 6;
@@ -50,21 +58,39 @@ export default function Dashboard({ greeting, standing, spend }: Props) {
                         <HeroCard greeting={greeting} standing={standing} />
                     </div>
 
-                    <Panel
-                        title={t('dashboard.spend.total')}
-                        description={period}
-                    >
-                        <Deferred data="spend" fallback={<FigureSkeleton />}>
-                            {() =>
-                                spend ? (
-                                    <MoneyAmount
-                                        amount={spend.total}
-                                        size="large"
-                                    />
-                                ) : null
-                            }
-                        </Deferred>
-                    </Panel>
+                    <div className="grid gap-4 md:gap-6">
+                        <Panel title={t('dashboard.wallet.usable')}>
+                            {walletUsable ? (
+                                <MoneyAmount
+                                    amount={walletUsable}
+                                    size="large"
+                                />
+                            ) : (
+                                <span className="text-muted-foreground text-sm">
+                                    —
+                                </span>
+                            )}
+                        </Panel>
+
+                        <Panel
+                            title={t('dashboard.spend.total')}
+                            description={period}
+                        >
+                            <Deferred
+                                data="spend"
+                                fallback={<FigureSkeleton />}
+                            >
+                                {() =>
+                                    spend ? (
+                                        <MoneyAmount
+                                            amount={spend.total}
+                                            size="large"
+                                        />
+                                    ) : null
+                                }
+                            </Deferred>
+                        </Panel>
+                    </div>
                 </div>
 
                 <div className="grid gap-4 md:gap-6 lg:grid-cols-3">

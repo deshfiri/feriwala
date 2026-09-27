@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Account\Actions\ActivateAccount;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Queries\AccountSpendSummary;
+use App\Domain\Wallet\Models\Wallet;
+use App\Http\Controllers\Erp\WalletController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -44,6 +47,7 @@ class DashboardController extends Controller
         return Inertia::render('dashboard', [
             'greeting' => $this->greeting($request->user('web')),
             'standing' => $this->standing($account),
+            'walletUsable' => $this->walletUsable($account),
 
             /*
              * Deferred: the spend chart is below the fold and costs a second
@@ -81,6 +85,24 @@ class DashboardController extends Controller
                 default => 'evening',
             },
         ];
+    }
+
+    /**
+     * What this account could spend right now (§24.2's "usable" figure — the
+     * same one {@see WalletController} shows on the dedicated wallet page),
+     * not the full balance breakdown that belongs there. A real activation
+     * (see {@see ActivateAccount}) always opens one in the same transaction,
+     * but a test-built account is not the only account that reaches this
+     * page in practice — null here means "nothing to show yet" exactly like
+     * the Supplier dashboard's own wallet card, never a hard failure.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function walletUsable(BusinessAccount $account): ?array
+    {
+        $wallet = Wallet::query()->where('business_account_id', $account->id)->first();
+
+        return $wallet?->usableBalance()->jsonSerialize();
     }
 
     /**

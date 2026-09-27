@@ -5,6 +5,10 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Wallet\Actions\OpenWallet;
+use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\LedgerTransactionType;
+use App\Domain\Wallet\WalletService;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -123,6 +127,34 @@ describe('an account holder', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->where('standing.needsAttention', true)
                 ->where('standing.action', null),
+            );
+    });
+
+    it('shows no wallet figure for an account with none opened yet', function () {
+        // The factory sets `status => Active` directly rather than running
+        // ActivateAccount, so this account has no wallet row at all --
+        // exactly the gap that must resolve to "nothing to show", not a 500.
+        $this->actingAs(dashboardOwner())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('walletUsable', null));
+    });
+
+    it('shows the wallet\'s usable balance, not the full balance breakdown', function () {
+        $user = dashboardOwner();
+        $wallet = app(OpenWallet::class)->handle($user->businessAccount);
+        app(WalletService::class)->credit(
+            $wallet,
+            LedgerTransactionType::TopUpCredit,
+            Money::fromDecimal('3000.00', Currency::BDT),
+            new PostingContext(source: 'manual', description: 'Test top-up'),
+        );
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('walletUsable.amount', '3000.00')
+                ->where('walletUsable.currency', 'BDT'),
             );
     });
 
