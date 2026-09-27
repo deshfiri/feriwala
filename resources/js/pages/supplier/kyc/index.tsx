@@ -3,6 +3,7 @@ import { FileText, Lock } from 'lucide-react';
 import FileField from '@/components/forms/file-field';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -64,7 +65,7 @@ export default function SupplierKyc({
         <>
             <Head title={t('supplier.kyc.title')} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={t('supplier.kyc.title')}
                     description={t('supplier.kyc.description')}
@@ -249,7 +250,7 @@ export default function SupplierKyc({
                         </ul>
                     </SectionCard>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }

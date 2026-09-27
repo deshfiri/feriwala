@@ -97,15 +97,19 @@ export default function SupplierLayout({
                           href: listings(),
                           icon: ClipboardList,
                       },
+                      /*
+                       * One screen, not two: `supplier/offers` shows each
+                       * approved product together with its own Supplier
+                       * Rate (its page description says so), so "Approved
+                       * products" and "Rates" used to sit here as separate
+                       * rows pointed at the identical href -- two doors
+                       * onto the same room. One row, kept under the more
+                       * discoverable label.
+                       */
                       {
                           title: t('supplier.nav.products'),
                           href: offers(),
                           icon: PackageCheck,
-                      },
-                      {
-                          title: t('supplier.nav.rates'),
-                          href: offers(),
-                          icon: Coins,
                       },
                       {
                           title: t('supplier.nav.stock'),
@@ -197,7 +201,7 @@ export default function SupplierLayout({
                         breadcrumbs={breadcrumbs}
                         account={account}
                     />
-                    <div className="flex-1 p-4 md:p-6">{children}</div>
+                    {children}
                 </AppContent>
             </AppShell>
         </>

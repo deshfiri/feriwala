@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -48,7 +49,7 @@ export default function SupplierPayableShow({ payable }: { payable: Payable }) {
         <>
             <Head title={payable.reference} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={payable.product_name}
                     description={`${payable.reference} · ${payable.order_reference}`}
@@ -162,7 +163,7 @@ export default function SupplierPayableShow({ payable }: { payable: Payable }) {
                         ))}
                     </ol>
                 </SectionCard>
-            </div>
+            </PageContainer>
         </>
     );
 }

@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react';
 import { CreditCard } from 'lucide-react';
 import { useState } from 'react';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
@@ -42,7 +43,7 @@ export default function SupplierPayoutMethodsIndex({
         <>
             <Head title={t('supplier.payout_methods.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.payout_methods.title')}
                     description={t('supplier.payout_methods.description')}
@@ -116,7 +117,7 @@ export default function SupplierPayoutMethodsIndex({
                         ))}
                     </ul>
                 )}
-            </div>
+            </PageContainer>
 
             <PayoutMethodDialog
                 open={creating}

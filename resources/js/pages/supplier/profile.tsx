@@ -2,6 +2,7 @@ import { Form, Head } from '@inertiajs/react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import TextArea from '@/components/forms/text-area';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Input } from '@/components/ui/input';
@@ -29,7 +30,7 @@ export default function SupplierProfile({
         <>
             <Head title={t('supplier.profile.title')} />
 
-            <div className="mx-auto max-w-2xl space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={t('supplier.profile.title')}
                     description={t('supplier.profile.description')}
@@ -132,7 +133,7 @@ export default function SupplierProfile({
                         )}
                     </Form>
                 </SectionCard>
-            </div>
+            </PageContainer>
         </>
     );
 }

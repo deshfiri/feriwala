@@ -1,6 +1,7 @@
 import { Form, Head } from '@inertiajs/react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,7 @@ export default function SupplierMobileVerification({
         <>
             <Head title={t('supplier.verification.mobile')} />
 
-            <div className="mx-auto max-w-md space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={t('supplier.verification.mobile')}
                     description={mobile}
@@ -93,7 +94,7 @@ export default function SupplierMobileVerification({
                         </div>
                     )}
                 </SectionCard>
-            </div>
+            </PageContainer>
         </>
     );
 }

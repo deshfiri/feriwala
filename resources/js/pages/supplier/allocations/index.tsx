@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { PackageSearch } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
@@ -109,7 +110,7 @@ export default function SupplierAllocationsIndex({
         <>
             <Head title={t('supplier.allocations.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.allocations.title')}
                     description={t('supplier.allocations.description')}
@@ -131,7 +132,7 @@ export default function SupplierAllocationsIndex({
                         />
                     }
                 />
-            </div>
+            </PageContainer>
         </>
     );
 }

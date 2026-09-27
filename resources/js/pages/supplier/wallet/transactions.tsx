@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Receipt } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import {
@@ -113,7 +114,7 @@ export default function SupplierWalletTransactions({
         <>
             <Head title={t('supplier.transactions.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.transactions.title')}
                     description={t('supplier.transactions.description')}
@@ -167,7 +168,7 @@ export default function SupplierWalletTransactions({
                         />
                     }
                 />
-            </div>
+            </PageContainer>
         </>
     );
 }

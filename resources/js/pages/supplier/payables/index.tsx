@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Coins } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
@@ -94,7 +95,7 @@ export default function SupplierPayablesIndex({
         <>
             <Head title={t('supplier.payables.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.payables.title')}
                     description={t('supplier.payables.description')}
@@ -116,7 +117,7 @@ export default function SupplierPayablesIndex({
                         />
                     }
                 />
-            </div>
+            </PageContainer>
         </>
     );
 }

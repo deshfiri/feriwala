@@ -1,5 +1,6 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { CheckCircle2, Circle } from 'lucide-react';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import SubmitButton from '@/components/forms/submit-button';
@@ -36,7 +37,7 @@ export default function SupplierVerificationNotice({
         <>
             <Head title={t('supplier.verification.title')} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={t('supplier.verification.title')}
                     description={t('supplier.verification.description')}
@@ -108,7 +109,7 @@ export default function SupplierVerificationNotice({
                         </p>
                     )}
                 </SectionCard>
-            </div>
+            </PageContainer>
         </>
     );
 }

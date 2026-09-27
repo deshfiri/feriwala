@@ -1,6 +1,7 @@
 import { Form, Head } from '@inertiajs/react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import PasswordInput from '@/components/password-input';
 import SectionCard from '@/components/section-card';
@@ -14,7 +15,7 @@ export default function SupplierSecurity() {
         <>
             <Head title={t('supplier.security.title')} />
 
-            <div className="mx-auto max-w-lg space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={t('supplier.security.title')}
                     description={t('supplier.security.description')}
@@ -81,7 +82,7 @@ export default function SupplierSecurity() {
                         )}
                     </Form>
                 </SectionCard>
-            </div>
+            </PageContainer>
         </>
     );
 }

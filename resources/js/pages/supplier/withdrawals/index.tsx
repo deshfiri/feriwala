@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Banknote } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
@@ -102,7 +103,7 @@ export default function SupplierWithdrawalsIndex({
         <>
             <Head title={t('supplier.withdrawals.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.withdrawals.title')}
                     description={t('supplier.withdrawals.description')}
@@ -163,7 +164,7 @@ export default function SupplierWithdrawalsIndex({
                         />
                     }
                 />
-            </div>
+            </PageContainer>
         </>
     );
 }

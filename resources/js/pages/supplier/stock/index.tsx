@@ -2,6 +2,7 @@ import { Form, Head } from '@inertiajs/react';
 import { Boxes } from 'lucide-react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import SectionCard from '@/components/section-card';
@@ -34,7 +35,7 @@ export default function SupplierStock({ offers }: { offers: Offer[] }) {
         <>
             <Head title={t('supplier.stock.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.stock.title')}
                     description={t('supplier.stock.description')}
@@ -135,7 +136,7 @@ export default function SupplierStock({ offers }: { offers: Offer[] }) {
                         )}
                     </SectionCard>
                 ))}
-            </div>
+            </PageContainer>
         </>
     );
 }

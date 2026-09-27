@@ -2,6 +2,7 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { Lock } from 'lucide-react';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -55,7 +56,7 @@ export default function SupplierListingShow({ listing }: { listing: Listing }) {
         <>
             <Head title={listing.product_name} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={listing.product_name}
                     description={listing.reference}
@@ -183,7 +184,7 @@ export default function SupplierListingShow({ listing }: { listing: Listing }) {
                         </ol>
                     </SectionCard>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }

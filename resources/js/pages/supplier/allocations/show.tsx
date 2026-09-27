@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -47,7 +48,7 @@ export default function SupplierAllocationShow({
         <>
             <Head title={allocation.product_name} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={allocation.product_name}
                     description={allocation.order_reference}
@@ -136,7 +137,7 @@ export default function SupplierAllocationShow({
                         </p>
                     </SectionCard>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }

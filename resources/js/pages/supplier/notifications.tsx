@@ -1,6 +1,7 @@
 import { Form, Head } from '@inertiajs/react';
 import { Bell } from 'lucide-react';
 import SubmitButton from '@/components/forms/submit-button';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import EmptyState from '@/components/states/empty-state';
@@ -32,7 +33,7 @@ export default function SupplierNotifications({
         <>
             <Head title={t('supplier.notifications.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.notifications.title')}
                     actions={
@@ -95,7 +96,7 @@ export default function SupplierNotifications({
                         </ul>
                     </SectionCard>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }

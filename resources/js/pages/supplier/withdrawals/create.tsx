@@ -4,6 +4,7 @@ import WithdrawalController from '@/actions/App/Http/Controllers/Supplier/Withdr
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import MoneyInput from '@/components/money-input';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Button } from '@/components/ui/button';
@@ -59,7 +60,7 @@ export default function SupplierWithdrawalCreate({
         <>
             <Head title={t('supplier.withdrawals.request')} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={t('supplier.withdrawals.request')}
                     description={t('supplier.withdrawals.description')}
@@ -176,7 +177,7 @@ export default function SupplierWithdrawalCreate({
                         </Form>
                     </SectionCard>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }

@@ -142,7 +142,6 @@ function renderLayout(children: ReactNode = 'content') {
 const OPERATIONAL_ONLY = [
     'Product listings',
     'Approved products',
-    'Rates',
     'Stock & availability',
     'Allocated orders',
     'Payables',
@@ -188,7 +187,7 @@ describe('the supplier portal navigation', () => {
         }
     });
 
-    it('opens listings, products, rates and stock once the supplier is approved', () => {
+    it('opens listings, products and stock once the supplier is approved', () => {
         page.props.supplierAccount = account({
             status: 'approved',
             status_label: 'Approved',
@@ -240,7 +239,7 @@ describe('the supplier portal navigation', () => {
             'ড্যাশবোর্ড',
             'আবেদন ও কেওয়াইসি',
             'পণ্য তালিকাভুক্তি',
-            'রেট',
+            'অনুমোদিত পণ্য',
             'মজুত ও প্রাপ্যতা',
             'বরাদ্দকৃত অর্ডার',
             'পাওনা',

@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import TextArea from '@/components/forms/text-area';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Button } from '@/components/ui/button';
@@ -152,235 +153,32 @@ export default function SupplierListingForm({
                 }
             />
 
-            <form onSubmit={submit} className="space-y-6">
-                <PageHeader
-                    title={
-                        listing
-                            ? t('supplier.listings.edit')
-                            : t('supplier.listings.new')
-                    }
-                    description={t('supplier.listings.proposal_notice')}
-                />
-
-                <SectionCard title={t('supplier.listings.product_name')}>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField
-                            label={t('supplier.listings.product_name')}
-                            error={form.errors.product_name}
-                            required
-                            className="sm:col-span-2"
-                        >
-                            {(field) => (
-                                <Input
-                                    {...field}
-                                    value={form.data.product_name}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'product_name',
-                                            e.target.value,
-                                        )
-                                    }
-                                    required
-                                />
-                            )}
-                        </FormField>
-
-                        <FormField
-                            label={t('supplier.listings.description_field')}
-                            error={form.errors.description}
-                            className="sm:col-span-2"
-                        >
-                            {(field) => (
-                                <TextArea
-                                    {...field}
-                                    value={form.data.description}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'description',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                            )}
-                        </FormField>
-
-                        <FormField
-                            label={t('supplier.listings.category')}
-                            error={form.errors.category_id}
-                        >
-                            {(field) => (
-                                <select
-                                    {...field}
-                                    value={form.data.category_id}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'category_id',
-                                            e.target.value,
-                                        )
-                                    }
-                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                >
-                                    <option value="">
-                                        {t('supplier.listings.none')}
-                                    </option>
-                                    {options.categories.map((option) => (
-                                        <option
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </FormField>
-
-                        <FormField
-                            label={t('supplier.listings.category_suggestion')}
-                            error={form.errors.category_suggestion}
-                        >
-                            {(field) => (
-                                <Input
-                                    {...field}
-                                    value={form.data.category_suggestion}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'category_suggestion',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                            )}
-                        </FormField>
-
-                        <FormField
-                            label={t('supplier.listings.brand')}
-                            error={form.errors.brand_id}
-                        >
-                            {(field) => (
-                                <select
-                                    {...field}
-                                    value={form.data.brand_id}
-                                    onChange={(e) =>
-                                        form.setData('brand_id', e.target.value)
-                                    }
-                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                >
-                                    <option value="">
-                                        {t('supplier.listings.none')}
-                                    </option>
-                                    {options.brands.map((option) => (
-                                        <option
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </FormField>
-
-                        <FormField
-                            label={t('supplier.listings.brand_suggestion')}
-                            error={form.errors.brand_suggestion}
-                        >
-                            {(field) => (
-                                <Input
-                                    {...field}
-                                    value={form.data.brand_suggestion}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'brand_suggestion',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                            )}
-                        </FormField>
-
-                        <FormField
-                            label={t('supplier.listings.supplier_note')}
-                            error={form.errors.supplier_note}
-                            className="sm:col-span-2"
-                        >
-                            {(field) => (
-                                <TextArea
-                                    {...field}
-                                    value={form.data.supplier_note}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'supplier_note',
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                            )}
-                        </FormField>
-                    </div>
-                </SectionCard>
-
-                {form.data.items.map((item, index) => (
-                    <SectionCard
-                        key={index}
-                        title={`${t('supplier.listings.variations')} ${index + 1}`}
-                        actions={
-                            form.data.items.length > 1 && (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                        form.setData(
-                                            'items',
-                                            form.data.items.filter(
-                                                (_, position) =>
-                                                    position !== index,
-                                            ),
-                                        )
-                                    }
-                                >
-                                    <Trash2
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    {t('supplier.listings.remove_variation')}
-                                </Button>
-                            )
+            <PageContainer width="narrow">
+                <form onSubmit={submit} className="space-y-6">
+                    <PageHeader
+                        title={
+                            listing
+                                ? t('supplier.listings.edit')
+                                : t('supplier.listings.new')
                         }
-                    >
+                        description={t('supplier.listings.proposal_notice')}
+                    />
+
+                    <SectionCard title={t('supplier.listings.product_name')}>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <FormField
-                                label={t('supplier.listings.variant_label')}
-                                error={errorFor(`items.${index}.variant_label`)}
-                            >
-                                {(field) => (
-                                    <Input
-                                        {...field}
-                                        value={item.variant_label}
-                                        onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'variant_label',
-                                                e.target.value,
-                                            )
-                                        }
-                                    />
-                                )}
-                            </FormField>
-                            <FormField
-                                label={t('supplier.listings.supplier_sku')}
-                                error={errorFor(`items.${index}.supplier_sku`)}
+                                label={t('supplier.listings.product_name')}
+                                error={form.errors.product_name}
                                 required
+                                className="sm:col-span-2"
                             >
                                 {(field) => (
                                     <Input
                                         {...field}
-                                        value={item.supplier_sku}
+                                        value={form.data.product_name}
                                         onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'supplier_sku',
+                                            form.setData(
+                                                'product_name',
                                                 e.target.value,
                                             )
                                         }
@@ -388,131 +186,138 @@ export default function SupplierListingForm({
                                     />
                                 )}
                             </FormField>
+
                             <FormField
-                                label={t('supplier.listings.supplier_rate')}
-                                error={errorFor(`items.${index}.supplier_rate`)}
-                                required
+                                label={t('supplier.listings.description_field')}
+                                error={form.errors.description}
+                                className="sm:col-span-2"
                             >
                                 {(field) => (
-                                    <Input
+                                    <TextArea
                                         {...field}
-                                        inputMode="decimal"
-                                        value={item.supplier_rate}
+                                        value={form.data.description}
                                         onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'supplier_rate',
+                                            form.setData(
+                                                'description',
                                                 e.target.value,
                                             )
                                         }
-                                        required
                                     />
                                 )}
                             </FormField>
+
+                            <FormField
+                                label={t('supplier.listings.category')}
+                                error={form.errors.category_id}
+                            >
+                                {(field) => (
+                                    <select
+                                        {...field}
+                                        value={form.data.category_id}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'category_id',
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                                    >
+                                        <option value="">
+                                            {t('supplier.listings.none')}
+                                        </option>
+                                        {options.categories.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </FormField>
+
                             <FormField
                                 label={t(
-                                    'supplier.listings.available_quantity',
+                                    'supplier.listings.category_suggestion',
                                 )}
-                                error={errorFor(
-                                    `items.${index}.available_quantity`,
-                                )}
-                                required
+                                error={form.errors.category_suggestion}
                             >
                                 {(field) => (
                                     <Input
                                         {...field}
-                                        type="number"
-                                        min={0}
-                                        value={item.available_quantity}
+                                        value={form.data.category_suggestion}
                                         onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'available_quantity',
-                                                e.target.value,
-                                            )
-                                        }
-                                        required
-                                    />
-                                )}
-                            </FormField>
-                            <FormField
-                                label={t(
-                                    'supplier.listings.minimum_supply_quantity',
-                                )}
-                                error={errorFor(
-                                    `items.${index}.minimum_supply_quantity`,
-                                )}
-                            >
-                                {(field) => (
-                                    <Input
-                                        {...field}
-                                        type="number"
-                                        min={1}
-                                        value={item.minimum_supply_quantity}
-                                        onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'minimum_supply_quantity',
+                                            form.setData(
+                                                'category_suggestion',
                                                 e.target.value,
                                             )
                                         }
                                     />
                                 )}
                             </FormField>
+
                             <FormField
-                                label={t('supplier.listings.lead_time_days')}
-                                error={errorFor(
-                                    `items.${index}.lead_time_days`,
+                                label={t('supplier.listings.brand')}
+                                error={form.errors.brand_id}
+                            >
+                                {(field) => (
+                                    <select
+                                        {...field}
+                                        value={form.data.brand_id}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'brand_id',
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                                    >
+                                        <option value="">
+                                            {t('supplier.listings.none')}
+                                        </option>
+                                        {options.brands.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
                                 )}
+                            </FormField>
+
+                            <FormField
+                                label={t('supplier.listings.brand_suggestion')}
+                                error={form.errors.brand_suggestion}
                             >
                                 {(field) => (
                                     <Input
                                         {...field}
-                                        type="number"
-                                        min={0}
-                                        value={item.lead_time_days}
+                                        value={form.data.brand_suggestion}
                                         onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'lead_time_days',
+                                            form.setData(
+                                                'brand_suggestion',
                                                 e.target.value,
                                             )
                                         }
                                     />
                                 )}
                             </FormField>
+
                             <FormField
-                                label={t('supplier.listings.warranty')}
-                                error={errorFor(`items.${index}.warranty`)}
+                                label={t('supplier.listings.supplier_note')}
+                                error={form.errors.supplier_note}
+                                className="sm:col-span-2"
                             >
                                 {(field) => (
-                                    <Input
+                                    <TextArea
                                         {...field}
-                                        value={item.warranty}
+                                        value={form.data.supplier_note}
                                         onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'warranty',
-                                                e.target.value,
-                                            )
-                                        }
-                                    />
-                                )}
-                            </FormField>
-                            <FormField
-                                label={t('supplier.listings.return_conditions')}
-                                error={errorFor(
-                                    `items.${index}.return_conditions`,
-                                )}
-                            >
-                                {(field) => (
-                                    <Input
-                                        {...field}
-                                        value={item.return_conditions}
-                                        onChange={(e) =>
-                                            setItem(
-                                                index,
-                                                'return_conditions',
+                                            form.setData(
+                                                'supplier_note',
                                                 e.target.value,
                                             )
                                         }
@@ -521,27 +326,242 @@ export default function SupplierListingForm({
                             </FormField>
                         </div>
                     </SectionCard>
-                ))}
 
-                <div className="flex flex-wrap gap-3">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                            form.setData('items', [
-                                ...form.data.items,
-                                emptyItem(),
-                            ])
-                        }
-                    >
-                        <Plus className="size-4" aria-hidden="true" />
-                        {t('supplier.listings.add_variation')}
-                    </Button>
-                    <SubmitButton processing={form.processing}>
-                        {t('supplier.listings.save_draft')}
-                    </SubmitButton>
-                </div>
-            </form>
+                    {form.data.items.map((item, index) => (
+                        <SectionCard
+                            key={index}
+                            title={`${t('supplier.listings.variations')} ${index + 1}`}
+                            actions={
+                                form.data.items.length > 1 && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                            form.setData(
+                                                'items',
+                                                form.data.items.filter(
+                                                    (_, position) =>
+                                                        position !== index,
+                                                ),
+                                            )
+                                        }
+                                    >
+                                        <Trash2
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {t(
+                                            'supplier.listings.remove_variation',
+                                        )}
+                                    </Button>
+                                )
+                            }
+                        >
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <FormField
+                                    label={t('supplier.listings.variant_label')}
+                                    error={errorFor(
+                                        `items.${index}.variant_label`,
+                                    )}
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            value={item.variant_label}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'variant_label',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </FormField>
+                                <FormField
+                                    label={t('supplier.listings.supplier_sku')}
+                                    error={errorFor(
+                                        `items.${index}.supplier_sku`,
+                                    )}
+                                    required
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            value={item.supplier_sku}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'supplier_sku',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                        />
+                                    )}
+                                </FormField>
+                                <FormField
+                                    label={t('supplier.listings.supplier_rate')}
+                                    error={errorFor(
+                                        `items.${index}.supplier_rate`,
+                                    )}
+                                    required
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            inputMode="decimal"
+                                            value={item.supplier_rate}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'supplier_rate',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                        />
+                                    )}
+                                </FormField>
+                                <FormField
+                                    label={t(
+                                        'supplier.listings.available_quantity',
+                                    )}
+                                    error={errorFor(
+                                        `items.${index}.available_quantity`,
+                                    )}
+                                    required
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            type="number"
+                                            min={0}
+                                            value={item.available_quantity}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'available_quantity',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                        />
+                                    )}
+                                </FormField>
+                                <FormField
+                                    label={t(
+                                        'supplier.listings.minimum_supply_quantity',
+                                    )}
+                                    error={errorFor(
+                                        `items.${index}.minimum_supply_quantity`,
+                                    )}
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            type="number"
+                                            min={1}
+                                            value={item.minimum_supply_quantity}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'minimum_supply_quantity',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </FormField>
+                                <FormField
+                                    label={t(
+                                        'supplier.listings.lead_time_days',
+                                    )}
+                                    error={errorFor(
+                                        `items.${index}.lead_time_days`,
+                                    )}
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            type="number"
+                                            min={0}
+                                            value={item.lead_time_days}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'lead_time_days',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </FormField>
+                                <FormField
+                                    label={t('supplier.listings.warranty')}
+                                    error={errorFor(`items.${index}.warranty`)}
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            value={item.warranty}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'warranty',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </FormField>
+                                <FormField
+                                    label={t(
+                                        'supplier.listings.return_conditions',
+                                    )}
+                                    error={errorFor(
+                                        `items.${index}.return_conditions`,
+                                    )}
+                                >
+                                    {(field) => (
+                                        <Input
+                                            {...field}
+                                            value={item.return_conditions}
+                                            onChange={(e) =>
+                                                setItem(
+                                                    index,
+                                                    'return_conditions',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </FormField>
+                            </div>
+                        </SectionCard>
+                    ))}
+
+                    <div className="flex flex-wrap gap-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                                form.setData('items', [
+                                    ...form.data.items,
+                                    emptyItem(),
+                                ])
+                            }
+                        >
+                            <Plus className="size-4" aria-hidden="true" />
+                            {t('supplier.listings.add_variation')}
+                        </Button>
+                        <SubmitButton processing={form.processing}>
+                            {t('supplier.listings.save_draft')}
+                        </SubmitButton>
+                    </div>
+                </form>
+            </PageContainer>
         </>
     );
 }

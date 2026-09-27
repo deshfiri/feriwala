@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -45,7 +46,7 @@ export default function SupplierWithdrawalShow({
         <>
             <Head title={withdrawal.reference} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={withdrawal.reference}
                     description={`${withdrawal.payout_snapshot.type_label} · ${withdrawal.payout_snapshot.masked_number}`}
@@ -149,7 +150,7 @@ export default function SupplierWithdrawalShow({
                         ))}
                     </ol>
                 </SectionCard>
-            </div>
+            </PageContainer>
         </>
     );
 }

@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { Wallet as WalletIcon } from 'lucide-react';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import EmptyState from '@/components/states/empty-state';
@@ -52,7 +53,7 @@ export default function SupplierWalletIndex({
         <>
             <Head title={t('supplier.wallet.title')} />
 
-            <div className="space-y-6">
+            <PageContainer>
                 <PageHeader
                     title={t('supplier.wallet.title')}
                     description={t('supplier.wallet.description')}
@@ -208,7 +209,7 @@ export default function SupplierWalletIndex({
                         </SectionCard>
                     </>
                 )}
-            </div>
+            </PageContainer>
         </>
     );
 }

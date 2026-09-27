@@ -1,5 +1,6 @@
 import { Head } from '@inertiajs/react';
 import MoneyAmount from '@/components/money-amount';
+import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -24,7 +25,7 @@ export default function SupplierOfferShow({
         <>
             <Head title={offer.product_name} />
 
-            <div className="space-y-6">
+            <PageContainer width="narrow">
                 <PageHeader
                     title={offer.product_name}
                     description={offer.reference}
@@ -73,7 +74,7 @@ export default function SupplierOfferShow({
                         ))}
                     </ul>
                 </SectionCard>
-            </div>
+            </PageContainer>
         </>
     );
 }
