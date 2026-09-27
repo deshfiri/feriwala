@@ -43,6 +43,16 @@ enum PermissionAction: string
     /** Working a queue item — requesting a correction or refusing it — short of the stronger approval verb (D25). */
     case Review = 'review';
 
+    /**
+     * Putting a suspended account back into operation.
+     *
+     * Its own verb rather than a reuse of `approve`: approval is the decision
+     * to let someone in for the first time, and this is the decision to undo a
+     * decision — different evidence, different question, and worth being
+     * separately grantable even though the default roles hold both.
+     */
+    case Reactivate = 'reactivate';
+
     public function label(): string
     {
         return match ($this) {
@@ -69,6 +79,7 @@ enum PermissionAction: string
             self::ViewSettings => 'View settings',
             self::Suspend => 'Suspend',
             self::Review => 'Review',
+            self::Reactivate => 'Reactivate',
         };
     }
 
@@ -96,6 +107,13 @@ enum PermissionAction: string
             // (D25). Holding `supplier.suspend` is what makes Supplier Manager
             // a two-factor role.
             self::Suspend,
+            /*
+             * And putting one back. Restoring the ability to trade is the
+             * decision an attacker would actually want — a suspension that
+             * can be quietly lifted protects nothing — so it escalates on the
+             * same terms as imposing one.
+             */
+            self::Reactivate,
             self::Delete => true,
             default => false,
         };

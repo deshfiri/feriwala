@@ -83,13 +83,12 @@ class BusinessAccountPolicy
     }
 
     /**
-     * Suspension is a separate permission from approval, on purpose.
+     * Declining an applicant at the activation gate (§5.3).
      *
-     * It removes a business's ability to trade — and its invited staff lose the
-     * ERP with it — while §5.3 keeps it reversible and closure is what is not.
-     * It must never become a quiet route to permanent denial in the hands of
-     * anyone who happens to work the approval queue; closure belongs to the
-     * closure and retention workflow (D18).
+     * Scoped to the approval queue, and kept on `account.reject` because that
+     * is what it is: a decision about someone who has never traded. Suspending
+     * a business that **is** trading is a different and larger power — see
+     * {@see suspendTrading()} — and must not ride on the queue's permission.
      */
     public function suspend(User $user, BusinessAccount $account): bool
     {
@@ -101,16 +100,39 @@ class BusinessAccountPolicy
     }
 
     /**
-     * Lifting a suspension sits with imposing one.
+     * Stopping a business that is already trading (§5.3).
      *
-     * The same authority in both directions, deliberately: splitting them
-     * would let a role remove a business's ability to trade and leave it to
-     * someone else to restore, which is how a reversible decision becomes
-     * permanent in practice. Whoever may suspend must be able to undo it.
+     * Its own permission, `account.suspend`, because the consequences are not
+     * the queue's: the business stops selling, its invited staff lose the ERP,
+     * and its websites stop taking orders. Whoever works the approval queue
+     * should not thereby be able to halt a live business.
+     *
+     * Sensitive, so the §32.2 escalation applies on top of holding it.
+     */
+    public function suspendTrading(User $user, BusinessAccount $account): bool
+    {
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::Suspend));
+    }
+
+    /**
+     * Lifting a suspension (§5.3).
+     *
+     * Separately grantable from `account.suspend` so a narrow role can be
+     * given neither — but the default roles hold both, because a role that can
+     * stop a business and not restart it turns a reversible decision into a
+     * permanent one in practice, which is what §5.3 and D18 keep apart.
      */
     public function reactivate(User $user, BusinessAccount $account): bool
     {
-        return $this->suspend($user, $account);
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::Reactivate));
     }
 
     protected function permission(PermissionAction $action): string

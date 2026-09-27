@@ -1,9 +1,11 @@
 <?php
 
+use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Actions\ReactivateAccount;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Audit\Models\AuditLog;
+use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Wallet\Models\Wallet;
 use App\Models\User;
 use App\Notifications\Account\AccountReactivated;
@@ -81,6 +83,49 @@ describe('suspending a trading account', function () {
         $this->actingAs($reviewer)
             ->post(route('admin.accounts.suspend', $this->account), ['reason' => 'No.'])
             ->assertForbidden();
+
+        expect($this->account->fresh()->status)->toBe(AccountStatus::Active);
+    });
+
+    it('refuses someone holding only the activation queue\'s reject permission', function () {
+        /*
+         * The correction that gave these their own permissions. Declining an
+         * applicant at the gate and halting a live business are different
+         * decisions with different consequences, and `account.reject` buys
+         * only the first.
+         */
+        $reviewer = User::factory()->staff()->create();
+        $reviewer->givePermissionTo(['account.view', 'account.reject']);
+
+        $this->actingAs($reviewer)
+            ->post(route('admin.accounts.suspend', $this->account), ['reason' => 'Halt them.'])
+            ->assertForbidden();
+
+        $this->post(route('admin.accounts.reactivate', $this->account), ['reason' => 'Restore them.'])
+            ->assertForbidden();
+
+        expect($this->account->fresh()->status)->toBe(AccountStatus::Active);
+    });
+
+    it('allows a staff member holding account.suspend', function () {
+        $reviewer = User::factory()->staff()->create();
+        $reviewer->givePermissionTo(['account.view', 'account.suspend']);
+
+        $this->actingAs($reviewer)
+            ->post(route('admin.accounts.suspend', $this->account), ['reason' => 'Authorised.'])
+            ->assertSessionHasNoErrors();
+
+        expect($this->account->fresh()->status)->toBe(AccountStatus::Suspended);
+    });
+
+    it('never lets a signed-in supplier reach either action', function () {
+        supplierTestSignIn(Supplier::factory()->create());
+
+        foreach (['admin.accounts.suspend', 'admin.accounts.reactivate'] as $name) {
+            $response = $this->post(route($name, $this->account), ['reason' => 'No.']);
+
+            expect($response->getStatusCode())->toBeIn([302, 403]);
+        }
 
         expect($this->account->fresh()->status)->toBe(AccountStatus::Active);
     });
@@ -180,6 +225,48 @@ describe('lifting a suspension', function () {
         expect(Wallet::query()
             ->where('business_account_id', $this->account->id)->count())
             ->toBe($walletsBefore);
+    });
+});
+
+describe('who holds the new permissions by default', function () {
+    it('grants both to Admin, so a reversible decision stays reversible', function () {
+        expect($this->staff->can('account.suspend'))->toBeTrue()
+            ->and($this->staff->can('account.reactivate'))->toBeTrue();
+    });
+
+    it('gives Super Admin both through the existing role mechanism', function () {
+        $superAdmin = testPlatformStaff(PlatformRole::SuperAdmin);
+
+        expect($superAdmin->can('account.suspend'))->toBeTrue()
+            ->and($superAdmin->can('account.reactivate'))->toBeTrue()
+            ->and($superAdmin->can('suspendTrading', $this->account))->toBeTrue()
+            ->and($superAdmin->can('reactivate', $this->account))->toBeTrue();
+    });
+
+    it('gives a read-only account role neither', function () {
+        // A KYC manager reads dossiers and decides verification; halting a
+        // live business is not part of that job.
+        $kycManager = testPlatformStaff(PlatformRole::KycManager);
+
+        expect($kycManager->can('account.suspend'))->toBeFalse()
+            ->and($kycManager->can('account.reactivate'))->toBeFalse();
+    });
+
+    it('treats both as sensitive, so the §32.2 escalation applies', function () {
+        expect(PermissionAction::Suspend->isSensitive())->toBeTrue()
+            ->and(PermissionAction::Reactivate->isSensitive())->toBeTrue();
+    });
+
+    it('leaves the activation queue on its own permission', function () {
+        // The queue decides about applicants and keeps `account.reject`;
+        // nothing here widened what that permission buys.
+        $reviewer = User::factory()->staff()->create();
+        $reviewer->givePermissionTo(['account.view', 'account.reject']);
+
+        $applicant = testBusinessAccount(AccountStatus::ApprovalPending);
+
+        expect($reviewer->can('suspend', $applicant))->toBeTrue()
+            ->and($reviewer->can('suspendTrading', $applicant))->toBeFalse();
     });
 });
 

@@ -199,7 +199,7 @@ class AccountController extends Controller
                  */
                 'suspend' => ! $account->isActivated()
                     ? false
-                    : Gate::allows('suspend', $account),
+                    : Gate::allows('suspendTrading', $account),
                 'reactivate' => $account->status === AccountStatus::Suspended
                     && Gate::allows('reactivate', $account),
             ],
@@ -217,7 +217,10 @@ class AccountController extends Controller
      */
     public function suspend(Request $request, BusinessAccount $account, SuspendAccount $action): RedirectResponse
     {
-        Gate::authorize('suspend', $account);
+        // `suspendTrading`, not `suspend`: the latter is the activation
+        // queue's decision about an applicant and rides on `account.reject`.
+        // Stopping a live business is `account.suspend`.
+        Gate::authorize('suspendTrading', $account);
 
         /** @var User $staff */
         $staff = $request->user();

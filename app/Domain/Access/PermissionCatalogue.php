@@ -42,10 +42,23 @@ class PermissionCatalogue
                 Action::Publish, Action::Unpublish, Action::Archive,
             ],
 
+            /*
+             * `reject` and `suspend` are different decisions and are kept
+             * apart on purpose.
+             *
+             * `reject` belongs to the activation queue: an applicant at the
+             * gate is declined and has never traded. `suspend` stops a
+             * business that **is** trading — its invited staff lose the ERP
+             * with it, its websites stop taking orders — and `reactivate`
+             * undoes that. Authorising the second through the first meant
+             * whoever worked the approval queue could halt a live business,
+             * which is a much larger power than the queue needs.
+             */
             Module::Account->value => [
                 Action::View, Action::Create, Action::Edit,
                 Action::Approve, Action::Reject, Action::Verify,
                 Action::Export, Action::Archive, Action::ViewSensitiveData,
+                Action::Suspend, Action::Reactivate,
             ],
 
             // KYC is never deletable — submissions and their review history are

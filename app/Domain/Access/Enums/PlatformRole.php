@@ -169,7 +169,18 @@ enum PlatformRole: string
             // Broad operational oversight, but deliberately not money movement,
             // KYC documents, backups, or permissions.
             self::Admin => [
-                Module::Account->value => [...$manage, ...$review],
+                /*
+                 * Suspending and restoring a trading business are granted
+                 * together, deliberately: a role that can stop a business but
+                 * not restart it turns a reversible decision into a permanent
+                 * one in practice, which is exactly what §5.3 and D18 keep
+                 * apart. They are separate *permissions* so a narrower role
+                 * can be given neither, not so one can be given half.
+                 */
+                Module::Account->value => [
+                    ...$manage, ...$review,
+                    Action::Suspend, Action::Reactivate,
+                ],
                 Module::Package->value => $manage,
                 Module::Catalog->value => $manage,
                 Module::Order->value => [...$manage, ...$review],
