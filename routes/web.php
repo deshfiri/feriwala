@@ -590,6 +590,19 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('kyc.request-update');
 
         /*
+         * Stopping and restarting a trading business (§5.3).
+         *
+         * The activation queue's own suspend endpoint is scoped to accounts
+         * awaiting activation, which a trading account never is — so before
+         * these, an activated business could not be suspended from anywhere,
+         * and a suspended one could not be restored at all.
+         */
+        Route::post('accounts/{account}/suspend', [AccountController::class, 'suspend'])
+            ->name('accounts.suspend');
+        Route::post('accounts/{account}/reactivate', [AccountController::class, 'reactivate'])
+            ->name('accounts.reactivate');
+
+        /*
          * Locking and unlocking a login (§6, P1-17).
          *
          * Keyed on the **person**, not on the account they belong to: locking an

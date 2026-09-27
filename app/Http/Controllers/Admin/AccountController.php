@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Account\Actions\ReactivateAccount;
+use App\Domain\Account\Actions\SuspendAccount;
+use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\AccountDirectory;
 use App\Domain\Account\Queries\AccountDossier;
@@ -9,10 +12,15 @@ use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Support\StateMachine\Exceptions\IllegalStateTransition;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 /**
  * One trading business, in full (P1-79).
@@ -180,10 +188,93 @@ class AccountController extends Controller
                  */
                 'request_kyc_update' => $blockers === []
                     && Gate::allows('requestUpdate', [KycSubmission::class, $account]),
+
+                /*
+                 * Suspension was previously reachable only from the activation
+                 * queue, which holds no trading account — so a business that
+                 * had already activated could not be suspended from anywhere.
+                 * The invariant rides with the permission here too: the two
+                 * are mutually exclusive by status, and offering both would
+                 * be offering one that will certainly be refused.
+                 */
+                'suspend' => ! $account->isActivated()
+                    ? false
+                    : Gate::allows('suspend', $account),
+                'reactivate' => $account->status === AccountStatus::Suspended
+                    && Gate::allows('reactivate', $account),
             ],
 
             'blockers' => $blockers,
         ]);
+    }
+
+    /**
+     * Stop a trading business (§5.3).
+     *
+     * Its own endpoint on this screen rather than a reuse of the activation
+     * queue's: that one is scoped to accounts awaiting activation, and a
+     * trading account never appears in it.
+     */
+    public function suspend(Request $request, BusinessAccount $account, SuspendAccount $action): RedirectResponse
+    {
+        Gate::authorize('suspend', $account);
+
+        /** @var User $staff */
+        $staff = $request->user();
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+            'feedback' => ['nullable', 'string', 'max:1000'],
+            'internal_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $action->handle(
+                account: $account,
+                decidedBy: $staff->id,
+                reason: $validated['reason'],
+                userVisibleNote: $validated['feedback'] ?? null,
+                internalNote: $validated['internal_note'] ?? null,
+            );
+        } catch (InvalidArgumentException|IllegalStateTransition $refused) {
+            throw ValidationException::withMessages(['reason' => $refused->getMessage()]);
+        }
+
+        return back()->with('success', __('Account suspended.'));
+    }
+
+    /**
+     * Lift a suspension (§5.3).
+     *
+     * The same authority as imposing one — a reversible decision nobody can
+     * reverse is closure under a kinder name.
+     */
+    public function reactivate(Request $request, BusinessAccount $account, ReactivateAccount $action): RedirectResponse
+    {
+        Gate::authorize('reactivate', $account);
+
+        /** @var User $staff */
+        $staff = $request->user();
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+            'feedback' => ['nullable', 'string', 'max:1000'],
+            'internal_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $action->handle(
+                account: $account,
+                decidedBy: $staff->id,
+                reason: $validated['reason'],
+                userVisibleNote: $validated['feedback'] ?? null,
+                internalNote: $validated['internal_note'] ?? null,
+            );
+        } catch (InvalidArgumentException|IllegalStateTransition $refused) {
+            throw ValidationException::withMessages(['reason' => $refused->getMessage()]);
+        }
+
+        return back()->with('success', __('Account reactivated.'));
     }
 
     /**

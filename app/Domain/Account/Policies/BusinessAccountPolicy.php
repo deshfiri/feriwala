@@ -100,6 +100,19 @@ class BusinessAccountPolicy
         return $user->can($this->permission(PermissionAction::Reject));
     }
 
+    /**
+     * Lifting a suspension sits with imposing one.
+     *
+     * The same authority in both directions, deliberately: splitting them
+     * would let a role remove a business's ability to trade and leave it to
+     * someone else to restore, which is how a reversible decision becomes
+     * permanent in practice. Whoever may suspend must be able to undo it.
+     */
+    public function reactivate(User $user, BusinessAccount $account): bool
+    {
+        return $this->suspend($user, $account);
+    }
+
     protected function permission(PermissionAction $action): string
     {
         return PermissionCatalogue::name(PermissionModule::Account, $action);

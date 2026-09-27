@@ -40,6 +40,19 @@ return [
         'by_system' => 'System',
     ],
 
+    'suspension' => [
+        'suspend_title' => 'Suspend this account',
+        'suspend_description' => 'The business stops trading immediately, and its invited staff lose the ERP with it. Suspension is reversible.',
+        'suspend_action' => 'Suspend',
+        'reactivate_title' => 'Lift this suspension',
+        'reactivate_description' => 'The business can trade again from the moment you confirm.',
+        'reactivate_action' => 'Reactivate',
+        'reason' => 'Internal reason',
+        'reason_help' => 'Recorded against your name. Never shown to the account holder.',
+        'feedback' => 'Note for the account holder (optional)',
+        'feedback_help' => 'The only thing they are sent. Leave blank to tell them nothing beyond the change itself.',
+    ],
+
     'kyc_update' => [
         'action' => 'Request verification update',
         'title' => 'Request a verification update',

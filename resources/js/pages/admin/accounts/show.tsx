@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { ShieldCheck } from 'lucide-react';
+import { Ban, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -18,6 +18,7 @@ import AssignPackageDialog, {
     type AssignablePackage,
 } from './assign-package-dialog';
 import SignInAccessDialog, { type Person } from './sign-in-access-dialog';
+import SuspensionDialog from './suspension-dialog';
 
 type Owner = {
     name: string;
@@ -99,7 +100,11 @@ type Props = {
     /** Plans an administrator may grant this account without a sale (§8.3). */
     assignable_packages: AssignablePackage[];
     document_types: DocumentTypeOption[];
-    can: { request_kyc_update: boolean };
+    can: {
+        request_kyc_update: boolean;
+        suspend: boolean;
+        reactivate: boolean;
+    };
     blockers: string[];
 };
 
@@ -133,6 +138,9 @@ export default function AdminAccountShow({
         null,
     );
     const [assigning, setAssigning] = useState(false);
+    const [suspending, setSuspending] = useState<
+        'suspend' | 'reactivate' | null
+    >(null);
 
     const date = (value: string | null) =>
         value === null ? '—' : new Date(value).toLocaleDateString(locale);
@@ -154,6 +162,36 @@ export default function AdminAccountShow({
                                 tone={business.status_tone}
                                 label={business.status_label}
                             />
+
+                            {/* §5.3 both ways. Mutually exclusive by status,
+                                so only the one that can actually happen is
+                                offered. */}
+                            {can.suspend && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSuspending('suspend')}
+                                >
+                                    <Ban
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                    {t('account.suspension.suspend_action')}
+                                </Button>
+                            )}
+
+                            {can.reactivate && (
+                                <Button
+                                    size="sm"
+                                    onClick={() => setSuspending('reactivate')}
+                                >
+                                    <RotateCcw
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                    {t('account.suspension.reactivate_action')}
+                                </Button>
+                            )}
 
                             {can.request_kyc_update ? (
                                 <Button
@@ -606,6 +644,13 @@ export default function AdminAccountShow({
                     </div>
                 </div>
             </PageContainer>
+
+            <SuspensionDialog
+                accountId={business.id}
+                mode={suspending ?? 'suspend'}
+                open={suspending !== null}
+                onOpenChange={(open) => !open && setSuspending(null)}
+            />
 
             <RequestKycUpdateDialog
                 open={requesting}
