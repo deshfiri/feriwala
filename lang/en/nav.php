@@ -42,6 +42,7 @@ return [
     'referral_commissions' => 'Referral commissions',
     'referral_chains' => 'Referral chains',
     'referrals' => 'Referrals',
+    'accounts' => 'Accounts',
     'activation_approvals' => 'Activation approvals',
     'billing_rules' => 'Billing rules',
     'payment_gateways' => 'Payment gateways',

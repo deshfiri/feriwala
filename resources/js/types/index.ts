@@ -1,3 +1,4 @@
+export type * from './accounts';
 export type * from './activation';
 export type * from './auth';
 export type * from './catalog';

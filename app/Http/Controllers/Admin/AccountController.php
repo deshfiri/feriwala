@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Account\Queries\AccountDirectory;
 use App\Domain\Account\Queries\AccountDossier;
 use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,10 +26,79 @@ use Inertia\Response;
  */
 class AccountController extends Controller
 {
+    /** Columns the directory may sort by. A whitelist, not the parameter. */
+    protected const SORTABLE = ['name', 'created_at', 'activated_at', 'status'];
+
     public function __construct(
         protected AccountDossier $dossier,
         protected CaptureRoundRequirements $requirements,
+        protected AccountDirectory $directory,
     ) {}
+
+    /**
+     * Every Client/Partner business, as an operations list.
+     *
+     * The activation queue answers "who is waiting on us"; this answers "who
+     * are our accounts", which is the question nobody could ask before —
+     * a trading business was reachable only by knowing its URL.
+     *
+     * **A directory, not a dossier.** No KYC document, payout detail, secret
+     * or wallet figure is selected here; those live behind their own abilities
+     * on the detail screen.
+     */
+    public function index(Request $request): Response
+    {
+        Gate::authorize('viewAny', BusinessAccount::class);
+
+        $sort = $request->string('sort')->toString();
+        $direction = $request->string('direction')->toString() === 'asc' ? 'asc' : 'desc';
+
+        $accounts = $this->directory
+            ->builder($request->only([
+                'search', 'state', 'status', 'kyc_status', 'kyc_reverification',
+                'package', 'package_status', 'facility', 'wallet_restriction',
+                'registered_from', 'registered_to', 'activated_from', 'activated_to',
+            ]))
+            ->reorder(
+                in_array($sort, self::SORTABLE, true) ? $sort : 'created_at',
+                $direction,
+            )
+            ->paginate(25)
+            ->withQueryString()
+            ->through(fn (BusinessAccount $account) => [
+                'id' => $account->public_id,
+                'name' => $account->name,
+                'owner' => $account->owner?->name,
+                'email' => $account->owner?->email,
+                'mobile' => $account->owner?->mobile,
+                'email_verified' => $account->owner?->email_verified_at !== null,
+                'mobile_verified' => $account->owner?->mobile_verified_at !== null,
+                'status_label' => $account->status->label(),
+                'status_tone' => $account->status->tone(),
+                'package' => $account->currentPackage?->package?->name,
+                'package_status' => $account->currentPackage?->status->label(),
+                'registered_at' => $account->created_at?->toIso8601String(),
+                'activated_at' => $account->activated_at?->toIso8601String(),
+            ]);
+
+        return Inertia::render('admin/accounts/index', [
+            'accounts' => $accounts,
+            'summary' => $this->directory->summary(),
+            'packages' => Package::query()
+                ->orderBy('name')
+                ->get(['public_id', 'name'])
+                ->map(fn (Package $package) => [
+                    'id' => $package->public_id,
+                    'name' => $package->name,
+                ]),
+            'filters' => $request->only([
+                'search', 'state', 'status', 'kyc_status', 'kyc_reverification',
+                'package', 'package_status', 'facility', 'wallet_restriction',
+                'registered_from', 'registered_to', 'activated_from', 'activated_to',
+                'sort', 'direction',
+            ]),
+        ]);
+    }
 
     public function show(BusinessAccount $account): Response
     {

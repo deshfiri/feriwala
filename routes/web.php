@@ -565,6 +565,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * awaiting activation — a trading account is not in it, so this is the
          * only screen from which its KYC can be asked for again.
          */
+        /*
+         * The operations list of every Client/Partner business.
+         *
+         * Declared before the `{account}` route so "accounts" is never read
+         * as a public id. "Partner" is not a second account type — it is a
+         * trading business account using wholesale, dropshipping or both, so
+         * this lists `business_accounts` and nothing else. Suppliers have
+         * their own module.
+         */
+        Route::get('accounts', [AccountController::class, 'index'])
+            ->name('accounts.index');
+
         Route::get('accounts/{account}', [AccountController::class, 'show'])
             ->name('accounts.show');
 

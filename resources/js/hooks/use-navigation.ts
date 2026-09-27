@@ -2,6 +2,7 @@ import { usePage } from '@inertiajs/react';
 import {
     Banknote,
     Boxes,
+    Building2,
     ClipboardList,
     CreditCard,
     FolderTree,
@@ -39,6 +40,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes';
 import { dashboard as adminDashboard } from '@/routes/admin';
+import { index as accountDirectory } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
@@ -454,6 +456,11 @@ export function useNavigation(): {
                     : []),
                 ...(permissions['account.view']
                     ? [
+                          {
+                              title: t('nav.accounts'),
+                              href: accountDirectory(),
+                              icon: Building2,
+                          },
                           {
                               title: t('nav.activation_approvals'),
                               href: activationQueue(),
