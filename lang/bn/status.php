@@ -172,6 +172,18 @@ return [
         'suspended' => 'স্থগিত',
     ],
 
+    'allocation_source' => [
+        'warehouse' => 'কেন্দ্রীয় গুদাম',
+        'supplier_offer' => 'সরবরাহকারী',
+    ],
+
+    'allocation' => [
+        'active' => 'সক্রিয়',
+        'released' => 'অবমুক্ত',
+        'superseded' => 'প্রতিস্থাপিত',
+        'cancelled' => 'বাতিল',
+    ],
+
     'user' => [
         'active' => 'সক্রিয়',
         'locked' => 'লক করা হয়েছে',

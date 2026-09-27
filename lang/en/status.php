@@ -182,6 +182,18 @@ return [
         'suspended' => 'Suspended',
     ],
 
+    'allocation_source' => [
+        'warehouse' => 'Central Warehouse',
+        'supplier_offer' => 'Supplier',
+    ],
+
+    'allocation' => [
+        'active' => 'Active',
+        'released' => 'Released',
+        'superseded' => 'Replaced',
+        'cancelled' => 'Cancelled',
+    ],
+
     'user' => [
         'active' => 'Active',
         'locked' => 'Locked',
