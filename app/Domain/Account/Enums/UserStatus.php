@@ -4,6 +4,7 @@ namespace App\Domain\Account\Enums;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * The status of a **login identity** — a person, not a business (§6).
@@ -28,6 +29,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum UserStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     /** Normal. May sign in, and may use whatever their roles and account allow. */
     case Active = 'active';
 
@@ -70,14 +73,9 @@ enum UserStatus: string implements TransitionableState
         return $this === self::Closed;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Active => 'Active',
-            self::Locked => 'Locked',
-            self::Suspended => 'Suspended',
-            self::Closed => 'Closed',
-        };
+        return 'user';
     }
 
     public function tone(): string

@@ -172,6 +172,59 @@ return [
         'suspended' => 'স্থগিত',
     ],
 
+    'user' => [
+        'active' => 'সক্রিয়',
+        'locked' => 'লক করা হয়েছে',
+        'suspended' => 'স্থগিত',
+        'closed' => 'বন্ধ',
+    ],
+
+    'product' => [
+        'draft' => 'খসড়া',
+        'pending_review' => 'পর্যালোচনার অপেক্ষায়',
+        'active' => 'সক্রিয়',
+        'inactive' => 'নিষ্ক্রিয়',
+        'out_of_stock' => 'মজুত নেই',
+        'discontinued' => 'বন্ধ করা হয়েছে',
+        'archived' => 'আর্কাইভ করা হয়েছে',
+        'dropshipping_enabled' => 'ড্রপশিপিং চালু',
+        'dropshipping_disabled' => 'ড্রপশিপিং বন্ধ',
+        'wholesale_enabled' => 'পাইকারি চালু',
+        'wholesale_disabled' => 'পাইকারি বন্ধ',
+    ],
+
+    'stock_reservation' => [
+        'active' => 'সক্রিয়',
+        'committed' => 'নিশ্চিত করা হয়েছে',
+        'released' => 'ছেড়ে দেওয়া হয়েছে',
+        'expired' => 'মেয়াদ শেষ',
+    ],
+
+    'wallet_transaction' => [
+        'initiated' => 'শুরু করা হয়েছে',
+        'pending' => 'অপেক্ষমাণ',
+        'on_hold' => 'স্থগিত রাখা হয়েছে',
+        'under_review' => 'পর্যালোচনাধীন',
+        'approved' => 'অনুমোদিত',
+        'available' => 'ব্যবহারযোগ্য',
+        'settled' => 'নিষ্পত্তিকৃত',
+        'paid' => 'পরিশোধিত',
+        'rejected' => 'প্রত্যাখ্যাত',
+        'failed' => 'ব্যর্থ',
+        'cancelled' => 'বাতিল',
+        'reversed' => 'বিপরীত করা হয়েছে',
+    ],
+
+    'user_package' => [
+        'pending_payment' => 'পেমেন্টের অপেক্ষায়',
+        'active' => 'সক্রিয়',
+        'renewal_due' => 'নবায়ন বাকি',
+        'grace_period' => 'অতিরিক্ত সময়সীমা',
+        'expired' => 'মেয়াদ শেষ',
+        'cancelled' => 'বাতিল',
+        'superseded' => 'প্রতিস্থাপিত',
+    ],
+
     'refund' => [
         'requested' => 'সিদ্ধান্তের অপেক্ষায়',
         'approved' => 'অনুমোদিত',

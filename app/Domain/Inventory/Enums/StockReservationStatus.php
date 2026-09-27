@@ -3,6 +3,7 @@
 namespace App\Domain\Inventory\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where a reservation stands (§19.1, contract §6.1.2).
@@ -13,6 +14,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum StockReservationStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     /** Units held in the reserved bucket, waiting on payment or confirmation. */
     case Active = 'active';
 
@@ -41,14 +44,9 @@ enum StockReservationStatus: string implements TransitionableState
         return $this->transitionsTo() === [];
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Active => 'Active',
-            self::Committed => 'Committed',
-            self::Released => 'Released',
-            self::Expired => 'Expired',
-        };
+        return 'stock_reservation';
     }
 
     public function tone(): string

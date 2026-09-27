@@ -3,6 +3,7 @@
 namespace App\Domain\Catalog\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Every product status §11.2 names, with the moves each allows.
@@ -24,6 +25,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum ProductStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Draft = 'draft';
     case PendingReview = 'pending_review';
     case Active = 'active';
@@ -127,21 +130,9 @@ enum ProductStatus: string implements TransitionableState
         return $this === self::Active;
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Draft => 'Draft',
-            self::PendingReview => 'Pending review',
-            self::Active => 'Active',
-            self::Inactive => 'Inactive',
-            self::OutOfStock => 'Out of stock',
-            self::Discontinued => 'Discontinued',
-            self::Archived => 'Archived',
-            self::DropshippingEnabled => 'Dropshipping enabled',
-            self::DropshippingDisabled => 'Dropshipping disabled',
-            self::WholesaleEnabled => 'Wholesale enabled',
-            self::WholesaleDisabled => 'Wholesale disabled',
-        };
+        return 'product';
     }
 
     public function tone(): string

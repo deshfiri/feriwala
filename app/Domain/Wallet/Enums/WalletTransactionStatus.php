@@ -3,6 +3,7 @@
 namespace App\Domain\Wallet\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * Where one wallet transaction has got to (§23.3).
@@ -14,6 +15,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum WalletTransactionStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case Initiated = 'initiated';
     case Pending = 'pending';
     case OnHold = 'on_hold';
@@ -90,22 +93,9 @@ enum WalletTransactionStatus: string implements TransitionableState
         ], true);
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Initiated => 'Initiated',
-            self::Pending => 'Pending',
-            self::OnHold => 'On hold',
-            self::UnderReview => 'Under review',
-            self::Approved => 'Approved',
-            self::Available => 'Available',
-            self::Settled => 'Settled',
-            self::Paid => 'Paid',
-            self::Rejected => 'Rejected',
-            self::Failed => 'Failed',
-            self::Cancelled => 'Cancelled',
-            self::Reversed => 'Reversed',
-        };
+        return 'wallet_transaction';
     }
 
     /**

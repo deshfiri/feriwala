@@ -3,6 +3,7 @@
 namespace App\Domain\Package\Enums;
 
 use App\Support\StateMachine\TransitionableState;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * The state of an account's subscription (§8.2, §8.4).
@@ -15,6 +16,8 @@ use App\Support\StateMachine\TransitionableState;
  */
 enum UserPackageStatus: string implements TransitionableState
 {
+    use HasTranslatedLabel;
+
     case PendingPayment = 'pending_payment';
     case Active = 'active';
     case RenewalDue = 'renewal_due';
@@ -57,17 +60,9 @@ enum UserPackageStatus: string implements TransitionableState
         return $this->transitionsTo() === [];
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::PendingPayment => 'Awaiting payment',
-            self::Active => 'Active',
-            self::RenewalDue => 'Renewal due',
-            self::GracePeriod => 'Grace period',
-            self::Expired => 'Expired',
-            self::Cancelled => 'Cancelled',
-            self::Superseded => 'Replaced',
-        };
+        return 'user_package';
     }
 
     /**

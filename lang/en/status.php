@@ -182,6 +182,59 @@ return [
         'suspended' => 'Suspended',
     ],
 
+    'user' => [
+        'active' => 'Active',
+        'locked' => 'Locked',
+        'suspended' => 'Suspended',
+        'closed' => 'Closed',
+    ],
+
+    'product' => [
+        'draft' => 'Draft',
+        'pending_review' => 'Pending review',
+        'active' => 'Active',
+        'inactive' => 'Inactive',
+        'out_of_stock' => 'Out of stock',
+        'discontinued' => 'Discontinued',
+        'archived' => 'Archived',
+        'dropshipping_enabled' => 'Dropshipping enabled',
+        'dropshipping_disabled' => 'Dropshipping disabled',
+        'wholesale_enabled' => 'Wholesale enabled',
+        'wholesale_disabled' => 'Wholesale disabled',
+    ],
+
+    'stock_reservation' => [
+        'active' => 'Active',
+        'committed' => 'Committed',
+        'released' => 'Released',
+        'expired' => 'Expired',
+    ],
+
+    'wallet_transaction' => [
+        'initiated' => 'Initiated',
+        'pending' => 'Pending',
+        'on_hold' => 'On hold',
+        'under_review' => 'Under review',
+        'approved' => 'Approved',
+        'available' => 'Available',
+        'settled' => 'Settled',
+        'paid' => 'Paid',
+        'rejected' => 'Rejected',
+        'failed' => 'Failed',
+        'cancelled' => 'Cancelled',
+        'reversed' => 'Reversed',
+    ],
+
+    'user_package' => [
+        'pending_payment' => 'Awaiting payment',
+        'active' => 'Active',
+        'renewal_due' => 'Renewal due',
+        'grace_period' => 'Grace period',
+        'expired' => 'Expired',
+        'cancelled' => 'Cancelled',
+        'superseded' => 'Replaced',
+    ],
+
     'refund' => [
         'requested' => 'Awaiting decision',
         'approved' => 'Approved',
