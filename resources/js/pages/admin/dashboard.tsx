@@ -11,7 +11,10 @@ import AreaTrend from '@/components/charts/area-trend';
 import RadialBreakdown from '@/components/charts/radial-breakdown';
 import PageContainer from '@/components/page-container';
 import Panel from '@/components/dashboard/panel';
-import StatCard, { StatCardGrid } from '@/components/stat-card';
+import StatCard, {
+    StatCardGrid,
+    type StatCardTone,
+} from '@/components/stat-card';
 import EmptyState from '@/components/states/empty-state';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes/admin';
@@ -37,6 +40,14 @@ const ICONS: Record<string, LucideIcon> = {
     orders: Package,
     supplier_kyc: Truck,
     supplier_listings: ClipboardList,
+};
+
+const TONES: Record<string, StatCardTone> = {
+    kyc: 'info',
+    activations: 'success',
+    orders: 'brand',
+    supplier_kyc: 'warning',
+    supplier_listings: 'neutral',
 };
 
 const TREND_DAYS = 14;
@@ -95,6 +106,7 @@ export default function AdminDashboard({
                                         label={card.label}
                                         value={card.value}
                                         icon={ICONS[card.key]}
+                                        tone={TONES[card.key]}
                                         className="hover:bg-accent/50 transition-colors"
                                     />
                                 </Link>

@@ -113,6 +113,7 @@ export default function SupplierDashboard({
                                 )}
                                 value={snapshot.active_listings}
                                 icon={ClipboardList}
+                                tone="brand"
                                 className="hover:bg-accent/50 transition-colors"
                             />
                         </Link>
@@ -127,6 +128,7 @@ export default function SupplierDashboard({
                                 )}
                                 value={snapshot.withdrawals_pending}
                                 icon={Banknote}
+                                tone="warning"
                                 className="hover:bg-accent/50 transition-colors"
                             />
                         </Link>
@@ -150,6 +152,7 @@ export default function SupplierDashboard({
                                     )
                                 }
                                 icon={Coins}
+                                tone="success"
                                 className="hover:bg-accent/50 transition-colors"
                             />
                         </Link>
