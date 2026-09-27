@@ -110,7 +110,10 @@ export default function RadialBreakdown({
                             className="size-2 shrink-0 rounded-full"
                             style={{ backgroundColor: toneFor(slice, index) }}
                         />
-                        <span className="text-muted-foreground min-w-0 flex-1 truncate">
+                        <span
+                            title={slice.label}
+                            className="text-muted-foreground min-w-0 flex-1 truncate"
+                        >
                             {slice.label}
                         </span>
                         <span className="shrink-0 font-medium tabular-nums">
