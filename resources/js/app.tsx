@@ -1,4 +1,4 @@
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -7,8 +7,11 @@ import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import SupplierAuthLayout from '@/layouts/supplier-auth-layout';
 import SupplierLayout from '@/layouts/supplier-layout';
+import { syncDocumentLocale } from '@/lib/sync-document-locale';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+router.on('success', (event) => syncDocumentLocale(event.detail.page.props));
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

@@ -16,6 +16,15 @@ export default defineConfig({
                 bunny('Instrument Sans', {
                     weights: [400, 500, 600],
                 }),
+                // `--font-bangla` (app.css) named this face, but nothing
+                // ever bundled it -- it only ever rendered on a visitor
+                // whose OS happened to already have a font of this exact
+                // name installed. Self-hosted the same way Instrument Sans
+                // is, so Bangla text renders correctly everywhere, not by
+                // accident of the visitor's platform (D6).
+                bunny('Noto Sans Bengali', {
+                    weights: [400, 500, 600],
+                }),
             ],
         }),
         inertia(),

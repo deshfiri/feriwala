@@ -313,11 +313,6 @@
         @apply bg-background text-foreground;
     }
 
-    /* Bangla renders in a face that has the glyphs (D6). */
-    :lang(bn) {
-        font-family: var(--font-bangla);
-    }
-
     /*
      * Tabular figures everywhere money and quantities appear, so columns of
      * numbers align on the decimal instead of jittering row to row (§33.7).
@@ -344,4 +339,20 @@
             scroll-behavior: auto !important;
         }
     }
+}
+
+/*
+ * Bangla renders in a face that has the glyphs (D6) -- deliberately
+ * unlayered. `<body class="font-sans">` (app.blade.php) is a Tailwind
+ * utility, and Tailwind's cascade layers put `utilities` after `base`
+ * regardless of selector specificity, so a `:lang(bn)` rule written inside
+ * `@layer base` above can never win against it: `body` would keep resolving
+ * to Instrument Sans (no Bengali glyphs) for every Bangla page, even with
+ * the correct `lang` attribute and a fully loaded Noto Sans Bengali font
+ * file. An unlayered rule sits in an implicit final layer that outranks
+ * every `@layer` block, layered or not, so this wins regardless of where
+ * Tailwind's own utilities land.
+ */
+:lang(bn) {
+    font-family: var(--font-bangla);
 }
