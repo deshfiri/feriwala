@@ -60,4 +60,49 @@ class CancelSupplierPayable
             }
         });
     }
+
+    /**
+     * Cancel one payable, because the allocation it was raised for has been
+     * replaced.
+     *
+     * The same transition, history row and audit entry as cancelling a whole
+     * order's payables — the only difference is the scope, since a reallocation
+     * takes back exactly one line's obligation and must leave the rest of the
+     * order's alone.
+     *
+     * Idempotent: a payable that is no longer `Pending` has either already been
+     * cancelled by a retry or has been earned, and neither is this method's to
+     * undo. The caller holds the transaction.
+     */
+    public function cancelOne(SupplierPayable $payable, string $reason, ?int $cancelledBy = null): bool
+    {
+        /** @var SupplierPayable|null $locked */
+        $locked = SupplierPayable::query()->lockForUpdate()->find($payable->id);
+
+        if ($locked === null || $locked->status !== PayableStatus::Pending) {
+            return false;
+        }
+
+        $locked->forceFill(['cancelled_at' => now()]);
+
+        $locked->transitionWithHistory(
+            PayableStatus::Cancelled,
+            new StatusChange(actorId: $cancelledBy, reason: $reason),
+            ['source' => $cancelledBy === null ? PayableChangeSource::System : PayableChangeSource::Staff],
+        );
+
+        $this->audit->handle(new AuditEntry(
+            action: 'supplier_payable.cancelled',
+            actorId: $cancelledBy,
+            auditableType: SupplierPayable::class,
+            auditableId: $locked->id,
+            reason: $reason,
+            accountId: $locked->supplier_id,
+            module: PermissionModule::SupplierPayable->value,
+        ));
+
+        $payable->setRawAttributes($locked->getAttributes(), sync: true);
+
+        return true;
+    }
 }
