@@ -3,11 +3,13 @@
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Supplier\Enums\ListingItemStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Supplier\Models\SupplierProductListing;
+use App\Domain\Supplier\Models\SupplierStockMovement;
 use App\Models\User;
 use App\Notifications\Supplier\SupplierListingApproved;
 use App\Notifications\Supplier\SupplierListingCorrectionRequested;
@@ -193,13 +195,139 @@ test('full approval creates a Central Product through the catalogue action and o
         ->and($offer->platform_rate->toDecimal())->toBe('1300.00')
         ->and($offer->wholesale_enabled)->toBeTrue()
         ->and($offer->dropshipping_enabled)->toBeFalse()
-        ->and($offer->stock->quantity)->toBe(0)
+        // Opened from what the Supplier said they could supply, so they are
+        // never asked to enter the same figure again after approval.
+        ->and($offer->stock->quantity)->toBe(50)
         ->and($offer->priceHistory()->count())->toBe(1)
         ->and($item->refresh()->status)->toBe(ListingItemStatus::Approved)
         ->and($item->supplier_offer_id)->toBe($offer->id)
         ->and(AuditLog::query()->where('action', 'supplier_listing.approved')->count())->toBe(1);
 
     Notification::assertSentTo($supplier, SupplierListingApproved::class);
+});
+
+test('approval opens the offer stock from the submitted availability and records the opening movement', function () {
+    $listing = supplierTestListing(Supplier::factory()->create(), [['available_quantity' => 25]]);
+    $item = $listing->items()->firstOrFail();
+
+    $this->actingAs(supplierListingTestReviewer())
+        ->post(route('admin.supplier-listings.decision.store', $listing), [
+            'reason' => 'Approved.',
+            'connect_product_id' => websiteTestProduct()->public_id,
+            'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
+        ])->assertSessionHasNoErrors();
+
+    $offer = SupplierOffer::query()->firstOrFail();
+    $movement = SupplierStockMovement::query()->where('supplier_offer_id', $offer->id)->sole();
+
+    expect($offer->stock->quantity)->toBe(25)
+        ->and($offer->stock->reserved_quantity)->toBe(0)
+        ->and($movement->quantity_before)->toBe(0)
+        ->and($movement->quantity_after)->toBe(25)
+        ->and($movement->source)->toBe('initial')
+        ->and($movement->actor_type)->toBe('staff')
+        ->and($movement->buckets_after[StockBucket::Available->value])->toBe(25)
+        // The Supplier's own submitted figure is a record of what they asked
+        // for and is never rewritten by the approval.
+        ->and($item->refresh()->available_quantity)->toBe(25);
+});
+
+test('a reviewer may open the offer at a different quantity, and the movement says so', function () {
+    $listing = supplierTestListing(Supplier::factory()->create(), [['available_quantity' => 80]]);
+    $item = $listing->items()->firstOrFail();
+
+    $this->actingAs(supplierListingTestReviewer())
+        ->post(route('admin.supplier-listings.decision.store', $listing), [
+            'reason' => 'Approved at a lower opening figure.',
+            'connect_product_id' => websiteTestProduct()->public_id,
+            'items' => [[
+                'item_id' => $item->public_id,
+                'decision' => 'approve',
+                'platform_rate' => '1300.00',
+                'approved_quantity' => 30,
+            ]],
+        ])->assertSessionHasNoErrors();
+
+    $offer = SupplierOffer::query()->firstOrFail();
+
+    expect($offer->stock->quantity)->toBe(30)
+        ->and($item->refresh()->available_quantity)->toBe(80)
+        ->and(SupplierStockMovement::query()->where('supplier_offer_id', $offer->id)->sole()->reason)
+        ->toContain('30')->toContain('80');
+});
+
+test('an offer approved at zero availability opens with no units and no phantom movement quantity', function () {
+    $listing = supplierTestListing(Supplier::factory()->create(), [['available_quantity' => 0]]);
+    $item = $listing->items()->firstOrFail();
+
+    $this->actingAs(supplierListingTestReviewer())
+        ->post(route('admin.supplier-listings.decision.store', $listing), [
+            'reason' => 'Approved, nothing in hand yet.',
+            'connect_product_id' => websiteTestProduct()->public_id,
+            'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
+        ])->assertSessionHasNoErrors();
+
+    $offer = SupplierOffer::query()->firstOrFail();
+    $movement = SupplierStockMovement::query()->where('supplier_offer_id', $offer->id)->sole();
+
+    expect($offer->stock->quantity)->toBe(0)
+        ->and($movement->quantity_after)->toBe(0)
+        ->and($movement->moved_quantity)->toBeNull()
+        ->and($movement->to_bucket)->toBeNull();
+});
+
+test('a negative approved quantity is refused before any offer or stock exists', function () {
+    $listing = supplierTestListing(Supplier::factory()->create());
+    $item = $listing->items()->firstOrFail();
+
+    $this->actingAs(supplierListingTestReviewer())
+        ->post(route('admin.supplier-listings.decision.store', $listing), [
+            'reason' => 'Approved.',
+            'connect_product_id' => websiteTestProduct()->public_id,
+            'items' => [[
+                'item_id' => $item->public_id,
+                'decision' => 'approve',
+                'platform_rate' => '1300.00',
+                'approved_quantity' => -5,
+            ]],
+        ])->assertSessionHasErrors('items.0.approved_quantity');
+
+    expect(SupplierOffer::query()->count())->toBe(0)
+        ->and(SupplierStockMovement::query()->count())->toBe(0)
+        ->and($listing->refresh()->status)->toBe(ListingStatus::UnderReview);
+});
+
+test('each supplier approved against the same variation gets its own offer and its own opening stock', function () {
+    $product = websiteTestProduct();
+    $quantities = [15, 40, 5];
+    $suppliers = [];
+
+    foreach ($quantities as $quantity) {
+        $supplier = Supplier::factory()->create();
+        $suppliers[] = $supplier;
+        $listing = supplierTestListing($supplier, [['available_quantity' => $quantity]]);
+
+        $this->actingAs(supplierListingTestReviewer())
+            ->post(route('admin.supplier-listings.decision.store', $listing), [
+                'reason' => 'Approved.',
+                'connect_product_id' => $product->public_id,
+                'items' => [[
+                    'item_id' => $listing->items()->firstOrFail()->public_id,
+                    'decision' => 'approve',
+                    'platform_rate' => '1300.00',
+                ]],
+            ])->assertSessionHasNoErrors();
+    }
+
+    $offers = SupplierOffer::query()->where('product_id', $product->id)->get();
+
+    expect($offers)->toHaveCount(3)
+        ->and($offers->pluck('supplier_id')->sort()->values()->all())
+        ->toBe(collect($suppliers)->pluck('id')->sort()->values()->all())
+        // One Central Product, three independent availabilities.
+        ->and($offers->map(fn (SupplierOffer $offer) => $offer->stock->quantity)->sort()->values()->all())
+        ->toBe([5, 15, 40])
+        ->and(Product::query()->where('id', $product->id)->count())->toBe(1);
 });
 
 test('creating a product needs the catalogue create permission on top of listing approval', function () {

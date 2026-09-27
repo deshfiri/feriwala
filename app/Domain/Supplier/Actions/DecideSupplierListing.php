@@ -8,11 +8,13 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Actions\ManageProducts;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Supplier\Enums\ListingItemStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\OfferStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Supplier\Models\SupplierOfferStock;
 use App\Domain\Supplier\Models\SupplierProductListing;
 use App\Domain\Supplier\Models\SupplierProductListingItem;
 use App\Domain\Supplier\Models\SupplierStockMovement;
@@ -52,7 +54,7 @@ class DecideSupplierListing
 
     /**
      * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string}
-     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate?: Money, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string}
+     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate?: Money, approved_quantity?: int|null, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string}
      */
     public function handle(
         SupplierProductListing $listing,
@@ -246,17 +248,7 @@ class DecideSupplierListing
             'created_at' => now(),
         ]);
 
-        $offer->stock()->create(['quantity' => 0]);
-        SupplierStockMovement::create([
-            'supplier_offer_id' => $offer->id,
-            'quantity_before' => 0,
-            'quantity_after' => 0,
-            'source' => 'initial',
-            'actor_type' => 'system',
-            'actor_id' => null,
-            'reason' => 'Offer created from listing approval.',
-            'created_at' => now(),
-        ]);
+        $this->openStock($offer, $item, $itemDecision, $reviewer);
 
         $item->forceFill([
             'status' => ListingItemStatus::Approved,
@@ -264,5 +256,60 @@ class DecideSupplierListing
             'supplier_offer_id' => $offer->id,
             'decision_note' => $itemDecision['note'] ?? null,
         ])->save();
+    }
+
+    /**
+     * The offer's opening availability, taken from the quantity the Supplier
+     * said they could supply — or the quantity staff approved instead.
+     *
+     * The Supplier already told us this on the listing item, so asking them to
+     * type the same figure again after approval was work for nothing. Staff may
+     * approve a different number; the difference is visible in the movement's
+     * own reason rather than by overwriting what the Supplier asked for, which
+     * stays on the listing item untouched.
+     *
+     * Keyed so a retried decision cannot open the same offer's stock twice. The
+     * offer itself is already unique per listing item, so this is the backstop
+     * rather than the guard.
+     *
+     * @param  array<string, mixed>  $itemDecision
+     */
+    protected function openStock(
+        SupplierOffer $offer,
+        SupplierProductListingItem $item,
+        array $itemDecision,
+        User $reviewer,
+    ): void {
+        $requested = (int) $item->available_quantity;
+        $approved = array_key_exists('approved_quantity', $itemDecision) && $itemDecision['approved_quantity'] !== null
+            ? (int) $itemDecision['approved_quantity']
+            : $requested;
+
+        if ($approved < 0) {
+            throw new InvalidArgumentException('Approved availability cannot be negative.');
+        }
+
+        /** @var SupplierOfferStock $stock */
+        $stock = $offer->stock()->create(['quantity' => $approved]);
+
+        $buckets = $stock->buckets();
+
+        SupplierStockMovement::create([
+            'supplier_offer_id' => $offer->id,
+            'quantity_before' => 0,
+            'quantity_after' => $approved,
+            'moved_quantity' => $approved > 0 ? $approved : null,
+            'to_bucket' => $approved > 0 ? StockBucket::Available->value : null,
+            'buckets_before' => array_fill_keys(array_keys($buckets), 0),
+            'buckets_after' => $buckets,
+            'source' => 'initial',
+            'actor_type' => 'staff',
+            'actor_id' => $reviewer->id,
+            'reason' => $approved === $requested
+                ? 'Opening availability from the approved listing item.'
+                : "Opening availability approved at {$approved}; the Supplier asked to supply {$requested}.",
+            'idempotency_key' => 'supplier-offer-opening:'.$item->public_id,
+            'created_at' => now(),
+        ]);
     }
 }

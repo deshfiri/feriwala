@@ -181,6 +181,11 @@ class SupplierListingController extends Controller
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
             'items.*.platform_rate' => ['nullable', new DecimalAmountRule],
+
+            // Left out to open the offer at the quantity the Supplier said
+            // they could supply; sent only when a reviewer approves a
+            // different figure, which the opening movement then records.
+            'items.*.approved_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'items.*.wholesale_enabled' => ['nullable', 'boolean'],
             'items.*.dropshipping_enabled' => ['nullable', 'boolean'],
             'items.*.note' => ['nullable', 'string', 'max:1000'],

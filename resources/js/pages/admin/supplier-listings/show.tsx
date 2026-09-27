@@ -70,6 +70,11 @@ type ItemDecision = {
     variant_id: string;
     /** Flat-Taka decimal typed by the reviewer, submitted exactly as typed. */
     platform_rate: string;
+    /**
+     * Left blank to open the offer at the quantity the Supplier asked to
+     * supply. Filled in only to approve a different figure.
+     */
+    approved_quantity: string;
     wholesale_enabled: boolean;
     dropshipping_enabled: boolean;
     note: string;
@@ -106,6 +111,7 @@ export default function AdminSupplierListingShow({
                 decision: 'skip',
                 variant_id: '',
                 platform_rate: '',
+                approved_quantity: '',
                 wholesale_enabled: true,
                 dropshipping_enabled: false,
                 note: '',
@@ -143,6 +149,13 @@ export default function AdminSupplierListingShow({
                     // only place that parses it (§36.1).
                     platform_rate:
                         item.decision === 'approve' ? item.platform_rate : null,
+                    // Null means "open at what the Supplier asked for"; the
+                    // server decides, so a blank box sends nothing at all.
+                    approved_quantity:
+                        item.decision === 'approve' &&
+                        item.approved_quantity !== ''
+                            ? Number.parseInt(item.approved_quantity, 10)
+                            : null,
                     wholesale_enabled: item.wholesale_enabled,
                     dropshipping_enabled: item.dropshipping_enabled,
                     note: item.note || null,
@@ -607,6 +620,53 @@ export default function AdminSupplierListingShow({
                                                                         index,
                                                                         {
                                                                             variant_id:
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        )}
+                                                    </FormField>
+                                                    <FormField
+                                                        label={t(
+                                                            'supplier.admin.listings.approved_quantity',
+                                                        )}
+                                                        description={t(
+                                                            'supplier.admin.listings.approved_quantity_hint',
+                                                            {
+                                                                quantity: (
+                                                                    source?.available_quantity ??
+                                                                    0
+                                                                ).toLocaleString(
+                                                                    locale,
+                                                                ),
+                                                            },
+                                                        )}
+                                                        error={errorFor(
+                                                            `items.${index}.approved_quantity`,
+                                                        )}
+                                                    >
+                                                        {(field) => (
+                                                            <Input
+                                                                {...field}
+                                                                type="number"
+                                                                min={0}
+                                                                step={1}
+                                                                inputMode="numeric"
+                                                                placeholder={String(
+                                                                    source?.available_quantity ??
+                                                                        0,
+                                                                )}
+                                                                value={
+                                                                    decisionItem.approved_quantity
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setItem(
+                                                                        index,
+                                                                        {
+                                                                            approved_quantity:
                                                                                 e
                                                                                     .target
                                                                                     .value,

@@ -431,6 +431,8 @@ return [
             'correction' => 'Send back',
             'skip' => 'Leave pending',
             'platform_rate' => 'Platform rate (BDT)',
+            'approved_quantity' => 'Approved availability (optional)',
+            'approved_quantity_hint' => 'Leave blank to open at the :quantity the Supplier offered.',
             'variant_id' => 'Existing variant ID (optional)',
             'wholesale' => 'Wholesale',
             'dropshipping' => 'Dropshipping',
