@@ -21,3 +21,18 @@ import { afterEach } from 'vitest';
 afterEach(() => {
     cleanup();
 });
+
+/**
+ * jsdom has no layout engine, so it never implements `ResizeObserver` —
+ * Radix's Popper content (behind every `Tooltip`, `Select` and `DropdownMenu`)
+ * reads it as soon as it mounts, which happens the moment a test focuses or
+ * hovers a trigger. Only stub it where `window` exists, since node-environment
+ * test files share this same setup file.
+ */
+if (typeof window !== 'undefined' && !window.ResizeObserver) {
+    window.ResizeObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    };
+}

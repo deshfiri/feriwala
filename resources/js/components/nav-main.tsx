@@ -70,15 +70,21 @@ function NavLink({
     item: NavItem;
     isCurrentUrl: IsCurrentUrlFn;
 }) {
+    const isActive = item.isActive ?? isCurrentUrl(item.href);
+
     return (
         <SidebarMenuItem>
             <SidebarMenuButton
                 asChild
                 className={activeItemClasses}
-                isActive={item.isActive ?? isCurrentUrl(item.href)}
+                isActive={isActive}
                 tooltip={{ children: item.title }}
             >
-                <Link href={item.href} prefetch>
+                <Link
+                    href={item.href}
+                    prefetch
+                    aria-current={isActive ? 'page' : undefined}
+                >
                     {item.icon && <item.icon />}
                     <span>{item.title}</span>
                     {item.badge && <NavBadgePill badge={item.badge} />}
@@ -138,25 +144,35 @@ function NavBranch({
 
                 <CollapsibleContent>
                     <SidebarMenuSub>
-                        {children.map((child) => (
-                            <SidebarMenuSubItem key={child.title}>
-                                <SidebarMenuSubButton
-                                    asChild
-                                    isActive={
-                                        child.isActive ??
-                                        isCurrentUrl(child.href)
-                                    }
-                                    className="data-[active=true]:bg-brand-subtle data-[active=true]:text-brand"
-                                >
-                                    <Link href={child.href} prefetch>
-                                        <span>{child.title}</span>
-                                        {child.badge && (
-                                            <NavBadgePill badge={child.badge} />
-                                        )}
-                                    </Link>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                        ))}
+                        {children.map((child) => {
+                            const childActive =
+                                child.isActive ?? isCurrentUrl(child.href);
+
+                            return (
+                                <SidebarMenuSubItem key={child.title}>
+                                    <SidebarMenuSubButton
+                                        asChild
+                                        isActive={childActive}
+                                        className="data-[active=true]:bg-brand-subtle data-[active=true]:text-brand"
+                                    >
+                                        <Link
+                                            href={child.href}
+                                            prefetch
+                                            aria-current={
+                                                childActive ? 'page' : undefined
+                                            }
+                                        >
+                                            <span>{child.title}</span>
+                                            {child.badge && (
+                                                <NavBadgePill
+                                                    badge={child.badge}
+                                                />
+                                            )}
+                                        </Link>
+                                    </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                            );
+                        })}
                     </SidebarMenuSub>
                 </CollapsibleContent>
             </SidebarMenuItem>

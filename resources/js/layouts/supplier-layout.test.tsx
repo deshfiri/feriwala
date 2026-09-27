@@ -275,10 +275,10 @@ describe('the supplier portal navigation', () => {
      * hydrated, which made React log a hydration mismatch on every load of
      * this page (caught in browser verification, not by an earlier version
      * of this test suite, which never asserted on the active state at all).
-     * The shared `NavMain`/`SidebarMenuButton` mark the active row with
-     * `data-active`, not `aria-current` — the same as the Admin/Client
-     * sidebar, so this asserts what the shared component actually does
-     * rather than a different convention invented for this one portal.
+     * The shared `NavMain` marks the active row both visually
+     * (`data-active`, which `SidebarMenuButton` styles from) and for
+     * assistive tech (`aria-current="page"`, the same on every portal's
+     * sidebar since they all render through `NavMain`).
      */
     it('marks the current page active from the page URL, not window.location', () => {
         page.props.supplierAccount = account();
@@ -286,13 +286,12 @@ describe('the supplier portal navigation', () => {
 
         renderLayout();
 
-        expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
-            'data-active',
-            'true',
-        );
-        expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
-            'data-active',
-            'false',
-        );
+        const active = screen.getByRole('link', { name: 'Dashboard' });
+        const inactive = screen.getByRole('link', { name: 'Profile' });
+
+        expect(active).toHaveAttribute('data-active', 'true');
+        expect(active).toHaveAttribute('aria-current', 'page');
+        expect(inactive).toHaveAttribute('data-active', 'false');
+        expect(inactive).not.toHaveAttribute('aria-current');
     });
 });
