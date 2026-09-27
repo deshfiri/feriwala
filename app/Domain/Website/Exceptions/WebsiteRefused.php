@@ -54,6 +54,18 @@ class WebsiteRefused extends RuntimeException
     }
 
     /** The website is not in a state this move is allowed from (§16.4). */
+    /**
+     * An outstanding KYC re-verification blocks new publishing (§7.4).
+     *
+     * Only *new* publishing. Products already on the storefront stay up —
+     * unpublishing an account's live catalogue because we asked it a question
+     * would take down a shop over a document.
+     */
+    public static function kycReverificationOutstanding(string $message): self
+    {
+        return new self($message, 'kyc');
+    }
+
     public static function statusDoesNotAllow(): self
     {
         return new self(__('website.refused.status_does_not_allow'), 'status');

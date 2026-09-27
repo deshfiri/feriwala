@@ -11,6 +11,7 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
+use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
@@ -90,6 +91,7 @@ class PlaceWholesaleOrder
         protected ReserveCoupon $coupons,
         protected AllocateSupplierOrderLine $supplierAllocation,
         protected AccrueSupplierPayable $supplierPayables,
+        protected KycRestrictions $kycRestrictions,
         protected DatabaseManager $database,
     ) {}
 
@@ -103,6 +105,23 @@ class PlaceWholesaleOrder
         ?string $customerNote = null,
         ?IntendedResaleChannel $resaleChannel = null,
     ): Order {
+        /*
+         * An outstanding KYC re-verification can stop new wholesale orders
+         * (§7.4). Checked here, in the action, rather than by hiding a button:
+         * the route and the cart are still reachable, and the person most
+         * likely to find them is the one the restriction is aimed at.
+         *
+         * Only *new* orders. Nothing about this touches an order already
+         * placed, its reservations, its payment or its invoice — those still
+         * have to be settled, and a business asked to re-verify has not been
+         * found guilty of anything.
+         */
+        if ($this->kycRestrictions->blocksWholesaleOrders($account)) {
+            throw OrderRefused::kycReverificationOutstanding(
+                $this->kycRestrictions->refusalReason($account),
+            );
+        }
+
         $cart = $this->carts->find($user, $account);
 
         if ($cart === null) {

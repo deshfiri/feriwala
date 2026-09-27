@@ -29,6 +29,18 @@ class OrderRefused extends RuntimeException
         return new self(__('wholesale.refused.checkout_changed'), 'fingerprint');
     }
 
+    /**
+     * An outstanding KYC re-verification blocks new wholesale orders (§7.4).
+     *
+     * The message is the account holder's, never the reviewer's internal
+     * reason for asking (§7.3): they are told verification is outstanding and
+     * by when, not what was suspected.
+     */
+    public static function kycReverificationOutstanding(string $message): self
+    {
+        return new self($message, 'kyc');
+    }
+
     public static function cartNotReady(): self
     {
         return new self(__('wholesale.refused.cart_not_ready'), 'cart');

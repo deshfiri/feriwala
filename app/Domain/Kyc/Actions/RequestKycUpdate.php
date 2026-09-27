@@ -5,6 +5,8 @@ namespace App\Domain\Kyc\Actions;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Kyc\Enums\KycConsequence;
+use App\Domain\Kyc\Enums\KycRoundPurpose;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -53,6 +55,10 @@ class RequestKycUpdate
      *                                                    these documents; null
      *                                                    asks for everything
      *                                                    that applies
+     * @param  array<int, KycConsequence>|null  $consequences  what this costs the
+     *                                                         business while the
+     *                                                         round is open (§7.4);
+     *                                                         null carries none
      *
      * @throws InvalidArgumentException
      */
@@ -63,6 +69,7 @@ class RequestKycUpdate
         string $instructions,
         ?CarbonImmutable $deadline = null,
         ?array $documentTypeIds = null,
+        ?array $consequences = null,
     ): KycSubmission {
         $reason = trim($reason);
         $instructions = trim($instructions);
@@ -95,6 +102,8 @@ class RequestKycUpdate
             );
         }
 
+        $consequences = $this->normaliseConsequences($consequences);
+
         $submission = $this->database->transaction(
             fn () => $this->open(
                 $account,
@@ -103,6 +112,7 @@ class RequestKycUpdate
                 $instructions,
                 $deadline,
                 $documentTypeIds,
+                $consequences,
             )
         );
 
@@ -120,7 +130,40 @@ class RequestKycUpdate
     }
 
     /**
+     * The chosen consequences, as storable values — or null for a round that
+     * carries none.
+     *
+     * "Warning only" is stored as nothing rather than as itself: it *is*
+     * nothing, operationally, and a round carrying it would otherwise trip the
+     * database's "consequences need a deadline" check for no benefit. What the
+     * reviewer chose is still visible in the round's instructions and audit.
+     *
+     * @param  array<int, KycConsequence>|null  $consequences
+     * @return array<int, string>|null
+     *
+     * @throws InvalidArgumentException
+     */
+    protected function normaliseConsequences(?array $consequences): ?array
+    {
+        if ($consequences === null) {
+            return null;
+        }
+
+        $real = array_values(array_filter(
+            array_unique($consequences, SORT_REGULAR),
+            fn (KycConsequence $consequence) => $consequence !== KycConsequence::WarningOnly,
+        ));
+
+        if ($real === []) {
+            return null;
+        }
+
+        return array_map(fn (KycConsequence $consequence) => $consequence->value, $real);
+    }
+
+    /**
      * @param  array<int, string>|null  $documentTypeIds
+     * @param  array<int, string>|null  $consequences
      */
     protected function open(
         BusinessAccount $account,
@@ -129,6 +172,7 @@ class RequestKycUpdate
         string $instructions,
         ?CarbonImmutable $deadline,
         ?array $documentTypeIds = null,
+        ?array $consequences = null,
     ): KycSubmission {
         /*
          * The **account** is locked, not the latest round.
@@ -167,7 +211,9 @@ class RequestKycUpdate
         }
 
         try {
-            $submission = $this->createRound($account, $latest->round + 1, $requestedBy, $reason, $instructions, $deadline);
+            $submission = $this->createRound(
+                $account, $latest->round + 1, $requestedBy, $reason, $instructions, $deadline, $consequences,
+            );
         } catch (UniqueConstraintViolationException) {
             /*
              * The unique index on (business_account_id, round) — the backstop
@@ -206,7 +252,11 @@ class RequestKycUpdate
             auditableId: $submission->id,
             after: [
                 'round' => $submission->round,
+                'purpose' => $submission->purpose->value,
                 'deadline_at' => $submission->deadline_at?->toIso8601String(),
+                // The consequence *values* only. No document path, no file
+                // name, no identity field ever reaches an audit payload.
+                'consequences' => $consequences ?? [],
             ],
             reason: $reason,
             note: $instructions,
@@ -217,6 +267,9 @@ class RequestKycUpdate
         return $submission;
     }
 
+    /**
+     * @param  array<int, string>|null  $consequences
+     */
     protected function createRound(
         BusinessAccount $account,
         int $round,
@@ -224,11 +277,23 @@ class RequestKycUpdate
         string $reason,
         string $instructions,
         ?CarbonImmutable $deadline,
+        ?array $consequences = null,
     ): KycSubmission {
         return KycSubmission::create([
             'business_account_id' => $account->id,
             'status' => KycStatus::Draft,
             'round' => $round,
+
+            /*
+             * This action is §7.2's: it reaches a business that has been
+             * trading, which is what re-verification means and what separates
+             * it from an onboarding round or a reviewer's correction. Saying
+             * so on the row is what lets the account screen, the restriction
+             * query and the sweep tell the three apart without guessing from
+             * the account's status at whatever later moment they ask.
+             */
+            'purpose' => KycRoundPurpose::Reverification,
+            'consequences' => $consequences,
 
             // An explicit deadline wins over the configured window; null when
             // neither is set, which leaves the request open-ended rather than

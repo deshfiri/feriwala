@@ -6,6 +6,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
+use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Website\Enums\WebhookEvent;
@@ -48,6 +49,7 @@ class SetWebsiteProductPublication
     public function __construct(
         protected Entitlements $entitlements,
         protected ProductEligibility $eligibility,
+        protected KycRestrictions $kycRestrictions,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
@@ -73,6 +75,20 @@ class SetWebsiteProductPublication
 
         if (! $this->eligibility->isEligible($selection->product, $website->businessAccount, SalesChannel::Dropshipping)) {
             throw WebsiteRefused::productNotEligible();
+        }
+
+        /*
+         * An outstanding KYC re-verification can stop new publishing (§7.4),
+         * enforced in the action rather than by hiding the button.
+         *
+         * `publish()` only. Nothing unpublishes what is already live: taking
+         * an account's shop down because we asked it for a document would be a
+         * punishment out of all proportion to the question.
+         */
+        if ($this->kycRestrictions->blocksPublishing($website->businessAccount)) {
+            throw WebsiteRefused::kycReverificationOutstanding(
+                $this->kycRestrictions->refusalReason($website->businessAccount),
+            );
         }
 
         /** @var WebsiteProduct $published */

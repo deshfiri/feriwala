@@ -5,6 +5,8 @@ namespace App\Domain\Kyc\Models;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Kyc\Enums\KycConsequence;
+use App\Domain\Kyc\Enums\KycRoundPurpose;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -29,6 +31,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $requested_by
  * @property string|null $request_reason
  * @property string|null $request_instructions
+ * @property KycRoundPurpose $purpose
+ * @property array<int, string>|null $consequences
+ * @property CarbonImmutable|null $consequences_applied_at
+ * @property CarbonImmutable|null $cancelled_at
+ * @property int|null $cancelled_by
+ * @property string|null $cancellation_reason
  */
 class KycSubmission extends Model
 {
@@ -40,13 +48,27 @@ class KycSubmission extends Model
     {
         return [
             'status' => KycStatus::class,
+            'purpose' => KycRoundPurpose::class,
+            'consequences' => 'array',
             'round' => 'integer',
             'submitted_at' => 'immutable_datetime',
             'reviewed_at' => 'immutable_datetime',
             'deadline_at' => 'immutable_datetime',
             'requested_at' => 'immutable_datetime',
+            'consequences_applied_at' => 'immutable_datetime',
+            'cancelled_at' => 'immutable_datetime',
         ];
     }
+
+    /**
+     * Mirrors the column default, so a round built in memory reads as an
+     * onboarding one rather than as nothing.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'purpose' => KycRoundPurpose::Onboarding->value,
+    ];
 
     /**
      * @return BelongsTo<BusinessAccount, $this>
@@ -138,5 +160,66 @@ class KycSubmission extends Model
             && $this->status->awaitsReview() === false
             && $this->status !== KycStatus::Approved
             && $this->deadline_at->isPast();
+    }
+
+    public function isReverification(): bool
+    {
+        return $this->purpose === KycRoundPurpose::Reverification;
+    }
+
+    /**
+     * Whether this round is still a live requirement on the business.
+     *
+     * Decided, or withdrawn, and it is history. Matches the partial unique
+     * index that allows one of these per account, so the query and the
+     * constraint cannot drift apart.
+     */
+    public function isOpen(): bool
+    {
+        return $this->cancelled_at === null
+            && $this->status !== KycStatus::Approved
+            && $this->status !== KycStatus::Rejected;
+    }
+
+    /**
+     * The consequences this case carries, as enums.
+     *
+     * @return array<int, KycConsequence>
+     */
+    public function consequences(): array
+    {
+        $stored = $this->consequences;
+
+        if (! is_array($stored) || $stored === []) {
+            return [];
+        }
+
+        // `tryFrom` rather than `from`: a consequence removed from the enum in
+        // a later release must not make an old round unreadable.
+        return array_values(array_filter(array_map(
+            static fn (string $value): ?KycConsequence => KycConsequence::tryFrom($value),
+            $stored,
+        )));
+    }
+
+    /**
+     * Whether this round currently imposes `$consequence` on the business.
+     *
+     * A consequence that only bites after the deadline does nothing while the
+     * business still has time to answer — which is the whole difference
+     * between asking for a document and punishing someone for a document they
+     * have not been given a chance to send.
+     */
+    public function imposes(KycConsequence $consequence): bool
+    {
+        if (! $this->isOpen() || ! $this->isReverification()) {
+            return false;
+        }
+
+        if (! in_array($consequence, $this->consequences(), true)) {
+            return false;
+        }
+
+        return $consequence->appliesBeforeDeadline() || $this->isOverdue();
     }
 }
