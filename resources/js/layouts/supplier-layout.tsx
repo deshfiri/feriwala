@@ -198,7 +198,7 @@ export default function SupplierLayout({ children }: { children: ReactNode }) {
                                 />
                             )}
                             <LanguageSwitcher />
-                            <AppearanceToggleTab />
+                            <AppearanceToggleTab iconOnly />
                             <button
                                 type="button"
                                 onClick={() => router.post(logout().url)}

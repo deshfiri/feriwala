@@ -74,6 +74,15 @@ describe('appearance tabs', () => {
         expect(document.documentElement).not.toHaveClass('dark');
     });
 
+    it('keeps the same accessible names in iconOnly mode, just visually hidden', () => {
+        render(<AppearanceTabs iconOnly />);
+
+        const light = screen.getByRole('radio', { name: 'Light' });
+
+        expect(light).toBeInTheDocument();
+        expect(light.querySelector('span')).toHaveClass('sr-only');
+    });
+
     it('can be operated from the keyboard', async () => {
         const user = userEvent.setup();
 

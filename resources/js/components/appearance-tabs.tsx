@@ -19,8 +19,17 @@ import { cn } from '@/lib/utils';
  */
 export default function AppearanceToggleTab({
     className = '',
+    /**
+     * Keeps the icon, drops the visible word — the accessible name (and the
+     * radio semantics) stay exactly the same, so a screen reader still
+     * announces "Light, 1 of 3" even though the sighted label is gone. For a
+     * header too narrow for three full-width text buttons (the Supplier
+     * portal's own topbar, at a phone width) rather than a second, bespoke
+     * toggle component.
+     */
+    iconOnly = false,
     ...props
-}: HTMLAttributes<HTMLDivElement>) {
+}: HTMLAttributes<HTMLDivElement> & { iconOnly?: boolean }) {
     const { appearance, updateAppearance } = useAppearance();
     const { t } = useTranslation();
 
@@ -55,14 +64,20 @@ export default function AppearanceToggleTab({
                         aria-checked={selected}
                         onClick={() => updateAppearance(value)}
                         className={cn(
-                            'flex items-center rounded-md px-3.5 py-1.5 text-sm transition-colors',
+                            'flex items-center rounded-md text-sm transition-colors',
+                            iconOnly ? 'p-1.5' : 'px-3.5 py-1.5',
                             selected
                                 ? 'bg-card text-foreground shadow-xs'
                                 : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
                         )}
                     >
-                        <Icon aria-hidden="true" className="-ml-1 size-4" />
-                        <span className="ml-1.5">{label}</span>
+                        <Icon
+                            aria-hidden="true"
+                            className={cn('size-4', !iconOnly && '-ml-1')}
+                        />
+                        <span className={cn('ml-1.5', iconOnly && 'sr-only')}>
+                            {label}
+                        </span>
                     </button>
                 );
             })}
