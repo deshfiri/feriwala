@@ -70,9 +70,11 @@ export type AdminOrderDetail = {
             id: string;
             source_type: string;
             source_type_label: string;
+            /** Withheld (null) for a Supplier-sourced line without supplier_pricing.view. */
             source_label: string | null;
-            unit_cost: Money;
-            expected_margin: Money;
+            /** Withheld (null) without the permission for this source's figures (D25). */
+            unit_cost: Money | null;
+            expected_margin: Money | null;
             allocated_at: string;
         } | null;
         can_allocate: boolean;

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
@@ -113,6 +116,8 @@ class OrderController extends Controller
 
         $payment = $record->payment;
         $canAllocate = $actor->can('transition', $record);
+        $canViewSupplierPricing = $actor->can(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View));
+        $canViewCatalogPricing = $actor->can(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View));
 
         return Inertia::render('admin/orders/show', [
             'order' => [
@@ -177,21 +182,16 @@ class OrderController extends Controller
                     ],
                     /*
                      * The staff-chosen source currently holding this line
-                     * (AllocateOrderLineSource) — staff-only figures (D25):
-                     * never spliced into a Client, Partner or Storefront
-                     * payload.
+                     * (AllocateOrderLineSource) — never spliced into a
+                     * Client, Partner or Storefront payload (D25), and
+                     * redacted here too, field by field, for staff who lack
+                     * the permission each figure answers to: a Supplier's
+                     * identity and Rate need supplier_pricing.view, the
+                     * platform's own cost and margin need catalog.view.
+                     * `order.view` alone (this action's own gate) is never
+                     * enough to see any of the four.
                      */
-                    'allocation' => $item->activeAllocation === null ? null : [
-                        'id' => $item->activeAllocation->public_id,
-                        'source_type' => $item->activeAllocation->source_type->value,
-                        'source_type_label' => $item->activeAllocation->source_type->label(),
-                        'source_label' => $item->activeAllocation->warehouse !== null
-                            ? $item->activeAllocation->warehouse->name
-                            : $item->activeAllocation->supplier?->business_name,
-                        'unit_cost' => $item->activeAllocation->unit_cost->jsonSerialize(),
-                        'expected_margin' => $item->activeAllocation->expected_margin->jsonSerialize(),
-                        'allocated_at' => $item->activeAllocation->allocated_at->toIso8601String(),
-                    ],
+                    'allocation' => $this->allocationSummary($item, $canViewSupplierPricing, $canViewCatalogPricing),
                     'can_allocate' => $canAllocate,
                 ])->all(),
                 'payment' => $payment === null ? null : [
@@ -270,7 +270,7 @@ class OrderController extends Controller
         $actor = $this->actor($request);
         $record = $this->order($order);
 
-        Gate::forUser($actor)->authorize('transition', $record);
+        Gate::forUser($actor)->authorize('viewAllocationSources', $record);
 
         $line = $this->line($record, $item);
 
@@ -301,10 +301,14 @@ class OrderController extends Controller
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
         ]);
 
+        $sourceType = AllocationSourceType::from($validated['source_type']);
+
+        Gate::forUser($actor)->authorize('allocateSource', [$record, $sourceType]);
+
         try {
             $this->allocate->handle(
                 $line,
-                AllocationSourceType::from($validated['source_type']),
+                $sourceType,
                 $validated['source_id'],
                 $actor,
                 $validated['reason'],
@@ -318,6 +322,39 @@ class OrderController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.allocated')]);
 
         return back();
+    }
+
+    /**
+     * One line's current allocation, redacted field by field for a viewer
+     * who lacks the permission each figure answers to.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function allocationSummary(OrderItem $item, bool $canViewSupplierPricing, bool $canViewCatalogPricing): ?array
+    {
+        $allocation = $item->activeAllocation;
+
+        if ($allocation === null) {
+            return null;
+        }
+
+        $isSupplierSourced = $allocation->source_type === AllocationSourceType::SupplierOffer;
+        $canViewFinancials = $isSupplierSourced ? $canViewSupplierPricing : $canViewCatalogPricing;
+
+        return [
+            'id' => $allocation->public_id,
+            'source_type' => $allocation->source_type->value,
+            'source_type_label' => $allocation->source_type->label(),
+            // A warehouse's name is not the sensitive part (only its cost
+            // and margin are); a Supplier's identity is, so it is withheld
+            // along with the rate rather than shown on its own.
+            'source_label' => $isSupplierSourced
+                ? ($canViewSupplierPricing ? $allocation->supplier?->business_name : null)
+                : $allocation->warehouse?->name,
+            'unit_cost' => $canViewFinancials ? $allocation->unit_cost->jsonSerialize() : null,
+            'expected_margin' => $canViewFinancials ? $allocation->expected_margin->jsonSerialize() : null,
+            'allocated_at' => $allocation->allocated_at->toIso8601String(),
+        ];
     }
 
     /**

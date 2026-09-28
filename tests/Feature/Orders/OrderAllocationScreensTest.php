@@ -12,6 +12,7 @@ use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Models\Supplier;
+use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -20,6 +21,23 @@ use Database\Seeders\RolesAndPermissionsSeeder;
  * The staff allocation panel's own HTTP boundary: who may reach it, and what
  * it does and does not put on the wire (D25, §31.3).
  */
+
+/**
+ * Admin holds order.edit and catalog.view by default but deliberately not
+ * supplier_pricing.view (D25) — Admin can oversee Suppliers without seeing
+ * their confidential rate. This file is about the allocation screens
+ * working end to end for a staff member who legitimately may see both
+ * sides of the comparison, not about the permission boundary itself (see
+ * OrderAllocationPermissionsTest.php for that), so it grants the one
+ * permission no default role pairs with order.edit.
+ */
+function allocationScreenStaff(): User
+{
+    $staff = testPlatformStaff(PlatformRole::Admin);
+    $staff->givePermissionTo(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View));
+
+    return $staff;
+}
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -52,7 +70,7 @@ beforeEach(function () {
 });
 
 it('lists sources for staff holding order.edit, with the Supplier Rate and identity present', function () {
-    $staff = testPlatformStaff(PlatformRole::Admin);
+    $staff = allocationScreenStaff();
 
     $response = $this->actingAs($staff)
         ->getJson(route('admin.orders.lines.sources', [$this->order->public_id, $this->line->public_id]))
@@ -69,7 +87,7 @@ it('lists sources for staff holding order.edit, with the Supplier Rate and ident
 });
 
 it('allocates a line over HTTP and returns to the order screen', function () {
-    $staff = testPlatformStaff(PlatformRole::Admin);
+    $staff = allocationScreenStaff();
 
     $this->actingAs($staff)
         ->post(route('admin.orders.lines.allocation.store', [$this->order->public_id, $this->line->public_id]), [
@@ -86,7 +104,7 @@ it('allocates a line over HTTP and returns to the order screen', function () {
 });
 
 it('refuses a reason under ten characters', function () {
-    $staff = testPlatformStaff(PlatformRole::Admin);
+    $staff = allocationScreenStaff();
 
     $this->actingAs($staff)
         ->post(route('admin.orders.lines.allocation.store', [$this->order->public_id, $this->line->public_id]), [
@@ -130,7 +148,7 @@ it('never lets a business identity reach the allocation endpoints, whatever perm
 });
 
 it('404s a line that does not belong to the order in the URL', function () {
-    $staff = testPlatformStaff(PlatformRole::Admin);
+    $staff = allocationScreenStaff();
     $otherOrder = Order::factory()->create();
 
     $this->actingAs($staff)
@@ -139,7 +157,7 @@ it('404s a line that does not belong to the order in the URL', function () {
 });
 
 it('shows the current allocation on the order detail screen without leaking it anywhere a Client or Partner reads', function () {
-    $staff = testPlatformStaff(PlatformRole::Admin);
+    $staff = allocationScreenStaff();
 
     $this->actingAs($staff)
         ->post(route('admin.orders.lines.allocation.store', [$this->order->public_id, $this->line->public_id]), [
@@ -165,7 +183,7 @@ it('reports every warehouse candidate too, distinct from the supplier offer', fu
         'available' => 10,
     ]);
 
-    $staff = testPlatformStaff(PlatformRole::Admin);
+    $staff = allocationScreenStaff();
 
     $candidates = $this->actingAs($staff)
         ->getJson(route('admin.orders.lines.sources', [$this->order->public_id, $this->line->public_id]))

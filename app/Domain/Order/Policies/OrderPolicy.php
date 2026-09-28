@@ -5,6 +5,7 @@ namespace App\Domain\Order\Policies;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Models\Order;
 use App\Models\User;
 
@@ -56,6 +57,49 @@ class OrderPolicy
     public function transition(User $user, Order $order): bool
     {
         return $user->can(PermissionCatalogue::name(PermissionModule::Order, PermissionAction::Edit));
+    }
+
+    /**
+     * Open the staff source-comparison panel for one line.
+     *
+     * `order.edit` alone answers "may this person move the order", not
+     * "should this person see a Supplier's confidential rate or the
+     * platform's own cost and margin" — a wider question the allocation
+     * batch's first cut answered by accident rather than by design. Every
+     * candidate row carries all four at once (Supplier identity, Supplier
+     * Rate, warehouse cost, platform margin), so viewing the comparison at
+     * all requires every permission that covers what it shows — never a
+     * partial, redacted list a staff member could mistake for the whole
+     * picture and allocate from anyway.
+     */
+    public function viewAllocationSources(User $user, Order $order): bool
+    {
+        return $this->transition($user, $order)
+            && $user->can(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View))
+            && $user->can(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View));
+    }
+
+    /**
+     * Commit a line to the source a member of staff chose.
+     *
+     * `order.edit` is the transition authority every allocation needs
+     * regardless of source; which figure it was compared against decides
+     * the second permission — a Supplier offer's confidential rate needs
+     * `supplier_pricing.view`, Central Warehouse's own cost needs
+     * `catalog.view`. Checked again here, independently of
+     * {@see viewAllocationSources()}: a request that never opened the
+     * panel must not be able to allocate a source it was never shown.
+     */
+    public function allocateSource(User $user, Order $order, AllocationSourceType $sourceType): bool
+    {
+        if (! $this->transition($user, $order)) {
+            return false;
+        }
+
+        return match ($sourceType) {
+            AllocationSourceType::SupplierOffer => $user->can(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View)),
+            AllocationSourceType::Warehouse => $user->can(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View)),
+        };
     }
 
     /**
