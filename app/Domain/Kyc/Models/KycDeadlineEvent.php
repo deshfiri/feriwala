@@ -7,6 +7,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -73,12 +74,25 @@ class KycDeadlineEvent extends Model
         array $attributes = [],
     ): ?self {
         try {
-            return static::create([
+            /*
+             * Inside its own savepoint, which is what makes losing the race
+             * survivable.
+             *
+             * PostgreSQL aborts the **whole** transaction on a failed
+             * statement, so catching the unique violation out here was not
+             * enough: the caller's transaction was already poisoned, and
+             * every statement after the claim — the audit entry, the status
+             * read — failed with "current transaction is aborted" instead of
+             * quietly doing nothing. A nested `transaction()` issues a
+             * SAVEPOINT and rolls back only to it, leaving the caller's
+             * transaction usable.
+             */
+            return DB::transaction(fn () => static::create([
                 'kyc_submission_id' => $submission->id,
                 'business_account_id' => $submission->business_account_id,
                 'event' => $event,
                 ...$attributes,
-            ]);
+            ]));
         } catch (UniqueConstraintViolationException) {
             // Someone got here first. Returning null rather than throwing: a
             // second attempt at an already-handled event is the expected

@@ -197,7 +197,19 @@ class RequestKycUpdate
             );
         }
 
-        if ($latest->status->isEditable() || $latest->status->awaitsReview()) {
+        /*
+         * A withdrawn round is not in progress.
+         *
+         * It keeps its status — a cancelled round was Draft and stays Draft,
+         * because that is what it was when we withdrew it — so a guard reading
+         * only the status would see "editable" and refuse forever, locking
+         * staff out of the account over their own corrected mistake. The
+         * cancellation is the thing that ended it.
+         */
+        $isInProgress = $latest->cancelled_at === null
+            && ($latest->status->isEditable() || $latest->status->awaitsReview());
+
+        if ($isInProgress) {
             /*
              * A round is already open, or waiting on us.
              *

@@ -3,10 +3,12 @@
 namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Account\Actions\ChangeAccountStatus;
+use App\Domain\Account\Actions\SuspendAccount;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycDeadlineEvent;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -16,6 +18,7 @@ use App\Notifications\Kyc\KycDeadlineMissed;
 use App\Support\Localization\Locale;
 use Illuminate\Contracts\Translation\Translator;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Log\LogManager;
 use Throwable;
 
 /**
@@ -42,10 +45,12 @@ class EnforceKycDeadline
     public function __construct(
         protected KycDeadlines $deadlines,
         protected ChangeAccountStatus $changeStatus,
+        protected SuspendAccount $suspendAccount,
         protected RecordAuditLog $audit,
         protected SmsProvider $sms,
         protected Translator $translator,
         protected DatabaseManager $database,
+        protected LogManager $log,
     ) {}
 
     /**
@@ -73,8 +78,22 @@ class EnforceKycDeadline
             $account = $locked->businessAccount;
             $restricted = false;
 
+            /*
+             * A re-verification case carries its own consequences (§7.4), and
+             * they win over the global setting: a member of staff who chose
+             * what this particular case should cost has already answered the
+             * question the setting exists to answer by default.
+             *
+             * Suspension is not done here. It goes through `SuspendAccount`
+             * after this transaction commits — see below.
+             */
+            $suspends = $locked->imposes(KycConsequence::SuspendAfterDeadline);
+            $hasOwnConsequences = $locked->isReverification() && $locked->consequences() !== [];
+
             if ($account !== null
                 && $account->isActivated()
+                && ! $suspends
+                && ! $hasOwnConsequences
                 && $this->deadlines->restrictsActiveAccounts()
                 && $account->canTransitionTo(AccountStatus::TemporarilyRestricted)) {
                 $this->changeStatus->handle($account, AccountStatusChange::automatic(
@@ -96,22 +115,89 @@ class EnforceKycDeadline
                 after: [
                     'deadline_at' => $locked->deadline_at?->toIso8601String(),
                     'account_restricted' => $restricted,
+                    'consequences' => array_map(
+                        fn (KycConsequence $consequence) => $consequence->value,
+                        $locked->consequences(),
+                    ),
                 ],
                 reason: 'KYC deadline passed (§7.4).',
                 accountId: $account?->id,
                 module: 'kyc',
             ));
 
-            return $restricted;
+            /*
+             * The consequences that block new activity — orders, publishing,
+             * withdrawals — need nothing done to them here. They are read
+             * live from the round by {@see KycRestrictions}, so they started
+             * biting the moment it opened and stop the moment it closes. A
+             * flag set here would be a second copy of the same truth, free to
+             * drift from it.
+             */
+            $locked->forceFill(['consequences_applied_at' => now()])->saveQuietly();
+
+            return ['restricted' => $restricted, 'suspends' => $suspends && $account !== null];
         });
 
         if ($restricted === null) {
             return false;
         }
 
-        $this->notify($submission, $restricted);
+        /*
+         * Suspension after the deadline, through the **same** action a member
+         * of staff uses (§7.4). Not a second status path: `SuspendAccount`
+         * brings the row lock, the sanctioned status transition, the history
+         * row, the sensitive audit entry and the account holder's
+         * notification with it, and a sweep that wrote its own would be a
+         * suspension an investigation could not tell from a manual one.
+         *
+         * After the transaction rather than inside it, deliberately.
+         * `SuspendAccount` notifies once its own transaction commits; nesting
+         * it here would fire that notification while this transaction could
+         * still roll back, telling a business it had been suspended when it
+         * had not. The claim above has already committed, so this runs once.
+         */
+        if ($restricted['suspends']) {
+            $this->suspend($submission);
+        }
+
+        $this->notify($submission, $restricted['restricted'] || $restricted['suspends']);
 
         return true;
+    }
+
+    /**
+     * Suspend the account whose re-verification deadline has passed.
+     *
+     * Never allowed to undo the claim or the audit entry: the deadline passed
+     * whether or not this succeeded, and an account that escapes suspension
+     * because of a transient failure is visible in the audit trail and can be
+     * suspended by hand. Losing the record of the missed deadline would not
+     * be.
+     */
+    protected function suspend(KycSubmission $submission): void
+    {
+        $account = $submission->businessAccount?->fresh();
+
+        if ($account === null || ! $account->canTransitionTo(AccountStatus::Suspended)) {
+            return;
+        }
+
+        try {
+            $this->suspendAccount->handle(
+                account: $account,
+                // No person decided this; the deadline did. `SuspendAccount`
+                // takes a nullable actor for exactly this case.
+                decidedBy: null,
+                reason: 'The KYC re-verification deadline passed without the requested documents (§7.4).',
+                userVisibleNote: __('Your account has been suspended because the verification we asked for was not completed in time.'),
+            );
+        } catch (Throwable $throwable) {
+            $this->log->channel('daily')->error('Could not suspend an account after a missed KYC deadline', [
+                'submission' => $submission->public_id,
+                'business_account' => $account->id,
+                'error' => $throwable->getMessage(),
+            ]);
+        }
     }
 
     /**

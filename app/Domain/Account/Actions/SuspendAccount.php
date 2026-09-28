@@ -36,12 +36,17 @@ class SuspendAccount
     ) {}
 
     /**
+     * @param  int|null  $decidedBy  the member of staff taking responsibility, or
+     *                               null when a policy did — a missed KYC
+     *                               re-verification deadline suspends through
+     *                               this same action rather than writing its
+     *                               own status path (§7.4)
      * @param  string  $reason  the internal record. Required.
      * @param  string|null  $userVisibleNote  what the account holder is told, if anything
      */
     public function handle(
         BusinessAccount $account,
-        int $decidedBy,
+        ?int $decidedBy,
         string $reason,
         ?string $userVisibleNote = null,
         ?string $internalNote = null,
@@ -73,6 +78,7 @@ class SuspendAccount
             $this->audit->handle(new AuditEntry(
                 action: 'account.suspended',
                 actorId: $decidedBy,
+                actorType: $decidedBy === null ? 'system' : 'user',
                 auditableType: BusinessAccount::class,
                 auditableId: $locked->id,
                 before: ['status' => $from->value],

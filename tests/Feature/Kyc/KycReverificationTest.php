@@ -2,7 +2,6 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
-use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Kyc\Actions\RequestKycUpdate;
 use App\Domain\Kyc\Enums\KycConsequence;
