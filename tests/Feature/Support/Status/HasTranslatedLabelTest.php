@@ -3,6 +3,9 @@
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Enums\RefundStatus;
+use App\Domain\Kyc\Enums\KycConsequence;
+use App\Domain\Kyc\Enums\KycRoundPurpose;
+use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\ReturnStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
@@ -34,6 +37,16 @@ function statusEnumsUnderTest(): array
         'withdrawal' => SupplierWithdrawalStatus::class,
         'return' => ReturnStatus::class,
         'refund' => RefundStatus::class,
+
+        /*
+         * The KYC round enums (§7.2, §7.4). A consequence label is read by
+         * the account holder being told what is restricted, so an untranslated
+         * one leaves a Bangla reader looking at English for the part of the
+         * screen that matters most.
+         */
+        'kyc' => KycStatus::class,
+        'kyc_purpose' => KycRoundPurpose::class,
+        'kyc_consequence' => KycConsequence::class,
     ];
 }
 

@@ -177,6 +177,26 @@ return [
         'rejected' => 'Rejected',
     ],
 
+    'kyc_purpose' => [
+        'onboarding' => 'Onboarding',
+        'correction' => 'Correction',
+        'reverification' => 'Re-verification',
+    ],
+
+    /*
+     * What a re-verification costs the business while it is outstanding
+     * (§7.4). Read by staff choosing them and by the account holder being
+     * told what applies, so each one names the restriction rather than the
+     * rule behind it.
+     */
+    'kyc_consequence' => [
+        'warning_only' => 'Notify only',
+        'block_new_orders' => 'No new orders',
+        'block_publishing' => 'No new product publishing',
+        'block_withdrawals' => 'No new withdrawals',
+        'suspend_after_deadline' => 'Suspend after the deadline',
+    ],
+
     'offer' => [
         'active' => 'Active',
         'suspended' => 'Suspended',

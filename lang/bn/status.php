@@ -167,6 +167,20 @@ return [
         'rejected' => 'প্রত্যাখ্যাত',
     ],
 
+    'kyc_purpose' => [
+        'onboarding' => 'নিবন্ধন',
+        'correction' => 'সংশোধন',
+        'reverification' => 'পুনঃযাচাই',
+    ],
+
+    'kyc_consequence' => [
+        'warning_only' => 'শুধু জানানো হবে',
+        'block_new_orders' => 'নতুন অর্ডার নেওয়া যাবে না',
+        'block_publishing' => 'নতুন পণ্য প্রকাশ করা যাবে না',
+        'block_withdrawals' => 'নতুন উত্তোলন করা যাবে না',
+        'suspend_after_deadline' => 'সময়সীমা পেরোলে অ্যাকাউন্ট স্থগিত',
+    ],
+
     'offer' => [
         'active' => 'সক্রিয়',
         'suspended' => 'স্থগিত',
