@@ -21,6 +21,7 @@ return [
         'payables' => 'Payables',
         'wallet' => 'Wallet',
         'payout_methods' => 'Payout methods',
+        'addresses' => 'Addresses',
         'withdrawals' => 'Withdrawals',
         'notifications' => 'Notifications',
         'profile' => 'Profile',

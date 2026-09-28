@@ -12,6 +12,7 @@ return [
     'verification' => 'যাচাইকরণ',
     'subscription' => 'সাবস্ক্রিপশন',
     'wallet' => 'ওয়ালেট',
+    'addresses' => 'ঠিকানা',
     'wholesale_catalogue' => 'পাইকারি ক্যাটালগ',
     'wholesale_cart' => 'পাইকারি কার্ট',
     'wholesale_orders' => 'পাইকারি অর্ডার',

@@ -25,6 +25,7 @@ class SharedAddressesForOwner
         return SharedAddress::query()
             ->where('owner_type', $ownerType->value)
             ->where('owner_id', $ownerId)
+            ->with(['division', 'district', 'upazila', 'union'])
             ->orderByDesc('is_default')
             ->orderByDesc('id')
             ->get();

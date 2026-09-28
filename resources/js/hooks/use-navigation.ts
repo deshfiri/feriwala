@@ -10,6 +10,7 @@ import {
     LayoutGrid,
     ListChecks,
     Lock,
+    MapPin,
     MessageSquare,
     MonitorSmartphone,
     Network,
@@ -38,6 +39,7 @@ import {
     Warehouse,
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/use-translation';
+import { index as addresses } from '@/routes/addresses';
 import { dashboard } from '@/routes';
 import { dashboard as adminDashboard } from '@/routes/admin';
 import { index as accountDirectory } from '@/routes/admin/accounts';
@@ -161,6 +163,11 @@ export function useNavigation(): {
                                         title: t('nav.wallet'),
                                         href: wallet(),
                                         icon: WalletIcon,
+                                    },
+                                    {
+                                        title: t('nav.addresses'),
+                                        href: addresses(),
+                                        icon: MapPin,
                                     },
                                 ]
                               : []),

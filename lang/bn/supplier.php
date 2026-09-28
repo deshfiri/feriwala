@@ -21,6 +21,7 @@ return [
         'payables' => 'পাওনা',
         'wallet' => 'ওয়ালেট',
         'payout_methods' => 'পরিশোধ পদ্ধতি',
+        'addresses' => 'ঠিকানা',
         'withdrawals' => 'উত্তোলন',
         'notifications' => 'বিজ্ঞপ্তি',
         'profile' => 'প্রোফাইল',

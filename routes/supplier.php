@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\LocationLookupController;
 use App\Http\Controllers\Supplier\AccountController;
+use App\Http\Controllers\Supplier\AddressController;
 use App\Http\Controllers\Supplier\AllocationController;
 use App\Http\Controllers\Supplier\Auth\AuthenticatedSupplierSessionController;
 use App\Http\Controllers\Supplier\Auth\NewSupplierPasswordController;
@@ -133,6 +135,19 @@ Route::prefix('supplier')
                 Route::post('payout-methods', [PayoutMethodController::class, 'store'])->name('payout-methods.store');
                 Route::put('payout-methods/{method}', [PayoutMethodController::class, 'update'])->name('payout-methods.update');
                 Route::post('payout-methods/{method}/archive', [PayoutMethodController::class, 'archive'])->name('payout-methods.archive');
+
+                // Registered, pickup and return addresses (Location Directory
+                // + Shared Address module).
+                Route::get('addresses', [AddressController::class, 'index'])->name('addresses.index');
+                Route::post('addresses', [AddressController::class, 'store'])->name('addresses.store');
+                Route::put('addresses/{address}', [AddressController::class, 'update'])->name('addresses.update');
+                Route::post('addresses/{address}/default', [AddressController::class, 'setDefault'])->name('addresses.default');
+                Route::post('addresses/{address}/archive', [AddressController::class, 'archive'])->name('addresses.archive');
+
+                // The Bangladesh location directory's cached child lookups —
+                // reference data, so no owner scoping applies.
+                Route::get('locations/divisions', [LocationLookupController::class, 'divisions'])->name('locations.divisions');
+                Route::get('locations/{type}/{sourceId}/children', [LocationLookupController::class, 'children'])->name('locations.children');
 
                 Route::get('withdrawals', [WithdrawalController::class, 'index'])->name('withdrawals.index');
                 Route::get('withdrawals/create', [WithdrawalController::class, 'create'])->name('withdrawals.create');

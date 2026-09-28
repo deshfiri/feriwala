@@ -54,6 +54,7 @@ use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\Admin\WebsitePricingController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Erp\AddressController;
 use App\Http\Controllers\Erp\AllocatedStockController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
@@ -78,6 +79,7 @@ use App\Http\Controllers\Erp\WholesaleCheckoutController;
 use App\Http\Controllers\Erp\WholesaleOrderController;
 use App\Http\Controllers\Erp\WholesaleOrderPaymentReturnController;
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\LocationLookupController;
 use App\Http\Controllers\Webhook\GatewayReturnController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -235,6 +237,27 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wallet.download');
         Route::get('wallet/transactions/{transaction}', [WalletController::class, 'transaction'])
             ->name('wallet.transactions.show');
+
+        /*
+         * The account's own business/operational address book (§31.3,
+         * Location Directory + Shared Address module). Self-scoped through
+         * the signed-in person's own account, the same as the wallet above —
+         * no address appears in any URL, and one is found among this
+         * account's or not at all.
+         */
+        Route::prefix('addresses')->name('addresses.')->group(function () {
+            Route::get('/', [AddressController::class, 'index'])->name('index');
+            Route::post('/', [AddressController::class, 'store'])->name('store');
+            Route::put('{address}', [AddressController::class, 'update'])->name('update');
+            Route::post('{address}/default', [AddressController::class, 'setDefault'])->name('default');
+            Route::post('{address}/archive', [AddressController::class, 'archive'])->name('archive');
+        });
+
+        // The Bangladesh location directory's cached child lookups, behind
+        // the address book's cascading Division/District/Upazila/Union
+        // selects (§39). Reference data, so no owner scoping applies.
+        Route::get('locations/divisions', [LocationLookupController::class, 'divisions'])->name('locations.divisions');
+        Route::get('locations/{type}/{sourceId}/children', [LocationLookupController::class, 'children'])->name('locations.children');
 
         /*
          * The central catalogue for a business account (§10, §12, §13).

@@ -18,6 +18,7 @@ return [
     'verification' => 'Verification',
     'subscription' => 'Subscription',
     'wallet' => 'Wallet',
+    'addresses' => 'Addresses',
     'wholesale_catalogue' => 'Wholesale catalogue',
     'wholesale_cart' => 'Wholesale cart',
     'wholesale_orders' => 'Wholesale orders',

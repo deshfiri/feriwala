@@ -6,6 +6,7 @@ import {
     Coins,
     CreditCard,
     LayoutGrid,
+    MapPin,
     PackageCheck,
     PackageSearch,
     ShieldCheck,
@@ -21,6 +22,7 @@ import { SupplierHeader } from '@/components/supplier/supplier-header';
 import { SupplierSidebar } from '@/components/supplier/supplier-sidebar';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes/supplier';
+import { index as addresses } from '@/routes/supplier/addresses';
 import { index as allocations } from '@/routes/supplier/allocations';
 import { create as kyc } from '@/routes/supplier/kyc';
 import { index as listings } from '@/routes/supplier/listings';
@@ -120,6 +122,11 @@ export default function SupplierLayout({
                           title: t('supplier.nav.allocations'),
                           href: allocations(),
                           icon: PackageSearch,
+                      },
+                      {
+                          title: t('supplier.nav.addresses'),
+                          href: addresses(),
+                          icon: MapPin,
                       },
                   ]
                 : [],
