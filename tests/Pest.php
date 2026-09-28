@@ -5,6 +5,11 @@ use App\Domain\Account\Actions\ActivateAccount;
 use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Address\Actions\SaveSharedAddress;
+use App\Domain\Address\Enums\AddressOwnerType;
+use App\Domain\Address\Enums\ClientAddressType;
+use App\Domain\Address\Enums\SupplierAddressType;
+use App\Domain\Address\Models\SharedAddress;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentPurpose;
@@ -18,6 +23,8 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Location\Enums\BdLocationType;
+use App\Domain\Location\Models\BdLocation;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
@@ -723,6 +730,97 @@ function supplierTestOffer(
     $offer->stock()->create(['quantity' => 10]);
 
     return $offer;
+}
+
+/*
+ * Shared fixtures for the Location Directory + Shared Address module.
+ * Prefixed `addressTest`/`locationTest` so they cannot collide with anything
+ * else in Pest's single global function namespace — see
+ * tests/Feature/Location/ImportBdLocationsTest.php for `locationTestFixture()`,
+ * a different (raw-JSON) fixture for the importer itself.
+ */
+
+/**
+ * A valid, saved four-level `BdLocation` chain, independent of every other
+ * test's — each call mints its own random source ids, so tests may build as
+ * many chains as they need without colliding.
+ *
+ * @return array{division: BdLocation, district: BdLocation, upazila: BdLocation, union: BdLocation}
+ */
+function addressTestLocationChain(): array
+{
+    $division = BdLocation::create([
+        'type' => BdLocationType::Division,
+        'source_id' => Str::random(8),
+        'source_parent_id' => null,
+        'name_en' => 'Test Division',
+        'name_bn' => 'টেস্ট বিভাগ',
+        'is_active' => true,
+    ]);
+
+    $district = BdLocation::create([
+        'type' => BdLocationType::District,
+        'parent_id' => $division->id,
+        'source_id' => Str::random(8),
+        'source_parent_id' => $division->source_id,
+        'name_en' => 'Test District',
+        'name_bn' => 'টেস্ট জেলা',
+        'is_active' => true,
+    ]);
+
+    $upazila = BdLocation::create([
+        'type' => BdLocationType::Upazila,
+        'parent_id' => $district->id,
+        'source_id' => Str::random(8),
+        'source_parent_id' => $district->source_id,
+        'name_en' => 'Test Upazila',
+        'name_bn' => 'টেস্ট উপজেলা',
+        'is_active' => true,
+    ]);
+
+    $union = BdLocation::create([
+        'type' => BdLocationType::Union,
+        'parent_id' => $upazila->id,
+        'source_id' => Str::random(8),
+        'source_parent_id' => $upazila->source_id,
+        'name_en' => 'Test Union',
+        'name_bn' => 'টেস্ট ইউনিয়ন',
+        'is_active' => true,
+    ]);
+
+    return compact('division', 'district', 'upazila', 'union');
+}
+
+/**
+ * A saved `SharedAddress` for `$ownerType`/`$ownerId`, through the real
+ * {@see SaveSharedAddress} action (not `SharedAddress::create()`), so its
+ * `location_snapshot` is resolved exactly as a real request would build it.
+ *
+ * @param  array<string, mixed>  $overrides  'type', 'contactName', 'contactMobile', 'makeDefault'
+ */
+function addressTestCreate(AddressOwnerType $ownerType, int $ownerId, array $overrides = []): SharedAddress
+{
+    $chain = addressTestLocationChain();
+
+    $defaultType = $ownerType === AddressOwnerType::BusinessAccount
+        ? ClientAddressType::Business->value
+        : SupplierAddressType::Registered->value;
+
+    return app(SaveSharedAddress::class)->handle(
+        ownerType: $ownerType,
+        ownerId: $ownerId,
+        type: $overrides['type'] ?? $defaultType,
+        contactName: $overrides['contactName'] ?? 'Test Contact',
+        contactMobile: $overrides['contactMobile'] ?? '+8801700000000',
+        divisionId: $chain['division']->id,
+        districtId: $chain['district']->id,
+        upazilaId: $chain['upazila']->id,
+        unionId: $chain['union']->id,
+        detailedAddress: 'House 1, Road 2',
+        landmark: null,
+        postcode: null,
+        makeDefault: (bool) ($overrides['makeDefault'] ?? false),
+    );
 }
 
 /**

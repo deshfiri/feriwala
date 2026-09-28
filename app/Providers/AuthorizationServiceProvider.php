@@ -9,6 +9,8 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Policies\AccountMembershipPolicy;
 use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Account\Policies\UserPolicy;
+use App\Domain\Address\Models\SharedAddress;
+use App\Domain\Address\Policies\SharedAddressPolicy;
 use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Inventory\Policies\InventoryPolicy;
@@ -88,6 +90,14 @@ class AuthorizationServiceProvider extends ServiceProvider
         // A dedicated website is run by the account that owns it and
         // administered by staff who may administer websites (§16.3).
         Gate::policy(Website::class, WebsitePolicy::class);
+
+        /*
+         * The shared address book, Client/Partner side only — a Supplier's
+         * own addresses are query-scoped in the Supplier-guarded controller,
+         * the same as its payout methods (§31.3, Location Directory + Shared
+         * Address module).
+         */
+        Gate::policy(SharedAddress::class, SharedAddressPolicy::class);
 
         /*
          * The Supplier account domain (D25). Staff-side only — a Supplier's
