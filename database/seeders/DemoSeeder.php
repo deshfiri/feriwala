@@ -11,15 +11,11 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Enums\KycStatus;
-use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Models\Package;
-use App\Domain\Settings\Enums\SettingType;
-use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
 use App\Support\Money\Money;
-use App\Support\Security\SessionPolicy;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use RuntimeException;
@@ -35,6 +31,10 @@ use RuntimeException;
  * decides applications, and somebody who configures the catalogue, are
  * different people with different permissions, and the navigation differs for
  * each. Seeding only a Super Admin would hide that.
+ *
+ * Everything that does not need a login — roles/permissions, KYC document
+ * types, settings, the Bangladesh location directory — lives in
+ * {@see SafeSeeder} instead, which this calls after `packages()`.
  */
 class DemoSeeder extends Seeder
 {
@@ -49,45 +49,16 @@ class DemoSeeder extends Seeder
             );
         }
 
-        $this->call(RolesAndPermissionsSeeder::class);
-
-        $this->configureDeadlines();
+        // Packages first: SafeSeeder's own documentTypes() links its
+        // package-scoped requirement to the Enterprise package when one
+        // exists, and it must already exist by the time that runs.
         $this->packages();
-        $this->documentTypes();
+        $this->call(SafeSeeder::class);
 
         $this->platformStaff();
         $this->businessAccounts();
 
         $this->command->info('Seeded. Every login uses the password: '.self::PASSWORD);
-    }
-
-    /**
-     * A 30-day KYC window, so the deadline and countdown are visible.
-     *
-     * Off by default in the application itself (§7.4) — inventing a window
-     * would restrict real accounts on a number nobody agreed. A development
-     * environment is where seeing it matters.
-     */
-    protected function configureDeadlines(): void
-    {
-        $settings = app(SettingsRepository::class);
-
-        $settings->define('kyc.deadline_days', 'kyc', SettingType::Integer, 30);
-        $settings->define('kyc.deadline_warning_days', 'kyc', SettingType::Integer, 7);
-
-        /*
-         * Defined with a null value on purpose: the setting exists so it can be
-         * changed without a deploy (§36), and until somebody does,
-         * `SESSION_LIFETIME` is what applies. Seeding a number here would make
-         * the deployed configuration silently unreachable.
-         */
-        $settings->define(
-            SessionPolicy::LIFETIME,
-            'security',
-            SettingType::Integer,
-            label: 'Session lifetime (minutes)',
-            description: 'How long a signed-in session survives without activity. Leave empty to use the deployed SESSION_LIFETIME.',
-        );
     }
 
     /**
@@ -151,95 +122,6 @@ class DemoSeeder extends Seeder
         }
 
         return $package->refresh();
-    }
-
-    /**
-     * A catalogue that exercises every scoping shape (§7.2).
-     */
-    protected function documentTypes(): void
-    {
-        $national = $this->documentType([
-            'key' => 'national_id',
-            'name' => 'National ID',
-            'instructions' => 'Both sides, in colour, with all four corners visible.',
-            'is_required' => true,
-            'sort_order' => 0,
-        ]);
-
-        $this->documentType([
-            'key' => 'proof_of_address',
-            'name' => 'Proof of address',
-            'instructions' => 'A utility bill or bank statement from the last three months.',
-            'is_required' => true,
-            'sort_order' => 1,
-        ]);
-
-        // Country-scoped: a trade licence only Bangladeshi accounts are asked
-        // for, and mandatory there.
-        $this->documentType([
-            'key' => 'trade_licence',
-            'name' => 'Trade licence',
-            'instructions' => 'Current year, issued by your city corporation.',
-            'is_required' => false,
-            'sort_order' => 2,
-        ])->scopes()->create([
-            'country_code' => 'BD',
-            'is_required' => true,
-        ]);
-
-        // A typed value rather than a file.
-        $this->documentType([
-            'key' => 'tin',
-            'name' => 'Tax identification number',
-            'instructions' => 'The TIN on your certificate, digits only.',
-            'is_required' => false,
-            'requires_file' => false,
-            'requires_value' => true,
-            'value_label' => 'TIN',
-            'sort_order' => 3,
-        ]);
-
-        // Package-scoped: only Enterprise accounts are asked for this.
-        $this->documentType([
-            'key' => 'company_registration',
-            'name' => 'Company registration certificate',
-            'instructions' => 'The certificate of incorporation, all pages.',
-            'is_required' => false,
-            'sort_order' => 4,
-        ])->scopes()->create([
-            'package_public_id' => Package::query()->where('slug', 'enterprise')->value('public_id'),
-            'is_required' => true,
-        ]);
-
-        // Paused: configured, but not currently on the form.
-        $this->documentType([
-            'key' => 'bank_statement',
-            'name' => 'Bank statement',
-            'instructions' => 'Six months, stamped by the branch.',
-            'is_required' => false,
-            'is_active' => false,
-            'sort_order' => 5,
-        ]);
-
-        unset($national);
-    }
-
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    protected function documentType(array $attributes): KycDocumentType
-    {
-        return KycDocumentType::query()->updateOrCreate(
-            ['key' => $attributes['key']],
-            [
-                'is_active' => true,
-                'requires_file' => true,
-                'requires_value' => false,
-                'accepted_mime_types' => ['image/jpeg', 'image/png', 'application/pdf'],
-                'max_size_kb' => 5120,
-                ...$attributes,
-            ],
-        );
     }
 
     /**
