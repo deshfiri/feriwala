@@ -126,6 +126,7 @@ pest()->group('supplier')->in('Feature/Supplier');
 pest()->group('database')->in('Feature/Database');
 pest()->group('location')->in('Feature/Location');
 pest()->group('address')->in('Feature/Address');
+pest()->group('bank')->in('Feature/Bank');
 
 /*
 |--------------------------------------------------------------------------
