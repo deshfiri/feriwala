@@ -9,6 +9,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\AccountDirectory;
 use App\Domain\Account\Queries\AccountDossier;
 use App\Domain\Kyc\Actions\CaptureRoundRequirements;
+use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
@@ -178,6 +179,24 @@ class AccountController extends Controller
                 ])
                 ->all(),
 
+            /*
+             * What staff may attach to a re-verification (§7.4). Sent from the
+             * enum rather than hard-coded in React, so a consequence added or
+             * withdrawn here cannot leave the dialog offering one the server
+             * refuses — and the labels arrive already translated.
+             *
+             * "Warning only" is offered as the explicit default. It stores as
+             * nothing, which is exactly what it means.
+             */
+            'kyc_consequences' => array_map(
+                fn (KycConsequence $consequence) => [
+                    'value' => $consequence->value,
+                    'label' => $consequence->label(),
+                    'applies_before_deadline' => $consequence->appliesBeforeDeadline(),
+                ],
+                KycConsequence::cases(),
+            ),
+
             'can' => [
                 /*
                  * Permission **and** the invariant together. Super Admin passes
@@ -188,6 +207,14 @@ class AccountController extends Controller
                  */
                 'request_kyc_update' => $blockers === []
                     && Gate::allows('requestUpdate', [KycSubmission::class, $account]),
+
+                /*
+                 * Withdrawing a round (§7.2). The permission only — *which*
+                 * round may be withdrawn rides on each row's
+                 * `is_withdrawable`, because that is a fact about the round
+                 * rather than about the person looking at it.
+                 */
+                'withdraw_kyc_request' => Gate::allows('requestUpdate', [KycSubmission::class, $account]),
 
                 /*
                  * Suspension was previously reachable only from the activation
@@ -296,11 +323,11 @@ class AccountController extends Controller
             ->first();
 
         if ($latest === null) {
-            return [__('This account has never submitted verification, so there is nothing to update.')];
+            return [__('kyc.request.never_submitted')];
         }
 
         if ($latest->status->isEditable() || $latest->status->awaitsReview()) {
-            return [__('A verification round is already in progress.')];
+            return [__('kyc.request.already_in_progress')];
         }
 
         return [];

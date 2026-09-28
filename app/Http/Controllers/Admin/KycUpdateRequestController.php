@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Actions\RequestKycUpdate;
+use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -11,6 +12,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -51,6 +53,19 @@ class KycUpdateRequestController extends Controller
              */
             'document_type_ids' => ['sometimes', 'array'],
             'document_type_ids.*' => ['string', 'max:26'],
+
+            /*
+             * What this costs the business while the round is open (§7.4).
+             *
+             * Absent means none, which is the safe default and the common
+             * case: §7.4 *offers* consequences rather than requiring them, and
+             * a business that has done nothing wrong keeps trading while it
+             * answers. Only the values the enum declares are accepted — an
+             * unrecognised one is a rejected form, never a round that silently
+             * carries a restriction nobody chose.
+             */
+            'consequences' => ['sometimes', 'array'],
+            'consequences.*' => [Rule::enum(KycConsequence::class)],
         ]);
 
         /** @var User $actor */
@@ -66,12 +81,18 @@ class KycUpdateRequestController extends Controller
                     ? CarbonImmutable::parse($validated['deadline'])
                     : null,
                 documentTypeIds: $validated['document_type_ids'] ?? null,
+                consequences: isset($validated['consequences'])
+                    ? array_map(
+                        static fn (string $value): KycConsequence => KycConsequence::from($value),
+                        $validated['consequences'],
+                    )
+                    : null,
             );
         } catch (InvalidArgumentException $exception) {
             // A round already in progress is a rejected form, not a 500.
             throw ValidationException::withMessages(['reason' => $exception->getMessage()]);
         }
 
-        return back()->with('success', __('Verification update requested.'));
+        return back()->with('success', __('kyc.request.requested'));
     }
 }

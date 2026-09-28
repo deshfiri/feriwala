@@ -26,6 +26,8 @@ return [
         'requested_by' => 'Requested by :name on :date',
         'internal_reason' => 'Internal reason',
         'instructions_sent' => 'Instructions sent',
+        'withdrawn_by' => 'Withdrawn by :name on :date',
+        'consequence_pending' => ':label (after the deadline)',
         'required' => 'Required',
         'optional' => 'Optional',
 
@@ -72,10 +74,30 @@ return [
         'select_all' => 'Select all',
         'clear_all' => 'Clear all',
 
+        'consequences' => 'While this is outstanding',
+        'consequences_help' => 'Optional. Notify only is the default — the business keeps trading while it answers.',
+        'after_deadline_only' => 'Applies only after the deadline passes.',
+
         'confirm' => 'The owner will be notified as soon as you send this.',
         'submit' => 'Send request',
         'cancel' => 'Cancel',
         'sending' => 'Sending…',
         'unavailable' => 'Cannot request an update',
+    ],
+
+    /*
+     * Withdrawing a request nobody answered (§7.2). The round is kept — it is
+     * evidence that we asked — so nothing here says "delete".
+     */
+    'kyc_withdraw' => [
+        'action' => 'Withdraw request',
+        'title' => 'Withdraw this verification request',
+        'description' => 'Round :number. The request stays in the account history, marked withdrawn.',
+        'reason' => 'Why it is being withdrawn',
+        'reason_help' => 'Kept in the account history beside the request it cancels.',
+        'confirm' => 'Any restrictions this request imposed are lifted immediately, and the owner is notified.',
+        'submit' => 'Withdraw request',
+        'cancel' => 'Cancel',
+        'withdrawing' => 'Withdrawing…',
     ],
 ];

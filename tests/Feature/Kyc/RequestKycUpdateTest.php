@@ -4,6 +4,7 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Actions\RequestKycUpdate;
+use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -426,6 +427,86 @@ describe('the endpoint', function () {
                 'instructions' => 'Instructions.',
             ])
             ->assertForbidden();
+    });
+
+    /*
+     * §7.4's consequences are chosen per case by the member of staff opening
+     * the round, so they have to survive the trip through the form. The
+     * action has always accepted them; for a while nothing handed them over,
+     * which made the whole feature unreachable from the only screen that can
+     * open a round.
+     */
+    it('carries the consequences the form chose onto the round', function () {
+        $account = kycUpdateTestAccount();
+
+        $this->actingAs($this->officer)
+            ->from(route('admin.kyc.index'))
+            ->post(route('admin.kyc.request-update', $account), [
+                'reason' => 'Trade licence expired.',
+                'instructions' => 'Please upload your renewed trade licence.',
+                'deadline' => now()->addDays(7)->toDateString(),
+                'consequences' => [
+                    KycConsequence::BlockNewOrders->value,
+                    KycConsequence::BlockPublishing->value,
+                ],
+            ])
+            ->assertRedirect(route('admin.kyc.index'));
+
+        $round = $account->kycSubmissions()->where('round', 2)->sole();
+
+        expect($round->consequences)->toBe([
+            KycConsequence::BlockNewOrders->value,
+            KycConsequence::BlockPublishing->value,
+        ]);
+    });
+
+    it('opens a round carrying nothing when none were chosen', function () {
+        // The safe default, and the common case: §7.4 offers consequences
+        // rather than requiring them.
+        $account = kycUpdateTestAccount();
+
+        $this->actingAs($this->officer)
+            ->from(route('admin.kyc.index'))
+            ->post(route('admin.kyc.request-update', $account), [
+                'reason' => 'Periodic re-verification.',
+                'instructions' => 'Please re-upload your documents.',
+            ]);
+
+        expect($account->kycSubmissions()->where('round', 2)->sole()->consequences)
+            ->toBeNull();
+    });
+
+    it('refuses a consequence the enum does not declare', function () {
+        /*
+         * A rejected form, never a round that silently carries a restriction
+         * nobody chose — `tryFrom` downstream would have dropped the value
+         * and left staff believing they had restricted the account.
+         */
+        $account = kycUpdateTestAccount();
+
+        $this->actingAs($this->officer)
+            ->from(route('admin.kyc.index'))
+            ->post(route('admin.kyc.request-update', $account), [
+                'reason' => 'Reason.',
+                'instructions' => 'Instructions.',
+                'deadline' => now()->addDays(7)->toDateString(),
+                'consequences' => ['block_everything'],
+            ])
+            ->assertSessionHasErrors('consequences.0');
+
+        expect($account->kycSubmissions()->where('round', 2)->exists())->toBeFalse();
+    });
+
+    it('offers every consequence the enum declares on the account screen', function () {
+        // The dialog is driven by this prop rather than a hard-coded list, so
+        // it cannot drift from what the server will accept.
+        $account = kycUpdateTestAccount();
+
+        $this->actingAs($this->officer)
+            ->get(route('admin.accounts.show', $account))
+            ->assertInertia(fn ($page) => $page
+                ->has('kyc_consequences', count(KycConsequence::cases()))
+                ->where('kyc_consequences.0.value', KycConsequence::WarningOnly->value));
     });
 
     it('uses the account public id, never a database id', function () {

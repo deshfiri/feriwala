@@ -7,6 +7,7 @@ use App\Domain\Account\Models\AccountMembership;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Models\BusinessAccountStatusChange;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Kyc\Models\KycSubmissionRequirement;
 use App\Domain\Package\Queries\AccountSubscription;
@@ -94,7 +95,7 @@ class AccountDossier
     {
         return KycSubmission::query()
             ->where('business_account_id', $account->id)
-            ->with(['requirements', 'requestedBy:id,name'])
+            ->with(['requirements', 'requestedBy:id,name', 'cancelledBy:id,name'])
             ->withCount('documents')
             ->orderByDesc('round')
             ->get()
@@ -124,6 +125,44 @@ class AccountDossier
                 'requested_by' => $round->requestedBy?->name,
                 'request_reason' => $round->request_reason,
                 'request_instructions' => $round->request_instructions,
+
+                'purpose' => $round->purpose->value,
+                'purpose_label' => $round->purpose->label(),
+
+                /*
+                 * What this round costs the business (§7.4), by label rather
+                 * than raw value: this list is the only place staff can see
+                 * what they imposed, and a screen reading `block_new_orders`
+                 * is one nobody checks twice.
+                 */
+                'consequences' => array_map(
+                    fn (KycConsequence $consequence) => [
+                        'value' => $consequence->value,
+                        'label' => $consequence->label(),
+                        'in_force' => $round->imposes($consequence),
+                    ],
+                    $round->consequences(),
+                ),
+
+                /*
+                 * The withdrawal half (§7.2). A round that was asked and then
+                 * taken back keeps both facts — the business was notified, and
+                 * possibly restricted, while it stood.
+                 */
+                'cancelled_at' => $round->cancelled_at?->toIso8601String(),
+                'cancelled_by' => $round->cancelledBy?->name,
+                'cancellation_reason' => $round->cancellation_reason,
+
+                /*
+                 * Whether this round is still withdrawable, by the same rules
+                 * the action applies under its lock. Surfaced so the button is
+                 * absent rather than offered and then refused; the action
+                 * remains the authority.
+                 */
+                'is_withdrawable' => $round->isReverification()
+                    && $round->cancelled_at === null
+                    && $round->isOpen()
+                    && ! $round->status->awaitsReview(),
             ])
             ->all();
     }

@@ -12,12 +12,14 @@ import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import type { AccountSubscriptionRow } from '@/types';
 import RequestKycUpdateDialog, {
+    type ConsequenceOption,
     type DocumentTypeOption,
 } from './request-kyc-update-dialog';
 import AssignPackageDialog, {
     type AssignablePackage,
 } from './assign-package-dialog';
 import SignInAccessDialog, { type Person } from './sign-in-access-dialog';
+import WithdrawKycRequestDialog from './withdraw-kyc-request-dialog';
 import SuspensionDialog from './suspension-dialog';
 
 type Owner = {
@@ -45,6 +47,14 @@ type KycRound = {
     requested_by: string | null;
     request_reason: string | null;
     request_instructions: string | null;
+    purpose: string;
+    purpose_label: string;
+    /** What this round costs the business while it stands (§7.4). */
+    consequences: { value: string; label: string; in_force: boolean }[];
+    cancelled_at: string | null;
+    cancelled_by: string | null;
+    cancellation_reason: string | null;
+    is_withdrawable: boolean;
 };
 
 type Props = {
@@ -100,8 +110,11 @@ type Props = {
     /** Plans an administrator may grant this account without a sale (§8.3). */
     assignable_packages: AssignablePackage[];
     document_types: DocumentTypeOption[];
+    /** What staff may attach to a re-verification round (§7.4). */
+    kyc_consequences: ConsequenceOption[];
     can: {
         request_kyc_update: boolean;
+        withdraw_kyc_request: boolean;
         suspend: boolean;
         reactivate: boolean;
     };
@@ -129,11 +142,15 @@ export default function AdminAccountShow({
     people,
     assignable_packages: assignablePackages,
     document_types: documentTypes,
+    kyc_consequences: kycConsequences,
     can,
     blockers,
 }: Props) {
     const { t, locale } = useTranslation();
     const [requesting, setRequesting] = useState(false);
+    /** The round being withdrawn, or null. Holds the row so the dialog can
+     *  name which one it is about. */
+    const [withdrawing, setWithdrawing] = useState<KycRound | null>(null);
     const [changingAccessFor, setChangingAccessFor] = useState<Person | null>(
         null,
     );
@@ -415,6 +432,95 @@ export default function AdminAccountShow({
                                                     )}
                                                 </div>
                                             )}
+
+                                            {/*
+                                             * What this round costs the
+                                             * business (§7.4). The only place
+                                             * staff can see what they imposed,
+                                             * so it names each restriction in
+                                             * words and says whether it is in
+                                             * force yet — a consequence that
+                                             * only bites after the deadline is
+                                             * not restricting anybody today.
+                                             */}
+                                            {round.consequences.length > 0 && (
+                                                <ul className="flex flex-wrap gap-1.5">
+                                                    {round.consequences.map(
+                                                        (consequence) => (
+                                                            <li
+                                                                key={
+                                                                    consequence.value
+                                                                }
+                                                            >
+                                                                <StatusPill
+                                                                    tone={
+                                                                        consequence.in_force
+                                                                            ? 'warning'
+                                                                            : 'neutral'
+                                                                    }
+                                                                    label={
+                                                                        consequence.in_force
+                                                                            ? consequence.label
+                                                                            : t(
+                                                                                  'account.detail.consequence_pending',
+                                                                                  {
+                                                                                      label: consequence.label,
+                                                                                  },
+                                                                              )
+                                                                    }
+                                                                />
+                                                            </li>
+                                                        ),
+                                                    )}
+                                                </ul>
+                                            )}
+
+                                            {/*
+                                             * A round that was asked and then
+                                             * taken back keeps both facts: the
+                                             * business was notified, and
+                                             * possibly restricted, while it
+                                             * stood.
+                                             */}
+                                            {round.cancelled_at && (
+                                                <p className="text-muted-foreground text-xs">
+                                                    <span className="font-medium">
+                                                        {t(
+                                                            'account.detail.withdrawn_by',
+                                                            {
+                                                                name:
+                                                                    round.cancelled_by ??
+                                                                    t(
+                                                                        'account.detail.by_system',
+                                                                    ),
+                                                                date: dateTime(
+                                                                    round.cancelled_at,
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </span>
+                                                    {round.cancellation_reason &&
+                                                        ` — ${round.cancellation_reason}`}
+                                                </p>
+                                            )}
+
+                                            {can.withdraw_kyc_request &&
+                                                round.is_withdrawable && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setWithdrawing(
+                                                                round,
+                                                            )
+                                                        }
+                                                    >
+                                                        {t(
+                                                            'account.kyc_withdraw.action',
+                                                        )}
+                                                    </Button>
+                                                )}
                                         </li>
                                     ))}
                                 </ol>
@@ -657,6 +763,12 @@ export default function AdminAccountShow({
                 onOpenChange={setRequesting}
                 accountId={business.id}
                 documentTypes={documentTypes}
+                consequenceOptions={kycConsequences}
+            />
+
+            <WithdrawKycRequestDialog
+                round={withdrawing}
+                onOpenChange={(open) => !open && setWithdrawing(null)}
             />
 
             <AssignPackageDialog
