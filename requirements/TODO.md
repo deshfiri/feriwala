@@ -211,6 +211,23 @@ renamed, and entries are never deleted.
       resets every login attempt limit alongside it. Self-healing and not reachable by an attacker, but it means a
       deploy hands whoever is mid-attack a fresh budget. Locks already have a database of their own for the same
       reason (§38); this is the same argument one shelf down. Noted from P1-14
+- [~] **P0-60** Location Directory + Shared Address module: a bundled, idempotent Bangladesh
+      Division/District/Upazila/Union directory (`bd_locations`, `bd-locations:import`
+      validate/dry-run/import, never deletes a location — deactivates instead), and `shared_addresses`,
+      a self-scoped address book for a `BusinessAccount`'s business/operational addresses and a
+      Supplier's registered/pickup/return addresses, with Erp and Supplier screens and cached cascading
+      lookups. One active default per (owner, type), the type/owner-kind pairing, and the
+      division/district/upazila/union chain are enforced **in the database**, not only in the
+      application — a partial unique index, a same-row CHECK, and a trigger against `bd_locations`
+      respectively — proven under real `pcntl_fork()` concurrency
+      (`tests/Feature/Concurrency/SharedAddressConcurrencyTest.php`), not trusted at design time (D28).
+      **Not done, and not claimed as done:** `SharedAddress::toSnapshot()` is not wired into any Order,
+      Fulfilment or Courier consumer — nothing outside this module reads a `SharedAddress` yet.
+      `user_addresses` (Wholesale checkout's billing/shipping, and the still-unwired registration
+      present/permanent address) is left exactly as it was: no backfill, no compatibility adapter — a
+      name-based match from its free-text `city`/`district` to a `bd_locations` row was ruled out as a
+      guess rather than attempted (D28). A human-supervised backfill tool remains a possible future
+      task, not started.
 
 ---
 

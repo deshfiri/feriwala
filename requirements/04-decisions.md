@@ -723,6 +723,55 @@ An activation quote reduced to zero by a 100% discount never creates a payment a
 never settle and can never trigger this path. Such an account still requires manual activation.
 Recorded rather than silently worked around; see [TODO.md](TODO.md).
 
+## D28 — `user_addresses` and `shared_addresses` stay separate; no name-based backfill (2026-09-28)
+
+**Instructed directly by the Project Owner on 2026-09-28**, as a correction during the Location
+Directory + Shared Address batch. Does not touch any change-controlled area.
+
+### The rule
+
+`user_addresses` and `shared_addresses` are **not** two competing implementations of the same
+feature. They answer different questions, for different owners, and neither is migrated into the
+other:
+
+- **`user_addresses`** — a `User`'s own present/permanent address (§5.2, collected at registration,
+  currently unwired — see the existing gap noted below) and the billing/shipping address a Wholesale
+  order is placed against (`SaveCheckoutAddress`, `PriceCheckout`,
+  `WholesaleCheckoutController`). Free-text `city`/`district`, no structured geography. An order's own
+  `billing_address`/`shipping_address` snapshot (on `Order` itself) is downstream of this, not of
+  `shared_addresses`.
+- **`shared_addresses`** — a `BusinessAccount`'s business/operational address book, or a Supplier's
+  registered/pickup/return address book (`app/Http/Controllers/{Erp,Supplier}/AddressController`,
+  `resources/js/pages/{erp,supplier}/addresses`). Structured against `bd_locations`
+  (Division/District/Upazila/optional Union), both at the database and the HTTP boundary.
+
+No screen and no order flow reads from both for the same purpose today. Wholesale checkout has never
+been touched by the Address Directory batch and continues to use `user_addresses` exactly as before.
+
+### Why no backfill
+
+Backfilling `user_addresses.city`/`district` into `shared_addresses`' structured
+division/district/upazila/union columns would require matching free-text strings against
+`bd_locations` names — "Dhaka", "dhaka city", "Dhk", or a misspelling, against one of 504 upazilas
+and 4,964 unions with overlapping and repeated names across the country. **A name match is a guess**,
+explicitly ruled out. A wrong automatic mapping would silently misfile a real address against the
+wrong Upazila, and nothing downstream would notice until a shipment went to the wrong Thana.
+
+An adapter is equally unsafe for the same reason: any translation from free text to a `bd_locations`
+row id still has to resolve the mapping somehow, and every resolution path bottoms out in matching a
+name.
+
+The safe path is therefore **neither** of the two offered: not an automatic backfill, and not a
+compatibility adapter that silently guesses on read. `user_addresses` rows are left exactly as
+written — no deletion, no rewriting, no reinterpretation.
+
+### If `user_addresses` needs structured geography later
+
+That is a separate, future decision, not a consequence of this one: a human-supervised backfill tool
+that shows a staff member or the account holder each free-text address next to its best-guess
+`bd_locations` match and asks for confirmation before writing anything — never an unattended migration.
+Out of scope here and not started.
+
 ## Change control 🔒
 
 Any future change affecting **merchant of record · financial ledger · payment direction ·

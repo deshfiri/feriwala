@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\Address\Actions\SetDefaultSharedAddress;
+use App\Domain\Address\Enums\AddressStatus;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -20,11 +22,13 @@ use Illuminate\Support\Facades\Schema;
  *
  * `location_snapshot` freezes the resolved bilingual place names at save time,
  * so a later rename or deactivation in `bd_locations` never rewrites an
- * address already on file. `is_default` is enforced one-per-(owner, type) by
- * {@see \App\Domain\Address\Actions\SaveSharedAddress::makeDefault()}, not a
- * database constraint — the same convention `SupplierPayoutMethod` already
- * uses, and archiving is a status transition
- * ({@see \App\Domain\Address\Enums\AddressStatus}), never a delete.
+ * address already on file. `is_default` is enforced one-per-(owner, type) in
+ * the application ({@see SetDefaultSharedAddress}, inside a transaction with
+ * row locking) **and**, since the follow-up migration
+ * `2026_10_10_100000_enforce_shared_address_invariants`, by a partial unique
+ * index — the database is a second, independent guard against a write that
+ * reaches this table any other way, not a replacement for the transaction.
+ * Archiving is a status transition ({@see AddressStatus}), never a delete.
  */
 return new class extends Migration
 {
