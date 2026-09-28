@@ -22,6 +22,9 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
+import AllocationPanel, {
+    type AllocationLine,
+} from '@/pages/admin/orders/allocation-panel';
 import { index } from '@/routes/admin/orders';
 
 export type AdminOrderDetail = {
@@ -63,6 +66,16 @@ export type AdminOrderDetail = {
             status: string;
             expires_at: string;
         } | null;
+        allocation: {
+            id: string;
+            source_type: string;
+            source_type_label: string;
+            source_label: string | null;
+            unit_cost: Money;
+            expected_margin: Money;
+            allocated_at: string;
+        } | null;
+        can_allocate: boolean;
     }[];
     payment: {
         reference: string;
@@ -124,6 +137,7 @@ const controlClass =
 export default function AdminOrder({ order, can }: Props) {
     const { t, locale } = useTranslation();
     const [cancelling, setCancelling] = useState(false);
+    const [allocating, setAllocating] = useState<AllocationLine | null>(null);
     const at = (value: string | null) =>
         value ? new Date(value).toLocaleString(locale) : '—';
 
@@ -226,11 +240,47 @@ export default function AdminOrder({ order, can }: Props) {
                                                     )}
                                                 </p>
                                             )}
+                                            {line.allocation && (
+                                                <p className="text-muted-foreground text-xs">
+                                                    {t(
+                                                        'orders.admin.allocation.current',
+                                                    )}
+                                                    {': '}
+                                                    {line.allocation
+                                                        .source_label ??
+                                                        line.allocation
+                                                            .source_type_label}
+                                                </p>
+                                            )}
                                         </div>
-                                        <MoneyAmount
-                                            amount={line.total}
-                                            className="font-semibold"
-                                        />
+                                        <div className="flex flex-col items-end gap-2">
+                                            <MoneyAmount
+                                                amount={line.total}
+                                                className="font-semibold"
+                                            />
+                                            {line.can_allocate && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setAllocating({
+                                                            id: line.id,
+                                                            name: line.name,
+                                                            sku: line.sku,
+                                                        })
+                                                    }
+                                                >
+                                                    {line.allocation
+                                                        ? t(
+                                                              'orders.admin.allocation.change_action',
+                                                          )
+                                                        : t(
+                                                              'orders.admin.allocation.action',
+                                                          )}
+                                                </Button>
+                                            )}
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -631,6 +681,15 @@ export default function AdminOrder({ order, can }: Props) {
                     </DialogContent>
                 </Dialog>
             )}
+
+            <AllocationPanel
+                open={allocating !== null}
+                onOpenChange={(next) => {
+                    if (!next) setAllocating(null);
+                }}
+                orderId={order.id}
+                line={allocating}
+            />
         </>
     );
 }
