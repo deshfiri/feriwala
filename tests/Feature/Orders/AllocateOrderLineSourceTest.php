@@ -11,6 +11,7 @@ use App\Domain\Order\Exceptions\AllocationRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
+use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Supplier\Enums\PayableStatus;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Models\Supplier;
@@ -184,6 +185,26 @@ describe('choosing between suppliers', function () {
         expect($allocation->supplier_offer_id)->toBe($chosen->id)
             ->and($allocation->supplier_offer_id)->not->toBe($cheapest->id)
             ->and($allocation->unit_cost->toDecimal())->toBe('1100.00');
+    });
+
+    it('reports all five candidates for one product and allocates the one staff picked', function () {
+        $offers = collect(['500.00', '650.00', '800.00', '950.00', '1100.00'])
+            ->map(fn (string $rate) => allocateTestOffer(rate: $rate));
+
+        $candidates = app(AllocationSourceCandidates::class)->forLine(test()->line);
+        $supplierCandidates = collect($candidates)->filter(
+            fn ($candidate) => $candidate->sourceType === AllocationSourceType::SupplierOffer,
+        );
+
+        expect($supplierCandidates)->toHaveCount(5)
+            ->and($supplierCandidates->every(fn ($candidate) => $candidate->isEligible))->toBeTrue();
+
+        // Staff picks the middle one — neither the cheapest nor the dearest.
+        $picked = $offers->get(2);
+        $allocation = allocateTestLineTo(AllocationSourceType::SupplierOffer, $picked->public_id);
+
+        expect($allocation->supplier_offer_id)->toBe($picked->id)
+            ->and($allocation->unit_cost->toDecimal())->toBe('800.00');
     });
 });
 
