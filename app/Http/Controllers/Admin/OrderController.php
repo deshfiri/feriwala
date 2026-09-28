@@ -3,21 +3,28 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
+use App\Domain\Order\Data\AllocationCandidate;
+use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Exceptions\AllocationRefused;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderStatusChange;
+use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -42,6 +49,8 @@ class OrderController extends Controller
     public function __construct(
         protected CancelUnpaidOrderByStaff $cancel,
         protected CodConfirmationState $confirmations,
+        protected AllocationSourceCandidates $candidates,
+        protected AllocateOrderLineSource $allocate,
     ) {}
 
     public function index(Request $request): Response
@@ -100,9 +109,10 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('viewAny', Order::class);
 
         $record = $this->order($order);
-        $record->load(['businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation', 'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain', 'websiteCustomer:id,public_id,mobile,is_guest']);
+        $record->load(['businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation', 'items.activeAllocation.warehouse', 'items.activeAllocation.supplier', 'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain', 'websiteCustomer:id,public_id,mobile,is_guest']);
 
         $payment = $record->payment;
+        $canAllocate = $actor->can('transition', $record);
 
         return Inertia::render('admin/orders/show', [
             'order' => [
@@ -165,6 +175,24 @@ class OrderController extends Controller
                         'status' => $item->stockReservation->status->value,
                         'expires_at' => $item->stockReservation->expires_at->toIso8601String(),
                     ],
+                    /*
+                     * The staff-chosen source currently holding this line
+                     * (AllocateOrderLineSource) — staff-only figures (D25):
+                     * never spliced into a Client, Partner or Storefront
+                     * payload.
+                     */
+                    'allocation' => $item->activeAllocation === null ? null : [
+                        'id' => $item->activeAllocation->public_id,
+                        'source_type' => $item->activeAllocation->source_type->value,
+                        'source_type_label' => $item->activeAllocation->source_type->label(),
+                        'source_label' => $item->activeAllocation->warehouse !== null
+                            ? $item->activeAllocation->warehouse->name
+                            : $item->activeAllocation->supplier?->business_name,
+                        'unit_cost' => $item->activeAllocation->unit_cost->jsonSerialize(),
+                        'expected_margin' => $item->activeAllocation->expected_margin->jsonSerialize(),
+                        'allocated_at' => $item->activeAllocation->allocated_at->toIso8601String(),
+                    ],
+                    'can_allocate' => $canAllocate,
                 ])->all(),
                 'payment' => $payment === null ? null : [
                     'reference' => $payment->reference,
@@ -232,6 +260,67 @@ class OrderController extends Controller
     }
 
     /**
+     * Every source that could fulfil one line — Central Warehouse and every
+     * eligible Supplier offer for the exact variation — for the staff
+     * allocation panel. The platform ranks nothing here; the panel sorts and
+     * filters what this returns, never the query.
+     */
+    public function allocationCandidates(Request $request, string $order, string $item): JsonResponse
+    {
+        $actor = $this->actor($request);
+        $record = $this->order($order);
+
+        Gate::forUser($actor)->authorize('transition', $record);
+
+        $line = $this->line($record, $item);
+
+        return response()->json([
+            'candidates' => array_map(
+                fn (AllocationCandidate $candidate) => $candidate->toArray(),
+                $this->candidates->forLine($line),
+            ),
+        ]);
+    }
+
+    /**
+     * Commit the line to the source a member of staff explicitly chose.
+     * Never a fallback, never the cheapest — {@see AllocateOrderLineSource}.
+     */
+    public function allocate(Request $request, string $order, string $item): RedirectResponse
+    {
+        $actor = $this->actor($request);
+        $record = $this->order($order);
+
+        Gate::forUser($actor)->authorize('transition', $record);
+
+        $line = $this->line($record, $item);
+
+        $validated = $request->validate([
+            'source_type' => ['required', Rule::enum(AllocationSourceType::class)],
+            'source_id' => ['required', 'string'],
+            'reason' => ['required', 'string', 'min:10', 'max:1000'],
+        ]);
+
+        try {
+            $this->allocate->handle(
+                $line,
+                AllocationSourceType::from($validated['source_type']),
+                $validated['source_id'],
+                $actor,
+                $validated['reason'],
+            );
+        } catch (AllocationRefused $refused) {
+            throw ValidationException::withMessages(['source_id' => $refused->getMessage()]);
+        } catch (LockTimeout) {
+            throw ValidationException::withMessages(['source_id' => __('orders.refused.busy')]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.allocated')]);
+
+        return back();
+    }
+
+    /**
      * @return array{search: string|null, status: string|null, source: string|null}
      */
     protected function filters(Request $request): array
@@ -251,6 +340,21 @@ class OrderController extends Controller
         $order = Order::query()->where('public_id', $publicId)->firstOrFail();
 
         return $order;
+    }
+
+    /**
+     * A line, scoped to the order it must belong to — a mismatched pair in
+     * the URL is a 404, never a chance to act on someone else's line (§31.3).
+     */
+    protected function line(Order $order, string $publicId): OrderItem
+    {
+        /** @var OrderItem $item */
+        $item = OrderItem::query()
+            ->where('order_id', $order->id)
+            ->where('public_id', $publicId)
+            ->firstOrFail();
+
+        return $item;
     }
 
     protected function actor(Request $request): User

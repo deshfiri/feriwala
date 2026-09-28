@@ -996,6 +996,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.cancellation.store');
 
         /*
+         * Staff source allocation (§5-§8 of the allocation batch, D25).
+         * Reading candidates and confirming one both answer to `order.edit`
+         * (OrderPolicy::transition) — the same ability cancellation already
+         * requires, and the same Gate::before that keeps a business identity
+         * out of every `order.*` ability keeps this staff-only.
+         */
+        Route::get('orders/{order}/lines/{item}/sources', [OrderController::class, 'allocationCandidates'])
+            ->name('orders.lines.sources');
+        Route::post('orders/{order}/lines/{item}/allocation', [OrderController::class, 'allocate'])
+            ->name('orders.lines.allocation.store');
+
+        /*
          * The returns desk (§18.2, §19.1, §26.3, P6-12). Each step asks for its
          * own permission — see OrderReturnController — and recording a refund
          * settled by hand sits behind a freshly confirmed password, as sending

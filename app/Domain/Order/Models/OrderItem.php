@@ -7,6 +7,8 @@ use App\Concerns\HasPublicId;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Models\StockReservation;
+use App\Domain\Order\Actions\AllocateOrderLineSource;
+use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Supplier\Models\SupplierPayable;
@@ -63,6 +65,7 @@ use LogicException;
  * @property-read Supplier|null $supplier
  * @property-read SupplierOffer|null $supplierOffer
  * @property-read SupplierPayable|null $supplierPayable
+ * @property-read OrderItemAllocation|null $activeAllocation
  *
  * A Supplier-backed line also snapshots, once and immutably, the Supplier, the
  * exact offer and price version it was allocated at, both rates and the margin
@@ -131,6 +134,19 @@ class OrderItem extends Model
     public function supplierPayable(): HasOne
     {
         return $this->hasOne(SupplierPayable::class);
+    }
+
+    /**
+     * The staff-chosen source currently holding this line, if any
+     * ({@see AllocateOrderLineSource}) — separate
+     * from the columns above, which snapshot what a dropshipping/wholesale
+     * line was allocated to at placement time and are never rewritten.
+     *
+     * @return HasOne<OrderItemAllocation, $this>
+     */
+    public function activeAllocation(): HasOne
+    {
+        return $this->hasOne(OrderItemAllocation::class)->where('status', AllocationStatus::Active);
     }
 
     protected static function booted(): void
