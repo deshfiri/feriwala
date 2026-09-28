@@ -140,6 +140,16 @@ class KycSubmission extends Model
     }
 
     /**
+     * Who withdrew this round (§7.2).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
      * Whether an administrator asked for this round (§7.2).
      *
      * Distinct from a round the applicant opened themselves. The two mean

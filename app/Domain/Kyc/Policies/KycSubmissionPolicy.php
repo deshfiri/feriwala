@@ -65,6 +65,27 @@ class KycSubmissionPolicy
         return $user->can($this->permission(PermissionAction::Verify));
     }
 
+    /**
+     * Withdraw a re-verification nobody has answered (§7.2).
+     *
+     * The same `kyc.verify` permission that opens a round, because this is the
+     * undo of that act rather than a decision about the business: whoever can
+     * require verification must be able to take the requirement back when it
+     * was asked in error, without also being able to approve an account.
+     *
+     * Whether the round is *withdrawable* — unanswered, not already decided —
+     * belongs to {@see CancelKycReverification}, under its lock. A policy that
+     * duplicated those checks would be a second copy to drift.
+     */
+    public function cancelUpdate(User $user, KycSubmission $submission): bool
+    {
+        if ($user->accountMembership()->where('business_account_id', $submission->business_account_id)->exists()) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::Verify));
+    }
+
     protected function permission(PermissionAction $action): string
     {
         return PermissionCatalogue::name(PermissionModule::Kyc, $action);

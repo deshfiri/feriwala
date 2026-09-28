@@ -116,7 +116,7 @@ class PlaceWholesaleOrder
          * have to be settled, and a business asked to re-verify has not been
          * found guilty of anything.
          */
-        if ($this->kycRestrictions->blocksWholesaleOrders($account)) {
+        if ($this->kycRestrictions->blocksNewOrders($account)) {
             throw OrderRefused::kycReverificationOutstanding(
                 $this->kycRestrictions->refusalReason($account),
             );

@@ -12,6 +12,7 @@ use App\Domain\Kyc\Models\KycSubmission;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Notification;
 
 /*
@@ -76,7 +77,7 @@ describe('opening a re-verification round', function () {
     });
 
     it('does not change the account status — the business keeps trading while it answers', function () {
-        requireReverification([KycConsequence::BlockWholesaleOrders]);
+        requireReverification([KycConsequence::BlockNewOrders]);
 
         expect($this->account->fresh()->status)->toBe(AccountStatus::Active);
     });
@@ -133,7 +134,7 @@ describe('opening a re-verification round', function () {
             'status' => KycStatus::Draft,
             'round' => 5,
             'purpose' => KycRoundPurpose::Reverification,
-            'consequences' => [KycConsequence::BlockWholesaleOrders->value],
+            'consequences' => [KycConsequence::BlockNewOrders->value],
         ]))->toThrow(QueryException::class);
     });
 
@@ -144,7 +145,7 @@ describe('opening a re-verification round', function () {
             'round' => 6,
             'purpose' => KycRoundPurpose::Onboarding,
             'deadline_at' => now()->addDays(7),
-            'consequences' => [KycConsequence::BlockWholesaleOrders->value],
+            'consequences' => [KycConsequence::BlockNewOrders->value],
         ]))->toThrow(QueryException::class);
     });
 });
@@ -155,17 +156,17 @@ describe('what the consequences actually restrict', function () {
 
         $restrictions = app(KycRestrictions::class);
 
-        expect($restrictions->blocksWholesaleOrders($this->account))->toBeFalse()
+        expect($restrictions->blocksNewOrders($this->account))->toBeFalse()
             ->and($restrictions->blocksPublishing($this->account))->toBeFalse()
             ->and($restrictions->blocksWithdrawals($this->account))->toBeFalse();
     });
 
     it('restricts only what was chosen', function () {
-        requireReverification([KycConsequence::BlockWholesaleOrders]);
+        requireReverification([KycConsequence::BlockNewOrders]);
 
         $restrictions = app(KycRestrictions::class);
 
-        expect($restrictions->blocksWholesaleOrders($this->account))->toBeTrue()
+        expect($restrictions->blocksNewOrders($this->account))->toBeTrue()
             // Independently configurable: blocking orders is not blocking
             // everything.
             ->and($restrictions->blocksPublishing($this->account))->toBeFalse()
@@ -183,13 +184,13 @@ describe('what the consequences actually restrict', function () {
     });
 
     it('stops restricting once the round is approved', function () {
-        $round = requireReverification([KycConsequence::BlockWholesaleOrders]);
+        $round = requireReverification([KycConsequence::BlockNewOrders]);
 
-        expect(app(KycRestrictions::class)->blocksWholesaleOrders($this->account))->toBeTrue();
+        expect(app(KycRestrictions::class)->blocksNewOrders($this->account))->toBeTrue();
 
         $round->forceFill(['status' => KycStatus::Approved, 'reviewed_at' => now()])->save();
 
-        expect(app(KycRestrictions::class)->blocksWholesaleOrders($this->account))->toBeFalse();
+        expect(app(KycRestrictions::class)->blocksNewOrders($this->account))->toBeFalse();
     });
 
     it('stops restricting once the round is withdrawn', function () {
@@ -213,11 +214,50 @@ describe('what the consequences actually restrict', function () {
 
     it('never tells the business the reviewer\'s internal reason', function () {
         // §7.3: the private assessment is not what the account holder reads.
-        requireReverification([KycConsequence::BlockWholesaleOrders]);
+        requireReverification([KycConsequence::BlockNewOrders]);
 
         $message = app(KycRestrictions::class)->refusalReason($this->account);
 
         expect($message)->not->toContain('Trade licence expired.')
             ->and($message)->toContain('verification');
+    });
+
+    /*
+     * The refusal is the one piece of §7.4 the account holder actually reads,
+     * so it is the piece that most needs to be in their language. It used to
+     * be an `__()` call keyed by an English sentence, and this application has
+     * no JSON lang files at all — so Bangla fell through to the English key
+     * and the reader was told, in English, why they could not trade.
+     */
+    it('reads the refusal in the current locale', function () {
+        requireReverification([KycConsequence::BlockNewOrders]);
+
+        App::setLocale('en');
+        $english = app(KycRestrictions::class)->refusalReason($this->account);
+
+        App::setLocale('bn');
+        $bangla = app(KycRestrictions::class)->refusalReason($this->account);
+
+        App::setLocale('en');
+
+        expect($bangla)->not->toBe($english)
+            // Never the raw dotted key, which reads as a bug rather than as a
+            // missing translation.
+            ->and($bangla)->not->toContain('kyc.restriction')
+            ->and($english)->not->toContain('kyc.restriction')
+            ->and($bangla)->toContain('যাচাই');
+    });
+
+    it('names the deadline in the refusal when there is one', function () {
+        requireReverification([KycConsequence::BlockNewOrders]);
+
+        foreach (['en', 'bn'] as $locale) {
+            App::setLocale($locale);
+
+            expect(app(KycRestrictions::class)->refusalReason($this->account))
+                ->not->toContain(':date');
+        }
+
+        App::setLocale('en');
     });
 });

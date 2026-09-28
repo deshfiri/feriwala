@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
+use App\Http\Controllers\Admin\KycReverificationCancellationController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
 use App\Http\Controllers\Admin\OrderController;
@@ -588,6 +589,16 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::post('accounts/{account}/kyc-update', KycUpdateRequestController::class)
             ->name('kyc.request-update');
+
+        /*
+         * Withdrawing one that nobody answered (§7.2).
+         *
+         * Keyed on the round, unlike the request above: here there *is* one to
+         * name, and naming the account instead would leave the endpoint
+         * guessing which round was meant the moment an account had two.
+         */
+        Route::post('kyc/{submission}/withdraw', KycReverificationCancellationController::class)
+            ->name('kyc.withdraw');
 
         /*
          * Stopping and restarting a trading business (§5.3).

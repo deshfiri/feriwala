@@ -10,6 +10,7 @@ use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Order\Data\WebsiteOrderLine;
 use App\Domain\Order\Data\WebsiteOrderPaymentQuote;
 use App\Domain\Order\Data\WebsiteOrderQuote;
@@ -88,6 +89,7 @@ class PlaceWebsiteOrder
         protected WebsiteAddresses $addresses,
         protected AllocateSupplierOrderLine $supplierAllocation,
         protected AccrueSupplierPayable $supplierPayables,
+        protected KycRestrictions $kycRestrictions,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
     ) {}
@@ -100,6 +102,21 @@ class PlaceWebsiteOrder
     public function handle(Website $website, WebsiteOrderSubmission $submission): array
     {
         if (! $website->status->isLive()) {
+            throw WebsiteOrderRefused::notAcceptingOrders();
+        }
+
+        /*
+         * An outstanding KYC re-verification can stop new orders (§7.4), and
+         * a dropshipping order is a new order however it arrives.
+         *
+         * Deliberately `notAcceptingOrders()` — the same answer a paused shop
+         * gives. This path is the Storefront API, reached by a partner's own
+         * website and ultimately by their customer, and neither is entitled
+         * to learn that the merchant is under verification. A distinct
+         * KYC-shaped error here would leak an account's compliance state to
+         * anyone who could place an order.
+         */
+        if ($this->kycRestrictions->blocksNewOrders($website->businessAccount)) {
             throw WebsiteOrderRefused::notAcceptingOrders();
         }
 

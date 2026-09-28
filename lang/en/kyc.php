@@ -191,4 +191,24 @@ return [
         'already_decided' => 'This round has already been decided.',
         'not_permitted' => 'Your role does not include deciding KYC applications.',
     ],
+
+    /*
+     * What an account holder is told when a §7.4 restriction refuses something.
+     *
+     * Never the internal reason the round was opened for (§7.3) — only that
+     * verification is outstanding, and by when. An account told "blocked:
+     * suspected forgery" learns something the reviewer wrote privately.
+     */
+    'restriction' => [
+        'outstanding_by' => 'Your account verification is outstanding. Complete it by :date to continue.',
+        'outstanding' => 'Your account verification is outstanding. Complete it to continue.',
+    ],
+
+    /* Staff-facing, on the §7.2 request and withdrawal actions. */
+    'request' => [
+        'never_submitted' => 'This account has never submitted verification, so there is nothing to update.',
+        'already_in_progress' => 'A verification round is already in progress.',
+        'requested' => 'Verification update requested.',
+        'withdrawn' => 'Verification request withdrawn.',
+    ],
 ];

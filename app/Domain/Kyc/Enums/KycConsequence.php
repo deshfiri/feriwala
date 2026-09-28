@@ -34,8 +34,15 @@ enum KycConsequence: string
      */
     case WarningOnly = 'warning_only';
 
-    /** No new wholesale orders. Existing ones are untouched. */
-    case BlockWholesaleOrders = 'block_wholesale_orders';
+    /**
+     * No new orders, wholesale or website/dropshipping. Existing ones are
+     * untouched.
+     *
+     * One consequence rather than two: a business we are not sure about
+     * should not be able to take new work through whichever channel was left
+     * switched on.
+     */
+    case BlockNewOrders = 'block_new_orders';
 
     /** No new products published to a partner website. Published ones stay up. */
     case BlockPublishing = 'block_publishing';
@@ -64,7 +71,7 @@ enum KycConsequence: string
     public function appliesBeforeDeadline(): bool
     {
         return match ($this) {
-            self::BlockWholesaleOrders,
+            self::BlockNewOrders,
             self::BlockPublishing,
             self::BlockWithdrawals => true,
             self::WarningOnly,

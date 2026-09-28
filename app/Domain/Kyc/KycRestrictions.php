@@ -37,9 +37,9 @@ class KycRestrictions
      */
     protected ?array $cache = null;
 
-    public function blocksWholesaleOrders(BusinessAccount $account): bool
+    public function blocksNewOrders(BusinessAccount $account): bool
     {
-        return $this->imposes($account, KycConsequence::BlockWholesaleOrders);
+        return $this->imposes($account, KycConsequence::BlockNewOrders);
     }
 
     public function blocksPublishing(BusinessAccount $account): bool
@@ -100,12 +100,12 @@ class KycRestrictions
         $deadline = $case?->deadline_at;
 
         if ($deadline !== null && ! $deadline->isPast()) {
-            return __('Your account verification is outstanding. Complete it by :date to continue.', [
+            return __('kyc.restriction.outstanding_by', [
                 'date' => $deadline->toFormattedDayDateString(),
             ]);
         }
 
-        return __('Your account verification is outstanding. Complete it to continue.');
+        return __('kyc.restriction.outstanding');
     }
 
     /**

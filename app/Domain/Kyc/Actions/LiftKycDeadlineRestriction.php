@@ -26,9 +26,12 @@ use Illuminate\Database\DatabaseManager;
  *
  *   - the account is in the state the deadline put it in, not one an
  *     administrator chose afterwards — a business suspended for fraud must not
- *     be released by approving a document
+ *     be released by approving a document, and a suspension is never lifted
+ *     here at all
  *   - a recorded `enforced` event says this restriction was ours to lift
- *   - KYC is now approved, so the reason for the restriction is actually gone
+ *   - **the round that caused it** is now approved, so the reason for the
+ *     restriction is actually gone — not merely that the account has some
+ *     approved round somewhere, which nearly all of them do
  *
  * Idempotent through {@see KycDeadlineEvent::claim()}, like enforcement: the
  * `restored` claim is an insert against a unique index, so a second approval or
@@ -68,14 +71,23 @@ class LiftKycDeadlineRestriction
                 return null;
             }
 
-            if (! $this->kycNowApproved($locked)) {
+            $submission = KycSubmission::query()->find($enforced->kyc_submission_id);
+
+            /*
+             * **The round that caused this restriction** must be the one now
+             * approved — not merely "some approved round exists".
+             *
+             * An account almost always has an approved round: the onboarding
+             * one. Reading any of them would lift a restriction imposed by a
+             * later re-verification the moment anything called this, while
+             * that re-verification was still outstanding — releasing a
+             * business from a requirement it had not met.
+             */
+            if ($submission === null || $submission->status !== KycStatus::Approved) {
                 return null;
             }
 
-            $submission = KycSubmission::query()->find($enforced->kyc_submission_id);
-
-            if ($submission === null
-                || KycDeadlineEvent::claim($submission, KycDeadlineEvent::RESTORED) === null) {
+            if (KycDeadlineEvent::claim($submission, KycDeadlineEvent::RESTORED) === null) {
                 return null;
             }
 
@@ -108,16 +120,5 @@ class LiftKycDeadlineRestriction
         $account->owner?->notify(new KycDeadlineRestrictionLifted);
 
         return true;
-    }
-
-    /**
-     * Whether the reason for the restriction has actually gone.
-     */
-    protected function kycNowApproved(BusinessAccount $account): bool
-    {
-        return KycSubmission::query()
-            ->where('business_account_id', $account->id)
-            ->where('status', KycStatus::Approved)
-            ->exists();
     }
 }

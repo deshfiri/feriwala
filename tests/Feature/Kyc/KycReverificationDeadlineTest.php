@@ -11,6 +11,7 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Order\Models\Order;
+use App\Models\User;
 use App\Notifications\Account\AccountSuspended;
 use App\Notifications\Kyc\KycReverificationCancelled;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -108,12 +109,12 @@ describe('a deadline that passes', function () {
 
     it('does not suspend an account whose case only blocks orders', function () {
         // Independently configurable: blocking new orders is not suspension.
-        $round = kycDeadlineTestOverdueRound([KycConsequence::BlockWholesaleOrders]);
+        $round = kycDeadlineTestOverdueRound([KycConsequence::BlockNewOrders]);
 
         app(EnforceKycDeadline::class)->handle($round);
 
         expect($this->account->fresh()->status)->toBe(AccountStatus::Active)
-            ->and(app(KycRestrictions::class)->blocksWholesaleOrders($this->account))->toBeTrue();
+            ->and(app(KycRestrictions::class)->blocksNewOrders($this->account))->toBeTrue();
     });
 
     it('acts exactly once however many times the sweep runs', function () {
@@ -152,11 +153,95 @@ describe('a deadline that passes', function () {
     });
 });
 
+/*
+ * The action has been able to withdraw a round since it was written; for a
+ * while nothing could reach it. An undo that exists only in the domain layer
+ * leaves staff with the two exits the action was built to avoid — approving a
+ * round nobody submitted, or rejecting a business that did nothing wrong.
+ */
+describe('the withdraw endpoint', function () {
+    it('withdraws an unanswered round and lifts what it imposed', function () {
+        $round = kycDeadlineTestRound([KycConsequence::BlockNewOrders]);
+
+        $this->actingAs($this->officer)
+            ->from(route('admin.kyc.index'))
+            ->post(route('admin.kyc.withdraw', $round), [
+                'reason' => 'Licence arrived by email.',
+            ])
+            ->assertRedirect(route('admin.kyc.index'))
+            ->assertSessionHas('success');
+
+        expect($round->fresh()->cancelled_at)->not->toBeNull()
+            ->and(app(KycRestrictions::class)->blocksNewOrders($this->account))->toBeFalse();
+    });
+
+    it('requires a reason', function () {
+        $round = kycDeadlineTestRound([KycConsequence::BlockNewOrders]);
+
+        $this->actingAs($this->officer)
+            ->from(route('admin.kyc.index'))
+            ->post(route('admin.kyc.withdraw', $round), [])
+            ->assertSessionHasErrors('reason');
+
+        expect($round->fresh()->cancelled_at)->toBeNull();
+    });
+
+    it('turns an already-withdrawn round into a form error, not a 500', function () {
+        // Two staff reaching the same round is ordinary, not exceptional.
+        $round = kycDeadlineTestRound([KycConsequence::BlockNewOrders]);
+
+        app(CancelKycReverification::class)->handle($round, $this->officer, 'First.');
+
+        $this->actingAs($this->officer)
+            ->from(route('admin.kyc.index'))
+            ->post(route('admin.kyc.withdraw', $round->fresh()), [
+                'reason' => 'Second.',
+            ])
+            ->assertSessionHasErrors('reason');
+
+        expect($round->fresh()->cancellation_reason)->toBe('First.');
+    });
+
+    it('refuses to withdraw a round the business has already submitted', function () {
+        // Someone has done the work and is owed a decision.
+        $round = kycDeadlineTestRound([KycConsequence::BlockNewOrders]);
+        $round->forceFill(['status' => KycStatus::Submitted, 'submitted_at' => now()])->save();
+
+        $this->actingAs($this->officer)
+            ->from(route('admin.kyc.index'))
+            ->post(route('admin.kyc.withdraw', $round->fresh()), [
+                'reason' => 'Changed our mind.',
+            ])
+            ->assertSessionHasErrors('reason');
+
+        expect($round->fresh()->cancelled_at)->toBeNull();
+    });
+
+    it('turns away somebody without the verify permission', function () {
+        $round = kycDeadlineTestRound([KycConsequence::BlockNewOrders]);
+
+        $this->actingAs(User::factory()->staff()->create())
+            ->post(route('admin.kyc.withdraw', $round), ['reason' => 'No.'])
+            ->assertForbidden();
+
+        expect($round->fresh()->cancelled_at)->toBeNull();
+    });
+
+    it('uses the round public id, never a database id', function () {
+        $round = kycDeadlineTestRound();
+
+        expect(route('admin.kyc.withdraw', $round))
+            ->toContain($round->public_id)
+            ->and(route('admin.kyc.withdraw', $round))
+            ->not->toContain("/kyc/{$round->id}/");
+    });
+});
+
 describe('withdrawing a request nobody answered', function () {
     it('marks it cancelled, keeps it in history, and lifts its restrictions', function () {
-        $round = kycDeadlineTestRound([KycConsequence::BlockWholesaleOrders]);
+        $round = kycDeadlineTestRound([KycConsequence::BlockNewOrders]);
 
-        expect(app(KycRestrictions::class)->blocksWholesaleOrders($this->account))->toBeTrue();
+        expect(app(KycRestrictions::class)->blocksNewOrders($this->account))->toBeTrue();
 
         app(CancelKycReverification::class)->handle($round, $this->officer, 'Licence arrived by email.');
 
@@ -167,7 +252,7 @@ describe('withdrawing a request nobody answered', function () {
             ->and($round->cancellation_reason)->toBe('Licence arrived by email.')
             // Kept, not deleted: it is evidence that we asked.
             ->and(KycSubmission::query()->whereKey($round->id)->exists())->toBeTrue()
-            ->and(app(KycRestrictions::class)->blocksWholesaleOrders($this->account))->toBeFalse();
+            ->and(app(KycRestrictions::class)->blocksNewOrders($this->account))->toBeFalse();
 
         Notification::assertSentTo($this->account->owner, KycReverificationCancelled::class);
     });
