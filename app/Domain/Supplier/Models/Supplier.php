@@ -66,7 +66,6 @@ use Illuminate\Notifications\Notifiable;
  * @property-read User|null $reviewedBy
  * @property-read Collection<int, SupplierStatusChange> $statusHistory
  * @property-read Collection<int, SupplierWallet> $wallets
- * @property-read Collection<int, SupplierPayoutMethod> $payoutMethods
  * @property-read Collection<int, SupplierWithdrawal> $withdrawals
  */
 #[Fillable([
@@ -167,14 +166,6 @@ class Supplier extends Authenticatable implements MustVerifyEmail
     public function wallets(): HasMany
     {
         return $this->hasMany(SupplierWallet::class);
-    }
-
-    /**
-     * @return HasMany<SupplierPayoutMethod, $this>
-     */
-    public function payoutMethods(): HasMany
-    {
-        return $this->hasMany(SupplierPayoutMethod::class);
     }
 
     /**

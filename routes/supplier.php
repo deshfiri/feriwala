@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BankLookupController;
 use App\Http\Controllers\LocationLookupController;
 use App\Http\Controllers\Supplier\AccountController;
 use App\Http\Controllers\Supplier\AddressController;
@@ -134,7 +135,13 @@ Route::prefix('supplier')
                 Route::get('payout-methods', [PayoutMethodController::class, 'index'])->name('payout-methods.index');
                 Route::post('payout-methods', [PayoutMethodController::class, 'store'])->name('payout-methods.store');
                 Route::put('payout-methods/{method}', [PayoutMethodController::class, 'update'])->name('payout-methods.update');
+                Route::post('payout-methods/{method}/default', [PayoutMethodController::class, 'setDefault'])->name('payout-methods.default');
                 Route::post('payout-methods/{method}/archive', [PayoutMethodController::class, 'archive'])->name('payout-methods.archive');
+
+                // The bank directory's cached Bank -> Branch lookup, behind
+                // the bank payout-method form (Shared Payout Methods batch).
+                Route::get('banks', [BankLookupController::class, 'banks'])->name('banks.index');
+                Route::get('banks/{bankCode}/branches', [BankLookupController::class, 'branches'])->name('banks.branches');
 
                 // Registered, pickup and return addresses (Location Directory
                 // + Shared Address module).

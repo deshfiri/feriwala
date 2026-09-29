@@ -1,6 +1,7 @@
 import { Form } from '@inertiajs/react';
 import { useState } from 'react';
-import PayoutMethodController from '@/actions/App/Http/Controllers/Supplier/PayoutMethodController';
+import PayoutMethodController from '@/actions/App/Http/Controllers/Erp/PayoutMethodController';
+import BankFields from '@/components/payout/bank-fields';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,15 +16,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import BankFields from '@/components/payout/bank-fields';
-import {
-    branches as bankBranches,
-    index as bankIndex,
-} from '@/routes/supplier/banks';
+import { branches as bankBranches, index as bankIndex } from '@/routes/banks';
 import {
     children as locationChildren,
     divisions as locationDivisions,
-} from '@/routes/supplier/locations';
+} from '@/routes/locations';
 
 const controlClass =
     'border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
@@ -37,11 +34,10 @@ type Method = {
 };
 
 /**
- * Create or update a Supplier payout method (D25, P13-24).
+ * Create or update a `BusinessAccount`'s payout method (D25, P13-24; Shared
+ * Payout Methods batch — the Client/Partner side of the same architecture
+ * {@see \App\Http\Controllers\Supplier\PayoutMethodController} uses).
  *
- * The Supplier guard has no Fortify confirm-password flow, so the change is
- * confirmed inline with the current password instead — checked by the
- * server (`current_password:supplier`), never trusted from the browser.
  * Editing an existing method never shows its saved account number back; a
  * changed number must be typed in full again.
  */
@@ -75,11 +71,11 @@ export default function PayoutMethodDialog({
                 <DialogHeader>
                     <DialogTitle>
                         {isEditing
-                            ? t('supplier.payout_methods.edit')
-                            : t('supplier.payout_methods.add')}
+                            ? t('payout.index.edit')
+                            : t('payout.index.add')}
                     </DialogTitle>
                     <DialogDescription>
-                        {t('supplier.payout_methods.description')}
+                        {t('payout.index.description')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -93,7 +89,7 @@ export default function PayoutMethodDialog({
                         <>
                             <div className="grid gap-2">
                                 <Label htmlFor="payout-type">
-                                    {t('supplier.payout_methods.type')}
+                                    {t('payout.index.type')}
                                 </Label>
                                 <select
                                     id="payout-type"
@@ -119,7 +115,7 @@ export default function PayoutMethodDialog({
 
                             <div className="grid gap-2">
                                 <Label htmlFor="payout-label">
-                                    {t('supplier.payout_methods.label')}
+                                    {t('payout.index.label')}
                                 </Label>
                                 <Input
                                     id="payout-label"
@@ -153,9 +149,7 @@ export default function PayoutMethodDialog({
                             {fields.map((field) => (
                                 <div key={field} className="grid gap-2">
                                     <Label htmlFor={`payout-${field}`}>
-                                        {t(
-                                            `supplier.payout_methods.fields.${field}`,
-                                        )}
+                                        {t(`payout.form.fields.${field}`)}
                                     </Label>
                                     {field === 'account_type' ? (
                                         <select
@@ -170,12 +164,12 @@ export default function PayoutMethodDialog({
                                             </option>
                                             <option value="savings">
                                                 {t(
-                                                    'supplier.payout_methods.account_types.savings',
+                                                    'payout.form.account_types.savings',
                                                 )}
                                             </option>
                                             <option value="current">
                                                 {t(
-                                                    'supplier.payout_methods.account_types.current',
+                                                    'payout.form.account_types.current',
                                                 )}
                                             </option>
                                         </select>
@@ -200,7 +194,7 @@ export default function PayoutMethodDialog({
                                 <div className="grid gap-2">
                                     <Label htmlFor="payout-confirm-account-number">
                                         {t(
-                                            'supplier.payout_methods.fields.confirm_account_number',
+                                            'payout.form.fields.confirm_account_number',
                                         )}
                                     </Label>
                                     <Input
@@ -219,14 +213,12 @@ export default function PayoutMethodDialog({
                                     value="1"
                                     className="accent-brand"
                                 />
-                                {t('supplier.payout_methods.make_default')}
+                                {t('payout.index.make_default')}
                             </label>
 
                             <div className="grid gap-2">
                                 <Label htmlFor="payout-current-password">
-                                    {t(
-                                        'supplier.payout_methods.current_password',
-                                    )}
+                                    {t('payout.form.current_password')}
                                 </Label>
                                 <Input
                                     id="payout-current-password"
@@ -236,9 +228,7 @@ export default function PayoutMethodDialog({
                                     required
                                 />
                                 <p className="text-muted-foreground text-xs">
-                                    {t(
-                                        'supplier.payout_methods.current_password_help',
-                                    )}
+                                    {t('payout.form.current_password_help')}
                                 </p>
                                 <InputError message={errors.current_password} />
                             </div>
@@ -253,7 +243,7 @@ export default function PayoutMethodDialog({
                                 </Button>
                                 <Button type="submit" disabled={processing}>
                                     {processing && <Spinner />}
-                                    {t('supplier.payout_methods.save')}
+                                    {t('payout.form.save')}
                                 </Button>
                             </DialogFooter>
                         </>

@@ -18,6 +18,7 @@ return [
         'retry' => 'Try again',
         'back' => 'Back',
         'next' => 'Next',
+        'select' => 'Select…',
     ],
 
     'states' => [

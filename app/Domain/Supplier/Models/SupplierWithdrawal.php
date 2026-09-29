@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
+use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Models\User;
 use App\Support\Money\Money;
@@ -26,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * {@see HasStateMachine::transitionTo()} via {@see RecordsStatusHistory}.
  *
  * `payout_snapshot` is frozen at request time from the
- * {@see SupplierPayoutMethod} it names, so an edit or an archive of that
+ * {@see PayoutMethod} it names, so an edit or an archive of that
  * method afterwards can never change what this withdrawal says it was paid
  * to.
  *
@@ -35,7 +36,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $reference
  * @property int $supplier_id
  * @property int $supplier_wallet_id
- * @property int $supplier_payout_method_id
+ * @property int $payout_method_id
  * @property array<string, mixed> $payout_snapshot
  * @property Money $amount
  * @property string $currency_code
@@ -53,7 +54,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable $created_at
  * @property-read Supplier $supplier
  * @property-read SupplierWallet $wallet
- * @property-read SupplierPayoutMethod $payoutMethod
+ * @property-read PayoutMethod $payoutMethod
  * @property-read Collection<int, SupplierWithdrawalStatusChange> $statusHistory
  */
 class SupplierWithdrawal extends Model
@@ -102,11 +103,11 @@ class SupplierWithdrawal extends Model
     }
 
     /**
-     * @return BelongsTo<SupplierPayoutMethod, $this>
+     * @return BelongsTo<PayoutMethod, $this>
      */
     public function payoutMethod(): BelongsTo
     {
-        return $this->belongsTo(SupplierPayoutMethod::class, 'supplier_payout_method_id');
+        return $this->belongsTo(PayoutMethod::class, 'payout_method_id');
     }
 
     /**

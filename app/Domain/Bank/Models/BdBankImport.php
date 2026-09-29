@@ -22,4 +22,13 @@ class BdBankImport extends Model
             'imported_at' => 'immutable_datetime',
         ];
     }
+
+    /**
+     * The bank directory's current cache-bust version — the latest
+     * completed `import` run, or 0 before anything has ever been imported.
+     */
+    public static function currentVersion(): int
+    {
+        return static::query()->where('mode', 'import')->max('id') ?? 0;
+    }
 }

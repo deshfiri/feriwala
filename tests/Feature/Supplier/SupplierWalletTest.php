@@ -1,6 +1,8 @@
 <?php
 
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Bank\Models\BdBank;
+use App\Domain\Bank\Models\BdBankBranch;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Actions\DecideOrderReturn;
@@ -13,6 +15,12 @@ use App\Domain\Order\Enums\ReturnDisposition;
 use App\Domain\Order\Enums\ReturnReason;
 use App\Domain\Order\Models\Order;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Payout\Actions\ArchivePayoutMethod;
+use App\Domain\Payout\Actions\SavePayoutMethod;
+use App\Domain\Payout\Enums\PayoutMethodStatus;
+use App\Domain\Payout\Enums\PayoutMethodType;
+use App\Domain\Payout\Enums\PayoutOwnerType;
+use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Supplier\Actions\AdvanceSupplierWithdrawalStatus;
@@ -21,12 +29,9 @@ use App\Domain\Supplier\Actions\PaySupplierWithdrawal;
 use App\Domain\Supplier\Actions\RecordSupplierPayableDelivery;
 use App\Domain\Supplier\Actions\RejectOrFailSupplierWithdrawal;
 use App\Domain\Supplier\Actions\RequestSupplierWithdrawal;
-use App\Domain\Supplier\Actions\SavePayoutMethod;
 use App\Domain\Supplier\Actions\SetSupplierWithdrawalLimits;
 use App\Domain\Supplier\Actions\SettleSupplierPayable;
 use App\Domain\Supplier\Enums\PayableStatus;
-use App\Domain\Supplier\Enums\SupplierPayoutMethodStatus;
-use App\Domain\Supplier\Enums\SupplierPayoutMethodType;
 use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Domain\Supplier\Exceptions\SupplierPayableSettlementRefused;
 use App\Domain\Supplier\Exceptions\SupplierWalletOperationRefused;
@@ -34,7 +39,6 @@ use App\Domain\Supplier\Exceptions\SupplierWithdrawalRefused;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierLedgerEntry;
 use App\Domain\Supplier\Models\SupplierPayable;
-use App\Domain\Supplier\Models\SupplierPayoutMethod;
 use App\Domain\Supplier\Models\SupplierWallet;
 use App\Domain\Website\Actions\ManageWebhookEndpoint;
 use App\Domain\Website\CodTerms;
@@ -259,10 +263,11 @@ describe('reversal after settlement', function () {
 
         // A withdrawal takes almost everything available first.
         $method = app(SavePayoutMethod::class)->handle(
-            $this->supplier,
-            SupplierPayoutMethodType::Bkash,
-            'Primary bKash',
-            ['account_name' => 'Test Supplier', 'account_number' => '01711112222'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Bkash,
+            label: 'Primary bKash',
+            details: ['account_holder_name' => 'Test Supplier', 'account_number' => '01711112222'],
         );
         app(RequestSupplierWithdrawal::class)->handle($this->supplier, $method, Money::fromDecimal('1500.00', Currency::BDT), 'wallet-test:withdrawal:1');
 
@@ -298,24 +303,61 @@ describe('reversal after settlement', function () {
     });
 });
 
+/**
+ * A minimal, valid `BdBankBranch` — payout_methods' `bank_fields_match_type`
+ * check constraint requires a real bd_bank_id/bd_bank_branch_id whenever a
+ * payout method's type is BankAccount.
+ */
+function supplierWalletTestBankBranch(): BdBankBranch
+{
+    $bank = BdBank::create([
+        'bank_code' => '001',
+        'name' => 'Test Bank',
+        'slug' => 'test-bank',
+        'payable' => true,
+        'available_in_selector' => true,
+        'is_active' => true,
+    ]);
+
+    return BdBankBranch::create([
+        'bank_id' => $bank->id,
+        'routing_number' => '001120100',
+        'name' => 'Head Office',
+        'slug' => 'head-office',
+        'district_source_name' => 'Dhaka',
+        'source' => 'test',
+        'source_status' => 'legacy_unverified',
+        'is_active' => true,
+    ]);
+}
+
 describe('payout methods', function () {
     it('creates a payout method, storing only the masked number outside the encrypted column', function () {
+        $branch = supplierWalletTestBankBranch();
+
         $method = app(SavePayoutMethod::class)->handle(
-            $this->supplier,
-            SupplierPayoutMethodType::BankAccount,
-            'Primary bank',
-            ['bank_name' => 'City Bank', 'account_name' => 'Test Supplier', 'account_number' => '123456789012'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::BankAccount,
+            label: 'Primary bank',
+            details: ['bank_name' => 'City Bank', 'account_holder_name' => 'Test Supplier', 'account_number' => '123456789012'],
+            bdBankId: $branch->bank_id,
+            bdBankBranchId: $branch->id,
         );
 
         expect($method->last_four)->toBe('9012')
             ->and($method->maskedNumber())->toBe('••••9012')
-            ->and($method->status)->toBe(SupplierPayoutMethodStatus::Active)
+            ->and($method->status)->toBe(PayoutMethodStatus::Active)
             ->and(json_encode($method))->not->toContain('123456789012');
     });
 
     it('archives a payout method without deleting it, and a withdrawal keeps its own snapshot', function () {
         $method = app(SavePayoutMethod::class)->handle(
-            $this->supplier, SupplierPayoutMethodType::Nagad, 'Nagad', ['account_name' => 'Test', 'account_number' => '01899990000'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Nagad,
+            label: 'Nagad',
+            details: ['account_holder_name' => 'Test', 'account_number' => '01899990000'],
         );
 
         $payable = supplierWalletTestEligiblePayable(1);
@@ -327,16 +369,20 @@ describe('payout methods', function () {
         // Renaming the method afterwards changes nothing about the snapshot
         // the withdrawal already took, and the row is archived, not deleted.
         app(SavePayoutMethod::class)->handle(
-            $this->supplier, SupplierPayoutMethodType::Nagad, 'Nagad (renamed)', ['account_name' => 'Test', 'account_number' => '01711110000'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Nagad,
+            label: 'Nagad (renamed)',
+            details: ['account_holder_name' => 'Test', 'account_number' => '01711110000'],
             existing: $method,
         );
-        app(SavePayoutMethod::class)->archive($method->fresh());
+        app(ArchivePayoutMethod::class)->handle($method->fresh());
 
         // toEqual, not toBe: jsonb does not preserve key order, so a round
         // trip through the database is only guaranteed to match by value.
-        expect($method->fresh()->status)->toBe(SupplierPayoutMethodStatus::Archived)
+        expect($method->fresh()->status)->toBe(PayoutMethodStatus::Archived)
             ->and($method->fresh()->label)->toBe('Nagad (renamed)')
-            ->and(SupplierPayoutMethod::query()->count())->toBe(1)
+            ->and(PayoutMethod::query()->where('owner_type', PayoutOwnerType::Supplier->value)->where('owner_id', $this->supplier->id)->count())->toBe(1)
             ->and($withdrawal->fresh()->payout_snapshot)->toEqual($snapshotBefore);
     });
 });
@@ -348,7 +394,11 @@ describe('withdrawals', function () {
 
         $this->wallet = SupplierWallet::query()->where('supplier_id', $this->supplier->id)->sole();
         $this->method = app(SavePayoutMethod::class)->handle(
-            $this->supplier, SupplierPayoutMethodType::Bkash, 'bKash', ['account_name' => 'Test', 'account_number' => '01711112222'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Bkash,
+            label: 'bKash',
+            details: ['account_holder_name' => 'Test', 'account_number' => '01711112222'],
         );
     });
 

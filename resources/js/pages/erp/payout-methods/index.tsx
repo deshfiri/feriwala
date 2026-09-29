@@ -1,15 +1,16 @@
 import { Head, router } from '@inertiajs/react';
 import { CreditCard } from 'lucide-react';
 import { useState } from 'react';
-import PayoutMethodController from '@/actions/App/Http/Controllers/Supplier/PayoutMethodController';
+import PayoutMethodController from '@/actions/App/Http/Controllers/Erp/PayoutMethodController';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
-import PayoutMethodDialog from '@/pages/supplier/payout-methods/payout-method-dialog';
-import ArchivePayoutMethodDialog from '@/pages/supplier/payout-methods/archive-payout-method-dialog';
+import { index } from '@/routes/payout-methods';
+import PayoutMethodDialog from '@/pages/erp/payout-methods/payout-method-dialog';
+import ArchivePayoutMethodDialog from '@/pages/erp/payout-methods/archive-payout-method-dialog';
 
 type Method = {
     id: string;
@@ -28,12 +29,14 @@ type Method = {
 
 type TypeOption = { value: string; label: string; fields: string[] };
 
-export default function SupplierPayoutMethodsIndex({
+export default function ErpPayoutMethodsIndex({
     methods,
     types,
+    can,
 }: {
     methods: Method[];
     types: TypeOption[];
+    can: { create: boolean };
 }) {
     const { t } = useTranslation();
     const [creating, setCreating] = useState(false);
@@ -44,26 +47,26 @@ export default function SupplierPayoutMethodsIndex({
 
     return (
         <>
-            <Head title={t('supplier.payout_methods.title')} />
+            <Head title={t('payout.index.title')} />
 
             <PageContainer>
                 <PageHeader
-                    title={t('supplier.payout_methods.title')}
-                    description={t('supplier.payout_methods.description')}
+                    title={t('payout.index.title')}
+                    description={t('payout.index.description')}
                     actions={
-                        <Button size="sm" onClick={() => setCreating(true)}>
-                            {t('supplier.payout_methods.add')}
-                        </Button>
+                        can.create && (
+                            <Button size="sm" onClick={() => setCreating(true)}>
+                                {t('payout.index.add')}
+                            </Button>
+                        )
                     }
                 />
 
                 {active.length === 0 ? (
                     <EmptyState
                         icon={CreditCard}
-                        title={t('supplier.payout_methods.empty_title')}
-                        description={t(
-                            'supplier.payout_methods.empty_description',
-                        )}
+                        title={t('payout.index.empty_title')}
+                        description={t('payout.index.empty_description')}
                     />
                 ) : (
                     <ul className="grid gap-4 sm:grid-cols-2">
@@ -93,19 +96,15 @@ export default function SupplierPayoutMethodsIndex({
                                     {method.is_default && (
                                         <StatusPill
                                             tone="success"
-                                            label={t(
-                                                'supplier.payout_methods.default',
-                                            )}
+                                            label={t('payout.index.default')}
                                         />
                                     )}
                                 </div>
 
                                 <p className="text-muted-foreground text-xs">
                                     {method.verified_at
-                                        ? t('supplier.payout_methods.verified')
-                                        : t(
-                                              'supplier.payout_methods.not_verified',
-                                          )}
+                                        ? t('payout.index.verified')
+                                        : t('payout.index.not_verified')}
                                 </p>
 
                                 <div className="flex flex-wrap gap-2">
@@ -114,7 +113,7 @@ export default function SupplierPayoutMethodsIndex({
                                         size="sm"
                                         onClick={() => setEditing(method)}
                                     >
-                                        {t('supplier.payout_methods.edit')}
+                                        {t('payout.index.edit')}
                                     </Button>
                                     {!method.is_default && (
                                         <Button
@@ -130,9 +129,7 @@ export default function SupplierPayoutMethodsIndex({
                                                 )
                                             }
                                         >
-                                            {t(
-                                                'supplier.payout_methods.make_default',
-                                            )}
+                                            {t('payout.index.make_default')}
                                         </Button>
                                     )}
                                     <Button
@@ -140,7 +137,7 @@ export default function SupplierPayoutMethodsIndex({
                                         size="sm"
                                         onClick={() => setArchiving(method)}
                                     >
-                                        {t('supplier.payout_methods.archive')}
+                                        {t('payout.index.archive')}
                                     </Button>
                                 </div>
                             </li>
@@ -175,3 +172,7 @@ export default function SupplierPayoutMethodsIndex({
         </>
     );
 }
+
+ErpPayoutMethodsIndex.layout = {
+    breadcrumbs: [{ title: 'payout.nav.payout_methods', href: index() }],
+};

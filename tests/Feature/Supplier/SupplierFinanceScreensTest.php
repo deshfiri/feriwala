@@ -3,14 +3,15 @@
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Payout\Actions\SavePayoutMethod;
+use App\Domain\Payout\Enums\PayoutMethodType;
+use App\Domain\Payout\Enums\PayoutOwnerType;
+use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Supplier\Actions\RequestSupplierWithdrawal;
-use App\Domain\Supplier\Actions\SavePayoutMethod;
 use App\Domain\Supplier\Actions\SettleSupplierPayable;
-use App\Domain\Supplier\Enums\SupplierPayoutMethodType;
 use App\Domain\Supplier\Models\Supplier;
-use App\Domain\Supplier\Models\SupplierPayoutMethod;
 use App\Domain\Supplier\Models\SupplierWallet;
 use App\Domain\Website\Actions\ManageWebhookEndpoint;
 use App\Domain\Website\CodTerms;
@@ -137,12 +138,12 @@ describe('payout methods', function () {
 
         $this->post(route('supplier.payout-methods.store'), [
             'current_password' => 'not-the-password',
-            'type' => SupplierPayoutMethodType::Bkash->value,
+            'type' => PayoutMethodType::Bkash->value,
             'label' => 'Primary bKash',
-            'details' => ['account_name' => 'Test', 'account_number' => '01711112222'],
+            'details' => ['account_holder_name' => 'Test', 'account_number' => '01711112222'],
         ])->assertSessionHasErrors('current_password');
 
-        expect(SupplierPayoutMethod::query()->count())->toBe(0);
+        expect(PayoutMethod::query()->where('owner_type', PayoutOwnerType::Supplier->value)->where('owner_id', $this->supplier->id)->count())->toBe(0);
     });
 
     it('creates a payout method and never exposes the unmasked number to the browser', function () {
@@ -150,9 +151,9 @@ describe('payout methods', function () {
 
         $response = $this->post(route('supplier.payout-methods.store'), [
             'current_password' => 'password',
-            'type' => SupplierPayoutMethodType::Bkash->value,
+            'type' => PayoutMethodType::Bkash->value,
             'label' => 'Primary bKash',
-            'details' => ['account_name' => 'Test Supplier', 'account_number' => '01711112222'],
+            'details' => ['account_holder_name' => 'Test Supplier', 'account_number' => '01711112222'],
         ]);
 
         $response->assertSessionHasNoErrors()->assertRedirect();
@@ -168,7 +169,11 @@ describe('payout methods', function () {
 
     it('archives a payout method only with the current password', function () {
         $method = app(SavePayoutMethod::class)->handle(
-            $this->supplier, SupplierPayoutMethodType::Nagad, 'Nagad', ['account_name' => 'Test', 'account_number' => '01899990000'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Nagad,
+            label: 'Nagad',
+            details: ['account_holder_name' => 'Test', 'account_number' => '01899990000'],
         );
 
         supplierTestSignIn($this->supplier);
@@ -190,7 +195,11 @@ describe('withdrawals', function () {
         $payable = supplierWalletTestEligiblePayable(3);
         app(SettleSupplierPayable::class)->handle($payable, $this->manager->id);
         $this->method = app(SavePayoutMethod::class)->handle(
-            $this->supplier, SupplierPayoutMethodType::Bkash, 'bKash', ['account_name' => 'Test', 'account_number' => '01711112222'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Bkash,
+            label: 'bKash',
+            details: ['account_holder_name' => 'Test', 'account_number' => '01711112222'],
         );
     });
 
@@ -247,7 +256,11 @@ describe('self-scope and guard isolation', function () {
         $payable = supplierWalletTestEligiblePayable(1);
         app(SettleSupplierPayable::class)->handle($payable, $this->manager->id);
         $method = app(SavePayoutMethod::class)->handle(
-            $this->supplier, SupplierPayoutMethodType::Bkash, 'bKash', ['account_name' => 'Test', 'account_number' => '01711112222'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Bkash,
+            label: 'bKash',
+            details: ['account_holder_name' => 'Test', 'account_number' => '01711112222'],
         );
         $withdrawal = app(RequestSupplierWithdrawal::class)->handle(
             $this->supplier, $method, Money::fromDecimal('500.00', Currency::BDT), 'scope-test',

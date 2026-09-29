@@ -24,6 +24,8 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Policies\OrderPolicy;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Policies\PackagePolicy;
+use App\Domain\Payout\Models\PayoutMethod;
+use App\Domain\Payout\Policies\PayoutMethodPolicy;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
 use App\Domain\Supplier\Models\SupplierOffer;
@@ -98,6 +100,13 @@ class AuthorizationServiceProvider extends ServiceProvider
          * Address module).
          */
         Gate::policy(SharedAddress::class, SharedAddressPolicy::class);
+
+        /*
+         * The shared payout-method table, Client/Partner side only — a
+         * Supplier's own payout methods are query-scoped in the
+         * Supplier-guarded controller, the same as its addresses.
+         */
+        Gate::policy(PayoutMethod::class, PayoutMethodPolicy::class);
 
         /*
          * The Supplier account domain (D25). Staff-side only — a Supplier's

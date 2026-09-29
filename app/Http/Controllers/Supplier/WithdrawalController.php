@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers\Supplier;
 
+use App\Domain\Payout\Enums\PayoutMethodStatus;
+use App\Domain\Payout\Enums\PayoutOwnerType;
+use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Supplier\Actions\OpenSupplierWallet;
 use App\Domain\Supplier\Actions\RequestSupplierWithdrawal;
-use App\Domain\Supplier\Enums\SupplierPayoutMethodStatus;
 use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Domain\Supplier\Exceptions\SupplierWalletOperationRefused;
 use App\Domain\Supplier\Exceptions\SupplierWithdrawalRefused;
 use App\Domain\Supplier\Models\Supplier;
-use App\Domain\Supplier\Models\SupplierPayoutMethod;
 use App\Domain\Supplier\Models\SupplierWithdrawal;
 use App\Domain\Supplier\SupplierWithdrawalLimits;
 use App\Http\Controllers\Controller;
@@ -94,12 +95,13 @@ class WithdrawalController extends Controller
         $currency = Currency::BDT;
         $wallet = $openWallet->handle($supplier, $currency);
 
-        $methods = SupplierPayoutMethod::query()
-            ->where('supplier_id', $supplier->id)
-            ->where('status', SupplierPayoutMethodStatus::Active)
+        $methods = PayoutMethod::query()
+            ->where('owner_type', PayoutOwnerType::Supplier->value)
+            ->where('owner_id', $supplier->id)
+            ->where('status', PayoutMethodStatus::Active)
             ->orderByDesc('is_default')
             ->get()
-            ->map(fn (SupplierPayoutMethod $method) => [
+            ->map(fn (PayoutMethod $method) => [
                 'id' => $method->public_id,
                 'label' => $method->label,
                 'type_label' => $method->type->label(),
@@ -129,11 +131,12 @@ class WithdrawalController extends Controller
             'idempotency_key' => ['required', 'string', 'max:64'],
         ]);
 
-        /** @var SupplierPayoutMethod $method */
-        $method = SupplierPayoutMethod::query()
-            ->where('supplier_id', $supplier->id)
+        /** @var PayoutMethod $method */
+        $method = PayoutMethod::query()
+            ->where('owner_type', PayoutOwnerType::Supplier->value)
+            ->where('owner_id', $supplier->id)
             ->where('public_id', $validated['payout_method_id'])
-            ->where('status', SupplierPayoutMethodStatus::Active)
+            ->where('status', PayoutMethodStatus::Active)
             ->firstOrFail();
 
         try {

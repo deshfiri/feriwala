@@ -3,13 +3,14 @@
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Payout\Actions\SavePayoutMethod;
+use App\Domain\Payout\Enums\PayoutMethodType;
+use App\Domain\Payout\Enums\PayoutOwnerType;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Supplier\Actions\RequestSupplierWithdrawal;
-use App\Domain\Supplier\Actions\SavePayoutMethod;
 use App\Domain\Supplier\Actions\SettleSupplierPayable;
 use App\Domain\Supplier\Enums\PayableStatus;
-use App\Domain\Supplier\Enums\SupplierPayoutMethodType;
 use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierPayable;
@@ -193,7 +194,11 @@ describe('withdrawal decisions', function () {
         $payable = supplierWalletTestEligiblePayable(3);
         app(SettleSupplierPayable::class)->handle($payable, $this->manager->id);
         $method = app(SavePayoutMethod::class)->handle(
-            $this->supplier, SupplierPayoutMethodType::Bkash, 'bKash', ['account_name' => 'Test', 'account_number' => '01711112222'],
+            ownerType: PayoutOwnerType::Supplier,
+            ownerId: $this->supplier->id,
+            type: PayoutMethodType::Bkash,
+            label: 'bKash',
+            details: ['account_holder_name' => 'Test', 'account_number' => '01711112222'],
         );
         $this->withdrawal = app(RequestSupplierWithdrawal::class)->handle(
             $this->supplier, $method, Money::fromDecimal('1000.00', Currency::BDT), 'admin-test:withdrawal',

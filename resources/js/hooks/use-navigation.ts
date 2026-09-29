@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as addresses } from '@/routes/addresses';
+import { index as payoutMethods } from '@/routes/payout-methods';
 import { dashboard } from '@/routes';
 import { dashboard as adminDashboard } from '@/routes/admin';
 import { index as accountDirectory } from '@/routes/admin/accounts';
@@ -168,6 +169,11 @@ export function useNavigation(): {
                                         title: t('nav.addresses'),
                                         href: addresses(),
                                         icon: MapPin,
+                                    },
+                                    {
+                                        title: t('payout.nav.payout_methods'),
+                                        href: payoutMethods(),
+                                        icon: CreditCard,
                                     },
                                 ]
                               : []),

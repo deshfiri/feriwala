@@ -5,12 +5,13 @@ namespace App\Domain\Supplier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Payout\Enums\PayoutOwnerType;
+use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Supplier\Data\SupplierPostingContext;
 use App\Domain\Supplier\Enums\SupplierWithdrawalChangeSource;
 use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Domain\Supplier\Exceptions\SupplierWithdrawalRefused;
 use App\Domain\Supplier\Models\Supplier;
-use App\Domain\Supplier\Models\SupplierPayoutMethod;
 use App\Domain\Supplier\Models\SupplierWithdrawal;
 use App\Domain\Supplier\SupplierWalletService;
 use App\Domain\Supplier\SupplierWithdrawalLimits;
@@ -51,7 +52,7 @@ class RequestSupplierWithdrawal
 
     public function handle(
         Supplier $supplier,
-        SupplierPayoutMethod $payoutMethod,
+        PayoutMethod $payoutMethod,
         Money $amount,
         string $idempotencyKey,
     ): SupplierWithdrawal {
@@ -59,7 +60,7 @@ class RequestSupplierWithdrawal
             throw SupplierWithdrawalRefused::supplierNotOperational();
         }
 
-        if ($payoutMethod->supplier_id !== $supplier->id || ! $payoutMethod->isActive()) {
+        if (! $payoutMethod->ownedBy(PayoutOwnerType::Supplier, $supplier->id) || ! $payoutMethod->isActive()) {
             throw SupplierWithdrawalRefused::payoutMethodNotUsable();
         }
 
@@ -88,8 +89,8 @@ class RequestSupplierWithdrawal
                 $withdrawal = SupplierWithdrawal::create([
                     'supplier_id' => $supplier->id,
                     'supplier_wallet_id' => $wallet->id,
-                    'supplier_payout_method_id' => $payoutMethod->id,
-                    'payout_snapshot' => $payoutMethod->toSnapshot(),
+                    'payout_method_id' => $payoutMethod->id,
+                    'payout_snapshot' => $payoutMethod->toSnapshot()->toArray(),
                     'amount' => $amount,
                     'currency_code' => $amount->currency->value,
                     'status' => SupplierWithdrawalStatus::Requested,

@@ -53,6 +53,7 @@ use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\Admin\WebsitePricingController;
+use App\Http\Controllers\BankLookupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\AddressController;
 use App\Http\Controllers\Erp\AllocatedStockController;
@@ -64,6 +65,7 @@ use App\Http\Controllers\Erp\MobileVerificationController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
+use App\Http\Controllers\Erp\PayoutMethodController as ErpPayoutMethodController;
 use App\Http\Controllers\Erp\ReferralController;
 use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\WalletController;
@@ -258,6 +260,24 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // selects (§39). Reference data, so no owner scoping applies.
         Route::get('locations/divisions', [LocationLookupController::class, 'divisions'])->name('locations.divisions');
         Route::get('locations/{type}/{sourceId}/children', [LocationLookupController::class, 'children'])->name('locations.children');
+
+        /*
+         * A `BusinessAccount`'s own payout methods (Shared Payout Methods
+         * batch, D25, P13-24) — self-scoped the same way `addresses` above
+         * is, no method appears in any URL that isn't this account's own.
+         */
+        Route::prefix('payout-methods')->name('payout-methods.')->group(function () {
+            Route::get('/', [ErpPayoutMethodController::class, 'index'])->name('index');
+            Route::post('/', [ErpPayoutMethodController::class, 'store'])->name('store');
+            Route::put('{method}', [ErpPayoutMethodController::class, 'update'])->name('update');
+            Route::post('{method}/default', [ErpPayoutMethodController::class, 'setDefault'])->name('default');
+            Route::post('{method}/archive', [ErpPayoutMethodController::class, 'archive'])->name('archive');
+        });
+
+        // The bank directory's cached Bank -> Branch lookup, behind the bank
+        // payout-method form. Reference data, so no owner scoping applies.
+        Route::get('banks', [BankLookupController::class, 'banks'])->name('banks.index');
+        Route::get('banks/{bankCode}/branches', [BankLookupController::class, 'branches'])->name('banks.branches');
 
         /*
          * The central catalogue for a business account (§10, §12, §13).

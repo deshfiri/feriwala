@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers\Supplier;
+namespace App\Http\Controllers\Erp;
 
+use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Bank\Models\BdBank;
 use App\Domain\Bank\Models\BdBankBranch;
 use App\Domain\Payout\Actions\ArchivePayoutMethod;
@@ -13,31 +14,28 @@ use App\Domain\Payout\Enums\PayoutOwnerType;
 use App\Domain\Payout\Exceptions\PayoutMethodRefused;
 use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Payout\Queries\PayoutMethodsForOwner;
-use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * A Supplier's own payout methods (D25, P13-24; generalized in the Shared
- * Payout Methods batch onto {@see PayoutMethod}, the same table
- * {@see \App\Http\Controllers\Erp\PayoutMethodController} uses for
- * Client/Partner accounts).
+ * A `BusinessAccount`'s own payout methods (D25, P13-24; Shared Payout
+ * Methods batch).
  *
- * Never returns an unmasked account number: {@see PayoutMethod} hides
- * `details` unconditionally, and every response here is built from
- * {@see PayoutMethod::maskedNumber()}. Creating, updating or archiving a
- * method is sensitive — the supplier guard has no Fortify confirm-password
- * flow, so this asks for the current password inline, the same
- * `current_password:supplier` rule {@see AccountController::updatePassword()}
- * already uses.
+ * Self-scoped through the signed-in person's own account, the same as
+ * {@see AddressController}. Never returns an unmasked account number:
+ * {@see PayoutMethod} hides `details` unconditionally, and every response
+ * here is built from {@see PayoutMethod::maskedNumber()}.
  */
 class PayoutMethodController extends Controller
 {
+    use ResolvesBusinessAccount;
+
     public function __construct(
         protected PayoutMethodsForOwner $methods,
         protected SavePayoutMethod $save,
@@ -47,28 +45,31 @@ class PayoutMethodController extends Controller
 
     public function index(Request $request): Response
     {
-        /** @var Supplier $supplier */
-        $supplier = $request->user('supplier');
+        $account = $this->businessAccountFor($request);
 
-        return Inertia::render('supplier/payout-methods/index', [
-            'methods' => $this->methods->forOwner(PayoutOwnerType::Supplier, $supplier->id)
+        return Inertia::render('erp/payout-methods/index', [
+            'methods' => $this->methods->forOwner(PayoutOwnerType::BusinessAccount, $account->id)
                 ->map(fn (PayoutMethod $method) => $this->row($method))
                 ->values(),
             'types' => $this->typeOptions(),
+            'can' => [
+                'create' => $request->user()?->can('create', PayoutMethod::class) ?? false,
+            ],
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        /** @var Supplier $supplier */
-        $supplier = $request->user('supplier');
+        $account = $this->businessAccountFor($request);
+
+        Gate::authorize('create', PayoutMethod::class);
 
         $validated = $this->validated($request);
 
         try {
             $this->save->handle(
-                ownerType: PayoutOwnerType::Supplier,
-                ownerId: $supplier->id,
+                ownerType: PayoutOwnerType::BusinessAccount,
+                ownerId: $account->id,
                 type: $validated['type'],
                 label: $validated['label'],
                 details: $validated['details'],
@@ -80,22 +81,22 @@ class PayoutMethodController extends Controller
             throw ValidationException::withMessages(['details' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('supplier.payout_methods.created'));
+        return back()->with('success', __('payout.flash.created'));
     }
 
     public function update(Request $request, string $method): RedirectResponse
     {
-        /** @var Supplier $supplier */
-        $supplier = $request->user('supplier');
+        $account = $this->businessAccountFor($request);
+        $existing = $this->methodFor($account->id, $method);
 
-        $existing = $this->methodFor($supplier->id, $method);
+        Gate::authorize('update', $existing);
 
         $validated = $this->validated($request);
 
         try {
             $this->save->handle(
-                ownerType: PayoutOwnerType::Supplier,
-                ownerId: $supplier->id,
+                ownerType: PayoutOwnerType::BusinessAccount,
+                ownerId: $account->id,
                 type: $validated['type'],
                 label: $validated['label'],
                 details: $validated['details'],
@@ -108,38 +109,38 @@ class PayoutMethodController extends Controller
             throw ValidationException::withMessages(['details' => $refused->getMessage()]);
         }
 
-        return back()->with('success', __('supplier.payout_methods.updated'));
+        return back()->with('success', __('payout.flash.updated'));
     }
 
     public function setDefault(Request $request, string $method): RedirectResponse
     {
-        /** @var Supplier $supplier */
-        $supplier = $request->user('supplier');
+        $account = $this->businessAccountFor($request);
+        $existing = $this->methodFor($account->id, $method);
 
-        $existing = $this->methodFor($supplier->id, $method);
+        Gate::authorize('setDefault', $existing);
 
         $this->setDefault->handle($existing);
 
-        return back()->with('success', __('supplier.payout_methods.default_set'));
+        return back()->with('success', __('payout.flash.default_set'));
     }
 
     public function archive(Request $request, string $method): RedirectResponse
     {
-        /** @var Supplier $supplier */
-        $supplier = $request->user('supplier');
+        $account = $this->businessAccountFor($request);
+        $existing = $this->methodFor($account->id, $method);
 
-        $request->validate(['current_password' => ['required', 'string', 'current_password:supplier']]);
+        Gate::authorize('archive', $existing);
 
-        $existing = $this->methodFor($supplier->id, $method);
+        $request->validate(['current_password' => ['required', 'string', 'current_password']]);
 
         $this->archive->handle($existing);
 
-        return back()->with('success', __('supplier.payout_methods.archived'));
+        return back()->with('success', __('payout.flash.archived'));
     }
 
-    protected function methodFor(int $supplierId, string $publicId): PayoutMethod
+    protected function methodFor(int $accountId, string $publicId): PayoutMethod
     {
-        $method = $this->methods->findForOwner(PayoutOwnerType::Supplier, $supplierId, $publicId);
+        $method = $this->methods->findForOwner(PayoutOwnerType::BusinessAccount, $accountId, $publicId);
 
         abort_if($method === null, 404);
 
@@ -152,7 +153,7 @@ class PayoutMethodController extends Controller
     protected function validated(Request $request): array
     {
         $validated = $request->validate([
-            'current_password' => ['required', 'string', 'current_password:supplier'],
+            'current_password' => ['required', 'string', 'current_password'],
             'type' => ['required', Rule::enum(PayoutMethodType::class)],
             'label' => ['required', 'string', 'max:80'],
             'details' => ['required', 'array'],
@@ -168,7 +169,7 @@ class PayoutMethodController extends Controller
         if (isset($rawDetails['account_number'], $rawDetails['confirm_account_number'])
             && $rawDetails['account_number'] !== $rawDetails['confirm_account_number']) {
             throw ValidationException::withMessages([
-                'details' => __('supplier.payout_methods.account_number_mismatch'),
+                'details' => __('payout.form.account_number_mismatch'),
             ]);
         }
 
@@ -179,7 +180,7 @@ class PayoutMethodController extends Controller
 
         if ($missing !== []) {
             throw ValidationException::withMessages([
-                'details' => __('supplier.payout_methods.missing_fields', ['fields' => implode(', ', $missing)]),
+                'details' => __('payout.form.missing_fields', ['fields' => implode(', ', $missing)]),
             ]);
         }
 
@@ -207,7 +208,7 @@ class PayoutMethodController extends Controller
 
         if ($bank === null || $branch === null || $branch->bank_id !== $bank->id) {
             throw ValidationException::withMessages([
-                'bank_code' => __('supplier.payout_methods.invalid_bank_branch'),
+                'bank_code' => __('payout.form.invalid_bank_branch'),
             ]);
         }
 

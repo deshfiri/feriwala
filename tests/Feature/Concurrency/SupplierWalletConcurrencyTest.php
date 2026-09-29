@@ -4,6 +4,10 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
+use App\Domain\Payout\Enums\PayoutMethodStatus;
+use App\Domain\Payout\Enums\PayoutMethodType;
+use App\Domain\Payout\Enums\PayoutOwnerType;
+use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Supplier\Actions\AdvanceSupplierWithdrawalStatus;
 use App\Domain\Supplier\Actions\OpenSupplierWallet;
 use App\Domain\Supplier\Actions\RejectOrFailSupplierWithdrawal;
@@ -11,13 +15,10 @@ use App\Domain\Supplier\Actions\RequestSupplierWithdrawal;
 use App\Domain\Supplier\Actions\SettleSupplierPayable;
 use App\Domain\Supplier\Data\SupplierPostingContext;
 use App\Domain\Supplier\Enums\PayableStatus;
-use App\Domain\Supplier\Enums\SupplierPayoutMethodStatus;
-use App\Domain\Supplier\Enums\SupplierPayoutMethodType;
 use App\Domain\Supplier\Enums\SupplierWithdrawalStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierLedgerEntry;
 use App\Domain\Supplier\Models\SupplierPayable;
-use App\Domain\Supplier\Models\SupplierPayoutMethod;
 use App\Domain\Supplier\Models\SupplierWallet;
 use App\Domain\Supplier\Models\SupplierWithdrawal;
 use App\Domain\Supplier\SupplierWalletService;
@@ -52,14 +53,14 @@ afterEach(function () {
     DB::statement('ALTER TABLE supplier_ledger_entries DISABLE TRIGGER supplier_ledger_entries_no_delete');
     DB::statement('ALTER TABLE supplier_withdrawal_status_history DISABLE TRIGGER supplier_withdrawal_status_history_no_delete');
     DB::statement('ALTER TABLE supplier_withdrawals DISABLE TRIGGER supplier_withdrawals_never_deleted');
-    DB::statement('ALTER TABLE supplier_payout_methods DISABLE TRIGGER supplier_payout_methods_never_deleted');
+    DB::statement('ALTER TABLE payout_methods DISABLE TRIGGER payout_methods_never_deleted');
 
     DB::table('supplier_ledger_entries')->where('supplier_wallet_id', $this->wallet->id)->delete();
     DB::table('supplier_withdrawal_status_history')
         ->whereIn('supplier_withdrawal_id', DB::table('supplier_withdrawals')->where('supplier_wallet_id', $this->wallet->id)->pluck('id'))
         ->delete();
     DB::table('supplier_withdrawals')->where('supplier_wallet_id', $this->wallet->id)->delete();
-    DB::table('supplier_payout_methods')->where('supplier_id', $this->supplier->id)->delete();
+    DB::table('payout_methods')->where('owner_type', PayoutOwnerType::Supplier->value)->where('owner_id', $this->supplier->id)->delete();
     DB::table('supplier_wallets')->where('id', $this->wallet->id)->delete();
 
     // Suppliers are never deleted, only closed (feriwala_suppliers_are_never_deleted)
@@ -68,7 +69,7 @@ afterEach(function () {
     // schema, the same accepted trade-off already made for other immutable
     // fixture data in this project's browser/testing schemas.
 
-    DB::statement('ALTER TABLE supplier_payout_methods ENABLE TRIGGER supplier_payout_methods_never_deleted');
+    DB::statement('ALTER TABLE payout_methods ENABLE TRIGGER payout_methods_never_deleted');
     DB::statement('ALTER TABLE supplier_withdrawals ENABLE TRIGGER supplier_withdrawals_never_deleted');
     DB::statement('ALTER TABLE supplier_withdrawal_status_history ENABLE TRIGGER supplier_withdrawal_status_history_no_delete');
     DB::statement('ALTER TABLE supplier_ledger_entries ENABLE TRIGGER supplier_ledger_entries_no_delete');
@@ -119,16 +120,18 @@ function supplierWalletRaceWallet(): SupplierWallet
     return $wallet;
 }
 
-function supplierWalletRacePayoutMethod(): SupplierPayoutMethod
+function supplierWalletRacePayoutMethod(): PayoutMethod
 {
-    return SupplierPayoutMethod::create([
-        'supplier_id' => test()->supplier->id,
-        'type' => SupplierPayoutMethodType::Bkash,
+    return PayoutMethod::create([
+        'owner_type' => PayoutOwnerType::Supplier->value,
+        'owner_id' => test()->supplier->id,
+        'type' => PayoutMethodType::Bkash,
         'label' => 'Race fixture',
-        'details' => ['account_name' => 'Race', 'account_number' => '01711112222'],
+        'details' => ['account_holder_name' => 'Race', 'account_number' => '01711112222'],
         'last_four' => '2222',
+        'fingerprint' => hash('sha256', 'race-fixture-'.test()->supplier->id),
         'is_default' => true,
-        'status' => SupplierPayoutMethodStatus::Active,
+        'status' => PayoutMethodStatus::Active,
     ]);
 }
 

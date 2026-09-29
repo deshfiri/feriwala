@@ -136,7 +136,7 @@ Resolve them from the supplied attachments/download location. Do not assume atta
 - [ ] Add Admin/authorized directory visibility or management only where a real operational screen is needed. **Not done** — no screen has needed it yet; revisit if unit 6 doesn't end up requiring one either.
 - [ ] Run importer, relationship, duplicate, malformed JSON, idempotency, cache, permission, and lookup tests. **Partial**: importer/relationship/duplicate/idempotency covered by `ImportBdBanksTest.php` (13 tests, verified against both the recovering cluster and the fresh one); cache/permission/lookup tests don't exist yet since the endpoints don't.
 - [x] Commit the Bank Directory separately.
-- [x] Record the commit hash here: `cfe562b` (original import), `_(SafeSeeder wiring commit follows immediately)_`.
+- [x] Record the commit hash here: `cfe562b` (original import), `c3f615e` (SafeSeeder wiring).
 
 ### Addendum — wiring into `SafeSeeder`
 
@@ -146,36 +146,36 @@ If the files are inaccessible, report the exact attachment-resolution problem on
 
 ## 6. Shared Client/Partner and Supplier Payout Methods
 
-- [ ] Inspect and extend the existing Supplier payout architecture. Do not replace it.
-- [ ] Add a compatible Client/Partner payout owner path without creating duplicate security logic.
-- [ ] Support Bank, bKash, and Nagad only where consistent with current requirements.
-- [ ] Bank selection flow:
-  - [ ] Bank
-  - [ ] District
-  - [ ] Branch
-  - [ ] Routing/branch information
-  - [ ] Account Holder Name
-  - [ ] Account Number
-  - [ ] Confirm Account Number
-  - [ ] Account Type where applicable
-  - [ ] Current password confirmation
-- [ ] Encrypt full account numbers/details at rest.
-- [ ] Store a blind fingerprint for safe duplicate detection where appropriate.
-- [ ] Store only safe masking helpers such as last four digits in clear text.
-- [ ] Never include full account numbers in normal browser props, logs, audits, exceptions, notifications, or search indexes.
-- [ ] Require account-number confirmation.
-- [ ] Require current password for sensitive changes.
-- [ ] Apply the existing 2FA rules.
-- [ ] Enforce strict owner, business-account, Supplier, and authentication-guard isolation.
-- [ ] Allow one active default payout method per owner.
-- [ ] Archive used methods instead of deleting them.
-- [ ] Preserve historical methods and snapshots.
-- [ ] Authorized staff normally see masked details only.
-- [ ] Any minimum necessary release-detail access must be permission-controlled and audited.
-- [ ] Build Client/Partner and Supplier screens for list, add, edit permitted unused details, set default, and archive.
-- [ ] Add navigation only for real screens.
-- [ ] Commit secure Payout Methods separately.
-- [ ] Record the commit hash here: `________________`.
+- [x] Inspect and extend the existing Supplier payout architecture. Do not replace it. (`supplier_payout_methods` generalized in place into the polymorphic `payout_methods` — both tables were empty in every environment, confirmed before restructuring; Supplier's own screens/routes/tests kept, rewired to the shared model.)
+- [x] Add a compatible Client/Partner payout owner path without creating duplicate security logic. (`Erp\PayoutMethodController` calls the exact same `SavePayoutMethod`/`ArchivePayoutMethod`/`SetDefaultPayoutMethod` Actions and `PayoutMethod` model as the Supplier side — one encryption path, one fingerprint scheme, one default-selection rule.)
+- [x] Support Bank, bKash, and Nagad only where consistent with current requirements. (`PayoutMethodType`: `bank_account`, `bkash`, `nagad` — no others.)
+- [x] Bank selection flow:
+  - [x] Bank (`BdBank`, cached lookup)
+  - [x] District (reuses the existing Bangladesh location directory cascade)
+  - [x] Branch (`BdBankBranch`, cached lookup scoped to bank + district)
+  - [x] Routing/branch information (routing number is the branch's own stable identifier, resolved server-side)
+  - [x] Account Holder Name
+  - [x] Account Number
+  - [x] Confirm Account Number (client-side match + server-side re-check, tested)
+  - [x] Account Type where applicable (Savings/Current, bank_account only)
+  - [x] Current password confirmation
+- [x] Encrypt full account numbers/details at rest. (Laravel `encrypted:array` cast; verified the raw `details` column and `json_encode($method)` never contain the plain number.)
+- [x] Store a blind fingerprint for safe duplicate detection where appropriate. (Keyed HMAC, scoped to owner+type; a duplicate is refused with a friendly error — both the up-front check and the DB partial-unique-index race are tested.)
+- [x] Store only safe masking helpers such as last four digits in clear text.
+- [x] Never include full account numbers in normal browser props, logs, audits, exceptions, notifications, or search indexes. (`details` is `$hidden` on the model; the audit log entry only ever records `type` + `last_four`.)
+- [x] Require account-number confirmation.
+- [x] Require current password for sensitive changes. (Laravel's built-in `current_password` rule on the `web` guard for Client/Partner, `current_password:supplier` for Supplier — same pattern the existing `AccountController::updatePassword()` already used.)
+- [ ] Apply the existing 2FA rules. **Not applicable, not done**: `PlatformRole::requiresTwoFactor()` is a platform-staff (admin-panel) mechanism keyed to sensitive permission actions; neither the Client/Partner `web` guard nor the `supplier` guard has an equivalent 2FA requirement anywhere else in the app to extend here. Flagging rather than silently checking it off.
+- [x] Enforce strict owner, business-account, Supplier, and authentication-guard isolation. (Tested: one BusinessAccount cannot reach another's method by public id; a Supplier-guard session cannot reach the `web`-guard routes at all; a staff account-member without `UpdateAccount` permission is refused.)
+- [x] Allow one active default payout method per owner. (App-level targeted update + a DB partial unique index as the backstop, both exercised by tests.)
+- [x] Archive used methods instead of deleting them. (Tested at both the app level and the DB trigger level.)
+- [x] Preserve historical methods and snapshots. (`RequestSupplierWithdrawal` snapshots via `PayoutMethod::toSnapshot()`; the pre-existing snapshot-survives-a-rename-and-archive test in `SupplierWalletTest.php` still passes against the new shared table.)
+- [ ] Authorized staff normally see masked details only. **Design note, not a gap**: no staff screen reads a live `PayoutMethod` row at all in this batch — staff only ever see a withdrawal's frozen `payout_snapshot` (already masked at snapshot time), which is stricter than "masked live details," so there was nothing to build here yet. Revisit if a direct staff-facing payout-method admin view is ever requested.
+- [ ] Any minimum necessary release-detail access must be permission-controlled and audited. Deferred to unit 7 (Withdrawal integration) — "release" is a withdrawal-payment action, not a payout-method action.
+- [x] Build Client/Partner and Supplier screens for list, add, edit permitted unused details, set default, and archive.
+- [x] Add navigation only for real screens. (BusinessAccount nav entry added; Supplier's already existed from the pre-batch screen.)
+- [x] Commit secure Payout Methods separately.
+- [x] Record the commit hash here: `_(filled in immediately after the commit below)_`.
 
 ## 7. Withdrawal integration
 
