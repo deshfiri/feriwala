@@ -41,6 +41,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { index as addresses } from '@/routes/addresses';
 import { index as payoutMethods } from '@/routes/payout-methods';
+import { index as clientWithdrawals } from '@/routes/withdrawals';
 import { dashboard } from '@/routes';
 import { dashboard as adminDashboard } from '@/routes/admin';
 import { index as accountDirectory } from '@/routes/admin/accounts';
@@ -175,6 +176,11 @@ export function useNavigation(): {
                                         title: t('payout.nav.payout_methods'),
                                         href: payoutMethods(),
                                         icon: CreditCard,
+                                    },
+                                    {
+                                        title: t('withdrawal.erp.title'),
+                                        href: clientWithdrawals(),
+                                        icon: Banknote,
                                     },
                                 ]
                               : []),

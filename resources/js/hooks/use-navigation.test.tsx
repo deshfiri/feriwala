@@ -348,6 +348,54 @@ describe('allocated stock navigation', () => {
 });
 
 /**
+ * A Client/Partner BusinessAccount's own withdrawal requests (§27): its own
+ * self-service door, alongside the wallet and payout methods it depends on
+ * -- never offered to platform staff, who reach the staff queue through its
+ * own permission-gated door instead.
+ */
+describe('client withdrawal navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives an active account its own withdrawals door', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: false,
+                managesStaff: false,
+            },
+        });
+
+        expect(titles).toContain('withdrawal.erp.title');
+    });
+
+    it('offers it to no platform staff, whatever permissions they hold', () => {
+        renderFor({
+            permissions: { 'withdrawal.view': true },
+            account: null,
+        });
+
+        expect(titles).not.toContain('withdrawal.erp.title');
+    });
+});
+
+/**
  * The referral configuration (D24): reached by seeing it, never offered to a
  * partner, whose own referrals live on their own page.
  */
