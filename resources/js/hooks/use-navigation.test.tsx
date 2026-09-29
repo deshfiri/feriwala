@@ -396,6 +396,54 @@ describe('client withdrawal navigation', () => {
 });
 
 /**
+ * The permission-filtered settings hub (commit-order item 4): shown whenever
+ * at least one of the screens it links to would be, so the door is never
+ * open onto an empty page, and never offered to a partner holding none of
+ * these permissions at all.
+ */
+describe('settings hub navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives staff holding any one covered permission the hub door', () => {
+        renderFor({
+            permissions: { 'sms.view': true },
+            account: null,
+        });
+
+        expect(titles).toContain('nav.settings_hub');
+    });
+
+    it('offers it neither to staff without any of them nor to a partner', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: false,
+                managesStaff: false,
+            },
+        });
+
+        expect(titles).not.toContain('nav.settings_hub');
+    });
+});
+
+/**
  * The referral configuration (D24): reached by seeing it, never offered to a
  * partner, whose own referrals live on their own page.
  */

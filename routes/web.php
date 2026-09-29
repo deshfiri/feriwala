@@ -36,6 +36,7 @@ use App\Http\Controllers\Admin\ReferralChainController;
 use App\Http\Controllers\Admin\ReferralCommissionController;
 use App\Http\Controllers\Admin\ReferralSettingsController;
 use App\Http\Controllers\Admin\ReservationController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
@@ -524,6 +525,14 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         // already requires, so it never shows a figure its viewer could not
         // otherwise reach.
         Route::get('dashboard', AdminDashboardController::class)->name('dashboard');
+
+        /*
+         * A single, permission-filtered index of every real settings screen
+         * (commit-order item 4) -- a navigational wrapper, not a new settings
+         * surface of its own: every link already has its own route and
+         * permission gate, exactly as the dashboard's cards do above.
+         */
+        Route::get('settings', SettingsController::class)->name('settings');
 
         /*
          * The requirement catalogue (§7.2).

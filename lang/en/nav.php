@@ -52,6 +52,7 @@ return [
     'deposit_rules' => 'Deposit rules',
     'account_withdrawals' => 'Client/Partner withdrawals',
     'withdrawal_limits' => 'Withdrawal limits',
+    'settings_hub' => 'Settings',
     'sms' => 'SMS',
     'branding' => 'Branding',
     'stock' => 'Stock',

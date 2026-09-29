@@ -43,7 +43,10 @@ import { index as addresses } from '@/routes/addresses';
 import { index as payoutMethods } from '@/routes/payout-methods';
 import { index as clientWithdrawals } from '@/routes/withdrawals';
 import { dashboard } from '@/routes';
-import { dashboard as adminDashboard } from '@/routes/admin';
+import {
+    dashboard as adminDashboard,
+    settings as settingsHub,
+} from '@/routes/admin';
 import { index as accountDirectory } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { edit as brandingSettings } from '@/routes/admin/branding';
@@ -297,6 +300,29 @@ export function useNavigation(): {
         {
             label: t('nav.groups.administration'),
             items: [
+                /*
+                 * A single, permission-filtered index of every real settings
+                 * screen below (commit-order item 4) -- shown whenever at
+                 * least one of them would be, so the door is never open onto
+                 * an empty page.
+                 */
+                ...(permissions['payment.view'] ||
+                permissions['wallet.view'] ||
+                permissions['withdrawal.view'] ||
+                permissions['website.manage_settings'] ||
+                permissions['referral.view_settings'] ||
+                permissions['package.view'] ||
+                permissions['kyc.manage_settings'] ||
+                permissions['sms.view'] ||
+                permissions['system.manage_settings']
+                    ? [
+                          {
+                              title: t('nav.settings_hub'),
+                              href: settingsHub(),
+                              icon: Settings,
+                          },
+                      ]
+                    : []),
                 ...(permissions['kyc.view']
                     ? [
                           {
