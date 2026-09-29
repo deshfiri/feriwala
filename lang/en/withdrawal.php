@@ -74,5 +74,23 @@ return [
         'history' => 'Status history',
         'open' => 'Open',
         'all_statuses' => 'All statuses',
+
+        'limits' => [
+            'title' => 'Withdrawal limits',
+            'description' => 'The platform default withdrawal minimum and maximum, and any account or Supplier that needs its own.',
+            'account_section' => 'Client/Partner defaults',
+            'supplier_section' => 'Supplier defaults',
+            'override_section' => 'Set an override',
+            'minimum' => 'Minimum',
+            'maximum' => 'Maximum',
+            'no_maximum' => 'No maximum',
+            'owner_public_id' => 'Account or Supplier reference',
+            'save' => 'Save',
+            'set_override' => 'Set override',
+        ],
+
+        'limits_updated' => 'Withdrawal limits updated.',
+        'override_updated' => 'Override updated.',
+        'minimum_above_maximum' => 'The minimum cannot be above the maximum.',
     ],
 ];

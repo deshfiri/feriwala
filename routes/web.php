@@ -54,6 +54,7 @@ use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\Admin\WebsitePricingController;
+use App\Http\Controllers\Admin\WithdrawalLimitsController;
 use App\Http\Controllers\BankLookupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\AccountWithdrawalController as ErpAccountWithdrawalController;
@@ -786,6 +787,25 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('deposit-rules.store');
         Route::post('deposit-rules/{rule}/close', [DepositRuleController::class, 'close'])
             ->name('deposit-rules.close');
+
+        /*
+         * Platform-default withdrawal limits, and a per-owner override on
+         * either side (§27, D25) -- gated on `withdrawal.manage_settings`,
+         * which no seeded role holds today by design (WithdrawalApprover
+         * holds every other withdrawal permission but deliberately not this
+         * one); reachable by Super Admin until an administrator decides who
+         * else should hold it.
+         */
+        Route::get('withdrawal-limits', [WithdrawalLimitsController::class, 'index'])
+            ->name('withdrawal-limits.index');
+        Route::put('withdrawal-limits/account', [WithdrawalLimitsController::class, 'updateAccountDefault'])
+            ->name('withdrawal-limits.account.update');
+        Route::put('withdrawal-limits/supplier', [WithdrawalLimitsController::class, 'updateSupplierDefault'])
+            ->name('withdrawal-limits.supplier.update');
+        Route::post('withdrawal-limits/account/override', [WithdrawalLimitsController::class, 'updateAccountOverride'])
+            ->name('withdrawal-limits.account.override');
+        Route::post('withdrawal-limits/supplier/override', [WithdrawalLimitsController::class, 'updateSupplierOverride'])
+            ->name('withdrawal-limits.supplier.override');
 
         Route::get('wallets', [AdminWalletController::class, 'index'])
             ->name('wallets.index');
