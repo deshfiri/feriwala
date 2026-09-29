@@ -26,6 +26,8 @@ use Illuminate\Support\Facades\DB;
  * @var array<string, list<string>>
  */
 const MONEY_COLUMN_INVENTORY = [
+    'account_withdrawals' => ['amount'],
+    'business_accounts' => ['withdrawal_minimum_override', 'withdrawal_maximum_override'],
     'cart_items' => ['unit_price_seen'],
     'carts' => ['confirmed_total'],
     'coupon_redemptions' => ['amount'],
@@ -35,6 +37,7 @@ const MONEY_COLUMN_INVENTORY = [
     'invoice_lines' => ['amount'],
     'invoices' => ['subtotal', 'total'],
     'ledger_entries' => ['debit', 'credit', 'balance_before', 'balance_after', 'pending', 'reserved', 'available', 'hold'],
+    'order_item_allocations' => ['unit_cost', 'platform_rate', 'expected_margin'],
     'order_items' => ['unit_price', 'line_subtotal', 'discount', 'tax', 'tax_included', 'line_total', 'supplier_rate', 'platform_rate', 'platform_margin'],
     'order_return_items' => ['refund_amount'],
     'order_returns' => ['refund_amount'],
@@ -87,6 +90,10 @@ const MONEY_COLUMN_CURRENCY_EXEMPTIONS = [
     // column here would be a second answer that could disagree with the
     // wallet it constrains.
     'suppliers' => "withdrawal overrides bound the Supplier's own wallet, which already carries the currency",
+
+    // The same shape, for the Client/Partner side: a BusinessAccount's
+    // withdrawal overrides bound its own wallet's balance.
+    'business_accounts' => "withdrawal overrides bound the account's own wallet, which already carries the currency",
 ];
 
 /**

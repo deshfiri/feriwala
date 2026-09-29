@@ -107,6 +107,43 @@ it('resolves a bank account method to the correct bank and branch', function () 
         ->and($method->branch->routing_number)->toBe('001120100');
 });
 
+it('snapshots district and routing number for a bank account method, and neither for a wallet method', function () {
+    $account = testBusinessAccount();
+    $branch = payoutTestBankBranch();
+
+    $bankMethod = app(SavePayoutMethod::class)->handle(
+        ownerType: PayoutOwnerType::BusinessAccount,
+        ownerId: $account->id,
+        type: PayoutMethodType::BankAccount,
+        label: 'Primary bank',
+        details: ['account_holder_name' => 'Karim Traders', 'account_number' => '123456789012', 'account_type' => 'savings'],
+        bdBankId: $branch->bank_id,
+        bdBankBranchId: $branch->id,
+    );
+
+    $bankSnapshot = $bankMethod->toSnapshot()->toArray();
+
+    expect($bankSnapshot['district'])->toBe($branch->district_source_name)
+        ->and($bankSnapshot['routing_number'])->toBe('001120100')
+        ->and($bankSnapshot['bank_name'])->toBe($branch->bank->name)
+        ->and($bankSnapshot['branch_name'])->toBe($branch->name);
+
+    $walletMethod = app(SavePayoutMethod::class)->handle(
+        ownerType: PayoutOwnerType::BusinessAccount,
+        ownerId: $account->id,
+        type: PayoutMethodType::Bkash,
+        label: 'bKash',
+        details: ['account_holder_name' => 'Karim Traders', 'account_number' => '01711112222'],
+    );
+
+    $walletSnapshot = $walletMethod->toSnapshot()->toArray();
+
+    expect($walletSnapshot['district'])->toBeNull()
+        ->and($walletSnapshot['routing_number'])->toBeNull()
+        ->and($walletSnapshot['bank_name'])->toBeNull()
+        ->and($walletSnapshot['branch_name'])->toBeNull();
+});
+
 it('refuses the same account number registered twice for the same owner', function () {
     $account = testBusinessAccount();
 

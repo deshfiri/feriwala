@@ -16,6 +16,7 @@ use App\Domain\Withdrawal\Enums\AccountWithdrawalStatus;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 /*
@@ -170,5 +171,31 @@ describe('guard and self-scope isolation', function () {
         $this->actingAs($otherOwner)
             ->get(route('withdrawals.show', $this->withdrawal->public_id))
             ->assertNotFound();
+    });
+});
+
+describe('payout snapshot backward compatibility', function () {
+    it('renders a pre-existing snapshot that has no district or routing_number key at all', function () {
+        // district/routing_number were added to PayoutMethodSnapshot after
+        // this withdrawal's own snapshot was frozen -- never backfilled
+        // (§27's "never rewrite" rule), so simulate that shape directly
+        // rather than through the locked-column trigger.
+        $oldShapeSnapshot = collect($this->withdrawal->payout_snapshot)
+            ->except(['district', 'routing_number'])
+            ->all();
+
+        DB::statement('ALTER TABLE account_withdrawals DISABLE TRIGGER account_withdrawals_locked_columns');
+        DB::table('account_withdrawals')
+            ->where('id', $this->withdrawal->id)
+            ->update(['payout_snapshot' => json_encode($oldShapeSnapshot)]);
+        DB::statement('ALTER TABLE account_withdrawals ENABLE TRIGGER account_withdrawals_locked_columns');
+
+        $this->actingAs($this->approver)
+            ->get(route('admin.account-withdrawals.show', $this->withdrawal->public_id))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->missing('withdrawal.payout_snapshot.district')
+                ->missing('withdrawal.payout_snapshot.routing_number')
+                ->whereNot('withdrawal.payout_snapshot.masked_number', null));
     });
 });

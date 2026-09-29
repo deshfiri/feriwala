@@ -39,6 +39,10 @@ type Withdrawal = {
         type_label: string | null;
         label: string | null;
         masked_number: string | null;
+        bank_name?: string | null;
+        branch_name?: string | null;
+        district?: string | null;
+        routing_number?: string | null;
     };
     failure_reason: string | null;
     external_reference: string | null;
@@ -114,6 +118,53 @@ export default function AdminSupplierWithdrawalShow({
                         {withdrawal.payout_snapshot.label} (
                         {withdrawal.payout_snapshot.masked_number})
                     </p>
+
+                    {withdrawal.payout_snapshot.bank_name && (
+                        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                            <div>
+                                <dt className="text-muted-foreground text-xs">
+                                    {t('supplier.admin.withdrawals.bank')}
+                                </dt>
+                                <dd>{withdrawal.payout_snapshot.bank_name}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted-foreground text-xs">
+                                    {t('supplier.admin.withdrawals.branch')}
+                                </dt>
+                                <dd>
+                                    {withdrawal.payout_snapshot.branch_name ??
+                                        t(
+                                            'supplier.admin.withdrawals.not_available',
+                                        )}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted-foreground text-xs">
+                                    {t('supplier.admin.withdrawals.district')}
+                                </dt>
+                                <dd>
+                                    {withdrawal.payout_snapshot.district ??
+                                        t(
+                                            'supplier.admin.withdrawals.not_available',
+                                        )}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted-foreground text-xs">
+                                    {t(
+                                        'supplier.admin.withdrawals.routing_number',
+                                    )}
+                                </dt>
+                                <dd className="font-mono">
+                                    {withdrawal.payout_snapshot
+                                        .routing_number ??
+                                        t(
+                                            'supplier.admin.withdrawals.not_available',
+                                        )}
+                                </dd>
+                            </div>
+                        </dl>
+                    )}
 
                     {withdrawal.external_reference && (
                         <p className="text-muted-foreground mt-2 text-xs">

@@ -135,6 +135,8 @@ class PayoutMethod extends Model
             maskedNumber: $this->maskedNumber(),
             bankName: $this->bank?->name,
             branchName: $this->branch?->name,
+            district: $this->branch?->district_source_name,
+            routingNumber: $this->branch?->routing_number,
         );
     }
 }

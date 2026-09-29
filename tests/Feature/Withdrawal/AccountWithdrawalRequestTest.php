@@ -209,3 +209,27 @@ it('never lets a withdrawal reach into the required deposit even when the deposi
 
     expect($withdrawal->amount->toDecimal())->toBe('600.00');
 });
+
+it('freezes district and routing number onto the withdrawal for a bank account method', function () {
+    $wallet = accountWithdrawalTestWallet('1000.00');
+    $account = $wallet->businessAccount;
+    $branch = payoutTestBankBranch();
+
+    $method = app(SavePayoutMethod::class)->handle(
+        ownerType: PayoutOwnerType::BusinessAccount,
+        ownerId: $account->id,
+        type: PayoutMethodType::BankAccount,
+        label: 'Primary bank',
+        details: ['account_holder_name' => 'Karim Traders', 'account_number' => '123456789012', 'account_type' => 'savings'],
+        bdBankId: $branch->bank_id,
+        bdBankBranchId: $branch->id,
+    );
+
+    $withdrawal = app(RequestAccountWithdrawal::class)->handle(
+        $account, $wallet, $method, Money::fromDecimal('600.00', Currency::BDT), 'request-test:bank-snapshot',
+    );
+
+    expect($withdrawal->payout_snapshot['district'])->toBe($branch->district_source_name)
+        ->and($withdrawal->payout_snapshot['routing_number'])->toBe('001120100')
+        ->and($withdrawal->payout_snapshot['bank_name'])->toBe($branch->bank->name);
+});
