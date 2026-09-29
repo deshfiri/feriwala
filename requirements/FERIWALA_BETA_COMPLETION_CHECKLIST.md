@@ -119,24 +119,28 @@ Authoritative files supplied by the user:
 
 Resolve them from the supplied attachments/download location. Do not assume attachments already exist in the repository.
 
-- [ ] Copy validated authoritative files into a versioned directory such as `database/data/bangladesh-bank/`.
-- [ ] Record source/provenance, import date, SHA-256 checksums, schema version, and audit summary.
-- [ ] Validate JSON structure before importing.
-- [ ] Build normalized Bank and Branch records with stable source identifiers.
-- [ ] Include bank, district, branch, routing number, address, active status, and available bilingual fields.
-- [ ] Map branch districts to the existing Bangladesh location directory deterministically.
-- [ ] Report unmatched districts. Never guess.
-- [ ] Support a reviewed explicit alias map for deterministic district matches.
-- [ ] Reject duplicate routing numbers, invalid routing formats, orphan branches, duplicate stable IDs, and malformed records.
-- [ ] Build dry-run, validate, and import modes.
-- [ ] Make import idempotent and report inserted, updated, unchanged, rejected, and unmatched counts.
-- [ ] Never delete a Bank or Branch referenced by a payout method or withdrawal snapshot.
-- [ ] Build small cached lookup endpoints for Bank -> District -> Branch.
-- [ ] Do not send the full directory with every page.
-- [ ] Add Admin/authorized directory visibility or management only where a real operational screen is needed.
-- [ ] Run importer, relationship, duplicate, malformed JSON, idempotency, cache, permission, and lookup tests.
-- [ ] Commit the Bank Directory separately.
-- [ ] Record the commit hash here: `________________`.
+- [x] Copy validated authoritative files into a versioned directory such as `database/data/bangladesh-bank/`.
+- [x] Record source/provenance, import date, SHA-256 checksums, schema version, and audit summary. (`NOTICE.md`.)
+- [x] Validate JSON structure before importing. (`validate` mode plus a meta-agreement cross-check across all three files.)
+- [x] Build normalized Bank and Branch records with stable source identifiers. (`bank_code`, `routing_number`.)
+- [x] Include bank, district, branch, routing number, address, active status, and available bilingual fields. (District is bilingual via the `bd_locations` FK, `name_en`/`name_bn`; the source itself has no Bengali bank/branch names to carry — nothing to translate that the source doesn't provide.)
+- [x] Map branch districts to the existing Bangladesh location directory deterministically.
+- [x] Report unmatched districts. Never guess.
+- [x] Support a reviewed explicit alias map for deterministic district matches. (`DistrictAliases`, 3 entries, documented in `NOTICE.md`.)
+- [x] Reject duplicate routing numbers, invalid routing formats, orphan branches, duplicate stable IDs, and malformed records. (All covered by `ImportBdBanksTest.php`.)
+- [x] Build dry-run, validate, and import modes.
+- [ ] Make import idempotent and report inserted, updated, unchanged, rejected, and unmatched counts. **Partial**: idempotent (verified — a second run against the real data reports zero deactivations), and reports banks/branches/deactivated/unmatched — but does not currently distinguish inserted vs. updated vs. unchanged as separate counts, only a combined per-run total. Real gap against the letter of this line; low priority since the counts that matter operationally (deactivated, unmatched) are already there.
+- [x] Never delete a Bank or Branch referenced by a payout method or withdrawal snapshot. (`restrictOnDelete` FKs + never-delete triggers; the in-progress `payout_methods` table FKs into `bd_banks`/`bd_bank_branches` the same way.)
+- [ ] Build small cached lookup endpoints for Bank -> District -> Branch. **Not done yet** — needed for the Payout Method bank-selection flow (unit 6), building it there.
+- [ ] Do not send the full directory with every page. (Depends on the lookup endpoints above.)
+- [ ] Add Admin/authorized directory visibility or management only where a real operational screen is needed. **Not done** — no screen has needed it yet; revisit if unit 6 doesn't end up requiring one either.
+- [ ] Run importer, relationship, duplicate, malformed JSON, idempotency, cache, permission, and lookup tests. **Partial**: importer/relationship/duplicate/idempotency covered by `ImportBdBanksTest.php` (13 tests, verified against both the recovering cluster and the fresh one); cache/permission/lookup tests don't exist yet since the endpoints don't.
+- [x] Commit the Bank Directory separately.
+- [x] Record the commit hash here: `cfe562b` (original import), `_(SafeSeeder wiring commit follows immediately)_`.
+
+### Addendum — wiring into `SafeSeeder`
+
+`SafeSeeder` predates this batch and did not call the bank importer, so a fresh `db:seed` never actually populated `bd_banks`/`bd_bank_branches` even though the importer itself worked. Added a `banks()` step (after `locations()`, since district resolution depends on it) mirroring the existing `locations()` method exactly. Re-verified against the newly created fresh database: `banks=59 branches=8649 deactivated_banks=0 deactivated_branches=0 unmatched_districts=0`.
 
 If the files are inaccessible, report the exact attachment-resolution problem once. Continue the independent payout schema/security work without inventing bank data.
 

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Bank\Actions\ImportBdBanks;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Location\Actions\ImportBdLocations;
 use App\Domain\Package\Models\Package;
@@ -34,6 +35,7 @@ class SafeSeeder extends Seeder
         $this->settings();
         $this->documentTypes();
         $this->locations();
+        $this->banks();
 
         $this->command->info('Safe seed complete.');
     }
@@ -180,6 +182,29 @@ class SafeSeeder extends Seeder
             $report->counts['upazila'],
             $report->counts['union'],
             $report->counts['deactivated'],
+        ));
+    }
+
+    /**
+     * The bundled Bangladesh bank/branch directory (Bank Directory batch),
+     * linked to the locations directory above by district -- must run after
+     * {@see locations()} for that resolution to find anything.
+     */
+    protected function banks(): void
+    {
+        $report = app(ImportBdBanks::class)->handle('import');
+
+        if (! $report->isValid()) {
+            throw new RuntimeException('Bangladesh bank import failed validation: '.implode('; ', $report->problems));
+        }
+
+        $this->command->info(sprintf(
+            'Banks: banks=%d branches=%d deactivated_banks=%d deactivated_branches=%d unmatched_districts=%d',
+            $report->counts['banks'],
+            $report->counts['branches'],
+            $report->counts['deactivated_banks'],
+            $report->counts['deactivated_branches'],
+            count($report->unmatchedDistricts),
         ));
     }
 }
