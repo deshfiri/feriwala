@@ -107,7 +107,7 @@ First inspect the current staged and unstaged changes. Preserve verified work al
 - [ ] Run relevant Vitest, `tsc`, and `vp check` when frontend files changed. (No frontend files changed in this unit — panel UI is the flagged next step above — so nothing to run yet.)
 - [ ] **Not done**: browser-test search, relationship confirmation, allocation, reallocation, permission refusal, mobile, and Bangla. (Blocked on the panel UI above; will run once that lands.)
 - [x] Commit the allocation correction separately.
-- [x] Record the commit hash here: `_(filled in immediately after the commit below)_`.
+- [x] Record the commit hash here: `632b25e`.
 
 ## 5. Bangladesh Bank and Branch Directory
 
