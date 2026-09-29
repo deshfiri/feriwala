@@ -29,11 +29,12 @@ use Throwable;
  *     a "Data": "IV:CipherText" envelope, and a decrypted field list, but
  *     never states what the "Secret Key" it names actually is)
  *   - https://github.com/EPS-PG (the official GitHub organisation) —
- *     specifically EPS_Laravel (`app/EPS/EPSPayment.php`,
- *     `config/epsPayment.php`, `app/Http/Controllers/EPSExampleController.php`)
- *     and EPS_PHP (`Sandbox&ProductionPhP.php`, which is also where the
- *     sandbox and live base URLs actually live — neither repo's README
- *     states them)
+ *     specifically EPS_Laravel at commit `2ae54af21eed1eb8cc8f05505379cff60dfd30b3`
+ *     (`app/EPS/EPSPayment.php`, `config/epsPayment.php`,
+ *     `app/Http/Controllers/EPSExampleController.php`) and EPS_PHP at commit
+ *     `c1ace43cc8fb07f686eefe340363690074927603` (`Sandbox&ProductionPhP.php`,
+ *     which is also where the sandbox and live base URLs actually live —
+ *     neither repo's README states them)
  *
  * **What those sources confirm**, independently verified against the live
  * sandbox using EPS_PHP's own published demo credentials (`Epsdemo@gmail.com`
