@@ -1,10 +1,12 @@
 import { router } from '@inertiajs/react';
-import { Languages } from 'lucide-react';
+import { Check, Languages } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useTranslation } from '@/hooks/use-translation';
@@ -38,14 +40,22 @@ export default function LanguageSwitcher({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className={cn('size-8', className)}
+                    className={cn(
+                        'text-muted-foreground hover:text-foreground size-8',
+                        className,
+                    )}
                     aria-label={t('common.language.switch')}
                 >
-                    <Languages className="size-4" />
+                    <Languages aria-hidden="true" className="size-4" />
                 </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuContent align="end" sideOffset={8} className="w-44">
+                <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
+                    {t('common.language.label')}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
                 {available.map((option) => (
                     <DropdownMenuItem
                         key={option.value}
@@ -63,9 +73,10 @@ export default function LanguageSwitcher({
                     >
                         {option.label}
                         {option.value === locale && (
-                            <span className="text-brand" aria-hidden="true">
-                                ✓
-                            </span>
+                            <Check
+                                aria-hidden="true"
+                                className="text-brand size-4"
+                            />
                         )}
                     </DropdownMenuItem>
                 ))}

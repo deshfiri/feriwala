@@ -6,7 +6,9 @@ import { cn } from '@/lib/utils';
  *
  * Deliberately thin. `ui/card` is the vendored shadcn primitive and stays that
  * way; this is the one place the dashboard's own spacing and heading rhythm are
- * decided, so twelve panels cannot each invent their own.
+ * decided, so twelve panels cannot each invent their own. It shares its surface,
+ * corner and heading size with `SectionCard`, so the dashboard and the screens
+ * behind it read as one product.
  *
  * The heading is a real `h2`. A dashboard is a page of sections, and someone
  * navigating it by headings should be able to jump between them.
@@ -29,13 +31,15 @@ export default function Panel({
     return (
         <section
             className={cn(
-                'bg-card border-border flex flex-col rounded-xl border shadow-sm',
+                'bg-card text-card-foreground flex flex-col rounded-xl border shadow-sm',
                 className,
             )}
         >
             <header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
-                <div className="min-w-0 space-y-0.5">
-                    <h2 className="leading-none font-semibold">{title}</h2>
+                <div className="min-w-0 space-y-1">
+                    <h2 className="text-base leading-6 font-semibold tracking-tight">
+                        {title}
+                    </h2>
                     {description && (
                         <p className="text-muted-foreground text-sm">
                             {description}

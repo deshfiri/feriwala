@@ -30,11 +30,11 @@
         --}}
         <style>
             html {
-                background-color: oklch(0.969 0.003 75);
+                background-color: oklch(0.976 0.002 75);
             }
 
             html.dark {
-                background-color: oklch(0.175 0.003 60);
+                background-color: oklch(0.16 0.003 60);
             }
         </style>
 

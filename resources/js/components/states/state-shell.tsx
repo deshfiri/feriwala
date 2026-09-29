@@ -25,31 +25,31 @@ export default function StateShell({
     className?: string;
 }) {
     const toneClasses = {
-        neutral: 'bg-muted text-muted-foreground',
-        danger: 'bg-danger-subtle text-danger',
-        warning: 'bg-warning-subtle text-warning',
+        neutral: 'bg-surface-subtle text-muted-foreground border-border',
+        danger: 'bg-danger-subtle text-danger border-danger/20',
+        warning: 'bg-warning-subtle text-warning border-warning/20',
     }[tone];
 
     return (
         <div
             className={cn(
-                'flex flex-col items-center justify-center gap-3 px-6 py-14 text-center',
+                'flex flex-col items-center justify-center gap-4 px-6 py-12 text-center',
                 className,
             )}
         >
             <div
                 className={cn(
-                    'flex size-10 items-center justify-center rounded-full',
+                    'flex size-12 items-center justify-center rounded-xl border shadow-xs',
                     toneClasses,
                 )}
             >
                 <Icon aria-hidden="true" className="size-5" />
             </div>
 
-            <div className="space-y-1">
-                <p className="text-sm font-semibold">{title}</p>
+            <div className="space-y-1.5">
+                <p className="text-base font-semibold">{title}</p>
                 {description && (
-                    <p className="text-muted-foreground mx-auto max-w-sm text-sm text-balance">
+                    <p className="text-muted-foreground mx-auto max-w-md text-sm text-balance">
                         {description}
                     </p>
                 )}

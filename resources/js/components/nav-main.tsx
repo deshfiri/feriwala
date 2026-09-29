@@ -35,14 +35,24 @@ const badgeToneClasses: Record<NavBadgeTone, string> = {
 };
 
 /**
+ * One row of the rail. Icons sit a step quieter than their labels, so the eye
+ * reads the words down the column and the icons only take over once the rail is
+ * collapsed to them.
+ */
+const itemClasses = cn(
+    'text-sidebar-foreground h-9 gap-2.5 rounded-lg px-2.5 font-medium transition-colors',
+    '[&>svg]:text-muted-foreground hover:[&>svg]:text-sidebar-accent-foreground',
+);
+
+/**
  * The current row is marked twice: a brand-tinted ground and a solid rail down
  * its leading edge. The tint alone would be the only carrier of meaning, and the
  * rail is what lets the eye find the current section while scanning a long
  * sidebar rather than reading every entry.
  */
 const activeItemClasses = cn(
-    'data-[active=true]:bg-brand-subtle data-[active=true]:text-brand relative data-[active=true]:font-medium',
-    'data-[active=true]:before:absolute data-[active=true]:before:inset-y-1.5 data-[active=true]:before:left-0',
+    'data-[active=true]:bg-brand-subtle data-[active=true]:text-brand data-[active=true]:[&>svg]:text-brand relative data-[active=true]:font-semibold',
+    'data-[active=true]:before:absolute data-[active=true]:before:inset-y-2 data-[active=true]:before:left-0',
     'data-[active=true]:before:bg-brand data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full',
 );
 
@@ -50,7 +60,7 @@ function NavBadgePill({ badge }: { badge: NavBadge }) {
     return (
         <span
             className={cn(
-                'ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-4 font-semibold tracking-wide uppercase',
+                'text-2xs ml-auto shrink-0 rounded-full px-1.5 py-0.5 leading-none font-semibold tracking-wide uppercase',
                 'group-data-[collapsible=icon]:hidden',
                 badgeToneClasses[badge.tone ?? 'neutral'],
             )}
@@ -76,7 +86,7 @@ function NavLink({
         <SidebarMenuItem>
             <SidebarMenuButton
                 asChild
-                className={activeItemClasses}
+                className={cn(itemClasses, activeItemClasses)}
                 isActive={isActive}
                 tooltip={{ children: item.title }}
             >
@@ -85,7 +95,7 @@ function NavLink({
                     prefetch
                     aria-current={isActive ? 'page' : undefined}
                 >
-                    {item.icon && <item.icon />}
+                    {item.icon && <item.icon aria-hidden="true" />}
                     <span>{item.title}</span>
                     {item.badge && <NavBadgePill badge={item.badge} />}
                 </Link>
@@ -124,11 +134,11 @@ function NavBranch({
             <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                        className={activeItemClasses}
+                        className={cn(itemClasses, activeItemClasses)}
                         isActive={isCurrentUrl(item.href)}
                         tooltip={{ children: item.title }}
                     >
-                        {item.icon && <item.icon />}
+                        {item.icon && <item.icon aria-hidden="true" />}
                         <span>{item.title}</span>
                         {item.badge && <NavBadgePill badge={item.badge} />}
                         <ChevronRight
@@ -143,7 +153,7 @@ function NavBranch({
                 </CollapsibleTrigger>
 
                 <CollapsibleContent>
-                    <SidebarMenuSub>
+                    <SidebarMenuSub className="mt-0.5 mr-0 ml-[1.1875rem] gap-0.5 px-2">
                         {children.map((child) => {
                             const childActive =
                                 child.isActive ?? isCurrentUrl(child.href);
@@ -153,7 +163,7 @@ function NavBranch({
                                     <SidebarMenuSubButton
                                         asChild
                                         isActive={childActive}
-                                        className="data-[active=true]:bg-brand-subtle data-[active=true]:text-brand"
+                                        className="text-sidebar-foreground data-[active=true]:bg-brand-subtle data-[active=true]:text-brand h-8 rounded-md px-2.5 data-[active=true]:font-semibold"
                                     >
                                         <Link
                                             href={child.href}
@@ -197,12 +207,15 @@ export function NavMain({ groups }: { groups: NavGroup[] }) {
             {groups
                 .filter((group) => group.items.length > 0)
                 .map((group) => (
-                    <SidebarGroup key={group.label} className="px-2 py-0">
-                        <SidebarGroupLabel className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                    <SidebarGroup
+                        key={group.label}
+                        className="px-3 py-0 group-data-[collapsible=icon]:px-2"
+                    >
+                        <SidebarGroupLabel className="text-muted-foreground text-2xs h-7 px-2.5 font-semibold tracking-wider uppercase">
                             {group.label}
                         </SidebarGroupLabel>
 
-                        <SidebarMenu>
+                        <SidebarMenu className="gap-0.5">
                             {group.items.map((item) =>
                                 item.items && item.items.length > 0 ? (
                                     <NavBranch

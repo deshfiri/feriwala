@@ -78,6 +78,11 @@ return [
         'hint' => 'Move with the arrow keys, open with Enter, close with Esc.',
     ],
 
+    'account_menu' => [
+        'settings' => 'Settings',
+        'log_out' => 'Log out',
+    ],
+
     'notifications' => [
         'title' => 'Notifications',
         'unread' => ':count unread',

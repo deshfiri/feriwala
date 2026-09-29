@@ -43,7 +43,9 @@ void createInertiaApp({
         );
     },
     progress: {
-        color: '#4B5563',
+        // The brand token, so the bar re-themes with the page instead of
+        // carrying a grey that belongs to neither mode.
+        color: 'var(--brand)',
     },
 });
 

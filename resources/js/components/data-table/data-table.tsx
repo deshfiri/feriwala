@@ -24,6 +24,11 @@ import type { Column, Paginator, TableState } from '@/types';
  * Sorting, searching, and paging are all server round trips (§39). The component
  * holds one page of rows and never filters in the browser, because a browser
  * cannot filter rows it was never sent.
+ *
+ * The toolbar reads left to right in the order someone narrows a list: search
+ * first, then filters, then — pushed to the far end — the actions that operate
+ * on what is left. On a phone the search takes the full width and the rest wraps
+ * beneath it, so no control is clipped off the edge.
  */
 export default function DataTable<T>({
     columns,
@@ -160,7 +165,7 @@ export default function DataTable<T>({
                 {renderCard && (
                     <div className="divide-border divide-y md:hidden">
                         {rows.map((row) => (
-                            <div key={rowKey(row)} className="p-3">
+                            <div key={rowKey(row)} className="px-4 py-3">
                                 {renderCard(row)}
                             </div>
                         ))}
@@ -185,16 +190,11 @@ export default function DataTable<T>({
                         <thead
                             className={cn(stickyHeader && 'sticky top-0 z-10')}
                         >
-                            <tr
-                                className={cn(
-                                    'border-border border-b',
-                                    // Opaque once it floats, or the rows passing
-                                    // beneath it read straight through.
-                                    stickyHeader ? 'bg-muted' : 'bg-muted/60',
-                                )}
-                            >
+                            {/* The heading ground is opaque, so a floating
+                                heading never lets rows read through it. */}
+                            <tr className="border-border bg-surface-subtle border-b">
                                 {selection && (
-                                    <th scope="col" className="w-9 px-4 py-2">
+                                    <th scope="col" className="h-10 w-10 px-4">
                                         <Checkbox
                                             checked={allOnPageSelected}
                                             onCheckedChange={toggleAllOnPage}
@@ -203,62 +203,72 @@ export default function DataTable<T>({
                                     </th>
                                 )}
 
-                                {visibleColumns.map((column) => (
-                                    <th
-                                        key={column.key}
-                                        scope="col"
-                                        style={{ width: column.width }}
-                                        className={cn(
-                                            'text-muted-foreground px-4 py-2 text-[11px] font-semibold tracking-wide whitespace-nowrap uppercase',
-                                            column.align === 'end'
-                                                ? 'text-right'
-                                                : 'text-left',
-                                            column.priority === 'secondary' &&
-                                                'hidden lg:table-cell',
-                                        )}
-                                        aria-sort={
-                                            sort?.column === column.key
-                                                ? sort.direction === 'asc'
-                                                    ? 'ascending'
-                                                    : 'descending'
-                                                : undefined
-                                        }
-                                    >
-                                        {column.sortable ? (
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    toggleSort(column.key)
-                                                }
-                                                className={cn(
-                                                    'hover:text-foreground inline-flex items-center gap-1 uppercase',
-                                                    column.align === 'end' &&
-                                                        'flex-row-reverse',
-                                                )}
-                                            >
-                                                {column.header}
-                                                {sort?.column !== column.key ? (
-                                                    <ArrowUpDown
-                                                        className="size-3 opacity-50"
-                                                        aria-hidden="true"
-                                                    />
-                                                ) : sort.direction === 'asc' ? (
-                                                    <ArrowUp
-                                                        className="text-brand size-3"
-                                                        aria-hidden="true"
-                                                    />
-                                                ) : (
-                                                    <ArrowDown
-                                                        className="text-brand size-3"
-                                                        aria-hidden="true"
-                                                    />
-                                                )}
-                                            </button>
-                                        ) : (
-                                            column.header
-                                        )}
-                                    </th>
-                                ))}
+                                {visibleColumns.map((column) => {
+                                    const isSorted =
+                                        sort?.column === column.key;
+
+                                    return (
+                                        <th
+                                            key={column.key}
+                                            scope="col"
+                                            style={{ width: column.width }}
+                                            className={cn(
+                                                'text-muted-foreground text-2xs h-10 px-4 font-semibold tracking-wider whitespace-nowrap uppercase',
+                                                column.align === 'end'
+                                                    ? 'text-right'
+                                                    : 'text-left',
+                                                column.priority ===
+                                                    'secondary' &&
+                                                    'hidden lg:table-cell',
+                                            )}
+                                            aria-sort={
+                                                isSorted
+                                                    ? sort.direction === 'asc'
+                                                        ? 'ascending'
+                                                        : 'descending'
+                                                    : undefined
+                                            }
+                                        >
+                                            {column.sortable ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        toggleSort(column.key)
+                                                    }
+                                                    className={cn(
+                                                        'hover:text-foreground -mx-1 inline-flex items-center gap-1 rounded px-1 uppercase transition-colors',
+                                                        isSorted &&
+                                                            'text-foreground',
+                                                        column.align ===
+                                                            'end' &&
+                                                            'flex-row-reverse',
+                                                    )}
+                                                >
+                                                    {column.header}
+                                                    {!isSorted ? (
+                                                        <ArrowUpDown
+                                                            className="size-3 opacity-50"
+                                                            aria-hidden="true"
+                                                        />
+                                                    ) : sort.direction ===
+                                                      'asc' ? (
+                                                        <ArrowUp
+                                                            className="text-brand size-3"
+                                                            aria-hidden="true"
+                                                        />
+                                                    ) : (
+                                                        <ArrowDown
+                                                            className="text-brand size-3"
+                                                            aria-hidden="true"
+                                                        />
+                                                    )}
+                                                </button>
+                                            ) : (
+                                                column.header
+                                            )}
+                                        </th>
+                                    );
+                                })}
                             </tr>
                         </thead>
 
@@ -271,10 +281,10 @@ export default function DataTable<T>({
                                     <tr
                                         key={key}
                                         data-selected={isSelected || undefined}
-                                        className="border-border hover:bg-muted/50 data-[selected]:bg-brand-subtle border-b last:border-b-0"
+                                        className="border-border hover:bg-surface-hover data-[selected]:bg-brand-subtle border-b transition-colors last:border-b-0"
                                     >
                                         {selection && (
-                                            <td className="px-4 py-2">
+                                            <td className="h-(--table-row-height) px-4 py-2">
                                                 <Checkbox
                                                     checked={isSelected}
                                                     onCheckedChange={() =>
@@ -289,7 +299,7 @@ export default function DataTable<T>({
                                             <td
                                                 key={column.key}
                                                 className={cn(
-                                                    'px-4 py-2 align-middle',
+                                                    'h-(--table-row-height) px-4 py-2 align-middle',
                                                     column.align === 'end' &&
                                                         'text-right tabular-nums',
                                                     column.priority ===
@@ -311,8 +321,8 @@ export default function DataTable<T>({
     };
 
     return (
-        <div className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
-            <div className="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2.5">
+        <div className="bg-card overflow-hidden rounded-xl border shadow-sm">
+            <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-4 py-3">
                 {selectedCount > 0 && bulkActions ? (
                     <>
                         <span className="text-sm font-medium tabular-nums">
@@ -320,14 +330,14 @@ export default function DataTable<T>({
                                 count: selectedCount,
                             })}
                         </span>
-                        <div className="ml-auto flex items-center gap-2">
+                        <div className="ml-auto flex flex-wrap items-center gap-2">
                             {bulkActions(selection!.selected)}
                         </div>
                     </>
                 ) : (
                     <>
                         {searchable && (
-                            <div className="relative max-w-xs flex-1">
+                            <div className="relative w-full sm:w-auto sm:max-w-xs sm:flex-1">
                                 <Search
                                     className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
                                     aria-hidden="true"
@@ -341,6 +351,10 @@ export default function DataTable<T>({
                                         searchPlaceholder ??
                                         t('common.table.search_placeholder')
                                     }
+                                    aria-label={
+                                        searchPlaceholder ??
+                                        t('common.table.search_placeholder')
+                                    }
                                     className="h-8 pl-8 text-sm"
                                     type="search"
                                 />
@@ -349,7 +363,7 @@ export default function DataTable<T>({
 
                         {filters}
 
-                        <div className="ml-auto flex items-center gap-2">
+                        <div className="ml-auto flex flex-wrap items-center gap-2">
                             {actions}
                             <ColumnVisibilityMenu
                                 columns={columns}

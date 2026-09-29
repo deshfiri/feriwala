@@ -1,7 +1,24 @@
-import type { LucideIcon } from 'lucide-react';
+import {
+    ArrowDownRight,
+    ArrowUpRight,
+    Minus,
+    type LucideIcon,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+
+const changeClasses = {
+    up: 'bg-success-subtle text-success',
+    down: 'bg-danger-subtle text-danger',
+    flat: 'bg-muted text-muted-foreground',
+};
+
+const changeIcons = {
+    up: ArrowUpRight,
+    down: ArrowDownRight,
+    flat: Minus,
+};
 
 /**
  * The icon badge's colour, reusing the same five-tone vocabulary
@@ -39,9 +56,12 @@ const toneIconClasses: Record<StatCardTone, string> = {
  * reader cannot tell them apart. Pass an already-formatted string — a percentage
  * computed in the browser is a percentage the server cannot vouch for (§36.1).
  *
- * `tone`, when given, renders the icon inside a coloured badge rather than as a
- * bare muted glyph — purely decorative, so a card with no natural tone (or no
- * icon at all) is just as correct without it.
+ * `tone` colours the icon tile only. It says what kind of figure this is at a
+ * glance; it never says whether the figure is good.
+ *
+ * `size="compact"` is for a secondary row that qualifies a primary one — the
+ * claims on a balance beneath the balance itself — so the two rows read as a
+ * hierarchy rather than nine equal numbers.
  */
 export default function StatCard({
     label,
@@ -49,7 +69,8 @@ export default function StatCard({
     hint,
     change,
     icon: Icon,
-    tone,
+    tone = 'neutral',
+    size = 'default',
     className,
 }: {
     label: string;
@@ -59,54 +80,61 @@ export default function StatCard({
     change?: { label: string; direction: 'up' | 'down' | 'flat' };
     icon?: LucideIcon;
     tone?: StatCardTone;
+    size?: 'default' | 'compact';
     className?: string;
 }) {
+    const isCompact = size === 'compact';
+    const ChangeIcon = change ? changeIcons[change.direction] : null;
+
     return (
-        <Card className={cn('gap-0 px-5 py-4', className)}>
-            <div className="flex items-start justify-between gap-3">
-                <dt className="text-muted-foreground text-xs font-medium">
+        <Card
+            className={cn('gap-0 px-5', isCompact ? 'py-4' : 'py-5', className)}
+        >
+            <dt className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground min-w-0 text-sm font-medium">
                     {label}
-                </dt>
+                </span>
 
-                {Icon &&
-                    (tone ? (
-                        <span
-                            className={cn(
-                                'flex size-8 shrink-0 items-center justify-center rounded-lg',
-                                toneIconClasses[tone],
-                            )}
-                        >
-                            <Icon aria-hidden="true" className="size-4" />
-                        </span>
-                    ) : (
-                        <Icon
-                            aria-hidden="true"
-                            className="text-muted-foreground size-4 shrink-0"
-                        />
-                    ))}
-            </div>
+                {Icon && (
+                    <span
+                        aria-hidden="true"
+                        className={cn(
+                            'flex shrink-0 items-center justify-center rounded-lg',
+                            isCompact ? 'size-7' : 'size-9',
+                            toneIconClasses[tone],
+                        )}
+                    >
+                        <Icon className={isCompact ? 'size-3.5' : 'size-4'} />
+                    </span>
+                )}
+            </dt>
 
-            <dd className="mt-2 space-y-1">
-                <div className="tabular text-2xl leading-none font-semibold tracking-tight">
+            <dd className={cn('space-y-2', isCompact ? 'mt-2' : 'mt-3')}>
+                <div
+                    className={cn(
+                        'tabular leading-none font-semibold tracking-tight',
+                        isCompact ? 'text-lg' : 'text-2xl',
+                    )}
+                >
                     {value}
                 </div>
 
-                {change && (
+                {change && ChangeIcon && (
                     <p
                         className={cn(
-                            'text-xs font-medium',
-                            change.direction === 'up' && 'text-success',
-                            change.direction === 'down' && 'text-danger',
-                            change.direction === 'flat' &&
-                                'text-muted-foreground',
+                            'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium',
+                            changeClasses[change.direction],
                         )}
                     >
+                        <ChangeIcon aria-hidden="true" className="size-3" />
                         {change.label}
                     </p>
                 )}
 
                 {hint && (
-                    <p className="text-muted-foreground text-xs">{hint}</p>
+                    <p className="text-muted-foreground text-xs text-pretty">
+                        {hint}
+                    </p>
                 )}
             </dd>
         </Card>

@@ -40,8 +40,15 @@ export default function ColumnVisibilityMenu<T>({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                    <Columns3 className="size-3.5" />
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    // The visible label is hidden on a phone, where this is an
+                    // icon alone and would otherwise have no name at all.
+                    aria-label={t('common.table.columns')}
+                >
+                    <Columns3 aria-hidden="true" className="size-3.5" />
                     <span className="hidden sm:inline">
                         {t('common.table.columns')}
                     </span>

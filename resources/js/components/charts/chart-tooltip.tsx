@@ -30,7 +30,7 @@ export default function ChartTooltip({
     }
 
     return (
-        <div className="bg-popover text-popover-foreground border-border min-w-32 rounded-md border px-3 py-2 shadow-md">
+        <div className="bg-popover text-popover-foreground border-border min-w-32 rounded-lg border px-3 py-2 shadow-md">
             <p className="text-muted-foreground mb-1 text-xs">{label}</p>
 
             <ul className="space-y-0.5">

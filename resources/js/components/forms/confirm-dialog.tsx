@@ -1,3 +1,4 @@
+import { AlertTriangle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +20,9 @@ import { useTranslation } from '@/hooks/use-translation';
  * clicked through without being read; one that restates what is about to happen
  * — the amount, the destination, the number of rows affected — gives the reader
  * a chance to notice that it is wrong.
+ *
+ * A destructive confirmation also carries a warning mark beside its title, so the
+ * dialog looks different from a routine one before a word of it is read.
  *
  * Sensitive financial actions may additionally require password confirmation,
  * two-factor, or a second approver (§32.2). Those are enforced server-side; this
@@ -52,22 +56,33 @@ export default function ConfirmDialog({
             <DialogTrigger asChild>{trigger}</DialogTrigger>
 
             <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>{title}</DialogTitle>
-                    {description && (
-                        <DialogDescription>{description}</DialogDescription>
+                <DialogHeader className="gap-3 sm:flex-row sm:items-start sm:gap-4">
+                    {destructive && (
+                        <span
+                            aria-hidden="true"
+                            className="bg-danger-subtle text-danger mx-auto flex size-10 shrink-0 items-center justify-center rounded-full sm:mx-0"
+                        >
+                            <AlertTriangle className="size-5" />
+                        </span>
                     )}
+
+                    <div className="space-y-1.5">
+                        <DialogTitle>{title}</DialogTitle>
+                        {description && (
+                            <DialogDescription>{description}</DialogDescription>
+                        )}
+                    </div>
                 </DialogHeader>
 
                 {summary && (
-                    <div className="bg-muted border-border rounded-md border px-3 py-2.5 text-sm">
+                    <div className="bg-surface-subtle rounded-lg border px-4 py-3 text-sm">
                         {summary}
                     </div>
                 )}
 
                 <DialogFooter className="gap-2 sm:gap-2">
                     <Button
-                        variant="ghost"
+                        variant="outline"
                         onClick={() => setOpen(false)}
                         disabled={processing}
                     >

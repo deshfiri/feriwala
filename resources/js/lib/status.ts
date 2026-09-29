@@ -42,10 +42,14 @@ export const statusIconOverrides = {
     attention: AlertTriangle,
 } satisfies Record<string, LucideIcon>;
 
+/**
+ * The hairline border in the tone's own hue is what keeps a pill legible where
+ * its tinted ground sits on a tinted row — a selected row, a warning notice.
+ */
 export const statusToneClasses: Record<StatusTone, string> = {
-    success: 'bg-success-subtle text-success',
-    warning: 'bg-warning-subtle text-warning',
-    danger: 'bg-danger-subtle text-danger',
-    info: 'bg-info-subtle text-info',
-    neutral: 'bg-neutral-status-subtle text-neutral-status',
+    success: 'border-success/20 bg-success-subtle text-success',
+    warning: 'border-warning/25 bg-warning-subtle text-warning',
+    danger: 'border-danger/20 bg-danger-subtle text-danger',
+    info: 'border-info/20 bg-info-subtle text-info',
+    neutral: 'border-border bg-neutral-status-subtle text-neutral-status',
 };

@@ -22,11 +22,11 @@ export function UserInfo({
 
     return (
         <>
-            <Avatar className="h-8 w-8 overflow-hidden rounded-lg">
+            <Avatar className="size-8 shrink-0 overflow-hidden rounded-full">
                 {showAvatar ? (
                     <AvatarImage src={user.avatar} alt={user.name} />
                 ) : null}
-                <AvatarFallback className="rounded-lg text-black dark:text-white">
+                <AvatarFallback className="bg-brand-subtle text-brand rounded-full text-xs font-semibold">
                     {getInitials(user.name)}
                 </AvatarFallback>
             </Avatar>
