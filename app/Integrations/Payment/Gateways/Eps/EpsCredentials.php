@@ -7,13 +7,12 @@ use App\Integrations\Payment\Gateways\GatewayCredentials;
 /**
  * EPS credentials (§26.4, §36).
  *
- * The field names come from EPS's own published SDKs — the repositories linked
- * from eps.com.bd's gateway page, which list `username`, `password`, `hashKey`,
- * `merchantId` and `storeId` as what a merchant is issued.
- *
- * Knowing what a merchant holds is not the same as knowing the protocol those
- * credentials authenticate. See {@see EpsGateway} for why this gateway stores
- * configuration but does nothing with it yet.
+ * The field names come from EPS's own official SDK
+ * (github.com/EPS-PG/EPS_Laravel, `config/epsPayment.php`, read 2026-09-29):
+ * `merchant_id`, `store_id`, `username`, `password` and `hash_key` are what a
+ * merchant is issued, and `device_type_id` (`EPSDeviceTypeID`) is a further
+ * value the SDK's own `InitializeEPS` request requires but never explains —
+ * ask EPS what value a web merchant should send.
  */
 class EpsCredentials extends GatewayCredentials
 {
@@ -27,6 +26,36 @@ class EpsCredentials extends GatewayCredentials
      */
     public function requiredKeys(): array
     {
-        return ['merchant_id', 'store_id', 'username', 'password', 'hash_key'];
+        return ['merchant_id', 'store_id', 'username', 'password', 'hash_key', 'device_type_id'];
+    }
+
+    public function merchantId(): string
+    {
+        return $this->require('merchant_id');
+    }
+
+    public function storeId(): string
+    {
+        return $this->require('store_id');
+    }
+
+    public function username(): string
+    {
+        return $this->require('username');
+    }
+
+    public function password(): string
+    {
+        return $this->require('password');
+    }
+
+    public function hashKey(): string
+    {
+        return $this->require('hash_key');
+    }
+
+    public function deviceTypeId(): string
+    {
+        return $this->require('device_type_id');
     }
 }

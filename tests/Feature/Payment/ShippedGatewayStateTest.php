@@ -52,18 +52,27 @@ it('has a driver behind all eight', function () {
     expect(app(PaymentGatewayManager::class)->implemented())->toHaveCount(8);
 });
 
-it('leaves EPS and Nagad able to do nothing at all', function () {
+it('leaves Nagad able to do nothing at all', function () {
     /*
-     * Their protocols could not be confirmed against official documentation —
-     * both issue their integration guides to merchants rather than publishing
-     * them — so they declare no capabilities and refuse every operation. That is
-     * a decision, not an unfinished job.
+     * Its protocol could not be confirmed against official documentation —
+     * Nagad issues its integration guide to merchants rather than publishing
+     * it, and an RSA signing scheme is not something to reconstruct from the
+     * outside. That is a decision, not an unfinished job.
      */
-    $manager = app(PaymentGatewayManager::class);
+    expect(app(PaymentGatewayManager::class)->driver('nagad')->capabilities())->toBe([]);
+});
 
-    foreach (['eps', 'nagad'] as $name) {
-        expect($manager->driver($name)->capabilities())->toBe([]);
-    }
+it('gives EPS exactly the capabilities confirmed against its official SDKs, and nothing else', function () {
+    /*
+     * See EpsGatewayTest for the sources and the live-sandbox confirmation.
+     * IPN and refunds stay unimplemented: neither the IPN's AES "Secret Key"
+     * nor any refund endpoint appears in EPS's public materials.
+     */
+    expect(app(PaymentGatewayManager::class)->driver('eps')->capabilities())->toBe([
+        GatewayCapability::Initiate,
+        GatewayCapability::Verify,
+        GatewayCapability::StatusQuery,
+    ]);
 });
 
 it('makes Stripe and PayPal fully capable and completely unavailable', function () {

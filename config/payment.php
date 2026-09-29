@@ -81,10 +81,14 @@ return [
         ],
 
         /*
-         * Configuration foundation only — the driver declares no capabilities
-         * and refuses every operation. EPS issues its integration guide to
-         * merchants on request rather than publishing it, and a payment
-         * protocol is not something to infer. See EpsGateway.
+         * Initiate, verify and status-query are implemented against EPS's
+         * official SDKs (github.com/EPS-PG) and confirmed against the live
+         * sandbox — see EpsGateway's own docblock for the exact sources and
+         * what is and is not confirmed. Shipped disabled regardless: no
+         * merchant credentials exist yet, and the confirmed response shape
+         * for a genuinely paid transaction still needs a live or sandbox
+         * transaction to verify against, which no merchant account has run.
+         * The IPN channel remains unconfirmed and unimplemented.
          */
         'eps' => [
             'driver' => EpsGateway::class,

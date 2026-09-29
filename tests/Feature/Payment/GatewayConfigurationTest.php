@@ -88,9 +88,9 @@ describe('when a gateway is offered', function () {
 
     it('is never offered by a driver that cannot confirm a payment', function () {
         /*
-         * EPS and Nagad rest here: a class is wired up and their credentials
-         * have somewhere to live, but their protocol could not be confirmed
-         * against official documentation, so they declare nothing.
+         * Nagad rests here: a class is wired up and its credentials have
+         * somewhere to live, but its protocol could not be confirmed against
+         * official documentation, so it declares nothing.
          *
          * Checked at the catalogue as well as when enabling, because this is
          * what the checkout reads. "Switched on" is a decision somebody made
@@ -98,16 +98,30 @@ describe('when a gateway is offered', function () {
          */
         $catalogue = collect(app(PaymentGatewayManager::class)->catalogue());
 
-        foreach (['eps', 'nagad'] as $name) {
-            $entry = $catalogue->firstWhere('name', $name);
+        $nagad = $catalogue->firstWhere('name', 'nagad');
 
-            expect($entry['is_implemented'])->toBeTrue()
-                ->and($entry['is_operational'])->toBeFalse()
-                ->and($entry['capabilities'])->toBe([])
-                ->and($entry['is_available'])->toBeFalse();
-        }
+        expect($nagad['is_implemented'])->toBeTrue()
+            ->and($nagad['is_operational'])->toBeFalse()
+            ->and($nagad['capabilities'])->toBe([])
+            ->and($nagad['is_available'])->toBeFalse();
 
         expect($catalogue->firstWhere('name', 'sslcommerz')['is_operational'])->toBeTrue();
+    });
+
+    it('lets EPS confirm a payment but still keeps it unavailable with no credentials configured', function () {
+        /*
+         * Initiate/Verify/StatusQuery are real (EpsGatewayTest), so EPS is
+         * "operational" here unlike Nagad -- what still keeps it off the
+         * checkout is that nobody has entered a real merchant account's
+         * credentials, exactly the same gap Stripe and PayPal ship with.
+         */
+        $eps = collect(app(PaymentGatewayManager::class)->catalogue())->firstWhere('name', 'eps');
+
+        expect($eps['is_implemented'])->toBeTrue()
+            ->and($eps['is_operational'])->toBeTrue()
+            ->and($eps['capabilities'])->toContain('verify')
+            ->and($eps['is_configured'])->toBeFalse()
+            ->and($eps['is_available'])->toBeFalse();
     });
 });
 
