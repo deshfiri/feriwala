@@ -9,7 +9,6 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -54,18 +53,8 @@ class RolesController extends Controller
          * sentence instead, and there is nothing to group here at all.
          */
         $permissionGroups = $platformRole->grantsEverything()
-            ? collect()
-            : collect($platformRole->permissions())
-                ->groupBy(fn (string $permission) => Str::before($permission, '.'))
-                ->map(fn ($names, string $moduleValue) => [
-                    'module' => PermissionModule::from($moduleValue)->label(),
-                    'actions' => collect($names)
-                        ->map(fn (string $name) => PermissionAction::from(Str::after($name, '.'))->label())
-                        ->sort()
-                        ->values(),
-                ])
-                ->sortBy('module')
-                ->values();
+            ? []
+            : PermissionCatalogue::groupedByModule($platformRole->permissions());
 
         $holders = User::role($platformRole->value)
             ->orderBy('name')

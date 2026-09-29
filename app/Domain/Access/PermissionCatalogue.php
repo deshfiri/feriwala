@@ -267,6 +267,68 @@ class PermissionCatalogue
     }
 
     /**
+     * A flat list of permission names, grouped by module label with each
+     * module's action labels sorted -- the shape both the Roles screen and
+     * the staff directory's effective-permission view need, built once so
+     * the two cannot drift apart.
+     *
+     * @param  array<int, string>  $permissionNames
+     * @return array<int, array{module: string, actions: array<int, string>}>
+     */
+    public static function groupedByModule(array $permissionNames): array
+    {
+        $byModule = [];
+
+        foreach ($permissionNames as $permission) {
+            $module = self::moduleFor($permission);
+            $byModule[$module->value][] = substr($permission, strlen($module->value) + 1);
+        }
+
+        $groups = [];
+
+        foreach ($byModule as $moduleValue => $actionValues) {
+            $actionLabels = array_map(
+                fn (string $actionValue) => Action::from($actionValue)->label(),
+                $actionValues,
+            );
+            sort($actionLabels);
+
+            $groups[] = [
+                'module' => Module::from($moduleValue)->label(),
+                'actions' => $actionLabels,
+            ];
+        }
+
+        usort($groups, fn (array $a, array $b) => $a['module'] <=> $b['module']);
+
+        return $groups;
+    }
+
+    /**
+     * The module a permission name belongs to.
+     *
+     * Not a plain split on the first dot: {@see Module::SupplierKyc}'s own
+     * value ("supplier.kyc") contains one, so "supplier.kyc.view" would
+     * otherwise parse as module "supplier", action "kyc.view" -- a module
+     * that exists too, so the mistake would not even throw. Matching the
+     * *longest* module value that prefixes the permission is what tells
+     * "supplier.kyc.view" apart from a real "supplier.approve".
+     */
+    protected static function moduleFor(string $permission): Module
+    {
+        $matches = array_filter(
+            Module::cases(),
+            fn (Module $module) => str_starts_with($permission, $module->value.'.'),
+        );
+
+        usort($matches, fn (Module $a, Module $b) => strlen($b->value) <=> strlen($a->value));
+
+        return $matches[0] ?? throw new \InvalidArgumentException(
+            "[{$permission}] does not belong to any known module."
+        );
+    }
+
+    /**
      * Compose a single permission name, failing loudly if that combination is
      * not in the matrix — a typo in a policy should surface in tests, not as a
      * check that silently never passes.

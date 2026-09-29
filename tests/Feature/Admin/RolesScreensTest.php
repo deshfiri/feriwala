@@ -95,6 +95,34 @@ it('marks Super Admin protected, and does not list it as individual permission r
             ->where('permissionGroups', []));
 });
 
+it('tells a dotted module value apart from the plain one it prefixes', function () {
+    /*
+     * Regression: Module::SupplierKyc's own value ("supplier.kyc") contains
+     * a dot, so "supplier.kyc.view" was briefly parsed as module "supplier"
+     * action "kyc.view" -- a real module, so the mistake produced no error
+     * for a modern PHP array key, but PermissionAction::from('kyc.view')
+     * throws a ValueError, and Supplier Manager holds exactly this
+     * permission.
+     */
+    $staff = testPlatformStaff(PlatformRole::SystemAdministrator);
+
+    $this->actingAs($staff)
+        ->get(route('admin.roles.show', 'supplier_manager'))
+        ->assertOk()
+        ->assertInertia(function (Assert $page) {
+            $groups = collect($page->toArray()['props']['permissionGroups']);
+
+            expect($groups->pluck('module'))
+                ->toContain('Supplier KYC')
+                ->toContain('Suppliers');
+
+            $supplierKyc = $groups->firstWhere('module', 'Supplier KYC');
+
+            expect($supplierKyc['actions'])->toContain('View')
+                ->and($supplierKyc['actions'])->toContain('Review');
+        });
+});
+
 it('404s an unknown role key rather than guessing', function () {
     $staff = testPlatformStaff(PlatformRole::SystemAdministrator);
 

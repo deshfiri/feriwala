@@ -43,9 +43,5 @@ return [
         'confirm_password' => 'Confirm your password',
         'submit' => 'Assign role',
         'role_assigned' => 'Role updated.',
-        'cannot_change_own_role' => 'You cannot change your own role.',
-        'cannot_change_super_admin' => 'Only a Super Admin may change another Super Admin\'s role.',
-        'last_super_admin' => 'The platform must always have at least one active Super Admin.',
-        'not_platform_staff' => 'This person has a business account and cannot hold a platform role.',
     ],
 ];

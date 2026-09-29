@@ -65,6 +65,52 @@ describe('the catalogue', function () {
     });
 });
 
+describe('groupedByModule', function () {
+    it('tells a dotted module value apart from the plain one it prefixes', function () {
+        // Module::SupplierKyc's own value ("supplier.kyc") contains a dot,
+        // so "supplier.kyc.view" must resolve to Supplier KYC, not to
+        // Supplier with a bogus "kyc.view" action.
+        $groups = collect(PermissionCatalogue::groupedByModule([
+            'supplier.kyc.view',
+            'supplier.kyc.review',
+            'supplier.approve',
+        ]));
+
+        expect($groups->pluck('module'))
+            ->toContain('Supplier KYC')
+            ->toContain('Suppliers');
+
+        $supplierKyc = $groups->firstWhere('module', 'Supplier KYC');
+        $supplier = $groups->firstWhere('module', 'Suppliers');
+
+        expect($supplierKyc['actions'])->toBe(['Review', 'View'])
+            ->and($supplier['actions'])->toBe(['Approve']);
+    });
+
+    it('groups every real permission in the catalogue without throwing', function () {
+        // A property check standing in for one per role: every permission
+        // string the catalogue actually produces must resolve to exactly
+        // one module, including every dotted one.
+        $groups = PermissionCatalogue::groupedByModule(PermissionCatalogue::all());
+
+        $totalActions = array_sum(array_map(fn (array $group) => count($group['actions']), $groups));
+
+        expect($totalActions)->toBe(count(PermissionCatalogue::all()));
+    });
+
+    it('sorts groups by module label and actions within a group', function () {
+        $groups = collect(PermissionCatalogue::groupedByModule([
+            'sms.manage_settings',
+            'sms.view',
+            'account.view',
+        ]));
+
+        expect($groups->pluck('module')->all())->toBe(['Accounts', 'SMS'])
+            ->and($groups->firstWhere('module', 'SMS')['actions'])
+            ->toBe(['Manage settings', 'View']);
+    });
+});
+
 describe('immutability guarantees', function () {
     it('offers no way to create, edit, or delete a ledger entry', function () {
         // The ledger is append-only (§23.2). Corrections are new reversal or
