@@ -40,4 +40,28 @@ class UserPolicy
 
         return $actor->can('account.edit');
     }
+
+    /**
+     * Whether the actor may change which platform role this person holds.
+     *
+     * Same two rules as {@see lock()}, for the same reason: **nobody changes
+     * their own role** (a self-service escalation, or a self-demotion nobody
+     * else asked for), and **only a Super Admin changes a Super Admin's
+     * role** — otherwise anybody holding `access.edit` could quietly demote
+     * the platform's own unrestricted login. A Super Admin actor never
+     * reaches this method; `Gate::before` answers first, which is precisely
+     * the case being allowed.
+     */
+    public function assignRole(User $actor, User $subject): bool
+    {
+        if ($actor->is($subject)) {
+            return false;
+        }
+
+        if ($subject->hasRole(PlatformRole::SuperAdmin->value)) {
+            return false;
+        }
+
+        return $actor->can('access.edit');
+    }
 }
