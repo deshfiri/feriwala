@@ -145,11 +145,12 @@ renamed, and entries are never deleted.
 - [~] **P0-26** `SensitiveActionGuard` + `SensitiveActionRequest`: graded controls — password confirmation for all sensitive actions, 2FA for money movement, second approver for releasing payment, mandatory reason (19 tests). _Middleware wiring and audit emission land with the first real sensitive action_ (§32.2)
 - [ ] **P0-27** Maker-checker / `approval_requests` scaffold for second-approver actions (§32.2)
 - [x] **P0-28** `PreventSearchIndexing` middleware, aliased `noindex`, applied per-route so the public site and storefronts stay indexable (§34.2) — 3 tests
+- [~] **P0-61** Roles & Permissions admin UI, closing the gap P0-20/21/22 left open: the 21 `PlatformRole` cases and 161-permission catalogue existed with no screen to browse them and no production code path that ever called Spatie's `assignRole`/`syncRoles`. `RolesController` (list all 21 with permission/holder counts; inspect one role's grants grouped by module and who holds it) and `StaffAccessController` (searchable platform-staff directory; one staff member's *effective* permissions plus a role-assignment form) are both read-only-by-design where the architecture is: `PlatformRole` is a pure PHP enum and the catalogue matrix is hand-declared, not data, so there is no safe way to create or clone a role without a code deploy — reported as an architectural limitation rather than worked around with a parallel, database-backed role system. `AssignPlatformRole` is the only code path that ever calls `syncRoles()`, guarded against self-change, granting/touching Super Admin without already holding it, and demoting the platform's last *active* Super Admin (a locked or suspended one doesn't count as available) — mirroring `ChangeIdentityAccess`'s existing "guard lives in the action, because `Gate::before` passes a Super Admin actor straight over the policy" pattern. The role-assignment write sits behind `RequirePassword` on top of every action/policy guard. 45 Pest tests (`AssignPlatformRoleTest`, `RolesScreensTest`, `StaffAccessTest`) plus 2 Vitest nav cases. **Not yet done:** live-browser verification across personas/locales/themes/viewports (in progress) and the SaaS-shell responsive/accessibility closure pass the rest of this batch still owes.
 
 ## P0.D Settings & configuration
 
-- [~] **P0-29** `settings` migration, `SettingType` casting (decimals stay strings, money casts to `Money`), `SettingsRepository` with Redis cache and full invalidation on write (19 tests) — _migration not yet run_
-- [ ] **P0-30** Admin settings UI shell with grouped sections and permission gating
+- [~] **P0-29** `settings` migration, `SettingType` casting (decimals stay strings, money casts to `Money`), `SettingsRepository` with Redis cache and full invalidation on write (19 tests) — _migration not yet run in the dev database; verified against isolated testing schemas throughout, including by the withdrawal-limits settings below_
+- [x] **P0-30** Admin settings UI shell with grouped sections and permission gating. `SettingsController`/`admin/settings/index` groups every real settings screen (billing, gateways, payments, deposit rules, withdrawal limits, website pricing, referral settings, packages, KYC requirements, SMS, branding) into three sections, filtering each card through the exact permission its target screen already requires — a navigational wrapper, not a new settings surface. CMS, SEO, Backups, Audit logs, generic Notifications/Integrations, Reports, Wholesale/Dropshipping settings, Fulfillment, Courier, Commission and Settlement have no screen at all yet and are deliberately left out rather than shown as disabled placeholders — 6 tests (`SettingsHubTest`)
 - [ ] **P0-31** Encrypted-credential storage pattern for gateway / SMS / courier / website secrets (§26.4, §36)
 
 ## P0.E Design system & ERP shell (§33)
@@ -966,7 +967,7 @@ increment by hand; a progress table that has drifted is worse than none.
 
 | Phase                                           | Tasks   | Done    | Started |
 | ----------------------------------------------- | ------- | ------- | ------- |
-| P0 Foundation                                   | 59      | 29      | 10      |
+| P0 Foundation                                   | 61      | 30      | 12      |
 | P1 Identity & Onboarding                        | 80      | 76      | 2       |
 | P2 Money Core                                   | 38      | 38      | 0       |
 | P3 Catalog & Inventory                          | 31      | 31      | 0       |
@@ -980,10 +981,29 @@ increment by hand; a progress table that has drifted is worse than none.
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
 | P13 Supplier Account System                     | 29      | 24      | 2       |
-| **Total**                                       | **489** | **250** | **25**  |
+| **Total**                                       | **491** | **251** | **27**  |
 
 ### Revision log
 
+- **2026-09-29** — Withdrawal limits settings screen (`26f1dcb`/`e728746`-era backend now has an
+  admin screen: `SetAccountWithdrawalLimits` mirrors the existing, never-wired
+  `SetSupplierWithdrawalLimits`; one `WithdrawalLimitsController` handles both sides' defaults and
+  per-owner overrides). A Settings hub (P0-30) groups every real settings screen behind the exact
+  permission its target already requires, reporting CMS/SEO/Backups/Audit/Notifications/Integrations
+  /Reports/Wholesale-Dropshipping-settings/Fulfillment/Courier/Commission/Settlement as genuine
+  no-screen-yet gaps rather than building placeholders for them. Roles & Permissions admin UI
+  (P0-61): browsing/inspecting the 21 `PlatformRole` cases and the 161-permission catalogue, a
+  platform-staff directory, effective-permission inspection, and `AssignPlatformRole` — the first and
+  only production code path that calls Spatie's `assignRole`/`syncRoles` — with self-change,
+  granting-Super-Admin-without-holding-it, and last-active-Super-Admin guards living in the action
+  rather than the policy, since `Gate::before` passes a Super Admin actor straight over a policy
+  method. Also fixed, in passing: a role-page 500 for any permission from a module whose own enum
+  value contains a dot (`supplier.kyc.*`), caught by testing the Supplier Manager role page before it
+  reached a second controller. A cross-directory test-isolation gap was fixed separately
+  (`payoutTestBankBranch()` moved into the shared `tests/Pest.php` helpers) after a narrower
+  `tests/Feature/Withdrawal`-only run surfaced it. Commits: `26f1dcb`, `21f35b5`, `a061e79`, `f15c08a`,
+  `02bf084`, `3c9a259`, `de6dfc7`. Live-browser verification across personas/locales/themes/viewports
+  is in progress as this entry is written; not yet folded into a final status here.
 - **2026-09-24** — D26 flat-Taka recovery completed and fully verified, closing out the gap the
   2026-09-23 entry below left open (Website, Order/Checkout and Package/Billing, the source of that
   entry's 51 failures). A coding session applying the 2026-09-23 conversion was interrupted
