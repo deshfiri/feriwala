@@ -36,6 +36,7 @@ use App\Http\Controllers\Admin\ReferralChainController;
 use App\Http\Controllers\Admin\ReferralCommissionController;
 use App\Http\Controllers\Admin\ReferralSettingsController;
 use App\Http\Controllers\Admin\ReservationController;
+use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
@@ -533,6 +534,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * permission gate, exactly as the dashboard's cards do above.
          */
         Route::get('settings', SettingsController::class)->name('settings');
+
+        /*
+         * The twenty-one PlatformRole cases (commit-order item 6). Read-only
+         * -- there is no safe way to create or clone a role without a code
+         * deploy, so this browses and searches the fixed catalogue rather
+         * than editing it.
+         */
+        Route::get('roles', [RolesController::class, 'index'])->name('roles.index');
+        Route::get('roles/{role}', [RolesController::class, 'show'])->name('roles.show');
 
         /*
          * The requirement catalogue (§7.2).

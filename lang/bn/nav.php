@@ -47,6 +47,7 @@ return [
     'account_withdrawals' => 'ক্লায়েন্ট/পার্টনার উত্তোলন',
     'withdrawal_limits' => 'উত্তোলন সীমা',
     'settings_hub' => 'সেটিংস',
+    'roles' => 'ভূমিকা ও অনুমতি',
     'sms' => 'এসএমএস',
     'branding' => 'ব্র্যান্ডিং',
     'stock' => 'স্টক',

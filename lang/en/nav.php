@@ -53,6 +53,7 @@ return [
     'account_withdrawals' => 'Client/Partner withdrawals',
     'withdrawal_limits' => 'Withdrawal limits',
     'settings_hub' => 'Settings',
+    'roles' => 'Roles & permissions',
     'sms' => 'SMS',
     'branding' => 'Branding',
     'stock' => 'Stock',

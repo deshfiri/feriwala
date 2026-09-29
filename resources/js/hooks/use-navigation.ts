@@ -34,6 +34,7 @@ import {
     Truck,
     Undo2,
     UserCheck,
+    UserCog,
     Users,
     Wallet as WalletIcon,
     Warehouse,
@@ -49,6 +50,7 @@ import {
 } from '@/routes/admin';
 import { index as accountDirectory } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
+import { index as roles } from '@/routes/admin/roles';
 import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
@@ -320,6 +322,21 @@ export function useNavigation(): {
                               title: t('nav.settings_hub'),
                               href: settingsHub(),
                               icon: Settings,
+                          },
+                      ]
+                    : []),
+                /*
+                 * The twenty-one PlatformRole cases, and the staff directory
+                 * that assigns them (commit-order item 6). Its own
+                 * permission: browsing who holds what is not the same
+                 * question as any other module's own settings.
+                 */
+                ...(permissions['access.view']
+                    ? [
+                          {
+                              title: t('nav.roles'),
+                              href: roles(),
+                              icon: UserCog,
                           },
                       ]
                     : []),

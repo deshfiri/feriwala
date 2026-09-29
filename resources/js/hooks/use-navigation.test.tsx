@@ -444,6 +444,53 @@ describe('settings hub navigation', () => {
 });
 
 /**
+ * The twenty-one PlatformRole cases and the staff directory that assigns
+ * them (commit-order item 6): its own permission, never offered to a
+ * partner.
+ */
+describe('roles and permissions navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+    });
+
+    it('gives staff holding access.view the roles door', () => {
+        renderFor({
+            permissions: { 'access.view': true },
+            account: null,
+        });
+
+        expect(titles).toContain('nav.roles');
+    });
+
+    it('offers it neither to staff without access.view nor to a partner', () => {
+        renderFor({
+            permissions: {},
+            account: {
+                status: 'active',
+                allowsWholesale: true,
+                allowsDropshipping: false,
+                managesStaff: false,
+            },
+        });
+
+        expect(titles).not.toContain('nav.roles');
+    });
+});
+
+/**
  * The referral configuration (D24): reached by seeing it, never offered to a
  * partner, whose own referrals live on their own page.
  */
