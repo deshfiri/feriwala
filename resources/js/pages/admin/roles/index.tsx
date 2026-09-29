@@ -1,10 +1,12 @@
 import { Head, Link } from '@inertiajs/react';
-import { ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, UserCog } from 'lucide-react';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import StatusPill from '@/components/status-pill';
+import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as rolesIndex, show as roleShow } from '@/routes/admin/roles';
+import { index as staffIndex } from '@/routes/admin/staff-access';
 
 type RoleSummary = {
     key: string;
@@ -37,6 +39,14 @@ export default function RolesIndex({ roles }: Props) {
                 <PageHeader
                     title={t('access.roles.title')}
                     description={t('access.roles.description')}
+                    actions={
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={staffIndex()}>
+                                <UserCog aria-hidden="true" />
+                                {t('access.staff.title')}
+                            </Link>
+                        </Button>
+                    }
                 />
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

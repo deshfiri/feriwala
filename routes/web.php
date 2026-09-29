@@ -39,6 +39,7 @@ use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Admin\StaffAccessController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
@@ -543,6 +544,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('roles', [RolesController::class, 'index'])->name('roles.index');
         Route::get('roles/{role}', [RolesController::class, 'show'])->name('roles.show');
+
+        /*
+         * Platform staff, and assigning one of the twenty-one roles above
+         * (commit-order item 6). The write is behind RequirePassword on top
+         * of AssignPlatformRole's own guards -- privilege escalation is
+         * exactly the risk a confirmed password exists for.
+         */
+        Route::get('staff-access', [StaffAccessController::class, 'index'])->name('staff-access.index');
+        Route::get('staff-access/{user}', [StaffAccessController::class, 'show'])->name('staff-access.show');
+        Route::put('staff-access/{user}/role', [StaffAccessController::class, 'updateRole'])
+            ->middleware(RequirePassword::class)
+            ->name('staff-access.role.update');
 
         /*
          * The requirement catalogue (§7.2).

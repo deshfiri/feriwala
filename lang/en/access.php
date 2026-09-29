@@ -33,6 +33,8 @@ return [
             'status' => 'Sign-in',
         ],
         'no_role' => 'No role assigned',
+        'two_factor_enabled' => 'Enabled',
+        'two_factor_disabled' => 'Not set up',
         'back' => 'Back to staff',
         'effective_permissions' => 'Effective permissions',
         'change_role' => 'Change role',

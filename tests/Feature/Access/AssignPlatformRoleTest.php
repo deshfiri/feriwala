@@ -129,17 +129,33 @@ describe('the last Super Admin', function () {
         ))->toThrow(InvalidArgumentException::class);
     });
 
-    it('never blocks promoting someone new to Super Admin', function () {
+    it('never blocks a Super Admin promoting someone new to Super Admin', function () {
+        $rootAdmin = testPlatformStaff(PlatformRole::SuperAdmin);
         $subject = testPlatformStaff(PlatformRole::SmsManager);
 
         app(AssignPlatformRole::class)->handle(
             subject: $subject,
-            actor: $this->actor,
+            actor: $rootAdmin,
             role: PlatformRole::SuperAdmin,
             reason: 'Promoting a second Super Admin.',
         );
 
         expect($subject->fresh()->hasRole(PlatformRole::SuperAdmin->value))->toBeTrue();
+    });
+});
+
+describe('granting Super Admin', function () {
+    it('refuses an actor who does not already hold Super Admin', function () {
+        $subject = testPlatformStaff(PlatformRole::SmsManager);
+
+        expect(fn () => app(AssignPlatformRole::class)->handle(
+            subject: $subject,
+            actor: $this->actor,
+            role: PlatformRole::SuperAdmin,
+            reason: 'Trying to self-escalate by proxy.',
+        ))->toThrow(InvalidArgumentException::class);
+
+        expect($subject->fresh()->hasRole(PlatformRole::SuperAdmin->value))->toBeFalse();
     });
 });
 

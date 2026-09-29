@@ -28,6 +28,11 @@ use InvalidArgumentException;
  * **Nobody changes their own role.** A self-service escalation, or a
  * self-demotion nobody else asked for.
  *
+ * **Only a Super Admin may grant Super Admin.** Otherwise anybody holding
+ * `access.edit` -- SystemAdministrator, by default -- could hand a third
+ * party the one role that passes every check unconditionally, which is a
+ * strictly bigger power than `access.edit` is meant to carry.
+ *
  * **The platform's last Super Admin may never be demoted.** If theirs were
  * the only active login holding it, the recovery from that mistake is a
  * database console.
@@ -51,6 +56,10 @@ class AssignPlatformRole
 
         if ($subject->accountMembership()->exists()) {
             throw new InvalidArgumentException('Only a platform staff member may hold a platform role.');
+        }
+
+        if ($role === PlatformRole::SuperAdmin && ! $actor->hasRole(PlatformRole::SuperAdmin->value)) {
+            throw new InvalidArgumentException('Only a Super Admin may grant the Super Admin role.');
         }
 
         $this->database->transaction(function () use ($subject, $role, $actor, $reason) {

@@ -28,6 +28,8 @@ return [
             'status' => 'সাইন-ইন',
         ],
         'no_role' => 'কোনো ভূমিকা নির্ধারিত নেই',
+        'two_factor_enabled' => 'সক্রিয়',
+        'two_factor_disabled' => 'সেট করা হয়নি',
         'back' => 'স্টাফে ফিরুন',
         'effective_permissions' => 'কার্যকর অনুমতিসমূহ',
         'change_role' => 'ভূমিকা পরিবর্তন করুন',
