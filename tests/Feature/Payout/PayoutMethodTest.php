@@ -1,8 +1,6 @@
 <?php
 
 use App\Domain\Account\Enums\AccountRole;
-use App\Domain\Bank\Models\BdBank;
-use App\Domain\Bank\Models\BdBankBranch;
 use App\Domain\Payout\Actions\ArchivePayoutMethod;
 use App\Domain\Payout\Actions\SavePayoutMethod;
 use App\Domain\Payout\Actions\SetDefaultPayoutMethod;
@@ -21,25 +19,6 @@ use Illuminate\Support\Facades\DB;
  * batch, D25, P13-24) — one architecture serving both Supplier and
  * Client/Partner BusinessAccount owners.
  */
-
-function payoutTestBankBranch(string $bankCode = '001', string $routing = '001120100'): BdBankBranch
-{
-    $bank = BdBank::query()->firstOrCreate(
-        ['bank_code' => $bankCode],
-        ['name' => 'Test Bank '.$bankCode, 'slug' => 'test-bank-'.$bankCode, 'payable' => true, 'available_in_selector' => true, 'is_active' => true],
-    );
-
-    return BdBankBranch::create([
-        'bank_id' => $bank->id,
-        'routing_number' => $routing,
-        'name' => 'Head Office',
-        'slug' => 'head-office-'.$routing,
-        'district_source_name' => 'Dhaka',
-        'source' => 'test',
-        'source_status' => 'legacy_unverified',
-        'is_active' => true,
-    ]);
-}
 
 it('creates a bKash method for a BusinessAccount and a Supplier independently, sharing the same table', function () {
     $account = testBusinessAccount();

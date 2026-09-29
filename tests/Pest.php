@@ -10,6 +10,8 @@ use App\Domain\Address\Enums\AddressOwnerType;
 use App\Domain\Address\Enums\ClientAddressType;
 use App\Domain\Address\Enums\SupplierAddressType;
 use App\Domain\Address\Models\SharedAddress;
+use App\Domain\Bank\Models\BdBank;
+use App\Domain\Bank\Models\BdBankBranch;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentPurpose;
@@ -823,6 +825,39 @@ function addressTestCreate(AddressOwnerType $ownerType, int $ownerId, array $ove
         postcode: null,
         makeDefault: (bool) ($overrides['makeDefault'] ?? false),
     );
+}
+
+/*
+ * Shared fixtures for the shared, owner-polymorphic Payout Method table
+ * (D25, P13-24). Prefixed `payoutTest` so they cannot collide with anything
+ * else in Pest's single global function namespace — moved here from
+ * tests/Feature/Payout/PayoutMethodTest.php once a Withdrawal-directory test
+ * started needing the same bank branch fixture and a narrow run of only that
+ * directory couldn't see it (a defined-in-one-test-file function is only
+ * visible to tests Pest loads alongside it in the same run).
+ */
+
+/**
+ * A `BdBankBranch` (with its owning `BdBank`, created if missing) valid
+ * enough to attach to a bank-account `PayoutMethod` in a test.
+ */
+function payoutTestBankBranch(string $bankCode = '001', string $routing = '001120100'): BdBankBranch
+{
+    $bank = BdBank::query()->firstOrCreate(
+        ['bank_code' => $bankCode],
+        ['name' => 'Test Bank '.$bankCode, 'slug' => 'test-bank-'.$bankCode, 'payable' => true, 'available_in_selector' => true, 'is_active' => true],
+    );
+
+    return BdBankBranch::create([
+        'bank_id' => $bank->id,
+        'routing_number' => $routing,
+        'name' => 'Head Office',
+        'slug' => 'head-office-'.$routing,
+        'district_source_name' => 'Dhaka',
+        'source' => 'test',
+        'source_status' => 'legacy_unverified',
+        'is_active' => true,
+    ]);
 }
 
 /**
