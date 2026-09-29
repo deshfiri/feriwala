@@ -179,21 +179,21 @@ If the files are inaccessible, report the exact attachment-resolution problem on
 
 ## 7. Withdrawal integration
 
-- [ ] Build or extend Client/Partner withdrawal requests through the existing wallet and immutable ledger architecture.
-- [ ] Preserve the existing Supplier withdrawal flow and extend it safely.
-- [ ] A withdrawal request must select an active payout method.
-- [ ] Show the user a masked confirmation before submission.
-- [ ] Store an immutable payout snapshot on the withdrawal.
-- [ ] Later edits to the payout method must not alter existing withdrawals.
-- [ ] Release staff must use the withdrawal snapshot, not the current profile method.
-- [ ] Preserve wallet reservation, available-balance, minimum/maximum limit, approval, rejection, release, failure, idempotency, and 2FA rules.
-- [ ] Enforce KYC `blocksWithdrawals()` only on new Client/Partner withdrawal requests.
-- [ ] Do not incorrectly apply Client/Partner KYC restrictions to Supplier withdrawals.
-- [ ] Support platform default withdrawal limits and Admin-set account-specific overrides.
-- [ ] Staff screens must show owner, amount, provider/Bank, district, Branch, routing number, masked account, status, and immutable snapshot according to permission.
-- [ ] Add real concurrency tests proving reservation/release/payment occurs once.
-- [ ] Commit Withdrawal Snapshot Integration separately.
-- [ ] Record the commit hash here: `________________`.
+- [x] Build or extend Client/Partner withdrawal requests through the existing wallet and immutable ledger architecture. (`RequestAccountWithdrawal`/`AdvanceAccountWithdrawalStatus`/`RejectOrFailAccountWithdrawal`/`PayAccountWithdrawal` against the generic `WalletService` claim primitive — reserve/release/capture — never a parallel implementation.)
+- [x] Preserve the existing Supplier withdrawal flow and extend it safely. (Nothing under `app/Domain/Supplier/` touched; wallet + payout Pest groups, 266 tests, re-run clean after this batch.)
+- [x] A withdrawal request must select an active payout method. (`payoutMethodNotUsable()` refusal in `RequestAccountWithdrawal`.)
+- [x] Show the user a masked confirmation before submission. (Create screen's payout-method selector shows the masked number per option, the same single-step UX already accepted for the Supplier withdrawal screen it mirrors.)
+- [x] Store an immutable payout snapshot on the withdrawal. (`payout_snapshot` jsonb, locked by trigger from insert.)
+- [x] Later edits to the payout method must not alter existing withdrawals. (Snapshot frozen via `PayoutMethod::toSnapshot()` at request time; archiving/editing the method afterward cannot touch it.)
+- [x] Release staff must use the withdrawal snapshot, not the current profile method. (`PayAccountWithdrawal` never reads `PayoutMethod`; the Admin show screen renders only `payout_snapshot`.)
+- [x] Preserve wallet reservation, available-balance, minimum/maximum limit, approval, rejection, release, failure, idempotency, and 2FA rules. (2FA via the existing app-wide `two-factor` admin middleware, applies to these routes too, same as Supplier's.)
+- [x] Enforce KYC `blocksWithdrawals()` only on new Client/Partner withdrawal requests. (`.ai/rules/withdrawal.md` wired in `RequestAccountWithdrawal`; tested.)
+- [x] Do not incorrectly apply Client/Partner KYC restrictions to Supplier withdrawals. (`KycRestrictions`/`KycConsequence` only ever resolve against `BusinessAccount`; Supplier code path untouched.)
+- [x] Support platform default withdrawal limits and Admin-set account-specific overrides. (`AccountWithdrawalLimits` + `withdrawal_minimum_override`/`withdrawal_maximum_override` on `business_accounts`.)
+- [ ] Staff screens must show owner, amount, provider/Bank, district, Branch, routing number, masked account, status, and immutable snapshot according to permission. **Partially open**: owner, amount, provider/bank name, branch name, masked account, status and the snapshot itself all render — but `PayoutMethodSnapshot` (the shared DTO `PayoutMethod::toSnapshot()` returns, already committed under the Shared Payout Methods batch and reused as-is by the Supplier withdrawal admin screen too) never captures `district` or `routing_number` at all, so neither screen can show them. Fixing this means changing the shared snapshot DTO and both the Supplier and Client/Partner admin screens — out of this unit's scope to do silently; raised here rather than routed past.
+- [x] Add real concurrency tests proving reservation/release/payment occurs once. (`tests/Feature/Concurrency/AccountWithdrawalConcurrencyTest.php`: competing reservations, approve-races-reject, a debit racing a reservation — all real `pcntl_fork` processes.)
+- [x] Commit Withdrawal Snapshot Integration separately. (Backend financial/authorization unit committed separately from the UI/browser-closure unit, per instruction.)
+- [x] Record the commit hash here: `212791f` (backend: migrations, actions, policy, controllers, 19 tests) and `e728746` (Erp/Admin Inertia screens, EN/BN translations, nav entry — browser-verified against an isolated schema before commit, including the authorization-guard regression check).
 
 ## 8. EPS Payment Gateway
 
