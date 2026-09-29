@@ -2,7 +2,9 @@
 
 namespace App\Domain\Order\Data;
 
+use App\Domain\Order\Actions\ConfirmProductSourceLink;
 use App\Domain\Order\Enums\AllocationSourceType;
+use App\Domain\Order\Models\ProductSourceLink;
 use App\Support\Money\Money;
 
 /**
@@ -23,7 +25,7 @@ use App\Support\Money\Money;
 class AllocationCandidate
 {
     /**
-     * @param  string  $sourceId  the warehouse's or offer's public id — never a database id
+     * @param  string  $sourceId  the warehouse's or offer's public id for a source directly catalogued under the ordered product/variation; the **stock item's own** public id (never the warehouse's) for a warehouse source reached through a confirmed cross-catalogue link, since one warehouse can hold more than one linked product — never a database id either way
      * @param  int  $availableToPromise  what this source could actually commit to the line right now
      * @param  string|null  $ineligibleReason  why this source cannot serve the line, when it cannot
      */
@@ -49,6 +51,27 @@ class AllocationCandidate
         public readonly bool $isPreferred = false,
         public readonly ?string $supplierStatus = null,
         public readonly ?string $offerStatus = null,
+
+        /**
+         * Whether this source is already known to fulfil the ordered
+         * product/variation — either because it is directly catalogued
+         * under it (the historical, only case this DTO used to carry), or
+         * because a {@see ProductSourceLink} has
+         * confirmed it. False for a catalogue-wide search result nobody has
+         * confirmed yet — {@see ConfirmProductSourceLink}
+         * is required before it can be allocated.
+         */
+        public readonly bool $isRelated = true,
+
+        // Set only when this source is catalogued under a *different*
+        // product/variation than the order line's own — what a confirmation
+        // dialog compares the ordered item against, and what a reservation
+        // must actually be taken against instead of the order line's own
+        // product.
+        public readonly ?int $sourceProductId = null,
+        public readonly ?int $sourceProductVariantId = null,
+        public readonly ?string $sourceProductName = null,
+        public readonly ?string $sourceProductSku = null,
     ) {}
 
     /**
@@ -81,6 +104,9 @@ class AllocationCandidate
             'is_preferred' => $this->isPreferred,
             'supplier_status' => $this->supplierStatus,
             'offer_status' => $this->offerStatus,
+            'is_related' => $this->isRelated,
+            'source_product_name' => $this->sourceProductName,
+            'source_product_sku' => $this->sourceProductSku,
         ];
     }
 }

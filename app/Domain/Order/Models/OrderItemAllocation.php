@@ -4,6 +4,7 @@ namespace App\Domain\Order\Models;
 
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
+use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Enums\AllocationSourceType;
@@ -46,6 +47,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $order_item_id
  * @property AllocationSourceType $source_type
  * @property int|null $warehouse_id
+ * @property int|null $linked_stock_item_id
  * @property int|null $supplier_id
  * @property int|null $supplier_offer_id
  * @property int|null $supplier_offer_price_change_id
@@ -67,6 +69,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property-read Order $order
  * @property-read OrderItem $orderItem
  * @property-read Warehouse|null $warehouse
+ * @property-read StockItem|null $linkedStockItem
  * @property-read Supplier|null $supplier
  * @property-read SupplierOffer|null $offer
  * @property-read SupplierOfferPriceChange|null $priceVersion
@@ -119,6 +122,20 @@ class OrderItemAllocation extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    /**
+     * Which stock item this allocation actually draws on, when it reaches a
+     * different product/variation than the order line's own through a
+     * confirmed {@see ProductSourceLink}. Null for
+     * the historical, exact-match case, where `warehouse_id` plus the order
+     * line's own product already say everything.
+     *
+     * @return BelongsTo<StockItem, $this>
+     */
+    public function linkedStockItem(): BelongsTo
+    {
+        return $this->belongsTo(StockItem::class, 'linked_stock_item_id');
     }
 
     /**

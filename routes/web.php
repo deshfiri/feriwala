@@ -1004,6 +1004,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('orders/{order}/lines/{item}/sources', [OrderController::class, 'allocationCandidates'])
             ->name('orders.lines.sources');
+        Route::get('orders/{order}/lines/{item}/sources/search', [OrderController::class, 'searchAllocationSources'])
+            ->name('orders.lines.sources.search');
+        Route::post('orders/{order}/lines/{item}/sources/confirm-link', [OrderController::class, 'confirmSourceLink'])
+            ->name('orders.lines.sources.confirm-link');
         Route::post('orders/{order}/lines/{item}/allocation', [OrderController::class, 'allocate'])
             ->name('orders.lines.allocation.store');
 

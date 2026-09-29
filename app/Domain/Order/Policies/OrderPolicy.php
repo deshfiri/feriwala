@@ -103,6 +103,33 @@ class OrderPolicy
     }
 
     /**
+     * Confirm that a Supplier offer or warehouse stock item, catalogued under
+     * a different product, fulfils this order line's own product (D25,
+     * Order Allocation correction batch).
+     *
+     * Deliberately independent of `order.edit`: this is a catalogue-curation
+     * decision (the relationship holds for every future order of this
+     * product, not just this one), reusing `catalog.edit` -- the existing
+     * permission for changing what the catalogue says -- rather than a new
+     * one. A Supplier-side relationship additionally needs
+     * `supplier_pricing.view`, the same figure-ownership boundary
+     * {@see allocateSource()} already draws, so confirming a link to a
+     * Supplier's offer is never possible for someone who may not even see
+     * that Supplier's rate.
+     */
+    public function confirmSourceLink(User $user, Order $order, AllocationSourceType $sourceType): bool
+    {
+        if (! $user->can(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::Edit))) {
+            return false;
+        }
+
+        return match ($sourceType) {
+            AllocationSourceType::SupplierOffer => $user->can(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View)),
+            AllocationSourceType::Warehouse => true,
+        };
+    }
+
+    /**
      * Cancel an order nobody has paid for: the account that placed it, or staff
      * who may move orders.
      */

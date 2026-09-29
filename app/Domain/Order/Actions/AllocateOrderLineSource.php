@@ -7,6 +7,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Enums\StockReservationStatus;
+use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockReservations;
@@ -204,16 +205,31 @@ class AllocateOrderLineSource
             ? SupplierOffer::query()->where('public_id', $candidate->sourceId)->firstOrFail()
             : null;
 
-        $reservation = $this->reserve($line, $candidate, $offer, $quantity, $key);
+        $linkedStockItem = null;
+        $warehouse = null;
+
+        if ($offer === null) {
+            $warehouse = Warehouse::query()->where('public_id', $candidate->sourceId)->first();
+
+            // Not a warehouse's own public id: this candidate reaches a
+            // *different* product/variation through a confirmed
+            // ProductSourceLink, so `sourceId` names the stock item itself
+            // (see AllocationCandidate's own docblock).
+            if ($warehouse === null) {
+                $linkedStockItem = StockItem::query()->with('warehouse')->where('public_id', $candidate->sourceId)->firstOrFail();
+                $warehouse = $linkedStockItem->warehouse;
+            }
+        }
+
+        $reservation = $this->reserve($line, $candidate, $offer, $linkedStockItem, $quantity, $key);
 
         try {
             $allocation = OrderItemAllocation::create([
                 'order_id' => $line->order_id,
                 'order_item_id' => $line->id,
                 'source_type' => $candidate->sourceType,
-                'warehouse_id' => $offer === null
-                    ? Warehouse::query()->where('public_id', $candidate->sourceId)->value('id')
-                    : null,
+                'warehouse_id' => $warehouse?->id,
+                'linked_stock_item_id' => $linkedStockItem?->id,
                 'supplier_id' => $offer?->supplier_id,
                 'supplier_offer_id' => $offer?->id,
                 'supplier_offer_price_change_id' => $offer === null
@@ -281,6 +297,7 @@ class AllocateOrderLineSource
         OrderItem $line,
         AllocationCandidate $candidate,
         ?SupplierOffer $offer,
+        ?StockItem $linkedStockItem,
         int $quantity,
         string $reference,
     ): StockReservation {
@@ -289,6 +306,22 @@ class AllocateOrderLineSource
 
         if ($offer !== null) {
             return $this->reservations->reserveFromSupplier($offer, $quantity, $kind, $reference, $account);
+        }
+
+        // A confirmed cross-catalogue link reserves against the *linked*
+        // product/variation, never the order line's own — that is the whole
+        // point of the link. Best-effort against any active warehouse
+        // holding it, the same "any warehouse in priority order" mechanism
+        // the exact-match path below already relies on.
+        if ($linkedStockItem !== null) {
+            return $this->reservations->reserve(
+                $linkedStockItem->product,
+                $linkedStockItem->product_variant_id === null ? null : $linkedStockItem->variant,
+                $quantity,
+                $kind,
+                $reference,
+                $account,
+            );
         }
 
         return $this->reservations->reserve(
@@ -328,9 +361,13 @@ class AllocateOrderLineSource
             return false;
         }
 
-        return $type === AllocationSourceType::Warehouse
-            ? $allocation->warehouse?->public_id === $sourceId
-            : $allocation->offer?->public_id === $sourceId;
+        if ($type !== AllocationSourceType::Warehouse) {
+            return $allocation->offer?->public_id === $sourceId;
+        }
+
+        return $allocation->linked_stock_item_id !== null
+            ? $allocation->linkedStockItem?->public_id === $sourceId
+            : $allocation->warehouse?->public_id === $sourceId;
     }
 
     /**

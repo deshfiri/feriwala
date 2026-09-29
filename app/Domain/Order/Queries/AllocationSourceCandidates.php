@@ -9,6 +9,7 @@ use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
+use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -53,7 +54,133 @@ class AllocationSourceCandidates
         return [
             ...$this->warehouseCandidates($line, $quantity, $platformRate, $currency, $active),
             ...$this->supplierCandidates($line, $quantity, $platformRate, $currency, $active),
+            ...$this->linkedCandidates($line, $quantity, $platformRate, $currency, $active),
         ];
+    }
+
+    /**
+     * Sources confirmed, through {@see ProductSourceLink}, to fulfil this
+     * product/variation despite being catalogued under a different one —
+     * "Recommended / Already Related" beyond the trivial exact-match case
+     * the two methods above already cover.
+     *
+     * @return list<AllocationCandidate>
+     */
+    protected function linkedCandidates(
+        OrderItem $line,
+        int $quantity,
+        Money $platformRate,
+        Currency $currency,
+        ?OrderItemAllocation $active,
+    ): array {
+        $links = ProductSourceLink::query()
+            ->forOrderedProduct($line->product_id, $line->product_variant_id)
+            ->with(['stockItem.warehouse', 'stockItem.product', 'stockItem.variant', 'supplierOffer.supplier', 'supplierOffer.stock', 'supplierOffer.product', 'supplierOffer.variant'])
+            ->get();
+
+        $candidates = [];
+
+        foreach ($links as $link) {
+            $candidates[] = $link->source_type === AllocationSourceType::Warehouse
+                ? $this->linkedWarehouseCandidate($link, $quantity, $platformRate, $currency, $active)
+                : $this->linkedSupplierCandidate($link, $quantity, $platformRate, $currency, $active);
+        }
+
+        return array_values(array_filter($candidates));
+    }
+
+    protected function linkedWarehouseCandidate(
+        ProductSourceLink $link,
+        int $quantity,
+        Money $platformRate,
+        Currency $currency,
+        ?OrderItemAllocation $active,
+    ): ?AllocationCandidate {
+        $item = $link->stockItem;
+
+        if ($item === null || ! $item->warehouse->is_active) {
+            return null;
+        }
+
+        $variant = $item->product_variant_id === null ? null : $item->variant;
+        $cost = $variant === null ? $item->product->base_cost : ($variant->base_cost ?? $item->product->base_cost);
+        $atp = (int) $item->available;
+        $isEligible = $atp >= $quantity;
+
+        return new AllocationCandidate(
+            sourceType: AllocationSourceType::Warehouse,
+            sourceId: $item->public_id,
+            sourceLabel: $item->warehouse->name,
+            available: (int) $item->available,
+            reserved: (int) $item->reserved,
+            availableToPromise: $atp,
+            unitCost: $cost,
+            platformRate: $platformRate,
+            expectedMargin: $platformRate->minus($cost)->multipliedBy($quantity),
+            currencyCode: $currency->value,
+            isEligible: $isEligible,
+            ineligibleReason: $isEligible ? null : 'This warehouse holds '.$atp.' of the '.$quantity.' needed.',
+            isCurrentlyAllocated: $active !== null
+                && $active->source_type === AllocationSourceType::Warehouse
+                && $active->warehouse_id === $item->warehouse_id,
+            isRelated: true,
+            sourceProductId: $item->product_id,
+            sourceProductVariantId: $item->product_variant_id,
+            sourceProductName: $item->product->name,
+            sourceProductSku: $item->sku(),
+        );
+    }
+
+    protected function linkedSupplierCandidate(
+        ProductSourceLink $link,
+        int $quantity,
+        Money $platformRate,
+        Currency $currency,
+        ?OrderItemAllocation $active,
+    ): ?AllocationCandidate {
+        $offer = $link->supplierOffer;
+
+        if ($offer === null || $offer->status->value !== 'active' || ! $offer->supplier->isOperational()) {
+            return null;
+        }
+
+        $stock = $offer->stock;
+        $atp = (int) ($stock->quantity ?? 0);
+        $rate = $offer->supplier_rate;
+
+        $reason = match (true) {
+            $offer->currency_code !== $currency->value => 'This offer is priced in '.$offer->currency_code.'.',
+            $atp < $quantity => 'This Supplier has '.$atp.' of the '.$quantity.' needed.',
+            default => null,
+        };
+
+        return new AllocationCandidate(
+            sourceType: AllocationSourceType::SupplierOffer,
+            sourceId: $offer->public_id,
+            sourceLabel: $offer->supplier->business_name,
+            available: $atp,
+            reserved: (int) ($stock->reserved_quantity ?? 0),
+            availableToPromise: $atp,
+            unitCost: $rate,
+            platformRate: $platformRate,
+            expectedMargin: $offer->currency_code === $currency->value
+                ? $platformRate->minus($rate)->multipliedBy((int) $quantity)
+                : Money::zero($currency),
+            currencyCode: $offer->currency_code,
+            isEligible: $reason === null,
+            ineligibleReason: $reason,
+            isCurrentlyAllocated: $active !== null && $active->supplier_offer_id === $offer->id,
+            supplierId: $offer->supplier->public_id,
+            supplierName: $offer->supplier->business_name,
+            isPreferred: (bool) $offer->is_preferred,
+            supplierStatus: $offer->supplier->status->value,
+            offerStatus: $offer->status->value,
+            isRelated: true,
+            sourceProductId: $offer->product_id,
+            sourceProductVariantId: $offer->product_variant_id,
+            sourceProductName: $offer->product->name,
+            sourceProductSku: $offer->variant === null ? $offer->product->sku : $offer->variant->sku,
+        );
     }
 
     /**
