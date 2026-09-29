@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AccountController;
+use App\Http\Controllers\Admin\AccountWithdrawalController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BillingController;
@@ -55,6 +56,7 @@ use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\Admin\WebsitePricingController;
 use App\Http\Controllers\BankLookupController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Erp\AccountWithdrawalController as ErpAccountWithdrawalController;
 use App\Http\Controllers\Erp\AddressController;
 use App\Http\Controllers\Erp\AllocatedStockController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
@@ -278,6 +280,18 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // payout-method form. Reference data, so no owner scoping applies.
         Route::get('banks', [BankLookupController::class, 'banks'])->name('banks.index');
         Route::get('banks/{bankCode}/branches', [BankLookupController::class, 'branches'])->name('banks.branches');
+
+        /*
+         * A `BusinessAccount`'s own withdrawal requests (§27) — self-scoped
+         * the same way `payout-methods` above is, no withdrawal appears in
+         * any URL that isn't this account's own.
+         */
+        Route::prefix('withdrawals')->name('withdrawals.')->group(function () {
+            Route::get('/', [ErpAccountWithdrawalController::class, 'index'])->name('index');
+            Route::get('create', [ErpAccountWithdrawalController::class, 'create'])->name('create');
+            Route::post('/', [ErpAccountWithdrawalController::class, 'store'])->name('store');
+            Route::get('{withdrawal}', [ErpAccountWithdrawalController::class, 'show'])->name('show');
+        });
 
         /*
          * The central catalogue for a business account (§10, §12, §13).
@@ -820,6 +834,17 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('wallets/{wallet}/transactions/{transaction}/reversal', [WalletAdjustmentController::class, 'reverse'])
             ->middleware(RequirePassword::class)
             ->name('wallets.reversals.store');
+
+        // Client/Partner withdrawals (§27).
+        Route::get('account-withdrawals', [AccountWithdrawalController::class, 'index'])->name('account-withdrawals.index');
+        Route::get('account-withdrawals/{withdrawal}', [AccountWithdrawalController::class, 'show'])->name('account-withdrawals.show');
+        Route::post('account-withdrawals/{withdrawal}/approve', [AccountWithdrawalController::class, 'approve'])->name('account-withdrawals.approve');
+        Route::post('account-withdrawals/{withdrawal}/reject', [AccountWithdrawalController::class, 'reject'])->name('account-withdrawals.reject');
+        Route::post('account-withdrawals/{withdrawal}/process', [AccountWithdrawalController::class, 'process'])->name('account-withdrawals.process');
+        Route::post('account-withdrawals/{withdrawal}/paid', [AccountWithdrawalController::class, 'markPaid'])
+            ->middleware(RequirePassword::class)
+            ->name('account-withdrawals.paid');
+        Route::post('account-withdrawals/{withdrawal}/failed', [AccountWithdrawalController::class, 'markFailed'])->name('account-withdrawals.failed');
 
         /*
          * Giving an account a package without a sale (§8.3, P1-40).

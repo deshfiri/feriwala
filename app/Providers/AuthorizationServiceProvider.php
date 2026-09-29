@@ -40,6 +40,8 @@ use App\Domain\Supplier\Policies\SupplierProductListingPolicy;
 use App\Domain\Supplier\Policies\SupplierWithdrawalPolicy;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Policies\WebsitePolicy;
+use App\Domain\Withdrawal\Models\AccountWithdrawal;
+use App\Domain\Withdrawal\Policies\AccountWithdrawalPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -107,6 +109,14 @@ class AuthorizationServiceProvider extends ServiceProvider
          * Supplier-guarded controller, the same as its addresses.
          */
         Gate::policy(PayoutMethod::class, PayoutMethodPolicy::class);
+
+        /*
+         * A Client/Partner `BusinessAccount`'s own withdrawals (§27) — both
+         * the account's self-service view/request and staff review share
+         * this one policy, the same as {@see WalletPolicy}'s shape for the
+         * wallet it draws from.
+         */
+        Gate::policy(AccountWithdrawal::class, AccountWithdrawalPolicy::class);
 
         /*
          * The Supplier account domain (D25). Staff-side only — a Supplier's

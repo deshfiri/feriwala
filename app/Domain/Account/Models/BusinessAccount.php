@@ -59,6 +59,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $activation_hold_reason
  * @property CarbonImmutable|null $activation_held_at
  * @property int|null $activation_held_by
+ * @property string|null $withdrawal_minimum_override
+ * @property string|null $withdrawal_maximum_override
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
