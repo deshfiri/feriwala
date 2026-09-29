@@ -204,25 +204,25 @@ Use only official EPS sources:
 - Official EPS GitHub repository linked from the EPS website
 - `https://www.eps.com.bd/ipn`
 
-- [ ] Record official source URLs and pin the official GitHub commit/version used.
-- [ ] Audit the existing disabled `EpsGateway` stub before changing it.
-- [ ] Implement only officially documented capabilities.
-- [ ] Implement payment initiation and hosted external redirect.
-- [ ] Implement success, cancellation, and failure returns.
-- [ ] Implement authenticated IPN handling.
-- [ ] Implement server-side verification/reconciliation.
-- [ ] Implement refund/status enquiry only when officially documented.
-- [ ] Browser return is never authoritative for settlement.
-- [ ] Reuse the existing Payment Gateway, PaymentRecorder, settlement, reconciliation, return-result, and external-navigation architecture.
-- [ ] Follow the official encryption/signature protocol exactly. Never infer a missing signing rule.
-- [ ] Validate payment identity, exact flat-Taka amount, currency, account/order, and gateway transaction reference.
-- [ ] Make callbacks, IPN, verification, and settlement idempotent and replay-resistant.
-- [ ] Store secrets only in environment/configuration and redact sensitive payloads from logs/audits.
-- [ ] Keep EPS disabled by default until required credentials are configured and verification passes.
-- [ ] If merchant credentials are unavailable, complete official-protocol fixture tests and report only the live sandbox transaction as credential-blocked.
-- [ ] Add contract, security, duplicate callback, mismatch, reconciliation, and browser result tests.
-- [ ] Commit EPS separately.
-- [ ] Record the commit hash here: `________________`.
+- [x] Record official source URLs and pin the official GitHub commit/version used. (`EpsGateway`'s own docblock: eps.com.bd, eps.com.bd/eps-gateway, eps.com.bd/ipn, all read 2026-09-29; `github.com/EPS-PG/EPS_Laravel` at `2ae54af21eed1eb8cc8f05505379cff60dfd30b3` and `github.com/EPS-PG/EPS_PHP` at `c1ace43cc8fb07f686eefe340363690074927603`.)
+- [x] Audit the existing disabled `EpsGateway` stub before changing it. (Read in full before any change; its own prior docblock's "undocumented" claim turned out to be half right — see below.)
+- [x] Implement only officially documented capabilities. (`Initiate`, `Verify`, `StatusQuery` only — each confirmed against the SDK source, and `Verify`'s HMAC scheme independently confirmed with one real `GetToken` call against the live sandbox using EPS_PHP's own published demo credentials.)
+- [x] Implement payment initiation and hosted external redirect.
+- [x] Implement success, cancellation, and failure returns. (Browser-return query params only; never concludes paid.)
+- [ ] Implement authenticated IPN handling. **Not done, deliberately** — eps.com.bd/ipn documents AES-256-CBC/PKCS7 and an `IV:CipherText` envelope but never identifies what the "Secret Key" actually is (the same `hash_key` used for HMAC signing, or something issued separately). Neither EPS_Laravel nor EPS_PHP's published source implements IPN decryption either, despite EPS_Laravel's own README listing "Callback & IPN handling" as a feature. `verifyWebhookSignature()` stays fail-closed; `handleCallback()` recognises an encrypted IPN body only well enough to refuse it, never misreads it. Settlement is unweakened by this: nothing releases value except `verify()`/`status()`, reached via the browser-return path every time a payer returns. **Credential/documentation blocker**: resolving this needs EPS's own integration guide from integration@eps.com.bd, or a live merchant asking EPS support directly what the IPN secret is.
+- [x] Implement server-side verification/reconciliation. (`verify()` and `status()` — EPS exposes exactly one lookup, addressed by the merchant's own transaction id, so both ask the same question.)
+- [x] Implement refund/status enquiry only when officially documented. (Status enquiry: yes. Refund: correctly *not* implemented — no refund endpoint appears in any official EPS source found.)
+- [x] Browser return is never authoritative for settlement.
+- [x] Reuse the existing Payment Gateway, PaymentRecorder, settlement, reconciliation, return-result, and external-navigation architecture. (Zero changes to `SettlePayment`, `PaymentReturnController`, `PaymentWebhookController`, or `PaymentGatewayManager` — `EpsGateway` only implements the existing `PaymentGateway` contract.)
+- [x] Follow the official encryption/signature protocol exactly. Never infer a missing signing rule. (HMAC-SHA512 scheme confirmed from source and a real sandbox call, used exactly as published; the IPN encryption is *not* inferred and is left unimplemented rather than guessed.)
+- [x] Validate payment identity, exact flat-Taka amount, currency, account/order, and gateway transaction reference. (Generic `SettlePayment` — `belongsToPayment()`, `matchesAmount()` — unaffected and unmodified; EPS amounts flow through as `Money::fromDecimal()`, never a float.)
+- [~] Make callbacks, IPN, verification, and settlement idempotent and replay-resistant. Callbacks/verification/settlement: yes, via the same generic `SettlePayment` lock and idempotency every gateway shares. IPN: not applicable — the channel is not implemented (see above), so there is nothing to make idempotent yet.
+- [x] Store secrets only in environment/configuration and redact sensitive payloads from logs/audits. (Via the app's own established `GatewayCredentials`/settings architecture — encrypted-at-rest in the settings table, never in env or committed config, which is this application's standing, more-secure convention than a literal env var; confirmed no credential reaches a log line, mirroring `SslCommerzGatewayTest`'s own check.)
+- [x] Keep EPS disabled by default until required credentials are configured and verification passes. (Ships `enabled: false`; `ConfigureGateway::setEnabled()` still refuses to switch it on until every credential is present.)
+- [x] If merchant credentials are unavailable, complete official-protocol fixture tests and report only the live sandbox transaction as credential-blocked. (`Http::fake()` fixture tests against the confirmed protocol; the one thing reported as blocked is the exact response shape of a genuinely *paid* `CheckMerchantTransactionStatus` call — confirming it needs either EPS's integration guide or a transaction actually driven to paid, which was not pursued after one authentication call.)
+- [~] Add contract, security, duplicate callback, mismatch, reconciliation, and browser result tests. Contract, security (credential redaction, fail-closed webhook), mismatch (malformed/unrecognised response), and reconciliation (`status()`) are all covered in `EpsGatewayTest` (28 tests). Duplicate callback is covered by the existing generic `SettlePaymentTest` idempotency suite, which needed no EPS-specific duplicate since the lock lives one layer up and is gateway-agnostic. **Browser result tests were not run for EPS specifically** — there is no new UI surface (the generic, already-verified Admin gateway settings screen renders EPS's fields from its declared `requiredConfiguration()` the same as every other provider, and the gateway ships disabled with no live checkout to click through).
+- [x] Commit EPS separately. (`f0af2ca`, plus a small follow-up `af92dfc` pinning the exact source commit SHAs.)
+- [x] Record the commit hash here: `f0af2ca` (implementation), `af92dfc` (source-commit pinning follow-up).
 
 ## 9. Activation and payment-result closure
 
