@@ -175,7 +175,7 @@ If the files are inaccessible, report the exact attachment-resolution problem on
 - [x] Build Client/Partner and Supplier screens for list, add, edit permitted unused details, set default, and archive.
 - [x] Add navigation only for real screens. (BusinessAccount nav entry added; Supplier's already existed from the pre-batch screen.)
 - [x] Commit secure Payout Methods separately.
-- [x] Record the commit hash here: `_(filled in immediately after the commit below)_`.
+- [x] Record the commit hash here: `647438f`.
 
 ## 7. Withdrawal integration
 
