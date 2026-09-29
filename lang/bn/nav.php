@@ -44,6 +44,7 @@ return [
     'payments' => 'পেমেন্ট',
     'wallets' => 'অ্যাকাউন্ট ওয়ালেট',
     'deposit_rules' => 'জমার নিয়ম',
+    'account_withdrawals' => 'ক্লায়েন্ট/পার্টনার উত্তোলন',
     'sms' => 'এসএমএস',
     'branding' => 'ব্র্যান্ডিং',
     'stock' => 'স্টক',

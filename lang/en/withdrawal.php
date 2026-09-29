@@ -1,0 +1,73 @@
+<?php
+
+return [
+    /*
+     * A Client/Partner `BusinessAccount`'s own withdrawal requests (§27).
+     */
+    'erp' => [
+        'title' => 'Withdrawals',
+        'description' => 'Requests to withdraw from your available balance.',
+        'empty_title' => 'No withdrawals yet',
+        'empty_description' => 'Request a withdrawal from your wallet once you have a payout method saved.',
+        'request' => 'Request withdrawal',
+        'amount' => 'Amount',
+        'currency' => 'Currency',
+        'payout_method' => 'Payout method',
+        'available_balance' => 'Available balance',
+        'minimum' => 'Minimum',
+        'maximum' => 'Maximum',
+        'no_maximum' => 'No maximum',
+        'status' => 'Status',
+        'requested_at' => 'Requested',
+        'decided_at' => 'Decided',
+        'paid_at' => 'Paid',
+        'external_reference' => 'Payment reference',
+        'failure_reason' => 'Reason',
+        'history' => 'Status history',
+        'back' => 'Back to withdrawals',
+        'submit' => 'Submit request',
+        'requested' => 'Withdrawal requested.',
+        'select_method' => 'Select a payout method',
+        'no_methods' => 'Add a payout method before requesting a withdrawal.',
+        'add_method' => 'Add a payout method',
+        'open' => 'Open',
+        'all_statuses' => 'All statuses',
+    ],
+
+    /*
+     * The staff withdrawal queue and its decisions.
+     */
+    'admin' => [
+        'title' => 'Client/Partner withdrawals',
+        'description' => 'Requests to withdraw from a business account\'s wallet, and their decisions.',
+        'empty_title' => 'No withdrawals',
+        'empty_description' => 'A withdrawal appears once a business account requests one.',
+        'columns' => [
+            'reference' => 'Reference',
+            'account' => 'Account',
+            'amount' => 'Amount',
+            'status' => 'Status',
+            'requested' => 'Requested',
+        ],
+        'back' => 'Back to withdrawals',
+        'payout_destination' => 'Payout destination',
+        'approve' => 'Approve',
+        'reject' => 'Reject',
+        'reject_reason' => 'Reason for rejection',
+        'process' => 'Start processing',
+        'mark_paid' => 'Mark paid',
+        'mark_failed' => 'Mark failed',
+        'failed_reason' => 'Reason for failure',
+        'external_reference' => 'External transaction reference',
+        'confirm_password_first' => 'Confirm your password before marking a withdrawal paid.',
+        'confirm_password' => 'Confirm password',
+        'approved' => 'Withdrawal approved.',
+        'rejected' => 'Withdrawal rejected.',
+        'processing' => 'Withdrawal is now processing.',
+        'paid' => 'Withdrawal marked paid.',
+        'failed' => 'Withdrawal marked failed.',
+        'history' => 'Status history',
+        'open' => 'Open',
+        'all_statuses' => 'All statuses',
+    ],
+];

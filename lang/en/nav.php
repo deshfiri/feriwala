@@ -50,6 +50,7 @@ return [
     'payments' => 'Payments',
     'wallets' => 'Account wallets',
     'deposit_rules' => 'Deposit rules',
+    'account_withdrawals' => 'Client/Partner withdrawals',
     'sms' => 'SMS',
     'branding' => 'Branding',
     'stock' => 'Stock',

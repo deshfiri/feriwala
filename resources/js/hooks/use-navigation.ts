@@ -69,6 +69,7 @@ import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawal
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as accountWallets } from '@/routes/admin/wallets';
+import { index as accountWithdrawals } from '@/routes/admin/account-withdrawals';
 import { index as productAttributes } from '@/routes/admin/catalog/attributes';
 import { index as dropshippingCatalogue } from '@/routes/catalog/dropshipping';
 import { index as wholesaleCatalogue } from '@/routes/catalog/wholesale';
@@ -535,6 +536,21 @@ export function useNavigation(): {
                               title: t('nav.deposit_rules'),
                               href: depositRules(),
                               icon: Scale,
+                          },
+                      ]
+                    : []),
+                /*
+                 * A Client/Partner BusinessAccount's own withdrawal requests
+                 * (§27) -- the same `withdrawal.view` permission already
+                 * gates the Supplier withdrawal queue above, since both sides
+                 * reuse `Module::Withdrawal` rather than owner-specific ones.
+                 */
+                ...(permissions['withdrawal.view']
+                    ? [
+                          {
+                              title: t('nav.account_withdrawals'),
+                              href: accountWithdrawals(),
+                              icon: Banknote,
                           },
                       ]
                     : []),
