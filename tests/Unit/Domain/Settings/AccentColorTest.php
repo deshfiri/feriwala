@@ -35,6 +35,25 @@ it('ships the default the stylesheet uses and treats it as the default', functio
         ->and(AccentColor::fromHex('#059669')->isDefault())->toBeFalse();
 });
 
+it('derives every accent-coloured token from the chosen colour, in both themes', function () {
+    // A token that held its own colour would stay orange after an
+    // administrator picked another accent — the one screen that forgot.
+    $css = (string) file_get_contents(dirname(__DIR__, 4).'/resources/css/app.css');
+
+    preg_match('/:root\s*\{(.*?)\n\}/s', $css, $light);
+    preg_match('/\.dark\s*\{(.*?)\n\}/s', $css, $dark);
+
+    foreach (['light' => $light[1] ?? '', 'dark' => $dark[1] ?? ''] as $theme => $block) {
+        expect($block)->toMatch('/--brand:\s*[^;]*var\(--brand-base\)/', "{$theme}: --brand")
+            ->and($block)->toMatch('/--brand-subtle:\s*[^;]*var\(--brand-base\)/', "{$theme}: --brand-subtle")
+            ->and($block)->toMatch('/--brand-border:\s*[^;]*var\(--brand-base\)/', "{$theme}: --brand-border");
+
+        foreach (['--ring', '--chart-1', '--sidebar-primary', '--sidebar-ring'] as $token) {
+            expect($block)->toMatch('/'.preg_quote($token, '/').':\s*var\(--brand\);/', "{$theme}: {$token}");
+        }
+    }
+});
+
 it('lays whichever label colour contrasts more on the accent', function (string $hex, string $on) {
     expect(AccentColor::fromHex($hex)->onColor())->toBe($on);
 })->with([
