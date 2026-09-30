@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Billing\Actions\ConfigureGateway;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
+use App\Domain\Billing\Queries\GatewayPaymentTotals;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Data\GatewayOutcome;
 use App\Integrations\Payment\PaymentGatewayManager;
@@ -59,14 +60,33 @@ class PaymentGatewayController extends Controller
      * a gateway on — credentials present, able to verify — are the server's,
      * not this page's.
      */
-    public function switches(Request $request, PaymentGatewayManager $gateways): Response
+    public function switches(Request $request, PaymentGatewayManager $gateways, GatewayPaymentTotals $totals): Response
     {
         $actor = $this->actor($request);
 
         abort_unless(BillingSettingsPolicy::canView($actor), 403);
 
+        $catalogue = $this->catalogue($gateways);
+
+        /** @var list<string> $names */
+        $names = array_map(fn (array $entry) => (string) $entry['name'], $catalogue);
+        $received = $totals->handle($names);
+
         return Inertia::render('admin/payment-switches', [
-            'gateways' => $this->catalogue($gateways),
+            /*
+             * Each gateway carries what it has taken beside whether it is on,
+             * so the decision to switch one off is made knowing how much money
+             * goes through it.
+             */
+            'gateways' => array_map(fn (array $entry) => [
+                ...$entry,
+                ...$received['by_gateway'][(string) $entry['name']],
+            ], $catalogue),
+            'summary' => [
+                'received' => $received['received'],
+                'payments' => $received['payments'],
+                'taking_payments' => count(array_filter($catalogue, fn (array $entry) => $entry['is_available'] === true)),
+            ],
             'can' => ['manage' => BillingSettingsPolicy::canManageGateways($actor)],
         ]);
     }
