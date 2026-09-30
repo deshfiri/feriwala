@@ -62,6 +62,21 @@ class InvitePlatformStaff
                 'password' => Hash::make(Str::random(40)),
             ]);
 
+            /*
+             * There is no self-registration step to verify this against
+             * (§5.1's flow is a different scope entirely) -- an
+             * already-authorized platform staff member typed this address in
+             * and vouches for it. The password-setup link this class sends
+             * next is the same proof-of-mailbox-ownership `HomeRoute` would
+             * otherwise wait on, so leaving this null would only route every
+             * new hire to `verification.notice` forever: nothing else ever
+             * sends them a verification email to act on. `email_verified_at`
+             * is deliberately not mass-assignable, so it is set here rather
+             * than in the `create()` array above, which would silently drop
+             * it.
+             */
+            $user->forceFill(['email_verified_at' => now()])->save();
+
             $this->assignRole->handle($user, $actor, $roleNames, $reason);
 
             $this->audit->handle(new AuditEntry(

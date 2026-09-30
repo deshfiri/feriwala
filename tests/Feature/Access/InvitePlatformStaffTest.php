@@ -41,6 +41,26 @@ it('creates a platform staff login with the given roles, and no business account
         ->and($user->accountMembership()->exists())->toBeFalse();
 });
 
+it('pre-verifies the email -- there is no self-registration step to verify it against', function () {
+    /*
+     * Without this, HomeRoute sends every new hire to verification.notice
+     * forever: nothing else ever sends them a verification email to act
+     * on, only the password-setup link this action sends.
+     */
+    Notification::fake();
+
+    $user = app(InvitePlatformStaff::class)->handle(
+        actor: $this->actor,
+        name: 'Karim Ahmed',
+        email: 'karim.verified@example.test',
+        mobile: null,
+        roleNames: [PlatformRole::SmsManager->value],
+        reason: 'Joining the SMS team.',
+    );
+
+    expect($user->hasVerifiedEmail())->toBeTrue();
+});
+
 it('never lets the admin see or choose a password -- it is random and unusable', function () {
     Notification::fake();
 
