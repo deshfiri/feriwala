@@ -47,6 +47,7 @@ use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\SupplierAllocationController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\SupplierListingController;
+use App\Http\Controllers\Admin\SupplierListingLotReviewController;
 use App\Http\Controllers\Admin\SupplierOfferController;
 use App\Http\Controllers\Admin\SupplierPayableController;
 use App\Http\Controllers\Admin\SupplierStockController;
@@ -654,6 +655,12 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('supplier-listings.correction.store');
         Route::post('supplier-listings/{listing}/decision', [SupplierListingController::class, 'decide'])
             ->name('supplier-listings.decision.store');
+
+        // The listing-lot review queue (Supplier Bulk Product Listing batch).
+        Route::get('supplier-listing-lots', [SupplierListingLotReviewController::class, 'index'])->name('supplier-listing-lots.index');
+        Route::get('supplier-listing-lots/{lot}', [SupplierListingLotReviewController::class, 'show'])->name('supplier-listing-lots.show');
+        Route::post('supplier-listing-lots/{lot}/decision', [SupplierListingLotReviewController::class, 'decide'])
+            ->name('supplier-listing-lots.decision.store');
 
         // Supplier offers, pricing, and catalogue connection (P13-13, D25 pricing rules).
         Route::get('supplier-offers', [SupplierOfferController::class, 'index'])->name('supplier-offers.index');

@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $supplier_sku
  * @property Money $supplier_rate
  * @property string $currency_code
- * @property int $available_quantity
+ * @property int|null $available_quantity
  * @property int $minimum_supply_quantity
  * @property int|null $lead_time_days
  * @property string|null $warranty

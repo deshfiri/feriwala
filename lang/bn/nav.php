@@ -60,6 +60,7 @@ return [
     'invoices' => 'চালান',
     'suppliers' => 'সাপ্লায়ার',
     'supplier_listings' => 'সাপ্লায়ারের তালিকা',
+    'supplier_listing_lots' => 'সাপ্লায়ারের তালিকার ব্যাচ',
     'supplier_offers' => 'সাপ্লায়ার অফার',
     'supplier_stock' => 'সাপ্লায়ারের প্রাপ্যতা',
     'supplier_allocations' => 'সাপ্লায়ার বরাদ্দ',

@@ -68,6 +68,7 @@ import { index as adminReturns } from '@/routes/admin/returns';
 import { index as supplierAllocations } from '@/routes/admin/supplier-allocations';
 import { index as supplierPayables } from '@/routes/admin/supplier-payables';
 import { index as supplierApplications } from '@/routes/admin/suppliers';
+import { index as supplierListingLots } from '@/routes/admin/supplier-listing-lots';
 import { index as supplierListings } from '@/routes/admin/supplier-listings';
 import { index as supplierOffers } from '@/routes/admin/supplier-offers';
 import { index as supplierStock } from '@/routes/admin/supplier-stock';
@@ -639,6 +640,11 @@ export function useNavigation(): {
                           {
                               title: t('nav.supplier_listings'),
                               href: supplierListings(),
+                              icon: ClipboardList,
+                          },
+                          {
+                              title: t('nav.supplier_listing_lots'),
+                              href: supplierListingLots(),
                               icon: ClipboardList,
                           },
                       ]
