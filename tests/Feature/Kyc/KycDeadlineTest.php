@@ -12,6 +12,8 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycDeadlineEvent;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Notification\Enums\SmsEvent;
+use App\Domain\Notification\SmsEventSwitch;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Sms\Contracts\SmsProvider;
@@ -229,6 +231,18 @@ describe('consequences (§7.4)', function () {
         expect($this->sent)->toHaveCount(1)
             ->and($this->sent->first()->event)->toBe('kyc_deadline_missed')
             ->and($this->sent->first()->body)->toContain('verification deadline has passed');
+    });
+
+    it('skips the text, but not the notice, when its SMS event is switched off', function () {
+        configureKycDeadline();
+        $submission = overdueRound();
+
+        app(SmsEventSwitch::class)->set(SmsEvent::KycDeadlineMissed->value, false);
+
+        sweepDeadlines();
+
+        Notification::assertSentTo($submission->businessAccount->owner, KycDeadlineMissed::class);
+        expect($this->sent)->toBeEmpty();
     });
 
     it('leaves an unactivated account blocked rather than pushing it backwards', function () {

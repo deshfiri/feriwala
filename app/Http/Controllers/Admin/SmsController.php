@@ -4,13 +4,18 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Notification\Actions\ConfigureSms;
+use App\Domain\Notification\Actions\ToggleSmsEvent;
+use App\Domain\Notification\Enums\SmsEvent;
+use App\Domain\Notification\Enums\SmsStatus;
 use App\Domain\Notification\Models\SmsMessageRecord;
 use App\Domain\Notification\Policies\SmsSettingsPolicy;
+use App\Domain\Notification\SmsEventSwitch;
 use App\Http\Controllers\Controller;
 use App\Integrations\Sms\SmsProviderManager;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,6 +38,7 @@ class SmsController extends Controller
         protected ConfigureSms $configure,
         protected SmsProviderManager $providers,
         protected PaymentLogRedactor $redactor,
+        protected SmsEventSwitch $events,
     ) {}
 
     public function index(Request $request): Response
@@ -79,8 +85,67 @@ class SmsController extends Controller
                 ])
                 ->all(),
 
+            /*
+             * §30's per-event switch: every event that sends a text, whether
+             * its own switch is on, and how many it has sent. One-time codes
+             * are listed but locked on — see {@see SmsEvent}.
+             */
+            'events' => $this->eventRows(),
+
             'can' => ['manage' => SmsSettingsPolicy::canManage($actor)],
         ]);
+    }
+
+    /**
+     * Switch SMS on or off for one event.
+     */
+    public function toggleEvent(Request $request, ToggleSmsEvent $toggle): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(SmsSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            'event' => ['required', Rule::enum(SmsEvent::class)->only(SmsEvent::switchable())],
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $event = SmsEvent::from($validated['event']);
+        $enabled = (bool) $validated['enabled'];
+
+        $toggle->handle($actor, $event, $enabled);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(
+            $enabled ? 'sms.event_switch.enabled' : 'sms.event_switch.disabled',
+            ['event' => $event->describe()['title']],
+        )]);
+
+        return back();
+    }
+
+    /**
+     * @return list<array{event: string, title: string, description: string, switchable: bool, enabled: bool, sent: int}>
+     */
+    protected function eventRows(): array
+    {
+        /** @var array<string, int> $sent */
+        $sent = SmsMessageRecord::query()
+            ->where('status', SmsStatus::Sent)
+            ->whereIn('event', array_map(fn (SmsEvent $event) => $event->value, SmsEvent::cases()))
+            ->toBase()
+            ->selectRaw('event, count(*) as total')
+            ->groupBy('event')
+            ->pluck('total', 'event')
+            ->map(fn ($total) => (int) $total)
+            ->all();
+
+        return array_map(fn (SmsEvent $event) => [
+            'event' => $event->value,
+            ...$event->describe(),
+            'switchable' => $event->isSwitchable(),
+            'enabled' => $this->events->isSwitchedOn($event->value),
+            'sent' => $sent[$event->value] ?? 0,
+        ], SmsEvent::cases());
     }
 
     public function update(Request $request): RedirectResponse
