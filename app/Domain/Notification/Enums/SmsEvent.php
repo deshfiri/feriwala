@@ -11,10 +11,11 @@ namespace App\Domain\Notification\Enums;
  * code sends an SMS under an event that is not listed here, so a new message
  * cannot slip in without its switch.
  *
- * **One-time codes cannot be switched off.** A verification or confirmation
- * code is the only way someone finishes signing up or confirms a cash order;
- * silencing it would lock them out rather than spare them a message. Those
- * events are listed so the screen is complete, and shown as always sent.
+ * **One-time codes can be switched off too, with a warning** — an
+ * administrator's explicit choice. A verification or confirmation code is the
+ * only way someone finishes signing up or confirms a cash order, so switching
+ * one off stops that flow rather than sparing anybody a message. The screen
+ * says so and asks before doing it, and the change is audited.
  */
 enum SmsEvent: string
 {
@@ -27,24 +28,17 @@ enum SmsEvent: string
     case CodConfirmation = 'cod_confirmation';
 
     /**
-     * Whether an administrator may switch this event's SMS off.
+     * Whether this event carries a one-time code somebody has to type in —
+     * switching it off blocks the flow that waits for the code.
      */
-    public function isSwitchable(): bool
+    public function isOneTimeCode(): bool
     {
         return match ($this) {
             self::MobileVerification,
             self::SupplierMobileVerification,
-            self::CodConfirmation => false,
-            default => true,
+            self::CodConfirmation => true,
+            default => false,
         };
-    }
-
-    /**
-     * @return list<self>
-     */
-    public static function switchable(): array
-    {
-        return array_values(array_filter(self::cases(), fn (self $event) => $event->isSwitchable()));
     }
 
     /**

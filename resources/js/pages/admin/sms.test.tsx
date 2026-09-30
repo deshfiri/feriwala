@@ -29,7 +29,7 @@ const smsEvents: SmsEventRow[] = [
         event: 'account.activated',
         title: 'Account activated',
         description: 'Sent when approved.',
-        switchable: true,
+        one_time_code: false,
         enabled: true,
         sent: 3,
     },
@@ -37,7 +37,7 @@ const smsEvents: SmsEventRow[] = [
         event: 'payment.received',
         title: 'Payment received',
         description: 'Sent when paid.',
-        switchable: true,
+        one_time_code: false,
         enabled: false,
         sent: 0,
     },
@@ -45,7 +45,7 @@ const smsEvents: SmsEventRow[] = [
         event: 'mobile_verification',
         title: 'Mobile verification code',
         description: 'One-time code.',
-        switchable: false,
+        one_time_code: true,
         enabled: true,
         sent: 12,
     },
@@ -95,17 +95,45 @@ describe('the per-event SMS switches', () => {
         );
     });
 
-    it('locks one-time codes on, and says why', () => {
+    it('warns on a one-time code and asks before switching it off', () => {
         renderSmsPage();
 
-        expect(smsEventSwitch('mobile_verification')).toBeDisabled();
-        expect(smsEventSwitch('mobile_verification')).toHaveAttribute(
-            'aria-checked',
-            'true',
-        );
+        expect(smsEventSwitch('mobile_verification')).toBeEnabled();
         expect(
-            screen.getByText('sms.event_switch.always_on'),
+            screen.getByText('sms.event_switch.code_warning'),
         ).toBeInTheDocument();
+
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
+        fireEvent.click(smsEventSwitch('mobile_verification'));
+
+        // Declined: nothing is sent.
+        expect(confirm).toHaveBeenCalledWith(
+            'sms.event_switch.confirm_code_off',
+        );
+        expect(router.put).not.toHaveBeenCalled();
+
+        confirm.mockReturnValueOnce(true);
+        fireEvent.click(smsEventSwitch('mobile_verification'));
+
+        expect(router.put).toHaveBeenCalledTimes(1);
+        expect(router.put.mock.calls[0][1]).toEqual({
+            event: 'mobile_verification',
+            enabled: false,
+        });
+
+        confirm.mockRestore();
+    });
+
+    it('does not ask before switching an ordinary event off', () => {
+        renderSmsPage();
+
+        const confirm = vi.spyOn(window, 'confirm');
+        fireEvent.click(smsEventSwitch('account.activated'));
+
+        expect(confirm).not.toHaveBeenCalled();
+        expect(router.put).toHaveBeenCalledTimes(1);
+
+        confirm.mockRestore();
     });
 
     it('sends the flipped state for that event', () => {

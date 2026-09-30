@@ -5,6 +5,8 @@ namespace App\Domain\Order\Actions;
 use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Inventory\ReservationWindows;
+use App\Domain\Notification\Enums\SmsEvent;
+use App\Domain\Notification\SmsEventSwitch;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\ConfirmationCodesExhausted;
 use App\Domain\Order\Models\Order;
@@ -55,6 +57,7 @@ class SendCodConfirmationCode
         protected PublishWebsiteEvent $events,
         protected Translator $translator,
         protected Cache $cache,
+        protected SmsEventSwitch $smsEvents,
     ) {}
 
     /**
@@ -64,6 +67,17 @@ class SendCodConfirmationCode
     public function handle(Order $order, ?Locale $locale = null): void
     {
         if ($order->status !== OrderStatus::CustomerVerificationPending) {
+            return;
+        }
+
+        /*
+         * Switched off under Admin → SMS: send nothing, and spend none of the
+         * order's codes or its cooldown. Nothing is raised — this runs inside
+         * placing an order through the frozen storefront API, which has no
+         * error to say it with. The order waits unconfirmed and expires on the
+         * usual schedule; the admin screen warns of exactly that.
+         */
+        if (! $this->smsEvents->isSwitchedOn(SmsEvent::CodConfirmation->value)) {
             return;
         }
 
@@ -94,7 +108,7 @@ class SendCodConfirmationCode
                     $locale->value,
                 ),
                 locale: $locale,
-                event: 'cod_confirmation',
+                event: SmsEvent::CodConfirmation->value,
             ));
         } catch (Throwable $exception) {
             $this->recordDelivery($order, self::DELIVERY_FAILED);

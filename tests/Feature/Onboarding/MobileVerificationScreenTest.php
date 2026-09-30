@@ -3,6 +3,8 @@
 use App\Domain\Account\Actions\SendMobileVerificationCode;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\VerificationCodes;
+use App\Domain\Notification\Enums\SmsEvent;
+use App\Domain\Notification\SmsEventSwitch;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -61,6 +63,18 @@ it('sends a code when asked and says where it went', function () {
         ->assertInertiaFlash('toast.message', 'Code sent to +88017****5678.');
 
     expect(mobileScreenCodePending($user))->toBeTrue();
+});
+
+it('says no code can be sent while an administrator has these codes switched off', function () {
+    app(SmsEventSwitch::class)->set(SmsEvent::MobileVerification->value, false);
+    $user = mobileScreenOwner();
+
+    $this->actingAs($user)
+        ->post(route('verification.mobile.send'))
+        ->assertSessionHasErrors(['resend' => __('sms.event_switch.code_off')]);
+
+    // No code issued, so no cooldown spent either.
+    expect(mobileScreenCodePending($user))->toBeFalse();
 });
 
 it('asks for a wait rather than sending again straight away', function () {

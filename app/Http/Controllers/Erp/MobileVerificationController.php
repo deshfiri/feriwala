@@ -6,6 +6,7 @@ use App\Domain\Account\Actions\SendMobileVerificationCode;
 use App\Domain\Account\Actions\VerifyMobile;
 use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Account\VerificationCodes;
+use App\Domain\Notification\Exceptions\SmsEventSwitchedOff;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Navigation\HomeRoute;
@@ -65,6 +66,11 @@ class MobileVerificationController extends Controller
             // A wait, not a failure — they have done nothing wrong.
             throw ValidationException::withMessages([
                 'resend' => __('common.verify_mobile.wait'),
+            ]);
+        } catch (SmsEventSwitchedOff) {
+            // Said plainly rather than claiming a code is on its way.
+            throw ValidationException::withMessages([
+                'resend' => __('sms.event_switch.code_off'),
             ]);
         }
 

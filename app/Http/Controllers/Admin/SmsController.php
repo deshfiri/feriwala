@@ -88,7 +88,7 @@ class SmsController extends Controller
             /*
              * §30's per-event switch: every event that sends a text, whether
              * its own switch is on, and how many it has sent. One-time codes
-             * are listed but locked on — see {@see SmsEvent}.
+             * warn before being switched off — see {@see SmsEvent}.
              */
             'events' => $this->eventRows(),
 
@@ -106,7 +106,7 @@ class SmsController extends Controller
         abort_unless(SmsSettingsPolicy::canManage($actor), 403);
 
         $validated = $request->validate([
-            'event' => ['required', Rule::enum(SmsEvent::class)->only(SmsEvent::switchable())],
+            'event' => ['required', Rule::enum(SmsEvent::class)],
             'enabled' => ['required', 'boolean'],
         ]);
 
@@ -124,7 +124,7 @@ class SmsController extends Controller
     }
 
     /**
-     * @return list<array{event: string, title: string, description: string, switchable: bool, enabled: bool, sent: int}>
+     * @return list<array{event: string, title: string, description: string, one_time_code: bool, enabled: bool, sent: int}>
      */
     protected function eventRows(): array
     {
@@ -142,7 +142,7 @@ class SmsController extends Controller
         return array_map(fn (SmsEvent $event) => [
             'event' => $event->value,
             ...$event->describe(),
-            'switchable' => $event->isSwitchable(),
+            'one_time_code' => $event->isOneTimeCode(),
             'enabled' => $this->events->isSwitchedOn($event->value),
             'sent' => $sent[$event->value] ?? 0,
         ], SmsEvent::cases());

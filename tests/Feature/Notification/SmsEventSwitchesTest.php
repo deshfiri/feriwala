@@ -1,12 +1,16 @@
 <?php
 
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Account\VerificationCodes;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Notification\Actions\ToggleSmsEvent;
 use App\Domain\Notification\Enums\SmsEvent;
 use App\Domain\Notification\Enums\SmsStatus;
+use App\Domain\Notification\Exceptions\SmsEventSwitchedOff;
 use App\Domain\Notification\Models\SmsMessageRecord;
 use App\Domain\Notification\SmsEventSwitch;
+use App\Domain\Supplier\Actions\SendSupplierMobileVerificationCode;
+use App\Domain\Supplier\Models\Supplier;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
@@ -52,13 +56,13 @@ it('lists every SMS event with its own switch and how many it has sent', functio
             ->has('events', count(SmsEvent::cases()))
             ->where('events.0.event', 'account.activated')
             ->where('events.0.title', 'Account activated')
-            ->where('events.0.switchable', true)
+            ->where('events.0.one_time_code', false)
             ->where('events.0.enabled', true)
             ->where('events.1.event', 'payment.received')
             // Only messages that actually went out count as sent.
             ->where('events.1.sent', 2)
             ->where('events.4.event', 'mobile_verification')
-            ->where('events.4.switchable', false)
+            ->where('events.4.one_time_code', true)
             ->where('events.4.enabled', true),
         );
 });
@@ -86,19 +90,35 @@ it('switches one event off and back on, and records both in the audit log', func
         ->and(AuditLog::query()->where('action', 'sms.event_enabled')->where('actor_id', $this->manager->id)->exists())->toBeTrue();
 });
 
-it('refuses to switch off a one-time code', function (SmsEvent $event) {
+it('lets an administrator switch a one-time code off and back on', function (SmsEvent $event) {
     $this->actingAs($this->manager)
         ->put(route('admin.sms.events.toggle'), ['event' => $event->value, 'enabled' => false])
-        ->assertSessionHasErrors('event');
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
 
-    expect(app(SmsEventSwitch::class)->isSwitchedOn($event->value))->toBeTrue()
-        ->and(fn () => app(SmsEventSwitch::class)->set($event->value, false))
-        ->toThrow(InvalidArgumentException::class);
+    expect(app(SmsEventSwitch::class)->isSwitchedOn($event->value))->toBeFalse()
+        ->and(AuditLog::query()->where('action', 'sms.event_disabled')->exists())->toBeTrue();
+
+    $this->actingAs($this->manager)
+        ->put(route('admin.sms.events.toggle'), ['event' => $event->value, 'enabled' => true])
+        ->assertRedirect();
+
+    expect(app(SmsEventSwitch::class)->isSwitchedOn($event->value))->toBeTrue();
 })->with([
     'customer verification' => SmsEvent::MobileVerification,
     'supplier verification' => SmsEvent::SupplierMobileVerification,
     'cash on delivery confirmation' => SmsEvent::CodConfirmation,
 ]);
+
+it('issues no supplier code while supplier verification codes are switched off', function () {
+    app(SmsEventSwitch::class)->set(SmsEvent::SupplierMobileVerification->value, false);
+    $supplier = Supplier::factory()->create();
+
+    expect(fn () => app(SendSupplierMobileVerificationCode::class)->handle($supplier))
+        ->toThrow(SmsEventSwitchedOff::class)
+        ->and(app(VerificationCodes::class)->isPending(SendSupplierMobileVerificationCode::PURPOSE, (string) $supplier->mobile))
+        ->toBeFalse();
+});
 
 it('refuses an event it does not know', function () {
     $this->actingAs($this->manager)

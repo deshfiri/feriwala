@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Supplier\Auth;
 
 use App\Domain\Account\Exceptions\ResendTooSoon;
+use App\Domain\Notification\Exceptions\SmsEventSwitchedOff;
 use App\Domain\Supplier\Actions\SendSupplierMobileVerificationCode;
 use App\Domain\Supplier\Actions\VerifySupplierMobile;
 use App\Domain\Supplier\Models\Supplier;
@@ -36,6 +37,11 @@ class SupplierMobileVerificationController extends Controller
         } catch (ResendTooSoon $exception) {
             throw ValidationException::withMessages([
                 'mobile' => $exception->getMessage(),
+            ]);
+        } catch (SmsEventSwitchedOff) {
+            // Said plainly rather than claiming a code is on its way.
+            throw ValidationException::withMessages([
+                'mobile' => __('sms.event_switch.code_off'),
             ]);
         }
 
