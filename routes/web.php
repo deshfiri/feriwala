@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
+use App\Http\Controllers\Admin\PlatformStaffController;
 use App\Http\Controllers\Admin\ProductAttributeController;
 use App\Http\Controllers\Admin\ProductBulkController;
 use App\Http\Controllers\Admin\ProductChannelController;
@@ -39,7 +40,6 @@ use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SmsController;
-use App\Http\Controllers\Admin\StaffAccessController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
@@ -546,16 +546,33 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('roles/{role}', [RolesController::class, 'show'])->name('roles.show');
 
         /*
-         * Platform staff, and assigning one of the twenty-one roles above
-         * (commit-order item 6). The write is behind RequirePassword on top
-         * of AssignPlatformRole's own guards -- privilege escalation is
-         * exactly the risk a confirmed password exists for.
+         * Platform staff: viewing, inviting, role assignment, and sign-in
+         * status changes (Platform Staff management). Every write that
+         * changes what a login may do or whether it may sign in at all sits
+         * behind RequirePassword on top of its own action's guards --
+         * privilege escalation and lockout are exactly the risks a
+         * confirmed password exists for.
          */
-        Route::get('staff-access', [StaffAccessController::class, 'index'])->name('staff-access.index');
-        Route::get('staff-access/{user}', [StaffAccessController::class, 'show'])->name('staff-access.show');
-        Route::put('staff-access/{user}/role', [StaffAccessController::class, 'updateRole'])
+        Route::get('staff', [PlatformStaffController::class, 'index'])->name('staff.index');
+        Route::get('staff/create', [PlatformStaffController::class, 'create'])->name('staff.create');
+        Route::post('staff', [PlatformStaffController::class, 'store'])
             ->middleware(RequirePassword::class)
-            ->name('staff-access.role.update');
+            ->name('staff.store');
+        Route::get('staff/{user}', [PlatformStaffController::class, 'show'])->name('staff.show');
+        Route::put('staff/{user}/roles', [PlatformStaffController::class, 'updateRoles'])
+            ->middleware(RequirePassword::class)
+            ->name('staff.roles.update');
+        Route::post('staff/{user}/resend-invite', [PlatformStaffController::class, 'resendInvite'])
+            ->name('staff.resend-invite');
+        Route::post('staff/{user}/activate', [PlatformStaffController::class, 'activate'])
+            ->middleware(RequirePassword::class)
+            ->name('staff.activate');
+        Route::post('staff/{user}/suspend', [PlatformStaffController::class, 'suspend'])
+            ->middleware(RequirePassword::class)
+            ->name('staff.suspend');
+        Route::post('staff/{user}/deactivate', [PlatformStaffController::class, 'deactivate'])
+            ->middleware(RequirePassword::class)
+            ->name('staff.deactivate');
 
         /*
          * The requirement catalogue (§7.2).

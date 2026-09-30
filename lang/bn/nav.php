@@ -48,6 +48,7 @@ return [
     'withdrawal_limits' => 'উত্তোলন সীমা',
     'settings_hub' => 'সেটিংস',
     'roles' => 'ভূমিকা ও অনুমতি',
+    'platform_staff' => 'প্ল্যাটফর্ম স্টাফ',
     'sms' => 'এসএমএস',
     'branding' => 'ব্র্যান্ডিং',
     'stock' => 'স্টক',
