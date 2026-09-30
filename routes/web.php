@@ -768,6 +768,11 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::put('gateways/enabled', [PaymentGatewayController::class, 'toggle'])
             ->name('gateways.toggle');
 
+        // Every gateway on one list with its own on/off switch — the Payments
+        // card in the settings hub. The switches post to `gateways.toggle`.
+        Route::get('settings/payments', [PaymentGatewayController::class, 'switches'])
+            ->name('gateways.switches');
+
         /*
          * Payments and their gateway trail (§42, P1-54).
          *
@@ -788,10 +793,14 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::put('sms', [SmsController::class, 'update'])->name('sms.update');
 
         /*
-         * The platform's logo and browser icon, behind `system.manage_settings`.
+         * The platform's logo, browser icon and accent colour, behind `system.manage_settings`.
          * Uploads are POST because a browser cannot send a file with PUT.
          */
         Route::get('settings/branding', [BrandingController::class, 'edit'])->name('branding.edit');
+        Route::put('settings/branding/accent', [BrandingController::class, 'updateAccent'])
+            ->name('branding.accent.update');
+        Route::delete('settings/branding/accent', [BrandingController::class, 'destroyAccent'])
+            ->name('branding.accent.destroy');
         Route::post('settings/branding/{asset}', [BrandingController::class, 'update'])
             ->whereIn('asset', ['logo', 'favicon'])
             ->name('branding.update');

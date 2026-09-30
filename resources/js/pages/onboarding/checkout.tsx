@@ -129,7 +129,7 @@ export default function Checkout({
                     </Alert>
                 )}
 
-                <section className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
+                <section className="bg-card border-border overflow-hidden rounded-xl border">
                     <dl className="divide-border divide-y">
                         {quote.lines.map((line) => (
                             <div
@@ -205,7 +205,7 @@ export default function Checkout({
                 <Form
                     action="/checkout/coupon"
                     method="post"
-                    className="bg-card border-border space-y-3 rounded-xl border p-5 shadow-sm"
+                    className="bg-card border-border space-y-3 rounded-xl border p-5"
                 >
                     {({ processing }) => (
                         <>
@@ -260,7 +260,7 @@ export default function Checkout({
                 <Form
                     action="/checkout"
                     method="post"
-                    className="bg-card border-border space-y-4 rounded-xl border p-5 shadow-sm"
+                    className="bg-card border-border space-y-4 rounded-xl border p-5"
                 >
                     {({ processing, errors }) => (
                         <>

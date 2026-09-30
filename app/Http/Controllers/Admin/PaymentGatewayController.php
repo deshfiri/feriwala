@@ -43,28 +43,30 @@ class PaymentGatewayController extends Controller
 
         abort_unless(BillingSettingsPolicy::canView($actor), 403);
 
-        $verified = $this->lastVerifications();
-
-        $catalogue = array_map(
-            fn (array $entry) => [
-                ...$entry,
-
-                /*
-                 * When this provider last confirmed a payment with us (§26.4).
-                 *
-                 * Read from the payment log rather than stored as a setting,
-                 * because it is a fact about what happened rather than something
-                 * anybody configured — and because a "last verified" field that
-                 * a screen writes is a field that can be wrong.
-                 */
-                'last_verified_at' => $verified[$entry['name']] ?? null,
-            ],
-            $gateways->catalogue(),
-        );
-
         return Inertia::render('admin/gateways', [
-            'gateways' => $catalogue,
+            'gateways' => $this->catalogue($gateways),
             'modes' => ConfigureGateway::MODES,
+            'can' => ['manage' => BillingSettingsPolicy::canManageGateways($actor)],
+        ]);
+    }
+
+    /**
+     * Every gateway on one list, each with its own on/off switch.
+     *
+     * The same catalogue as {@see index()}, without the credential forms: the
+     * screen somebody opens to decide which providers customers can pay with
+     * today. The switches post to {@see toggle()}, so the rules for switching
+     * a gateway on — credentials present, able to verify — are the server's,
+     * not this page's.
+     */
+    public function switches(Request $request, PaymentGatewayManager $gateways): Response
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canView($actor), 403);
+
+        return Inertia::render('admin/payment-switches', [
+            'gateways' => $this->catalogue($gateways),
             'can' => ['manage' => BillingSettingsPolicy::canManageGateways($actor)],
         ]);
     }
@@ -133,6 +135,33 @@ class PaymentGatewayController extends Controller
         ]);
 
         return back();
+    }
+
+    /**
+     * Every configured gateway, with when it last confirmed a payment.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function catalogue(PaymentGatewayManager $gateways): array
+    {
+        $verified = $this->lastVerifications();
+
+        return array_values(array_map(
+            fn (array $entry) => [
+                ...$entry,
+
+                /*
+                 * When this provider last confirmed a payment with us (§26.4).
+                 *
+                 * Read from the payment log rather than stored as a setting,
+                 * because it is a fact about what happened rather than something
+                 * anybody configured — and because a "last verified" field that
+                 * a screen writes is a field that can be wrong.
+                 */
+                'last_verified_at' => $verified[$entry['name']] ?? null,
+            ],
+            $gateways->catalogue(),
+        ));
     }
 
     /**

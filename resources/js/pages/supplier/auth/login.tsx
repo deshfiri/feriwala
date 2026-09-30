@@ -91,7 +91,7 @@ export default function SupplierLogin({ status }: { status?: string }) {
 
             {status && (
                 <p
-                    className="text-center text-sm font-medium text-green-600"
+                    className="text-success text-center text-sm font-medium"
                     role="status"
                 >
                     {status}

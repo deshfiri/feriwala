@@ -1,5 +1,13 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+{{--
+    The accent an administrator chose under Admin → Branding, painted before
+    the stylesheet loads so the page never flashes the default first. Only
+    ever `#rrggbb` values: `App\Domain\Settings\Branding` drops anything else,
+    and they are escaped here regardless. `BrandingHead` keeps the same three
+    properties in step after a save without a full reload.
+--}}
+@php($accent = $page['props']['branding']['accent'] ?? null)
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark']) @if (is_array($accent)) style="--brand-base: {{ $accent['color'] }}; --brand-on: {{ $accent['on'] }}; --brand-lifted-on: {{ $accent['lifted_on'] }};" @endif>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -30,11 +38,11 @@
         --}}
         <style>
             html {
-                background-color: oklch(0.976 0.002 75);
+                background-color: oklch(0.984 0.002 247);
             }
 
             html.dark {
-                background-color: oklch(0.16 0.003 60);
+                background-color: oklch(0.2 0.016 250);
             }
         </style>
 

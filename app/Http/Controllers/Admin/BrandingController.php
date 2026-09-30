@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Settings\AccentColor;
 use App\Domain\Settings\Actions\ManageBranding;
 use App\Domain\Settings\Branding;
 use App\Domain\Settings\Enums\BrandingAsset;
@@ -17,7 +18,7 @@ use Inertia\Response;
 use InvalidArgumentException;
 
 /**
- * The platform's logo and browser icon.
+ * The platform's logo, browser icon and accent colour.
  *
  * Every action asks {@see BrandingPolicy} before reading the request, so a
  * refused person meets a 403 rather than a validation message about the file
@@ -43,7 +44,41 @@ class BrandingController extends Controller
                 'accept' => implode(',', array_keys($asset->acceptedTypes())),
                 'max_kb' => $asset->maxKilobytes(),
             ], BrandingAsset::cases()),
+            'accent' => [
+                'color' => $this->branding->accent()->hex(),
+                'default' => AccentColor::DEFAULT_HEX,
+                'is_custom' => $this->branding->customAccent() !== null,
+                'readable' => $this->branding->accent()->isReadableAsText(),
+            ],
         ]);
+    }
+
+    public function updateAccent(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $validated = $request->validate([
+            'accent_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}\z/'],
+        ], [
+            'accent_color.regex' => __('branding.accent.invalid'),
+        ]);
+
+        $this->manage->setAccent($actor, AccentColor::fromHex($validated['accent_color']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.accent.saved')]);
+
+        return back();
+    }
+
+    public function destroyAccent(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $this->manage->setAccent($actor, null);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.accent.restored')]);
+
+        return back();
     }
 
     public function update(Request $request, string $asset): RedirectResponse

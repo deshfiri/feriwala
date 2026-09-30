@@ -106,3 +106,53 @@ describe('the browser icon', () => {
         ).toBe('/favicon.svg');
     });
 });
+
+/**
+ * A saved accent must reach every panel without a reload, and restoring the
+ * default must take it away again rather than leave the old colour behind.
+ */
+describe('the accent colour', () => {
+    let container: HTMLDivElement;
+    let root: Root;
+    const brandingWith = (accent: unknown) => ({
+        branding: {
+            logo_url: '/logo.png',
+            favicon_url: '/favicon.svg',
+            favicon_type: 'image/svg+xml',
+            accent,
+        },
+    });
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        container = document.createElement('div');
+        root = createRoot(container);
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        document.documentElement.removeAttribute('style');
+    });
+
+    it('writes a chosen accent onto the document and clears it on restore', () => {
+        const style = document.documentElement.style;
+
+        page.props = brandingWith({
+            color: '#1d4ed8',
+            on: '#ffffff',
+            lifted_on: '#1d2630',
+        });
+        act(() => root.render(<BrandingHead />));
+
+        expect(style.getPropertyValue('--brand-base')).toBe('#1d4ed8');
+        expect(style.getPropertyValue('--brand-on')).toBe('#ffffff');
+        expect(style.getPropertyValue('--brand-lifted-on')).toBe('#1d2630');
+
+        page.props = brandingWith(null);
+        act(() => root.render(<BrandingHead />));
+
+        expect(style.getPropertyValue('--brand-base')).toBe('');
+        expect(style.getPropertyValue('--brand-on')).toBe('');
+        expect(style.getPropertyValue('--brand-lifted-on')).toBe('');
+    });
+});

@@ -3,6 +3,8 @@
 return [
     'nav' => [
         'skip' => 'Skip to content',
+        'collapse_sidebar' => 'Collapse sidebar',
+        'expand_sidebar' => 'Expand sidebar',
     ],
 
     'actions' => [

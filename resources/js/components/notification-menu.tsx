@@ -22,7 +22,11 @@ import type { HeaderNotification } from '@/types';
  * accessible label and in a written count inside the menu, so the state reads
  * for a screen reader and in greyscale too (§33.9).
  */
-export default function NotificationMenu() {
+export default function NotificationMenu({
+    className,
+}: {
+    className?: string;
+}) {
     const { t } = useTranslation();
     const { notifications, unreadNotificationCount } = usePage().props;
 
@@ -35,7 +39,10 @@ export default function NotificationMenu() {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="text-muted-foreground hover:text-foreground relative size-9"
+                    className={cn(
+                        'text-muted-foreground hover:text-foreground relative size-9',
+                        className,
+                    )}
                     aria-label={
                         hasUnread
                             ? t('nav.notifications.unread', {
@@ -48,7 +55,7 @@ export default function NotificationMenu() {
                     {hasUnread && (
                         <span
                             aria-hidden="true"
-                            className="bg-brand ring-background absolute top-2 right-2 size-2 rounded-full ring-2"
+                            className="bg-brand ring-card absolute top-2 right-2 size-2 rounded-full ring-2"
                         />
                     )}
                 </Button>

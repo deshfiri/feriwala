@@ -300,6 +300,74 @@ describe('the settings screen', function () {
     });
 });
 
+describe('the payments switch list', function () {
+    it('lists every gateway with its switch state and no credential', function () {
+        gatewayTestCredentials();
+        app(SettingsRepository::class)->set('payment.sslcommerz.sandbox.store_password', 'super-secret-value');
+
+        $response = $this->actingAs($this->manager)->get(route('admin.gateways.switches'));
+
+        $response->assertOk()
+            ->assertDontSee('super-secret-value', escape: false)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/payment-switches')
+                ->has('gateways', 8)
+                ->where('gateways.0.name', 'sslcommerz')
+                ->where('gateways.0.is_enabled', true)
+                ->where('gateways.0.is_configured', true)
+                ->where('can.manage', true),
+            );
+    });
+
+    it('is where the Payments card in the settings hub leads', function () {
+        $this->actingAs($this->manager)
+            ->get(route('admin.settings'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('sections.0.items.2.key', 'payments')
+                ->where('sections.0.items.2.href', route('admin.gateways.switches')),
+            );
+    });
+
+    it('switches a gateway off and back on from the list, and says so on the next visit', function () {
+        gatewayTestCredentials();
+
+        $this->actingAs($this->manager)
+            ->from(route('admin.gateways.switches'))
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => false])
+            ->assertRedirect(route('admin.gateways.switches'));
+
+        $this->actingAs($this->manager)->get(route('admin.gateways.switches'))
+            ->assertInertia(fn (Assert $page) => $page->where('gateways.0.is_enabled', false));
+
+        $this->actingAs($this->manager)
+            ->from(route('admin.gateways.switches'))
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => true])
+            ->assertRedirect(route('admin.gateways.switches'));
+
+        $this->actingAs($this->manager)->get(route('admin.gateways.switches'))
+            ->assertInertia(fn (Assert $page) => $page->where('gateways.0.is_enabled', true));
+    });
+
+    it('shows a viewer the list read-only and refuses their switch', function () {
+        $viewer = testPlatformStaff(PlatformRole::FinanceManager);
+
+        $this->actingAs($viewer)->get(route('admin.gateways.switches'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('can.manage', false));
+
+        $this->actingAs($viewer)
+            ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => false])
+            ->assertForbidden();
+    });
+
+    it('is closed to people who may not see payment settings', function () {
+        $this->actingAs(testBusinessAccount(AccountStatus::Active)->owner)
+            ->get(route('admin.gateways.switches'))
+            ->assertForbidden();
+    });
+});
+
 describe('switching a gateway on', function () {
     it('refuses while a required credential is missing', function () {
         /*

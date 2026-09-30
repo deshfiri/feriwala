@@ -35,23 +35,64 @@ class Branding
      */
     public const FOLDER = 'branding';
 
+    /**
+     * The setting that holds the accent colour as `#rrggbb`. Null means the
+     * shipped accent.
+     */
+    public const ACCENT_SETTING = 'branding.accent_color';
+
     public function __construct(
         protected SettingsRepository $settings,
         protected FilesystemFactory $filesystem,
     ) {}
 
     /**
-     * The shared contract: addresses only, never storage paths.
+     * The shared contract: addresses only, never storage paths. `accent` is
+     * null while the shipped accent is in use, so the stylesheet's own value
+     * stands and nothing is written into the page.
      *
-     * @return array{logo_url: string, favicon_url: string, favicon_type: string}
+     * @return array{logo_url: string, favicon_url: string, favicon_type: string, accent: array{color: string, on: string, lifted_on: string}|null}
      */
     public function toArray(): array
     {
+        $accent = $this->customAccent();
+
         return [
             'logo_url' => $this->url(BrandingAsset::Logo),
             'favicon_url' => $this->url(BrandingAsset::Favicon),
             'favicon_type' => $this->faviconType(),
+            'accent' => $accent?->toArray(),
         ];
+    }
+
+    /**
+     * The accent every screen uses: the chosen one, or the shipped default.
+     */
+    public function accent(): AccentColor
+    {
+        return $this->customAccent() ?? AccentColor::default();
+    }
+
+    /**
+     * The chosen accent, when one is stored and well formed. Anything else —
+     * nothing chosen, a malformed value, an unreachable settings store — falls
+     * back to the stylesheet's own accent rather than breaking the page.
+     */
+    public function customAccent(): ?AccentColor
+    {
+        try {
+            $value = $this->settings->get(self::ACCENT_SETTING);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! is_string($value) || ! AccentColor::isValidHex($value)) {
+            return null;
+        }
+
+        $accent = AccentColor::fromHex($value);
+
+        return $accent->isDefault() ? null : $accent;
     }
 
     public function url(BrandingAsset $asset): string

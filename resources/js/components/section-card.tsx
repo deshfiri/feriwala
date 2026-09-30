@@ -56,7 +56,7 @@ export default function SectionCard({
             {hasHeader && (
                 <CardHeader
                     className={cn(
-                        'flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b px-5 py-4',
+                        'flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-dashed px-6 py-5',
                         tone === 'destructive' &&
                             'border-b-danger/25 bg-danger-subtle/60',
                     )}
@@ -65,7 +65,7 @@ export default function SectionCard({
                         {title && (
                             <Heading
                                 className={cn(
-                                    'text-base leading-6 font-semibold tracking-tight',
+                                    'text-lg leading-7 font-semibold tracking-tight',
                                     tone === 'destructive' && 'text-danger',
                                 )}
                             >
@@ -87,12 +87,12 @@ export default function SectionCard({
                 </CardHeader>
             )}
 
-            <CardContent className={cn('px-5 py-5', contentClassName)}>
+            <CardContent className={cn('px-6 py-6', contentClassName)}>
                 {children}
             </CardContent>
 
             {footer && (
-                <CardFooter className="bg-surface-subtle flex flex-wrap justify-end gap-2 border-t px-5 py-3">
+                <CardFooter className="bg-surface-subtle flex flex-wrap justify-end gap-2 border-t px-6 py-4">
                     {footer}
                 </CardFooter>
             )}
