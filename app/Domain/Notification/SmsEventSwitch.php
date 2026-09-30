@@ -2,11 +2,9 @@
 
 namespace App\Domain\Notification;
 
-use App\Domain\Notification\Enums\SmsEvent;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Sms\SmsProviderManager;
-use InvalidArgumentException;
 
 /**
  * Whether SMS is on for one particular event (§30).
@@ -39,14 +37,10 @@ class SmsEventSwitch
 
     /**
      * This event's own switch, ignoring the global one — what the admin screen
-     * shows beside each event. A one-time code is always on.
+     * shows beside each event, and what the one-time code senders ask.
      */
     public function isSwitchedOn(string $event): bool
     {
-        if (SmsEvent::tryFrom($event)?->isSwitchable() === false) {
-            return true;
-        }
-
         $setting = $this->settings->get(self::key($event));
 
         return $setting === null || (bool) $setting;
@@ -54,16 +48,9 @@ class SmsEventSwitch
 
     /**
      * Switch one event on or off.
-     *
-     * @throws InvalidArgumentException for a one-time code, which cannot be
-     *                                  switched off without locking people out
      */
     public function set(string $event, bool $enabled, ?int $actorId = null): void
     {
-        if (SmsEvent::tryFrom($event)?->isSwitchable() === false) {
-            throw new InvalidArgumentException("SMS for [{$event}] carries a one-time code and cannot be switched off.");
-        }
-
         $this->settings->define(
             self::key($event),
             'sms',

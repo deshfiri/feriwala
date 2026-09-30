@@ -4,6 +4,9 @@ namespace App\Domain\Supplier\Actions;
 
 use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Account\VerificationCodes;
+use App\Domain\Notification\Enums\SmsEvent;
+use App\Domain\Notification\Exceptions\SmsEventSwitchedOff;
+use App\Domain\Notification\SmsEventSwitch;
 use App\Domain\Supplier\Models\Supplier;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
@@ -26,13 +29,21 @@ class SendSupplierMobileVerificationCode
         protected VerificationCodes $codes,
         protected SmsProvider $sms,
         protected Translator $translator,
+        protected SmsEventSwitch $smsEvents,
     ) {}
 
     /**
      * @throws ResendTooSoon
+     * @throws SmsEventSwitchedOff when an administrator has switched these codes off
      */
     public function handle(Supplier $supplier): void
     {
+        // Asked before a code is issued, so a switched-off send spends no
+        // code and no cooldown.
+        if (! $this->smsEvents->isSwitchedOn(SmsEvent::SupplierMobileVerification->value)) {
+            throw new SmsEventSwitchedOff(SmsEvent::SupplierMobileVerification);
+        }
+
         $mobile = (string) $supplier->mobile;
 
         if (! $this->codes->canIssue(self::PURPOSE, $mobile)) {
@@ -53,7 +64,7 @@ class SendSupplierMobileVerificationCode
                 $locale->value,
             ),
             locale: $locale,
-            event: 'supplier_mobile_verification',
+            event: SmsEvent::SupplierMobileVerification->value,
             userId: null,
         ));
     }

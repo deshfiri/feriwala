@@ -35,8 +35,8 @@ export type SmsEventRow = {
     event: string;
     title: string;
     description: string;
-    /** False for one-time codes, which are always sent. */
-    switchable: boolean;
+    /** A code someone must type in: switching it off blocks their flow. */
+    one_time_code: boolean;
     enabled: boolean;
     sent: number;
 };
@@ -76,6 +76,20 @@ export default function AdminSms({
         events.find((row) => row.event === event)?.title ?? event;
 
     const toggleEvent = (row: SmsEventRow, enabled: boolean) => {
+        /*
+         * Switching a one-time code off stops people verifying their mobile
+         * or confirming a cash order — asked once more, in words, first.
+         */
+        if (
+            !enabled &&
+            row.one_time_code &&
+            !window.confirm(
+                t('sms.event_switch.confirm_code_off', { event: row.title }),
+            )
+        ) {
+            return;
+        }
+
         setFailure(null);
 
         router.put(
@@ -267,10 +281,13 @@ export default function AdminSms({
                                         </span>
                                     </div>
                                     <p className="text-muted-foreground text-xs">
-                                        {row.switchable
-                                            ? row.description
-                                            : t('sms.event_switch.always_on')}
+                                        {row.description}
                                     </p>
+                                    {row.one_time_code && (
+                                        <p className="text-warning text-xs font-medium">
+                                            {t('sms.event_switch.code_warning')}
+                                        </p>
+                                    )}
                                     {failure?.event === row.event && (
                                         <InputError message={failure.message} />
                                     )}
@@ -284,7 +301,7 @@ export default function AdminSms({
                                     label={t('sms.event_switch.toggle', {
                                         event: row.title,
                                     })}
-                                    disabled={!can.manage || !row.switchable}
+                                    disabled={!can.manage}
                                     busy={pending === row.event}
                                 />
                             </li>

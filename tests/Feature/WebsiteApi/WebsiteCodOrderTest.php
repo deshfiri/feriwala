@@ -9,6 +9,8 @@ use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockLedger;
+use App\Domain\Notification\Enums\SmsEvent;
+use App\Domain\Notification\SmsEventSwitch;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
 use App\Domain\Order\Actions\RetryCodConfirmationCodes;
 use App\Domain\Order\Actions\SendCodConfirmationCode;
@@ -211,6 +213,20 @@ describe('taking a cash-on-delivery order', function () {
         expect($this->sent)->toHaveCount(1)
             ->and($this->sent->first()->to)->toBe('+8801712345678')
             ->and($this->sent->first()->event)->toBe('cod_confirmation');
+    });
+
+    it('takes the order but texts no code while the COD code SMS is switched off', function () {
+        app(SmsEventSwitch::class)->set(SmsEvent::CodConfirmation->value, false);
+
+        codTestSubmit()
+            ->assertCreated()
+            ->assertJsonPath('status', OrderStatus::CustomerVerificationPending->value);
+
+        $order = Order::query()->sole();
+
+        // Nothing sent, and none of the order's codes spent while it was off.
+        expect($this->sent)->toBeEmpty()
+            ->and(app(SendCodConfirmationCode::class)->sendsUsed($order))->toBe(0);
     });
 
     it('refuses cash on delivery where the shop may not take it', function () {
