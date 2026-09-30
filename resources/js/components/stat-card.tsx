@@ -85,87 +85,56 @@ export default function StatCard({
 }) {
     const isCompact = size === 'compact';
     const ChangeIcon = change ? changeIcons[change.direction] : null;
-    const hasFooter = Boolean(change || hint);
-
-    /*
-     * The icon tile sits to the left of label and figure together, after
-     * Isomorphic. It is positioned against the card rather than wrapped in a
-     * row with them, because `dt` and `dd` must stay the card's direct
-     * children for the description list to hold together.
-     */
-    const inset = Icon
-        ? isCompact
-            ? 'pl-[3.75rem]'
-            : 'pl-[4.75rem]'
-        : isCompact
-          ? 'pl-4'
-          : 'pl-5';
 
     return (
-        <Card className={cn('relative gap-0 py-0', className)}>
-            <dt
-                className={cn(
-                    'text-muted-foreground min-w-0 text-sm font-medium',
-                    inset,
-                    isCompact ? 'pt-4 pr-4' : 'pt-5 pr-5',
-                )}
-            >
+        <Card
+            className={cn('gap-0 px-5', isCompact ? 'py-4' : 'py-5', className)}
+        >
+            <dt className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground min-w-0 text-sm font-medium">
+                    {label}
+                </span>
+
                 {Icon && (
                     <span
                         aria-hidden="true"
                         className={cn(
-                            'absolute flex items-center justify-center rounded-xl',
-                            isCompact
-                                ? 'top-4 left-4 size-9'
-                                : 'top-5 left-5 size-11',
+                            'flex shrink-0 items-center justify-center rounded-lg',
+                            isCompact ? 'size-7' : 'size-9',
                             toneIconClasses[tone],
                         )}
                     >
-                        <Icon className={isCompact ? 'size-4' : 'size-5'} />
+                        <Icon className={isCompact ? 'size-3.5' : 'size-4'} />
                     </span>
                 )}
-                {label}
             </dt>
 
-            <dd>
+            <dd className={cn('space-y-2', isCompact ? 'mt-2' : 'mt-3')}>
                 <div
                     className={cn(
-                        'tabular font-heading mt-1 leading-tight font-semibold tracking-tight',
-                        inset,
-                        isCompact ? 'pr-4 pb-4 text-lg' : 'pr-5 pb-5 text-2xl',
+                        'tabular leading-none font-semibold tracking-tight',
+                        isCompact ? 'text-lg' : 'text-2xl',
                     )}
                 >
                     {value}
                 </div>
 
-                {hasFooter && (
-                    <div
+                {change && ChangeIcon && (
+                    <p
                         className={cn(
-                            'flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-dashed text-xs',
-                            isCompact ? 'mx-4 py-3' : 'mx-5 py-3.5',
+                            'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium',
+                            changeClasses[change.direction],
                         )}
                     >
-                        {change && ChangeIcon && (
-                            <p
-                                className={cn(
-                                    'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold',
-                                    changeClasses[change.direction],
-                                )}
-                            >
-                                <ChangeIcon
-                                    aria-hidden="true"
-                                    className="size-3"
-                                />
-                                {change.label}
-                            </p>
-                        )}
+                        <ChangeIcon aria-hidden="true" className="size-3" />
+                        {change.label}
+                    </p>
+                )}
 
-                        {hint && (
-                            <p className="text-muted-foreground text-pretty">
-                                {hint}
-                            </p>
-                        )}
-                    </div>
+                {hint && (
+                    <p className="text-muted-foreground text-xs text-pretty">
+                        {hint}
+                    </p>
                 )}
             </dd>
         </Card>

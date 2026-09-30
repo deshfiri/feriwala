@@ -31,13 +31,13 @@ export default function Panel({
     return (
         <section
             className={cn(
-                'bg-card text-card-foreground flex flex-col rounded-xl border',
+                'bg-card text-card-foreground flex flex-col rounded-xl border shadow-sm',
                 className,
             )}
         >
-            <header className="flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
+            <header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
                 <div className="min-w-0 space-y-1">
-                    <h2 className="text-lg leading-7 font-semibold tracking-tight">
+                    <h2 className="text-base leading-6 font-semibold tracking-tight">
                         {title}
                     </h2>
                     {description && (
@@ -50,7 +50,7 @@ export default function Panel({
                 {action && <div className="shrink-0">{action}</div>}
             </header>
 
-            <div className={cn('flex-1 px-6 pt-4 pb-6', contentClassName)}>
+            <div className={cn('flex-1 px-5 pt-4 pb-5', contentClassName)}>
                 {children}
             </div>
         </section>

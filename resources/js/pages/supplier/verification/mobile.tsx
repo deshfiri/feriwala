@@ -29,7 +29,7 @@ export default function SupplierMobileVerification({
 
                 <SectionCard title={t('supplier.verification.mobile')}>
                     {mobileVerified ? (
-                        <p className="text-success text-sm font-medium">
+                        <p className="text-sm font-medium text-green-600">
                             {t('supplier.verification.verified')}
                         </p>
                     ) : (

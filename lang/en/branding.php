@@ -29,14 +29,14 @@ return [
 
     'accent' => [
         'title' => 'Accent colour',
-        'description' => 'Used for primary buttons, the current menu item, focus rings and highlights across the ERP, Admin and Supplier panels.',
+        'description' => 'Used for the current menu item, badges, focus rings and highlights across the ERP, Admin and Supplier panels. Buttons stay near-black.',
         'state_custom' => 'Custom',
         'presets' => 'Presets',
         'custom' => 'Custom colour',
         'hex' => 'Hex value',
-        'hex_hint' => 'Six digits, for example #e11d48.',
+        'hex_hint' => 'Six digits, for example #ca6330.',
         'preview' => 'Preview',
-        'preview_button' => 'Primary action',
+        'preview_focus' => 'Focused field',
         'preview_nav' => 'Current menu item',
         'preview_badge' => 'New',
         'low_contrast' => 'This colour is light: text drawn in it on a white card may be hard to read. A darker shade is easier on the eye.',
@@ -45,7 +45,7 @@ return [
         'restore_confirm' => 'Go back to the default accent colour?',
         'saved' => 'Accent colour updated.',
         'restored' => 'Accent colour restored to the default.',
-        'invalid' => 'Enter a six-digit hex colour, such as #e11d48.',
+        'invalid' => 'Enter a six-digit hex colour, such as #ca6330.',
         'names' => [
             'crimson' => 'Crimson',
             'orange' => 'Orange',

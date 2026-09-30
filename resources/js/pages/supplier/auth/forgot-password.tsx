@@ -18,7 +18,7 @@ export default function SupplierForgotPassword({
 
             {status && (
                 <p
-                    className="text-success text-center text-sm font-medium"
+                    className="text-center text-sm font-medium text-green-600"
                     role="status"
                 >
                     {status}

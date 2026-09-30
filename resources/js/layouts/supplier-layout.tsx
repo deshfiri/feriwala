@@ -18,7 +18,6 @@ import { usePage } from '@inertiajs/react';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import BrandingHead from '@/components/branding-head';
-import { PageBreadcrumbBar } from '@/components/page-breadcrumb-bar';
 import { SupplierHeader } from '@/components/supplier/supplier-header';
 import { SupplierSidebar } from '@/components/supplier/supplier-sidebar';
 import { useTranslation } from '@/hooks/use-translation';
@@ -205,8 +204,10 @@ export default function SupplierLayout({
                     variant="sidebar"
                     className="min-w-0"
                 >
-                    <SupplierHeader account={account} />
-                    <PageBreadcrumbBar breadcrumbs={breadcrumbs} />
+                    <SupplierHeader
+                        breadcrumbs={breadcrumbs}
+                        account={account}
+                    />
                     {children}
                 </AppContent>
             </AppShell>

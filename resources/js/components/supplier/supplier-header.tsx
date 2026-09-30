@@ -1,5 +1,6 @@
 import { Link, router } from '@inertiajs/react';
 import { Bell, LogOut, ShieldCheck, UserCog } from 'lucide-react';
+import { Breadcrumbs } from '@/components/breadcrumbs';
 import AppearanceToggleTab from '@/components/appearance-tabs';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,13 +15,12 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import LanguageSwitcher from '@/components/language-switcher';
 import StatusPill from '@/components/status-pill';
 import { useTranslation } from '@/hooks/use-translation';
-import { headerActionClasses } from '@/lib/header-action';
 import type { StatusTone } from '@/lib/status';
-import { cn } from '@/lib/utils';
 import { logout } from '@/routes/supplier';
 import { index as notifications } from '@/routes/supplier/notifications';
 import { edit as profile } from '@/routes/supplier/profile';
 import { edit as security } from '@/routes/supplier/security';
+import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
 type SupplierAccount = {
     business_name: string;
@@ -31,27 +31,30 @@ type SupplierAccount = {
 };
 
 /**
- * The Supplier portal's command bar — laid out like the ERP header (rail
- * toggle on a phone, account standing on the left, quick actions and the
- * account menu on the right), wired to the Supplier's own guard session
- * rather than the Client/Partner one. Breadcrumbs sit in `PageBreadcrumbBar`
- * above the page, as they do in the ERP.
+ * The Supplier portal's command bar — the same row §33.2 asks every ERP
+ * shell for (rail toggle, breadcrumbs, quick actions, account menu), wired
+ * to the Supplier's own guard session rather than the Client/Partner one.
  */
 export function SupplierHeader({
+    breadcrumbs = [],
     account,
 }: {
+    breadcrumbs?: BreadcrumbItemType[];
     account: SupplierAccount | null;
 }) {
     const { t } = useTranslation();
     const unread = account?.unread_notifications ?? 0;
 
     return (
-        <header className="bg-background/80 supports-[backdrop-filter]:bg-background/70 sticky top-0 z-30 flex h-(--header-height) shrink-0 items-center gap-3 px-4 backdrop-blur-md sm:px-6">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-                {/* On a desktop the chip on the rail's edge does this. */}
-                <SidebarTrigger
-                    className={cn(headerActionClasses, 'shrink-0 md:hidden')}
-                />
+        <header className="border-sidebar-border/60 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b px-4 backdrop-blur transition-[height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14 md:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+                <SidebarTrigger className="-ml-1 shrink-0" />
+                <div className="hidden min-w-0 sm:block">
+                    <Breadcrumbs breadcrumbs={breadcrumbs} />
+                </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1">
                 {account && (
                     <StatusPill
                         tone={
@@ -60,16 +63,14 @@ export function SupplierHeader({
                                 : ('info' as StatusTone)
                         }
                         label={account.status_label}
-                        className="hidden md:inline-flex"
+                        className="mr-1 hidden md:inline-flex"
                     />
                 )}
-            </div>
 
-            <div className="flex shrink-0 items-center gap-2">
                 <Button
                     variant="ghost"
                     size="icon"
-                    className={headerActionClasses}
+                    className="relative size-9"
                     asChild
                 >
                     <Link
@@ -86,13 +87,13 @@ export function SupplierHeader({
                         {unread > 0 && (
                             <span
                                 aria-hidden="true"
-                                className="bg-brand ring-card absolute top-2 right-2 size-2 rounded-full ring-2"
+                                className="bg-brand ring-background absolute top-1.5 right-1.5 size-2 rounded-full ring-2"
                             />
                         )}
                     </Link>
                 </Button>
 
-                <LanguageSwitcher className={headerActionClasses} />
+                <LanguageSwitcher />
                 <AppearanceToggleTab iconOnly />
 
                 <DropdownMenu>
@@ -100,7 +101,7 @@ export function SupplierHeader({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className={cn(headerActionClasses, 'ml-1')}
+                            className="ml-1 size-9"
                             aria-label={
                                 account?.business_name ??
                                 t('supplier.portal_name')

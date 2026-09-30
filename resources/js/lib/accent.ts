@@ -3,8 +3,8 @@
  * first is the shipped accent (`AccentColor::DEFAULT_HEX`).
  */
 export const ACCENT_PRESETS = [
+    { name: 'orange', hex: '#ca6330' },
     { name: 'crimson', hex: '#e11d48' },
-    { name: 'orange', hex: '#ea580c' },
     { name: 'amber', hex: '#d97706' },
     { name: 'emerald', hex: '#059669' },
     { name: 'teal', hex: '#0d9488' },

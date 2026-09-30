@@ -3,7 +3,6 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import BrandingHead from '@/components/branding-head';
-import { PageBreadcrumbBar } from '@/components/page-breadcrumb-bar';
 import { useTranslation } from '@/hooks/use-translation';
 import type { AppLayoutProps } from '@/types';
 
@@ -28,8 +27,7 @@ export default function AppSidebarLayout({
                 variant="sidebar"
                 className="min-w-0 overflow-x-clip"
             >
-                <AppSidebarHeader />
-                <PageBreadcrumbBar breadcrumbs={breadcrumbs} />
+                <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 {children}
             </AppContent>
         </AppShell>

@@ -9,7 +9,6 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import AreaTrend from '@/components/charts/area-trend';
 import RadialBreakdown from '@/components/charts/radial-breakdown';
-import GreetingBanner from '@/components/dashboard/greeting-banner';
 import PageContainer from '@/components/page-container';
 import Panel from '@/components/dashboard/panel';
 import StatCard, {
@@ -77,84 +76,78 @@ export default function AdminDashboard({
             <Head title={t('dashboard.admin.title')} />
 
             <PageContainer>
-                {/*
-                 * Isomorphic's arrangement: the greeting and the queue
-                 * figures fill the wide column, the breakdown of those same
-                 * queues rides beside them as the side card, and the trend
-                 * runs the full width underneath.
-                 */}
-                <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
-                    <div className="space-y-4 md:space-y-6 lg:col-span-2">
-                        <GreetingBanner
-                            heading={t(
-                                `dashboard.greeting.${greeting.period}`,
-                                {
-                                    name: greeting.name,
-                                },
+                <section className="bg-card border-border rounded-xl border p-6 shadow-sm">
+                    <h1 className="text-2xl font-semibold tracking-tight text-balance">
+                        {t(`dashboard.greeting.${greeting.period}`, {
+                            name: greeting.name,
+                        })}
+                    </h1>
+                    <p className="text-muted-foreground mt-1.5 text-sm text-balance">
+                        {attention > 0
+                            ? t('dashboard.admin.hero.attention', {
+                                  count: attention,
+                              })
+                            : t('dashboard.admin.hero.clear')}
+                    </p>
+                </section>
+
+                {cards.length === 0 ? (
+                    <EmptyState description={t('dashboard.admin.empty')} />
+                ) : (
+                    <>
+                        <StatCardGrid>
+                            {cards.map((card) => (
+                                <Link
+                                    key={card.key}
+                                    href={card.href}
+                                    className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+                                >
+                                    <StatCard
+                                        label={card.label}
+                                        value={card.value}
+                                        icon={ICONS[card.key]}
+                                        tone={TONES[card.key]}
+                                        className="hover:bg-accent/50 transition-colors"
+                                    />
+                                </Link>
+                            ))}
+                        </StatCardGrid>
+
+                        <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
+                            {trend && (
+                                <Panel
+                                    className="lg:col-span-2"
+                                    title={t('dashboard.admin.trend.title')}
+                                    description={t(
+                                        'dashboard.admin.trend.description',
+                                        { days: TREND_DAYS },
+                                    )}
+                                >
+                                    <AreaTrend
+                                        series={trend}
+                                        height={240}
+                                        emptyMessage={t(
+                                            'dashboard.admin.trend.empty',
+                                        )}
+                                    />
+                                </Panel>
                             )}
-                            message={
-                                attention > 0
-                                    ? t('dashboard.admin.hero.attention', {
-                                          count: attention,
-                                      })
-                                    : t('dashboard.admin.hero.clear')
-                            }
-                        />
 
-                        {cards.length === 0 ? (
-                            <EmptyState
-                                description={t('dashboard.admin.empty')}
-                            />
-                        ) : (
-                            <StatCardGrid className="lg:grid-cols-2 xl:grid-cols-3">
-                                {cards.map((card) => (
-                                    <Link
-                                        key={card.key}
-                                        href={card.href}
-                                        className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
-                                    >
-                                        <StatCard
-                                            label={card.label}
-                                            value={card.value}
-                                            icon={ICONS[card.key]}
-                                            tone={TONES[card.key]}
-                                            className="hover:border-input hover:bg-surface-hover h-full transition-colors"
-                                        />
-                                    </Link>
-                                ))}
-                            </StatCardGrid>
-                        )}
-                    </div>
-
-                    {cards.length > 0 && (
-                        <Panel title={t('dashboard.admin.breakdown.title')}>
-                            <RadialBreakdown
-                                slices={breakdown}
-                                size={150}
-                                emptyMessage={t(
-                                    'dashboard.admin.breakdown.empty',
-                                )}
-                            />
-                        </Panel>
-                    )}
-
-                    {cards.length > 0 && trend && (
-                        <Panel
-                            className="lg:col-span-3"
-                            title={t('dashboard.admin.trend.title')}
-                            description={t(
-                                'dashboard.admin.trend.description',
-                                { days: TREND_DAYS },
-                            )}
-                        >
-                            <AreaTrend
-                                series={trend}
-                                height={240}
-                                emptyMessage={t('dashboard.admin.trend.empty')}
-                            />
-                        </Panel>
-                    )}
-                </div>
+                            <Panel
+                                className={trend ? undefined : 'lg:col-span-3'}
+                                title={t('dashboard.admin.breakdown.title')}
+                            >
+                                <RadialBreakdown
+                                    slices={breakdown}
+                                    size={150}
+                                    emptyMessage={t(
+                                        'dashboard.admin.breakdown.empty',
+                                    )}
+                                />
+                            </Panel>
+                        </div>
+                    </>
+                )}
             </PageContainer>
         </>
     );

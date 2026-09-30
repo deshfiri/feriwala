@@ -1,5 +1,5 @@
 import { Form, router } from '@inertiajs/react';
-import { ArrowLeft, Check, LayoutGrid, RotateCcw, Save } from 'lucide-react';
+import { Check, LayoutGrid, RotateCcw, Save } from 'lucide-react';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import BrandingController from '@/actions/App/Http/Controllers/Admin/BrandingController';
@@ -27,8 +27,9 @@ export type AccentState = {
 };
 
 /**
- * Choose the accent colour every panel paints its primary actions, current
- * menu row, focus rings and highlights in.
+ * Choose the accent colour every panel paints its current menu row, badges,
+ * focus rings and highlights in. Primary buttons stay near-black: the accent
+ * is the accent, not the workhorse.
  *
  * A preset or any colour from the picker, previewed live on real controls
  * before it is saved. Nothing changes for anybody until Save; the server then
@@ -198,8 +199,8 @@ export default function AccentColorPicker({ accent }: { accent: AccentState }) {
 }
 
 /**
- * The accent on the controls that actually carry it — a primary button, the
- * current menu row with its edge rail, an outlined badge and the rail chip —
+ * The accent on the things that actually carry it — the current menu row with
+ * its edge rail, a badge, a focused field and an avatar —
  * inside a box that paints its own accent (`.accent-scope`), so the rest of
  * the page keeps the saved colour until Save.
  */
@@ -216,22 +217,22 @@ function AccentPreview({ color }: { color: string }) {
                 style={accentPreviewStyle(color) as CSSProperties}
                 className="accent-scope bg-surface-subtle flex flex-wrap items-center gap-4 rounded-lg border p-4"
             >
-                <span className="bg-primary text-primary-foreground inline-flex h-9 items-center rounded-lg px-4 text-sm font-medium">
-                    {t('branding.accent.preview_button')}
-                </span>
-
-                <span className="bg-brand-subtle text-brand relative inline-flex h-9 w-52 items-center gap-2.5 rounded-lg px-3 text-sm font-semibold">
-                    <span className="bg-brand absolute inset-y-2 left-0 w-[3px] rounded-r-full" />
+                <span className="bg-brand-subtle text-brand relative inline-flex h-9 w-52 items-center gap-2.5 rounded-lg px-2.5 text-sm font-semibold">
+                    <span className="bg-brand absolute inset-y-2 left-0 w-0.5 rounded-full" />
                     <LayoutGrid className="size-4" />
                     {t('branding.accent.preview_nav')}
                 </span>
 
-                <span className="border-brand-border text-brand text-2xs rounded-full border px-2 py-0.5 font-semibold tracking-wide uppercase">
+                <span className="bg-brand-subtle text-brand text-2xs rounded-full px-1.5 py-0.5 leading-none font-semibold tracking-wide uppercase">
                     {t('branding.accent.preview_badge')}
                 </span>
 
-                <span className="bg-brand text-brand-foreground flex size-6 items-center justify-center rounded-full">
-                    <ArrowLeft className="size-3.5" />
+                <span className="ring-ring ring-offset-surface-subtle bg-card inline-flex h-9 items-center rounded-lg border px-3 text-sm ring-2 ring-offset-2">
+                    {t('branding.accent.preview_focus')}
+                </span>
+
+                <span className="bg-brand-subtle text-brand flex size-8 items-center justify-center rounded-full text-xs font-semibold">
+                    AB
                 </span>
             </div>
         </div>

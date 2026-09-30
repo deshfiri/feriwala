@@ -135,9 +135,9 @@ export default function GlobalSearch() {
                 onClick={() => setIsOpen(true)}
                 aria-label={t('nav.search.open')}
                 className={cn(
-                    'text-muted-foreground bg-card flex size-10 items-center justify-center gap-2.5 rounded-lg border',
+                    'text-muted-foreground bg-card flex h-9 w-9 items-center justify-center gap-2 rounded-lg border shadow-xs',
                     'hover:border-input hover:text-foreground transition-colors',
-                    'md:w-64 md:justify-start md:pr-2 md:pl-3.5 lg:w-80',
+                    'md:w-56 md:justify-start md:px-3 lg:w-72',
                 )}
             >
                 <Search aria-hidden="true" className="size-4 shrink-0" />
@@ -146,7 +146,7 @@ export default function GlobalSearch() {
                 </span>
                 <kbd
                     aria-hidden="true"
-                    className="bg-brand text-brand-foreground text-2xs hidden rounded-md px-1.5 py-0.5 font-sans font-semibold md:inline"
+                    className="bg-surface-subtle text-muted-foreground text-2xs hidden rounded border px-1.5 font-sans font-medium md:inline"
                 >
                     {isAppleDevice ? '⌘K' : 'Ctrl K'}
                 </kbd>
