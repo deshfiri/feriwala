@@ -3,13 +3,13 @@
 namespace App\Domain\Access\Actions;
 
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Access\Models\Role;
 use App\Domain\Account\Enums\UserStatus;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
-use Spatie\Permission\Models\Role;
 
 /**
  * Assigns a platform staff member the full set of roles they should hold

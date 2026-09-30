@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Access\Actions\ManageCustomRole;
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Audit\Models\AuditLog;
@@ -240,6 +241,24 @@ describe('assigning roles', function () {
                 ->where('actor_id', $this->actor->id)
                 ->where('reason', 'Reassigned to the SEO team.')
                 ->exists())->toBeTrue();
+    });
+
+    it('assigns a custom, database-backed role alongside the fixed twenty-one', function () {
+        $subject = testPlatformStaff(PlatformRole::SmsManager);
+        // access.view is within SystemAdministrator's own authority, unlike
+        // sms.view -- ManageCustomRole::create() and the later role grant
+        // both cap a non-Super-Admin actor to permissions they hold.
+        app(ManageCustomRole::class)->create($this->actor, 'regional_manager', null, ['access.view'], 'New regional structure.');
+
+        $this->actingAs($this->actor)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->put(route('admin.staff.roles.update', $subject->public_id), [
+                'roles' => ['regional_manager'],
+                'reason' => 'Moved to the regional structure.',
+            ])
+            ->assertRedirect();
+
+        expect($subject->fresh()->hasRole('regional_manager'))->toBeTrue();
     });
 
     it('lets an actor change their own roles, unlike a sign-in status change', function () {

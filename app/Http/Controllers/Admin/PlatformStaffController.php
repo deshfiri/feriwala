@@ -7,6 +7,7 @@ use App\Domain\Access\Actions\InvitePlatformStaff;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Access\Models\Role;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Access\Queries\PlatformStaffDirectory;
 use App\Domain\Account\Actions\ChangeIdentityAccess;
@@ -217,11 +218,18 @@ class PlatformStaffController extends Controller
     }
 
     /**
+     * Every role offered on the staff-assignment form -- the fixed
+     * twenty-one {@see PlatformRole} cases, plus any active (non-archived)
+     * custom role Role and Permission management has created. A custom
+     * role carrying a permission the actor does not hold is still listed
+     * here; {@see AssignPlatformRole} is what actually enforces the
+     * authority ceiling at grant time.
+     *
      * @return array<int, array{key: string, label: string}>
      */
     protected function availableRoles(User $actor): array
     {
-        return collect(PlatformRole::cases())
+        $fixed = collect(PlatformRole::cases())
             /*
              * Super Admin is offered only to an actor who already holds it
              * -- granting it is how a lesser role would make itself
@@ -230,9 +238,18 @@ class PlatformStaffController extends Controller
              * here is the UI half of the same rule, not the guard itself.
              */
             ->reject(fn (PlatformRole $role) => $role->grantsEverything() && ! $actor->hasRole(PlatformRole::SuperAdmin->value))
-            ->map(fn (PlatformRole $role) => ['key' => $role->value, 'label' => $role->label()])
-            ->values()
-            ->all();
+            ->map(fn (PlatformRole $role) => ['key' => $role->value, 'label' => $role->label()]);
+
+        $custom = Role::query()
+            ->where('guard_name', 'web')
+            ->where('is_system', false)
+            ->whereNull('account_id')
+            ->whereNull('archived_at')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Role $role) => ['key' => $role->name, 'label' => $role->name]);
+
+        return $fixed->concat($custom)->values()->all();
     }
 
     /**
@@ -240,7 +257,17 @@ class PlatformStaffController extends Controller
      */
     protected function assignableRoleNames(): array
     {
-        return array_map(fn (PlatformRole $role) => $role->value, PlatformRole::cases());
+        $fixed = array_map(fn (PlatformRole $role) => $role->value, PlatformRole::cases());
+
+        $custom = Role::query()
+            ->where('guard_name', 'web')
+            ->where('is_system', false)
+            ->whereNull('account_id')
+            ->whereNull('archived_at')
+            ->pluck('name')
+            ->all();
+
+        return array_values(array_merge($fixed, $custom));
     }
 
     /**
@@ -250,12 +277,14 @@ class PlatformStaffController extends Controller
     {
         $role = collect(PlatformRole::cases())->first(fn (PlatformRole $role) => $user->hasRole($role->value));
 
+        $roleLabel = $role?->label() ?? $user->getRoleNames()->first();
+
         return [
             'public_id' => $user->public_id,
             'name' => $user->name,
             'email' => $user->email,
             'mobile' => $user->mobile,
-            'role_label' => $role?->label(),
+            'role_label' => $roleLabel,
             'requires_two_factor' => $role?->requiresTwoFactor() ?? false,
             'two_factor_enabled' => $user->hasEnabledTwoFactorAuthentication(),
             'identity_status' => $user->identity_status->value,

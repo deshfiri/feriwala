@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
 use App\Http\Controllers\Admin\PaymentRefundController;
+use App\Http\Controllers\Admin\PermissionsController;
 use App\Http\Controllers\Admin\PlatformStaffController;
 use App\Http\Controllers\Admin\ProductAttributeController;
 use App\Http\Controllers\Admin\ProductBulkController;
@@ -537,13 +538,43 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('settings', SettingsController::class)->name('settings');
 
         /*
-         * The twenty-one PlatformRole cases (commit-order item 6). Read-only
-         * -- there is no safe way to create or clone a role without a code
-         * deploy, so this browses and searches the fixed catalogue rather
-         * than editing it.
+         * The twenty-one fixed PlatformRole cases, read-only as before, plus
+         * a custom, database-backed role's full lifecycle (Role and
+         * Permission management). `roles/create` is registered ahead of
+         * `roles/{role}` so the literal segment wins the match.
          */
         Route::get('roles', [RolesController::class, 'index'])->name('roles.index');
+        Route::get('roles/create', [RolesController::class, 'create'])->name('roles.create');
+        Route::post('roles', [RolesController::class, 'store'])
+            ->middleware(RequirePassword::class)
+            ->name('roles.store');
         Route::get('roles/{role}', [RolesController::class, 'show'])->name('roles.show');
+        Route::put('roles/{role}', [RolesController::class, 'update'])
+            ->middleware(RequirePassword::class)
+            ->name('roles.update');
+        Route::post('roles/{role}/clone', [RolesController::class, 'clone'])
+            ->middleware(RequirePassword::class)
+            ->name('roles.clone');
+        Route::delete('roles/{role}', [RolesController::class, 'archive'])
+            ->middleware(RequirePassword::class)
+            ->name('roles.archive');
+
+        /*
+         * The permission catalogue (Role and Permission management):
+         * browsing every permission, System-bound and Custom/unbound alike,
+         * and managing the custom ones. `{permission}` is a name, never a
+         * database id (no IDs in public URLs).
+         */
+        Route::get('permissions', [PermissionsController::class, 'index'])->name('permissions.index');
+        Route::post('permissions', [PermissionsController::class, 'store'])
+            ->middleware(RequirePassword::class)
+            ->name('permissions.store');
+        Route::put('permissions/{permission}', [PermissionsController::class, 'update'])
+            ->middleware(RequirePassword::class)
+            ->name('permissions.update');
+        Route::delete('permissions/{permission}', [PermissionsController::class, 'archive'])
+            ->middleware(RequirePassword::class)
+            ->name('permissions.archive');
 
         /*
          * Platform staff: viewing, inviting, role assignment, and sign-in

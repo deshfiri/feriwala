@@ -4,6 +4,7 @@ namespace App\Domain\Access;
 
 use App\Domain\Access\Enums\PermissionAction as Action;
 use App\Domain\Access\Enums\PermissionModule as Module;
+use Illuminate\Support\Str;
 
 /**
  * Which verbs each module accepts, and therefore every permission that exists.
@@ -280,21 +281,17 @@ class PermissionCatalogue
         $byModule = [];
 
         foreach ($permissionNames as $permission) {
-            $module = self::moduleFor($permission);
-            $byModule[$module->value][] = substr($permission, strlen($module->value) + 1);
+            [$moduleLabel, $actionLabel] = self::describe($permission);
+            $byModule[$moduleLabel][] = $actionLabel;
         }
 
         $groups = [];
 
-        foreach ($byModule as $moduleValue => $actionValues) {
-            $actionLabels = array_map(
-                fn (string $actionValue) => Action::from($actionValue)->label(),
-                $actionValues,
-            );
+        foreach ($byModule as $moduleLabel => $actionLabels) {
             sort($actionLabels);
 
             $groups[] = [
-                'module' => Module::from($moduleValue)->label(),
+                'module' => $moduleLabel,
                 'actions' => $actionLabels,
             ];
         }
@@ -302,6 +299,34 @@ class PermissionCatalogue
         usort($groups, fn (array $a, array $b) => $a['module'] <=> $b['module']);
 
         return $groups;
+    }
+
+    /**
+     * The module and action label for one permission name -- catalogue
+     * permissions resolve through the {@see Module}/{@see Action} enums as
+     * usual; a *custom* permission naming something the closed catalogue
+     * does not is grouped and labelled from its own literal text instead of
+     * thrown at, since Role and Permission management lets an administrator
+     * hold a custom permission on a custom role.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function describe(string $permission): array
+    {
+        $module = self::moduleForOrNull($permission);
+
+        if ($module !== null) {
+            $actionValue = substr($permission, strlen($module->value) + 1);
+
+            return [$module->label(), Action::tryFrom($actionValue)?->label() ?? Str::headline($actionValue)];
+        }
+
+        [$prefix, $rest] = array_pad(explode('.', $permission, 2), 2, '');
+
+        return [
+            Str::headline($prefix),
+            Str::headline($rest !== '' ? $rest : $permission),
+        ];
     }
 
     /**
@@ -316,6 +341,18 @@ class PermissionCatalogue
      */
     protected static function moduleFor(string $permission): Module
     {
+        return self::moduleForOrNull($permission) ?? throw new \InvalidArgumentException(
+            "[{$permission}] does not belong to any known module."
+        );
+    }
+
+    /**
+     * The same longest-prefix match as {@see moduleFor()}, but null for a
+     * custom permission naming something outside every known module rather
+     * than throwing.
+     */
+    public static function moduleForOrNull(string $permission): ?Module
+    {
         $matches = array_filter(
             Module::cases(),
             fn (Module $module) => str_starts_with($permission, $module->value.'.'),
@@ -323,9 +360,7 @@ class PermissionCatalogue
 
         usort($matches, fn (Module $a, Module $b) => strlen($b->value) <=> strlen($a->value));
 
-        return $matches[0] ?? throw new \InvalidArgumentException(
-            "[{$permission}] does not belong to any known module."
-        );
+        return $matches[0] ?? null;
     }
 
     /**
