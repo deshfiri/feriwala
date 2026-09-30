@@ -8,6 +8,7 @@ use App\Concerns\HasReference;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Supplier\Enums\OfferStatus;
+use App\Domain\Supplier\Enums\SupplyMode;
 use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
@@ -47,6 +48,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property Money $supplier_rate
  * @property Money $platform_rate
  * @property string $currency_code
+ * @property SupplyMode $supply_mode
+ * @property int|null $lead_time_days
+ * @property int|null $fulfilment_capacity
+ * @property CarbonImmutable|null $expected_availability_at
  * @property int|null $activated_by
  * @property CarbonImmutable|null $activated_at
  * @property int|null $suspended_by
@@ -69,6 +74,7 @@ class SupplierOffer extends Model
         'wholesale_enabled' => false,
         'dropshipping_enabled' => false,
         'currency_code' => 'BDT',
+        'supply_mode' => SupplyMode::ReadyStock->value,
     ];
 
     /**
@@ -83,6 +89,10 @@ class SupplierOffer extends Model
             'dropshipping_enabled' => 'boolean',
             'supplier_rate' => MoneyCast::class,
             'platform_rate' => MoneyCast::class,
+            'supply_mode' => SupplyMode::class,
+            'lead_time_days' => 'integer',
+            'fulfilment_capacity' => 'integer',
+            'expected_availability_at' => 'immutable_datetime',
             'activated_at' => 'immutable_datetime',
             'suspended_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
@@ -179,5 +189,15 @@ class SupplierOffer extends Model
     public function isActive(): bool
     {
         return $this->status === OfferStatus::Active;
+    }
+
+    /**
+     * What a buyer or staff should read in place of a stock figure for this
+     * offer, or `null` when the real number should be shown instead
+     * (§SupplyMode -- "never display fake stock figures").
+     */
+    public function buyerFacingAvailabilityLabel(): ?string
+    {
+        return $this->supply_mode->buyerFacingLabel();
     }
 }

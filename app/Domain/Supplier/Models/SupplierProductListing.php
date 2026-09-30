@@ -145,6 +145,24 @@ class SupplierProductListing extends Model
     }
 
     /**
+     * This product entry's own images -- never a variant-specific override,
+     * which lives on the variant's own {@see SupplierProductListingItem::variantMedia()}.
+     *
+     * @return HasMany<SupplierListingMedia, $this>
+     */
+    public function media(): HasMany
+    {
+        return $this->hasMany(SupplierListingMedia::class)
+            ->whereNull('supplier_product_listing_item_id')
+            ->orderBy('position');
+    }
+
+    public function primaryMedia(): ?SupplierListingMedia
+    {
+        return $this->media->firstWhere('role', SupplierListingMedia::ROLE_PRIMARY);
+    }
+
+    /**
      * @return HasMany<SupplierProductListingStatusChange, $this>
      */
     public function statusHistory(): HasMany

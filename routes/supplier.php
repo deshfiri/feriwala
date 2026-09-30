@@ -16,6 +16,8 @@ use App\Http\Controllers\Supplier\Auth\VerifySupplierEmailController;
 use App\Http\Controllers\Supplier\DashboardController;
 use App\Http\Controllers\Supplier\KycController;
 use App\Http\Controllers\Supplier\ListingController;
+use App\Http\Controllers\Supplier\ListingMediaController;
+use App\Http\Controllers\Supplier\ListingMediaDownloadController;
 use App\Http\Controllers\Supplier\OfferController;
 use App\Http\Controllers\Supplier\PayableController;
 use App\Http\Controllers\Supplier\PayoutMethodController;
@@ -113,6 +115,12 @@ Route::prefix('supplier')
                 Route::patch('listings/{listing}', [ListingController::class, 'update'])->name('listings.update');
                 Route::post('listings/{listing}/submission', [ListingController::class, 'submit'])->name('listings.submission.store');
                 Route::post('listings/{listing}/archive', [ListingController::class, 'archive'])->name('listings.archive');
+
+                Route::post('listings/{listing}/media', [ListingMediaController::class, 'store'])->name('listings.media.store');
+                Route::patch('listings/{listing}/media/{media}', [ListingMediaController::class, 'update'])->name('listings.media.update');
+                Route::post('listings/{listing}/media/reorder', [ListingMediaController::class, 'reorder'])->name('listings.media.reorder');
+                Route::delete('listings/{listing}/media/{media}', [ListingMediaController::class, 'destroy'])->name('listings.media.destroy');
+                Route::get('listings/media/{media}/download', [ListingMediaDownloadController::class, 'show'])->name('listings.media.download');
 
                 // Approved Products and their offers (D25, P13-13).
                 Route::get('offers', [OfferController::class, 'index'])->name('offers.index');
