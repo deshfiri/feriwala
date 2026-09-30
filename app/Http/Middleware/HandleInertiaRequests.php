@@ -126,6 +126,15 @@ class HandleInertiaRequests extends Middleware
         // Supplier withdrawals (D25, P13-24), reusing the existing
         // Client/Partner Withdrawal module rather than a Supplier-specific one.
         [PermissionModule::Withdrawal, PermissionAction::View],
+
+        // The Roles & Permissions screens (commit-order item 6). Missing
+        // since the "Roles & permissions" nav link itself was added — the
+        // exact same failure mode as the SupplierPayable entry above: the
+        // link was gated on this key from the start, but the key was never
+        // added here, so it silently never appeared for anyone, Super Admin
+        // included (Gate::before grants the ability; it does not add a
+        // missing entry to this list).
+        [PermissionModule::Access, PermissionAction::View],
     ];
 
     /**

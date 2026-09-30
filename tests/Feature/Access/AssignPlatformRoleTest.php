@@ -8,10 +8,10 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 
 /*
- * Assigning one of the twenty-one PlatformRole cases to a platform staff
- * member -- the backend half of commit-order item 5. No production code
- * called Spatie's assignRole/syncRoles before this; the whole "give staff a
- * role" flow did not exist.
+ * Assigning one or more PlatformRole cases to a platform staff member --
+ * the backend half of Platform Staff management. No production code called
+ * Spatie's assignRole/syncRoles before this; the whole "give staff a role"
+ * flow did not exist.
  */
 
 beforeEach(function () {
@@ -26,11 +26,26 @@ it('assigns a new role, revoking the one held before', function () {
     app(AssignPlatformRole::class)->handle(
         subject: $subject,
         actor: $this->actor,
-        role: PlatformRole::SeoManager,
+        roleNames: [PlatformRole::SeoManager->value],
         reason: 'Reassigned to the SEO team.',
     );
 
     expect($subject->fresh()->hasRole(PlatformRole::SeoManager->value))->toBeTrue()
+        ->and($subject->fresh()->hasRole(PlatformRole::SmsManager->value))->toBeFalse();
+});
+
+it('assigns more than one role at once', function () {
+    $subject = testPlatformStaff(PlatformRole::SmsManager);
+
+    app(AssignPlatformRole::class)->handle(
+        subject: $subject,
+        actor: $this->actor,
+        roleNames: [PlatformRole::SeoManager->value, PlatformRole::ReportViewer->value],
+        reason: 'Taking on a second area.',
+    );
+
+    expect($subject->fresh()->hasRole(PlatformRole::SeoManager->value))->toBeTrue()
+        ->and($subject->fresh()->hasRole(PlatformRole::ReportViewer->value))->toBeTrue()
         ->and($subject->fresh()->hasRole(PlatformRole::SmsManager->value))->toBeFalse();
 });
 
@@ -40,7 +55,7 @@ it('records why, and the roles held before and after', function () {
     app(AssignPlatformRole::class)->handle(
         subject: $subject,
         actor: $this->actor,
-        role: PlatformRole::SeoManager,
+        roleNames: [PlatformRole::SeoManager->value],
         reason: 'Reassigned to the SEO team.',
     );
 
@@ -60,22 +75,24 @@ it('refuses without a recorded reason', function () {
     expect(fn () => app(AssignPlatformRole::class)->handle(
         subject: $subject,
         actor: $this->actor,
-        role: PlatformRole::SeoManager,
+        roleNames: [PlatformRole::SeoManager->value],
         reason: '   ',
     ))->toThrow(InvalidArgumentException::class);
 
     expect($subject->fresh()->hasRole(PlatformRole::SmsManager->value))->toBeTrue();
 });
 
-it('refuses to change the role of the person making the change', function () {
+it('refuses an empty role set', function () {
+    $subject = testPlatformStaff(PlatformRole::SmsManager);
+
     expect(fn () => app(AssignPlatformRole::class)->handle(
-        subject: $this->actor,
+        subject: $subject,
         actor: $this->actor,
-        role: PlatformRole::SeoManager,
-        reason: 'Trying it on myself.',
+        roleNames: [],
+        reason: 'Should be refused.',
     ))->toThrow(InvalidArgumentException::class);
 
-    expect($this->actor->fresh()->hasRole(PlatformRole::SystemAdministrator->value))->toBeTrue();
+    expect($subject->fresh()->hasRole(PlatformRole::SmsManager->value))->toBeTrue();
 });
 
 it('refuses to hand a platform role to a business account member', function () {
@@ -84,9 +101,71 @@ it('refuses to hand a platform role to a business account member', function () {
     expect(fn () => app(AssignPlatformRole::class)->handle(
         subject: $account->owner,
         actor: $this->actor,
-        role: PlatformRole::SeoManager,
+        roleNames: [PlatformRole::SeoManager->value],
         reason: 'Should be refused.',
     ))->toThrow(InvalidArgumentException::class);
+});
+
+describe('self-change', function () {
+    it('lets an actor add a role they already have full authority over, to themselves', function () {
+        app(AssignPlatformRole::class)->handle(
+            subject: $this->actor,
+            actor: $this->actor,
+            roleNames: [PlatformRole::SystemAdministrator->value, PlatformRole::ReportViewer->value],
+            reason: 'Taking on reporting too.',
+        );
+
+        expect($this->actor->fresh()->hasRole(PlatformRole::ReportViewer->value))->toBeTrue();
+    });
+
+    it('still refuses self-demotion when it would remove the last active Super Admin', function () {
+        $lastAdmin = testPlatformStaff(PlatformRole::SuperAdmin);
+
+        expect(fn () => app(AssignPlatformRole::class)->handle(
+            subject: $lastAdmin,
+            actor: $lastAdmin,
+            roleNames: [PlatformRole::SeoManager->value],
+            reason: 'Demoting myself.',
+        ))->toThrow(InvalidArgumentException::class);
+
+        expect($lastAdmin->fresh()->hasRole(PlatformRole::SuperAdmin->value))->toBeTrue();
+    });
+});
+
+describe('assigning a fixed role never needs the actor\'s own permission set', function () {
+    it('lets an actor holding only access.edit grant a specialist role it does not itself hold', function () {
+        // SystemAdministrator holds access.* but nothing under Module::Wallet
+        // at all -- assigning WalletManager to someone else is precisely
+        // what a centralized role-assignment screen is for, and must not
+        // require the assigning admin to personally hold every permission
+        // the role bundles. Only Super Admin itself is held to that
+        // standard (see the "granting Super Admin" tests below).
+        $subject = testPlatformStaff(PlatformRole::SmsManager);
+
+        app(AssignPlatformRole::class)->handle(
+            subject: $subject,
+            actor: $this->actor,
+            roleNames: [PlatformRole::WalletManager->value],
+            reason: 'Moving to the wallet team.',
+        );
+
+        expect($subject->fresh()->hasRole(PlatformRole::WalletManager->value))->toBeTrue();
+    });
+});
+
+describe('granting Super Admin', function () {
+    it('refuses an actor who does not already hold Super Admin', function () {
+        $subject = testPlatformStaff(PlatformRole::SmsManager);
+
+        expect(fn () => app(AssignPlatformRole::class)->handle(
+            subject: $subject,
+            actor: $this->actor,
+            roleNames: [PlatformRole::SuperAdmin->value],
+            reason: 'Trying to self-escalate by proxy.',
+        ))->toThrow(InvalidArgumentException::class);
+
+        expect($subject->fresh()->hasRole(PlatformRole::SuperAdmin->value))->toBeFalse();
+    });
 });
 
 describe('the last Super Admin', function () {
@@ -96,7 +175,7 @@ describe('the last Super Admin', function () {
         expect(fn () => app(AssignPlatformRole::class)->handle(
             subject: $lastAdmin,
             actor: $this->actor,
-            role: PlatformRole::SeoManager,
+            roleNames: [PlatformRole::SeoManager->value],
             reason: 'Demoting the only Super Admin.',
         ))->toThrow(InvalidArgumentException::class);
 
@@ -110,7 +189,7 @@ describe('the last Super Admin', function () {
         app(AssignPlatformRole::class)->handle(
             subject: $firstAdmin,
             actor: $this->actor,
-            role: PlatformRole::SeoManager,
+            roleNames: [PlatformRole::SeoManager->value],
             reason: 'A second Super Admin now exists.',
         );
 
@@ -124,7 +203,7 @@ describe('the last Super Admin', function () {
         expect(fn () => app(AssignPlatformRole::class)->handle(
             subject: $lastActive,
             actor: $this->actor,
-            role: PlatformRole::SeoManager,
+            roleNames: [PlatformRole::SeoManager->value],
             reason: 'The other Super Admin is locked out.',
         ))->toThrow(InvalidArgumentException::class);
     });
@@ -136,26 +215,11 @@ describe('the last Super Admin', function () {
         app(AssignPlatformRole::class)->handle(
             subject: $subject,
             actor: $rootAdmin,
-            role: PlatformRole::SuperAdmin,
+            roleNames: [PlatformRole::SuperAdmin->value],
             reason: 'Promoting a second Super Admin.',
         );
 
         expect($subject->fresh()->hasRole(PlatformRole::SuperAdmin->value))->toBeTrue();
-    });
-});
-
-describe('granting Super Admin', function () {
-    it('refuses an actor who does not already hold Super Admin', function () {
-        $subject = testPlatformStaff(PlatformRole::SmsManager);
-
-        expect(fn () => app(AssignPlatformRole::class)->handle(
-            subject: $subject,
-            actor: $this->actor,
-            role: PlatformRole::SuperAdmin,
-            reason: 'Trying to self-escalate by proxy.',
-        ))->toThrow(InvalidArgumentException::class);
-
-        expect($subject->fresh()->hasRole(PlatformRole::SuperAdmin->value))->toBeFalse();
     });
 });
 
@@ -186,8 +250,8 @@ describe('the assignRole policy', function () {
         expect($rootAdmin->can('assignRole', $otherAdmin))->toBeTrue();
     });
 
-    it('refuses an actor changing their own role, whatever they hold', function () {
-        expect($this->actor->can('assignRole', $this->actor))->toBeFalse();
+    it('lets an actor holding access.edit change their own role, unlike lock()', function () {
+        expect($this->actor->can('assignRole', $this->actor))->toBeTrue();
     });
 });
 
@@ -204,7 +268,7 @@ it('is unreachable for a business account member, whatever their own account rol
     expect(fn () => app(AssignPlatformRole::class)->handle(
         subject: $staffUser,
         actor: $this->actor,
-        role: PlatformRole::SeoManager,
+        roleNames: [PlatformRole::SeoManager->value],
         reason: 'Should be refused.',
     ))->toThrow(InvalidArgumentException::class);
 });

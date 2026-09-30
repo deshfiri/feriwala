@@ -54,6 +54,7 @@ return [
     'withdrawal_limits' => 'Withdrawal limits',
     'settings_hub' => 'Settings',
     'roles' => 'Roles & permissions',
+    'platform_staff' => 'Platform Staff',
     'sms' => 'SMS',
     'branding' => 'Branding',
     'stock' => 'Stock',

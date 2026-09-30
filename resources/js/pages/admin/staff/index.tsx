@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { UserCog } from 'lucide-react';
+import { UserCog, UserPlus } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as rolesIndex } from '@/routes/admin/roles';
 import {
+    create as staffCreate,
     index as staffIndex,
     show as staffShow,
-} from '@/routes/admin/staff-access';
+} from '@/routes/admin/staff';
 import type { StatusTone } from '@/lib/status';
 import type { Column, Paginator } from '@/types';
 
@@ -29,16 +30,17 @@ type StaffRow = {
 type Props = {
     staff: Paginator<StaffRow>;
     filters: { search: string };
+    can: { invite: boolean };
 };
 
 /**
- * Platform staff and the role each one holds (commit-order item 6).
+ * Platform staff and the role each one holds (Platform Staff management).
  *
  * Every login here has no business account at all (D23) -- a business
  * account's own staff are a different scope entirely, reached from the
  * account dossier instead.
  */
-export default function StaffAccessIndex({ staff }: Props) {
+export default function PlatformStaffIndex({ staff, can }: Props) {
     const { t } = useTranslation();
 
     const columns: Column<StaffRow>[] = [
@@ -95,7 +97,7 @@ export default function StaffAccessIndex({ staff }: Props) {
             cell: (row) => (
                 <Button variant="ghost" size="sm" asChild>
                     <Link href={staffShow(row.public_id)}>
-                        {t('access.staff.change_role')}
+                        {t('access.staff.manage')}
                     </Link>
                 </Button>
             ),
@@ -114,6 +116,16 @@ export default function StaffAccessIndex({ staff }: Props) {
                         href: rolesIndex(),
                         label: t('access.roles.title'),
                     }}
+                    actions={
+                        can.invite && (
+                            <Button asChild>
+                                <Link href={staffCreate()}>
+                                    <UserPlus aria-hidden="true" />
+                                    {t('access.staff.invite')}
+                                </Link>
+                            </Button>
+                        )
+                    }
                 />
 
                 <DataTable
@@ -156,6 +168,6 @@ export default function StaffAccessIndex({ staff }: Props) {
     );
 }
 
-StaffAccessIndex.layout = {
+PlatformStaffIndex.layout = {
     breadcrumbs: [{ title: 'access.staff.title', href: staffIndex() }],
 };
