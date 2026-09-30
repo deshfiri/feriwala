@@ -839,6 +839,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('sms', [SmsController::class, 'index'])->name('sms.index');
         Route::put('sms', [SmsController::class, 'update'])->name('sms.update');
+        // §30's per-event switch: one business event's texts on or off.
+        Route::put('sms/events', [SmsController::class, 'toggleEvent'])->name('sms.events.toggle');
 
         /*
          * The platform's logo, browser icon and accent colour, behind `system.manage_settings`.

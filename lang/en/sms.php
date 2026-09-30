@@ -39,6 +39,53 @@ return [
         'payment_received_subject' => 'We received your payment',
     ],
 
+    /*
+     * Keyed by the raw event string, which contains dots — fetch the array
+     * whole and index it (`SmsEvent::describe()`), never path into it.
+     */
+    'events' => [
+        'account.activated' => [
+            'title' => 'Account activated',
+            'description' => 'Sent when a business account is approved and can start trading.',
+        ],
+        'payment.received' => [
+            'title' => 'Payment received',
+            'description' => 'Sent when a payment is confirmed, with its amount and reference.',
+        ],
+        'wallet.balance_low' => [
+            'title' => 'Wallet balance low',
+            'description' => 'Sent when a wallet drops below its low-balance threshold.',
+        ],
+        'kyc_deadline_missed' => [
+            'title' => 'KYC deadline missed',
+            'description' => 'Sent when an account misses its verification deadline.',
+        ],
+        'mobile_verification' => [
+            'title' => 'Mobile verification code',
+            'description' => 'The one-time code a customer enters to verify their mobile number.',
+        ],
+        'supplier_mobile_verification' => [
+            'title' => 'Supplier mobile verification code',
+            'description' => 'The one-time code a supplier enters to verify their mobile number.',
+        ],
+        'cod_confirmation' => [
+            'title' => 'Cash on delivery confirmation code',
+            'description' => 'The one-time code a buyer enters to confirm a cash-on-delivery order.',
+        ],
+    ],
+
+    'event_switch' => [
+        'title' => 'Messages by event',
+        'description' => 'Turn text messages on or off for each event. Switching one off also stops its messages already waiting in the queue.',
+        'toggle' => 'Send an SMS for :event',
+        'always_on' => 'Always sent: this one-time code is how someone finishes signing up or confirming an order.',
+        'sent' => ':count sent',
+        'global_off' => 'SMS is switched off above, so nothing is sent whatever these say.',
+        'read_only' => 'You can see which events send SMS, but changing them needs the permission to manage SMS.',
+        'enabled' => 'SMS for :event switched on.',
+        'disabled' => 'SMS for :event switched off.',
+    ],
+
     'history' => [
         'title' => 'Recent messages',
         'description' => 'Delivery status, and every message that failed (§30.2).',

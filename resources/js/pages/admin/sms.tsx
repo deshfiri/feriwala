@@ -1,10 +1,12 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 import SmsController from '@/actions/App/Http/Controllers/Admin/SmsController';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
+import ToggleSwitch from '@/components/toggle-switch';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
@@ -29,10 +31,21 @@ type MessageRow = {
     at: string | null;
 };
 
+export type SmsEventRow = {
+    event: string;
+    title: string;
+    description: string;
+    /** False for one-time codes, which are always sent. */
+    switchable: boolean;
+    enabled: boolean;
+    sent: number;
+};
+
 type Props = {
     settings: { enabled: boolean; provider: string; can_send: boolean };
     providers: ProviderRow[];
     messages: MessageRow[];
+    events: SmsEventRow[];
     can: { manage: boolean };
 };
 
@@ -48,9 +61,38 @@ export default function AdminSms({
     settings,
     providers,
     messages,
+    events,
     can,
 }: Props) {
     const { t, locale } = useTranslation();
+    const [pending, setPending] = useState<string | null>(null);
+    const [failure, setFailure] = useState<{
+        event: string;
+        message: string;
+    } | null>(null);
+
+    /** An event's own name for the history list, falling back to its key. */
+    const eventTitle = (event: string) =>
+        events.find((row) => row.event === event)?.title ?? event;
+
+    const toggleEvent = (row: SmsEventRow, enabled: boolean) => {
+        setFailure(null);
+
+        router.put(
+            SmsController.toggleEvent.url(),
+            { event: row.event, enabled },
+            {
+                preserveScroll: true,
+                onStart: () => setPending(row.event),
+                onFinish: () => setPending(null),
+                onError: (errors) =>
+                    setFailure({
+                        event: row.event,
+                        message: errors.event ?? errors.enabled ?? '',
+                    }),
+            },
+        );
+    };
 
     return (
         <>
@@ -188,6 +230,69 @@ export default function AdminSms({
                 </SectionCard>
 
                 {/*
+                    §30's per-event switch. Each switch posts to the server,
+                    which reads it at delivery — so turning an event off also
+                    stops its messages already queued. One-time codes are
+                    listed but locked on: silencing one would lock people out.
+                */}
+                <SectionCard
+                    title={t('sms.event_switch.title')}
+                    description={t('sms.event_switch.description')}
+                    contentClassName="p-0"
+                >
+                    {(!settings.enabled || !can.manage) && (
+                        <p className="text-muted-foreground border-b px-5 py-3 text-sm">
+                            {!settings.enabled
+                                ? t('sms.event_switch.global_off')
+                                : t('sms.event_switch.read_only')}
+                        </p>
+                    )}
+
+                    <ul className="divide-border divide-y text-sm">
+                        {events.map((row) => (
+                            <li
+                                key={row.event}
+                                data-test={`sms-event-${row.event}`}
+                                className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3"
+                            >
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className="font-medium">
+                                            {row.title}
+                                        </p>
+                                        <span className="text-muted-foreground text-xs">
+                                            {t('sms.event_switch.sent', {
+                                                count: row.sent,
+                                            })}
+                                        </span>
+                                    </div>
+                                    <p className="text-muted-foreground text-xs">
+                                        {row.switchable
+                                            ? row.description
+                                            : t('sms.event_switch.always_on')}
+                                    </p>
+                                    {failure?.event === row.event && (
+                                        <InputError message={failure.message} />
+                                    )}
+                                </div>
+
+                                <ToggleSwitch
+                                    checked={row.enabled}
+                                    onCheckedChange={(enabled) =>
+                                        toggleEvent(row, enabled)
+                                    }
+                                    label={t('sms.event_switch.toggle', {
+                                        event: row.title,
+                                    })}
+                                    disabled={!can.manage || !row.switchable}
+                                    busy={pending === row.event}
+                                />
+                            </li>
+                        ))}
+                    </ul>
+                </SectionCard>
+
+                {/*
                     §30.2's delivery status, failed-SMS log and history in one
                     list. Recipients are masked: the row holds the number in
                     full so a message can be chased, but a screen full of phone
@@ -211,7 +316,7 @@ export default function AdminSms({
                                 >
                                     <div className="min-w-0">
                                         <p className="font-medium">
-                                            {message.event}
+                                            {eventTitle(message.event)}
                                             <span className="text-muted-foreground">
                                                 {' · '}
                                                 {message.recipient}

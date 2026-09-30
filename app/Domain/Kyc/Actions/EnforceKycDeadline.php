@@ -12,6 +12,8 @@ use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycDeadlineEvent;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Notification\Enums\SmsEvent;
+use App\Domain\Notification\SmsEventSwitch;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
 use App\Notifications\Kyc\KycDeadlineMissed;
@@ -51,6 +53,7 @@ class EnforceKycDeadline
         protected Translator $translator,
         protected DatabaseManager $database,
         protected LogManager $log,
+        protected SmsEventSwitch $smsEvents,
     ) {}
 
     /**
@@ -222,7 +225,9 @@ class EnforceKycDeadline
 
         $owner->notify(new KycDeadlineMissed($restricted));
 
-        if (blank($owner->mobile)) {
+        // Sent straight to the provider rather than through the queued channel,
+        // so the per-event switch is asked here instead of at delivery.
+        if (blank($owner->mobile) || ! $this->smsEvents->isEnabledFor(SmsEvent::KycDeadlineMissed->value)) {
             return;
         }
 
@@ -233,7 +238,7 @@ class EnforceKycDeadline
                 to: (string) $owner->mobile,
                 body: $this->translator->get('sms.templates.kyc_deadline_missed', [], $locale->value),
                 locale: $locale,
-                event: 'kyc_deadline_missed',
+                event: SmsEvent::KycDeadlineMissed->value,
                 userId: $owner->id,
             ));
         } catch (Throwable) {
