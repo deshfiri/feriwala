@@ -2,8 +2,12 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Billing\Actions\ConfigureGateway;
+use App\Domain\Billing\Enums\PaymentPurpose;
+use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Models\Payment;
 use App\Domain\Package\Models\Package;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\Models\Setting;
@@ -19,6 +23,7 @@ use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Carbon\CarbonInterface;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\Request;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -39,6 +44,30 @@ function gatewayTestCredentials(string $mode = 'sandbox'): void
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, $mode);
     $settings->define("payment.sslcommerz.{$mode}.store_id", 'payment', SettingType::String, 'store', isEncrypted: true);
     $settings->define("payment.sslcommerz.{$mode}.store_password", 'payment', SettingType::String, 'pass', isEncrypted: true);
+}
+
+/**
+ * A payment through `$gateway` in the given state.
+ */
+function gatewayTestPayment(
+    BusinessAccount $account,
+    string $gateway,
+    string $amount,
+    PaymentStatus $status,
+    Currency $currency = Currency::BDT,
+    ?CarbonInterface $completedAt = null,
+): Payment {
+    return Payment::create([
+        'business_account_id' => $account->id,
+        'purpose' => PaymentPurpose::WalletTopUp,
+        'status' => $status,
+        'amount' => Money::fromDecimal($amount, $currency),
+        'currency_code' => $currency->value,
+        'gateway' => $gateway,
+        'completed_at' => $status->isSettled() || $status === PaymentStatus::Refunded
+            ? ($completedAt ?? now())
+            : null,
+    ]);
 }
 
 beforeEach(function () {
@@ -359,6 +388,60 @@ describe('the payments switch list', function () {
         $this->actingAs($viewer)
             ->put(route('admin.gateways.toggle'), ['gateway' => 'sslcommerz', 'enabled' => false])
             ->assertForbidden();
+    });
+
+    it('shows how much each gateway has taken, counting settled payments only', function () {
+        $account = testBusinessAccount(AccountStatus::Active);
+
+        gatewayTestPayment($account, 'sslcommerz', '1000.50', PaymentStatus::Paid, completedAt: now()->subDays(3));
+        gatewayTestPayment($account, 'sslcommerz', '250.25', PaymentStatus::PartiallyRefunded, completedAt: now()->subDay());
+        gatewayTestPayment($account, 'bkash', '499.99', PaymentStatus::Paid);
+
+        // Not money received: still at the gateway, failed, or given back.
+        gatewayTestPayment($account, 'sslcommerz', '9000.00', PaymentStatus::Pending);
+        gatewayTestPayment($account, 'sslcommerz', '8000.00', PaymentStatus::Failed);
+        gatewayTestPayment($account, 'bkash', '7000.00', PaymentStatus::Refunded);
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.gateways.switches'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('gateways.0.name', 'sslcommerz')
+                ->where('gateways.0.payments', 2)
+                ->where('gateways.0.received.0.amount', '1250.75')
+                ->where('gateways.0.received.0.currency', 'BDT')
+                ->whereNot('gateways.0.last_paid_at', null)
+                ->where('gateways.4.name', 'bkash')
+                ->where('gateways.4.payments', 1)
+                ->where('gateways.4.received.0.amount', '499.99')
+                ->where('gateways.2.name', 'surjopay')
+                ->where('gateways.2.payments', 0)
+                ->where('gateways.2.received.0.amount', '0.00')
+                ->where('gateways.2.last_paid_at', null)
+                ->where('summary.payments', 3)
+                ->where('summary.received.0.amount', '1750.74')
+                ->has('summary.received', 1),
+            );
+    });
+
+    it('keeps each currency separate rather than adding them together', function () {
+        $account = testBusinessAccount(AccountStatus::Active);
+
+        gatewayTestPayment($account, 'stripe', '100.00', PaymentStatus::Paid, Currency::USD);
+        gatewayTestPayment($account, 'stripe', '2000.00', PaymentStatus::Paid);
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.gateways.switches'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('gateways.6.name', 'stripe')
+                ->where('gateways.6.payments', 2)
+                ->has('gateways.6.received', 2)
+                ->where('gateways.6.received.0.currency', 'BDT')
+                ->where('gateways.6.received.0.amount', '2000.00')
+                ->where('gateways.6.received.1.currency', 'USD')
+                ->where('gateways.6.received.1.amount', '100.00')
+                ->has('summary.received', 2),
+            );
     });
 
     it('is closed to people who may not see payment settings', function () {

@@ -1,16 +1,25 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { KeyRound, ScrollText } from 'lucide-react';
+import {
+    Banknote,
+    CreditCard,
+    KeyRound,
+    ReceiptText,
+    ScrollText,
+} from 'lucide-react';
 import { useState } from 'react';
 import PaymentGatewayController from '@/actions/App/Http/Controllers/Admin/PaymentGatewayController';
 import InputError from '@/components/input-error';
+import MoneyAmount from '@/components/money-amount';
 import Notice from '@/components/notice';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
+import StatCard, { StatCardGrid } from '@/components/stat-card';
 import StatusPill from '@/components/status-pill';
 import ToggleSwitch from '@/components/toggle-switch';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
+import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import { index as gatewaysIndex, switches } from '@/routes/admin/gateways';
 import { index as paymentsIndex } from '@/routes/admin/payments';
@@ -26,12 +35,48 @@ export type GatewaySwitchRow = {
     is_available: boolean;
     is_sandbox: boolean | null;
     missing_configuration: string[];
+    /** Settled payments through this gateway, one figure per currency. */
+    received: Money[];
+    payments: number;
+    /** Server-formatted, or null when it has never taken a payment. */
+    last_paid_at: string | null;
+};
+
+export type PaymentSwitchSummary = {
+    received: Money[];
+    payments: number;
+    taking_payments: number;
 };
 
 type Props = {
     gateways: GatewaySwitchRow[];
+    summary: PaymentSwitchSummary;
     can: { manage: boolean };
 };
+
+/**
+ * One or more amounts, one per currency — never added together across
+ * currencies, which is why this is a list and not a single figure.
+ */
+function ReceivedAmounts({
+    amounts,
+    size = 'default',
+}: {
+    amounts: Money[];
+    size?: 'default' | 'large';
+}) {
+    return (
+        <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            {amounts.map((amount) => (
+                <MoneyAmount
+                    key={amount.currency}
+                    amount={amount}
+                    size={size}
+                />
+            ))}
+        </span>
+    );
+}
 
 /**
  * Every payment gateway on one list, each with its own on/off switch.
@@ -43,7 +88,7 @@ type Props = {
  * shown disabled with the reason beside it, rather than offered and then
  * refused. A gateway already on can always be switched off.
  */
-export default function PaymentSwitches({ gateways, can }: Props) {
+export default function PaymentSwitches({ gateways, summary, can }: Props) {
     const { t } = useTranslation();
     const [pending, setPending] = useState<string | null>(null);
     const [failure, setFailure] = useState<{
@@ -167,6 +212,46 @@ export default function PaymentSwitches({ gateways, can }: Props) {
                     </Notice>
                 )}
 
+                {/*
+                 * Figures are the server's: settled payments only, summed
+                 * exactly per currency. Nothing here adds or converts money.
+                 */}
+                <StatCardGrid className="lg:grid-cols-3">
+                    <StatCard
+                        label={t('gateways.switches.summary.received')}
+                        value={
+                            <ReceivedAmounts
+                                amounts={summary.received}
+                                size="large"
+                            />
+                        }
+                        hint={t('gateways.switches.summary.received_hint')}
+                        icon={Banknote}
+                        tone="success"
+                    />
+                    <StatCard
+                        label={t('gateways.switches.summary.payments')}
+                        value={
+                            <span className="tabular">{summary.payments}</span>
+                        }
+                        icon={ReceiptText}
+                        tone="info"
+                    />
+                    <StatCard
+                        label={t('gateways.switches.summary.taking_payments')}
+                        value={
+                            <span className="tabular">
+                                {t('gateways.switches.summary.of_total', {
+                                    count: summary.taking_payments,
+                                    total: gateways.length,
+                                })}
+                            </span>
+                        }
+                        icon={CreditCard}
+                        tone="brand"
+                    />
+                </StatCardGrid>
+
                 <SectionCard
                     title={t('gateways.switches.list_title')}
                     description={t('gateways.switches.list_description')}
@@ -196,6 +281,25 @@ export default function PaymentSwitches({ gateways, can }: Props) {
                                     {failure?.gateway === gateway.name && (
                                         <InputError message={failure.message} />
                                     )}
+                                </div>
+
+                                <div
+                                    className="min-w-36 text-left sm:text-right"
+                                    data-test={`gateway-received-${gateway.name}`}
+                                >
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('gateways.switches.row.received')}
+                                    </p>
+                                    <ReceivedAmounts
+                                        amounts={gateway.received}
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('gateways.switches.row.payments', {
+                                            count: gateway.payments,
+                                        })}
+                                        {gateway.last_paid_at &&
+                                            ` · ${t('gateways.switches.row.last_paid', { date: gateway.last_paid_at })}`}
+                                    </p>
                                 </div>
 
                                 <ToggleSwitch

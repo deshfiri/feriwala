@@ -96,6 +96,18 @@ return [
         'credentials' => 'Gateway credentials',
         'toggle' => 'Offer :gateway at checkout',
         'read_only' => 'You can see which gateways are on, but switching them needs the permission to manage gateways.',
+        'summary' => [
+            'received' => 'Received through gateways',
+            'received_hint' => 'Settled payments only — paid, or paid and partly refunded.',
+            'payments' => 'Settled payments',
+            'taking_payments' => 'Gateways taking payments',
+            'of_total' => ':count of :total',
+        ],
+        'row' => [
+            'received' => 'Received',
+            'payments' => ':count settled payments',
+            'last_paid' => 'last :date',
+        ],
         'reason' => [
             'not_implemented' => 'Not built yet — it cannot take a payment.',
             'not_configured' => 'Needs credentials: :fields.',
