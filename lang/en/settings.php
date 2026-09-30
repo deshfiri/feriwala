@@ -20,7 +20,7 @@ return [
         'items' => [
             'billing_rules' => 'Fee rules, coupons and tax on every invoice.',
             'payment_gateways' => 'Which gateways are enabled and where the money lands.',
-            'payments' => 'The payment log and unmatched or late confirmations.',
+            'payments' => 'Switch each payment gateway on or off, and open the payment log.',
             'deposit_rules' => 'What accounts are required to deposit and keep.',
             'withdrawal_limits' => 'Minimum and maximum withdrawal amounts, and per-account overrides.',
             'website_pricing' => 'What partners may charge for what they sell.',

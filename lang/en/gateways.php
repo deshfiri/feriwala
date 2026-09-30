@@ -86,4 +86,22 @@ return [
 
     'sandbox_notice' => 'This gateway is in sandbox mode. No real money moves.',
     'empty_help' => 'A gateway is offered at checkout only when it is switched on in configuration and has credentials.',
+
+    'switches' => [
+        'title' => 'Payments',
+        'description' => 'Every payment gateway on one list. Switch a gateway on to offer it at checkout, or off to stop offering it.',
+        'list_title' => 'Payment gateways',
+        'list_description' => 'A gateway can only be switched on once its credentials are stored and it can confirm payments with its provider.',
+        'payment_log' => 'Payment log',
+        'credentials' => 'Gateway credentials',
+        'toggle' => 'Offer :gateway at checkout',
+        'read_only' => 'You can see which gateways are on, but switching them needs the permission to manage gateways.',
+        'reason' => [
+            'not_implemented' => 'Not built yet — it cannot take a payment.',
+            'not_configured' => 'Needs credentials: :fields.',
+            'not_configured_plain' => 'Needs credentials before it can be switched on.',
+            'live' => 'Live mode — real money.',
+            'sandbox' => 'Sandbox mode — no real money moves.',
+        ],
+    ],
 ];

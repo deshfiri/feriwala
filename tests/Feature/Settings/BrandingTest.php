@@ -2,6 +2,8 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Audit\Models\AuditLog;
+use App\Domain\Settings\AccentColor;
 use App\Domain\Settings\Actions\ManageBranding;
 use App\Domain\Settings\Branding;
 use App\Domain\Settings\Enums\BrandingAsset;
@@ -113,6 +115,7 @@ describe('the shipped defaults', function () {
             'logo_url' => '/logo.png',
             'favicon_url' => '/favicon.svg',
             'favicon_type' => 'image/svg+xml',
+            'accent' => null,
         ]);
     });
 });
@@ -278,13 +281,109 @@ describe('what is accepted', function () {
     });
 });
 
+describe('the accent colour', function () {
+    it('uses the stylesheet accent and writes nothing into the page until one is chosen', function () {
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.accent', null)
+            ->where('accent.color', AccentColor::DEFAULT_HEX)
+            ->where('accent.is_custom', false),
+        );
+
+        expect((string) $response->getContent())->not->toContain('--brand-base');
+    });
+
+    it('saves a chosen colour, shares it with every page and paints it before first load', function () {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.accent.update'), ['accent_color' => '#1D4ED8'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        expect(app(SettingsRepository::class)->get(Branding::ACCENT_SETTING))->toBe('#1d4ed8');
+
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.accent.color', '#1d4ed8')
+            ->where('branding.accent.on', AccentColor::LIGHT_TEXT),
+        );
+
+        expect((string) $response->getContent())->toContain('--brand-base: #1d4ed8;');
+    });
+
+    it('lays dark text on a pale accent and flags it as hard to read', function () {
+        $pale = AccentColor::fromHex('#fde047');
+
+        expect($pale->onColor())->toBe(AccentColor::DARK_TEXT)
+            ->and($pale->isReadableAsText())->toBeFalse()
+            ->and(AccentColor::default()->onColor())->toBe(AccentColor::LIGHT_TEXT)
+            ->and(AccentColor::default()->isReadableAsText())->toBeTrue();
+    });
+
+    it('refuses anything that is not a six-digit hex, so nothing else reaches the style attribute', function (string $value) {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.accent.update'), ['accent_color' => $value])
+            ->assertSessionHasErrors('accent_color');
+
+        expect(app(SettingsRepository::class)->get(Branding::ACCENT_SETTING))->toBeNull();
+    })->with([
+        'three digits' => '#fff',
+        'no hash' => 'e11d48',
+        'a name' => 'red',
+        'a declaration' => '#e11d48; background: url(x)',
+        'a closing tag' => '"><script>alert(1)</script>',
+    ]);
+
+    it('ignores a malformed stored value rather than writing it into the page', function () {
+        app(SettingsRepository::class)->define(Branding::ACCENT_SETTING, 'branding', SettingType::String);
+        app(SettingsRepository::class)->set(Branding::ACCENT_SETTING, 'red;}</style><script>');
+
+        $response = $this->get(route('login'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page->where('branding.accent', null));
+        expect((string) $response->getContent())->not->toContain('--brand-base');
+    });
+
+    it('restores the default accent and records both changes in the audit log', function () {
+        $this->actingAs($this->admin)->put(route('admin.branding.accent.update'), ['accent_color' => '#059669']);
+
+        $this->actingAs($this->admin)
+            ->delete(route('admin.branding.accent.destroy'))
+            ->assertRedirect();
+
+        expect(app(SettingsRepository::class)->get(Branding::ACCENT_SETTING))->toBeNull()
+            ->and(app(Branding::class)->toArray()['accent'])->toBeNull();
+
+        $changed = AuditLog::query()->where('action', 'system.branding_accent_changed')->firstOrFail();
+        $restored = AuditLog::query()->where('action', 'system.branding_accent_restored')->firstOrFail();
+
+        expect($changed->actor_id)->toBe($this->admin->id)
+            ->and($restored->actor_id)->toBe($this->admin->id);
+    });
+
+    it('refuses the accent to anyone who may not manage the branding', function (Closure $identity) {
+        $user = $identity();
+
+        $this->actingAs($user)->put(route('admin.branding.accent.update'), ['accent_color' => '#059669'])->assertForbidden();
+        $this->actingAs($user)->delete(route('admin.branding.accent.destroy'))->assertForbidden();
+
+        expect(app(SettingsRepository::class)->get(Branding::ACCENT_SETTING))->toBeNull()
+            ->and(fn () => app(ManageBranding::class)->setAccent($user, AccentColor::fromHex('#059669')))
+            ->toThrow(AuthorizationException::class);
+    })->with([
+        'sms manager' => fn () => testPlatformStaff(PlatformRole::SmsManager),
+        'business owner' => fn () => testBusinessAccount(AccountStatus::Active)->owner,
+    ]);
+});
+
 describe('the shared contract', function () {
     it('gives the browser addresses only, never a storage path', function () {
         $this->actingAs($this->admin)->post(route('admin.branding.update', 'logo'), ['file' => brandingImage()]);
 
         $props = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->viewData('page')['props'];
 
-        expect(array_keys($props['branding']))->toBe(['logo_url', 'favicon_url', 'favicon_type'])
+        expect(array_keys($props['branding']))->toBe(['logo_url', 'favicon_url', 'favicon_type', 'accent'])
             ->and(Branding::isManagedPath($props['branding']['logo_url']))->toBeFalse()
             ->and($props['branding']['logo_url'])->toStartWith(rtrim(Storage::disk(Branding::DISK)->url(''), '/'))
             ->and(collect($props['assets'])->pluck('url')->filter(fn (string $url) => Branding::isManagedPath($url)))->toBeEmpty();

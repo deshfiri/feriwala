@@ -2,7 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Banknote, Boxes, ClipboardList, PackageCheck } from 'lucide-react';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
-import PageHeader from '@/components/page-header';
+import GreetingBanner from '@/components/dashboard/greeting-banner';
 import SectionCard from '@/components/section-card';
 import StatCard, { StatCardGrid } from '@/components/stat-card';
 import StatusPill from '@/components/status-pill';
@@ -66,54 +66,45 @@ export default function SupplierDashboard({
             <Head title={t('supplier.dashboard.title')} />
 
             <PageContainer>
-                <PageHeader title={t('supplier.dashboard.title')} />
+                <GreetingBanner
+                    heading={t('supplier.dashboard.title')}
+                    wave={false}
+                    message={t(`supplier.dashboard.steps.${status}`)}
+                >
+                    <StatusPill
+                        tone={TONES[status] ?? 'neutral'}
+                        label={statusLabel}
+                    />
 
-                <SectionCard title={t('supplier.dashboard.status')}>
-                    <div className="space-y-4">
-                        <StatusPill
-                            tone={TONES[status] ?? 'neutral'}
-                            label={statusLabel}
-                        />
-
-                        <div>
-                            <h3 className="text-sm font-semibold">
-                                {t('supplier.dashboard.next_step')}
-                            </h3>
-                            <p className="text-muted-foreground mt-1 text-sm">
-                                {t(`supplier.dashboard.steps.${status}`)}
-                            </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                            {status === 'verification_pending' && (
-                                <Button asChild>
-                                    <Link href={mobile()}>
-                                        {t('supplier.verification.title')}
-                                    </Link>
-                                </Button>
-                            )}
-                            {[
-                                'kyc_pending',
-                                'correction_required',
-                                'under_review',
-                                'rejected',
-                            ].includes(status) && (
-                                <Button asChild>
-                                    <Link href={kyc()}>
-                                        {t('supplier.dashboard.open_kyc')}
-                                    </Link>
-                                </Button>
-                            )}
-                            {isOperational && (
-                                <Button asChild>
-                                    <Link href={listings()}>
-                                        {t('supplier.dashboard.open_listings')}
-                                    </Link>
-                                </Button>
-                            )}
-                        </div>
+                    <div className="flex flex-wrap gap-2">
+                        {status === 'verification_pending' && (
+                            <Button asChild>
+                                <Link href={mobile()}>
+                                    {t('supplier.verification.title')}
+                                </Link>
+                            </Button>
+                        )}
+                        {[
+                            'kyc_pending',
+                            'correction_required',
+                            'under_review',
+                            'rejected',
+                        ].includes(status) && (
+                            <Button asChild>
+                                <Link href={kyc()}>
+                                    {t('supplier.dashboard.open_kyc')}
+                                </Link>
+                            </Button>
+                        )}
+                        {isOperational && (
+                            <Button asChild>
+                                <Link href={listings()}>
+                                    {t('supplier.dashboard.open_listings')}
+                                </Link>
+                            </Button>
+                        )}
                     </div>
-                </SectionCard>
+                </GreetingBanner>
 
                 {snapshot && (
                     <>

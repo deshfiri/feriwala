@@ -8,18 +8,20 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Feriwala design tokens (decision D6).
+ * Banij design tokens (supersedes the D6 palette).
  *
- * Direction: neutral warm grey and off-white, near-black text and primary
- * actions, one restrained brand accent in Feriwala orange. Compact and
- * data-dense on desktop, comfortable on mobile. §33.1 explicitly rules out
- * gradients, glow, glassmorphism, and decorative clutter — everything here
- * earns its place.
+ * Direction: a cool grey canvas with white, hairline-bordered cards and
+ * slate text, after Able Pro, and one crimson accent after Isomorphic. That
+ * accent carries primary actions, the current navigation row and focus, and
+ * an administrator can swap it for any colour under Admin → Branding.
+ * Headings are set in Lexend Deca and body copy in Inter. Compact and
+ * data-dense on desktop, comfortable on mobile. §33.1 still rules out
+ * gradients, glow and decorative clutter.
  *
- * Canvas is off-white and cards are pure white, so a dense table lifts off the
- * page without needing a heavy border or a shadow to do it. Dark mode keeps the
- * same three steps — canvas, card, popover — each a little lighter than the
- * last, because a shadow cannot separate surfaces on a near-black ground.
+ * Cards separate from the canvas by colour and a hairline, never by a shadow,
+ * so a dense table lifts off the page without looking heavy. Dark mode keeps
+ * the same three steps — canvas, card, popover — each a little lighter than
+ * the last, because a shadow cannot separate surfaces on a near-black ground.
  *
  * Components read these tokens and nothing else. A colour that appears in a
  * component and not here is a colour dark mode will forget.
@@ -27,14 +29,17 @@
 
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Page titles, card titles and big figures. Body copy stays in Inter. */
+    --font-heading:
+        'Lexend Deca', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
     /* Bangla needs a face that actually has the glyphs; falls back gracefully. */
     --font-bangla:
-        'Noto Sans Bengali', 'Hind Siliguri', 'Instrument Sans', ui-sans-serif,
-        system-ui, sans-serif;
+        'Noto Sans Bengali', 'Hind Siliguri', 'Inter', ui-sans-serif, system-ui,
+        sans-serif;
 
     --font-mono:
         ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
@@ -60,15 +65,16 @@
     --radius-2xl: calc(var(--radius) + 0.5rem);
 
     /*
-     * Elevation. The ink comes from a per-theme token, so the same `shadow-sm`
-     * is a faint warm lift on the light canvas and a deeper one in dark mode,
-     * where a light-mode shadow would simply vanish.
+     * Elevation, for things that float: menus, dialogs, the rail on hover.
+     * The ink comes from a per-theme token, so the same `shadow-md` is a faint
+     * cool lift on the light canvas and a deeper one in dark mode, where a
+     * light-mode shadow would simply vanish.
      */
     --shadow-xs: 0 1px 2px 0 var(--elevation-soft);
     --shadow-sm:
         0 1px 3px 0 var(--elevation-soft), 0 1px 2px -1px var(--elevation-soft);
     --shadow-md:
-        0 4px 12px -2px var(--elevation-strong),
+        0 8px 24px -6px var(--elevation-strong),
         0 2px 4px -2px var(--elevation-soft);
     --shadow-lg:
         0 16px 40px -12px var(--elevation-strong),
@@ -115,7 +121,7 @@
     --color-surface-hover: var(--surface-hover);
     --color-overlay: var(--overlay);
 
-    /* Feriwala brand accent */
+    /* Brand accent */
     --color-brand: var(--brand);
     --color-brand-foreground: var(--brand-foreground);
     --color-brand-subtle: var(--brand-subtle);
@@ -164,60 +170,50 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
-
-    /*
-     * Restrained shadow scale (§33.1 — no glow, no glassmorphism). These override
-     * Tailwind's defaults so `shadow-xs`/`shadow-sm`/`shadow-md` stay this quiet
-     * everywhere, instead of every card/menu re-deciding its own elevation.
-     */
-    --shadow-xs: 0 1px 2px oklch(0.2 0 0 / 0.04);
-    --shadow-sm:
-        0 1px 3px oklch(0.2 0 0 / 0.06), 0 1px 2px oklch(0.2 0 0 / 0.04);
-    --shadow-md:
-        0 4px 8px oklch(0.2 0 0 / 0.06), 0 2px 4px oklch(0.2 0 0 / 0.04);
-    --shadow-lg:
-        0 8px 16px oklch(0.2 0 0 / 0.08), 0 2px 6px oklch(0.2 0 0 / 0.04);
 }
 
 :root {
     /*
-     * PLACEHOLDER BRAND VALUE — awaiting the official Feriwala orange.
-     * No brand asset exists in the repository yet, so this is a considered
-     * stand-in, not the real thing. Replacing it means changing these four lines
-     * and nothing else.
+     * The accent. Everything brand-coloured derives from `--brand-base`, so
+     * an administrator's choice under Admin → Branding is one value, written
+     * onto <html> by `app.blade.php` before first paint and kept in step by
+     * `BrandingHead` after a save. The label colours laid over it
+     * (`--brand-on` on the accent itself, `--brand-lifted-on` on the lighter
+     * dark-mode accent) are chosen server-side for contrast by
+     * `App\Domain\Settings\AccentColor`, whose default mirrors this one.
      */
-    --brand: oklch(0.615 0.145 45);
-    --brand-foreground: oklch(1 0 0);
-    --brand-subtle: oklch(0.966 0.02 58);
-    --brand-border: oklch(0.87 0.06 55);
+    --brand-base: #e11d48;
+    --brand-on: #ffffff;
+    --brand-lifted-on: #1d2630;
 
-    /*
-     * Neutrals carry a faint warm bias toward the accent. A pure grey beside
-     * orange reads as two unrelated decisions; this reads as one palette, while
-     * still presenting as the neutral grey D6 asks for.
-     */
-    --background: oklch(0.976 0.002 75);
-    --foreground: oklch(0.2 0.005 55);
+    --brand: var(--brand-base);
+    --brand-foreground: var(--brand-on);
+    --brand-subtle: color-mix(in srgb, var(--brand-base) 7%, white);
+    --brand-border: color-mix(in srgb, var(--brand-base) 30%, white);
+
+    /* Cool slate neutrals, after Able Pro. */
+    --background: oklch(0.984 0.002 247);
+    --foreground: oklch(0.26 0.022 250);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.2 0.005 55);
+    --card-foreground: oklch(0.26 0.022 250);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.2 0.005 55);
+    --popover-foreground: oklch(0.26 0.022 250);
 
     /* Floats a fraction above --card so a menu reads as raised over the panel beneath it. */
     --elevated: oklch(1 0 0);
-    --elevated-foreground: oklch(0.203 0.004 55);
+    --elevated-foreground: oklch(0.26 0.022 250);
 
-    /* Near-black carries primary actions; orange is the accent, not the workhorse. */
-    --primary: oklch(0.2 0.005 55);
-    --primary-foreground: oklch(0.985 0.002 75);
+    /* Primary actions carry the accent. */
+    --primary: var(--brand-base);
+    --primary-foreground: var(--brand-on);
 
-    --secondary: oklch(0.955 0.003 80);
-    --secondary-foreground: oklch(0.2 0.005 55);
-    --muted: oklch(0.955 0.003 80);
+    --secondary: oklch(0.969 0.004 248);
+    --secondary-foreground: oklch(0.26 0.022 250);
+    --muted: oklch(0.969 0.004 248);
     /* Dark enough to hold 4.5:1 on the canvas as well as on a card (§33.9). */
-    --muted-foreground: oklch(0.52 0.009 65);
-    --accent: oklch(0.955 0.003 80);
-    --accent-foreground: oklch(0.2 0.005 55);
+    --muted-foreground: oklch(0.5 0.03 248);
+    --accent: oklch(0.969 0.004 248);
+    --accent-foreground: oklch(0.26 0.022 250);
 
     --destructive: oklch(0.54 0.19 27);
     /*
@@ -228,24 +224,24 @@
     --destructive-foreground: oklch(0.5 0.19 27);
 
     /* Dividers stay quiet; inputs sit one step firmer so a field reads as a field. */
-    --border: oklch(0.917 0.004 80);
-    --input: oklch(0.887 0.005 80);
+    --border: oklch(0.936 0.005 248);
+    --input: oklch(0.88 0.012 245);
     --ring: var(--brand);
 
-    --surface-subtle: oklch(0.982 0.002 75);
-    --surface-hover: oklch(0.97 0.003 75);
-    --overlay: oklch(0.2 0.01 55 / 0.45);
+    --surface-subtle: oklch(0.978 0.003 248);
+    --surface-hover: oklch(0.966 0.004 248);
+    --overlay: oklch(0.2 0.02 250 / 0.45);
 
-    --elevation-soft: oklch(0.25 0.01 60 / 0.05);
-    --elevation-strong: oklch(0.25 0.01 60 / 0.12);
+    --elevation-soft: oklch(0.25 0.02 250 / 0.05);
+    --elevation-strong: oklch(0.25 0.02 250 / 0.1);
 
     /*
      * Status hues are dark enough to be read as text on their own subtle
      * ground. They are used that way far more often than as fills.
      */
-    --success: oklch(0.52 0.13 155);
+    --success: oklch(0.52 0.11 165);
     --success-foreground: oklch(0.99 0 0);
-    --success-subtle: oklch(0.955 0.035 155);
+    --success-subtle: oklch(0.96 0.03 165);
 
     --warning: oklch(0.56 0.13 62);
     --warning-foreground: oklch(0.99 0 0);
@@ -255,24 +251,23 @@
     --danger-foreground: oklch(0.99 0 0);
     --danger-subtle: oklch(0.955 0.028 27);
 
-    --info: oklch(0.52 0.14 250);
+    --info: oklch(0.52 0.16 262);
     --info-foreground: oklch(0.99 0 0);
-    --info-subtle: oklch(0.955 0.028 245);
+    --info-subtle: oklch(0.955 0.025 262);
 
-    --neutral-status: oklch(0.5 0.01 70);
+    --neutral-status: oklch(0.5 0.02 248);
     --neutral-status-foreground: oklch(0.99 0 0);
-    --neutral-status-subtle: oklch(0.955 0.003 80);
+    --neutral-status-subtle: oklch(0.955 0.005 248);
 
-    --credit: oklch(0.5 0.13 155);
+    --credit: oklch(0.52 0.11 165);
     --debit: oklch(0.52 0.19 27);
 
     --chart-1: var(--brand);
-    --chart-2: oklch(0.55 0.14 245);
-    --chart-3: oklch(0.55 0.14 155);
-    --chart-4: oklch(0.62 0.16 300);
-    --chart-5: oklch(0.62 0.13 200);
+    --chart-2: oklch(0.62 0.19 262);
+    --chart-3: oklch(0.65 0.13 165);
+    --chart-4: oklch(0.47 0.22 278);
+    --chart-5: oklch(0.72 0.12 205);
 
-    /* Slightly tighter than the starter kit — an ERP reads better less rounded. */
     --radius: 0.5rem;
 
     /*
@@ -281,97 +276,106 @@
      */
     --control-height: 2.25rem;
     --table-row-height: 2.75rem;
-    --header-height: 3.5rem;
+    --header-height: 4rem;
 
-    /* The rail is a card-white column against the off-white canvas. */
+    /* The rail is a white column against the grey canvas. */
     --sidebar: oklch(1 0 0);
-    --sidebar-foreground: oklch(0.38 0.008 60);
+    --sidebar-foreground: oklch(0.38 0.025 250);
     --sidebar-primary: var(--brand);
-    --sidebar-primary-foreground: oklch(1 0 0);
-    --sidebar-accent: oklch(0.962 0.003 75);
-    --sidebar-accent-foreground: oklch(0.2 0.005 55);
-    --sidebar-border: oklch(0.917 0.004 80);
+    --sidebar-primary-foreground: var(--brand-foreground);
+    --sidebar-accent: oklch(0.969 0.004 248);
+    --sidebar-accent-foreground: oklch(0.26 0.022 250);
+    --sidebar-border: oklch(0.88 0.012 245);
     --sidebar-ring: var(--brand);
 }
 
 .dark {
-    /* Brand lifts in dark so it keeps contrast against a near-black ground. */
-    --brand: oklch(0.72 0.135 52);
-    --brand-foreground: oklch(0.18 0.01 40);
-    --brand-subtle: oklch(0.27 0.035 48);
-    --brand-border: oklch(0.42 0.06 50);
+    /*
+     * Brand lifts in dark so it keeps contrast against a near-black ground.
+     * The 25% of white is mirrored by `AccentColor::DARK_LIFT_PERCENT`, which
+     * picks `--brand-lifted-on` for exactly this colour.
+     */
+    --brand: color-mix(in srgb, var(--brand-base) 75%, white);
+    --brand-foreground: var(--brand-lifted-on);
+    --brand-subtle: color-mix(in srgb, var(--brand-base) 20%, var(--card));
+    --brand-border: color-mix(in srgb, var(--brand-base) 45%, var(--card));
 
-    --background: oklch(0.16 0.003 60);
-    --foreground: oklch(0.96 0.003 75);
-    --card: oklch(0.2 0.004 60);
-    --card-foreground: oklch(0.96 0.003 75);
-    --popover: oklch(0.225 0.004 60);
-    --popover-foreground: oklch(0.96 0.003 75);
+    /* Able Pro's dark slate. */
+    --background: oklch(0.2 0.016 250);
+    --foreground: oklch(0.9 0.004 250);
+    --card: oklch(0.26 0.022 250);
+    --card-foreground: oklch(0.9 0.004 250);
+    --popover: oklch(0.285 0.022 250);
+    --popover-foreground: oklch(0.9 0.004 250);
 
     /* Dark mode elevation reads as lighter, not darker — a raised surface catches more light. */
-    --elevated: oklch(0.265 0.004 60);
-    --elevated-foreground: oklch(0.955 0.003 75);
+    --elevated: oklch(0.31 0.022 250);
+    --elevated-foreground: oklch(0.92 0.004 250);
 
-    --primary: oklch(0.955 0.003 75);
-    --primary-foreground: oklch(0.203 0.004 55);
+    /*
+     * The accent itself rather than the lifted --brand, so the label colour
+     * chosen for it (`--brand-on`) still holds its contrast on a button.
+     */
+    --primary: var(--brand-base);
+    --primary-foreground: var(--brand-on);
 
-    --secondary: oklch(0.265 0.004 60);
-    --secondary-foreground: oklch(0.96 0.003 75);
-    --muted: oklch(0.265 0.004 60);
-    --muted-foreground: oklch(0.69 0.008 70);
-    --accent: oklch(0.265 0.004 60);
-    --accent-foreground: oklch(0.96 0.003 75);
+    --secondary: oklch(0.31 0.02 250);
+    --secondary-foreground: oklch(0.9 0.004 250);
+    --muted: oklch(0.31 0.02 250);
+    --muted-foreground: oklch(0.72 0.02 250);
+    --accent: oklch(0.31 0.02 250);
+    --accent-foreground: oklch(0.92 0.004 250);
 
     --destructive: oklch(0.6 0.17 27);
     --destructive-foreground: oklch(0.76 0.14 27);
 
-    --border: oklch(0.285 0.005 60);
-    --input: oklch(0.34 0.005 60);
+    --border: oklch(0.32 0.018 250);
+    --input: oklch(0.4 0.02 250);
     --ring: var(--brand);
 
-    --surface-subtle: oklch(0.225 0.004 60);
-    --surface-hover: oklch(0.24 0.004 60);
+    --surface-subtle: oklch(0.235 0.019 250);
+    --surface-hover: oklch(0.29 0.021 250);
     --overlay: oklch(0 0 0 / 0.6);
 
     --elevation-soft: oklch(0 0 0 / 0.28);
     --elevation-strong: oklch(0 0 0 / 0.5);
 
-    --success: oklch(0.74 0.14 155);
+    --success: oklch(0.74 0.13 165);
     --success-foreground: oklch(0.16 0 0);
-    --success-subtle: oklch(0.27 0.05 155);
+    --success-subtle: oklch(0.3 0.05 165);
 
     --warning: oklch(0.8 0.14 78);
     --warning-foreground: oklch(0.18 0.03 78);
-    --warning-subtle: oklch(0.29 0.06 78);
+    --warning-subtle: oklch(0.31 0.06 78);
 
     --danger: oklch(0.72 0.17 27);
     --danger-foreground: oklch(0.16 0 0);
-    --danger-subtle: oklch(0.28 0.07 27);
+    --danger-subtle: oklch(0.31 0.07 27);
 
-    --info: oklch(0.74 0.12 245);
+    --info: oklch(0.74 0.13 262);
     --info-foreground: oklch(0.16 0 0);
-    --info-subtle: oklch(0.27 0.05 245);
+    --info-subtle: oklch(0.3 0.06 262);
 
-    --neutral-status: oklch(0.72 0.006 70);
+    --neutral-status: oklch(0.74 0.015 250);
     --neutral-status-foreground: oklch(0.16 0 0);
-    --neutral-status-subtle: oklch(0.265 0.004 60);
+    --neutral-status-subtle: oklch(0.31 0.02 250);
 
-    --credit: oklch(0.74 0.14 155);
+    --credit: oklch(0.74 0.13 165);
     --debit: oklch(0.72 0.17 27);
 
     --chart-1: var(--brand);
-    --chart-2: oklch(0.68 0.14 245);
-    --chart-3: oklch(0.68 0.15 155);
-    --chart-4: oklch(0.7 0.16 300);
-    --chart-5: oklch(0.7 0.13 200);
+    --chart-2: oklch(0.68 0.16 262);
+    --chart-3: oklch(0.7 0.13 165);
+    --chart-4: oklch(0.66 0.17 285);
+    --chart-5: oklch(0.74 0.11 205);
 
-    --sidebar: oklch(0.18 0.003 60);
-    --sidebar-foreground: oklch(0.76 0.006 70);
+    --sidebar: oklch(0.26 0.022 250);
+    --sidebar-foreground: oklch(0.78 0.015 250);
     --sidebar-primary: var(--brand);
-    --sidebar-primary-foreground: oklch(0.16 0 0);
-    --sidebar-accent: oklch(0.245 0.004 60);
-    --sidebar-accent-foreground: oklch(0.97 0.003 75);
-    --sidebar-border: oklch(0.265 0.005 60);
+    --sidebar-primary-foreground: var(--brand-foreground);
+    --sidebar-accent: oklch(0.31 0.02 250);
+    --sidebar-accent-foreground: oklch(0.95 0.004 250);
+    --sidebar-border: oklch(0.4 0.02 250);
     --sidebar-ring: var(--brand);
 }
 
@@ -394,6 +398,13 @@
 
     body {
         @apply bg-background text-foreground;
+    }
+
+    /* Titles take the display face; everything else stays in Inter. */
+    h1,
+    h2,
+    h3 {
+        font-family: var(--font-heading);
     }
 
     ::selection {
@@ -435,11 +446,11 @@
  * utility, and Tailwind's cascade layers put `utilities` after `base`
  * regardless of selector specificity, so a `:lang(bn)` rule written inside
  * `@layer base` above can never win against it: `body` would keep resolving
- * to Instrument Sans (no Bengali glyphs) for every Bangla page, even with
+ * to Inter (no Bengali glyphs) for every Bangla page, even with
  * the correct `lang` attribute and a fully loaded Noto Sans Bengali font
  * file. An unlayered rule sits in an implicit final layer that outranks
  * every `@layer` block, layered or not, so this wins regardless of where
- * Tailwind's own utilities land.
+ * Tailwind's own utilities land. It also outranks the heading face above.
  */
 :lang(bn) {
     font-family: var(--font-bangla);
@@ -454,12 +465,13 @@
 /*
  * Skin for the vendored primitives.
  *
- * `components/ui` is vendored shadcn and is not hand-edited, but three of its
- * defaults do not belong to this palette: an 80% black overlay, a dialog on the
- * page canvas rather than a raised surface, and an 8px dialog corner beside
- * 12px cards. They are corrected here, by the `data-slot` each primitive
- * already stamps, and deliberately outside any layer so they hold against the
- * primitive's own utilities.
+ * `components/ui` is vendored shadcn and is not hand-edited, but some of its
+ * defaults do not belong to this palette: an 80% black overlay, a dialog on
+ * the page canvas rather than a raised surface, an 8px dialog corner beside
+ * 12px cards, and a drop shadow under every card where this design separates
+ * surfaces with a hairline. They are corrected here, by the `data-slot` each
+ * primitive already stamps, and deliberately outside any layer so they hold
+ * against the primitive's own utilities.
  */
 [data-slot='dialog-overlay'],
 [data-slot='sheet-overlay'] {
@@ -470,6 +482,56 @@
     border-radius: var(--radius-xl);
     background-color: var(--popover);
     box-shadow: var(--shadow-lg);
+}
+
+[data-slot='card'] {
+    box-shadow: none;
+}
+
+[data-slot='card-title'] {
+    font-family: var(--font-heading);
+}
+
+/*
+ * The rail's edge is dashed, after Able Pro: it reads as a seam in the frame
+ * rather than a wall between the navigation and the page.
+ */
+[data-slot='sidebar'][data-side='left'][data-variant='sidebar']
+    > div:last-child {
+    border-right-style: dashed;
+    border-right-color: var(--sidebar-border);
+}
+
+/*
+ * A box that paints its own accent: set `--brand-base`, `--brand-on` and
+ * `--brand-lifted-on` on it and everything inside follows. Custom properties
+ * resolve where they are declared, so the derived tokens — and the Tailwind
+ * colours that read them — are declared again here rather than inherited
+ * from :root already resolved. The Branding page's live preview uses it.
+ */
+.accent-scope {
+    --brand: var(--brand-base);
+    --brand-foreground: var(--brand-on);
+    --brand-subtle: color-mix(in srgb, var(--brand-base) 7%, white);
+    --brand-border: color-mix(in srgb, var(--brand-base) 30%, white);
+    --primary: var(--brand-base);
+    --primary-foreground: var(--brand-on);
+    --ring: var(--brand);
+
+    --color-brand: var(--brand);
+    --color-brand-foreground: var(--brand-foreground);
+    --color-brand-subtle: var(--brand-subtle);
+    --color-brand-border: var(--brand-border);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-ring: var(--ring);
+}
+
+.dark .accent-scope {
+    --brand: color-mix(in srgb, var(--brand-base) 75%, white);
+    --brand-foreground: var(--brand-lifted-on);
+    --brand-subtle: color-mix(in srgb, var(--brand-base) 20%, var(--card));
+    --brand-border: color-mix(in srgb, var(--brand-base) 45%, var(--card));
 }
 
 /*

@@ -102,7 +102,7 @@ export default function SupplierVerificationNotice({
 
                     {status === 'verification-link-sent' && (
                         <p
-                            className="mt-4 text-sm font-medium text-green-600"
+                            className="text-success mt-4 text-sm font-medium"
                             role="status"
                         >
                             {t('supplier.verification.link_sent')}

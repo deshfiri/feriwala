@@ -84,7 +84,7 @@ class SettingsController extends Controller
                         'key' => 'payments',
                         'title' => __('nav.payments'),
                         'description' => __('settings.hub.items.payments'),
-                        'route' => 'admin.payments.index',
+                        'route' => 'admin.gateways.switches',
                         'permission' => PermissionCatalogue::name(PermissionModule::Payment, PermissionAction::View),
                     ],
                     [

@@ -194,7 +194,7 @@ export default function DataTable<T>({
                                 heading never lets rows read through it. */}
                             <tr className="border-border bg-surface-subtle border-b">
                                 {selection && (
-                                    <th scope="col" className="h-10 w-10 px-4">
+                                    <th scope="col" className="h-11 w-10 px-4">
                                         <Checkbox
                                             checked={allOnPageSelected}
                                             onCheckedChange={toggleAllOnPage}
@@ -213,7 +213,7 @@ export default function DataTable<T>({
                                             scope="col"
                                             style={{ width: column.width }}
                                             className={cn(
-                                                'text-muted-foreground text-2xs h-10 px-4 font-semibold tracking-wider whitespace-nowrap uppercase',
+                                                'text-muted-foreground text-2xs h-11 px-4 font-semibold tracking-wider whitespace-nowrap uppercase',
                                                 column.align === 'end'
                                                     ? 'text-right'
                                                     : 'text-left',
@@ -321,7 +321,7 @@ export default function DataTable<T>({
     };
 
     return (
-        <div className="bg-card overflow-hidden rounded-xl border shadow-sm">
+        <div className="bg-card overflow-hidden rounded-xl border">
             <div className="flex min-h-14 flex-wrap items-center gap-2 border-b px-4 py-3">
                 {selectedCount > 0 && bulkActions ? (
                     <>

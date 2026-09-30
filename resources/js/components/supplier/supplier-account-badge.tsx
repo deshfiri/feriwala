@@ -26,14 +26,14 @@ export function SupplierAccountBadge({
     return (
         <SidebarMenuButton
             size="lg"
-            className="cursor-default hover:bg-transparent active:bg-transparent"
+            className="bg-surface-subtle hover:bg-surface-subtle active:bg-surface-subtle h-12 cursor-default gap-2.5 rounded-lg border px-2 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent"
         >
-            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+            <div className="bg-brand-subtle text-brand flex aspect-square size-8 shrink-0 items-center justify-center rounded-md">
                 <Truck className="size-4" />
             </div>
             {state === 'expanded' ? (
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">
+                    <span className="text-foreground truncate font-semibold">
                         {account.business_name}
                     </span>
                     <span className="text-muted-foreground truncate text-xs">

@@ -4,6 +4,7 @@ namespace App\Domain\Settings\Actions;
 
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Settings\AccentColor;
 use App\Domain\Settings\Branding;
 use App\Domain\Settings\Enums\BrandingAsset;
 use App\Domain\Settings\Enums\SettingType;
@@ -17,7 +18,8 @@ use Symfony\Component\Mime\MimeTypes;
 use Throwable;
 
 /**
- * Replace the logo or browser icon, or put the shipped default back.
+ * Replace the logo or browser icon, or put the shipped default back — and
+ * choose the accent colour, or put the shipped accent back.
  *
  * Settings hold a managed storage path and nothing else — never the image's
  * bytes, never a data URI. The file and the setting are kept in step: the new
@@ -91,6 +93,36 @@ class ManageBranding
 
         $this->removeFile($previous);
         $this->record($actor, $asset, $previous, null);
+    }
+
+    /**
+     * Choose the accent colour, or pass null to go back to the shipped one.
+     *
+     * @throws AuthorizationException
+     */
+    public function setAccent(User $actor, ?AccentColor $accent): void
+    {
+        $this->authorize($actor);
+
+        $previous = $this->branding->customAccent()?->hex();
+        $next = $accent === null || $accent->isDefault() ? null : $accent->hex();
+
+        $this->settings->define(
+            Branding::ACCENT_SETTING,
+            'branding',
+            SettingType::String,
+            label: 'Accent colour',
+            description: 'A six-digit hex colour. Empty means the shipped accent.',
+        );
+        $this->settings->set(Branding::ACCENT_SETTING, $next, $actor->id);
+
+        $this->audit->handle(new AuditEntry(
+            action: $next === null ? 'system.branding_accent_restored' : 'system.branding_accent_changed',
+            actorId: $actor->id,
+            before: ['accent_color' => $previous],
+            after: ['accent_color' => $next],
+            module: 'system',
+        ));
     }
 
     /**

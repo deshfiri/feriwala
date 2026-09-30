@@ -1,6 +1,9 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { RotateCcw, Upload } from 'lucide-react';
 import BrandingController from '@/actions/App/Http/Controllers/Admin/BrandingController';
+import AccentColorPicker, {
+    type AccentState,
+} from '@/components/accent-color-picker';
 import FormField from '@/components/forms/form-field';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -21,16 +24,17 @@ type AssetState = {
 
 type Props = {
     assets: AssetState[];
+    accent: AccentState;
 };
 
 /**
- * The platform's logo and browser icon.
+ * The platform's accent colour, logo and browser icon.
  *
  * Each image is its own form, because each is its own decision, and each shows
  * exactly what every screen is showing right now — the uploaded file or the
  * shipped default — on both a light and a dark ground, since both themes use it.
  */
-export default function AdminBranding({ assets }: Props) {
+export default function AdminBranding({ assets, accent }: Props) {
     const { t } = useTranslation();
 
     const restore = (asset: AssetState) => {
@@ -52,6 +56,8 @@ export default function AdminBranding({ assets }: Props) {
                     title={t('branding.title')}
                     description={t('branding.description')}
                 />
+
+                <AccentColorPicker accent={accent} />
 
                 {assets.map((asset) => (
                     <SectionCard

@@ -3,6 +3,8 @@
 return [
     'nav' => [
         'skip' => 'মূল অংশে যান',
+        'collapse_sidebar' => 'সাইডবার ছোট করুন',
+        'expand_sidebar' => 'সাইডবার বড় করুন',
     ],
 
     'actions' => [

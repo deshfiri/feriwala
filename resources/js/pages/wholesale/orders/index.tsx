@@ -50,7 +50,7 @@ export default function WholesaleOrders({ orders }: Props) {
                     />
                 ) : (
                     <div className="space-y-4">
-                        <ul className="bg-card divide-border divide-y rounded-xl border text-sm shadow-sm">
+                        <ul className="bg-card divide-border divide-y rounded-xl border text-sm">
                             {orders.data.map((order) => (
                                 <li
                                     key={order.id}
