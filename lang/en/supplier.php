@@ -63,6 +63,60 @@ return [
         'reset_title' => 'Choose a new password',
         'reset_submit' => 'Reset password',
         'client_notice' => 'Looking for the Client or Partner sign in?',
+
+        'login_heading' => 'Welcome back',
+        'login_intro' => 'Sign in to manage your listings, stock and orders.',
+        'email_placeholder' => 'email@example.com',
+        'password_placeholder' => 'Enter your password',
+        'signing_in' => 'Signing in...',
+        'client_prompt' => 'Looking for the Client or Partner sign in?',
+
+        'register_eyebrow' => 'Supplier Registration',
+        'register_heading' => 'Become a supplier',
+        'register_intro' => 'Set up your supplier account in a few simple steps.',
+        'continue' => 'Continue',
+        'back' => 'Back',
+
+        'steps' => [
+            'business' => ['title' => 'Business', 'description' => 'Business details'],
+            'contact' => ['title' => 'Contact', 'description' => 'Contact & documents'],
+            'security' => ['title' => 'Security', 'description' => 'Secure your account'],
+        ],
+
+        'sections' => [
+            'business' => ['title' => 'Business information', 'description' => 'Tell us about your business.'],
+            'contact' => ['title' => 'Contact & documents', 'description' => 'Add your contact and business registration details.'],
+            'security' => ['title' => 'Account security', 'description' => 'Create a secure password for your supplier account.'],
+        ],
+
+        'placeholders' => [
+            'business_name' => 'Your business name',
+            'contact_person_name' => 'Contact person',
+            'business_address' => 'Enter your complete business address',
+            'trade_licence_number' => 'Trade licence number',
+            'tax_identification_number' => 'Tax identification number',
+            'password' => 'Create password',
+            'password_confirmation' => 'Confirm password',
+        ],
+
+        'showcase' => [
+            'eyebrow' => 'Supplier Network',
+            'heading' => 'Bring your products',
+            'heading_muted' => 'closer to opportunity.',
+            'description' => 'Join a connected supplier ecosystem designed to simplify product management, inventory and order operations.',
+            'workspace' => 'Supplier Workspace',
+            'overview' => 'Business overview',
+            'products' => 'Products',
+            'inventory' => 'Inventory',
+            'orders' => 'Orders',
+            'growth' => 'Growth',
+            'active_products' => 'Active products',
+            'in_stock' => 'In Stock',
+            'availability' => 'Availability',
+            'supplier' => 'Supplier',
+            'account_ready' => 'Account ready',
+            'trust' => 'Built for reliable supplier partnerships.',
+        ],
     ],
 
     'verification' => [

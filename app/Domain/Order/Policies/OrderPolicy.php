@@ -103,6 +103,23 @@ class OrderPolicy
     }
 
     /**
+     * Advance or cancel a Supplier's fulfilment commitment on an on_demand
+     * or pre_order allocation (Supplier Bulk Product Listing batch,
+     * correction 11).
+     *
+     * Deliberately the same boundary as {@see allocateSource()} for a
+     * Supplier Offer, never `supplier_listing.approve` — a fulfilment
+     * commitment exists because staff already allocated the line, and
+     * listing-review permissions govern listing review only, whichever
+     * screen a batch was drafted through.
+     */
+    public function manageFulfilmentCommitment(User $user, Order $order): bool
+    {
+        return $this->transition($user, $order)
+            && $user->can(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View));
+    }
+
+    /**
      * Confirm that a Supplier offer or warehouse stock item, catalogued under
      * a different product, fulfils this order line's own product (D25,
      * Order Allocation correction batch).

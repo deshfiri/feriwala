@@ -47,6 +47,11 @@ type Candidate = {
     is_preferred: boolean;
     supplier_status: string | null;
     offer_status: string | null;
+    supply_mode: 'ready_stock' | 'on_demand' | 'pre_order';
+    supply_mode_label: string;
+    buyer_facing_availability_label: string | null;
+    fulfilment_capacity: number | null;
+    requires_confirmation: boolean;
     is_related: boolean;
     source_product_name: string | null;
     source_product_sku: string | null;
@@ -397,10 +402,25 @@ function CandidateCard({
                     <p className="text-muted-foreground text-xs">
                         {t(`status.allocation_source.${candidate.source_type}`)}
                         {' · '}
-                        {t('orders.admin.allocation.columns.available')}
-                        {': '}
-                        {candidate.available_to_promise}
+                        {candidate.buyer_facing_availability_label ? (
+                            candidate.buyer_facing_availability_label
+                        ) : (
+                            <>
+                                {t('orders.admin.allocation.columns.available')}
+                                {': '}
+                                {candidate.available_to_promise}
+                            </>
+                        )}
                     </p>
+                    {candidate.requires_confirmation && (
+                        <p className="text-muted-foreground text-xs">
+                            {candidate.supply_mode_label}
+                            {candidate.lead_time_days !== null &&
+                                ` · ${t('orders.admin.allocation.lead_time', { days: candidate.lead_time_days })}`}
+                            {candidate.fulfilment_capacity !== null &&
+                                ` · ${t('orders.admin.allocation.capacity', { capacity: candidate.fulfilment_capacity })}`}
+                        </p>
+                    )}
                     {candidate.source_product_name && (
                         <p className="text-muted-foreground truncate text-xs">
                             {candidate.source_product_name}
@@ -425,6 +445,14 @@ function CandidateCard({
                                 : 'orders.admin.allocation.not_related',
                         )}
                     />
+                    {candidate.requires_confirmation && (
+                        <StatusPill
+                            tone="warning"
+                            label={t(
+                                'orders.admin.allocation.requires_confirmation',
+                            )}
+                        />
+                    )}
                 </div>
             </div>
 
@@ -751,10 +779,17 @@ function ConfirmAllocationDialog({
     onSuccess: () => void;
 }) {
     const { t } = useTranslation();
+    const [acknowledged, setAcknowledged] = useState(false);
+
+    useEffect(() => {
+        setAcknowledged(false);
+    }, [candidate]);
 
     if (candidate === null) {
         return null;
     }
+
+    const needsAcknowledgement = candidate.requires_confirmation;
 
     return (
         <Dialog open onOpenChange={onOpenChange}>
@@ -793,6 +828,30 @@ function ConfirmAllocationDialog({
                                 value={candidate.source_id}
                             />
 
+                            {needsAcknowledgement && (
+                                <label className="bg-warning-subtle border-warning/30 flex items-start gap-2 rounded-lg border p-3 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-0.5"
+                                        checked={acknowledged}
+                                        onChange={(event) =>
+                                            setAcknowledged(
+                                                event.target.checked,
+                                            )
+                                        }
+                                    />
+                                    <span>
+                                        {t(
+                                            'orders.admin.allocation.confirmation_notice',
+                                            {
+                                                supply_mode:
+                                                    candidate.supply_mode_label,
+                                            },
+                                        )}
+                                    </span>
+                                </label>
+                            )}
+
                             <div className="grid gap-2">
                                 <Label htmlFor="allocation-reason">
                                     {t('orders.admin.allocation.reason')}
@@ -822,7 +881,13 @@ function ConfirmAllocationDialog({
                                 >
                                     {t('common.actions.cancel')}
                                 </Button>
-                                <Button type="submit" disabled={processing}>
+                                <Button
+                                    type="submit"
+                                    disabled={
+                                        processing ||
+                                        (needsAcknowledgement && !acknowledged)
+                                    }
+                                >
                                     {processing && <Spinner />}
                                     {t('orders.admin.allocation.confirm')}
                                 </Button>

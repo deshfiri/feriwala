@@ -13,11 +13,24 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 router.on('success', (event) => syncDocumentLocale(event.detail.page.props));
 
+/**
+ * Screens that draw their own full-screen, two-panel shell. Every other page
+ * under `auth/` and `supplier/auth/` still gets its shared auth layout — they
+ * had all lost it, which left register, password reset, email verification and
+ * the two-factor challenge rendering with no frame, title or logo at all.
+ */
+const fullScreenPages = new Set([
+    'welcome',
+    'auth/login',
+    'supplier/auth/login',
+    'supplier/auth/register',
+]);
+
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     layout: (name) => {
         switch (true) {
-            case name === 'welcome':
+            case fullScreenPages.has(name):
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;

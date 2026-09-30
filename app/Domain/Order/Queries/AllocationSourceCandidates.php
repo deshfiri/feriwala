@@ -10,6 +10,9 @@ use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\ProductSourceLink;
+use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
+use App\Domain\Supplier\Enums\SupplyMode;
+use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -144,23 +147,20 @@ class AllocationSourceCandidates
             return null;
         }
 
-        $stock = $offer->stock;
-        $atp = (int) ($stock->quantity ?? 0);
         $rate = $offer->supplier_rate;
+        $availability = $this->availabilityFor($offer, $quantity);
 
-        $reason = match (true) {
-            $offer->currency_code !== $currency->value => 'This offer is priced in '.$offer->currency_code.'.',
-            $atp < $quantity => 'This Supplier has '.$atp.' of the '.$quantity.' needed.',
-            default => null,
-        };
+        $reason = $offer->currency_code !== $currency->value
+            ? 'This offer is priced in '.$offer->currency_code.'.'
+            : $availability['reason'];
 
         return new AllocationCandidate(
             sourceType: AllocationSourceType::SupplierOffer,
             sourceId: $offer->public_id,
             sourceLabel: $offer->supplier->business_name,
-            available: $atp,
-            reserved: (int) ($stock->reserved_quantity ?? 0),
-            availableToPromise: $atp,
+            available: $availability['available'],
+            reserved: $availability['reserved'],
+            availableToPromise: $availability['available_to_promise'],
             unitCost: $rate,
             platformRate: $platformRate,
             expectedMargin: $offer->currency_code === $currency->value
@@ -172,9 +172,13 @@ class AllocationSourceCandidates
             isCurrentlyAllocated: $active !== null && $active->supplier_offer_id === $offer->id,
             supplierId: $offer->supplier->public_id,
             supplierName: $offer->supplier->business_name,
+            leadTimeDays: $offer->lead_time_days,
             isPreferred: (bool) $offer->is_preferred,
             supplierStatus: $offer->supplier->status->value,
             offerStatus: $offer->status->value,
+            supplyMode: $offer->supply_mode,
+            fulfilmentCapacity: $offer->fulfilment_capacity,
+            requiresConfirmation: $offer->supply_mode->requiresStaffConfirmationAtAllocation(),
             isRelated: true,
             sourceProductId: $offer->product_id,
             sourceProductVariantId: $offer->product_variant_id,
@@ -269,25 +273,23 @@ class AllocationSourceCandidates
         $candidates = $offers->map(function (SupplierOffer $offer) use (
             $quantity, $platformRate, $currency, $active
         ) {
-            $stock = $offer->stock;
-            $atp = (int) ($stock->quantity ?? 0);
             $rate = $offer->supplier_rate;
+            $availability = $this->availabilityFor($offer, $quantity);
 
             $reason = match (true) {
                 ! $offer->supplier->isOperational() => 'This Supplier is not currently operational.',
                 $offer->status->value !== 'active' => 'This offer is suspended.',
                 $offer->currency_code !== $currency->value => 'This offer is priced in '.$offer->currency_code.'.',
-                $atp < $quantity => 'This Supplier has '.$atp.' of the '.$quantity.' needed.',
-                default => null,
+                default => $availability['reason'],
             };
 
             return new AllocationCandidate(
                 sourceType: AllocationSourceType::SupplierOffer,
                 sourceId: $offer->public_id,
                 sourceLabel: $offer->supplier->business_name,
-                available: $atp,
-                reserved: (int) ($stock->reserved_quantity ?? 0),
-                availableToPromise: $atp,
+                available: $availability['available'],
+                reserved: $availability['reserved'],
+                availableToPromise: $availability['available_to_promise'],
                 unitCost: $rate,
                 platformRate: $platformRate,
                 // Guarded: a mismatched currency would throw inside Money, and
@@ -301,13 +303,63 @@ class AllocationSourceCandidates
                 isCurrentlyAllocated: $active !== null && $active->supplier_offer_id === $offer->id,
                 supplierId: $offer->supplier->public_id,
                 supplierName: $offer->supplier->business_name,
-                leadTimeDays: $offer->originatingListingItem?->lead_time_days,
+                leadTimeDays: $offer->lead_time_days ?? $offer->originatingListingItem?->lead_time_days,
                 isPreferred: (bool) $offer->is_preferred,
                 supplierStatus: $offer->supplier->status->value,
                 offerStatus: $offer->status->value,
+                supplyMode: $offer->supply_mode,
+                fulfilmentCapacity: $offer->fulfilment_capacity,
+                requiresConfirmation: $offer->supply_mode->requiresStaffConfirmationAtAllocation(),
             );
         })->values()->all();
 
         return array_values($candidates);
+    }
+
+    /**
+     * What an offer can actually promise for this line -- the real stock
+     * figures for `ready_stock`, or an honest zero plus the reason a
+     * non-ready-stock offer is still eligible or not, since there is no
+     * physical stock to report for it (Supplier Bulk Product Listing batch,
+     * correction 8). Never a fabricated stock number either way.
+     *
+     * @return array{available: int, reserved: int, available_to_promise: int, reason: ?string}
+     */
+    protected function availabilityFor(SupplierOffer $offer, int $quantity): array
+    {
+        if ($offer->supply_mode === SupplyMode::ReadyStock) {
+            $stock = $offer->stock;
+            $atp = (int) ($stock->quantity ?? 0);
+
+            return [
+                'available' => $atp,
+                'reserved' => (int) ($stock->reserved_quantity ?? 0),
+                'available_to_promise' => $atp,
+                'reason' => $atp < $quantity ? 'This Supplier has '.$atp.' of the '.$quantity.' needed.' : null,
+            ];
+        }
+
+        $reason = null;
+
+        if ($offer->fulfilment_capacity !== null) {
+            $committed = (int) SupplierFulfilmentCommitment::query()
+                ->where('supplier_offer_id', $offer->id)
+                ->whereIn('status', array_map(
+                    fn (FulfilmentCommitmentStatus $status) => $status->value,
+                    SupplierFulfilmentCommitment::nonTerminalStatuses(),
+                ))
+                ->sum('quantity');
+
+            if ($committed + $quantity > $offer->fulfilment_capacity) {
+                $reason = 'This offer can commit to '.$offer->fulfilment_capacity.' units at once; '.$committed.' are already committed.';
+            }
+        }
+
+        return [
+            'available' => 0,
+            'reserved' => 0,
+            'available_to_promise' => 0,
+            'reason' => $reason,
+        ];
     }
 }

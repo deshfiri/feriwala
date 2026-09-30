@@ -1162,6 +1162,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.lines.sources.confirm-link');
         Route::post('orders/{order}/lines/{item}/allocation', [OrderController::class, 'allocate'])
             ->name('orders.lines.allocation.store');
+        Route::post('orders/{order}/lines/{item}/fulfilment-commitments/{commitment}/advance', [OrderController::class, 'advanceFulfilmentCommitment'])
+            ->name('orders.lines.fulfilment-commitments.advance');
 
         /*
          * The returns desk (§18.2, §19.1, §26.3, P6-12). Each step asks for its
