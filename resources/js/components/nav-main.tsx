@@ -22,7 +22,6 @@ import {
 } from '@/hooks/use-current-url';
 import { cn } from '@/lib/utils';
 import type { NavBadge, NavBadgeTone, NavGroup, NavItem } from '@/types';
-
 /**
  * Badge tones. The label always renders as text beside the colour, so a badge
  * still reads in greyscale and for a colour-blind user (§33.9).

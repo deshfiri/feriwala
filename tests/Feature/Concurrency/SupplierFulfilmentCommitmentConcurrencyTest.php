@@ -150,19 +150,13 @@ it('admits only as many concurrent commitments as the offer\'s capacity allows',
         /** @var User $staff */
         $staff = User::query()->findOrFail($staffId);
 
-        try {
-            app(AllocateOrderLineSource::class)->handle(
-                $line,
-                AllocationSourceType::SupplierOffer,
-                $offerId,
-                $staff,
-                'Race worker '.$worker.' against a capacity of 2.',
-            );
-        } catch (\Throwable $e) {
-            file_put_contents('/tmp/race-debug.log', "worker {$worker}: ".get_class($e).' '.$e->getMessage()."\n", FILE_APPEND);
-
-            throw $e;
-        }
+        app(AllocateOrderLineSource::class)->handle(
+            $line,
+            AllocationSourceType::SupplierOffer,
+            $offerId,
+            $staff,
+            'Race worker '.$worker.' against a capacity of 2.',
+        );
     });
 
     // The offer declared capacity for 2 -- exactly 2 of the 3 racing lines
