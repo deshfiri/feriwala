@@ -51,6 +51,7 @@ import {
 import { index as accountDirectory } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as roles } from '@/routes/admin/roles';
+import { index as platformStaffIndex } from '@/routes/admin/staff';
 import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
@@ -327,7 +328,7 @@ export function useNavigation(): {
                     : []),
                 /*
                  * The twenty-one PlatformRole cases, and the staff directory
-                 * that assigns them (commit-order item 6). Its own
+                 * that assigns them (Platform Staff management). Their own
                  * permission: browsing who holds what is not the same
                  * question as any other module's own settings.
                  */
@@ -337,6 +338,11 @@ export function useNavigation(): {
                               title: t('nav.roles'),
                               href: roles(),
                               icon: UserCog,
+                          },
+                          {
+                              title: t('nav.platform_staff'),
+                              href: platformStaffIndex(),
+                              icon: Users,
                           },
                       ]
                     : []),

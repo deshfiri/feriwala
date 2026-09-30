@@ -41,8 +41,14 @@ class RolesAndPermissionsSeeder extends Seeder
         $missing = array_diff(PermissionCatalogue::all(), $existing);
 
         foreach ($missing as $name) {
-            Permission::create(['name' => $name, 'guard_name' => 'web']);
+            Permission::create(['name' => $name, 'guard_name' => 'web', 'is_system' => true]);
         }
+
+        // Backfill: a permission created before `is_system` existed is still
+        // one of the catalogue's own, so it is still protected -- this marks
+        // every catalogue permission `is_system` on every run, not only a
+        // freshly created one.
+        Permission::query()->whereIn('name', PermissionCatalogue::all())->update(['is_system' => true]);
 
         $this->command->info(sprintf(
             'Permissions: %d in catalogue, %d created, %d already present.',
@@ -60,8 +66,10 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // Platform roles are not bound to an account (D2). With Spatie's
             // teams feature enabled this must be explicit, or the role would be
-            // scoped to whichever account happened to be active.
-            $role->forceFill(['account_id' => null])->save();
+            // scoped to whichever account happened to be active. Marked
+            // is_system on every run for the same backfill reason as
+            // permissions above.
+            $role->forceFill(['account_id' => null, 'is_system' => true])->save();
 
             // syncPermissions rather than givePermissionTo, so a grant removed
             // from the catalogue is actually revoked on the next seed.

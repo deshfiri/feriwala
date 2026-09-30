@@ -466,16 +466,17 @@ describe('roles and permissions navigation', () => {
         titles = [];
     });
 
-    it('gives staff holding access.view the roles door', () => {
+    it('gives staff holding access.view the roles and platform-staff doors', () => {
         renderFor({
             permissions: { 'access.view': true },
             account: null,
         });
 
         expect(titles).toContain('nav.roles');
+        expect(titles).toContain('nav.platform_staff');
     });
 
-    it('offers it neither to staff without access.view nor to a partner', () => {
+    it('offers neither door to staff without access.view nor to a partner', () => {
         renderFor({
             permissions: {},
             account: {
@@ -487,6 +488,7 @@ describe('roles and permissions navigation', () => {
         });
 
         expect(titles).not.toContain('nav.roles');
+        expect(titles).not.toContain('nav.platform_staff');
     });
 });
 
