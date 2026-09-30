@@ -122,12 +122,15 @@ class SupplierProductListingLot extends Model
         }
 
         // An item stays Draft only while this lot itself is still Draft
-        // (new items may only be added to a Draft lot) -- it contributes
-        // nothing to a review-derived status.
-        $reviewable = $statuses->reject(fn (ListingStatus $status) => $status === ListingStatus::Draft);
+        // (new items may only be added to a Draft lot), and an Archived one
+        // was withdrawn by the Supplier before ever being decided --
+        // neither contributes to a review-derived status.
+        $reviewable = $statuses->reject(fn (ListingStatus $status) => in_array(
+            $status, [ListingStatus::Draft, ListingStatus::Archived], true,
+        ));
 
         if ($reviewable->isEmpty()) {
-            return LotStatus::Draft;
+            return $this->status === LotStatus::Draft ? LotStatus::Draft : LotStatus::Closed;
         }
 
         $pending = $reviewable->filter(fn (ListingStatus $s) => $s === ListingStatus::UnderReview)->count();

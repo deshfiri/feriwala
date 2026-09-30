@@ -122,6 +122,11 @@ return [
             'description' => 'আমরা এটি পর্যালোচনা করে ফলাফল জানাব।',
         ],
 
+        'supplier.listing_lot_submitted' => [
+            'title' => 'আপনার পণ্য তালিকাভুক্তির ব্যাচ জমা হয়েছে',
+            'description' => 'আমরা ব্যাচের প্রতিটি পণ্য পর্যালোচনা করে ফলাফল জানাব।',
+        ],
+
         'supplier.listing_correction_requested' => [
             'title' => 'আপনার পণ্য তালিকায় সংশোধন প্রয়োজন',
             'description' => 'মতামত দেখে তালিকা আবার জমা দিন।',

@@ -16,6 +16,8 @@ use App\Http\Controllers\Supplier\Auth\VerifySupplierEmailController;
 use App\Http\Controllers\Supplier\DashboardController;
 use App\Http\Controllers\Supplier\KycController;
 use App\Http\Controllers\Supplier\ListingController;
+use App\Http\Controllers\Supplier\ListingLotController;
+use App\Http\Controllers\Supplier\ListingLotItemController;
 use App\Http\Controllers\Supplier\ListingMediaController;
 use App\Http\Controllers\Supplier\ListingMediaDownloadController;
 use App\Http\Controllers\Supplier\OfferController;
@@ -121,6 +123,24 @@ Route::prefix('supplier')
                 Route::post('listings/{listing}/media/reorder', [ListingMediaController::class, 'reorder'])->name('listings.media.reorder');
                 Route::delete('listings/{listing}/media/{media}', [ListingMediaController::class, 'destroy'])->name('listings.media.destroy');
                 Route::get('listings/media/{media}/download', [ListingMediaDownloadController::class, 'show'])->name('listings.media.download');
+
+                /*
+                 * Listing lots -- a draft-then-submit-once batch of several
+                 * product entries (Supplier Bulk Product Listing batch).
+                 * Images stay on the routes above: a lot's product entry is
+                 * an ordinary listing row, so `listings/{listing}/media/...`
+                 * already covers it without a parallel route tree.
+                 */
+                Route::get('listing-lots', [ListingLotController::class, 'index'])->name('listing-lots.index');
+                Route::get('listing-lots/create', [ListingLotController::class, 'create'])->name('listing-lots.create');
+                Route::post('listing-lots', [ListingLotController::class, 'store'])->name('listing-lots.store');
+                Route::get('listing-lots/{lot}', [ListingLotController::class, 'show'])->name('listing-lots.show');
+                Route::post('listing-lots/{lot}/submission', [ListingLotController::class, 'submit'])->name('listing-lots.submission.store');
+                Route::post('listing-lots/{lot}/archive', [ListingLotController::class, 'archive'])->name('listing-lots.archive');
+
+                Route::post('listing-lots/{lot}/items', [ListingLotItemController::class, 'store'])->name('listing-lots.items.store');
+                Route::patch('listing-lots/{lot}/items/{item}', [ListingLotItemController::class, 'update'])->name('listing-lots.items.update');
+                Route::post('listing-lots/{lot}/items/{item}/archive', [ListingLotItemController::class, 'destroy'])->name('listing-lots.items.archive');
 
                 // Approved Products and their offers (D25, P13-13).
                 Route::get('offers', [OfferController::class, 'index'])->name('offers.index');
