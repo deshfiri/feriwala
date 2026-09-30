@@ -6,6 +6,7 @@ use App\Domain\Settings\AccentColor;
 use App\Domain\Settings\Actions\ManageBranding;
 use App\Domain\Supplier\Models\Supplier;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
@@ -13,7 +14,7 @@ use Inertia\Testing\AssertableInertia as Assert;
  * site — the public home page, both sign-in pages, and the ERP, Admin and
  * Supplier panels — painted on <html> before first load and shared with the
  * client for later visits. One setting, every shell: a page that forgot it
- * would open in the old colour.
+ * would open in the default colour.
  */
 
 beforeEach(function () {
@@ -25,32 +26,43 @@ beforeEach(function () {
     );
 });
 
-it('paints the chosen accent on every kind of page', function (Closure $visit) {
-    $response = $visit($this)->assertOk();
+/**
+ * The page's opening `<html>` tag, where the site-wide accent is painted.
+ */
+function accentSiteWideRootTag(TestResponse $response): string
+{
+    preg_match('/<html\b[^>]*>/', (string) $response->getContent(), $matches);
 
-    $response->assertInertia(fn (Assert $page) => $page
+    return $matches[0] ?? '';
+}
+
+it('paints the chosen accent on every kind of page', function (TestResponse $response) {
+    $accent = AccentColor::fromHex('#059669');
+
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->where('branding.accent.color', '#059669')
-        ->where('branding.accent.on', AccentColor::fromHex('#059669')->onColor())
-        ->where('branding.accent.lifted_on', AccentColor::fromHex('#059669')->onLiftedColor()),
+        ->where('branding.accent.on', $accent->onColor())
+        ->where('branding.accent.lifted_on', $accent->onLiftedColor()),
     );
 
-    expect((string) $response->getContent())
+    expect(accentSiteWideRootTag($response))
         ->toContain('--brand-base: #059669;')
-        ->toContain('--brand-on: '.AccentColor::fromHex('#059669')->onColor().';');
+        ->toContain('--brand-on: '.$accent->onColor().';')
+        ->toContain('--brand-lifted-on: '.$accent->onLiftedColor().';');
 })->with([
-    'the public home page' => fn (TestCase $test) => $test->get(route('home')),
-    'the sign-in page' => fn (TestCase $test) => $test->get(route('login')),
-    'the supplier sign-in page' => fn (TestCase $test) => $test->get(route('supplier.login')),
-    'the ERP panel' => fn (TestCase $test) => $test
+    'the public home page' => fn () => $this->get(route('home')),
+    'the sign-in page' => fn () => $this->get(route('login')),
+    'the supplier sign-in page' => fn () => $this->get(route('supplier.login')),
+    'the ERP panel' => fn () => $this
         ->actingAs(testBusinessAccount(AccountStatus::Active)->owner)
         ->get(route('dashboard')),
-    'the Admin panel' => fn (TestCase $test) => $test
+    'the Admin panel' => fn () => $this
         ->actingAs(testPlatformStaff(PlatformRole::SuperAdmin))
         ->get(route('admin.dashboard')),
-    'the Supplier panel' => function (TestCase $test) {
+    'the Supplier panel' => function () {
         supplierTestSignIn(Supplier::factory()->create());
 
-        return $test->get(route('supplier.dashboard'));
+        return $this->get(route('supplier.dashboard'));
     },
 ]);
 
@@ -61,6 +73,6 @@ it('stops painting it everywhere once the default is restored', function () {
         $response = $this->get($url)->assertOk();
 
         $response->assertInertia(fn (Assert $page) => $page->where('branding.accent', null));
-        expect((string) $response->getContent())->not->toContain('--brand-base');
+        expect(accentSiteWideRootTag($response))->not->toContain('--brand-base');
     }
 });

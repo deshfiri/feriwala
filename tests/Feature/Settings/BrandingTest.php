@@ -65,6 +65,18 @@ function brandingStoredPath(BrandingAsset $asset): mixed
     return app(SettingsRepository::class)->get($asset->setting());
 }
 
+/**
+ * The page's opening `<html>` tag — where the site-wide accent is painted.
+ * Read on its own, because the Branding page's own preview swatches carry
+ * `--brand-base` inline further down the rendered page.
+ */
+function brandingRootTag(string $html): string
+{
+    preg_match('/<html\b[^>]*>/', $html, $matches);
+
+    return $matches[0] ?? '';
+}
+
 describe('the shipped defaults', function () {
     it('serves the shipped logo and icon when nothing has been uploaded', function () {
         $this->get(route('login'))
@@ -291,7 +303,7 @@ describe('the accent colour', function () {
             ->where('accent.is_custom', false),
         );
 
-        expect((string) $response->getContent())->not->toContain('--brand-base');
+        expect(brandingRootTag((string) $response->getContent()))->not->toContain('--brand-base');
     });
 
     it('saves a chosen colour, shares it with every page and paints it before first load', function () {
@@ -309,7 +321,7 @@ describe('the accent colour', function () {
             ->where('branding.accent.on', AccentColor::LIGHT_TEXT),
         );
 
-        expect((string) $response->getContent())->toContain('--brand-base: #1d4ed8;');
+        expect(brandingRootTag((string) $response->getContent()))->toContain('--brand-base: #1d4ed8;');
     });
 
     it('lays dark text on a pale accent and flags it as hard to read', function () {
@@ -318,7 +330,7 @@ describe('the accent colour', function () {
         expect($pale->onColor())->toBe(AccentColor::DARK_TEXT)
             ->and($pale->isReadableAsText())->toBeFalse()
             ->and(AccentColor::default()->onColor())->toBe(AccentColor::LIGHT_TEXT)
-            ->and(AccentColor::default()->isReadableAsText())->toBeTrue();
+            ->and(AccentColor::fromHex('#1d4ed8')->isReadableAsText())->toBeTrue();
     });
 
     it('refuses anything that is not a six-digit hex, so nothing else reaches the style attribute', function (string $value) {
@@ -342,7 +354,7 @@ describe('the accent colour', function () {
         $response = $this->get(route('login'))->assertOk();
 
         $response->assertInertia(fn (Assert $page) => $page->where('branding.accent', null));
-        expect((string) $response->getContent())->not->toContain('--brand-base');
+        expect(brandingRootTag((string) $response->getContent()))->not->toContain('--brand-base');
     });
 
     it('restores the default accent and records both changes in the audit log', function () {

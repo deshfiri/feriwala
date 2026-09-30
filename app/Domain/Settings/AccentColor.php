@@ -22,7 +22,7 @@ final class AccentColor
      * The shipped accent, used until an administrator picks another. Mirrors
      * `--brand-base` in `resources/css/app.css`.
      */
-    public const DEFAULT_HEX = '#e11d48';
+    public const DEFAULT_HEX = '#ca6330';
 
     /**
      * Label colours an accent can carry: white, or the theme's slate text.
@@ -51,7 +51,7 @@ final class AccentColor
     public static function fromHex(string $hex): self
     {
         if (! self::isValidHex($hex)) {
-            throw new InvalidArgumentException('An accent colour must be a six-digit hex such as #e11d48.');
+            throw new InvalidArgumentException('An accent colour must be a six-digit hex such as #ca6330.');
         }
 
         return new self(strtolower($hex));

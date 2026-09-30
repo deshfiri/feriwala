@@ -318,10 +318,10 @@ scalable (§40, D10). `.env.example` is the reference.
 
 ## UI
 
-Design tokens live in `resources/css/app.css`; the approved visual direction combines the Able Pro
-and Isomorphic admin templates: a cool slate-grey canvas with white, hairline-bordered cards (no
-card shadows), a dashed-edge white rail, a frosted borderless header, Inter body with Lexend Deca
-headings, and one crimson accent that carries primary actions, the current nav row and focus.
+Design tokens live in `resources/css/app.css`; the approved visual direction is a
+neutral warm-grey surface with near-black primary actions and one restrained orange accent.
+The accent is admin-selectable under Admin → Branding: every brand token derives from
+`--brand-base`, so a colour never goes into a component directly.
 
 - Reuse `DataTable` for lists — it already covers search, filters, sort, server-side pagination,
   column visibility, bulk actions, and every state.

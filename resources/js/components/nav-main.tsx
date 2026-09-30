@@ -28,10 +28,10 @@ import type { NavBadge, NavBadgeTone, NavGroup, NavItem } from '@/types';
  * still reads in greyscale and for a colour-blind user (§33.9).
  */
 const badgeToneClasses: Record<NavBadgeTone, string> = {
-    brand: 'border-brand-border text-brand',
-    info: 'border-info/40 text-info',
-    danger: 'border-danger/40 text-danger',
-    neutral: 'border-border text-muted-foreground',
+    brand: 'bg-brand-subtle text-brand',
+    info: 'bg-info-subtle text-info',
+    danger: 'bg-danger-subtle text-danger',
+    neutral: 'bg-muted text-muted-foreground',
 };
 
 /**
@@ -40,8 +40,8 @@ const badgeToneClasses: Record<NavBadgeTone, string> = {
  * collapsed to them.
  */
 const itemClasses = cn(
-    'text-sidebar-foreground h-10 gap-3 rounded-lg px-3 font-medium transition-colors',
-    '[&>svg]:text-muted-foreground hover:[&>svg]:text-sidebar-accent-foreground [&>svg]:size-[1.125rem]',
+    'text-sidebar-foreground h-9 gap-2.5 rounded-lg px-2.5 font-medium transition-colors',
+    '[&>svg]:text-muted-foreground hover:[&>svg]:text-sidebar-accent-foreground',
 );
 
 /**
@@ -53,14 +53,14 @@ const itemClasses = cn(
 const activeItemClasses = cn(
     'data-[active=true]:bg-brand-subtle data-[active=true]:text-brand data-[active=true]:[&>svg]:text-brand relative data-[active=true]:font-semibold',
     'data-[active=true]:before:absolute data-[active=true]:before:inset-y-2 data-[active=true]:before:left-0',
-    'data-[active=true]:before:bg-brand data-[active=true]:before:w-[3px] data-[active=true]:before:rounded-r-full',
+    'data-[active=true]:before:bg-brand data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full',
 );
 
 function NavBadgePill({ badge }: { badge: NavBadge }) {
     return (
         <span
             className={cn(
-                'text-2xs ml-auto shrink-0 rounded-full border bg-transparent px-2 py-0.5 leading-none font-semibold tracking-wide uppercase',
+                'text-2xs ml-auto shrink-0 rounded-full px-1.5 py-0.5 leading-none font-semibold tracking-wide uppercase',
                 'group-data-[collapsible=icon]:hidden',
                 badgeToneClasses[badge.tone ?? 'neutral'],
             )}
@@ -153,13 +153,7 @@ function NavBranch({
                 </CollapsibleTrigger>
 
                 <CollapsibleContent>
-                    {/*
-                     * Children hang off a dot rather than a rule, after Able
-                     * Pro; the current child's dot fills with the accent, so
-                     * its place in the branch is marked by shape as well as
-                     * by colour.
-                     */}
-                    <SidebarMenuSub className="mx-0 mt-0.5 gap-0.5 border-l-0 px-0">
+                    <SidebarMenuSub className="mt-0.5 mr-0 ml-[1.1875rem] gap-0.5 px-2">
                         {children.map((child) => {
                             const childActive =
                                 child.isActive ?? isCurrentUrl(child.href);
@@ -169,11 +163,7 @@ function NavBranch({
                                     <SidebarMenuSubButton
                                         asChild
                                         isActive={childActive}
-                                        className={cn(
-                                            'text-sidebar-foreground h-9 translate-x-0 rounded-lg pr-3 pl-[2.625rem]',
-                                            'before:bg-muted-foreground/60 before:absolute before:left-[1.1875rem] before:size-1.5 before:rounded-full',
-                                            'data-[active=true]:text-brand data-[active=true]:before:bg-brand relative data-[active=true]:bg-transparent data-[active=true]:font-semibold',
-                                        )}
+                                        className="text-sidebar-foreground data-[active=true]:bg-brand-subtle data-[active=true]:text-brand h-8 rounded-md px-2.5 data-[active=true]:font-semibold"
                                     >
                                         <Link
                                             href={child.href}
@@ -221,7 +211,7 @@ export function NavMain({ groups }: { groups: NavGroup[] }) {
                         key={group.label}
                         className="px-3 py-0 group-data-[collapsible=icon]:px-2"
                     >
-                        <SidebarGroupLabel className="text-muted-foreground text-2xs h-7 px-3 font-semibold tracking-[0.12em] uppercase">
+                        <SidebarGroupLabel className="text-muted-foreground text-2xs h-7 px-2.5 font-semibold tracking-wider uppercase">
                             {group.label}
                         </SidebarGroupLabel>
 

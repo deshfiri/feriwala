@@ -11,7 +11,7 @@ import type { LocaleState } from '@/types/localization';
  * attribute stayed on whatever locale the last hard load happened to be in
  * while the page itself had already switched to Bangla. `:lang(bn)` in
  * app.css, which is what selects `--font-bangla`, never matched, and Bangla
- * text fell through to the Latin face (no Bengali glyphs) instead.
+ * text fell through to Instrument Sans (no Bengali glyphs) instead.
  */
 export function syncDocumentLocale(props: Record<string, unknown>): void {
     const locale = props.locale as LocaleState | undefined;

@@ -31,14 +31,15 @@ it('ships the default the stylesheet uses and treats it as the default', functio
 
     expect($css)->toContain('--brand-base: '.AccentColor::DEFAULT_HEX.';')
         ->and(AccentColor::default()->isDefault())->toBeTrue()
-        ->and(AccentColor::fromHex('#E11D48')->isDefault())->toBeTrue()
+        ->and(AccentColor::fromHex('#CA6330')->isDefault())->toBeTrue()
         ->and(AccentColor::fromHex('#059669')->isDefault())->toBeFalse();
 });
 
 it('lays whichever label colour contrasts more on the accent', function (string $hex, string $on) {
     expect(AccentColor::fromHex($hex)->onColor())->toBe($on);
 })->with([
-    'the default crimson' => ['#e11d48', AccentColor::LIGHT_TEXT],
+    'the default orange' => ['#ca6330', AccentColor::LIGHT_TEXT],
+    'crimson' => ['#e11d48', AccentColor::LIGHT_TEXT],
     'a deep blue' => ['#1d4ed8', AccentColor::LIGHT_TEXT],
     'slate' => ['#1d2630', AccentColor::LIGHT_TEXT],
     'a pale yellow' => ['#fde047', AccentColor::DARK_TEXT],
@@ -46,12 +47,13 @@ it('lays whichever label colour contrasts more on the accent', function (string 
 ]);
 
 it('decides the dark-mode label on the lifted accent, not the base one', function () {
-    // Crimson carries white text, but lifted with 25% white it is light enough
-    // that the slate text reads better — which is what dark mode shows.
-    $crimson = AccentColor::default();
+    // The default orange carries white text, but lifted with 25% white it is
+    // light enough that the slate text reads better — which is what dark mode
+    // shows.
+    $orange = AccentColor::default();
 
-    expect($crimson->onColor())->toBe(AccentColor::LIGHT_TEXT)
-        ->and($crimson->onLiftedColor())->toBe(AccentColor::DARK_TEXT)
+    expect($orange->onColor())->toBe(AccentColor::LIGHT_TEXT)
+        ->and($orange->onLiftedColor())->toBe(AccentColor::DARK_TEXT)
         ->and(AccentColor::fromHex('#1d2630')->onLiftedColor())->toBe(AccentColor::LIGHT_TEXT);
 });
 
