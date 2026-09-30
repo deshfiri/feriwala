@@ -145,6 +145,14 @@ class Supplier extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * @return HasMany<SupplierProductListingLot, $this>
+     */
+    public function lots(): HasMany
+    {
+        return $this->hasMany(SupplierProductListingLot::class);
+    }
+
+    /**
      * @return HasMany<SupplierOffer, $this>
      */
     public function offers(): HasMany

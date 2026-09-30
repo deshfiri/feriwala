@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $public_id
  * @property string $reference
  * @property int $supplier_id
+ * @property int|null $lot_id
  * @property ListingStatus $status
  * @property string $product_name
  * @property string|null $description
@@ -90,6 +91,17 @@ class SupplierProductListing extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    /**
+     * The batch this product entry was drafted into, when it was created
+     * through the lot workspace rather than the single-listing path.
+     *
+     * @return BelongsTo<SupplierProductListingLot, $this>
+     */
+    public function lot(): BelongsTo
+    {
+        return $this->belongsTo(SupplierProductListingLot::class, 'lot_id');
     }
 
     /**
