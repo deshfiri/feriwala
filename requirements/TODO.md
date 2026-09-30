@@ -145,7 +145,7 @@ renamed, and entries are never deleted.
 - [~] **P0-26** `SensitiveActionGuard` + `SensitiveActionRequest`: graded controls — password confirmation for all sensitive actions, 2FA for money movement, second approver for releasing payment, mandatory reason (19 tests). _Middleware wiring and audit emission land with the first real sensitive action_ (§32.2)
 - [ ] **P0-27** Maker-checker / `approval_requests` scaffold for second-approver actions (§32.2)
 - [x] **P0-28** `PreventSearchIndexing` middleware, aliased `noindex`, applied per-route so the public site and storefronts stay indexable (§34.2) — 3 tests
-- [~] **P0-61** Roles & Permissions admin UI, closing the gap P0-20/21/22 left open: the 21 `PlatformRole` cases and 161-permission catalogue existed with no screen to browse them and no production code path that ever called Spatie's `assignRole`/`syncRoles`. `RolesController` (list all 21 with permission/holder counts; inspect one role's grants grouped by module and who holds it) and `StaffAccessController` (searchable platform-staff directory; one staff member's *effective* permissions plus a role-assignment form) are both read-only-by-design where the architecture is: `PlatformRole` is a pure PHP enum and the catalogue matrix is hand-declared, not data, so there is no safe way to create or clone a role without a code deploy — reported as an architectural limitation rather than worked around with a parallel, database-backed role system. `AssignPlatformRole` is the only code path that ever calls `syncRoles()`, guarded against self-change, granting/touching Super Admin without already holding it, and demoting the platform's last *active* Super Admin (a locked or suspended one doesn't count as available) — mirroring `ChangeIdentityAccess`'s existing "guard lives in the action, because `Gate::before` passes a Super Admin actor straight over the policy" pattern. The role-assignment write sits behind `RequirePassword` on top of every action/policy guard. 45 Pest tests (`AssignPlatformRoleTest`, `RolesScreensTest`, `StaffAccessTest`) plus 2 Vitest nav cases. **Not yet done:** live-browser verification across personas/locales/themes/viewports (in progress) and the SaaS-shell responsive/accessibility closure pass the rest of this batch still owes.
+- [x] **P0-61** Roles & Permissions admin UI, closing the gap P0-20/21/22 left open: the 21 `PlatformRole` cases and 161-permission catalogue existed with no screen to browse them and no production code path that ever called Spatie's `assignRole`/`syncRoles`. `RolesController` (list all 21 with permission/holder counts; inspect one role's grants grouped by module and who holds it) and `StaffAccessController` (searchable platform-staff directory; one staff member's *effective* permissions plus a role-assignment form) are both read-only-by-design where the architecture is: `PlatformRole` is a pure PHP enum and the catalogue matrix is hand-declared, not data, so there is no safe way to create or clone a role without a code deploy — reported as an architectural limitation rather than worked around with a parallel, database-backed role system. `AssignPlatformRole` is the only code path that ever calls `syncRoles()`, guarded against self-change, granting/touching Super Admin without already holding it, and demoting the platform's last *active* Super Admin (a locked or suspended one doesn't count as available) — mirroring `ChangeIdentityAccess`'s existing "guard lives in the action, because `Gate::before` passes a Super Admin actor straight over the policy" pattern. The role-assignment write sits behind `RequirePassword` on top of every action/policy guard. 45 Pest tests (`AssignPlatformRoleTest`, `RolesScreensTest`, `StaffAccessTest`) plus 2 Vitest nav cases. **Live-browser verification complete** (isolated schema/Redis prefix, `~/feriwala-verification/rbac/`): all four screens render with zero console errors as System Administrator in EN/light, EN/dark and BN/light; Super Admin's role picker includes all 21 roles while System Administrator's excludes Super Admin; SMS Manager gets 403 on Roles/Staff Access and a Settings hub showing only its SMS card; a Client/Partner owner gets 403 on Roles/Staff Access and an empty Settings hub; a real end-to-end role reassignment through Fortify's actual password-confirmation redirect succeeded and was reflected immediately in both the staff list and the staff member's own page; 1440/820/390px all show zero horizontal overflow. **Not yet done:** the SaaS-shell responsive/accessibility closure pass the rest of this batch still owes (this entry covers only these four new screens, not a full-app audit).
 
 ## P0.D Settings & configuration
 
@@ -967,7 +967,7 @@ increment by hand; a progress table that has drifted is worse than none.
 
 | Phase                                           | Tasks   | Done    | Started |
 | ----------------------------------------------- | ------- | ------- | ------- |
-| P0 Foundation                                   | 61      | 30      | 12      |
+| P0 Foundation                                   | 61      | 31      | 11      |
 | P1 Identity & Onboarding                        | 80      | 76      | 2       |
 | P2 Money Core                                   | 38      | 38      | 0       |
 | P3 Catalog & Inventory                          | 31      | 31      | 0       |
@@ -981,7 +981,7 @@ increment by hand; a progress table that has drifted is worse than none.
 | P11 Hardening                                   | 38      | 0       | 0       |
 | P12 Final QA                                    | 12      | 0       | 0       |
 | P13 Supplier Account System                     | 29      | 24      | 2       |
-| **Total**                                       | **491** | **251** | **27**  |
+| **Total**                                       | **491** | **252** | **26**  |
 
 ### Revision log
 
@@ -1003,7 +1003,9 @@ increment by hand; a progress table that has drifted is worse than none.
   (`payoutTestBankBranch()` moved into the shared `tests/Pest.php` helpers) after a narrower
   `tests/Feature/Withdrawal`-only run surfaced it. Commits: `26f1dcb`, `21f35b5`, `a061e79`, `f15c08a`,
   `02bf084`, `3c9a259`, `de6dfc7`. Live-browser verification across personas/locales/themes/viewports
-  is in progress as this entry is written; not yet folded into a final status here.
+  passed in full (`~/feriwala-verification/rbac/`, results.json) — zero console errors, correct
+  guard isolation for SMS Manager and a Client/Partner owner, a real end-to-end Fortify password-
+  confirm-then-reassign flow, and no horizontal overflow at 1440/820/390px.
 - **2026-09-24** — D26 flat-Taka recovery completed and fully verified, closing out the gap the
   2026-09-23 entry below left open (Website, Order/Checkout and Package/Billing, the source of that
   entry's 51 failures). A coding session applying the 2026-09-23 conversion was interrupted
