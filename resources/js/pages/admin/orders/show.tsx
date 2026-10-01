@@ -20,7 +20,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import type { Money } from '@/lib/money';
+import { isZero, type Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import AllocationPanel, {
     type AllocationLine,
@@ -32,6 +32,21 @@ import OrderLifecyclePanel, {
     type OrderLifecycle,
 } from '@/pages/admin/orders/order-lifecycle-panel';
 import { index } from '@/routes/admin/orders';
+
+export type SupplierPayableSummary = {
+    id: string;
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+    gross_amount: Money;
+    reversed_amount: Money;
+    net_amount: Money;
+    delivered_at: string | null;
+    payment_settled_at: string | null;
+    eligible_at: string | null;
+    settled_at: string | null;
+    cancelled_at: string | null;
+};
 
 export type AdminOrderDetail = {
     id: string;
@@ -91,6 +106,8 @@ export type AdminOrderDetail = {
             expected_margin: Money | null;
             allocated_at: string;
             fulfilment_commitment: FulfilmentCommitment | null;
+            /** Withheld (null) without supplier_pricing.view, same as unit_cost (§8, P13-26). */
+            payable: SupplierPayableSummary | null;
         }[];
         allocated_quantity: number;
         remaining_quantity: number;
@@ -325,6 +342,56 @@ export default function AdminOrder({ order, can }: Props) {
                                                                     allocation.fulfilment_commitment
                                                                 }
                                                             />
+                                                        )}
+                                                        {allocation.payable && (
+                                                            <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+                                                                <StatusPill
+                                                                    tone={
+                                                                        allocation
+                                                                            .payable
+                                                                            .status_tone
+                                                                    }
+                                                                    label={
+                                                                        allocation
+                                                                            .payable
+                                                                            .status_label
+                                                                    }
+                                                                />
+                                                                <span className="text-muted-foreground text-xs">
+                                                                    {t(
+                                                                        'orders.admin.payable.net_amount',
+                                                                    )}
+                                                                    {': '}
+                                                                </span>
+                                                                <MoneyAmount
+                                                                    amount={
+                                                                        allocation
+                                                                            .payable
+                                                                            .net_amount
+                                                                    }
+                                                                    size="small"
+                                                                />
+                                                                {!isZero(
+                                                                    allocation
+                                                                        .payable
+                                                                        .reversed_amount,
+                                                                ) && (
+                                                                    <span className="text-muted-foreground text-xs">
+                                                                        (
+                                                                        {t(
+                                                                            'orders.admin.payable.reversed_amount',
+                                                                        )}
+                                                                        {': '}
+                                                                        {
+                                                                            allocation
+                                                                                .payable
+                                                                                .reversed_amount
+                                                                                .formatted
+                                                                        }
+                                                                        )
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 ),

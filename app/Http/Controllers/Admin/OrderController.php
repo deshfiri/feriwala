@@ -143,6 +143,7 @@ class OrderController extends Controller
             'businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation',
             'items.activeAllocations.warehouse', 'items.activeAllocations.supplier', 'items.activeAllocations.offer',
             'items.activeAllocations.fulfilmentCommitment.statusHistory.changedBy:id,name',
+            'items.activeAllocations.payable',
             'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain',
             'websiteCustomer:id,public_id,mobile,is_guest',
             'fulfillmentStatusHistory.changedBy:id,name',
@@ -672,6 +673,39 @@ class OrderController extends Controller
             'fulfilment_commitment' => $isSupplierSourced && $canViewSupplierPricing
                 ? $this->fulfilmentCommitmentSummary($allocation, $canManageFulfilmentCommitment)
                 : null,
+            // Only a Supplier-sourced allocation ever owes anything (§8) --
+            // behind the same supplier_pricing.view gate as its rate/margin,
+            // since the payable amount is derived from that same rate.
+            'payable' => $isSupplierSourced && $canViewSupplierPricing
+                ? $this->payableSummary($allocation)
+                : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function payableSummary(OrderItemAllocation $allocation): ?array
+    {
+        $payable = $allocation->payable;
+
+        if ($payable === null) {
+            return null;
+        }
+
+        return [
+            'id' => $payable->public_id,
+            'status' => $payable->status->value,
+            'status_label' => $payable->status->label(),
+            'status_tone' => $payable->status->tone(),
+            'gross_amount' => $payable->gross_amount->jsonSerialize(),
+            'reversed_amount' => $payable->reversedAmount()->jsonSerialize(),
+            'net_amount' => $payable->netAmount()->jsonSerialize(),
+            'delivered_at' => $payable->delivered_at?->toIso8601String(),
+            'payment_settled_at' => $payable->payment_settled_at?->toIso8601String(),
+            'eligible_at' => $payable->eligible_at?->toIso8601String(),
+            'settled_at' => $payable->settled_at?->toIso8601String(),
+            'cancelled_at' => $payable->cancelled_at?->toIso8601String(),
         ];
     }
 

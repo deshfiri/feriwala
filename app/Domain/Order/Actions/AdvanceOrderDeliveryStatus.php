@@ -21,6 +21,11 @@ use InvalidArgumentException;
  * return — every move that stops the normal path and needs explaining.
  * {@see RollUpOrderStatus} runs in the same transaction: reaching `Delivered`
  * here is what moves the order's own status to `Delivered`.
+ *
+ * {@see SynchronizeSupplierPayablesWithDelivery} also runs in the same
+ * transaction: reaching `Delivered` is what marks every Supplier payable on
+ * the order delivered (closes P13-26), and reaching `FailedDelivery`,
+ * `Cancelled` or `Returned` cancels any that are still `Pending`.
  */
 class AdvanceOrderDeliveryStatus
 {
@@ -36,6 +41,7 @@ class AdvanceOrderDeliveryStatus
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
         protected RollUpOrderStatus $rollUp,
+        protected SynchronizeSupplierPayablesWithDelivery $supplierPayables,
     ) {}
 
     public function handle(
@@ -63,6 +69,8 @@ class AdvanceOrderDeliveryStatus
             );
 
             $this->rollUp->handle($locked);
+
+            $this->supplierPayables->handle($locked, $to, $reason);
 
             $this->audit->handle(new AuditEntry(
                 action: 'order.delivery_status.advanced',

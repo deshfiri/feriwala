@@ -313,6 +313,17 @@ return [
                 'cancel' => 'Cancel',
             ],
         ],
+        'payable' => [
+            'title' => 'Supplier payable',
+            'gross_amount' => 'Gross',
+            'net_amount' => 'Net',
+            'reversed_amount' => 'Reversed',
+            'delivered_at' => 'Delivered :date',
+            'payment_settled_at' => 'Payment settled :date',
+            'eligible_at' => 'Eligible since :date',
+            'settled_at' => 'Settled :date',
+            'cancelled_at' => 'Cancelled :date',
+        ],
         'allocation' => [
             'action' => 'Assign source',
             'change_action' => 'Change source',
