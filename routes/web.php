@@ -95,7 +95,7 @@ use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/',DashboardController::class)->name('home');
+Route::inertia('/', 'welcome')->name('home');
 
 // Language switching is available to guests as well, so the public site and the
 // login screen can be read in Bangla before an account exists (D6).
