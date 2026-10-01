@@ -320,9 +320,7 @@ export default function AdminOrder({ order, can }: Props) {
                                                                 orderId={
                                                                     order.id
                                                                 }
-                                                                itemId={
-                                                                    line.id
-                                                                }
+                                                                itemId={line.id}
                                                                 commitment={
                                                                     allocation.fulfilment_commitment
                                                                 }
@@ -338,8 +336,7 @@ export default function AdminOrder({ order, can }: Props) {
                                                 className="font-semibold"
                                             />
                                             {line.can_allocate &&
-                                                line.remaining_quantity >
-                                                    0 && (
+                                                line.remaining_quantity > 0 && (
                                                     <Button
                                                         type="button"
                                                         size="sm"

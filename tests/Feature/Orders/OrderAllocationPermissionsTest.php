@@ -256,19 +256,22 @@ it('redacts Supplier identity and rate from the order screen for a viewer withou
         ->get(route('admin.orders.show', $this->order->public_id))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('order.lines.0.allocation.source_label', null)
-            ->where('order.lines.0.allocation.unit_cost', null)
-            ->where('order.lines.0.allocation.expected_margin', null));
+            ->where('order.lines.0.allocations.0.source_label', null)
+            ->where('order.lines.0.allocations.0.unit_cost', null)
+            ->where('order.lines.0.allocations.0.expected_margin', null));
 
     // The same viewer, now also holding catalog.view but still not
     // supplier_pricing.view: warehouse figures would show, Supplier
     // figures still would not. Re-allocate to the warehouse to prove it.
+    $current = OrderItemAllocation::query()->where('order_item_id', $this->line->id)->where('status', 'active')->sole();
+
     $this->actingAs($allocator)->post(
         route('admin.orders.lines.allocation.store', [$this->order->public_id, $this->line->public_id]),
         [
             'source_type' => AllocationSourceType::Warehouse->value,
             'source_id' => $this->warehouse->public_id,
             'reason' => 'Reallocated for the redaction check.',
+            'replacing_allocation_id' => $current->public_id,
         ],
     );
 
@@ -278,6 +281,6 @@ it('redacts Supplier identity and rate from the order screen for a viewer withou
         ->get(route('admin.orders.show', $this->order->public_id))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('order.lines.0.allocation.source_label', $this->warehouse->name)
-            ->where('order.lines.0.allocation.unit_cost.amount', '700.00'));
+            ->where('order.lines.0.allocations.0.source_label', $this->warehouse->name)
+            ->where('order.lines.0.allocations.0.unit_cost.amount', '700.00'));
 });

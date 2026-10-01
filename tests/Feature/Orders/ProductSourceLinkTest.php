@@ -284,7 +284,10 @@ describe('allocating through a confirmed cross-catalogue relationship', function
         $warehouse = Warehouse::create(['name' => 'Dhaka Central', 'code' => 'DHK-'.random_int(100, 999), 'is_active' => true]);
         StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $this->product->id, 'product_variant_id' => null, 'available' => 5]);
 
-        app(AllocateOrderLineSource::class)->handle($this->line->refresh(), AllocationSourceType::Warehouse, $warehouse->public_id, $staff, 'Reallocated to the warehouse.');
+        app(AllocateOrderLineSource::class)->handle(
+            $this->line->refresh(), AllocationSourceType::Warehouse, $warehouse->public_id, $staff, 'Reallocated to the warehouse.',
+            replacingAllocationId: $allocation->public_id,
+        );
 
         expect($payable->refresh()->status)->toBe(PayableStatus::Cancelled)
             ->and(SupplierPayable::query()->where('status', PayableStatus::Pending)->count())->toBe(0);

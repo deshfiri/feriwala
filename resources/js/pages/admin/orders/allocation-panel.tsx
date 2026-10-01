@@ -877,9 +877,7 @@ function ConfirmAllocationDialog({
                             {maxQuantity > 1 && (
                                 <div className="grid gap-2">
                                     <Label htmlFor="allocation-quantity">
-                                        {t(
-                                            'orders.admin.allocation.quantity',
-                                        )}
+                                        {t('orders.admin.allocation.quantity')}
                                     </Label>
                                     <Input
                                         id="allocation-quantity"
@@ -908,9 +906,7 @@ function ConfirmAllocationDialog({
                                             { max: maxQuantity },
                                         )}
                                     </p>
-                                    <InputError
-                                        message={errors.quantity}
-                                    />
+                                    <InputError message={errors.quantity} />
                                 </div>
                             )}
 

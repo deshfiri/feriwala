@@ -78,13 +78,13 @@ test('the order detail screen shows the commitment, its supply details and the m
         ->get(route('admin.orders.show', $this->order->public_id))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('order.lines.0.allocation.fulfilment_commitment.status', 'awaiting_confirmation')
-            ->where('order.lines.0.allocation.fulfilment_commitment.supply_mode', 'on_demand')
-            ->where('order.lines.0.allocation.fulfilment_commitment.lead_time_days', 4)
-            ->where('order.lines.0.allocation.fulfilment_commitment.fulfilment_capacity', 5)
-            ->where('order.lines.0.allocation.fulfilment_commitment.is_staff_managed', true)
-            ->where('order.lines.0.allocation.fulfilment_commitment.can_manage', true)
-            ->where('order.lines.0.allocation.fulfilment_commitment.available_actions', ['confirm', 'cancel']));
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.status', 'awaiting_confirmation')
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.supply_mode', 'on_demand')
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.lead_time_days', 4)
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.fulfilment_capacity', 5)
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.is_staff_managed', true)
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.can_manage', true)
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.available_actions', ['confirm', 'cancel']));
 });
 
 test('a viewer without supplier_pricing.view sees the allocation but never the fulfilment commitment', function () {
@@ -95,8 +95,8 @@ test('a viewer without supplier_pricing.view sees the allocation but never the f
         ->get(route('admin.orders.show', $this->order->public_id))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('order.lines.0.allocation.source_label', null)
-            ->where('order.lines.0.allocation.fulfilment_commitment', null));
+            ->where('order.lines.0.allocations.0.source_label', null)
+            ->where('order.lines.0.allocations.0.fulfilment_commitment', null));
 });
 
 test('a viewer who can see pricing but not manage allocations sees the commitment with no actions', function () {
@@ -110,9 +110,9 @@ test('a viewer who can see pricing but not manage allocations sees the commitmen
         ->get(route('admin.orders.show', $this->order->public_id))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('order.lines.0.allocation.fulfilment_commitment.status', 'awaiting_confirmation')
-            ->where('order.lines.0.allocation.fulfilment_commitment.can_manage', false)
-            ->where('order.lines.0.allocation.fulfilment_commitment.available_actions', []));
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.status', 'awaiting_confirmation')
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.can_manage', false)
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.available_actions', []));
 });
 
 test('every legal transition is reachable through the advance route, not just confirm', function () {
@@ -164,9 +164,9 @@ test('failing through the route with a reason records it and shows it on the nex
     $this->actingAs($this->staff)
         ->get(route('admin.orders.show', $this->order->public_id))
         ->assertInertia(fn ($page) => $page
-            ->where('order.lines.0.allocation.fulfilment_commitment.status', 'failed')
-            ->where('order.lines.0.allocation.fulfilment_commitment.failed_reason', 'Supplier can no longer source this item.')
-            ->where('order.lines.0.allocation.fulfilment_commitment.available_actions', []));
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.status', 'failed')
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.failed_reason', 'Supplier can no longer source this item.')
+            ->where('order.lines.0.allocations.0.fulfilment_commitment.available_actions', []));
 });
 
 test('the status history timeline accumulates across transitions', function () {
@@ -176,7 +176,7 @@ test('the status history timeline accumulates across transitions', function () {
 
     $history = $this->actingAs($this->staff)
         ->get(route('admin.orders.show', $this->order->public_id))
-        ->viewData('page')['props']['order']['lines'][0]['allocation']['fulfilment_commitment']['history'];
+        ->viewData('page')['props']['order']['lines'][0]['allocations'][0]['fulfilment_commitment']['history'];
 
     expect($history)->toHaveCount(2)
         ->and(collect($history)->pluck('new_status')->all())

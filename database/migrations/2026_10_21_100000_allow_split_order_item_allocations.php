@@ -18,6 +18,13 @@ use Illuminate\Support\Facades\DB;
  * is the `sum` with nothing else active. `order_item_allocations_one_active_per_reservation`
  * is untouched — a `ready_stock` allocation still holds exactly one
  * reservation, split or not.
+ *
+ * `supplier_payables_one_live_per_line` is dropped for the same reason: it
+ * was only ever "one live payable per allocation" wearing the no-split
+ * assumption that one line held exactly one allocation. `supplier_payables_one_per_allocation`
+ * already says the real rule directly and is untouched — a split line
+ * legitimately carries one live payable per active allocation, several at
+ * once.
  */
 return new class extends Migration
 {
@@ -56,6 +63,8 @@ return new class extends Migration
             CREATE TRIGGER order_item_allocations_quantity_within_line
                 BEFORE INSERT OR UPDATE OF status ON order_item_allocations
                 FOR EACH ROW EXECUTE FUNCTION feriwala_order_item_allocation_quantity_within_line();
+
+            DROP INDEX IF EXISTS supplier_payables_one_live_per_line;
         SQL);
     }
 
@@ -68,6 +77,10 @@ return new class extends Migration
             CREATE UNIQUE INDEX order_item_allocations_one_active_per_line
                 ON order_item_allocations (order_item_id)
                 WHERE status = 'active';
+
+            CREATE UNIQUE INDEX supplier_payables_one_live_per_line
+                ON supplier_payables (order_item_id)
+                WHERE status NOT IN ('cancelled', 'reversed');
         SQL);
     }
 };

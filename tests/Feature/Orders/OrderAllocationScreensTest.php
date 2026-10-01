@@ -170,8 +170,8 @@ it('shows the current allocation on the order detail screen without leaking it a
         ->get(route('admin.orders.show', $this->order->public_id))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('order.lines.0.allocation.source_type', 'supplier_offer')
-            ->where('order.lines.0.allocation.source_label', $this->offer->supplier->business_name));
+            ->where('order.lines.0.allocations.0.source_type', 'supplier_offer')
+            ->where('order.lines.0.allocations.0.source_label', $this->offer->supplier->business_name));
 });
 
 it('reports every warehouse candidate too, distinct from the supplier offer', function () {
