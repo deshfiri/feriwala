@@ -279,6 +279,22 @@ return [
         'cancelled' => 'অর্ডার :reference বাতিল হয়েছে। এর স্টক ছেড়ে দেওয়া হয়েছে।',
         'allocated' => 'লাইন বরাদ্দ করা হয়েছে।',
         'commitment_updated' => 'সরবরাহ প্রতিশ্রুতি হালনাগাদ হয়েছে।',
+        'fulfilment_commitment' => [
+            'title' => 'সরবরাহকারীর সরবরাহ প্রতিশ্রুতি',
+            'due' => ':date এর মধ্যে প্রত্যাশিত',
+            'staff_managed_notice' => 'স্টাফ দ্বারা পরিচালিত। সরবরাহকারী এখনও নিজে এটি নিশ্চিত করে না (অ্যাডভান্সড অর্ডার ম্যানেজমেন্ট)।',
+            'reason' => 'কারণ',
+            'reason_description' => 'প্রতিশ্রুতিতে এবং অডিট লগে রেকর্ড করা হবে।',
+            'failed_reason' => 'ব্যর্থ: :reason',
+            'cancelled_reason' => 'বাতিল: :reason',
+            'actions' => [
+                'confirm' => 'নিশ্চিত করুন',
+                'start_preparing' => 'প্রস্তুতি শুরু করুন',
+                'mark_ready' => 'প্রস্তুত চিহ্নিত করুন',
+                'fail' => 'ব্যর্থ',
+                'cancel' => 'বাতিল',
+            ],
+        ],
         'allocation' => [
             'action' => 'উৎস নির্ধারণ করুন',
             'change_action' => 'উৎস পরিবর্তন করুন',

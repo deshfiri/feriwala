@@ -17,12 +17,14 @@ use App\Domain\Order\Exceptions\AllocationRefused;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
+use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\OrderStatusChange;
 use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\SearchAllocationSources;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
+use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -122,12 +124,19 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('viewAny', Order::class);
 
         $record = $this->order($order);
-        $record->load(['businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation', 'items.activeAllocation.warehouse', 'items.activeAllocation.supplier', 'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain', 'websiteCustomer:id,public_id,mobile,is_guest']);
+        $record->load([
+            'businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation',
+            'items.activeAllocation.warehouse', 'items.activeAllocation.supplier', 'items.activeAllocation.offer',
+            'items.activeAllocation.fulfilmentCommitment.statusHistory.changedBy:id,name',
+            'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain',
+            'websiteCustomer:id,public_id,mobile,is_guest',
+        ]);
 
         $payment = $record->payment;
         $canAllocate = $actor->can('transition', $record);
         $canViewSupplierPricing = $actor->can(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View));
         $canViewCatalogPricing = $actor->can(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View));
+        $canManageFulfilmentCommitment = Gate::forUser($actor)->allows('manageFulfilmentCommitment', $record);
 
         return Inertia::render('admin/orders/show', [
             'order' => [
@@ -201,7 +210,7 @@ class OrderController extends Controller
                      * `order.view` alone (this action's own gate) is never
                      * enough to see any of the four.
                      */
-                    'allocation' => $this->allocationSummary($item, $canViewSupplierPricing, $canViewCatalogPricing),
+                    'allocation' => $this->allocationSummary($item, $canViewSupplierPricing, $canViewCatalogPricing, $canManageFulfilmentCommitment),
                     'can_allocate' => $canAllocate,
                 ])->all(),
                 'payment' => $payment === null ? null : [
@@ -466,8 +475,12 @@ class OrderController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    protected function allocationSummary(OrderItem $item, bool $canViewSupplierPricing, bool $canViewCatalogPricing): ?array
-    {
+    protected function allocationSummary(
+        OrderItem $item,
+        bool $canViewSupplierPricing,
+        bool $canViewCatalogPricing,
+        bool $canManageFulfilmentCommitment,
+    ): ?array {
         $allocation = $item->activeAllocation;
 
         if ($allocation === null) {
@@ -490,6 +503,76 @@ class OrderController extends Controller
             'unit_cost' => $canViewFinancials ? $allocation->unit_cost->jsonSerialize() : null,
             'expected_margin' => $canViewFinancials ? $allocation->expected_margin->jsonSerialize() : null,
             'allocated_at' => $allocation->allocated_at->toIso8601String(),
+            // Only a Supplier Offer allocation can carry one (Supplier Bulk
+            // Product Listing batch, correction 7) -- shown behind the same
+            // supplier_pricing.view gate as the rest of this Supplier's
+            // figures, since its presence alone says this line has no
+            // physical stock behind it.
+            'fulfilment_commitment' => $isSupplierSourced && $canViewSupplierPricing
+                ? $this->fulfilmentCommitmentSummary($allocation, $canManageFulfilmentCommitment)
+                : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function fulfilmentCommitmentSummary(OrderItemAllocation $allocation, bool $canManage): ?array
+    {
+        $commitment = $allocation->fulfilmentCommitment;
+        $offer = $allocation->offer;
+
+        if ($commitment === null || $offer === null) {
+            return null;
+        }
+
+        // Every transition this batch ships is staff-initiated -- see
+        // AdvanceSupplierFulfilmentCommitment. A Supplier confirming their
+        // own commitment is Advanced Order Management's own dependency, not
+        // built here; the UI must say so rather than imply self-service
+        // exists.
+        $actionsByTransition = [
+            FulfilmentCommitmentStatus::Confirmed->value => 'confirm',
+            FulfilmentCommitmentStatus::Preparing->value => 'start_preparing',
+            FulfilmentCommitmentStatus::Ready->value => 'mark_ready',
+            FulfilmentCommitmentStatus::Failed->value => 'fail',
+            FulfilmentCommitmentStatus::Cancelled->value => 'cancel',
+        ];
+
+        return [
+            'id' => $commitment->public_id,
+            'status' => $commitment->status->value,
+            'status_label' => $commitment->status->label(),
+            'status_tone' => $commitment->status->tone(),
+            'is_terminal' => $commitment->status->isTerminal(),
+            'is_staff_managed' => true,
+            'supply_mode' => $offer->supply_mode->value,
+            'supply_mode_label' => $offer->supply_mode->label(),
+            'lead_time_days' => $offer->lead_time_days,
+            'fulfilment_capacity' => $offer->fulfilment_capacity,
+            'quantity' => $commitment->quantity,
+            'due_at' => $commitment->due_at?->toIso8601String(),
+            'confirmed_at' => $commitment->confirmed_at?->toIso8601String(),
+            'failed_reason' => $commitment->failed_reason,
+            'failed_at' => $commitment->failed_at?->toIso8601String(),
+            'cancelled_reason' => $commitment->cancelled_reason,
+            'cancelled_at' => $commitment->cancelled_at?->toIso8601String(),
+            'can_manage' => $canManage,
+            'available_actions' => $canManage
+                ? array_values(array_filter(
+                    array_map(
+                        fn (FulfilmentCommitmentStatus $to) => $actionsByTransition[$to->value] ?? null,
+                        $commitment->status->transitionsTo(),
+                    ),
+                ))
+                : [],
+            'history' => $commitment->statusHistory->map(fn ($change) => [
+                'previous_status' => $change->previous_status?->label(),
+                'new_status' => $change->new_status->label(),
+                'changed_by' => $change->changedBy?->name,
+                'changed_at' => $change->changed_at->toIso8601String(),
+                'reason' => $change->reason,
+            ])->all(),
         ];
     }
 
