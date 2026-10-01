@@ -73,18 +73,27 @@ export type AdminOrderDetail = {
             status: string;
             expires_at: string;
         } | null;
-        allocation: {
+        /**
+         * One row per source currently holding part of this line — several
+         * when it is split across sources (Advanced Order Management batch,
+         * Commit 3), one in the ordinary unsplit case, none before any
+         * allocation has been made.
+         */
+        allocations: {
             id: string;
             source_type: string;
             source_type_label: string;
             /** Withheld (null) for a Supplier-sourced line without supplier_pricing.view. */
             source_label: string | null;
+            quantity: number;
             /** Withheld (null) without the permission for this source's figures (D25). */
             unit_cost: Money | null;
             expected_margin: Money | null;
             allocated_at: string;
             fulfilment_commitment: FulfilmentCommitment | null;
-        } | null;
+        }[];
+        allocated_quantity: number;
+        remaining_quantity: number;
         can_allocate: boolean;
     }[];
     payment: {
@@ -255,28 +264,72 @@ export default function AdminOrder({ order, can }: Props) {
                                                     )}
                                                 </p>
                                             )}
-                                            {line.allocation && (
-                                                <p className="text-muted-foreground text-xs">
-                                                    {t(
-                                                        'orders.admin.allocation.current',
-                                                    )}
-                                                    {': '}
-                                                    {line.allocation
-                                                        .source_label ??
-                                                        line.allocation
-                                                            .source_type_label}
-                                                </p>
-                                            )}
-                                            {line.allocation
-                                                ?.fulfilment_commitment && (
-                                                <FulfilmentCommitmentPanel
-                                                    orderId={order.id}
-                                                    itemId={line.id}
-                                                    commitment={
-                                                        line.allocation
-                                                            .fulfilment_commitment
-                                                    }
-                                                />
+                                            {line.allocations.map(
+                                                (allocation) => (
+                                                    <div
+                                                        key={allocation.id}
+                                                        className="border-border mt-1 rounded-md border border-dashed p-2"
+                                                    >
+                                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                                            <p className="text-muted-foreground text-xs">
+                                                                {t(
+                                                                    'orders.admin.allocation.current',
+                                                                )}
+                                                                {': '}
+                                                                {allocation.source_label ??
+                                                                    allocation.source_type_label}
+                                                                {' · '}
+                                                                {t(
+                                                                    'orders.lines.quantity_each',
+                                                                    {
+                                                                        quantity:
+                                                                            allocation.quantity,
+                                                                        amount: line
+                                                                            .unit_price
+                                                                            .formatted,
+                                                                    },
+                                                                )}
+                                                            </p>
+                                                            {line.can_allocate && (
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() =>
+                                                                        setAllocating(
+                                                                            {
+                                                                                id: line.id,
+                                                                                name: line.name,
+                                                                                sku: line.sku,
+                                                                                replacingAllocationId:
+                                                                                    allocation.id,
+                                                                                quantity:
+                                                                                    allocation.quantity,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {t(
+                                                                        'orders.admin.allocation.change_action',
+                                                                    )}
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                        {allocation.fulfilment_commitment && (
+                                                            <FulfilmentCommitmentPanel
+                                                                orderId={
+                                                                    order.id
+                                                                }
+                                                                itemId={
+                                                                    line.id
+                                                                }
+                                                                commitment={
+                                                                    allocation.fulfilment_commitment
+                                                                }
+                                                            />
+                                                        )}
+                                                    </div>
+                                                ),
                                             )}
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
@@ -284,28 +337,33 @@ export default function AdminOrder({ order, can }: Props) {
                                                 amount={line.total}
                                                 className="font-semibold"
                                             />
-                                            {line.can_allocate && (
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() =>
-                                                        setAllocating({
-                                                            id: line.id,
-                                                            name: line.name,
-                                                            sku: line.sku,
-                                                        })
-                                                    }
-                                                >
-                                                    {line.allocation
-                                                        ? t(
-                                                              'orders.admin.allocation.change_action',
-                                                          )
-                                                        : t(
-                                                              'orders.admin.allocation.action',
-                                                          )}
-                                                </Button>
-                                            )}
+                                            {line.can_allocate &&
+                                                line.remaining_quantity >
+                                                    0 && (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            setAllocating({
+                                                                id: line.id,
+                                                                name: line.name,
+                                                                sku: line.sku,
+                                                                quantity:
+                                                                    line.remaining_quantity,
+                                                            })
+                                                        }
+                                                    >
+                                                        {line.allocations
+                                                            .length > 0
+                                                            ? t(
+                                                                  'orders.admin.allocation.split_action',
+                                                              )
+                                                            : t(
+                                                                  'orders.admin.allocation.action',
+                                                              )}
+                                                    </Button>
+                                                )}
                                         </div>
                                     </li>
                                 ))}

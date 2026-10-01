@@ -16,6 +16,7 @@ use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use LogicException;
 
@@ -142,11 +143,28 @@ class OrderItem extends Model
      * from the columns above, which snapshot what a dropshipping/wholesale
      * line was allocated to at placement time and are never rewritten.
      *
+     * Only ever the line's single source before split allocation
+     * (Advanced Order Management batch, Commit 3); {@see activeAllocations()}
+     * is the one to use now that a line may hold more than one at once —
+     * kept rather than removed since a non-split line's "the one source" is
+     * still a meaningful question, and several existing call sites ask it.
+     *
      * @return HasOne<OrderItemAllocation, $this>
      */
     public function activeAllocation(): HasOne
     {
         return $this->hasOne(OrderItemAllocation::class)->where('status', AllocationStatus::Active);
+    }
+
+    /**
+     * Every source currently holding part of this line — one row when the
+     * line is not split, several when it is.
+     *
+     * @return HasMany<OrderItemAllocation, $this>
+     */
+    public function activeAllocations(): HasMany
+    {
+        return $this->hasMany(OrderItemAllocation::class)->where('status', AllocationStatus::Active);
     }
 
     protected static function booted(): void

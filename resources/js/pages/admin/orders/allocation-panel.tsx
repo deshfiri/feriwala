@@ -60,7 +60,19 @@ type Candidate = {
 type SortKey = 'cost_asc' | 'cost_desc' | 'margin_desc' | 'margin_asc';
 type Tab = 'recommended' | 'suppliers' | 'warehouses';
 
-export type AllocationLine = { id: string; name: string; sku: string };
+export type AllocationLine = {
+    id: string;
+    name: string;
+    sku: string;
+    /**
+     * The specific existing active allocation this panel is reallocating,
+     * when it is one (Advanced Order Management batch, Commit 3) — absent
+     * when adding a brand-new split for still-unallocated units.
+     */
+    replacingAllocationId?: string;
+    /** Defaults the quantity-to-allocate field; editable down, never up past what the line has left. */
+    quantity?: number;
+};
 
 const controlClass =
     'border-input bg-background focus-visible:ring-ring rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
@@ -97,6 +109,9 @@ export default function AllocationPanel({
     const [eligibleOnly, setEligibleOnly] = useState(true);
     const [chosen, setChosen] = useState<Candidate | null>(null);
     const [linking, setLinking] = useState<Candidate | null>(null);
+    const [remainingQuantity, setRemainingQuantity] = useState<number | null>(
+        null,
+    );
 
     useEffect(() => {
         if (!open || line === null) {
@@ -104,6 +119,7 @@ export default function AllocationPanel({
             setChosen(null);
             setLinking(null);
             setTab('recommended');
+            setRemainingQuantity(null);
 
             return;
         }
@@ -111,20 +127,32 @@ export default function AllocationPanel({
         let cancelled = false;
         setRecommended(null);
 
-        fetch(
+        const url = new URL(
             OrderController.allocationCandidates.url({
                 order: orderId,
                 item: line.id,
             }),
-            {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            },
-        )
+            window.location.origin,
+        );
+        if (line.replacingAllocationId) {
+            url.searchParams.set('replacing', line.replacingAllocationId);
+        }
+
+        fetch(url.toString(), {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
             .then((response) => response.json())
-            .then((body: { candidates: Candidate[] }) => {
-                if (!cancelled) setRecommended(body.candidates);
-            })
+            .then(
+                (body: {
+                    candidates: Candidate[];
+                    remaining_quantity: number;
+                }) => {
+                    if (cancelled) return;
+                    setRecommended(body.candidates);
+                    setRemainingQuantity(body.remaining_quantity);
+                },
+            )
             .catch(() => {
                 if (!cancelled) setRecommended([]);
             });
@@ -358,6 +386,7 @@ export default function AllocationPanel({
                 orderId={orderId}
                 line={line}
                 candidate={chosen}
+                remainingQuantity={remainingQuantity}
                 onOpenChange={(next) => {
                     if (!next) setChosen(null);
                 }}
@@ -769,27 +798,32 @@ function ConfirmAllocationDialog({
     orderId,
     line,
     candidate,
+    remainingQuantity,
     onOpenChange,
     onSuccess,
 }: {
     orderId: string;
     line: AllocationLine;
     candidate: Candidate | null;
+    remainingQuantity: number | null;
     onOpenChange: (open: boolean) => void;
     onSuccess: () => void;
 }) {
     const { t } = useTranslation();
     const [acknowledged, setAcknowledged] = useState(false);
+    const [quantity, setQuantity] = useState(line.quantity ?? 1);
 
     useEffect(() => {
         setAcknowledged(false);
-    }, [candidate]);
+        setQuantity(line.quantity ?? remainingQuantity ?? 1);
+    }, [candidate, line.quantity, remainingQuantity]);
 
     if (candidate === null) {
         return null;
     }
 
     const needsAcknowledgement = candidate.requires_confirmation;
+    const maxQuantity = remainingQuantity ?? line.quantity ?? 1;
 
     return (
         <Dialog open onOpenChange={onOpenChange}>
@@ -827,6 +861,58 @@ function ConfirmAllocationDialog({
                                 name="source_id"
                                 value={candidate.source_id}
                             />
+                            <input
+                                type="hidden"
+                                name="quantity"
+                                value={quantity}
+                            />
+                            {line.replacingAllocationId && (
+                                <input
+                                    type="hidden"
+                                    name="replacing_allocation_id"
+                                    value={line.replacingAllocationId}
+                                />
+                            )}
+
+                            {maxQuantity > 1 && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="allocation-quantity">
+                                        {t(
+                                            'orders.admin.allocation.quantity',
+                                        )}
+                                    </Label>
+                                    <Input
+                                        id="allocation-quantity"
+                                        type="number"
+                                        min={1}
+                                        max={maxQuantity}
+                                        value={quantity}
+                                        onChange={(event) =>
+                                            setQuantity(
+                                                Math.min(
+                                                    maxQuantity,
+                                                    Math.max(
+                                                        1,
+                                                        Number(
+                                                            event.target.value,
+                                                        ) || 1,
+                                                    ),
+                                                ),
+                                            )
+                                        }
+                                        className="max-w-32"
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        {t(
+                                            'orders.admin.allocation.quantity_help',
+                                            { max: maxQuantity },
+                                        )}
+                                    </p>
+                                    <InputError
+                                        message={errors.quantity}
+                                    />
+                                </div>
+                            )}
 
                             {needsAcknowledgement && (
                                 <label className="bg-warning-subtle border-warning/30 flex items-start gap-2 rounded-lg border p-3 text-sm">

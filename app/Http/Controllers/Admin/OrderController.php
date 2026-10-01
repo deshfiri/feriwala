@@ -141,8 +141,8 @@ class OrderController extends Controller
         $record = $this->order($order);
         $record->load([
             'businessAccount:id,name', 'placedBy:id,name', 'items.stockReservation',
-            'items.activeAllocation.warehouse', 'items.activeAllocation.supplier', 'items.activeAllocation.offer',
-            'items.activeAllocation.fulfilmentCommitment.statusHistory.changedBy:id,name',
+            'items.activeAllocations.warehouse', 'items.activeAllocations.supplier', 'items.activeAllocations.offer',
+            'items.activeAllocations.fulfilmentCommitment.statusHistory.changedBy:id,name',
             'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain',
             'websiteCustomer:id,public_id,mobile,is_guest',
             'fulfillmentStatusHistory.changedBy:id,name',
@@ -236,8 +236,10 @@ class OrderController extends Controller
                         'expires_at' => $item->stockReservation->expires_at->toIso8601String(),
                     ],
                     /*
-                     * The staff-chosen source currently holding this line
-                     * (AllocateOrderLineSource) — never spliced into a
+                     * The staff-chosen sources currently holding this line
+                     * (AllocateOrderLineSource) — one row, or several when
+                     * the line is split across sources (Advanced Order
+                     * Management batch, Commit 3) — never spliced into a
                      * Client, Partner or Storefront payload (D25), and
                      * redacted here too, field by field, for staff who lack
                      * the permission each figure answers to: a Supplier's
@@ -246,7 +248,11 @@ class OrderController extends Controller
                      * `order.view` alone (this action's own gate) is never
                      * enough to see any of the four.
                      */
-                    'allocation' => $this->allocationSummary($item, $canViewSupplierPricing, $canViewCatalogPricing, $canManageFulfilmentCommitment),
+                    'allocations' => $item->activeAllocations->map(
+                        fn (OrderItemAllocation $allocation) => $this->allocationSummary($allocation, $canViewSupplierPricing, $canViewCatalogPricing, $canManageFulfilmentCommitment),
+                    )->all(),
+                    'allocated_quantity' => (int) $item->activeAllocations->sum('quantity'),
+                    'remaining_quantity' => max(0, $item->quantity - (int) $item->activeAllocations->sum('quantity')),
                     'can_allocate' => $canAllocate,
                 ])->all(),
                 'payment' => $payment === null ? null : [
@@ -330,11 +336,24 @@ class OrderController extends Controller
 
         $line = $this->line($record, $item);
 
+        // When browsing candidates to replace one specific existing split
+        // (Advanced Order Management batch, Commit 3), that allocation's own
+        // quantity is left out of "already allocated" -- otherwise a
+        // like-for-like swap on a fully-allocated line would show zero
+        // units remaining and every candidate as unable to cover the line.
+        $replacing = $request->string('replacing')->toString();
+        $excluding = $replacing === '' ? null : OrderItemAllocation::query()
+            ->where('order_item_id', $line->id)
+            ->where('public_id', $replacing)
+            ->first();
+
         return response()->json([
             'candidates' => array_map(
                 fn (AllocationCandidate $candidate) => $candidate->toArray(),
-                $this->candidates->forLine($line),
+                $this->candidates->forLine($line, $excluding),
             ),
+            'already_allocated_quantity' => $line->quantity - $this->candidates->remainingQuantity($line, $excluding),
+            'remaining_quantity' => $this->candidates->remainingQuantity($line, $excluding),
         ]);
     }
 
@@ -356,6 +375,11 @@ class OrderController extends Controller
             'source_id' => ['required', 'string'],
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
             'override' => ['sometimes', 'boolean'],
+            // Split allocation (Advanced Order Management batch, Commit 3):
+            // omitted, this allocates everything not yet covered by another
+            // active allocation, exactly as before split allocation existed.
+            'quantity' => ['sometimes', 'integer', 'min:1'],
+            'replacing_allocation_id' => ['sometimes', 'nullable', 'string'],
         ]);
 
         $sourceType = AllocationSourceType::from($validated['source_type']);
@@ -376,6 +400,8 @@ class OrderController extends Controller
                 $actor,
                 $validated['reason'],
                 $override,
+                isset($validated['quantity']) ? (int) $validated['quantity'] : null,
+                $validated['replacing_allocation_id'] ?? null,
             );
         } catch (AllocationRefused $refused) {
             throw ValidationException::withMessages(['source_id' => $refused->getMessage()]);
@@ -608,23 +634,19 @@ class OrderController extends Controller
     }
 
     /**
-     * One line's current allocation, redacted field by field for a viewer
-     * who lacks the permission each figure answers to.
+     * One active allocation holding part (or all) of a line, redacted field
+     * by field for a viewer who lacks the permission each figure answers to.
+     * A split line (Advanced Order Management batch, Commit 3) calls this
+     * once per active allocation, not once per line.
      *
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
      */
     protected function allocationSummary(
-        OrderItem $item,
+        OrderItemAllocation $allocation,
         bool $canViewSupplierPricing,
         bool $canViewCatalogPricing,
         bool $canManageFulfilmentCommitment,
-    ): ?array {
-        $allocation = $item->activeAllocation;
-
-        if ($allocation === null) {
-            return null;
-        }
-
+    ): array {
         $isSupplierSourced = $allocation->source_type === AllocationSourceType::SupplierOffer;
         $canViewFinancials = $isSupplierSourced ? $canViewSupplierPricing : $canViewCatalogPricing;
 
@@ -638,6 +660,7 @@ class OrderController extends Controller
             'source_label' => $isSupplierSourced
                 ? ($canViewSupplierPricing ? $allocation->supplier?->business_name : null)
                 : $allocation->warehouse?->name,
+            'quantity' => $allocation->quantity,
             'unit_cost' => $canViewFinancials ? $allocation->unit_cost->jsonSerialize() : null,
             'expected_margin' => $canViewFinancials ? $allocation->expected_margin->jsonSerialize() : null,
             'allocated_at' => $allocation->allocated_at->toIso8601String(),

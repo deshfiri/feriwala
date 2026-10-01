@@ -32,6 +32,7 @@ use App\Domain\Supplier\Models\SupplierOffer;
 use App\Models\User;
 use App\Support\Concurrency\DistributedLock;
 use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Str;
@@ -47,9 +48,16 @@ use Illuminate\Support\Str;
  * refused rather than quietly swapped — the reason goes back to the staff
  * member so they can choose again from a refreshed list.
  *
- * One line, one source, one reservation, one payable. The no-split rule is
- * unchanged: a source that cannot cover the whole line is not eligible, so an
- * allocation is always for the line's full quantity.
+ * **Split allocation** (Advanced Order Management batch, Commit 3): a line
+ * may hold more than one simultaneously active allocation at once, each for
+ * part of its quantity — different units from different sources, not a
+ * second claim on the same units. `$quantity` defaults to whatever is not
+ * yet covered by any active allocation, so every call that omits it keeps
+ * behaving exactly as the single-source original did. `$replacingAllocationId`
+ * names the one specific existing allocation being handed to a new source;
+ * omitted, a call either re-confirms an already-active exact source
+ * (unchanged, idempotent) or adds a brand-new split for still-unallocated
+ * units — never implicitly replaces anything.
  *
  * ### What one allocation does, atomically
  *
@@ -92,6 +100,14 @@ class AllocateOrderLineSource
      * @param  bool  $override  force a reallocation past picking/dispatch — only
      *                          ever true when the caller has already checked
      *                          {@see OrderPolicy::overrideFulfilmentState()}
+     * @param  int|null  $quantity  how much of the line this allocation should
+     *                              cover; defaults to everything not yet covered
+     *                              by another active allocation
+     * @param  string|null  $replacingAllocationId  the specific existing active
+     *                                              allocation's public id being
+     *                                              handed to this source, when
+     *                                              this is a reallocation rather
+     *                                              than a new split
      *
      * @throws AllocationRefused
      */
@@ -102,6 +118,8 @@ class AllocateOrderLineSource
         User $actor,
         string $reason,
         bool $override = false,
+        ?int $quantity = null,
+        ?string $replacingAllocationId = null,
     ): OrderItemAllocation {
         if (trim($reason) === '') {
             throw AllocationRefused::because('A reason is required and is recorded against this allocation.');
@@ -109,7 +127,7 @@ class AllocateOrderLineSource
 
         return $this->lock->run(
             key: 'order-line:allocate:'.$line->id,
-            callback: fn () => $this->allocate($line, $sourceType, $sourceId, $actor, trim($reason), $override),
+            callback: fn () => $this->allocate($line, $sourceType, $sourceId, $actor, trim($reason), $override, $quantity, $replacingAllocationId),
             ttlSeconds: 30,
             waitSeconds: 10,
         );
@@ -125,28 +143,43 @@ class AllocateOrderLineSource
         User $actor,
         string $reason,
         bool $override,
+        ?int $quantity,
+        ?string $replacingAllocationId,
     ): OrderItemAllocation {
-        return $this->database->transaction(function () use ($line, $sourceType, $sourceId, $actor, $reason, $override) {
+        return $this->database->transaction(function () use ($line, $sourceType, $sourceId, $actor, $reason, $override, $quantity, $replacingAllocationId) {
             /** @var OrderItem $locked */
             $locked = OrderItem::query()->lockForUpdate()->findOrFail($line->id);
             $order = $locked->order()->lockForUpdate()->firstOrFail();
 
-            $current = OrderItemAllocation::query()
+            $activeAllocations = OrderItemAllocation::query()
                 ->where('order_item_id', $locked->id)
                 ->where('status', AllocationStatus::Active)
                 ->lockForUpdate()
-                ->first();
+                ->get();
 
-            // Re-confirming what the line already holds changes nothing. The
-            // panel's confirm button is double-clickable and the request is
-            // retryable; neither may reserve twice or owe twice.
-            if ($current !== null && $this->isSameSource($current, $sourceType, $sourceId)) {
-                return $current;
+            $replacing = $replacingAllocationId === null
+                ? null
+                : $activeAllocations->first(fn (OrderItemAllocation $allocation) => $allocation->public_id === $replacingAllocationId);
+
+            if ($replacingAllocationId !== null && $replacing === null) {
+                throw AllocationRefused::because('The allocation being replaced is no longer active.');
+            }
+
+            // Re-confirming an already-active exact source, when nothing is
+            // explicitly being replaced, changes nothing. The panel's confirm
+            // button is double-clickable and the request is retryable; neither
+            // may reserve twice or owe twice.
+            $existingSame = $replacing === null
+                ? $activeAllocations->first(fn (OrderItemAllocation $allocation) => $this->isSameSource($allocation, $sourceType, $sourceId))
+                : null;
+
+            if ($existingSame !== null) {
+                return $existingSame;
             }
 
             $overrideUsed = false;
 
-            if ($current !== null && ! $this->canReallocate($order)) {
+            if ($replacing !== null && ! $this->canReallocate($order)) {
                 if (! $override) {
                     throw AllocationRefused::because(
                         'This line has already been picked or dispatched and can no longer be reallocated.',
@@ -156,9 +189,25 @@ class AllocateOrderLineSource
                 $overrideUsed = true;
             }
 
+            $replacingId = $replacing?->id;
+            $otherActiveQuantity = (int) $activeAllocations
+                ->reject(fn (OrderItemAllocation $allocation) => $allocation->id === $replacingId)
+                ->sum('quantity');
+
+            $remaining = max(0, (int) $locked->quantity - $otherActiveQuantity);
+            $requestedQuantity = $quantity ?? $remaining;
+
+            if ($requestedQuantity <= 0 || $requestedQuantity > $remaining) {
+                throw AllocationRefused::because("This line has {$remaining} unit(s) left to allocate.");
+            }
+
             // Re-read live, inside the lock. The panel is a view and can be
-            // minutes old; this is the decision.
-            $candidate = $this->candidateFor($locked, $sourceType, $sourceId);
+            // minutes old; this is the decision. Eligibility is judged
+            // against the same `$remaining` just computed, excluding the
+            // allocation being replaced, so a like-for-like reallocation of
+            // a fully-allocated line is never wrongly refused for "no units
+            // left."
+            $candidate = $this->candidateFor($locked, $sourceType, $sourceId, $replacing);
 
             if (! $candidate->isEligible) {
                 throw AllocationRefused::because(
@@ -166,11 +215,11 @@ class AllocateOrderLineSource
                 );
             }
 
-            if ($current !== null) {
-                $this->standDown($current, $actor, $reason);
+            if ($replacing !== null) {
+                $this->standDown($replacing, $actor, $reason);
             }
 
-            return $this->commitTo($locked, $candidate, $current, $actor, $reason, $overrideUsed);
+            return $this->commitTo($locked, $candidate, $replacing, $actor, $reason, $overrideUsed, $requestedQuantity);
         });
     }
 
@@ -223,10 +272,10 @@ class AllocateOrderLineSource
         ?OrderItemAllocation $superseded,
         User $actor,
         string $reason,
-        bool $overrideUsed = false,
+        bool $overrideUsed,
+        int $quantity,
     ): OrderItemAllocation {
         $currency = Currency::from($line->currency_code);
-        $quantity = (int) $line->quantity;
         $key = 'order-line-allocation:'.$line->public_id.':'.Str::lower((string) Str::ulid());
 
         // Locked up front, before anything that references this row: an
@@ -280,7 +329,13 @@ class AllocateOrderLineSource
                 'quantity' => $quantity,
                 'unit_cost' => $candidate->unitCost,
                 'platform_rate' => $candidate->platformRate,
-                'expected_margin' => $candidate->expectedMargin,
+                // Recomputed against the quantity actually being committed,
+                // never trusted from the candidate's own figure: that one
+                // was computed against the remaining quantity at browse
+                // time, which a split allocation may ask for less than.
+                'expected_margin' => $candidate->currencyCode === $currency->value
+                    ? $candidate->platformRate->minus($candidate->unitCost)->multipliedBy($quantity)
+                    : Money::zero($currency),
                 'currency_code' => $currency->value,
                 'status' => AllocationStatus::Active,
                 'allocated_by' => $actor->id,
@@ -427,9 +482,13 @@ class AllocateOrderLineSource
     /**
      * @throws AllocationRefused
      */
-    protected function candidateFor(OrderItem $line, AllocationSourceType $type, string $sourceId): AllocationCandidate
-    {
-        foreach ($this->candidates->forLine($line) as $candidate) {
+    protected function candidateFor(
+        OrderItem $line,
+        AllocationSourceType $type,
+        string $sourceId,
+        ?OrderItemAllocation $excluding,
+    ): AllocationCandidate {
+        foreach ($this->candidates->forLine($line, $excluding) as $candidate) {
             if ($candidate->sourceType === $type && $candidate->sourceId === $sourceId) {
                 return $candidate;
             }

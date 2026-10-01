@@ -316,6 +316,9 @@ return [
         'allocation' => [
             'action' => 'Assign source',
             'change_action' => 'Change source',
+            'split_action' => 'Allocate remaining units',
+            'quantity' => 'Quantity to allocate',
+            'quantity_help' => 'Up to :max unit(s) still unallocated on this line.',
             'panel_title' => 'Choose a source for :product',
             'panel_description' => 'Central Warehouse and every eligible Supplier offer for this exact variation. Nothing is chosen for you — pick one and confirm.',
             'search' => 'Search by warehouse or Supplier',

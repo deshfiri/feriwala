@@ -16,6 +16,7 @@ use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Illuminate\Support\Collection;
 
 /**
  * Every source that could fulfil one order line, for the staff allocation
@@ -41,24 +42,55 @@ use App\Support\Money\Money;
 class AllocationSourceCandidates
 {
     /**
+     * @param  OrderItemAllocation|null  $excluding  a specific active allocation
+     *                                               to leave out of "already
+     *                                               allocated" — the one about
+     *                                               to be replaced, when this is
+     *                                               a reallocation rather than a
+     *                                               new split
      * @return list<AllocationCandidate>
      */
-    public function forLine(OrderItem $line): array
+    public function forLine(OrderItem $line, ?OrderItemAllocation $excluding = null): array
     {
         $currency = Currency::from($line->currency_code);
         $platformRate = $line->unit_price;
-        $quantity = (int) $line->quantity;
+        $remaining = $this->remainingQuantity($line, $excluding);
 
         $active = OrderItemAllocation::query()
             ->where('order_item_id', $line->id)
             ->where('status', AllocationStatus::Active)
-            ->first();
+            ->get();
 
         return [
-            ...$this->warehouseCandidates($line, $quantity, $platformRate, $currency, $active),
-            ...$this->supplierCandidates($line, $quantity, $platformRate, $currency, $active),
-            ...$this->linkedCandidates($line, $quantity, $platformRate, $currency, $active),
+            ...$this->warehouseCandidates($line, $remaining, $platformRate, $currency, $active),
+            ...$this->supplierCandidates($line, $remaining, $platformRate, $currency, $active),
+            ...$this->linkedCandidates($line, $remaining, $platformRate, $currency, $active),
         ];
+    }
+
+    /**
+     * How much of this line is not yet covered by any active allocation —
+     * what a genuinely new split allocation could still take (Advanced Order
+     * Management batch, Commit 3). Every eligibility check and margin figure
+     * below is judged against this, not the line's full quantity, so an
+     * unsplit line (the overwhelming majority) behaves exactly as before:
+     * with nothing yet active, remaining equals the line's own quantity.
+     *
+     * `$excluding` leaves one specific active allocation's own quantity out
+     * of what counts as "already allocated" — without it, reallocating a
+     * fully-split line's one allocation to a different source would see
+     * zero units remaining and wrongly refuse a like-for-like swap.
+     */
+    public function remainingQuantity(OrderItem $line, ?OrderItemAllocation $excluding = null): int
+    {
+        $excludingId = $excluding?->id;
+        $allocated = (int) OrderItemAllocation::query()
+            ->where('order_item_id', $line->id)
+            ->where('status', AllocationStatus::Active)
+            ->when($excludingId !== null, fn ($query) => $query->whereKeyNot($excludingId))
+            ->sum('quantity');
+
+        return max(0, (int) $line->quantity - $allocated);
     }
 
     /**
@@ -67,6 +99,7 @@ class AllocationSourceCandidates
      * "Recommended / Already Related" beyond the trivial exact-match case
      * the two methods above already cover.
      *
+     * @param  Collection<int, OrderItemAllocation>  $active
      * @return list<AllocationCandidate>
      */
     protected function linkedCandidates(
@@ -74,7 +107,7 @@ class AllocationSourceCandidates
         int $quantity,
         Money $platformRate,
         Currency $currency,
-        ?OrderItemAllocation $active,
+        Collection $active,
     ): array {
         $links = ProductSourceLink::query()
             ->forOrderedProduct($line->product_id, $line->product_variant_id)
@@ -92,12 +125,15 @@ class AllocationSourceCandidates
         return array_values(array_filter($candidates));
     }
 
+    /**
+     * @param  Collection<int, OrderItemAllocation>  $active
+     */
     protected function linkedWarehouseCandidate(
         ProductSourceLink $link,
         int $quantity,
         Money $platformRate,
         Currency $currency,
-        ?OrderItemAllocation $active,
+        Collection $active,
     ): ?AllocationCandidate {
         $item = $link->stockItem;
 
@@ -123,9 +159,10 @@ class AllocationSourceCandidates
             currencyCode: $currency->value,
             isEligible: $isEligible,
             ineligibleReason: $isEligible ? null : 'This warehouse holds '.$atp.' of the '.$quantity.' needed.',
-            isCurrentlyAllocated: $active !== null
-                && $active->source_type === AllocationSourceType::Warehouse
-                && $active->warehouse_id === $item->warehouse_id,
+            isCurrentlyAllocated: $active->contains(
+                fn (OrderItemAllocation $allocation) => $allocation->source_type === AllocationSourceType::Warehouse
+                    && $allocation->warehouse_id === $item->warehouse_id,
+            ),
             isRelated: true,
             sourceProductId: $item->product_id,
             sourceProductVariantId: $item->product_variant_id,
@@ -134,12 +171,15 @@ class AllocationSourceCandidates
         );
     }
 
+    /**
+     * @param  Collection<int, OrderItemAllocation>  $active
+     */
     protected function linkedSupplierCandidate(
         ProductSourceLink $link,
         int $quantity,
         Money $platformRate,
         Currency $currency,
-        ?OrderItemAllocation $active,
+        Collection $active,
     ): ?AllocationCandidate {
         $offer = $link->supplierOffer;
 
@@ -169,7 +209,7 @@ class AllocationSourceCandidates
             currencyCode: $offer->currency_code,
             isEligible: $reason === null,
             ineligibleReason: $reason,
-            isCurrentlyAllocated: $active !== null && $active->supplier_offer_id === $offer->id,
+            isCurrentlyAllocated: $active->contains(fn (OrderItemAllocation $allocation) => $allocation->supplier_offer_id === $offer->id),
             supplierId: $offer->supplier->public_id,
             supplierName: $offer->supplier->business_name,
             leadTimeDays: $offer->lead_time_days,
@@ -195,6 +235,7 @@ class AllocationSourceCandidates
      * left `available` precisely so nobody else can reach them (§19), so
      * leaving them out would under-report what this order can actually take.
      *
+     * @param  Collection<int, OrderItemAllocation>  $active
      * @return list<AllocationCandidate>
      */
     protected function warehouseCandidates(
@@ -202,7 +243,7 @@ class AllocationSourceCandidates
         int $quantity,
         Money $platformRate,
         Currency $currency,
-        ?OrderItemAllocation $active,
+        Collection $active,
     ): array {
         // A variation may price its own cost; otherwise the product's stands.
         $variant = $line->product_variant_id === null ? null : $line->variant;
@@ -239,9 +280,10 @@ class AllocationSourceCandidates
                 currencyCode: $currency->value,
                 isEligible: $isEligible,
                 ineligibleReason: $isEligible ? null : 'This warehouse holds '.$atp.' of the '.$quantity.' needed.',
-                isCurrentlyAllocated: $active !== null
-                    && $active->source_type === AllocationSourceType::Warehouse
-                    && $active->warehouse_id === $item->warehouse_id,
+                isCurrentlyAllocated: $active->contains(
+                    fn (OrderItemAllocation $allocation) => $allocation->source_type === AllocationSourceType::Warehouse
+                        && $allocation->warehouse_id === $item->warehouse_id,
+                ),
             );
         })->values()->all();
 
@@ -255,6 +297,7 @@ class AllocationSourceCandidates
      * catalogue holds one product and one variation, and each Supplier's offer
      * is a separate row here with its own rate, availability and lead time.
      *
+     * @param  Collection<int, OrderItemAllocation>  $active
      * @return list<AllocationCandidate>
      */
     protected function supplierCandidates(
@@ -262,7 +305,7 @@ class AllocationSourceCandidates
         int $quantity,
         Money $platformRate,
         Currency $currency,
-        ?OrderItemAllocation $active,
+        Collection $active,
     ): array {
         $offers = SupplierOffer::query()
             ->with(['supplier', 'stock', 'originatingListingItem'])
@@ -300,7 +343,7 @@ class AllocationSourceCandidates
                 currencyCode: $offer->currency_code,
                 isEligible: $reason === null,
                 ineligibleReason: $reason,
-                isCurrentlyAllocated: $active !== null && $active->supplier_offer_id === $offer->id,
+                isCurrentlyAllocated: $active->contains(fn (OrderItemAllocation $allocation) => $allocation->supplier_offer_id === $offer->id),
                 supplierId: $offer->supplier->public_id,
                 supplierName: $offer->supplier->business_name,
                 leadTimeDays: $offer->lead_time_days ?? $offer->originatingListingItem?->lead_time_days,
