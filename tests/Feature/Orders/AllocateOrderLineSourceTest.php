@@ -82,7 +82,7 @@ function allocateTestOffer(string $rate = '900.00', int $stock = 10): SupplierOf
     return $offer->refresh();
 }
 
-function allocateTestLineTo(AllocationSourceType $type, string $sourceId, ?User $actor = null): OrderItemAllocation
+function allocateTestLineTo(AllocationSourceType $type, string $sourceId, ?User $actor = null, ?OrderItemAllocation $replacing = null): OrderItemAllocation
 {
     return app(AllocateOrderLineSource::class)->handle(
         test()->line->refresh(),
@@ -90,6 +90,7 @@ function allocateTestLineTo(AllocationSourceType $type, string $sourceId, ?User 
         $sourceId,
         $actor ?? test()->staff,
         'Chosen by staff after comparing sources.',
+        replacingAllocationId: $replacing?->public_id,
     );
 }
 
@@ -260,7 +261,7 @@ describe('reallocating to a different source', function () {
         $second = allocateTestOffer(rate: '1000.00', stock: 10);
 
         $original = allocateTestLineTo(AllocationSourceType::SupplierOffer, $first->public_id);
-        $replacement = allocateTestLineTo(AllocationSourceType::SupplierOffer, $second->public_id);
+        $replacement = allocateTestLineTo(AllocationSourceType::SupplierOffer, $second->public_id, replacing: $original);
 
         $original->refresh();
 
@@ -297,8 +298,8 @@ describe('reallocating to a different source', function () {
         $offer = allocateTestOffer(stock: 10);
         $warehouse = allocateTestWarehouse();
 
-        allocateTestLineTo(AllocationSourceType::SupplierOffer, $offer->public_id);
-        $replacement = allocateTestLineTo(AllocationSourceType::Warehouse, $warehouse->public_id);
+        $original = allocateTestLineTo(AllocationSourceType::SupplierOffer, $offer->public_id);
+        $replacement = allocateTestLineTo(AllocationSourceType::Warehouse, $warehouse->public_id, replacing: $original);
 
         expect($replacement->source_type)->toBe(AllocationSourceType::Warehouse)
             ->and($replacement->createsSupplierPayable())->toBeFalse()
@@ -312,8 +313,8 @@ describe('reallocating to a different source', function () {
         $warehouse = allocateTestWarehouse(available: 10);
         $offer = allocateTestOffer(rate: '950.00', stock: 10);
 
-        allocateTestLineTo(AllocationSourceType::Warehouse, $warehouse->public_id);
-        allocateTestLineTo(AllocationSourceType::SupplierOffer, $offer->public_id);
+        $original = allocateTestLineTo(AllocationSourceType::Warehouse, $warehouse->public_id);
+        allocateTestLineTo(AllocationSourceType::SupplierOffer, $offer->public_id, replacing: $original);
 
         $item = StockItem::query()->where('warehouse_id', $warehouse->id)->sole();
 

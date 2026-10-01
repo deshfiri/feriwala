@@ -73,7 +73,7 @@ beforeEach(function () {
 
     $this->staff = User::factory()->staff()->create();
 
-    app(AllocateOrderLineSource::class)->handle(
+    $this->initialAllocation = app(AllocateOrderLineSource::class)->handle(
         $this->line, AllocationSourceType::SupplierOffer, $this->offerA->public_id, $this->staff, 'Initial allocation.',
     );
 });
@@ -89,6 +89,7 @@ function reallocationGuardAdvanceToPicking(Order $order, User $staff): void
 test('reallocation is allowed while fulfilment is still early', function () {
     app(AllocateOrderLineSource::class)->handle(
         $this->line, AllocationSourceType::SupplierOffer, $this->offerB->public_id, $this->staff, 'Switching before picking.',
+        replacingAllocationId: $this->initialAllocation->public_id,
     );
 
     $active = OrderItemAllocation::query()->where('order_item_id', $this->line->id)->where('status', 'active')->sole();
@@ -102,6 +103,7 @@ test('reallocation is refused once fulfilment has reached picking', function () 
 
     expect(fn () => app(AllocateOrderLineSource::class)->handle(
         $this->line, AllocationSourceType::SupplierOffer, $this->offerB->public_id, $this->staff, 'Too late.',
+        replacingAllocationId: $this->initialAllocation->public_id,
     ))->toThrow(AllocationRefused::class, 'picked or dispatched');
 
     $active = OrderItemAllocation::query()->where('order_item_id', $this->line->id)->where('status', 'active')->sole();
@@ -112,7 +114,8 @@ test('an explicit override reallocates past picking and is recorded on the new a
     reallocationGuardAdvanceToPicking($this->order, $this->staff);
 
     app(AllocateOrderLineSource::class)->handle(
-        $this->line, AllocationSourceType::SupplierOffer, $this->offerB->public_id, $this->staff, 'Overriding: Supplier A can no longer fulfil in time.', override: true,
+        $this->line, AllocationSourceType::SupplierOffer, $this->offerB->public_id, $this->staff, 'Overriding: Supplier A can no longer fulfil in time.',
+        override: true, replacingAllocationId: $this->initialAllocation->public_id,
     );
 
     $active = OrderItemAllocation::query()->where('order_item_id', $this->line->id)->where('status', 'active')->sole();

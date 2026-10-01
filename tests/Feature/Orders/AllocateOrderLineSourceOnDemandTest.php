@@ -79,7 +79,7 @@ function fulfilmentCommitmentTestOffer(
     return $offer->refresh();
 }
 
-function fulfilmentCommitmentTestAllocate(AllocationSourceType $type, string $sourceId)
+function fulfilmentCommitmentTestAllocate(AllocationSourceType $type, string $sourceId, ?OrderItemAllocation $replacing = null)
 {
     return app(AllocateOrderLineSource::class)->handle(
         test()->line->refresh(),
@@ -87,6 +87,7 @@ function fulfilmentCommitmentTestAllocate(AllocationSourceType $type, string $so
         $sourceId,
         test()->staff,
         'Chosen by staff after comparing sources.',
+        replacingAllocationId: $replacing?->public_id,
     );
 }
 
@@ -181,7 +182,7 @@ test('reallocating away from an on_demand offer cancels its commitment atomicall
     $firstAllocation = fulfilmentCommitmentTestAllocate(AllocationSourceType::SupplierOffer, $original->public_id);
     $originalCommitment = SupplierFulfilmentCommitment::query()->where('order_item_allocation_id', $firstAllocation->id)->sole();
 
-    $secondAllocation = fulfilmentCommitmentTestAllocate(AllocationSourceType::SupplierOffer, $replacement->public_id);
+    $secondAllocation = fulfilmentCommitmentTestAllocate(AllocationSourceType::SupplierOffer, $replacement->public_id, replacing: $firstAllocation);
 
     expect($originalCommitment->refresh()->status)->toBe(FulfilmentCommitmentStatus::Cancelled)
         ->and($originalCommitment->cancelled_at)->not->toBeNull()
