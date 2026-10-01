@@ -6,6 +6,7 @@ import {
     Coins,
     CreditCard,
     LayoutGrid,
+    Layers,
     MapPin,
     PackageCheck,
     PackageSearch,
@@ -25,6 +26,7 @@ import { dashboard } from '@/routes/supplier';
 import { index as addresses } from '@/routes/supplier/addresses';
 import { index as allocations } from '@/routes/supplier/allocations';
 import { create as kyc } from '@/routes/supplier/kyc';
+import { index as listingLots } from '@/routes/supplier/listing-lots';
 import { index as listings } from '@/routes/supplier/listings';
 import { index as notifications } from '@/routes/supplier/notifications';
 import { index as offers } from '@/routes/supplier/offers';
@@ -98,6 +100,11 @@ export default function SupplierLayout({
                           title: t('supplier.nav.listings'),
                           href: listings(),
                           icon: ClipboardList,
+                      },
+                      {
+                          title: t('supplier.nav.listing_lots'),
+                          href: listingLots(),
+                          icon: Layers,
                       },
                       /*
                        * One screen, not two: `supplier/offers` shows each

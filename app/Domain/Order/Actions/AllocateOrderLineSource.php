@@ -22,7 +22,11 @@ use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Supplier\Actions\AccrueSupplierPayable;
+use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
 use App\Domain\Supplier\Actions\CancelSupplierPayable;
+use App\Domain\Supplier\Actions\RecordSupplierFulfilmentCommitment;
+use App\Domain\Supplier\Enums\SupplyMode;
+use App\Domain\Supplier\Exceptions\FulfilmentCapacityExhausted;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Models\User;
 use App\Support\Concurrency\DistributedLock;
@@ -75,6 +79,8 @@ class AllocateOrderLineSource
         protected StockReservations $reservations,
         protected AccrueSupplierPayable $payables,
         protected CancelSupplierPayable $cancellations,
+        protected RecordSupplierFulfilmentCommitment $commitments,
+        protected AdvanceSupplierFulfilmentCommitment $advanceCommitment,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
@@ -171,6 +177,15 @@ class AllocateOrderLineSource
             $this->reservations->release($reservation, 'Reallocated: '.$reason, $actor->id);
         }
 
+        // A non-ready-stock allocation never held a reservation at all (see
+        // commitTo()) -- its capacity commitment is what standing down must
+        // release instead, correction 10.
+        $commitment = $current->fulfilmentCommitment;
+
+        if ($commitment !== null && ! $commitment->status->isTerminal()) {
+            $this->advanceCommitment->cancel($commitment, $actor, 'Line reallocated to another source: '.$reason);
+        }
+
         $payable = $current->payable;
 
         if ($payable !== null) {
@@ -201,8 +216,16 @@ class AllocateOrderLineSource
         $quantity = (int) $line->quantity;
         $key = 'order-line-allocation:'.$line->public_id.':'.Str::lower((string) Str::ulid());
 
+        // Locked up front, before anything that references this row: an
+        // OrderItemAllocation insert below takes an implicit FK share lock
+        // on the offer the instant it's created, and RecordSupplierFulfilmentCommitment
+        // locks it again for update. Two concurrent transactions that both
+        // insert the allocation first and only then try to lock the offer
+        // deadlock on that lock upgrade (a real failure this action's own
+        // concurrency test caught) -- taking the strongest lock first, in
+        // the same order every transaction takes it, is what rules that out.
         $offer = $candidate->sourceType === AllocationSourceType::SupplierOffer
-            ? SupplierOffer::query()->where('public_id', $candidate->sourceId)->firstOrFail()
+            ? SupplierOffer::query()->where('public_id', $candidate->sourceId)->lockForUpdate()->firstOrFail()
             : null;
 
         $linkedStockItem = null;
@@ -221,7 +244,12 @@ class AllocateOrderLineSource
             }
         }
 
-        $reservation = $this->reserve($line, $candidate, $offer, $linkedStockItem, $quantity, $key);
+        // on_demand/pre_order never hold physical stock -- no reservation is
+        // taken, and none of StockReservations' own machinery runs for them
+        // (corrections 5/6). Their capacity is enforced separately, below,
+        // once the allocation itself exists.
+        $isNonReadyStockOffer = $offer !== null && $offer->supply_mode !== SupplyMode::ReadyStock;
+        $reservation = $isNonReadyStockOffer ? null : $this->reserve($line, $candidate, $offer, $linkedStockItem, $quantity, $key);
 
         try {
             $allocation = OrderItemAllocation::create([
@@ -235,7 +263,7 @@ class AllocateOrderLineSource
                 'supplier_offer_price_change_id' => $offer === null
                     ? null
                     : $this->currentPriceVersionId($offer),
-                'stock_reservation_id' => $reservation->id,
+                'stock_reservation_id' => $reservation?->id,
                 'quantity' => $quantity,
                 'unit_cost' => $candidate->unitCost,
                 'platform_rate' => $candidate->platformRate,
@@ -251,9 +279,19 @@ class AllocateOrderLineSource
             // The partial unique index refused a second active allocation:
             // another request won this line while we were reserving. Give the
             // units straight back rather than stranding them.
-            $this->reservations->release($reservation, 'Allocation lost a race for this line.', $actor->id);
+            if ($reservation !== null) {
+                $this->reservations->release($reservation, 'Allocation lost a race for this line.', $actor->id);
+            }
 
             throw AllocationRefused::because('This line was allocated by someone else a moment ago.');
+        }
+
+        if ($isNonReadyStockOffer) {
+            try {
+                $this->commitments->forAllocation($allocation);
+            } catch (FulfilmentCapacityExhausted $exception) {
+                throw AllocationRefused::because($exception->getMessage());
+            }
         }
 
         $superseded?->forceFill(['superseded_by_allocation_id' => $allocation->id])->save();
@@ -281,7 +319,7 @@ class AllocateOrderLineSource
                 'unit_cost' => $allocation->unit_cost->toDecimal(),
                 'expected_margin' => $allocation->expected_margin->toDecimal(),
                 'currency' => $currency->value,
-                'reservation' => $reservation->reference,
+                'reservation' => $reservation?->reference,
             ],
             reason: $reason,
             module: PermissionModule::Order->value,

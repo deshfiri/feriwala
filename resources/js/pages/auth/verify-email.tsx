@@ -1,4 +1,4 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, setLayoutProps } from '@inertiajs/react';
 import { CheckCircle2, MailCheck } from 'lucide-react';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,11 @@ type Props = {
  */
 export default function VerifyEmail({ email, status }: Props) {
     const { t } = useTranslation();
+
+    setLayoutProps({
+        title: t('common.verify_email.title'),
+        description: t('auth.verify_email.layout_description'),
+    });
 
     const justSent = status === 'verification-link-sent';
 
@@ -115,8 +120,3 @@ export default function VerifyEmail({ email, status }: Props) {
         </>
     );
 }
-
-VerifyEmail.layout = {
-    title: 'Confirm your email address',
-    description: 'One step left before your account is ready',
-};

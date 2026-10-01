@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $public_id
  * @property string $reference
  * @property int $supplier_id
+ * @property int|null $lot_id
  * @property ListingStatus $status
  * @property string $product_name
  * @property string|null $description
@@ -93,6 +94,17 @@ class SupplierProductListing extends Model
     }
 
     /**
+     * The batch this product entry was drafted into, when it was created
+     * through the lot workspace rather than the single-listing path.
+     *
+     * @return BelongsTo<SupplierProductListingLot, $this>
+     */
+    public function lot(): BelongsTo
+    {
+        return $this->belongsTo(SupplierProductListingLot::class, 'lot_id');
+    }
+
+    /**
      * @return BelongsTo<Category, $this>
      */
     public function category(): BelongsTo
@@ -130,6 +142,24 @@ class SupplierProductListing extends Model
     public function items(): HasMany
     {
         return $this->hasMany(SupplierProductListingItem::class)->orderBy('id');
+    }
+
+    /**
+     * This product entry's own images -- never a variant-specific override,
+     * which lives on the variant's own {@see SupplierProductListingItem::variantMedia()}.
+     *
+     * @return HasMany<SupplierListingMedia, $this>
+     */
+    public function media(): HasMany
+    {
+        return $this->hasMany(SupplierListingMedia::class)
+            ->whereNull('supplier_product_listing_item_id')
+            ->orderBy('position');
+    }
+
+    public function primaryMedia(): ?SupplierListingMedia
+    {
+        return $this->media->firstWhere('role', SupplierListingMedia::ROLE_PRIMARY);
     }
 
     /**

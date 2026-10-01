@@ -59,6 +59,25 @@ return [
             'visibility' => 'private',
         ],
 
+        /*
+         * Supplier listing images and gallery photos (Supplier Bulk Product
+         * Listing batch).
+         *
+         * Private, like `kyc`: a listing is a pre-approval proposal, not a
+         * public storefront asset, and Supplier-rate-adjacent business data
+         * (D25) never gets a directly guessable public URL. Every read goes
+         * through a controller that checks Supplier ownership or staff's
+         * `supplier_listing.view` permission first.
+         */
+        'supplier-media' => [
+            'driver' => env('SUPPLIER_MEDIA_DISK_DRIVER', 'local'),
+            'root' => storage_path('app/supplier-media'),
+            'serve' => false,
+            'throw' => true,
+            'report' => true,
+            'visibility' => 'private',
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
