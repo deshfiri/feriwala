@@ -76,6 +76,9 @@ class RecordSupplierFulfilmentCommitment
                     'supplier_offer_id' => $offer->id,
                     'quantity' => $allocation->quantity,
                     'due_at' => $this->dueAt($offer),
+                    'confirmation_due_at' => CarbonImmutable::now()->addHours(
+                        (int) config('supplier.fulfilment_confirmation_deadline_hours', 48),
+                    ),
                 ]);
 
                 $commitment->recordStatusChange(

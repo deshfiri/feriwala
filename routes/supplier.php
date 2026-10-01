@@ -14,6 +14,7 @@ use App\Http\Controllers\Supplier\Auth\SupplierMobileVerificationController;
 use App\Http\Controllers\Supplier\Auth\SupplierPasswordResetLinkController;
 use App\Http\Controllers\Supplier\Auth\VerifySupplierEmailController;
 use App\Http\Controllers\Supplier\DashboardController;
+use App\Http\Controllers\Supplier\FulfilmentController;
 use App\Http\Controllers\Supplier\KycController;
 use App\Http\Controllers\Supplier\ListingController;
 use App\Http\Controllers\Supplier\ListingLotController;
@@ -155,6 +156,16 @@ Route::prefix('supplier')
                 Route::get('allocations/{item}', [AllocationController::class, 'show'])->name('allocations.show');
                 Route::get('payables', [PayableController::class, 'index'])->name('payables.index');
                 Route::get('payables/{payable}', [PayableController::class, 'show'])->name('payables.show');
+
+                /*
+                 * Self-service fulfilment commitments (Advanced Order
+                 * Management batch, Commit 2) -- confirm, decline, start
+                 * preparing, mark ready, own history. Staff-managed
+                 * elsewhere is not built here.
+                 */
+                Route::get('fulfilment', [FulfilmentController::class, 'index'])->name('fulfilment.index');
+                Route::get('fulfilment/{commitment}', [FulfilmentController::class, 'show'])->name('fulfilment.show');
+                Route::post('fulfilment/{commitment}/advance', [FulfilmentController::class, 'advance'])->name('fulfilment.advance');
 
                 // Wallet, payout methods and withdrawals (D25, P13-23, P13-24).
                 Route::get('wallet', [WalletController::class, 'show'])->name('wallet.show');

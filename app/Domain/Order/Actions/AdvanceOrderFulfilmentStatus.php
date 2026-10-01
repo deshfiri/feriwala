@@ -38,30 +38,35 @@ class AdvanceOrderFulfilmentStatus
         protected RollUpOrderStatus $rollUp,
     ) {}
 
-    public function handle(Order $order, OrderFulfillmentStatus $to, User $actor, ?string $reason = null): OrderFulfillmentStatusChange
-    {
+    public function handle(
+        Order $order,
+        OrderFulfillmentStatus $to,
+        ?User $actor,
+        ?string $reason = null,
+        OrderStatusChangeSource $source = OrderStatusChangeSource::Staff,
+    ): OrderFulfillmentStatusChange {
         $reason = $reason === null ? null : trim($reason);
 
         if (in_array($to, self::REASON_REQUIRED, true) && ($reason === null || $reason === '')) {
             throw new InvalidArgumentException('A reason is required for this move.');
         }
 
-        return $this->database->transaction(function () use ($order, $to, $actor, $reason) {
+        return $this->database->transaction(function () use ($order, $to, $actor, $reason, $source) {
             /** @var Order $locked */
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
 
             /** @var OrderFulfillmentStatusChange $entry */
             $entry = $locked->moveFulfilmentTo(
                 $to,
-                new StatusChange(actorId: $actor->id, reason: $reason),
-                OrderStatusChangeSource::Staff,
+                new StatusChange(actorId: $actor?->id, reason: $reason),
+                $source,
             );
 
             $this->rollUp->handle($locked);
 
             $this->audit->handle(new AuditEntry(
                 action: 'order.fulfilment_status.advanced',
-                actorId: $actor->id,
+                actorId: $actor?->id,
                 auditableType: Order::class,
                 auditableId: $locked->id,
                 before: ['fulfillment_status' => $entry->previous_status?->value],

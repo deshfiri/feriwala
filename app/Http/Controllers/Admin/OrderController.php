@@ -34,6 +34,7 @@ use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\SearchAllocationSources;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
+use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -706,11 +707,29 @@ class OrderController extends Controller
             'history' => $commitment->statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),
-                'changed_by' => $change->changedBy?->name,
+                // Null for a Supplier's own action -- there is no `users`
+                // row to name (D25) -- so the source stands in: "Supplier"
+                // reads better than a blank attribution.
+                'changed_by' => $this->historyActorLabel($change->changedBy, $change->source),
                 'changed_at' => $change->changed_at->toIso8601String(),
                 'reason' => $change->reason,
             ])->all(),
         ];
+    }
+
+    /**
+     * Who to show for a fulfilment-commitment history row — the staff
+     * member's name when one acted, else the source itself ("Supplier",
+     * "System"): a Supplier's own action has no `users` row to name at all
+     * (D25), and a blank attribution reads worse than naming the source.
+     */
+    protected function historyActorLabel(?User $changedBy, SupplierStatusChangeSource $source): string
+    {
+        if ($changedBy === null) {
+            return $source->label();
+        }
+
+        return $changedBy->name;
     }
 
     /**

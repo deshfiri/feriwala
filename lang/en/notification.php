@@ -145,6 +145,11 @@ return [
             'description' => 'We will review every product in the batch and let you know the outcome.',
         ],
 
+        'supplier.fulfilment_commitment_expired' => [
+            'title' => 'A fulfilment commitment was cancelled',
+            'description' => 'You did not confirm it before the deadline, so it has been cancelled and returned to staff for reassignment.',
+        ],
+
         'supplier.listing_correction_requested' => [
             'title' => 'Your product listing needs a correction',
             'description' => 'Review the feedback and resubmit your listing.',

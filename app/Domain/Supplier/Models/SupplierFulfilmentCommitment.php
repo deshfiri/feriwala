@@ -36,8 +36,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $quantity
  * @property FulfilmentCommitmentStatus $status
  * @property CarbonImmutable|null $due_at
+ * @property CarbonImmutable|null $confirmation_due_at
  * @property int|null $confirmed_by
  * @property CarbonImmutable|null $confirmed_at
+ * @property CarbonImmutable|null $expected_ready_at
  * @property string|null $failed_reason
  * @property CarbonImmutable|null $failed_at
  * @property int|null $cancelled_by
@@ -68,7 +70,9 @@ class SupplierFulfilmentCommitment extends Model
             'status' => FulfilmentCommitmentStatus::class,
             'quantity' => 'integer',
             'due_at' => 'immutable_datetime',
+            'confirmation_due_at' => 'immutable_datetime',
             'confirmed_at' => 'immutable_datetime',
+            'expected_ready_at' => 'immutable_datetime',
             'failed_at' => 'immutable_datetime',
             'cancelled_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
@@ -134,5 +138,16 @@ class SupplierFulfilmentCommitment extends Model
     public function statusHistory(): HasMany
     {
         return $this->hasMany(SupplierFulfilmentCommitmentStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * Whether this commitment is one of the given Supplier's own — the whole
+     * of the Supplier self-service workspace's scoping (Advanced Order
+     * Management batch, Commit 2). Read from the offer rather than a direct
+     * column, since that is the one place `supplier_id` already lives.
+     */
+    public function belongsToSupplier(Supplier $supplier): bool
+    {
+        return $this->offer->supplier_id === $supplier->id;
     }
 }

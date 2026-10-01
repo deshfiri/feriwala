@@ -35,28 +35,33 @@ class AdvanceOrderCourierStatus
         protected DatabaseManager $database,
     ) {}
 
-    public function handle(Order $order, OrderCourierStatus $to, User $actor, ?string $reason = null): OrderCourierStatusChange
-    {
+    public function handle(
+        Order $order,
+        OrderCourierStatus $to,
+        ?User $actor,
+        ?string $reason = null,
+        OrderStatusChangeSource $source = OrderStatusChangeSource::Staff,
+    ): OrderCourierStatusChange {
         $reason = $reason === null ? null : trim($reason);
 
         if (in_array($to, self::REASON_REQUIRED, true) && ($reason === null || $reason === '')) {
             throw new InvalidArgumentException('A reason is required for this move.');
         }
 
-        return $this->database->transaction(function () use ($order, $to, $actor, $reason) {
+        return $this->database->transaction(function () use ($order, $to, $actor, $reason, $source) {
             /** @var Order $locked */
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
 
             /** @var OrderCourierStatusChange $entry */
             $entry = $locked->moveCourierTo(
                 $to,
-                new StatusChange(actorId: $actor->id, reason: $reason),
-                OrderStatusChangeSource::Staff,
+                new StatusChange(actorId: $actor?->id, reason: $reason),
+                $source,
             );
 
             $this->audit->handle(new AuditEntry(
                 action: 'order.courier_status.advanced',
-                actorId: $actor->id,
+                actorId: $actor?->id,
                 auditableType: Order::class,
                 auditableId: $locked->id,
                 before: ['courier_status' => $entry->previous_status?->value],

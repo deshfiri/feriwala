@@ -2,6 +2,7 @@ import {
     Banknote,
     Bell,
     Boxes,
+    ClipboardCheck,
     ClipboardList,
     Coins,
     CreditCard,
@@ -25,6 +26,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes/supplier';
 import { index as addresses } from '@/routes/supplier/addresses';
 import { index as allocations } from '@/routes/supplier/allocations';
+import { index as fulfilment } from '@/routes/supplier/fulfilment';
 import { create as kyc } from '@/routes/supplier/kyc';
 import { index as listingLots } from '@/routes/supplier/listing-lots';
 import { index as listings } from '@/routes/supplier/listings';
@@ -129,6 +131,11 @@ export default function SupplierLayout({
                           title: t('supplier.nav.allocations'),
                           href: allocations(),
                           icon: PackageSearch,
+                      },
+                      {
+                          title: t('supplier.nav.fulfilment'),
+                          href: fulfilment(),
+                          icon: ClipboardCheck,
                       },
                       {
                           title: t('supplier.nav.addresses'),

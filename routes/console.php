@@ -10,6 +10,7 @@ use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use App\Domain\Order\Actions\RetryCodConfirmationCodes;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
+use App\Domain\Supplier\Actions\ExpireOverdueFulfilmentCommitments;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
 use App\Domain\Website\Actions\DispatchDueWebhookRetries;
@@ -236,6 +237,20 @@ Schedule::call(fn () => app(ExpireUnconfirmedCodOrders::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Close cash-on-delivery orders nobody confirmed (P6-10)');
+
+/*
+ * Supplier fulfilment commitments nobody confirmed in time (Advanced Order
+ * Management batch, Commit 2). A Supplier confirmation deadline is measured
+ * in hours, not minutes, so an hourly pass is frequent enough; the line
+ * returns to staff review without corrupting the order, payable or
+ * inventory state.
+ */
+Schedule::call(fn () => app(ExpireOverdueFulfilmentCommitments::class)->handle())
+    ->name('supplier-fulfilment-confirmation-sweep')
+    ->hourly()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Cancel Supplier fulfilment commitments past their confirmation deadline');
 
 /*
  * Confirmation codes the SMS provider did not take (§6.2, P6-10). Only those:
