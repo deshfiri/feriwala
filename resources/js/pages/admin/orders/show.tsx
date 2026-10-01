@@ -25,6 +25,9 @@ import type { StatusTone } from '@/lib/status';
 import AllocationPanel, {
     type AllocationLine,
 } from '@/pages/admin/orders/allocation-panel';
+import FulfilmentCommitmentPanel, {
+    type FulfilmentCommitment,
+} from '@/pages/admin/orders/fulfilment-commitment-panel';
 import { index } from '@/routes/admin/orders';
 
 export type AdminOrderDetail = {
@@ -76,6 +79,7 @@ export type AdminOrderDetail = {
             unit_cost: Money | null;
             expected_margin: Money | null;
             allocated_at: string;
+            fulfilment_commitment: FulfilmentCommitment | null;
         } | null;
         can_allocate: boolean;
     }[];
@@ -253,6 +257,17 @@ export default function AdminOrder({ order, can }: Props) {
                                                         line.allocation
                                                             .source_type_label}
                                                 </p>
+                                            )}
+                                            {line.allocation
+                                                ?.fulfilment_commitment && (
+                                                <FulfilmentCommitmentPanel
+                                                    orderId={order.id}
+                                                    itemId={line.id}
+                                                    commitment={
+                                                        line.allocation
+                                                            .fulfilment_commitment
+                                                    }
+                                                />
                                             )}
                                         </div>
                                         <div className="flex flex-col items-end gap-2">

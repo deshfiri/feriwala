@@ -284,6 +284,22 @@ return [
         'cancelled' => 'Order :reference cancelled. Its stock was released.',
         'allocated' => 'Line allocated.',
         'commitment_updated' => 'Fulfilment commitment updated.',
+        'fulfilment_commitment' => [
+            'title' => 'Supplier fulfilment commitment',
+            'due' => 'Due :date',
+            'staff_managed_notice' => 'Managed by staff. The Supplier does not yet confirm this themselves (Advanced Order Management).',
+            'reason' => 'Reason',
+            'reason_description' => 'Recorded on the commitment and in the audit log.',
+            'failed_reason' => 'Failed: :reason',
+            'cancelled_reason' => 'Cancelled: :reason',
+            'actions' => [
+                'confirm' => 'Confirm',
+                'start_preparing' => 'Start preparing',
+                'mark_ready' => 'Mark ready',
+                'fail' => 'Fail',
+                'cancel' => 'Cancel',
+            ],
+        ],
         'allocation' => [
             'action' => 'Assign source',
             'change_action' => 'Change source',
