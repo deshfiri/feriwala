@@ -30,29 +30,24 @@ export default function Welcome() {
             <BrandingHead />
 
             <main className="relative min-h-screen overflow-hidden text-[#171717]">
-
-
                 <div className="relative mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-6 sm:px-10 lg:px-16 xl:px-20">
-
                     {/* Brand */}
                     <header className="flex h-24 items-center">
                         <AppLogoIcon className="h-11 w-auto max-w-[190px]" />
                     </header>
 
                     {/* One Section */}
-                    <div className="grid flex-1 items-center gap-16 pb-24 pt-8 lg:grid-cols-[1fr_0.85fr] lg:gap-24 lg:pb-16 lg:pt-0">
-
+                    <div className="grid flex-1 items-center gap-16 pt-8 pb-24 lg:grid-cols-[1fr_0.85fr] lg:gap-24 lg:pt-0 lg:pb-16">
                         {/* LEFT */}
                         <section className="max-w-[620px]">
-
                             <div className="mb-7 flex items-center gap-3">
-                                <span className="h-2 w-2 rounded-full bg-orange-500" />
-                                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                <span className="bg-brand h-2 w-2 rounded-full" />
+                                <span className="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
                                     Business Portal
                                 </span>
                             </div>
 
-                            <h1 className="text-[44px] font-semibold leading-[1.08] tracking-[-0.045em] text-slate-950 sm:text-5xl lg:text-[64px]">
+                            <h1 className="text-[44px] leading-[1.08] font-semibold tracking-[-0.045em] text-slate-950 sm:text-5xl lg:text-[64px]">
                                 Everything you need
                                 <span className="block text-slate-400">
                                     to move forward.
@@ -66,14 +61,12 @@ export default function Welcome() {
 
                             {/* Actions */}
                             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-
                                 {auth.user ? (
                                     <Link
                                         href={dashboardUrl}
                                         className="group inline-flex h-[52px] items-center justify-center rounded-xl bg-slate-950 px-7 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-800"
                                     >
                                         Go to Dashboard
-
                                         <svg
                                             className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1"
                                             viewBox="0 0 20 20"
@@ -96,7 +89,6 @@ export default function Welcome() {
                                             className="group inline-flex h-[52px] items-center justify-center rounded-xl bg-slate-950 px-8 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-800"
                                         >
                                             Login
-
                                             <svg
                                                 className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1"
                                                 viewBox="0 0 20 20"
@@ -126,24 +118,22 @@ export default function Welcome() {
 
                         {/* RIGHT */}
                         <section className="relative flex items-center lg:min-h-[440px]">
-
                             {/* Divider */}
-                            <div className="absolute bottom-8 left-0 top-8 hidden w-px bg-gradient-to-b from-transparent via-slate-200 to-transparent lg:block" />
+                            <div className="absolute top-8 bottom-8 left-0 hidden w-px bg-gradient-to-b from-transparent via-slate-200 to-transparent lg:block" />
 
                             <div className="max-w-[480px] lg:pl-20">
-
-                                <div className="mb-6 font-serif text-[72px] leading-[0.7] text-orange-500/30">
+                                <div className="text-brand/30 mb-6 font-serif text-[72px] leading-[0.7]">
                                     “
                                 </div>
 
                                 <blockquote>
-                                    <p className="text-2xl font-medium leading-[1.5] tracking-[-0.025em] text-slate-700 sm:text-[28px] lg:text-[32px]">
+                                    <p className="text-2xl leading-[1.5] font-medium tracking-[-0.025em] text-slate-700 sm:text-[28px] lg:text-[32px]">
                                         {quote}
                                     </p>
                                 </blockquote>
 
                                 <div className="mt-9 flex items-center gap-4">
-                                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                    <span className="text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
                                         Business Insight
                                     </span>
                                 </div>

@@ -39,27 +39,24 @@ const { default: Welcome } = await import('./welcome');
 
 /**
  * The public home page keeps its own neutral palette, but its accent — the
- * links and the hero panel — must come from the brand token, so the colour an
- * administrator picks under Admin → Branding reaches it like every other page.
+ * "Business Portal" dot and the quotation mark — must come from the brand
+ * token, so the colour an administrator picks under Admin → Branding reaches
+ * it like every other page.
  */
 describe('the public home page', () => {
-    it('paints its links and hero panel in the brand accent', () => {
+    it('paints its accent marks in the brand colour', () => {
         const { container } = render(<Welcome />);
 
-        expect(screen.getByText('Documentation').closest('a')).toHaveClass(
-            'text-brand',
-        );
-        expect(screen.getByText('Laracasts').closest('a')).toHaveClass(
-            'text-brand',
-        );
-        expect(container.querySelector('.bg-brand-subtle')).not.toBeNull();
+        expect(screen.getByText('Business Portal')).toBeInTheDocument();
+        expect(container.querySelector('.bg-brand')).not.toBeNull();
+        expect(container.querySelector('.text-brand\\/30')).not.toBeNull();
     });
 
     it('carries no fixed accent colour of its own', () => {
         const { container } = render(<Welcome />);
 
         expect(container.innerHTML).not.toMatch(
-            /#f53003|#ff4433|#fff2f2|#f3bec7|#f8b803|#ff750f/i,
+            /(bg|text|border|ring)-(orange|amber|red|rose)-\d{2,3}/,
         );
     });
 });
