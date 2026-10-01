@@ -45,16 +45,28 @@ trait RecordsStatusHistory
     /**
      * Move to a new state and record the move, in one transaction.
      *
+     * A model with more than one independent lifecycle passes `$attribute`
+     * (the status column) and `$historyRelation` (the method on this model
+     * returning that axis's own history relation) together — both default to
+     * the model's single default axis, so every existing call site that
+     * passes neither keeps moving `status` into {@see statusHistory()}
+     * exactly as before.
+     *
      * @param  array<string, mixed>  $attributes  columns this history keeps beyond the shared contract
      */
-    public function transitionWithHistory(TransitionableState $to, StatusChange $change, array $attributes = []): Model
-    {
-        return $this->getConnection()->transaction(function () use ($to, $change, $attributes) {
-            $previous = $this->currentState();
+    public function transitionWithHistory(
+        TransitionableState $to,
+        StatusChange $change,
+        array $attributes = [],
+        ?string $attribute = null,
+        ?string $historyRelation = null,
+    ): Model {
+        return $this->getConnection()->transaction(function () use ($to, $change, $attributes, $attribute, $historyRelation) {
+            $previous = $this->currentState($attribute);
 
-            $this->transitionTo($to)->save();
+            $this->transitionTo($to, $attribute)->save();
 
-            return $this->recordStatusChange($previous, $to, $change, $attributes);
+            return $this->recordStatusChange($previous, $to, $change, $attributes, $historyRelation);
         });
     }
 
@@ -69,8 +81,12 @@ trait RecordsStatusHistory
         TransitionableState $new,
         StatusChange $change,
         array $attributes = [],
+        ?string $historyRelation = null,
     ): Model {
-        return $this->statusHistory()->create([
+        /** @var HasMany<Model, $this> $relation */
+        $relation = $historyRelation === null ? $this->statusHistory() : $this->{$historyRelation}();
+
+        return $relation->create([
             ...$attributes,
             'previous_status' => $previous === null ? null : $this->statusHistoryValue($previous),
             'new_status' => $this->statusHistoryValue($new),

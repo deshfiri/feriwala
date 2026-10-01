@@ -57,6 +57,47 @@ return [
         'refunded' => 'অর্থ ফেরত দেওয়া হয়েছে',
     ],
 
+    'order_fulfillment' => [
+        'pending_review' => 'পর্যালোচনার অপেক্ষায়',
+        'source_allocation_pending' => 'উৎস বরাদ্দের অপেক্ষায়',
+        'supplier_confirmation_pending' => 'সরবরাহকারীর নিশ্চিতকরণের অপেক্ষায়',
+        'processing' => 'প্রক্রিয়াধীন',
+        'picking' => 'সংগ্রহ চলছে',
+        'packing' => 'প্যাকিং চলছে',
+        'ready_for_dispatch' => 'প্রেরণের জন্য প্রস্তুত',
+        'partially_fulfilled' => 'আংশিক সম্পন্ন',
+        'fulfilled' => 'সম্পন্ন',
+        'on_hold' => 'স্থগিত রাখা হয়েছে',
+        'cancelled' => 'বাতিল',
+    ],
+
+    'order_delivery' => [
+        'not_shipped' => 'পাঠানো হয়নি',
+        'courier_assigned' => 'কুরিয়ার নির্ধারিত',
+        'shipped' => 'পাঠানো হয়েছে',
+        'in_transit' => 'পরিবহনে আছে',
+        'out_for_delivery' => 'সরবরাহের পথে',
+        'delivered' => 'সরবরাহ করা হয়েছে',
+        'failed_delivery' => 'সরবরাহ ব্যর্থ',
+        'return_requested' => 'ফেরতের অনুরোধ করা হয়েছে',
+        'returned' => 'ফেরত এসেছে',
+        'refunded' => 'অর্থ ফেরত দেওয়া হয়েছে',
+        'on_hold' => 'স্থগিত রাখা হয়েছে',
+        'cancelled' => 'বাতিল',
+    ],
+
+    'order_courier' => [
+        'unassigned' => 'কুরিয়ার নির্ধারিত হয়নি',
+        'assigned' => 'কুরিয়ার নির্ধারিত',
+        'pickup_requested' => 'পিকআপের অনুরোধ করা হয়েছে',
+        'picked_up' => 'সংগ্রহ করা হয়েছে',
+        'in_transit' => 'পরিবহনে আছে',
+        'delivered' => 'সরবরাহ করা হয়েছে',
+        'failed_delivery' => 'সরবরাহ ব্যর্থ',
+        'returned_to_origin' => 'উৎসে ফেরত পাঠানো হয়েছে',
+        'cancelled' => 'বাতিল',
+    ],
+
     'payment' => [
         'draft' => 'খসড়া',
         'initiated' => 'শুরু করা হয়েছে',

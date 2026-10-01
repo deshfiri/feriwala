@@ -86,7 +86,7 @@ it('keeps every field §18 makes mandatory on a wholesale order', function () {
         ->and($order->billing_address)->toHaveKey('city', 'Dhaka')
         ->and($order->shipping_address)->toHaveKey('country', 'BD')
         ->and($order->total->toDecimal())->toBe('1000.00')
-        ->and($order->fulfillment_status)->toBe(OrderFulfillmentStatus::Unfulfilled)
+        ->and($order->fulfillment_status)->toBe(OrderFulfillmentStatus::PendingReview)
         ->and($order->courier_status)->toBe(OrderCourierStatus::Unassigned)
         ->and($order->delivery_status)->toBe(OrderDeliveryStatus::NotShipped)
         ->and($order->placed_at)->not->toBeNull();

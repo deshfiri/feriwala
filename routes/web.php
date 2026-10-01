@@ -1177,6 +1177,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.lines.fulfilment-commitments.advance');
 
         /*
+         * The order's own fulfilment/delivery/courier lifecycle (§18, §20,
+         * §21) — three independent axes beside the order's own status, each
+         * its own guarded transition map.
+         */
+        Route::post('orders/{order}/fulfilment-status/advance', [OrderController::class, 'advanceFulfilmentStatus'])
+            ->name('orders.fulfilment-status.advance');
+        Route::post('orders/{order}/delivery-status/advance', [OrderController::class, 'advanceDeliveryStatus'])
+            ->name('orders.delivery-status.advance');
+        Route::post('orders/{order}/courier-status/advance', [OrderController::class, 'advanceCourierStatus'])
+            ->name('orders.courier-status.advance');
+
+        /*
          * The returns desk (§18.2, §19.1, §26.3, P6-12). Each step asks for its
          * own permission — see OrderReturnController — and recording a refund
          * settled by hand sits behind a freshly confirmed password, as sending

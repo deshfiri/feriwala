@@ -147,6 +147,23 @@ class OrderPolicy
     }
 
     /**
+     * Force a reallocation, or a fulfilment/delivery/courier status move,
+     * past a point the ordinary rules would refuse — once picking has
+     * started or the line has been handed to a courier (§20, §21).
+     *
+     * Composed from `order.edit` and `order.manage_settings`, both already
+     * in the Order module's permission matrix, rather than a new permission
+     * verb: an override is still a transition the "may this person move the
+     * order" permission covers, held to the stricter settings-management bar
+     * a decision this consequential deserves.
+     */
+    public function overrideFulfilmentState(User $user, Order $order): bool
+    {
+        return $this->transition($user, $order)
+            && $user->can(PermissionCatalogue::name(PermissionModule::Order, PermissionAction::ManageSettings));
+    }
+
+    /**
      * Cancel an order nobody has paid for: the account that placed it, or staff
      * who may move orders.
      */

@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Supplier\Models\Supplier;
@@ -67,6 +68,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string|null $release_reason
  * @property int|null $superseded_by_allocation_id
  * @property string $idempotency_key
+ * @property int|null $override_by
+ * @property CarbonImmutable|null $override_at
+ * @property string|null $override_reason
  * @property-read Order $order
  * @property-read OrderItem $orderItem
  * @property-read Warehouse|null $warehouse
@@ -76,6 +80,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property-read SupplierOfferPriceChange|null $priceVersion
  * @property-read StockReservation|null $reservation
  * @property-read User|null $allocatedBy
+ * @property-read User|null $overrideBy
  * @property-read SupplierPayable|null $payable
  * @property-read SupplierFulfilmentCommitment|null $fulfilmentCommitment
  */
@@ -99,6 +104,7 @@ class OrderItemAllocation extends Model
             'expected_margin' => MoneyCast::class,
             'allocated_at' => 'immutable_datetime',
             'released_at' => 'immutable_datetime',
+            'override_at' => 'immutable_datetime',
         ];
     }
 
@@ -178,6 +184,18 @@ class OrderItemAllocation extends Model
     public function allocatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'allocated_by');
+    }
+
+    /**
+     * Who forced this allocation past
+     * {@see AllocateOrderLineSource::canReallocate()},
+     * when it was created that way. Null for an ordinary allocation.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function overrideBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'override_by');
     }
 
     /**

@@ -12,6 +12,12 @@ use App\Support\StateMachine\TransitionableState;
  * column declares where it may go next. Nothing else in the application should
  * assign the status attribute directly — go through transitionTo() so the move is
  * checked, and so status history has a single place to hook into (§18.3).
+ *
+ * A model that carries more than one independent lifecycle on separate columns
+ * (an order's own status beside its fulfilment/delivery/courier status, say)
+ * passes `$attribute` explicitly to every method here rather than overriding
+ * {@see stateAttribute()} a second time — that method names only the default
+ * axis, used when nothing more specific is given.
  */
 trait HasStateMachine
 {
@@ -26,14 +32,15 @@ trait HasStateMachine
     /**
      * The model's current state.
      */
-    public function currentState(): TransitionableState
+    public function currentState(?string $attribute = null): TransitionableState
     {
-        $state = $this->getAttribute($this->stateAttribute());
+        $attribute ??= $this->stateAttribute();
+        $state = $this->getAttribute($attribute);
 
         if (! $state instanceof TransitionableState) {
             throw new \LogicException(sprintf(
                 'The [%s] attribute on %s must cast to a %s.',
-                $this->stateAttribute(),
+                $attribute,
                 static::class,
                 TransitionableState::class,
             ));
@@ -45,9 +52,9 @@ trait HasStateMachine
     /**
      * Whether the model may legally move to the given state.
      */
-    public function canTransitionTo(TransitionableState $to): bool
+    public function canTransitionTo(TransitionableState $to, ?string $attribute = null): bool
     {
-        $current = $this->currentState();
+        $current = $this->currentState($attribute);
 
         if ($current === $to) {
             return false;
@@ -69,13 +76,15 @@ trait HasStateMachine
      * take part in the surrounding database transaction alongside its ledger
      * entries and history row.
      */
-    public function transitionTo(TransitionableState $to): static
+    public function transitionTo(TransitionableState $to, ?string $attribute = null): static
     {
-        if (! $this->canTransitionTo($to)) {
-            throw IllegalStateTransition::between(static::class, $this->currentState(), $to);
+        $attribute ??= $this->stateAttribute();
+
+        if (! $this->canTransitionTo($to, $attribute)) {
+            throw IllegalStateTransition::between(static::class, $this->currentState($attribute), $to);
         }
 
-        $this->setAttribute($this->stateAttribute(), $to);
+        $this->setAttribute($attribute, $to);
 
         return $this;
     }
@@ -86,8 +95,8 @@ trait HasStateMachine
      *
      * @return array<int, TransitionableState>
      */
-    public function availableTransitions(): array
+    public function availableTransitions(?string $attribute = null): array
     {
-        return $this->currentState()->transitionsTo();
+        return $this->currentState($attribute)->transitionsTo();
     }
 }

@@ -20,6 +20,7 @@ use App\Domain\Order\Exceptions\AllocationRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
+use App\Domain\Order\Policies\OrderPolicy;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Supplier\Actions\AccrueSupplierPayable;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
@@ -88,6 +89,9 @@ class AllocateOrderLineSource
 
     /**
      * @param  string  $sourceId  a warehouse's or Supplier offer's **public** id
+     * @param  bool  $override  force a reallocation past picking/dispatch — only
+     *                          ever true when the caller has already checked
+     *                          {@see OrderPolicy::overrideFulfilmentState()}
      *
      * @throws AllocationRefused
      */
@@ -97,6 +101,7 @@ class AllocateOrderLineSource
         string $sourceId,
         User $actor,
         string $reason,
+        bool $override = false,
     ): OrderItemAllocation {
         if (trim($reason) === '') {
             throw AllocationRefused::because('A reason is required and is recorded against this allocation.');
@@ -104,7 +109,7 @@ class AllocateOrderLineSource
 
         return $this->lock->run(
             key: 'order-line:allocate:'.$line->id,
-            callback: fn () => $this->allocate($line, $sourceType, $sourceId, $actor, trim($reason)),
+            callback: fn () => $this->allocate($line, $sourceType, $sourceId, $actor, trim($reason), $override),
             ttlSeconds: 30,
             waitSeconds: 10,
         );
@@ -119,8 +124,9 @@ class AllocateOrderLineSource
         string $sourceId,
         User $actor,
         string $reason,
+        bool $override,
     ): OrderItemAllocation {
-        return $this->database->transaction(function () use ($line, $sourceType, $sourceId, $actor, $reason) {
+        return $this->database->transaction(function () use ($line, $sourceType, $sourceId, $actor, $reason, $override) {
             /** @var OrderItem $locked */
             $locked = OrderItem::query()->lockForUpdate()->findOrFail($line->id);
             $order = $locked->order()->lockForUpdate()->firstOrFail();
@@ -138,10 +144,16 @@ class AllocateOrderLineSource
                 return $current;
             }
 
+            $overrideUsed = false;
+
             if ($current !== null && ! $this->canReallocate($order)) {
-                throw AllocationRefused::because(
-                    'This line has already been picked or dispatched and can no longer be reallocated.',
-                );
+                if (! $override) {
+                    throw AllocationRefused::because(
+                        'This line has already been picked or dispatched and can no longer be reallocated.',
+                    );
+                }
+
+                $overrideUsed = true;
             }
 
             // Re-read live, inside the lock. The panel is a view and can be
@@ -158,7 +170,7 @@ class AllocateOrderLineSource
                 $this->standDown($current, $actor, $reason);
             }
 
-            return $this->commitTo($locked, $candidate, $current, $actor, $reason);
+            return $this->commitTo($locked, $candidate, $current, $actor, $reason, $overrideUsed);
         });
     }
 
@@ -211,6 +223,7 @@ class AllocateOrderLineSource
         ?OrderItemAllocation $superseded,
         User $actor,
         string $reason,
+        bool $overrideUsed = false,
     ): OrderItemAllocation {
         $currency = Currency::from($line->currency_code);
         $quantity = (int) $line->quantity;
@@ -274,6 +287,9 @@ class AllocateOrderLineSource
                 'allocated_at' => now(),
                 'allocation_reason' => $reason,
                 'idempotency_key' => $key,
+                'override_by' => $overrideUsed ? $actor->id : null,
+                'override_at' => $overrideUsed ? now() : null,
+                'override_reason' => $overrideUsed ? $reason : null,
             ]);
         } catch (UniqueConstraintViolationException) {
             // The partial unique index refused a second active allocation:
@@ -426,21 +442,34 @@ class AllocateOrderLineSource
      * Whether this order is still early enough to change its mind.
      *
      * Reallocation is allowed only before picking, dispatch or any other
-     * irreversible fulfilment step. **Today nothing can refuse it**: both
-     * enums are single-valued stubs — `unfulfilled` and `not_shipped` — because
-     * picking and dispatch states do not exist yet (P6.B).
+     * irreversible fulfilment step (§20, §21) — once picking has started, or
+     * the line has been handed to a courier, the source can no longer change
+     * except through the explicit override {@see handle()} accepts (gated by
+     * {@see OrderPolicy::overrideFulfilmentState()}).
      *
-     * Written as an exhaustive `match` rather than a comparison precisely
-     * because of that. A comparison would silently keep returning true when
-     * P6.B adds `Picking` or `Dispatched`; this fails the build until someone
-     * states what those mean for reallocation, which is the decision that
-     * should not be made by omission.
+     * Written as an exhaustive `match` rather than a comparison: a new
+     * fulfilment or delivery status added later fails the build here until
+     * someone states what it means for reallocation, rather than silently
+     * falling through a default.
      */
     protected function canReallocate(Order $order): bool
     {
-        return match ($order->fulfillment_status) {
-            OrderFulfillmentStatus::Unfulfilled => $this->isBeforeDispatch($order),
+        $fulfilmentAllows = match ($order->fulfillment_status) {
+            OrderFulfillmentStatus::PendingReview,
+            OrderFulfillmentStatus::SourceAllocationPending,
+            OrderFulfillmentStatus::SupplierConfirmationPending,
+            OrderFulfillmentStatus::Processing,
+            OrderFulfillmentStatus::OnHold => true,
+
+            OrderFulfillmentStatus::Picking,
+            OrderFulfillmentStatus::Packing,
+            OrderFulfillmentStatus::ReadyForDispatch,
+            OrderFulfillmentStatus::PartiallyFulfilled,
+            OrderFulfillmentStatus::Fulfilled,
+            OrderFulfillmentStatus::Cancelled => false,
         };
+
+        return $fulfilmentAllows && $this->isBeforeDispatch($order);
     }
 
     /**
@@ -451,7 +480,18 @@ class AllocateOrderLineSource
     protected function isBeforeDispatch(Order $order): bool
     {
         return match ($order->delivery_status) {
-            OrderDeliveryStatus::NotShipped => true,
+            OrderDeliveryStatus::NotShipped, OrderDeliveryStatus::OnHold => true,
+
+            OrderDeliveryStatus::CourierAssigned,
+            OrderDeliveryStatus::Shipped,
+            OrderDeliveryStatus::InTransit,
+            OrderDeliveryStatus::OutForDelivery,
+            OrderDeliveryStatus::Delivered,
+            OrderDeliveryStatus::FailedDelivery,
+            OrderDeliveryStatus::ReturnRequested,
+            OrderDeliveryStatus::Returned,
+            OrderDeliveryStatus::Refunded,
+            OrderDeliveryStatus::Cancelled => false,
         };
     }
 }

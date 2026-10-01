@@ -6,16 +6,25 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
+use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
+use App\Domain\Order\Actions\AdvanceOrderFulfilmentStatus;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
 use App\Domain\Order\Actions\ConfirmProductSourceLink;
 use App\Domain\Order\Data\AllocationCandidate;
 use App\Domain\Order\Enums\AllocationSourceType;
+use App\Domain\Order\Enums\OrderCourierStatus;
+use App\Domain\Order\Enums\OrderDeliveryStatus;
+use App\Domain\Order\Enums\OrderFulfillmentStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\AllocationRefused;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderCourierStatusChange;
+use App\Domain\Order\Models\OrderDeliveryStatusChange;
+use App\Domain\Order\Models\OrderFulfillmentStatusChange;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\OrderStatusChange;
@@ -30,7 +39,9 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
+use App\Support\StateMachine\TransitionableState;
 use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -66,6 +77,9 @@ class OrderController extends Controller
         protected SearchAllocationSources $search,
         protected ConfirmProductSourceLink $confirmLink,
         protected AdvanceSupplierFulfilmentCommitment $advanceCommitment,
+        protected AdvanceOrderFulfilmentStatus $advanceFulfilment,
+        protected AdvanceOrderDeliveryStatus $advanceDelivery,
+        protected AdvanceOrderCourierStatus $advanceCourier,
     ) {}
 
     public function index(Request $request): Response
@@ -130,6 +144,9 @@ class OrderController extends Controller
             'items.activeAllocation.fulfilmentCommitment.statusHistory.changedBy:id,name',
             'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain',
             'websiteCustomer:id,public_id,mobile,is_guest',
+            'fulfillmentStatusHistory.changedBy:id,name',
+            'deliveryStatusHistory.changedBy:id,name',
+            'courierStatusHistory.changedBy:id,name',
         ]);
 
         $payment = $record->payment;
@@ -137,6 +154,7 @@ class OrderController extends Controller
         $canViewSupplierPricing = $actor->can(PermissionCatalogue::name(PermissionModule::SupplierPricing, PermissionAction::View));
         $canViewCatalogPricing = $actor->can(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View));
         $canManageFulfilmentCommitment = Gate::forUser($actor)->allows('manageFulfilmentCommitment', $record);
+        $canOverrideFulfilmentState = Gate::forUser($actor)->allows('overrideFulfilmentState', $record);
 
         return Inertia::render('admin/orders/show', [
             'order' => [
@@ -145,6 +163,23 @@ class OrderController extends Controller
                 'source' => $record->source->value,
                 'status' => $record->status->value,
                 'status_tone' => $record->status->tone(),
+                'lifecycle' => [
+                    'fulfillment' => $this->lifecycleSummary(
+                        $record->fulfillment_status,
+                        $record->fulfillmentStatusHistory,
+                        $canAllocate,
+                    ),
+                    'delivery' => $this->lifecycleSummary(
+                        $record->delivery_status,
+                        $record->deliveryStatusHistory,
+                        $canAllocate,
+                    ),
+                    'courier' => $this->lifecycleSummary(
+                        $record->courier_status,
+                        $record->courierStatusHistory,
+                        $canAllocate,
+                    ),
+                ],
                 'account' => $record->businessAccount->name,
                 'placed_by' => $record->placedBy?->name,
                 /*
@@ -250,6 +285,7 @@ class OrderController extends Controller
                     && $payment !== null
                     && $payment->status !== PaymentStatus::Pending
                     && ! $payment->status->isSettled(),
+                'override_fulfilment_state' => $canOverrideFulfilmentState,
             ],
         ]);
     }
@@ -318,11 +354,18 @@ class OrderController extends Controller
             'source_type' => ['required', Rule::enum(AllocationSourceType::class)],
             'source_id' => ['required', 'string'],
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
+            'override' => ['sometimes', 'boolean'],
         ]);
 
         $sourceType = AllocationSourceType::from($validated['source_type']);
 
         Gate::forUser($actor)->authorize('allocateSource', [$record, $sourceType]);
+
+        $override = (bool) ($validated['override'] ?? false);
+
+        if ($override) {
+            Gate::forUser($actor)->authorize('overrideFulfilmentState', $record);
+        }
 
         try {
             $this->allocate->handle(
@@ -331,6 +374,7 @@ class OrderController extends Controller
                 $validated['source_id'],
                 $actor,
                 $validated['reason'],
+                $override,
             );
         } catch (AllocationRefused $refused) {
             throw ValidationException::withMessages(['source_id' => $refused->getMessage()]);
@@ -383,6 +427,99 @@ class OrderController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.commitment_updated')]);
+
+        return back();
+    }
+
+    /**
+     * Move an order's fulfilment status by hand (§18, §20).
+     */
+    public function advanceFulfilmentStatus(Request $request, string $order): RedirectResponse
+    {
+        $actor = $this->actor($request);
+        $record = $this->order($order);
+
+        Gate::forUser($actor)->authorize('transition', $record);
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::enum(OrderFulfillmentStatus::class)],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $this->advanceFulfilment->handle(
+                $record,
+                OrderFulfillmentStatus::from($validated['status']),
+                $actor,
+                $validated['reason'] ?? null,
+            );
+        } catch (InvalidArgumentException|IllegalStateTransition $exception) {
+            throw ValidationException::withMessages(['status' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.lifecycle_updated')]);
+
+        return back();
+    }
+
+    /**
+     * Move an order's delivery status by hand (§18, §21).
+     */
+    public function advanceDeliveryStatus(Request $request, string $order): RedirectResponse
+    {
+        $actor = $this->actor($request);
+        $record = $this->order($order);
+
+        Gate::forUser($actor)->authorize('transition', $record);
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::enum(OrderDeliveryStatus::class)],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $this->advanceDelivery->handle(
+                $record,
+                OrderDeliveryStatus::from($validated['status']),
+                $actor,
+                $validated['reason'] ?? null,
+            );
+        } catch (InvalidArgumentException|IllegalStateTransition $exception) {
+            throw ValidationException::withMessages(['status' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.lifecycle_updated')]);
+
+        return back();
+    }
+
+    /**
+     * Move an order's courier status by hand (§18, §21).
+     */
+    public function advanceCourierStatus(Request $request, string $order): RedirectResponse
+    {
+        $actor = $this->actor($request);
+        $record = $this->order($order);
+
+        Gate::forUser($actor)->authorize('transition', $record);
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::enum(OrderCourierStatus::class)],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $this->advanceCourier->handle(
+                $record,
+                OrderCourierStatus::from($validated['status']),
+                $actor,
+                $validated['reason'] ?? null,
+            );
+        } catch (InvalidArgumentException|IllegalStateTransition $exception) {
+            throw ValidationException::withMessages(['status' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.lifecycle_updated')]);
 
         return back();
     }
@@ -567,6 +704,40 @@ class OrderController extends Controller
                 ))
                 : [],
             'history' => $commitment->statusHistory->map(fn ($change) => [
+                'previous_status' => $change->previous_status?->label(),
+                'new_status' => $change->new_status->label(),
+                'changed_by' => $change->changedBy?->name,
+                'changed_at' => $change->changed_at->toIso8601String(),
+                'reason' => $change->reason,
+            ])->all(),
+        ];
+    }
+
+    /**
+     * One lifecycle axis (fulfilment, delivery or courier), with the actions
+     * a manager may legally take from here derived straight from
+     * {@see TransitionableState::transitionsTo()} —
+     * never a hand-maintained list, so no transition route can exist that
+     * this never offers a button for.
+     *
+     * @param  Collection<int, OrderFulfillmentStatusChange>|Collection<int, OrderDeliveryStatusChange>|Collection<int, OrderCourierStatusChange>  $history
+     * @return array<string, mixed>
+     */
+    protected function lifecycleSummary(
+        OrderFulfillmentStatus|OrderDeliveryStatus|OrderCourierStatus $status,
+        Collection $history,
+        bool $canManage,
+    ): array {
+        return [
+            'status' => $status->value,
+            'status_label' => $status->label(),
+            'status_tone' => $status->tone(),
+            'is_terminal' => $status->isTerminal(),
+            'can_manage' => $canManage,
+            'available_actions' => $canManage
+                ? array_map(fn (OrderFulfillmentStatus|OrderDeliveryStatus|OrderCourierStatus $to) => $to->value, $status->transitionsTo())
+                : [],
+            'history' => $history->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),
                 'changed_by' => $change->changedBy?->name,

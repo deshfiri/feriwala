@@ -67,6 +67,47 @@ return [
         'refunded' => 'Refunded',
     ],
 
+    'order_fulfillment' => [
+        'pending_review' => 'Pending review',
+        'source_allocation_pending' => 'Source allocation pending',
+        'supplier_confirmation_pending' => 'Supplier confirmation pending',
+        'processing' => 'Processing',
+        'picking' => 'Picking',
+        'packing' => 'Packing',
+        'ready_for_dispatch' => 'Ready for dispatch',
+        'partially_fulfilled' => 'Partially fulfilled',
+        'fulfilled' => 'Fulfilled',
+        'on_hold' => 'On hold',
+        'cancelled' => 'Cancelled',
+    ],
+
+    'order_delivery' => [
+        'not_shipped' => 'Not shipped',
+        'courier_assigned' => 'Courier assigned',
+        'shipped' => 'Shipped',
+        'in_transit' => 'In transit',
+        'out_for_delivery' => 'Out for delivery',
+        'delivered' => 'Delivered',
+        'failed_delivery' => 'Failed delivery',
+        'return_requested' => 'Return requested',
+        'returned' => 'Returned',
+        'refunded' => 'Refunded',
+        'on_hold' => 'On hold',
+        'cancelled' => 'Cancelled',
+    ],
+
+    'order_courier' => [
+        'unassigned' => 'No courier assigned',
+        'assigned' => 'Courier assigned',
+        'pickup_requested' => 'Pickup requested',
+        'picked_up' => 'Picked up',
+        'in_transit' => 'In transit',
+        'delivered' => 'Delivered',
+        'failed_delivery' => 'Failed delivery',
+        'returned_to_origin' => 'Returned to origin',
+        'cancelled' => 'Cancelled',
+    ],
+
     'payment' => [
         'draft' => 'Draft',
         'initiated' => 'Initiated',

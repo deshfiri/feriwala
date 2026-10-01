@@ -28,6 +28,9 @@ import AllocationPanel, {
 import FulfilmentCommitmentPanel, {
     type FulfilmentCommitment,
 } from '@/pages/admin/orders/fulfilment-commitment-panel';
+import OrderLifecyclePanel, {
+    type OrderLifecycle,
+} from '@/pages/admin/orders/order-lifecycle-panel';
 import { index } from '@/routes/admin/orders';
 
 export type AdminOrderDetail = {
@@ -36,6 +39,7 @@ export type AdminOrderDetail = {
     source: string;
     status: string;
     status_tone: StatusTone;
+    lifecycle: OrderLifecycle;
     account: string;
     placed_by: string | null;
     /** The partner website an order came through, where one did (§18.5). */
@@ -195,6 +199,11 @@ export default function AdminOrder({ order, can }: Props) {
                         body={order.payment.reconciliation_reason}
                     />
                 )}
+
+                <OrderLifecyclePanel
+                    orderId={order.id}
+                    lifecycle={order.lifecycle}
+                />
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                     <div className="min-w-0 space-y-6">

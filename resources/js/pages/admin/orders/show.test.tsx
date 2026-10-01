@@ -23,6 +23,15 @@ vi.mock('@inertiajs/react', async () => {
                 children as never,
             ),
         Form: () => null,
+        useForm: () => ({
+            data: { status: '', reason: '' },
+            setData: vi.fn(),
+            transform: vi.fn(),
+            post: vi.fn(),
+            reset: vi.fn(),
+            processing: false,
+            errors: {},
+        }),
         usePage: () => ({ props: { translations: {} } }),
     };
 });
@@ -35,6 +44,18 @@ const money = (amount: string) => ({
     formatted: `৳${amount}`,
 });
 
+function lifecycleAxis(status: string) {
+    return {
+        status,
+        status_label: status,
+        status_tone: 'info' as const,
+        is_terminal: false,
+        can_manage: false,
+        available_actions: [],
+        history: [],
+    };
+}
+
 function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
     return {
         id: '01ORDER',
@@ -42,6 +63,11 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
         source: 'erp_wholesale',
         status: 'payment_pending',
         status_tone: 'warning',
+        lifecycle: {
+            fulfillment: lifecycleAxis('pending_review'),
+            delivery: lifecycleAxis('not_shipped'),
+            courier: lifecycleAxis('unassigned'),
+        },
         account: 'Karim Traders',
         placed_by: 'Karim Uddin',
         website: null,

@@ -93,6 +93,9 @@ use LogicException;
  * @property-read Payment|null $payment
  * @property-read Collection<int, OrderItem> $items
  * @property-read Collection<int, OrderStatusChange> $statusHistory
+ * @property-read Collection<int, OrderFulfillmentStatusChange> $fulfillmentStatusHistory
+ * @property-read Collection<int, OrderDeliveryStatusChange> $deliveryStatusHistory
+ * @property-read Collection<int, OrderCourierStatusChange> $courierStatusHistory
  */
 class Order extends Model
 {
@@ -223,6 +226,36 @@ class Order extends Model
     }
 
     /**
+     * Every recorded fulfilment-status change, oldest first.
+     *
+     * @return HasMany<OrderFulfillmentStatusChange, $this>
+     */
+    public function fulfillmentStatusHistory(): HasMany
+    {
+        return $this->hasMany(OrderFulfillmentStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * Every recorded delivery-status change, oldest first.
+     *
+     * @return HasMany<OrderDeliveryStatusChange, $this>
+     */
+    public function deliveryStatusHistory(): HasMany
+    {
+        return $this->hasMany(OrderDeliveryStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * Every recorded courier-status change, oldest first.
+     *
+     * @return HasMany<OrderCourierStatusChange, $this>
+     */
+    public function courierStatusHistory(): HasMany
+    {
+        return $this->hasMany(OrderCourierStatusChange::class)->orderBy('id');
+    }
+
+    /**
      * Whether this order is paid on delivery rather than through a gateway.
      *
      * A cash-on-delivery order records its payment with no gateway named: the
@@ -261,6 +294,69 @@ class Order extends Model
         if ($this->source === OrderSource::Website) {
             app(AnnounceWebsiteOrderStatus::class)->handle($this, $entry);
         }
+
+        return $entry;
+    }
+
+    /**
+     * Move the order's fulfilment status and record why, in one transaction.
+     *
+     * A separate axis from {@see moveTo()} — see {@see OrderFulfillmentStatus}
+     * for why it exists apart from the order's own status.
+     */
+    public function moveFulfilmentTo(
+        OrderFulfillmentStatus $to,
+        StatusChange $change,
+        OrderStatusChangeSource $source,
+    ): OrderFulfillmentStatusChange {
+        /** @var OrderFulfillmentStatusChange $entry */
+        $entry = $this->transitionWithHistory(
+            $to,
+            $change,
+            ['source' => $source],
+            attribute: 'fulfillment_status',
+            historyRelation: 'fulfillmentStatusHistory',
+        );
+
+        return $entry;
+    }
+
+    /**
+     * Move the order's delivery status and record why, in one transaction.
+     */
+    public function moveDeliveryTo(
+        OrderDeliveryStatus $to,
+        StatusChange $change,
+        OrderStatusChangeSource $source,
+    ): OrderDeliveryStatusChange {
+        /** @var OrderDeliveryStatusChange $entry */
+        $entry = $this->transitionWithHistory(
+            $to,
+            $change,
+            ['source' => $source],
+            attribute: 'delivery_status',
+            historyRelation: 'deliveryStatusHistory',
+        );
+
+        return $entry;
+    }
+
+    /**
+     * Move the order's courier status and record why, in one transaction.
+     */
+    public function moveCourierTo(
+        OrderCourierStatus $to,
+        StatusChange $change,
+        OrderStatusChangeSource $source,
+    ): OrderCourierStatusChange {
+        /** @var OrderCourierStatusChange $entry */
+        $entry = $this->transitionWithHistory(
+            $to,
+            $change,
+            ['source' => $source],
+            attribute: 'courier_status',
+            historyRelation: 'courierStatusHistory',
+        );
 
         return $entry;
     }
