@@ -22,9 +22,12 @@ use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\SearchAllocationSources;
+use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
+use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
+use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -34,6 +37,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 /**
  * The platform's review of orders (§18.4, §18.5, P4-12).
@@ -59,6 +63,7 @@ class OrderController extends Controller
         protected AllocateOrderLineSource $allocate,
         protected SearchAllocationSources $search,
         protected ConfirmProductSourceLink $confirmLink,
+        protected AdvanceSupplierFulfilmentCommitment $advanceCommitment,
     ) {}
 
     public function index(Request $request): Response
@@ -325,6 +330,50 @@ class OrderController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.allocated')]);
+
+        return back();
+    }
+
+    /**
+     * Advance, fail or cancel the Supplier fulfilment commitment behind an
+     * on_demand/pre_order allocation (Supplier Bulk Product Listing batch,
+     * correction 7/11) -- gated by the same boundary as {@see allocate()}
+     * for a Supplier Offer, never `supplier_listing.approve`.
+     */
+    public function advanceFulfilmentCommitment(Request $request, string $order, string $item, string $commitment): RedirectResponse
+    {
+        $actor = $this->actor($request);
+        $record = $this->order($order);
+
+        Gate::forUser($actor)->authorize('manageFulfilmentCommitment', $record);
+
+        $line = $this->line($record, $item);
+
+        /** @var SupplierFulfilmentCommitment $commitmentModel */
+        $commitmentModel = SupplierFulfilmentCommitment::query()
+            ->whereHas('allocation', fn ($query) => $query->where('order_item_id', $line->id))
+            ->where('public_id', $commitment)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'action' => ['required', Rule::in(['confirm', 'start_preparing', 'mark_ready', 'fail', 'cancel'])],
+            'reason' => ['nullable', 'string', 'max:1000', 'required_if:action,fail,cancel'],
+        ]);
+
+        try {
+            match ($validated['action']) {
+                'confirm' => $this->advanceCommitment->confirm($commitmentModel, $actor),
+                'start_preparing' => $this->advanceCommitment->startPreparing($commitmentModel, $actor),
+                'mark_ready' => $this->advanceCommitment->markReady($commitmentModel, $actor),
+                'fail' => $this->advanceCommitment->fail($commitmentModel, $actor, $validated['reason']),
+                'cancel' => $this->advanceCommitment->cancel($commitmentModel, $actor, $validated['reason']),
+                default => throw new InvalidArgumentException("Unknown fulfilment commitment action [{$validated['action']}]."),
+            };
+        } catch (InvalidArgumentException|IllegalStateTransition $exception) {
+            throw ValidationException::withMessages(['action' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.commitment_updated')]);
 
         return back();
     }

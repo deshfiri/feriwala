@@ -13,6 +13,7 @@ use App\Domain\Supplier\Enums\ListingItemStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\OfferStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
+use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Supplier\Models\SupplierOfferStock;
 use App\Domain\Supplier\Models\SupplierProductListing;
@@ -234,6 +235,12 @@ class DecideSupplierListing
             'supplier_rate' => $supplierRate,
             'platform_rate' => $platformRate,
             'currency_code' => $currency->value,
+            // Copied once, at approval, from what the Supplier declared --
+            // never re-entered by staff (Supplier Bulk Product Listing batch).
+            'supply_mode' => $item->supply_mode,
+            'lead_time_days' => $item->lead_time_days,
+            'fulfilment_capacity' => $item->fulfilment_capacity,
+            'expected_availability_at' => $item->expected_availability_at,
             'activated_by' => $reviewer->id,
             'activated_at' => now(),
         ]);
@@ -248,7 +255,16 @@ class DecideSupplierListing
             'created_at' => now(),
         ]);
 
-        $this->openStock($offer, $item, $itemDecision, $reviewer);
+        // Ready stock only opens a real stock row when a quantity actually
+        // exists; on_demand/pre_order never get one -- there is no physical
+        // stock to open, and a zero-quantity row would read as "confirmed no
+        // stock" rather than "not applicable" (Supplier Bulk Product Listing
+        // batch, corrections 5/6).
+        $approvedQuantity = $this->approvedQuantity($item, $itemDecision);
+
+        if ($item->supply_mode === SupplyMode::ReadyStock && $approvedQuantity !== null) {
+            $this->openStock($offer, $item, $approvedQuantity, $reviewer);
+        }
 
         $item->forceFill([
             'status' => ListingItemStatus::Approved,
@@ -271,23 +287,18 @@ class DecideSupplierListing
      * Keyed so a retried decision cannot open the same offer's stock twice. The
      * offer itself is already unique per listing item, so this is the backstop
      * rather than the guard.
-     *
-     * @param  array<string, mixed>  $itemDecision
      */
     protected function openStock(
         SupplierOffer $offer,
         SupplierProductListingItem $item,
-        array $itemDecision,
+        int $approved,
         User $reviewer,
     ): void {
-        $requested = (int) $item->available_quantity;
-        $approved = array_key_exists('approved_quantity', $itemDecision) && $itemDecision['approved_quantity'] !== null
-            ? (int) $itemDecision['approved_quantity']
-            : $requested;
-
         if ($approved < 0) {
             throw new InvalidArgumentException('Approved availability cannot be negative.');
         }
+
+        $requested = $item->available_quantity;
 
         /** @var SupplierOfferStock $stock */
         $stock = $offer->stock()->create(['quantity' => $approved]);
@@ -305,11 +316,28 @@ class DecideSupplierListing
             'source' => 'initial',
             'actor_type' => 'staff',
             'actor_id' => $reviewer->id,
-            'reason' => $approved === $requested
-                ? 'Opening availability from the approved listing item.'
-                : "Opening availability approved at {$approved}; the Supplier asked to supply {$requested}.",
+            'reason' => match (true) {
+                $requested === null => "Opening availability approved at {$approved}; the Supplier did not declare a quantity.",
+                $approved === $requested => 'Opening availability from the approved listing item.',
+                default => "Opening availability approved at {$approved}; the Supplier asked to supply {$requested}.",
+            },
             'idempotency_key' => 'supplier-offer-opening:'.$item->public_id,
             'created_at' => now(),
         ]);
+    }
+
+    /**
+     * The quantity to open stock at -- staff's own figure when given, else
+     * whatever the Supplier declared, else `null` (nothing to open at all).
+     *
+     * @param  array<string, mixed>  $itemDecision
+     */
+    protected function approvedQuantity(SupplierProductListingItem $item, array $itemDecision): ?int
+    {
+        if (array_key_exists('approved_quantity', $itemDecision) && $itemDecision['approved_quantity'] !== null) {
+            return (int) $itemDecision['approved_quantity'];
+        }
+
+        return $item->available_quantity === null ? null : (int) $item->available_quantity;
     }
 }

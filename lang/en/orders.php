@@ -283,6 +283,7 @@ return [
         'reason_help' => 'At least 10 characters. Kept on the order for staff and in the audit log.',
         'cancelled' => 'Order :reference cancelled. Its stock was released.',
         'allocated' => 'Line allocated.',
+        'commitment_updated' => 'Fulfilment commitment updated.',
         'allocation' => [
             'action' => 'Assign source',
             'change_action' => 'Change source',
@@ -310,6 +311,10 @@ return [
             'confirm' => 'Confirm this source',
             'confirm_title' => 'Confirm :source for :product',
             'confirm_description' => 'This reserves the stock and, for a Supplier source, raises a pending payable. Record why this source was chosen.',
+            'requires_confirmation' => 'No physical stock yet',
+            'lead_time' => 'Lead time :days days',
+            'capacity' => 'Capacity :capacity',
+            'confirmation_notice' => 'This offer has no physical stock -- it is :supply_mode. Allocating it commits the Supplier to fulfil this line rather than drawing down real stock. I understand this before confirming.',
             'reason' => 'Reason',
             'reason_help' => 'At least 10 characters. Kept on the allocation and in the audit log.',
             'empty' => 'No sources found',

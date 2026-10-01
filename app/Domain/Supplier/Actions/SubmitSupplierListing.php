@@ -33,7 +33,7 @@ class SubmitSupplierListing
         protected DatabaseManager $database,
     ) {}
 
-    public function handle(Supplier $supplier, SupplierProductListing $listing): SupplierProductListing
+    public function handle(Supplier $supplier, SupplierProductListing $listing, bool $suppressNotification = false): SupplierProductListing
     {
         if (! $supplier->isOperational()) {
             throw new InvalidArgumentException('Only an approved Supplier may submit a listing request.');
@@ -90,7 +90,13 @@ class SubmitSupplierListing
             return $locked;
         });
 
-        $supplier->notify((new SupplierListingSubmitted($listing))->locale($supplier->locale));
+        // A lot-level submission fires exactly one summary notification
+        // itself (SubmitSupplierListingLot) rather than one per product
+        // entry -- suppressed here, never skipped for a single-listing
+        // submission outside a lot.
+        if (! $suppressNotification) {
+            $supplier->notify((new SupplierListingSubmitted($listing))->locale($supplier->locale));
+        }
 
         return $listing->refresh();
     }

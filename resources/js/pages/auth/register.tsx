@@ -1,4 +1,4 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, setLayoutProps } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import StaffInvitationAlert from '@/components/staff-invitation-alert';
@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { useTranslation } from '@/hooks/use-translation';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
 import type { StaffInvitationContext } from '@/components/staff-invitation-alert';
@@ -44,9 +45,16 @@ export default function Register({
     genders,
     referralCode,
 }: Props) {
+    const { t } = useTranslation();
+
+    setLayoutProps({
+        title: t('auth.register.layout_title'),
+        description: t('auth.register.layout_description'),
+    });
+
     return (
         <>
-            <Head title="Register" />
+            <Head title={t('auth.register.title')} />
             <Form
                 {...store.form()}
                 resetOnSuccess={['password', 'password_confirmation']}
@@ -78,7 +86,9 @@ export default function Register({
 
                         <div className="grid gap-5">
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                                <Label htmlFor="name">
+                                    {t('auth.register.name')}
+                                </Label>
                                 <Input
                                     id="name"
                                     type="text"
@@ -86,7 +96,9 @@ export default function Register({
                                     autoFocus
                                     autoComplete="name"
                                     name="name"
-                                    placeholder="Full name"
+                                    placeholder={t(
+                                        'auth.register.name_placeholder',
+                                    )}
                                 />
                                 <InputError message={errors.name} />
                             </div>
@@ -96,7 +108,9 @@ export default function Register({
                                 inputs stop lining up. */}
                             <div className="grid items-start gap-4 sm:grid-cols-2">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="email">Email address</Label>
+                                    <Label htmlFor="email">
+                                        {t('auth.register.email')}
+                                    </Label>
                                     <Input
                                         id="email"
                                         type="email"
@@ -110,7 +124,7 @@ export default function Register({
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="mobile">
-                                        Mobile number
+                                        {t('auth.register.mobile')}
                                     </Label>
                                     <Input
                                         id="mobile"
@@ -124,8 +138,7 @@ export default function Register({
                                         factor, and OTP verification depends on
                                         reaching it. */}
                                     <p className="text-muted-foreground text-xs">
-                                        We send a verification code to this
-                                        number.
+                                        {t('auth.register.mobile_hint')}
                                     </p>
                                     <InputError message={errors.mobile} />
                                 </div>
@@ -136,13 +149,17 @@ export default function Register({
                                 inputs stop lining up. */}
                             <div className="grid items-start gap-4 sm:grid-cols-2">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="password">Password</Label>
+                                    <Label htmlFor="password">
+                                        {t('auth.register.password')}
+                                    </Label>
                                     <PasswordInput
                                         id="password"
                                         required
                                         autoComplete="new-password"
                                         name="password"
-                                        placeholder="Password"
+                                        placeholder={t(
+                                            'auth.register.password_placeholder',
+                                        )}
                                         passwordrules={passwordRules}
                                     />
                                     <InputError message={errors.password} />
@@ -150,14 +167,18 @@ export default function Register({
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="password_confirmation">
-                                        Confirm password
+                                        {t(
+                                            'auth.register.password_confirmation',
+                                        )}
                                     </Label>
                                     <PasswordInput
                                         id="password_confirmation"
                                         required
                                         autoComplete="new-password"
                                         name="password_confirmation"
-                                        placeholder="Confirm password"
+                                        placeholder={t(
+                                            'auth.register.password_confirmation_placeholder',
+                                        )}
                                         passwordrules={passwordRules}
                                     />
                                     <InputError
@@ -174,12 +195,12 @@ export default function Register({
                              */}
                             <fieldset className="grid items-start gap-4 sm:grid-cols-2">
                                 <legend className="text-muted-foreground mb-2 w-full text-xs">
-                                    Optional — you can add these later
+                                    {t('auth.register.optional_legend')}
                                 </legend>
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="date_of_birth">
-                                        Date of birth
+                                        {t('auth.register.date_of_birth')}
                                     </Label>
                                     <Input
                                         id="date_of_birth"
@@ -196,14 +217,20 @@ export default function Register({
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="gender">Gender</Label>
+                                    <Label htmlFor="gender">
+                                        {t('auth.register.gender')}
+                                    </Label>
                                     <select
                                         id="gender"
                                         name="gender"
                                         defaultValue=""
                                         className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-hidden"
                                     >
-                                        <option value="">Not specified</option>
+                                        <option value="">
+                                            {t(
+                                                'auth.register.gender_unspecified',
+                                            )}
+                                        </option>
                                         {genders.map((gender) => (
                                             <option
                                                 key={gender.value}
@@ -217,7 +244,9 @@ export default function Register({
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="country">Country</Label>
+                                    <Label htmlFor="country">
+                                        {t('auth.register.country')}
+                                    </Label>
                                     {/* From the supported registry, never free
                                         text — a country nobody can resolve is a
                                         scope rule that matches nobody. */}
@@ -241,13 +270,15 @@ export default function Register({
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="nationality">
-                                        Nationality
+                                        {t('auth.register.nationality')}
                                     </Label>
                                     <Input
                                         id="nationality"
                                         type="text"
                                         name="nationality"
-                                        placeholder="Bangladeshi"
+                                        placeholder={t(
+                                            'auth.register.nationality_placeholder',
+                                        )}
                                     />
                                     <InputError message={errors.nationality} />
                                 </div>
@@ -255,14 +286,16 @@ export default function Register({
 
                             <div className="grid gap-2">
                                 <Label htmlFor="referral_code">
-                                    Referral code
+                                    {t('auth.register.referral_code')}
                                 </Label>
                                 <Input
                                     id="referral_code"
                                     type="text"
                                     name="referral_code"
                                     defaultValue={referralCode ?? ''}
-                                    placeholder="Optional"
+                                    placeholder={t(
+                                        'auth.register.referral_placeholder',
+                                    )}
                                 />
                                 {/* A wrong code never blocks registration
                                     (§25.1) — it simply credits nobody. */}
@@ -281,7 +314,7 @@ export default function Register({
                                         htmlFor="terms_accepted"
                                         className="text-sm font-normal"
                                     >
-                                        I accept the terms and conditions
+                                        {t('auth.register.terms')}
                                     </Label>
                                 </div>
                                 <InputError message={errors.terms_accepted} />
@@ -297,7 +330,7 @@ export default function Register({
                                         htmlFor="privacy_accepted"
                                         className="text-sm font-normal"
                                     >
-                                        I accept the privacy policy
+                                        {t('auth.register.privacy')}
                                     </Label>
                                 </div>
                                 <InputError message={errors.privacy_accepted} />
@@ -309,12 +342,12 @@ export default function Register({
                                 data-test="register-user-button"
                             >
                                 {processing && <Spinner />}
-                                Create account
+                                {t('auth.register.submit')}
                             </Button>
                         </div>
 
                         <div className="text-muted-foreground text-center text-sm">
-                            Already have an account?{' '}
+                            {t('auth.register.have_account')}{' '}
                             <TextLink
                                 href={
                                     staffInvitation
@@ -328,7 +361,7 @@ export default function Register({
                                 }
                                 data-test="staff-invitation-login-link"
                             >
-                                Log in
+                                {t('auth.register.log_in')}
                             </TextLink>
                         </div>
                     </>
@@ -337,8 +370,3 @@ export default function Register({
         </>
     );
 }
-
-Register.layout = {
-    title: 'Create an account',
-    description: 'Enter your details below to create your account',
-};

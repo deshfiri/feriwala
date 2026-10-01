@@ -140,6 +140,11 @@ return [
             'description' => 'We will review it and let you know the outcome.',
         ],
 
+        'supplier.listing_lot_submitted' => [
+            'title' => 'Your product listing batch was received',
+            'description' => 'We will review every product in the batch and let you know the outcome.',
+        ],
+
         'supplier.listing_correction_requested' => [
             'title' => 'Your product listing needs a correction',
             'description' => 'Review the feedback and resubmit your listing.',

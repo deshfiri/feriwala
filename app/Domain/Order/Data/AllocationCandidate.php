@@ -5,6 +5,7 @@ namespace App\Domain\Order\Data;
 use App\Domain\Order\Actions\ConfirmProductSourceLink;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Models\ProductSourceLink;
+use App\Domain\Supplier\Enums\SupplyMode;
 use App\Support\Money\Money;
 
 /**
@@ -51,6 +52,23 @@ class AllocationCandidate
         public readonly bool $isPreferred = false,
         public readonly ?string $supplierStatus = null,
         public readonly ?string $offerStatus = null,
+
+        /**
+         * How this Supplier offer can actually be fulfilled (Supplier Bulk
+         * Product Listing batch, correction 8) -- `ReadyStock` for a
+         * warehouse candidate, since the concept does not apply to one.
+         */
+        public readonly SupplyMode $supplyMode = SupplyMode::ReadyStock,
+
+        /** The declared ceiling on concurrent on_demand/pre_order commitments, when the offer set one. */
+        public readonly ?int $fulfilmentCapacity = null,
+
+        /**
+         * True whenever this source is not ready_stock: allocating it
+         * commits the Supplier rather than drawing down real stock, so the
+         * panel must ask staff to acknowledge that before it is confirmed.
+         */
+        public readonly bool $requiresConfirmation = false,
 
         /**
          * Whether this source is already known to fulfil the ordered
@@ -104,6 +122,11 @@ class AllocationCandidate
             'is_preferred' => $this->isPreferred,
             'supplier_status' => $this->supplierStatus,
             'offer_status' => $this->offerStatus,
+            'supply_mode' => $this->supplyMode->value,
+            'supply_mode_label' => $this->supplyMode->label(),
+            'buyer_facing_availability_label' => $this->supplyMode->buyerFacingLabel(),
+            'fulfilment_capacity' => $this->fulfilmentCapacity,
+            'requires_confirmation' => $this->requiresConfirmation,
             'is_related' => $this->isRelated,
             'source_product_name' => $this->sourceProductName,
             'source_product_sku' => $this->sourceProductSku,

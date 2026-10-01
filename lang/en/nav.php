@@ -66,6 +66,7 @@ return [
     'invoices' => 'Invoices',
     'suppliers' => 'Suppliers',
     'supplier_listings' => 'Supplier listings',
+    'supplier_listing_lots' => 'Supplier listing batches',
     'supplier_offers' => 'Supplier offers',
     'supplier_stock' => 'Supplier availability',
     'supplier_allocations' => 'Supplier allocations',

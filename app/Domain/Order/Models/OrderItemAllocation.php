@@ -10,6 +10,7 @@ use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Supplier\Models\SupplierOfferPriceChange;
 use App\Domain\Supplier\Models\SupplierPayable;
@@ -76,6 +77,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property-read StockReservation|null $reservation
  * @property-read User|null $allocatedBy
  * @property-read SupplierPayable|null $payable
+ * @property-read SupplierFulfilmentCommitment|null $fulfilmentCommitment
  */
 class OrderItemAllocation extends Model
 {
@@ -186,6 +188,18 @@ class OrderItemAllocation extends Model
     public function payable(): HasOne
     {
         return $this->hasOne(SupplierPayable::class, 'order_item_allocation_id');
+    }
+
+    /**
+     * The capacity reservation backing this allocation, when it is one of
+     * the offer's non-ready-stock kind (Supplier Bulk Product Listing
+     * batch, correction 7). Null for a ready_stock or warehouse allocation.
+     *
+     * @return HasOne<SupplierFulfilmentCommitment, $this>
+     */
+    public function fulfilmentCommitment(): HasOne
+    {
+        return $this->hasOne(SupplierFulfilmentCommitment::class, 'order_item_allocation_id');
     }
 
     /**
