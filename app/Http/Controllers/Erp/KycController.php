@@ -95,6 +95,7 @@ class KycController extends Controller
 
         $type = KycDocumentType::query()
             ->where('key', $validated['document_type'])
+            ->forAccounts()
             ->active()
             ->firstOrFail();
 

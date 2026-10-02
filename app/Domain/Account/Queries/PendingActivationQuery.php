@@ -7,6 +7,7 @@ use App\Domain\Account\Actions\ChangeAccountStatus;
 use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\MobileVerificationRequirement;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
@@ -99,12 +100,17 @@ class PendingActivationQuery
             // Verification is a fact about the owner, not the business — an
             // invited staff member's unverified mobile is nothing to do with
             // whether the business may trade.
+            // Mobile only counts while the requirement is on, matching
+            // ActivationRequirements::ownerVerified().
             ->whereExists(fn ($owner) => $owner
                 ->selectRaw('1')
                 ->from('users')
                 ->whereColumn('users.id', 'business_accounts.owner_id')
                 ->whereNotNull('email_verified_at')
-                ->whereNotNull('mobile_verified_at'))
+                ->when(
+                    app(MobileVerificationRequirement::class)->isRequired(),
+                    fn ($verified) => $verified->whereNotNull('mobile_verified_at'),
+                ))
             ->whereExists(fn ($kyc) => $kyc
                 ->selectRaw('1')
                 ->from('kyc_submissions')

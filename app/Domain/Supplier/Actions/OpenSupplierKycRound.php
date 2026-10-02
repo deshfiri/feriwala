@@ -18,15 +18,29 @@ use App\Domain\Supplier\Models\SupplierKycSubmission;
  * round ({@see SupplierKycStatus::CorrectionRequired} → submitted), and a
  * rejection is final until staff decides otherwise — there is no Supplier-side
  * "start again".
+ *
+ * An editable round is given what it asks for ({@see CaptureSupplierKycRequirements})
+ * the first time it is opened, including a draft that pre-dates requirements.
+ * A round already under review is left as it is.
  */
 class OpenSupplierKycRound
 {
+    public function __construct(
+        protected CaptureSupplierKycRequirements $capture,
+    ) {}
+
     public function handle(Supplier $supplier): SupplierKycSubmission
     {
-        return $supplier->kycSubmissions()->first()
+        $round = $supplier->kycSubmissions()->first()
             ?? $supplier->kycSubmissions()->create([
                 'round' => 1,
                 'status' => SupplierKycStatus::Draft,
             ]);
+
+        if ($round->status->isEditable()) {
+            $this->capture->handle($round);
+        }
+
+        return $round;
     }
 }

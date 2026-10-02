@@ -18,7 +18,12 @@ import { index as dropshippingIndex } from '@/routes/catalog/dropshipping';
 import { index as wholesaleIndex } from '@/routes/catalog/wholesale';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { index as websiteProducts } from '@/routes/websites/products';
-import type { BrowseCard, BrowseDetail, SalesChannelName } from '@/types';
+import type {
+    BrowseCard,
+    BrowseDetail,
+    ContentRow,
+    SalesChannelName,
+} from '@/types';
 import { ProductCard } from './browse';
 
 type Props = {
@@ -34,6 +39,8 @@ type Props = {
     websites?: { id: string; name: string; selected: boolean }[];
     /** The product's public identifier, for choosing it for a storefront. */
     product_id?: string;
+    /** Updates published for this product, newest first (new feature). */
+    content: ContentRow[];
 };
 
 /**
@@ -50,6 +57,7 @@ export default function CatalogueProduct({
     related,
     websites = [],
     product_id: productId,
+    content,
 }: Props) {
     const { t } = useTranslation();
     const [active, setActive] = useState(0);
@@ -299,6 +307,62 @@ export default function CatalogueProduct({
                                 </li>
                             ))}
                         </ul>
+                    </SectionCard>
+                )}
+
+                {content.length > 0 && (
+                    <SectionCard
+                        title={t('catalog.content.title')}
+                        description={t('catalog.content.description')}
+                    >
+                        <ol className="space-y-4">
+                            {content.map((item) => (
+                                <li
+                                    key={item.id}
+                                    className="bg-card space-y-2 rounded-lg border p-4"
+                                >
+                                    <div>
+                                        <p className="font-medium">
+                                            {item.title}
+                                        </p>
+                                        <p className="text-muted-foreground text-xs">
+                                            {new Date(
+                                                item.published_at,
+                                            ).toLocaleDateString()}
+                                        </p>
+                                    </div>
+
+                                    {item.body && (
+                                        <p className="text-sm whitespace-pre-line">
+                                            {item.body}
+                                        </p>
+                                    )}
+
+                                    {item.attachment &&
+                                        (item.attachment.is_image &&
+                                        item.attachment.url ? (
+                                            <img
+                                                src={item.attachment.url}
+                                                alt=""
+                                                className="max-h-48 rounded-md border object-cover"
+                                            />
+                                        ) : (
+                                            item.attachment.url && (
+                                                <a
+                                                    href={item.attachment.url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-primary inline-flex items-center gap-1.5 text-sm underline"
+                                                >
+                                                    {t(
+                                                        'catalog.content.post_file',
+                                                    )}
+                                                </a>
+                                            )
+                                        ))}
+                                </li>
+                            ))}
+                        </ol>
                     </SectionCard>
                 )}
 

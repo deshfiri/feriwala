@@ -237,6 +237,10 @@ function TypeRow({
                         </span>
                     </p>
 
+                    <p className="text-muted-foreground text-xs">
+                        {t(`kyc.document_types.audience.${type.audience}`)}
+                    </p>
+
                     {type.instructions && (
                         <p className="text-muted-foreground text-sm">
                             {type.instructions}

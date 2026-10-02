@@ -33,6 +33,7 @@ class ApplicableRequirements
     public function forUser(BusinessAccount $account, ?string $packageKey = null): Collection
     {
         return KycDocumentType::query()
+            ->forAccounts()
             ->active()
             ->with('scopes')
             ->get()

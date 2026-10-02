@@ -126,6 +126,32 @@ export default function RequirementDialog({
                             </div>
 
                             <div className="grid gap-2">
+                                <Label htmlFor="audience">
+                                    {t('kyc.document_types.form.audience')}
+                                </Label>
+                                <select
+                                    id="audience"
+                                    name="audience"
+                                    defaultValue={type?.audience ?? 'account'}
+                                    className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+                                >
+                                    {(
+                                        ['account', 'supplier', 'both'] as const
+                                    ).map((audience) => (
+                                        <option key={audience} value={audience}>
+                                            {t(
+                                                `kyc.document_types.audience.${audience}`,
+                                            )}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-muted-foreground text-xs">
+                                    {t('kyc.document_types.form.audience_help')}
+                                </p>
+                                <InputError message={errors.audience} />
+                            </div>
+
+                            <div className="grid gap-2">
                                 <Label htmlFor="name">
                                     {t('kyc.document_types.form.name')}
                                 </Label>

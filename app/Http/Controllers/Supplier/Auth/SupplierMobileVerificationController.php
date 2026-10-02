@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Supplier\Auth;
 
 use App\Domain\Account\Exceptions\ResendTooSoon;
+use App\Domain\Account\MobileVerificationRequirement;
 use App\Domain\Notification\Exceptions\SmsEventSwitchedOff;
 use App\Domain\Supplier\Actions\SendSupplierMobileVerificationCode;
 use App\Domain\Supplier\Actions\VerifySupplierMobile;
@@ -16,10 +17,18 @@ use Inertia\Response;
 
 class SupplierMobileVerificationController extends Controller
 {
-    public function show(Request $request): Response
+    public function __construct(
+        protected MobileVerificationRequirement $requirement,
+    ) {}
+
+    public function show(Request $request): Response|RedirectResponse
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
+
+        if (! $this->requirement->isRequired()) {
+            return redirect()->route('supplier.verification.notice');
+        }
 
         return Inertia::render('supplier/verification/mobile', [
             'mobile' => $supplier->mobile,
@@ -31,6 +40,10 @@ class SupplierMobileVerificationController extends Controller
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
+
+        if (! $this->requirement->isRequired()) {
+            return redirect()->route('supplier.verification.notice');
+        }
 
         try {
             $action->handle($supplier);
@@ -52,6 +65,10 @@ class SupplierMobileVerificationController extends Controller
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
+
+        if (! $this->requirement->isRequired()) {
+            return redirect()->route('supplier.verification.notice');
+        }
 
         $request->validate(['code' => ['required', 'string']]);
 

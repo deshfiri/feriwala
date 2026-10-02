@@ -90,6 +90,7 @@ class CaptureRoundRequirements
     public function applicableFor(?string $packageId, ?string $country): Collection
     {
         return KycDocumentType::query()
+            ->forAccounts()
             ->active()
             ->with('scopes')
             ->get()

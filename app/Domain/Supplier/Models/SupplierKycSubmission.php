@@ -78,4 +78,22 @@ class SupplierKycSubmission extends Model
     {
         return $this->hasMany(SupplierKycDocument::class, 'supplier_kyc_submission_id');
     }
+
+    /**
+     * @return HasMany<SupplierKycRequirement, $this>
+     */
+    public function requirements(): HasMany
+    {
+        return $this->hasMany(SupplierKycRequirement::class, 'supplier_kyc_submission_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<SupplierKycField, $this>
+     */
+    public function fields(): HasMany
+    {
+        return $this->hasMany(SupplierKycField::class, 'supplier_kyc_submission_id');
+    }
 }

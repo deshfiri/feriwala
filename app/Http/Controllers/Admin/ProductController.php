@@ -7,6 +7,7 @@ use App\Domain\Catalog\Actions\BulkUpdateProducts;
 use App\Domain\Catalog\Actions\GenerateVariants;
 use App\Domain\Catalog\Actions\ManageProductMedia;
 use App\Domain\Catalog\Actions\ManageProducts;
+use App\Domain\Catalog\Actions\PublishProductContent;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
@@ -15,6 +16,7 @@ use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\Models\ProductContent;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductStatusChange;
@@ -25,6 +27,7 @@ use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Actions\SyncProductStockStatus;
 use App\Domain\Package\Models\Package;
+use App\Domain\Storage\ManagedStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
 use App\Models\User;
@@ -62,6 +65,7 @@ class ProductController extends Controller
         protected ProductMediaStore $mediaStore,
         protected WholesalePriceResolver $prices,
         protected ProductSeo $seo,
+        protected ManagedStorage $storage,
     ) {}
 
     public function index(Request $request): Response
@@ -233,6 +237,7 @@ class ProductController extends Controller
 
         $record = $this->product($product);
         $record->loadMissing(['socialImage', 'media', 'brand']);
+        $record->loadMissing(['contents' => fn ($query) => $query->with(['creator:id,name', 'attachment'])]);
 
         return Inertia::render('admin/catalog/products/form', [
             'product' => $this->detail($record),
@@ -377,6 +382,15 @@ class ProductController extends Controller
                         ->all(),
                 ])
                 ->all(),
+
+            // Updates published for this product, newest first (new feature).
+            'content' => $record->contents->map(fn (ProductContent $content) => $this->contentRow($content))->all(),
+            'content_limits' => [
+                'image_types' => PublishProductContent::IMAGE_TYPES,
+                'file_types' => PublishProductContent::FILE_TYPES,
+                'image_max_mb' => $this->megabytes(PublishProductContent::IMAGE_MAX_BYTES),
+                'file_max_mb' => $this->megabytes(PublishProductContent::FILE_MAX_BYTES),
+            ],
         ]);
     }
 
@@ -532,6 +546,30 @@ class ProductController extends Controller
                 ->sortBy(fn (ProductAttributeValue $value) => $value->attribute->sort_order)
                 ->pluck('value')
                 ->implode(' / '),
+        ];
+    }
+
+    /**
+     * One published update, with its attachment's address resolved against
+     * whichever disk it actually lives on (new feature).
+     *
+     * @return array<string, mixed>
+     */
+    protected function contentRow(ProductContent $content): array
+    {
+        $attachment = $content->attachment;
+
+        return [
+            'id' => $content->public_id,
+            'title' => $content->title,
+            'body' => $content->body,
+            'published_at' => $content->published_at->toIso8601String(),
+            'creator' => $content->creator?->name,
+            'attachment' => $attachment === null ? null : [
+                'url' => $this->storage->url($attachment),
+                'mime_type' => $attachment->mime_type,
+                'is_image' => str_starts_with($attachment->mime_type, 'image/'),
+            ],
         ];
     }
 

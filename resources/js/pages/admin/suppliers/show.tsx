@@ -46,10 +46,13 @@ type Props = {
         documents: {
             id: string;
             type: string;
+            label: string;
             original_name: string;
             size_bytes: number;
             mime_type: string;
         }[];
+        fields: { label: string; value: string }[];
+        missing_required: string[];
     } | null;
     status_history: {
         previous_status: string | null;
@@ -220,7 +223,41 @@ export default function AdminSupplierShow({
                         <SectionCard
                             title={t('supplier.admin.suppliers.evidence')}
                         >
-                            {round === null || round.documents.length === 0 ? (
+                            {round !== null && round.fields.length > 0 && (
+                                <dl className="border-border mb-4 grid gap-3 border-b pb-4 text-sm sm:grid-cols-2">
+                                    {round.fields.map((field) => (
+                                        <div key={field.label}>
+                                            <dt className="text-muted-foreground text-xs">
+                                                {field.label}
+                                            </dt>
+                                            <dd className="font-medium break-words">
+                                                {field.value}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            )}
+
+                            {round !== null &&
+                                round.missing_required.length > 0 && (
+                                    <p
+                                        role="alert"
+                                        className="text-danger mb-4 text-sm font-medium"
+                                    >
+                                        {t(
+                                            'supplier.admin.suppliers.missing_required',
+                                            {
+                                                items: round.missing_required.join(
+                                                    ', ',
+                                                ),
+                                            },
+                                        )}
+                                    </p>
+                                )}
+
+                            {round === null ||
+                            (round.documents.length === 0 &&
+                                round.fields.length === 0) ? (
                                 <p className="text-muted-foreground text-sm">
                                     {t('supplier.admin.suppliers.no_evidence')}
                                 </p>
@@ -237,9 +274,7 @@ export default function AdminSupplierShow({
                                             />
                                             <div className="min-w-0 flex-1">
                                                 <p className="truncate text-sm font-medium">
-                                                    {t(
-                                                        `supplier.kyc.types.${document.type}`,
-                                                    )}
+                                                    {document.label}
                                                 </p>
                                                 <p className="text-muted-foreground truncate text-xs">
                                                     {document.original_name} ·{' '}

@@ -193,7 +193,13 @@ return [
             'bank_statement' => 'Bank statement',
             'other' => 'Other',
         ],
-        'accepted' => 'JPG, PNG or PDF, up to 5 MB.',
+        'accepted' => 'Choose an item below and add what it asks for.',
+        'required' => 'Required',
+        'optional' => 'Optional',
+        'provided' => 'Provided',
+        'value' => 'Value',
+        'save' => 'Save',
+        'formats' => 'Accepted: :formats, up to :size KB.',
     ],
 
     'listings' => [
@@ -538,6 +544,7 @@ return [
             'details' => 'Business details',
             'evidence' => 'KYC evidence',
             'no_evidence' => 'No documents submitted.',
+            'missing_required' => 'Required items not provided: :items',
             'view_document' => 'View',
             'history' => 'Status history',
             'decision' => 'Decision',

@@ -3,6 +3,8 @@
 namespace App\Domain\Kyc\Models;
 
 use App\Concerns\HasPublicId;
+use App\Domain\Kyc\Enums\KycAudience;
+use App\Domain\Supplier\Models\SupplierKycRequirement;
 use Carbon\CarbonImmutable;
 use Database\Factories\KycDocumentTypeFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +23,7 @@ use Illuminate\Support\Collection;
  * (§7.3, §36.2).
  *
  * @property string $key
+ * @property KycAudience $audience
  * @property string $name
  * @property string|null $instructions
  * @property bool $is_required
@@ -43,6 +46,7 @@ class KycDocumentType extends Model
     protected function casts(): array
     {
         return [
+            'audience' => KycAudience::class,
             'accepted_mime_types' => 'array',
             'is_required' => 'boolean',
             'is_active' => 'boolean',
@@ -84,6 +88,36 @@ class KycDocumentType extends Model
     }
 
     /**
+     * @return HasMany<SupplierKycRequirement, $this>
+     */
+    public function supplierRequirements(): HasMany
+    {
+        return $this->hasMany(SupplierKycRequirement::class, 'kyc_document_type_id');
+    }
+
+    /**
+     * Types asked of Client/Partner accounts.
+     *
+     * @param  Builder<KycDocumentType>  $query
+     * @return Builder<KycDocumentType>
+     */
+    public function scopeForAccounts(Builder $query): Builder
+    {
+        return $query->whereIn('audience', [KycAudience::Account->value, KycAudience::Both->value]);
+    }
+
+    /**
+     * Types asked of Suppliers.
+     *
+     * @param  Builder<KycDocumentType>  $query
+     * @return Builder<KycDocumentType>
+     */
+    public function scopeForSuppliers(Builder $query): Builder
+    {
+        return $query->whereIn('audience', [KycAudience::Supplier->value, KycAudience::Both->value]);
+    }
+
+    /**
      * Offered on the form right now: active and not retired.
      *
      * @param  Builder<KycDocumentType>  $query
@@ -120,7 +154,9 @@ class KycDocumentType extends Model
      */
     public function isReferenced(): bool
     {
-        return $this->submissionRequirements()->exists() || $this->documents()->exists();
+        return $this->submissionRequirements()->exists()
+            || $this->documents()->exists()
+            || $this->supplierRequirements()->exists();
     }
 
     /**

@@ -232,6 +232,30 @@ export type MediaLimits = {
     max_items: number;
 };
 
+export type ContentAttachment = {
+    url: string | null;
+    mime_type: string;
+    is_image: boolean;
+};
+
+/** One update published against a product (new feature). */
+export type ContentRow = {
+    id: string;
+    title: string;
+    body: string | null;
+    published_at: string;
+    creator?: string | null;
+    attachment: ContentAttachment | null;
+};
+
+/** What the server will accept for a content attachment. */
+export type ContentLimits = {
+    image_types: string[];
+    file_types: string[];
+    image_max_mb: string;
+    file_max_mb: string;
+};
+
 export type AttributeOption = {
     id: string;
     name: string;

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Supplier\Auth;
 
+use App\Domain\Supplier\Actions\AdvanceSupplierPastVerification;
 use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
 use Illuminate\Auth\Events\Verified;
@@ -19,7 +20,7 @@ use Illuminate\Http\Request;
  */
 class VerifySupplierEmailController extends Controller
 {
-    public function __invoke(Request $request): RedirectResponse
+    public function __invoke(Request $request, AdvanceSupplierPastVerification $advance): RedirectResponse
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
@@ -41,6 +42,8 @@ class VerifySupplierEmailController extends Controller
         if ($supplier->markEmailAsVerified()) {
             event(new Verified($supplier));
         }
+
+        $advance->handle($supplier);
 
         return redirect()->route('supplier.verification.notice')->with('status', 'email-verified');
     }

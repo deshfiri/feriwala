@@ -59,7 +59,15 @@ return [
             'packages_pending' => 'Package-specific rules need packages to exist first. They can be added once package management is built (P1-32).',
         ],
 
+        'audience' => [
+            'account' => 'Clients & Partners',
+            'supplier' => 'Suppliers',
+            'both' => 'Clients, Partners & Suppliers',
+        ],
+
         'form' => [
+            'audience' => 'Asked of',
+            'audience_help' => 'Package and country rules below apply to Clients and Partners only. A Supplier is asked for every active requirement marked for them.',
             'create_title' => 'New requirement',
             'edit_title' => 'Edit requirement',
             'description' => 'Applicants see the name and instructions exactly as written here.',

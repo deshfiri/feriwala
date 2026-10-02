@@ -1,4 +1,4 @@
-import { Form, Head } from '@inertiajs/react';
+﻿import { Form, Head } from '@inertiajs/react';
 import { FileText, Lock } from 'lucide-react';
 import FileField from '@/components/forms/file-field';
 import FormField from '@/components/forms/form-field';
@@ -7,6 +7,7 @@ import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
+import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { submit } from '@/routes/supplier/kyc';
@@ -23,10 +24,25 @@ type Round = {
     documents: {
         id: string;
         type: string;
+        label: string;
         original_name: string;
         size_bytes: number;
         mime_type: string;
     }[];
+};
+
+type Requirement = {
+    key: string;
+    name: string;
+    instructions: string | null;
+    is_required: boolean;
+    requires_file: boolean;
+    requires_value: boolean;
+    value_label: string | null;
+    accepted_mime_types: string[];
+    max_size_kb: number;
+    uploaded: boolean;
+    value_preview: string | null;
 };
 
 const TONES: Record<string, StatusTone> = {
@@ -41,7 +57,7 @@ const TONES: Record<string, StatusTone> = {
 export default function SupplierKyc({
     round,
     history,
-    document_types,
+    requirements,
 }: {
     supplier_status: string;
     round: Round;
@@ -52,7 +68,7 @@ export default function SupplierKyc({
         reviewed_at: string | null;
         decision_note: string | null;
     }[];
-    document_types: string[];
+    requirements: Requirement[];
 }) {
     const { t, locale } = useTranslation();
 
@@ -108,12 +124,10 @@ export default function SupplierKyc({
                                     />
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate text-sm font-medium">
-                                            {t(
-                                                `supplier.kyc.types.${document.type}`,
-                                            )}
+                                            {document.label}
                                         </p>
                                         <p className="text-muted-foreground truncate text-xs">
-                                            {document.original_name} ·{' '}
+                                            {document.original_name} Â·{' '}
                                             {formatSize(document.size_bytes)}
                                         </p>
                                     </div>
@@ -129,62 +143,18 @@ export default function SupplierKyc({
                             title={t('supplier.kyc.upload')}
                             description={t('supplier.kyc.accepted')}
                         >
-                            <Form
-                                {...store.form()}
-                                resetOnSuccess
-                                options={{ preserveScroll: true }}
-                                className="space-y-4"
-                            >
-                                {({ processing, errors, progress }) => (
-                                    <>
-                                        <FormField
-                                            label={t(
-                                                'supplier.kyc.document_type',
-                                            )}
-                                            error={errors.document_type}
-                                            required
-                                        >
-                                            {(field) => (
-                                                <select
-                                                    {...field}
-                                                    name="document_type"
-                                                    required
-                                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                                >
-                                                    {document_types.map(
-                                                        (type) => (
-                                                            <option
-                                                                key={type}
-                                                                value={type}
-                                                            >
-                                                                {t(
-                                                                    `supplier.kyc.types.${type}`,
-                                                                )}
-                                                            </option>
-                                                        ),
-                                                    )}
-                                                </select>
-                                            )}
-                                        </FormField>
-
-                                        <FileField
-                                            label={t('supplier.kyc.file')}
-                                            name="file"
-                                            accept="image/jpeg,image/png,application/pdf"
-                                            maxSizeMb={5}
-                                            required
-                                            error={errors.file}
-                                            progress={
-                                                progress?.percentage ?? null
-                                            }
+                            <ul className="divide-border divide-y">
+                                {requirements.map((requirement) => (
+                                    <li
+                                        key={requirement.key}
+                                        className="py-4 first:pt-0 last:pb-0"
+                                    >
+                                        <RequirementForm
+                                            requirement={requirement}
                                         />
-
-                                        <SubmitButton processing={processing}>
-                                            {t('supplier.kyc.upload')}
-                                        </SubmitButton>
-                                    </>
-                                )}
-                            </Form>
+                                    </li>
+                                ))}
+                            </ul>
                         </SectionCard>
 
                         <SectionCard
@@ -205,7 +175,11 @@ export default function SupplierKyc({
                                         <SubmitButton
                                             processing={processing}
                                             disabled={
-                                                round.documents.length === 0
+                                                round.documents.length === 0 &&
+                                                !requirements.some(
+                                                    (requirement) =>
+                                                        requirement.value_preview,
+                                                )
                                             }
                                         >
                                             {t('supplier.kyc.submit')}
@@ -252,5 +226,96 @@ export default function SupplierKyc({
                 )}
             </PageContainer>
         </>
+    );
+}
+
+/**
+ * One item the administrator asks Suppliers for: a file, a typed value, or
+ * both, saved on its own so a failed upload never costs the others.
+ */
+function RequirementForm({ requirement }: { requirement: Requirement }) {
+    const { t } = useTranslation();
+
+    return (
+        <Form
+            {...store.form()}
+            resetOnSuccess
+            options={{ preserveScroll: true }}
+            className="space-y-3"
+        >
+            {({ processing, errors, progress }) => (
+                <>
+                    <input
+                        type="hidden"
+                        name="document_type"
+                        value={requirement.key}
+                    />
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium">
+                            {requirement.name}
+                        </p>
+                        <span className="text-muted-foreground flex items-center gap-2 text-xs">
+                            {requirement.is_required
+                                ? t('supplier.kyc.required')
+                                : t('supplier.kyc.optional')}
+                            {(requirement.uploaded ||
+                                requirement.value_preview) && (
+                                <StatusPill
+                                    tone="success"
+                                    label={t('supplier.kyc.provided')}
+                                />
+                            )}
+                        </span>
+                    </div>
+
+                    {requirement.instructions && (
+                        <p className="text-muted-foreground text-sm">
+                            {requirement.instructions}
+                        </p>
+                    )}
+
+                    {requirement.requires_file && (
+                        <FileField
+                            label={t('supplier.kyc.file')}
+                            name="file"
+                            accept={requirement.accepted_mime_types.join(',')}
+                            maxSizeMb={Math.max(
+                                1,
+                                Math.floor(requirement.max_size_kb / 1024),
+                            )}
+                            error={errors.file}
+                            progress={progress?.percentage ?? null}
+                        />
+                    )}
+
+                    {requirement.requires_value && (
+                        <FormField
+                            label={
+                                requirement.value_label ??
+                                t('supplier.kyc.value')
+                            }
+                            error={errors.value}
+                        >
+                            {(field) => (
+                                <Input
+                                    {...field}
+                                    name="value"
+                                    maxLength={255}
+                                    autoComplete="off"
+                                    placeholder={
+                                        requirement.value_preview ?? ''
+                                    }
+                                />
+                            )}
+                        </FormField>
+                    )}
+
+                    <SubmitButton processing={processing} size="sm">
+                        {t('supplier.kyc.save')}
+                    </SubmitButton>
+                </>
+            )}
+        </Form>
     );
 }

@@ -94,6 +94,8 @@ export type KycDocumentTypeRow = {
     /** The public id. §34.2 keeps database ids out of the client. */
     id: string;
     key: string;
+    /** Who is asked for it: Client/Partner accounts, Suppliers, or both. */
+    audience: 'account' | 'supplier' | 'both';
     name: string;
     instructions: string | null;
     is_required: boolean;

@@ -39,13 +39,24 @@ class SubmitSupplierKyc
             /** @var Supplier $locked */
             $locked = Supplier::query()->lockForUpdate()->findOrFail($supplier->id);
 
+            if ($locked->status === SupplierStatus::VerificationPending) {
+                throw new InvalidArgumentException('Verify your email and mobile number before submitting KYC.');
+            }
+
             $submission = $locked->kycSubmissions()->first();
 
             if ($submission === null || ! $submission->status->isEditable()) {
                 throw new InvalidArgumentException('There is no editable Supplier KYC round to submit.');
             }
 
-            if ($submission->documents()->count() === 0) {
+            $missing = $this->missingRequirements($submission);
+
+            if ($missing !== []) {
+                throw new InvalidArgumentException('Still required: '.implode(', ', $missing).'.');
+            }
+
+            // With nothing marked required there is still no empty application.
+            if ($submission->documents()->count() === 0 && $submission->fields()->count() === 0) {
                 throw new InvalidArgumentException('At least one document is required before submitting.');
             }
 
@@ -86,5 +97,28 @@ class SubmitSupplierKyc
         $supplier->notify((new SupplierKycSubmitted)->locale($supplier->locale));
 
         return $submission;
+    }
+
+    /**
+     * Names of required items the round still lacks, judged against the
+     * round's own snapshot rather than today's catalogue.
+     *
+     * @return array<int, string>
+     */
+    protected function missingRequirements(SupplierKycSubmission $submission): array
+    {
+        $documentKeys = $submission->documents()->pluck('document_type')->all();
+        $fieldKeys = $submission->fields()->pluck('key')->all();
+
+        $missing = [];
+
+        foreach ($submission->requirements()->where('is_required', true)->get() as $requirement) {
+            if (($requirement->requires_file && ! in_array($requirement->key, $documentKeys, true))
+                || ($requirement->requires_value && ! in_array($requirement->key, $fieldKeys, true))) {
+                $missing[] = $requirement->name;
+            }
+        }
+
+        return $missing;
     }
 }

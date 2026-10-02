@@ -112,6 +112,16 @@ test('a submission without a document is refused', function () {
     $this->post(route('supplier.kyc.submit'))->assertSessionHasErrors('submission');
 });
 
+test('a supplier still awaiting email and mobile verification cannot submit KYC', function () {
+    $supplier = supplierTestSignIn(Supplier::factory()->create(['status' => SupplierStatus::VerificationPending]));
+    supplierKycTestUpload()->assertSessionHasNoErrors();
+
+    $this->post(route('supplier.kyc.submit'))
+        ->assertSessionHasErrors(['submission' => 'Verify your email and mobile number before submitting KYC.']);
+
+    expect($supplier->refresh()->status)->toBe(SupplierStatus::VerificationPending);
+});
+
 test('a supplier only ever sees its own KYC round and documents', function () {
     $other = Supplier::factory()->kycPending()->create();
     $otherRound = $other->kycSubmissions()->create(['round' => 1, 'status' => SupplierKycStatus::Draft]);

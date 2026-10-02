@@ -50,6 +50,7 @@ class KycDocumentTypeController extends Controller
             'types' => $types->map(fn (KycDocumentType $type) => [
                 'id' => $type->public_id,
                 'key' => $type->key,
+                'audience' => $type->audience->value,
                 'name' => $type->name,
                 'instructions' => $type->instructions,
                 'is_required' => $type->is_required,

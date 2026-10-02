@@ -4,18 +4,20 @@ namespace App\Domain\Supplier;
 
 use App\Domain\Storage\ManagedStorage;
 use App\Domain\Supplier\Models\SupplierKycDocument;
+use App\Domain\Supplier\Models\SupplierKycRequirement;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
+use Symfony\Component\Mime\MimeTypes;
 
 /**
  * Stores and reads Supplier KYC documents (D25, mirrors
  * `App\Domain\Kyc\KycDocumentStore`).
  *
- * Unlike the generic engine, there is no administrator-configurable document
- * type catalogue behind this — the accepted document types and file rules are
- * fixed here, which is enough for the beta and avoids standing up a second
- * `kyc_document_types` table for one Supplier-only vocabulary.
+ * What may be uploaded comes from the round's snapshot of the administrator's
+ * document catalogue ({@see SupplierKycRequirement}). The constants below are
+ * only the built-in vocabulary a round falls back to while no Supplier
+ * requirement has been configured.
  *
  * Every §7.5-equivalent rule still applies:
  *
@@ -50,41 +52,46 @@ class SupplierKycDocumentStore
     /** @var list<string> */
     public const ACCEPTED_MIME_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 
-    /** @var list<string> */
-    public const ACCEPTED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf'];
-
     public const MAX_SIZE_KB = 5120;
 
     public function __construct(
         protected ManagedStorage $storage,
     ) {}
 
+    /**
+     * Judged against the rules the round was opened with (the requirement's
+     * snapshot), so an administrator changing a type this morning cannot start
+     * refusing a file the Supplier was told would be accepted.
+     */
     public function store(
         SupplierKycSubmission $submission,
-        string $documentType,
+        SupplierKycRequirement $requirement,
         UploadedFile $file,
     ): SupplierKycDocument {
-        if (! in_array($documentType, self::DOCUMENT_TYPES, true)) {
-            throw new InvalidArgumentException("[{$documentType}] is not an accepted Supplier KYC document type.");
-        }
-
         $mime = (string) $file->getMimeType();
         $extension = mb_strtolower((string) $file->getClientOriginalExtension());
         $size = (int) $file->getSize();
 
-        if (! in_array($mime, self::ACCEPTED_MIME_TYPES, true) || ! in_array($extension, self::ACCEPTED_EXTENSIONS, true)) {
+        // The extension has to belong to one of the accepted formats too, so a
+        // script cannot ride in under a document's mime type.
+        $allowedExtensions = collect($requirement->accepted_mime_types)
+            ->flatMap(fn (string $accepted) => (new MimeTypes)->getExtensions($accepted))
+            ->all();
+
+        if (! in_array($mime, $requirement->accepted_mime_types, true) || ! in_array($extension, $allowedExtensions, true)) {
             throw new InvalidArgumentException(sprintf(
-                'A %s file is not accepted. Allowed: %s.',
+                'A %s file is not accepted for %s. Allowed: %s.',
                 $mime,
-                implode(', ', self::ACCEPTED_EXTENSIONS),
+                $requirement->name,
+                implode(', ', $requirement->accepted_mime_types),
             ));
         }
 
-        if ($size > self::MAX_SIZE_KB * 1024) {
+        if ($size > $requirement->max_size_kb * 1024) {
             throw new InvalidArgumentException(sprintf(
                 'The file is %d KB, which is over the %d KB limit.',
                 (int) round($size / 1024),
-                self::MAX_SIZE_KB,
+                $requirement->max_size_kb,
             ));
         }
 
@@ -105,7 +112,7 @@ class SupplierKycDocumentStore
         $this->storage->diskForLocal(self::DISK)->put($path, encrypt($contents));
 
         return $submission->documents()->create([
-            'document_type' => $documentType,
+            'document_type' => $requirement->key,
             'disk' => $this->storage->diskNameForLocal(self::DISK),
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),

@@ -16,6 +16,8 @@ import type {
     AttributeOption,
     CatalogAbilities,
     CatalogOption,
+    ContentLimits,
+    ContentRow,
     MediaLimits,
     MediaRow,
     MerchandisingState,
@@ -34,6 +36,7 @@ import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
 import { ProductStatusPill } from './index';
+import ContentSection from './content-section';
 import MediaSection from './media-section';
 import PriceTiersSection from './price-tiers-section';
 import VariantsSection from './variants-section';
@@ -56,6 +59,8 @@ type Props = {
     merchandising: MerchandisingState | null;
     related_matches?: RelatedProductRow[];
     seo_preview: SeoPreview | null;
+    content: ContentRow[];
+    content_limits: ContentLimits;
 };
 
 const selectClass =
@@ -94,6 +99,8 @@ export default function ProductForm({
     merchandising,
     related_matches,
     seo_preview,
+    content,
+    content_limits,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -662,6 +669,17 @@ export default function ProductForm({
                             attributes={attributes}
                             builderMax={variant_builder_max}
                             can={can}
+                        />
+                    </div>
+                )}
+
+                {editing && (
+                    <div id="content" className="scroll-mt-20">
+                        <ContentSection
+                            product={product}
+                            content={content}
+                            limits={content_limits}
+                            canEdit={can.edit}
                         />
                     </div>
                 )}

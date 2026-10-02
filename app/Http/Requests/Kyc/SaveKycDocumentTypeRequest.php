@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Kyc;
 
+use App\Domain\Kyc\Enums\KycAudience;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Package\Models\Package;
 use App\Support\Localization\Countries;
@@ -36,6 +37,8 @@ class SaveKycDocumentTypeRequest extends FormRequest
                 Rule::unique(KycDocumentType::class, 'key')
                     ->ignore($type instanceof KycDocumentType ? $type->id : null),
             ],
+            // Left out, a new type is for Client/Partner accounts, as before.
+            'audience' => ['sometimes', Rule::enum(KycAudience::class)],
             'name' => ['required', 'string', 'max:120'],
             'instructions' => ['nullable', 'string', 'max:2000'],
 

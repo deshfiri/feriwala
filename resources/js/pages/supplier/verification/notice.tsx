@@ -12,10 +12,12 @@ import { mobile } from '@/routes/supplier/verification';
 export default function SupplierVerificationNotice({
     emailVerified,
     mobileVerified,
+    mobileRequired,
     status,
 }: {
     emailVerified: boolean;
     mobileVerified: boolean;
+    mobileRequired: boolean;
     status?: string;
 }) {
     const { t } = useTranslation();
@@ -26,11 +28,15 @@ export default function SupplierVerificationNotice({
             label: t('supplier.verification.email'),
             done: emailVerified,
         },
-        {
-            key: 'mobile',
-            label: t('supplier.verification.mobile'),
-            done: mobileVerified,
-        },
+        ...(mobileRequired
+            ? [
+                  {
+                      key: 'mobile',
+                      label: t('supplier.verification.mobile'),
+                      done: mobileVerified,
+                  },
+              ]
+            : []),
     ];
 
     return (

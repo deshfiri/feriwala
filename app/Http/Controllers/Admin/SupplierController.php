@@ -91,7 +91,7 @@ class SupplierController extends Controller
         /** @var User $reviewer */
         $reviewer = $request->user();
 
-        $round = $supplier->kycSubmissions()->with('documents')->first();
+        $round = $supplier->kycSubmissions()->with(['documents', 'requirements', 'fields'])->first();
         $statusHistory = $supplier->statusHistory()->with('changedBy')->get();
 
         return Inertia::render('admin/suppliers/show', [
@@ -124,10 +124,23 @@ class SupplierController extends Controller
                 'documents' => $round->documents->map(fn (SupplierKycDocument $document) => [
                     'id' => $document->public_id,
                     'type' => $document->document_type,
+                    'label' => $round->requirements->firstWhere('key', $document->document_type)?->name
+                        ?? $document->document_type,
                     'original_name' => $document->original_name,
                     'size_bytes' => $document->size_bytes,
                     'mime_type' => $document->mime_type,
                 ])->all(),
+                'fields' => $round->fields->map(fn ($field) => [
+                    'label' => $round->requirements->firstWhere('key', $field->key)?->name ?? $field->key,
+                    'value' => $field->value,
+                ])->all(),
+                'missing_required' => $round->requirements
+                    ->where('is_required', true)
+                    ->filter(fn ($requirement) => ($requirement->requires_file && ! $round->documents->contains('document_type', $requirement->key))
+                        || ($requirement->requires_value && ! $round->fields->contains('key', $requirement->key)))
+                    ->pluck('name')
+                    ->values()
+                    ->all(),
             ],
             'status_history' => $statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),

@@ -119,7 +119,7 @@ class SubmitKyc
         ?string $packageKey,
         ?string $country,
     ): array {
-        $types = KycDocumentType::query()->active()->with('scopes')->get();
+        $types = KycDocumentType::query()->forAccounts()->active()->with('scopes')->get();
 
         $documentTypeIds = $submission->documents()->pluck('kyc_document_type_id')->all();
         $fieldTypeIds = $submission->fields()

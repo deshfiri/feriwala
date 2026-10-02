@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\Models\ProductContent;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
@@ -16,6 +17,7 @@ use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Storage\ManagedStorage;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Http\Controllers\Controller;
@@ -61,6 +63,7 @@ class CatalogController extends Controller
         protected ProductMediaStore $media,
         protected WholesalePriceResolver $prices,
         protected StockAvailability $stock,
+        protected ManagedStorage $storage,
     ) {}
 
     public function wholesale(Request $request): Response
@@ -185,6 +188,7 @@ class CatalogController extends Controller
         $product = $this->eligibility->query($account, $channel)
             ->where('slug', $slug)
             ->with(['category.parent', 'brand', 'media', 'variants.values.attribute', 'variants.product'])
+            ->with(['contents' => fn ($query) => $query->with('attachment')])
             ->first();
 
         abort_if($product === null, 404);
@@ -298,6 +302,23 @@ class CatalogController extends Controller
             // What the selection endpoint is told. The product's public
             // identifier, never its key (§34.2).
             'product_id' => $product->public_id,
+
+            // Updates published for this product, newest first (new feature).
+            // Inherits this route's own `business.activated` gate — nothing
+            // here decides who may see it beyond already being on this page.
+            'content' => $product->contents
+                ->map(fn (ProductContent $content) => [
+                    'id' => $content->public_id,
+                    'title' => $content->title,
+                    'body' => $content->body,
+                    'published_at' => $content->published_at->toIso8601String(),
+                    'attachment' => $content->attachment === null ? null : [
+                        'url' => $this->storage->url($content->attachment),
+                        'mime_type' => $content->attachment->mime_type,
+                        'is_image' => str_starts_with($content->attachment->mime_type, 'image/'),
+                    ],
+                ])
+                ->all(),
         ]);
     }
 

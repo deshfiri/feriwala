@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -19,8 +19,12 @@ const translations = {
             locked: 'This submission is being reviewed and is read-only.',
             feedback: 'Reviewer feedback',
             history: 'Earlier rounds',
-            accepted: 'JPG, PNG or PDF, up to 5 MB.',
-            types: { trade_licence: 'Trade licence', nid_front: 'NID (front)' },
+            accepted: 'Choose an item below.',
+            required: 'Required',
+            optional: 'Optional',
+            provided: 'Provided',
+            value: 'Value',
+            save: 'Save',
         },
     },
 };
@@ -53,6 +57,7 @@ const { default: SupplierKyc } = await import('./index');
 type Document = {
     id: string;
     type: string;
+    label: string;
     original_name: string;
     size_bytes: number;
     mime_type: string;
@@ -81,11 +86,30 @@ const round = (overrides: Partial<Round> = {}): Round => ({
     ...overrides,
 });
 
+function requirement(key: string, name: string) {
+    return {
+        key,
+        name,
+        instructions: null,
+        is_required: true,
+        requires_file: true,
+        requires_value: false,
+        value_label: null,
+        accepted_mime_types: ['application/pdf'],
+        max_size_kb: 5120,
+        uploaded: false,
+        value_preview: null,
+    };
+}
+
 const props = (r: Round) => ({
     supplier_status: 'kyc_pending',
     round: r,
     history: [],
-    document_types: ['trade_licence', 'nid_front'],
+    requirements: [
+        requirement('trade_licence', 'Trade licence'),
+        requirement('nid_front', 'NID (front)'),
+    ],
 });
 
 /**
@@ -99,23 +123,17 @@ describe('the supplier KYC screen', () => {
         expect(
             screen.getByText('No documents uploaded yet.'),
         ).toBeInTheDocument();
-        expect(
-            screen.getByRole('button', { name: 'Upload document' }),
-        ).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(2);
         expect(
             screen.getByRole('button', { name: 'Submit for review' }),
         ).toBeDisabled();
     });
 
-    it('offers the document types by their translated names', () => {
+    it('lists each configured requirement by its own name', () => {
         render(<SupplierKyc {...props(round())} />);
 
-        expect(
-            screen.getByRole('option', { name: 'Trade licence' }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole('option', { name: 'NID (front)' }),
-        ).toBeInTheDocument();
+        expect(screen.getByText('Trade licence')).toBeInTheDocument();
+        expect(screen.getByText('NID (front)')).toBeInTheDocument();
     });
 
     it('lets a round with a document be submitted', () => {
@@ -127,6 +145,7 @@ describe('the supplier KYC screen', () => {
                             {
                                 id: 'd1',
                                 type: 'trade_licence',
+                                label: 'Trade licence',
                                 original_name: 'licence.pdf',
                                 size_bytes: 2048,
                                 mime_type: 'application/pdf',
@@ -162,7 +181,7 @@ describe('the supplier KYC screen', () => {
             ),
         ).toBeInTheDocument();
         expect(
-            screen.queryByRole('button', { name: 'Upload document' }),
+            screen.queryByRole('button', { name: 'Save' }),
         ).not.toBeInTheDocument();
         expect(
             screen.queryByRole('button', { name: 'Submit for review' }),
@@ -186,7 +205,7 @@ describe('the supplier KYC screen', () => {
             screen.getByText('The licence scan is blurry.'),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole('button', { name: 'Upload document' }),
-        ).toBeInTheDocument();
+            screen.getAllByRole('button', { name: 'Save' }).length,
+        ).toBeGreaterThan(0);
     });
 });

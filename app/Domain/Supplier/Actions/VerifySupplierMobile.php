@@ -4,10 +4,7 @@ namespace App\Domain\Supplier\Actions;
 
 use App\Domain\Account\Actions\VerifyMobile;
 use App\Domain\Account\VerificationCodes;
-use App\Domain\Supplier\Enums\SupplierStatus;
-use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\Supplier;
-use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\DatabaseManager;
 
 /**
@@ -22,6 +19,7 @@ class VerifySupplierMobile
     public function __construct(
         protected VerificationCodes $codes,
         protected DatabaseManager $database,
+        protected AdvanceSupplierPastVerification $advance,
     ) {}
 
     /**
@@ -38,26 +36,9 @@ class VerifySupplierMobile
         $this->database->transaction(function () use ($supplier) {
             $supplier->forceFill(['mobile_verified_at' => now()])->save();
 
-            $this->advanceIfFullyVerified($supplier);
+            $this->advance->handle($supplier);
         });
 
         return true;
-    }
-
-    protected function advanceIfFullyVerified(Supplier $supplier): void
-    {
-        if ($supplier->status !== SupplierStatus::VerificationPending) {
-            return;
-        }
-
-        if (! $supplier->isVerified()) {
-            return;
-        }
-
-        $supplier->transitionWithHistory(
-            SupplierStatus::KycPending,
-            new StatusChange(reason: 'Email and mobile verified.'),
-            ['source' => SupplierStatusChangeSource::Supplier],
-        );
     }
 }

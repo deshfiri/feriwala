@@ -315,4 +315,14 @@ class Product extends Model
             ->orderBy('sort_order')
             ->orderBy('id');
     }
+
+    /**
+     * Updates published for this product, newest first.
+     *
+     * @return HasMany<ProductContent, $this>
+     */
+    public function contents(): HasMany
+    {
+        return $this->hasMany(ProductContent::class)->orderByDesc('published_at');
+    }
 }

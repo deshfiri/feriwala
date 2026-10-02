@@ -29,6 +29,7 @@ use App\Http\Controllers\Admin\PlatformStaffController;
 use App\Http\Controllers\Admin\ProductAttributeController;
 use App\Http\Controllers\Admin\ProductBulkController;
 use App\Http\Controllers\Admin\ProductChannelController;
+use App\Http\Controllers\Admin\ProductContentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductEligibilityController;
 use App\Http\Controllers\Admin\ProductMediaController;
@@ -1118,6 +1119,12 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.media.update');
         Route::delete('catalog/products/{product}/media/{media}', [ProductMediaController::class, 'destroy'])
             ->name('catalog.products.media.destroy');
+
+        // Updates an administrator publishes against a product, for every partner to read.
+        Route::post('catalog/products/{product}/content', [ProductContentController::class, 'store'])
+            ->name('catalog.products.content.store');
+        Route::delete('catalog/products/{product}/content/{content}', [ProductContentController::class, 'destroy'])
+            ->name('catalog.products.content.destroy');
 
         Route::get('catalog/attributes', [ProductAttributeController::class, 'index'])
             ->name('catalog.attributes.index');

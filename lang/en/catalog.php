@@ -420,6 +420,24 @@ return [
         'limit_reached' => 'This product holds :max files, the most it can.',
     ],
 
+    'content' => [
+        'title' => 'Updates',
+        'description' => 'Announcements about this product. Every partner on an operating account sees these from the product\'s own page.',
+        'post_title' => 'Title',
+        'post_body' => 'Details',
+        'post_image' => 'Image',
+        'post_file' => 'File attachment',
+        'attachment_help' => 'At most one attachment. Image: JPEG, PNG or WebP, up to :image MB. File: PDF or an office document, up to :file MB.',
+        'publish' => 'Publish',
+        'delete_confirm' => 'Remove this update? It will no longer be shown to partners.',
+        'published' => 'Update published.',
+        'removed' => 'Update removed.',
+        'empty' => 'No updates yet',
+        'empty_help' => 'Publish the first update — every operating partner will see it on this product\'s page.',
+        'empty_help_read_only' => 'No updates have been published for this product.',
+        'posted_by' => 'Posted by :name',
+    ],
+
     'attributes' => [
         'title' => 'Attributes',
         'description' => 'Shared across the catalogue — one Size, one Colour — and used by every product that varies by them.',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Supplier;
 use App\Domain\Supplier\Actions\OpenSupplierKycRound;
 use App\Domain\Supplier\Actions\SubmitSupplierKyc;
 use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierKycRequirement;
 use App\Domain\Supplier\SupplierKycDocumentStore;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -34,6 +35,9 @@ class KycController extends Controller
         $round->load('documents');
 
         $history = $supplier->kycSubmissions()->with('documents')->get();
+        $requirements = $round->requirements()->get();
+        $documents = $round->documents->groupBy('document_type');
+        $fields = $round->fields()->get()->keyBy('key');
 
         return Inertia::render('supplier/kyc/index', [
             'supplier_status' => $supplier->status->value,
@@ -48,6 +52,8 @@ class KycController extends Controller
                 'documents' => $round->documents->map(fn ($document) => [
                     'id' => $document->public_id,
                     'type' => $document->document_type,
+                    'label' => $requirements->firstWhere('key', $document->document_type)?->name
+                        ?? $document->document_type,
                     'original_name' => $document->original_name,
                     'size_bytes' => $document->size_bytes,
                     'mime_type' => $document->mime_type,
@@ -60,7 +66,21 @@ class KycController extends Controller
                 'reviewed_at' => $item->reviewed_at?->toIso8601String(),
                 'decision_note' => $item->decision_note,
             ])->all(),
-            'document_types' => SupplierKycDocumentStore::DOCUMENT_TYPES,
+            'requirements' => $requirements->map(fn (SupplierKycRequirement $requirement) => [
+                'key' => $requirement->key,
+                'name' => $requirement->name,
+                'instructions' => $requirement->instructions,
+                'is_required' => $requirement->is_required,
+                'requires_file' => $requirement->requires_file,
+                'requires_value' => $requirement->requires_value,
+                'value_label' => $requirement->value_label,
+                'accepted_mime_types' => $requirement->accepted_mime_types,
+                'max_size_kb' => $requirement->max_size_kb,
+                'uploaded' => $documents->has($requirement->key),
+
+                // The stored value is masked: the form never echoes it back in full.
+                'value_preview' => $fields->get($requirement->key)?->masked(),
+            ])->all(),
         ]);
     }
 
@@ -69,12 +89,13 @@ class KycController extends Controller
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
 
-        $validated = $request->validate([
-            'document_type' => ['required', 'string', Rule::in(SupplierKycDocumentStore::DOCUMENT_TYPES)],
-            'file' => ['required', 'file', 'max:'.SupplierKycDocumentStore::MAX_SIZE_KB],
-        ]);
-
         $round = $openRound->handle($supplier);
+
+        $validated = $request->validate([
+            'document_type' => ['required', 'string', Rule::in($round->requirements()->pluck('key')->all())],
+            'file' => ['nullable', 'file', 'max:'.SupplierKycDocumentStore::MAX_SIZE_KB],
+            'value' => ['nullable', 'string', 'max:255'],
+        ]);
 
         if (! $round->status->isEditable()) {
             throw ValidationException::withMessages([
@@ -82,13 +103,39 @@ class KycController extends Controller
             ]);
         }
 
-        try {
-            $store->store($round, $validated['document_type'], $request->file('file'));
-        } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['file' => $e->getMessage()]);
+        /** @var SupplierKycRequirement $requirement */
+        $requirement = $round->requirements()->where('key', $validated['document_type'])->firstOrFail();
+
+        if (! $request->hasFile('file') && blank($validated['value'] ?? null)) {
+            throw ValidationException::withMessages([
+                $requirement->requires_file ? 'file' : 'value' => 'Provide a file or a value.',
+            ]);
         }
 
-        return back()->with('success', 'Document uploaded.');
+        if ($request->hasFile('file')) {
+            if (! $requirement->requires_file) {
+                throw ValidationException::withMessages(['file' => 'This item takes a value, not a file.']);
+            }
+
+            try {
+                $store->store($round, $requirement, $request->file('file'));
+            } catch (InvalidArgumentException $e) {
+                throw ValidationException::withMessages(['file' => $e->getMessage()]);
+            }
+        }
+
+        if (filled($validated['value'] ?? null)) {
+            if (! $requirement->requires_value) {
+                throw ValidationException::withMessages(['value' => 'This item takes a file, not a value.']);
+            }
+
+            $round->fields()->updateOrCreate(
+                ['key' => $requirement->key],
+                ['value' => $validated['value']],
+            );
+        }
+
+        return back()->with('success', $requirement->name.' saved.');
     }
 
     public function submit(Request $request, SubmitSupplierKyc $submit): RedirectResponse
