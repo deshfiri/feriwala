@@ -156,14 +156,21 @@ class Branding
     }
 
     /**
-     * Whether a value is a path this feature wrote: `branding/<asset>/<name>.<ext>`
-     * (the shape {@see StoreManagedFile} gives
-     * every file -- `<purpose>/<random>.<ext>`), with nothing that could
+     * Whether a value is a path this feature wrote, with nothing that could
      * climb out of the folder and no embedded data.
+     *
+     * Two shapes are accepted: `branding/<asset>/<name>.<ext>` (the shape
+     * {@see StoreManagedFile} gives every file -- `<purpose>/<random>.<ext>`
+     * -- since Commit 4 of the beta-critical batch) and the older
+     * `branding/<asset>-<name>.<ext>` a file uploaded before that batch may
+     * still carry. Narrowing this to only the new shape would silently
+     * revert an administrator's already-uploaded logo or favicon to the
+     * shipped default the next time this is checked -- accepting both is
+     * what keeps an old upload showing until it is next replaced.
      */
     public static function isManagedPath(string $path): bool
     {
-        return preg_match('#^'.self::FOLDER.'/[a-z]+/[A-Za-z0-9_-]+\.(png|jpg|webp|ico)$#', $path) === 1;
+        return preg_match('#^'.self::FOLDER.'/[a-z]+[/-][A-Za-z0-9_-]+\.(png|jpg|webp|ico)$#', $path) === 1;
     }
 
     public function disk(): Filesystem

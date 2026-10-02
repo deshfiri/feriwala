@@ -104,6 +104,25 @@ describe('the shipped defaults', function () {
             ->and(app(Branding::class)->isCustom(BrandingAsset::Logo))->toBeFalse();
     });
 
+    it('still serves a logo uploaded before the shared storage abstraction, in its older flat path shape', function () {
+        // branding/<asset>-<random>.<ext> is what this feature wrote before
+        // Commit 4 of the beta-critical batch moved it onto
+        // StoreManagedFile, which writes branding/<asset>/<random>.<ext>
+        // instead. An administrator's already-uploaded logo must not
+        // silently revert to the shipped default just because the shape of
+        // new uploads changed.
+        $path = 'branding/logo-'.str_repeat('a', 32).'.png';
+        Storage::disk(Branding::DISK)->put($path, 'fake-image-bytes');
+
+        $settings = app(SettingsRepository::class);
+        $settings->define(BrandingAsset::Logo->setting(), 'branding', SettingType::String);
+        $settings->set(BrandingAsset::Logo->setting(), $path);
+
+        expect(Branding::isManagedPath($path))->toBeTrue()
+            ->and(app(Branding::class)->isCustom(BrandingAsset::Logo))->toBeTrue()
+            ->and(app(Branding::class)->url(BrandingAsset::Logo))->toBe(Storage::disk(Branding::DISK)->url($path));
+    });
+
     it('never serves a value that is not a path this feature wrote', function (string $value) {
         $settings = app(SettingsRepository::class);
         $settings->define(BrandingAsset::Favicon->setting(), 'branding', SettingType::String);
