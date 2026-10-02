@@ -156,6 +156,28 @@ class SaveProductRequest extends FormRequest
             'maximum_selling_price' => ['nullable', new DecimalAmountRule],
 
             /*
+             * Physical logistics and packaging (beta-critical batch, Commit
+             * 1). Weight in whole grams, every dimension in centimetres --
+             * the one canonical unit each measurement is stored in, so
+             * nothing downstream has to guess. `min:1`/`min:0.01` rather than
+             * `min:0` rejects a mistyped zero outright, since a product with
+             * a genuine zero weight does not exist -- "unknown" is `null`,
+             * never zero.
+             */
+            'net_weight_grams' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'shipping_weight_grams' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'length_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'width_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'height_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'ships_by_box' => ['nullable', 'boolean'],
+            'pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'box_weight_grams' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'box_length_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'box_width_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'box_height_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'is_fragile' => ['nullable', 'boolean'],
+
+            /*
              * The SKU and both figures are this form's to set; the lifecycle,
              * channels, eligibility, quantity pricing, stock and the identifiers
              * the system assigns are not, and are refused rather than ignored
@@ -283,6 +305,16 @@ class SaveProductRequest extends FormRequest
             'suggested_selling_price' => 'suggested selling price',
             'minimum_selling_price' => 'minimum selling price',
             'maximum_selling_price' => 'maximum selling price',
+            'net_weight_grams' => 'net weight',
+            'shipping_weight_grams' => 'shipping weight',
+            'length_cm' => 'length',
+            'width_cm' => 'width',
+            'height_cm' => 'height',
+            'pieces_per_box' => 'pieces per box',
+            'box_weight_grams' => 'box weight',
+            'box_length_cm' => 'box length',
+            'box_width_cm' => 'box width',
+            'box_height_cm' => 'box height',
         ];
     }
 }

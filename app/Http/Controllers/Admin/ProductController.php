@@ -478,6 +478,22 @@ class ProductController extends Controller
             'minimum_selling_price' => $product->minimum_selling_price?->jsonSerialize(),
             'maximum_selling_price' => $product->maximum_selling_price?->jsonSerialize(),
 
+            // Physical logistics and packaging (beta-critical batch, Commit
+            // 1). Grams and centimetres, the one canonical unit each is
+            // stored in (§D26-style: no float, no ambiguous minor unit).
+            'net_weight_grams' => $product->net_weight_grams,
+            'shipping_weight_grams' => $product->shipping_weight_grams,
+            'length_cm' => $product->length_cm,
+            'width_cm' => $product->width_cm,
+            'height_cm' => $product->height_cm,
+            'ships_by_box' => $product->ships_by_box,
+            'pieces_per_box' => $product->pieces_per_box,
+            'box_weight_grams' => $product->box_weight_grams,
+            'box_length_cm' => $product->box_length_cm,
+            'box_width_cm' => $product->box_width_cm,
+            'box_height_cm' => $product->box_height_cm,
+            'is_fragile' => $product->is_fragile,
+
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
             'published_at' => $product->published_at?->toIso8601String(),
@@ -676,6 +692,23 @@ class ProductController extends Controller
             'wholesale_price' => $variant->effectiveWholesalePrice()->jsonSerialize(),
             'overrides_price' => $variant->wholesale_price !== null,
             'is_active' => $variant->is_active,
+
+            // This variant's own override only (null = inherits the
+            // product's figure), for the edit form's default value --
+            // never the effective figure, the same rule as the price
+            // fields above (beta-critical batch, Commit 1).
+            'net_weight_grams' => $variant->net_weight_grams,
+            'shipping_weight_grams' => $variant->shipping_weight_grams,
+            'length_cm' => $variant->length_cm,
+            'width_cm' => $variant->width_cm,
+            'height_cm' => $variant->height_cm,
+            'ships_by_box' => $variant->ships_by_box,
+            'pieces_per_box' => $variant->pieces_per_box,
+            'box_weight_grams' => $variant->box_weight_grams,
+            'box_length_cm' => $variant->box_length_cm,
+            'box_width_cm' => $variant->box_width_cm,
+            'box_height_cm' => $variant->box_height_cm,
+            'is_fragile' => $variant->is_fragile,
         ];
     }
 

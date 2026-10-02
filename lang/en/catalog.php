@@ -103,6 +103,8 @@ return [
             'bounds_help' => 'How many units one wholesale order may carry, and the prices partners are guided to sell at. Blank means no bound; the selling prices are never what Feriwala charges.',
             'pricing' => 'Pricing',
             'pricing_help' => 'Entered in Taka. What was saved is shown beneath each figure, so a misplaced digit is visible.',
+            'logistics' => 'Logistics and packaging',
+            'logistics_help' => 'Weight in grams, every dimension in centimetres -- used by the delivery-charge calculator and courier shipments.',
         ],
 
         'fields' => [
@@ -196,6 +198,28 @@ return [
         'empty_help_read_only' => 'Products appear here once someone with catalogue authoring permission creates them.',
         'no_matches' => 'No product matches',
         'no_matches_help' => 'Try a different name, SKU or barcode, or clear the filters.',
+    ],
+
+    'logistics' => [
+        'title' => 'Logistics and packaging',
+        'description' => 'Weight in grams, every dimension in centimetres -- the figures the delivery-charge calculator and courier shipments use. A blank field means not yet recorded, not zero.',
+        'net_weight_grams' => 'Net weight (g)',
+        'shipping_weight_grams' => 'Shipping weight (g)',
+        'shipping_weight_help' => 'Including packaging. Blank uses the net weight.',
+        'length_cm' => 'Length (cm)',
+        'width_cm' => 'Width (cm)',
+        'height_cm' => 'Height (cm)',
+        'is_fragile' => 'Fragile / special handling',
+        'box_section' => 'Box packaging',
+        'ships_by_box' => 'Ships by the box',
+        'ships_by_box_help' => 'Whether this item is packed into fixed-count boxes rather than shipped individually.',
+        'pieces_per_box' => 'Pieces per box',
+        'box_weight_grams' => 'Box weight (g)',
+        'box_length_cm' => 'Box length (cm)',
+        'box_width_cm' => 'Box width (cm)',
+        'box_height_cm' => 'Box height (cm)',
+        'inherit' => 'Inherit from product',
+        'inherit_hint' => 'Blank uses the product\'s own figure.',
     ],
 
     'seo' => [
@@ -443,6 +467,7 @@ return [
         'wholesale_price_help' => 'Leave blank to use the product’s wholesale price.',
         'base_cost' => 'Base cost override (BDT)',
         'base_cost_help' => 'Leave blank to use the product’s base cost. Never shown outside the panel.',
+        'logistics_title' => 'Logistics override',
         'availability' => 'Availability',
         'offered' => 'Offered',
         'switched_off' => 'Switched off',

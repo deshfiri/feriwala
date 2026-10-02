@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import LogisticsFields from './logistics-fields';
 import { index as attributesIndex } from '@/routes/admin/catalog/attributes';
 import type {
     AttributeOption,
@@ -706,6 +707,17 @@ function VariantDialog({
                                     )}
                                 </FormField>
                             </div>
+
+                            <fieldset className="space-y-3 rounded-lg border p-3">
+                                <legend className="px-1 text-sm font-medium">
+                                    {t('catalog.variants.logistics_title')}
+                                </legend>
+                                <LogisticsFields
+                                    defaultValues={variant ?? {}}
+                                    errors={errors}
+                                    allowInherit
+                                />
+                            </fieldset>
 
                             <DialogFooter>
                                 <Button

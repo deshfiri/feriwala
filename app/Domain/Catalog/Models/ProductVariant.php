@@ -4,6 +4,7 @@ namespace App\Domain\Catalog\Models;
 
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
+use App\Domain\Catalog\Data\ProductLogistics;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -29,6 +30,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property string $currency_code
  * @property Money|null $wholesale_price
  * @property Money|null $base_cost
+ * @property int|null $net_weight_grams
+ * @property int|null $shipping_weight_grams
+ * @property string|null $length_cm
+ * @property string|null $width_cm
+ * @property string|null $height_cm
+ * @property bool|null $ships_by_box
+ * @property int|null $pieces_per_box
+ * @property int|null $box_weight_grams
+ * @property string|null $box_length_cm
+ * @property string|null $box_width_cm
+ * @property string|null $box_height_cm
+ * @property bool|null $is_fragile
  * @property bool $is_active
  * @property int $sort_order
  * @property CarbonImmutable $created_at
@@ -58,6 +71,18 @@ class ProductVariant extends Model
         return [
             'wholesale_price' => MoneyCast::class,
             'base_cost' => MoneyCast::class,
+            'net_weight_grams' => 'integer',
+            'shipping_weight_grams' => 'integer',
+            'length_cm' => 'decimal:2',
+            'width_cm' => 'decimal:2',
+            'height_cm' => 'decimal:2',
+            'ships_by_box' => 'boolean',
+            'pieces_per_box' => 'integer',
+            'box_weight_grams' => 'integer',
+            'box_length_cm' => 'decimal:2',
+            'box_width_cm' => 'decimal:2',
+            'box_height_cm' => 'decimal:2',
+            'is_fragile' => 'boolean',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
             'created_at' => 'immutable_datetime',
@@ -92,6 +117,16 @@ class ProductVariant extends Model
     public function effectiveWholesalePrice(): Money
     {
         return $this->wholesale_price ?? $this->product->wholesale_price;
+    }
+
+    /**
+     * The logistics figures that apply to this variant: its own column where
+     * set, the product's otherwise, resolved independently per field (beta-
+     * critical batch, Commit 1).
+     */
+    public function logistics(): ProductLogistics
+    {
+        return ProductLogistics::forVariant($this);
     }
 
     /**

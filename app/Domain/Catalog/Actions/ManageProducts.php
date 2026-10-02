@@ -240,6 +240,32 @@ class ManageProducts
             }
         }
 
+        /*
+         * Physical logistics and packaging (beta-critical batch, Commit 1).
+         * Every figure is optional -- a blank clears it rather than failing,
+         * since a product with stock but no weight yet recorded is not an
+         * error state. Weight arrives already converted to whole grams and
+         * every dimension already in centimetres (never a float): see
+         * SaveProductRequest::productAttributes().
+         */
+        foreach (['net_weight_grams', 'shipping_weight_grams', 'pieces_per_box', 'box_weight_grams'] as $wholeNumber) {
+            if (array_key_exists($wholeNumber, $attributes)) {
+                $fields[$wholeNumber] = blank($attributes[$wholeNumber]) ? null : (int) $attributes[$wholeNumber];
+            }
+        }
+
+        foreach (['length_cm', 'width_cm', 'height_cm', 'box_length_cm', 'box_width_cm', 'box_height_cm'] as $dimension) {
+            if (array_key_exists($dimension, $attributes)) {
+                $fields[$dimension] = blank($attributes[$dimension]) ? null : (string) $attributes[$dimension];
+            }
+        }
+
+        foreach (['ships_by_box', 'is_fragile'] as $flag) {
+            if (array_key_exists($flag, $attributes)) {
+                $fields[$flag] = (bool) $attributes[$flag];
+            }
+        }
+
         return $fields;
     }
 
@@ -264,6 +290,18 @@ class ManageProducts
             'minimum_selling_price' => $product->minimum_selling_price?->toDecimal(),
             'maximum_selling_price' => $product->maximum_selling_price?->toDecimal(),
             'status' => $product->status->value,
+            'net_weight_grams' => $product->net_weight_grams,
+            'shipping_weight_grams' => $product->shipping_weight_grams,
+            'length_cm' => $product->length_cm,
+            'width_cm' => $product->width_cm,
+            'height_cm' => $product->height_cm,
+            'ships_by_box' => $product->ships_by_box,
+            'pieces_per_box' => $product->pieces_per_box,
+            'box_weight_grams' => $product->box_weight_grams,
+            'box_length_cm' => $product->box_length_cm,
+            'box_width_cm' => $product->box_width_cm,
+            'box_height_cm' => $product->box_height_cm,
+            'is_fragile' => $product->is_fragile,
         ];
     }
 

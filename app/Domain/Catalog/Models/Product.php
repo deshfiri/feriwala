@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Catalog\Data\ProductLogistics;
 use App\Domain\Catalog\Enums\AccountScope;
 use App\Domain\Catalog\Enums\ItemCondition;
 use App\Domain\Catalog\Enums\PackageScope;
@@ -59,6 +60,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property ItemCondition $item_condition
  * @property int|null $social_media_id
  * @property-read ProductMedia|null $socialImage
+ * @property int|null $net_weight_grams
+ * @property int|null $shipping_weight_grams
+ * @property string|null $length_cm
+ * @property string|null $width_cm
+ * @property string|null $height_cm
+ * @property bool $ships_by_box
+ * @property int|null $pieces_per_box
+ * @property int|null $box_weight_grams
+ * @property string|null $box_length_cm
+ * @property string|null $box_width_cm
+ * @property string|null $box_height_cm
+ * @property bool $is_fragile
  * @property bool $is_featured
  * @property CarbonImmutable|null $featured_at
  * @property-read bool|null $price_tiers_exists
@@ -111,6 +124,8 @@ class Product extends Model
         'wholesale_status' => 'wholesale_disabled',
         'is_featured' => false,
         'item_condition' => 'new',
+        'ships_by_box' => false,
+        'is_fragile' => false,
     ];
 
     protected $guarded = [];
@@ -136,6 +151,18 @@ class Product extends Model
             'is_featured' => 'boolean',
             'featured_at' => 'immutable_datetime',
             'item_condition' => ItemCondition::class,
+            'net_weight_grams' => 'integer',
+            'shipping_weight_grams' => 'integer',
+            'length_cm' => 'decimal:2',
+            'width_cm' => 'decimal:2',
+            'height_cm' => 'decimal:2',
+            'ships_by_box' => 'boolean',
+            'pieces_per_box' => 'integer',
+            'box_weight_grams' => 'integer',
+            'box_length_cm' => 'decimal:2',
+            'box_width_cm' => 'decimal:2',
+            'box_height_cm' => 'decimal:2',
+            'is_fragile' => 'boolean',
             'published_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -176,6 +203,14 @@ class Product extends Model
         }
 
         return $this->max_order_quantity === null || $quantity <= $this->max_order_quantity;
+    }
+
+    /**
+     * This product's own logistics figures (beta-critical batch, Commit 1).
+     */
+    public function logistics(): ProductLogistics
+    {
+        return ProductLogistics::forProduct($this);
     }
 
     /**

@@ -117,6 +117,27 @@ export type ProductDetail = {
     published_at: string | null;
     channels: ProductChannelState[];
     updated_at: string;
+} & ProductLogisticsFields;
+
+/**
+ * Physical logistics and packaging, shared shape between a product and a
+ * variant's own override (beta-critical batch, Commit 1). Weight in whole
+ * grams, every dimension a decimal string of centimetres -- the server's own
+ * canonical units, never converted or parsed here.
+ */
+export type ProductLogisticsFields = {
+    net_weight_grams: number | null;
+    shipping_weight_grams: number | null;
+    length_cm: string | null;
+    width_cm: string | null;
+    height_cm: string | null;
+    ships_by_box: boolean | null;
+    pieces_per_box: number | null;
+    box_weight_grams: number | null;
+    box_length_cm: string | null;
+    box_width_cm: string | null;
+    box_height_cm: string | null;
+    is_fragile: boolean | null;
 };
 
 export type VariantRow = {
@@ -133,7 +154,7 @@ export type VariantRow = {
     wholesale_price: Money;
     overrides_price: boolean;
     is_active: boolean;
-};
+} & ProductLogisticsFields;
 
 /**
  * Quantity pricing for one scope: the whole product (variant_id null) or one

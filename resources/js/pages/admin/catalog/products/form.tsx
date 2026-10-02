@@ -29,6 +29,7 @@ import type {
     VariantRow,
 } from '@/types';
 import SeoFields from './seo-fields';
+import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
@@ -579,6 +580,18 @@ export default function ProductForm({
                                         </FormField>
                                     ))}
                                 </div>
+                            </SectionCard>
+
+                            <SectionCard
+                                title={t('catalog.products.sections.logistics')}
+                                description={t(
+                                    'catalog.products.sections.logistics_help',
+                                )}
+                            >
+                                <LogisticsFields
+                                    defaultValues={product ?? {}}
+                                    errors={errors}
+                                />
                             </SectionCard>
 
                             <SeoFields

@@ -170,6 +170,25 @@ class SaveSupplierListingDraft
             'supply_mode' => $item['supply_mode'] ?? SupplyMode::ReadyStock->value,
             'fulfilment_capacity' => $item['fulfilment_capacity'] ?? null,
             'expected_availability_at' => $item['expected_availability_at'] ?? null,
+
+            /*
+             * Proposed logistics (beta-critical batch, Commit 1) -- a
+             * proposal only, never written to the catalogue by this action.
+             * See SupplierProductListingItem::proposedLogistics() and
+             * DecideSupplierListing::approveItem().
+             */
+            'proposed_net_weight_grams' => $item['proposed_net_weight_grams'] ?? null,
+            'proposed_shipping_weight_grams' => $item['proposed_shipping_weight_grams'] ?? null,
+            'proposed_length_cm' => $item['proposed_length_cm'] ?? null,
+            'proposed_width_cm' => $item['proposed_width_cm'] ?? null,
+            'proposed_height_cm' => $item['proposed_height_cm'] ?? null,
+            'proposed_ships_by_box' => array_key_exists('proposed_ships_by_box', $item) ? (bool) $item['proposed_ships_by_box'] : null,
+            'proposed_pieces_per_box' => $item['proposed_pieces_per_box'] ?? null,
+            'proposed_box_weight_grams' => $item['proposed_box_weight_grams'] ?? null,
+            'proposed_box_length_cm' => $item['proposed_box_length_cm'] ?? null,
+            'proposed_box_width_cm' => $item['proposed_box_width_cm'] ?? null,
+            'proposed_box_height_cm' => $item['proposed_box_height_cm'] ?? null,
+            'proposed_is_fragile' => array_key_exists('proposed_is_fragile', $item) ? (bool) $item['proposed_is_fragile'] : null,
         ];
     }
 

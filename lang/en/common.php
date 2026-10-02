@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'yes' => 'Yes',
+    'no' => 'No',
+
     'nav' => [
         'skip' => 'Skip to content',
     ],

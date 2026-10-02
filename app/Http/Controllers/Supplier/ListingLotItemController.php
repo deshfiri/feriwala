@@ -6,6 +6,7 @@ use App\Domain\Supplier\Actions\RemoveSupplierListingLotItem;
 use App\Domain\Supplier\Actions\SaveSupplierListingDraft;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierProductListing;
+use App\Domain\Supplier\Models\SupplierProductListingItem;
 use App\Domain\Supplier\Models\SupplierProductListingLot;
 use App\Http\Controllers\Controller;
 use App\Support\Money\Currency;
@@ -141,6 +142,8 @@ class ListingLotItemController extends Controller
 
             'items.*.attribute_value_ids' => ['nullable', 'array'],
             'items.*.attribute_value_ids.*' => ['string'],
+
+            ...SupplierProductListingItem::proposedLogisticsValidationRules(),
         ]);
 
         $items = array_values(array_map(function (array $item) {

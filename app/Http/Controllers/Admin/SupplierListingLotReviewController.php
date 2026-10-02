@@ -169,6 +169,11 @@ class SupplierListingLotReviewController extends Controller
             'entries.*.items.*.wholesale_enabled' => ['nullable', 'boolean'],
             'entries.*.items.*.dropshipping_enabled' => ['nullable', 'boolean'],
             'entries.*.items.*.note' => ['nullable', 'string', 'max:1000'],
+
+            // A reviewer's own confirmed (or corrected) logistics figures,
+            // written to the central Product/Variant only when approving and
+            // only when given (beta-critical batch, Commit 1).
+            ...SupplierProductListingItem::confirmedLogisticsValidationRules('entries.*.items.*.logistics.'),
         ]);
 
         $approvesAny = false;

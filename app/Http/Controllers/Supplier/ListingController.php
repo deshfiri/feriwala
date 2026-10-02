@@ -191,6 +191,8 @@ class ListingController extends Controller
             'items.*.lead_time_days' => ['nullable', 'integer', 'min:0'],
             'items.*.warranty' => ['nullable', 'string', 'max:255'],
             'items.*.return_conditions' => ['nullable', 'string', 'max:1000'],
+
+            ...SupplierProductListingItem::proposedLogisticsValidationRules(),
         ]);
 
         $items = array_values(array_map(function (array $item) {

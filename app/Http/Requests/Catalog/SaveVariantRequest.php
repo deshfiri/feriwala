@@ -87,6 +87,24 @@ class SaveVariantRequest extends FormRequest
 
             'is_active' => ['boolean'],
 
+            /*
+             * This variant's own logistics override (beta-critical batch,
+             * Commit 1). Blank means the product's own figure applies --
+             * see App\Domain\Catalog\Data\ProductLogistics::forVariant().
+             */
+            'net_weight_grams' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'shipping_weight_grams' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'length_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'width_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'height_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'ships_by_box' => ['nullable', 'boolean'],
+            'pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'box_weight_grams' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'box_length_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'box_width_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'box_height_cm' => ['nullable', 'numeric', 'min:0.01', 'max:1000'],
+            'is_fragile' => ['nullable', 'boolean'],
+
             // Its own SKU and figures only; never its product, combination key or stock (§12).
             ...CentralProductFields::rules(SaveProductRequest::OWNED, $this->all()),
         ];

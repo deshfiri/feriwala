@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Actions\ManageProducts;
+use App\Domain\Catalog\Actions\ManageVariants;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Enums\StockBucket;
@@ -49,13 +50,14 @@ class DecideSupplierListing
 {
     public function __construct(
         protected ManageProducts $products,
+        protected ManageVariants $variants,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
 
     /**
      * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string}
-     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate?: Money, approved_quantity?: int|null, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string}
+     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate?: Money, approved_quantity?: int|null, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string, logistics?: array<string, mixed>}
      */
     public function handle(
         SupplierProductListing $listing,
@@ -272,6 +274,40 @@ class DecideSupplierListing
             'supplier_offer_id' => $offer->id,
             'decision_note' => $itemDecision['note'] ?? null,
         ])->save();
+
+        $this->confirmLogistics($product, $variant, $itemDecision, $reviewer);
+    }
+
+    /**
+     * Write a reviewer's own confirmed (or corrected) logistics figures onto
+     * the central Product or Variant this item connects to (beta-critical
+     * batch, Commit 1).
+     *
+     * The Supplier's own proposal ({@see SupplierProductListingItem::
+     * proposedLogistics()}) never reaches the catalogue by itself — approving
+     * an item is not, on its own, a logistics decision. Only an explicit
+     * `logistics` key in this item's decision is written, through the same
+     * `ManageProducts`/`ManageVariants` write path every other catalogue edit
+     * uses, so it is validated, audited and locked-column-guarded exactly
+     * the same way a staff member editing the product directly would be.
+     * Approving without one leaves the central record's logistics exactly as
+     * they were.
+     *
+     * @param  array<string, mixed>  $itemDecision
+     */
+    protected function confirmLogistics(Product $product, ?ProductVariant $variant, array $itemDecision, User $reviewer): void
+    {
+        if (! isset($itemDecision['logistics']) || ! is_array($itemDecision['logistics'])) {
+            return;
+        }
+
+        if ($variant !== null) {
+            $this->variants->update($reviewer, $variant, $itemDecision['logistics']);
+
+            return;
+        }
+
+        $this->products->update($reviewer, $product, $itemDecision['logistics']);
     }
 
     /**

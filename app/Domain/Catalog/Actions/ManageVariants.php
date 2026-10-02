@@ -231,6 +231,31 @@ class ManageVariants
             $fields['is_active'] = (bool) $attributes['is_active'];
         }
 
+        /*
+         * This variant's own logistics override (beta-critical batch,
+         * Commit 1). Null means the product's own figure applies, the same
+         * convention wholesale_price/base_cost already use on this table.
+         */
+        foreach (['net_weight_grams', 'shipping_weight_grams', 'pieces_per_box', 'box_weight_grams'] as $wholeNumber) {
+            if (array_key_exists($wholeNumber, $attributes)) {
+                $fields[$wholeNumber] = blank($attributes[$wholeNumber]) ? null : (int) $attributes[$wholeNumber];
+            }
+        }
+
+        foreach (['length_cm', 'width_cm', 'height_cm', 'box_length_cm', 'box_width_cm', 'box_height_cm'] as $dimension) {
+            if (array_key_exists($dimension, $attributes)) {
+                $fields[$dimension] = blank($attributes[$dimension]) ? null : (string) $attributes[$dimension];
+            }
+        }
+
+        foreach (['ships_by_box', 'is_fragile'] as $flag) {
+            if (array_key_exists($flag, $attributes)) {
+                $fields[$flag] = $attributes[$flag] === null || $attributes[$flag] === ''
+                    ? null
+                    : (bool) $attributes[$flag];
+            }
+        }
+
         return $fields;
     }
 
@@ -247,6 +272,18 @@ class ManageVariants
             'wholesale_price' => $variant->wholesale_price?->toDecimal(),
             'base_cost' => $variant->base_cost?->toDecimal(),
             'is_active' => $variant->is_active,
+            'net_weight_grams' => $variant->net_weight_grams,
+            'shipping_weight_grams' => $variant->shipping_weight_grams,
+            'length_cm' => $variant->length_cm,
+            'width_cm' => $variant->width_cm,
+            'height_cm' => $variant->height_cm,
+            'ships_by_box' => $variant->ships_by_box,
+            'pieces_per_box' => $variant->pieces_per_box,
+            'box_weight_grams' => $variant->box_weight_grams,
+            'box_length_cm' => $variant->box_length_cm,
+            'box_width_cm' => $variant->box_width_cm,
+            'box_height_cm' => $variant->box_height_cm,
+            'is_fragile' => $variant->is_fragile,
         ];
     }
 
