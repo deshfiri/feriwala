@@ -2,17 +2,19 @@
 
 namespace App\Http\Controllers\Supplier;
 
+use App\Domain\Storage\ManagedStorage;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierListingMedia;
-use App\Domain\Supplier\SupplierListingMediaStore;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Streams a Supplier's own listing image back from the private
- * `supplier-media` disk (Supplier Bulk Product Listing batch).
+ * Streams a Supplier's own listing image back from wherever it actually
+ * lives -- its own stored `disk` column, resolved through
+ * {@see ManagedStorage} so a file already migrated to Cloudflare R2 is
+ * still found there (Supplier Bulk Product Listing batch; beta-critical
+ * batch).
  *
  * Never a public URL: a listing is a pre-approval proposal, and this route
  * is the only way its files are ever read, so ownership is checked on every
@@ -20,7 +22,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ListingMediaDownloadController extends Controller
 {
-    public function show(Request $request, string $media): StreamedResponse
+    public function show(Request $request, string $media, ManagedStorage $storage): StreamedResponse
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
@@ -30,7 +32,7 @@ class ListingMediaDownloadController extends Controller
             ->whereHas('listing', fn ($query) => $query->where('supplier_id', $supplier->id))
             ->firstOrFail();
 
-        return Storage::disk(SupplierListingMediaStore::DISK)->response($model->path, null, [
+        return $storage->resolveNamedDisk($model->disk)->response($model->path, null, [
             'Content-Type' => $model->mime_type,
         ]);
     }

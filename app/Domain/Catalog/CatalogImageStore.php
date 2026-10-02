@@ -5,8 +5,11 @@ namespace App\Domain\Catalog;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Kyc\KycDocumentStore;
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
+use App\Domain\Storage\Actions\DeleteManagedFile;
+use App\Domain\Storage\Actions\StoreManagedFile;
+use App\Domain\Storage\Enums\StorageVisibility;
+use App\Domain\Storage\Exceptions\UnacceptableFile;
+use App\Domain\Storage\ManagedStorage;
 use Illuminate\Http\UploadedFile;
 
 /**
@@ -32,14 +35,15 @@ use Illuminate\Http\UploadedFile;
  * Names are random. An original filename can carry anything — a path fragment, a
  * second extension, somebody's name — and none of it is worth keeping for a
  * logo.
+ *
+ * Writes through {@see StoreManagedFile} (connecting every remaining upload
+ * surface to the shared storage abstraction): the public contract is
+ * unchanged -- still a plain path string -- but the file now also carries a
+ * `stored_files` row with its mime type, size and checksum, and resolves to
+ * whichever disk {@see ManagedStorage} currently targets.
  */
 class CatalogImageStore
 {
-    /**
-     * The public disk, symlinked into `public/storage`.
-     */
-    public const DISK = 'public';
-
     /**
      * 2 MB. Generous for a logo or a category tile and small enough that an
      * upload cannot be used to fill a volume.
@@ -57,17 +61,10 @@ class CatalogImageStore
      */
     public const ACCEPTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-    /**
-     * @var array<string, string>
-     */
-    protected const EXTENSIONS = [
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/webp' => 'webp',
-    ];
-
     public function __construct(
-        protected FilesystemFactory $filesystem,
+        protected StoreManagedFile $storeFile,
+        protected DeleteManagedFile $deleteFile,
+        protected ManagedStorage $storage,
     ) {}
 
     /**
@@ -79,32 +76,21 @@ class CatalogImageStore
      */
     public function store(UploadedFile $file, string $folder): string
     {
-        $mime = (string) $file->getMimeType();
-        $size = (int) $file->getSize();
-
-        /*
-         * The MIME type is read from the file's own bytes rather than from what
-         * the browser said it was sending, because the browser's word is the
-         * attacker's word on an upload endpoint.
-         */
-        if (! in_array($mime, self::ACCEPTED_MIME_TYPES, true)) {
-            throw CatalogRefused::imageTypeNotAccepted($mime);
+        try {
+            $stored = $this->storeFile->handle(
+                file: $file,
+                purpose: 'catalog/'.trim($folder, '/'),
+                visibility: StorageVisibility::Public,
+                allowedMimeTypes: self::ACCEPTED_MIME_TYPES,
+                maxBytes: self::MAX_BYTES,
+            );
+        } catch (UnacceptableFile $exception) {
+            throw $exception->reason === UnacceptableFile::TOO_LARGE
+                ? CatalogRefused::imageTooLarge((int) $file->getSize(), self::MAX_BYTES)
+                : CatalogRefused::imageTypeNotAccepted((string) $file->getMimeType());
         }
 
-        if ($size > self::MAX_BYTES) {
-            throw CatalogRefused::imageTooLarge($size, self::MAX_BYTES);
-        }
-
-        $path = sprintf(
-            'catalog/%s/%s.%s',
-            trim($folder, '/'),
-            bin2hex(random_bytes(16)),
-            self::EXTENSIONS[$mime],
-        );
-
-        $this->disk()->put($path, (string) file_get_contents($file->getRealPath()));
-
-        return $path;
+        return $stored->path;
     }
 
     /**
@@ -116,11 +102,7 @@ class CatalogImageStore
      */
     public function delete(?string $path): void
     {
-        if ($path === null || $path === '') {
-            return;
-        }
-
-        $this->disk()->delete($path);
+        $this->deleteFile->forPath($path, StorageVisibility::Public);
     }
 
     /**
@@ -128,15 +110,6 @@ class CatalogImageStore
      */
     public function url(?string $path): ?string
     {
-        if ($path === null || $path === '') {
-            return null;
-        }
-
-        return $this->disk()->url($path);
-    }
-
-    protected function disk(): Filesystem
-    {
-        return $this->filesystem->disk(self::DISK);
+        return $this->storage->urlForPath($path, StorageVisibility::Public);
     }
 }

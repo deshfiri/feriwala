@@ -2,10 +2,9 @@
 
 namespace App\Domain\Supplier;
 
+use App\Domain\Storage\ManagedStorage;
 use App\Domain\Supplier\Models\SupplierKycDocument;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 
@@ -24,6 +23,10 @@ use InvalidArgumentException;
  *   - a random stored name, never the browser-supplied original
  *   - encrypted at rest
  *   - no method anywhere returns a public URL
+ *
+ * Resolves through {@see ManagedStorage::diskForLocal()}: moves to Cloudflare
+ * R2 the moment that is configured, but keeps landing on the dedicated `kyc`
+ * disk while R2 is off.
  */
 class SupplierKycDocumentStore
 {
@@ -53,7 +56,7 @@ class SupplierKycDocumentStore
     public const MAX_SIZE_KB = 5120;
 
     public function __construct(
-        protected FilesystemFactory $filesystem,
+        protected ManagedStorage $storage,
     ) {}
 
     public function store(
@@ -99,11 +102,11 @@ class SupplierKycDocumentStore
             bin2hex(random_bytes(16)),
         );
 
-        $this->disk()->put($path, encrypt($contents));
+        $this->storage->diskForLocal(self::DISK)->put($path, encrypt($contents));
 
         return $submission->documents()->create([
             'document_type' => $documentType,
-            'disk' => self::DISK,
+            'disk' => $this->storage->diskNameForLocal(self::DISK),
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $mime,
@@ -121,7 +124,7 @@ class SupplierKycDocumentStore
      */
     public function read(SupplierKycDocument $document): string
     {
-        $stored = (string) $this->filesystem->disk($document->disk)->get($document->path);
+        $stored = (string) $this->storage->resolveNamedDisk($document->disk)->get($document->path);
 
         return $document->is_encrypted ? (string) decrypt($stored) : $stored;
     }
@@ -142,12 +145,7 @@ class SupplierKycDocumentStore
             );
         }
 
-        $this->filesystem->disk($document->disk)->delete($document->path);
+        $this->storage->resolveNamedDisk($document->disk)->delete($document->path);
         $document->delete();
-    }
-
-    protected function disk(): Filesystem
-    {
-        return $this->filesystem->disk(self::DISK);
     }
 }

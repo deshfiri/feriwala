@@ -87,14 +87,13 @@ class ManageSupplierListingMedia
                     ...$stored,
                     'supplier_product_listing_id' => $locked->id,
                     'supplier_product_listing_item_id' => $variant?->id,
-                    'disk' => SupplierListingMediaStore::DISK,
                     'role' => $role,
                     'alt_text' => $altText,
                     'position' => (int) $scope->max('position') + 1,
                 ]);
             });
         } catch (Throwable $failure) {
-            $this->store->delete($stored['path']);
+            $this->store->delete($stored['path'], $stored['disk']);
 
             throw $failure;
         }
@@ -171,6 +170,7 @@ class ManageSupplierListingMedia
         $this->assertOwnedAndEditable($supplier, $listing);
 
         $path = $media->path;
+        $disk = $media->disk;
         $variantId = $media->supplier_product_listing_item_id;
 
         $this->database->transaction(function () use ($listing, $media, $variantId) {
@@ -187,7 +187,7 @@ class ManageSupplierListingMedia
             $this->renumber($scope);
         });
 
-        $this->store->delete($path);
+        $this->store->delete($path, $disk);
     }
 
     protected function assertOwnedAndEditable(Supplier $supplier, SupplierProductListing $listing): void

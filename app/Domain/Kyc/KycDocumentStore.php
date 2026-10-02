@@ -6,8 +6,7 @@ use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentAccess;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
+use App\Domain\Storage\ManagedStorage;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 
@@ -25,6 +24,13 @@ use InvalidArgumentException;
  * There is deliberately no method returning a URL. A `url()` helper would
  * eventually be called from a template, and §7.5 forbids these files ever being
  * reachable without an authorisation check.
+ *
+ * Resolves through {@see ManagedStorage::diskForLocal()}: moves to Cloudflare
+ * R2 the moment that is configured, but keeps landing on the dedicated `kyc`
+ * disk (never the generic shared `private` one) while R2 is off, so existing
+ * rows and app-level encryption are untouched. R2 or not, the bytes written
+ * are the same ciphertext this class has always produced -- R2's own
+ * encryption is never a substitute for it.
  */
 class KycDocumentStore
 {
@@ -35,7 +41,7 @@ class KycDocumentStore
     public const DISK = 'kyc';
 
     public function __construct(
-        protected FilesystemFactory $filesystem,
+        protected ManagedStorage $storage,
     ) {}
 
     /**
@@ -93,11 +99,11 @@ class KycDocumentStore
             bin2hex(random_bytes(16)),
         );
 
-        $this->disk()->put($path, encrypt($contents));
+        $this->storage->diskForLocal(self::DISK)->put($path, encrypt($contents));
 
         return $submission->documents()->create([
             'kyc_document_type_id' => $type->id,
-            'disk' => self::DISK,
+            'disk' => $this->storage->diskNameForLocal(self::DISK),
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $mime,
@@ -131,7 +137,7 @@ class KycDocumentStore
             'user_agent' => $userAgent === null ? null : mb_substr($userAgent, 0, 512),
         ]);
 
-        $stored = (string) $this->filesystem->disk($document->disk)->get($document->path);
+        $stored = (string) $this->storage->resolveNamedDisk($document->disk)->get($document->path);
 
         $contents = $document->is_encrypted ? decrypt($stored) : $stored;
 
@@ -146,7 +152,7 @@ class KycDocumentStore
      */
     public function verifyIntegrity(KycDocument $document): bool
     {
-        $stored = (string) $this->filesystem->disk($document->disk)->get($document->path);
+        $stored = (string) $this->storage->resolveNamedDisk($document->disk)->get($document->path);
         $contents = $document->is_encrypted ? decrypt($stored) : $stored;
 
         return hash_equals($document->checksum, hash('sha256', (string) $contents));
@@ -168,12 +174,7 @@ class KycDocumentStore
             );
         }
 
-        $this->filesystem->disk($document->disk)->delete($document->path);
+        $this->storage->resolveNamedDisk($document->disk)->delete($document->path);
         $document->delete();
-    }
-
-    protected function disk(): Filesystem
-    {
-        return $this->filesystem->disk(self::DISK);
     }
 }

@@ -157,6 +157,19 @@ class SettingsController extends Controller
                     ],
                 ],
             ],
+            [
+                'key' => 'integrations',
+                'label' => __('settings.hub.sections.integrations'),
+                'items' => [
+                    [
+                        'key' => 'storage',
+                        'title' => __('nav.storage_settings'),
+                        'description' => __('settings.hub.items.storage'),
+                        'route' => 'admin.storage-settings.index',
+                        'permission' => PermissionCatalogue::name(PermissionModule::Integration, PermissionAction::View),
+                    ],
+                ],
+            ],
         ];
     }
 

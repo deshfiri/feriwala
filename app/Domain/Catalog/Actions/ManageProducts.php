@@ -100,9 +100,9 @@ class ManageProducts
     {
         CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete products.');
 
-        $paths = [];
+        $media = collect();
 
-        $this->database->transaction(function () use ($actor, $product, &$paths) {
+        $this->database->transaction(function () use ($actor, $product, &$media) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
 
@@ -116,12 +116,12 @@ class ManageProducts
                 throw CatalogRefused::productHasHistory();
             }
 
-            $paths = ProductMedia::query()->where('product_id', $locked->id)->pluck('path')->all();
+            $media = ProductMedia::query()->where('product_id', $locked->id)->get(['path', 'disk']);
 
             $this->record($actor, 'catalog.product_deleted', $locked, before: [
                 ...$this->snapshot($locked),
                 'variants' => ProductVariant::query()->where('product_id', $locked->id)->pluck('sku')->all(),
-                'media' => $paths,
+                'media' => $media->pluck('path')->all(),
             ]);
 
             ProductMedia::query()->where('product_id', $locked->id)->delete();
@@ -141,8 +141,8 @@ class ManageProducts
             $locked->delete();
         });
 
-        foreach ($paths as $path) {
-            $this->mediaStore->delete($path);
+        foreach ($media as $item) {
+            $this->mediaStore->delete($item->path, $item->disk);
         }
     }
 

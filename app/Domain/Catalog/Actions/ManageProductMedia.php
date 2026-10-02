@@ -69,7 +69,6 @@ class ManageProductMedia
                     ...$stored,
                     'product_id' => $locked->id,
                     'product_variant_id' => $this->variantId($locked, $variantPublicId),
-                    'disk' => ProductMediaStore::DISK,
                     'alt_text' => $altText,
                     'position' => (int) $locked->media()->max('position') + 1,
                 ]);
@@ -80,7 +79,7 @@ class ManageProductMedia
             });
         } catch (Throwable $failure) {
             // Nothing references it, so it is ours to clean up.
-            $this->store->delete($stored['path']);
+            $this->store->delete($stored['path'], $stored['disk']);
 
             throw $failure;
         }
@@ -178,6 +177,7 @@ class ManageProductMedia
         CatalogPolicy::authorize(CatalogPolicy::canEdit($actor), 'You may not remove product media.');
 
         $path = $media->path;
+        $disk = $media->disk;
 
         $this->database->transaction(function () use ($actor, $media) {
             /** @var Product $locked */
@@ -191,7 +191,7 @@ class ManageProductMedia
             $this->renumber($locked->media()->get()->all());
         });
 
-        $this->store->delete($path);
+        $this->store->delete($path, $disk);
     }
 
     /**

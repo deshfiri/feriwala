@@ -3,10 +3,9 @@
 namespace App\Domain\Supplier;
 
 use App\Domain\Catalog\ProductMediaStore;
+use App\Domain\Storage\ManagedStorage;
 use App\Domain\Supplier\Actions\ManageSupplierListingMedia;
 use App\Domain\Supplier\Models\SupplierProductListing;
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 
@@ -21,6 +20,12 @@ use InvalidArgumentException;
  * Who may **put** a file here is enforced by the calling action
  * ({@see ManageSupplierListingMedia}), not by
  * this class -- exactly the division `ProductMediaStore` already draws.
+ *
+ * Resolves through {@see ManagedStorage::diskForLocal()}: switches to
+ * Cloudflare R2 the moment that is configured, exactly like every other
+ * surface, but keeps landing on its own dedicated `supplier-media` disk
+ * (never the generic shared `private` one) while R2 is off, so existing
+ * rows and on-disk layout are untouched.
  */
 class SupplierListingMediaStore
 {
@@ -43,7 +48,7 @@ class SupplierListingMediaStore
     ];
 
     public function __construct(
-        protected FilesystemFactory $filesystem,
+        protected ManagedStorage $storage,
     ) {}
 
     /**
@@ -68,7 +73,7 @@ class SupplierListingMediaStore
     /**
      * Store an upload against a listing.
      *
-     * @return array{path: string, mime_type: string, size_bytes: int, width: int|null, height: int|null}
+     * @return array{path: string, disk: string, mime_type: string, size_bytes: int, width: int|null, height: int|null}
      */
     public function store(UploadedFile $file, SupplierProductListing $listing): array
     {
@@ -96,10 +101,11 @@ class SupplierListingMediaStore
             self::EXTENSIONS[$mime],
         );
 
-        $this->disk()->put($path, (string) file_get_contents($file->getRealPath()));
+        $this->storage->diskForLocal(self::DISK)->put($path, (string) file_get_contents($file->getRealPath()));
 
         return [
             'path' => $path,
+            'disk' => $this->storage->diskNameForLocal(self::DISK),
             'mime_type' => $mime,
             'size_bytes' => $size,
             'width' => $width,
@@ -107,18 +113,16 @@ class SupplierListingMediaStore
         ];
     }
 
-    public function delete(?string $path): void
+    /**
+     * `$disk` should be the row's own stored disk when the caller has it.
+     */
+    public function delete(?string $path, ?string $disk = null): void
     {
         if ($path === null || $path === '') {
             return;
         }
 
-        $this->disk()->delete($path);
-    }
-
-    protected function disk(): Filesystem
-    {
-        return $this->filesystem->disk(self::DISK);
+        $this->storage->resolveNamedDisk($disk ?? self::DISK)->delete($path);
     }
 
     protected static function iniBytes(string $value): int

@@ -437,7 +437,7 @@ class ProductController extends Controller
                 'tone' => $product->channelStatus($channel)->tone(),
                 'enabled' => $product->sellsThrough($channel),
             ], SalesChannel::cases()),
-            'image_url' => $image === null ? null : $this->mediaStore->url($image->path),
+            'image_url' => $image === null ? null : $this->mediaStore->url($image->path, $image->disk),
             'media_count' => (int) $product->getAttribute('media_count'),
             'variants_count' => (int) $product->getAttribute('variants_count'),
             'updated_at' => $product->updated_at->toIso8601String(),
@@ -520,7 +520,7 @@ class ProductController extends Controller
         return [
             'id' => $media->public_id,
             'type' => $media->type,
-            'url' => $this->mediaStore->url($media->path),
+            'url' => $this->mediaStore->url($media->path, $media->disk),
             'alt_text' => $media->alt_text,
             'position' => $media->position,
             'mime_type' => $media->mime_type,

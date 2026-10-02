@@ -32,20 +32,34 @@ class ManagedStorage
 
     public function diskFor(StorageVisibility $visibility): Filesystem
     {
-        if ($this->r2Settings->isAvailable()) {
-            return $this->r2->disk($this->r2Settings->toR2ManagerCredentials());
-        }
-
-        return $this->filesystem->disk($visibility === StorageVisibility::Public ? 'public' : 'private');
+        return $this->diskForLocal($visibility === StorageVisibility::Public ? 'public' : 'private');
     }
 
     public function diskNameFor(StorageVisibility $visibility): string
     {
+        return $this->diskNameForLocal($visibility === StorageVisibility::Public ? 'public' : 'private');
+    }
+
+    /**
+     * Today's write/read target for a surface that keeps its own dedicated
+     * local disk name -- `supplier-media`, `kyc` -- rather than the generic
+     * `public`/`private` pair. R2, when switched on, still takes over for
+     * these exactly as it does for everything else; when it is off, each
+     * surface keeps landing on the specific disk it always has, so existing
+     * rows, tests and on-disk layouts for these surfaces are untouched.
+     */
+    public function diskForLocal(string $localDiskName): Filesystem
+    {
         if ($this->r2Settings->isAvailable()) {
-            return 'r2';
+            return $this->r2->disk($this->r2Settings->toR2ManagerCredentials());
         }
 
-        return $visibility === StorageVisibility::Public ? 'public' : 'private';
+        return $this->filesystem->disk($localDiskName);
+    }
+
+    public function diskNameForLocal(string $localDiskName): string
+    {
+        return $this->r2Settings->isAvailable() ? 'r2' : $localDiskName;
     }
 
     /**
@@ -56,11 +70,81 @@ class ManagedStorage
      */
     public function diskForFile(StoredFile $file): Filesystem
     {
-        if ($file->disk === 'r2') {
+        return $this->resolveNamedDisk($file->disk);
+    }
+
+    /**
+     * The disk behind any stored `disk` name a table already tracks per row
+     * -- `ProductMedia`, `SupplierListingMedia`, `KycDocument` and
+     * `SupplierKycDocument` all keep one of these on every row, exactly as
+     * {@see StoredFile} does. `'r2'` is never a disk registered in
+     * `config/filesystems.php` (it has no single static configuration), so
+     * every caller that resolves a disk by a stored name -- not only
+     * {@see StoredFile} -- must come through here rather than
+     * `Storage::disk()` directly.
+     */
+    public function resolveNamedDisk(string $diskName): Filesystem
+    {
+        if ($diskName === 'r2') {
             return $this->r2->disk($this->r2Settings->toR2ManagerCredentials());
         }
 
-        return $this->filesystem->disk($file->disk);
+        return $this->filesystem->disk($diskName);
+    }
+
+    /**
+     * The disk a bare path string actually lives on, for a surface that
+     * never kept its own `disk` column (a storefront's logo/banner, the
+     * platform's own branding, a brand/category image).
+     *
+     * Looks up a {@see StoredFile} row for the path first -- present for
+     * anything written since this abstraction existed -- and uses *its*
+     * disk, so a file already migrated to R2 is still found there. Only
+     * when no row is tracking the path does this fall back to whichever
+     * disk `$visibility` resolves to today, which is correct for a file
+     * older than this abstraction that has not been migrated (and will not
+     * be: {@see MigrationSources} does not cover a bare
+     * path with no recorded size or checksum to verify against).
+     */
+    public function diskForPath(string $path, StorageVisibility $visibility): Filesystem
+    {
+        $tracked = StoredFile::query()->where('path', $path)->first();
+
+        return $tracked !== null ? $this->diskForFile($tracked) : $this->diskFor($visibility);
+    }
+
+    /**
+     * The address a public file is rendered from, given only a bare path
+     * string. See {@see diskForPath()}.
+     */
+    public function urlForPath(?string $path, StorageVisibility $visibility): ?string
+    {
+        if ($path === null || $path === '') {
+            return null;
+        }
+
+        try {
+            return $this->diskForPath($path, $visibility)->url($path);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Whether a bare path string's file still physically exists. See
+     * {@see diskForPath()}.
+     */
+    public function existsForPath(?string $path, StorageVisibility $visibility): bool
+    {
+        if ($path === null || $path === '') {
+            return false;
+        }
+
+        try {
+            return $this->diskForPath($path, $visibility)->exists($path);
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**

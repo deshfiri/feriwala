@@ -99,10 +99,6 @@ class WebsiteImageStore
      */
     public function url(?string $path): ?string
     {
-        if ($path === null || $path === '') {
-            return null;
-        }
-
-        return $this->storage->diskFor(StorageVisibility::Public)->url($path);
+        return $this->storage->urlForPath($path, StorageVisibility::Public);
     }
 }

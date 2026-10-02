@@ -108,11 +108,7 @@ class Branding
             return $asset->defaultUrl();
         }
 
-        try {
-            return $this->disk()->url($path);
-        } catch (Throwable) {
-            return $asset->defaultUrl();
-        }
+        return $this->storage->urlForPath($path, StorageVisibility::Public) ?? $asset->defaultUrl();
     }
 
     public function isCustom(BrandingAsset $asset): bool
@@ -152,7 +148,7 @@ class Branding
                 return null;
             }
 
-            return $this->disk()->exists($path) ? $path : null;
+            return $this->storage->existsForPath($path, StorageVisibility::Public) ? $path : null;
         } catch (Throwable) {
             // The settings store or the disk is unavailable: show the defaults.
             return null;

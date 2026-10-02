@@ -5,8 +5,8 @@ namespace App\Domain\Catalog;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductMedia;
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
+use App\Domain\Storage\Enums\StorageVisibility;
+use App\Domain\Storage\ManagedStorage;
 use Illuminate\Http\UploadedFile;
 
 /**
@@ -27,11 +27,15 @@ use Illuminate\Http\UploadedFile;
  * server whose `upload_max_filesize` is 2 MB would promise something the upload
  * fails before validation ever sees it, so {@see maxBytesFor()} answers with
  * whichever is smaller and the form's help text reads the same figure.
+ *
+ * Resolves its disk through {@see ManagedStorage} rather than a hardcoded
+ * name, and returns which disk it actually used so the caller can record it
+ * on the row -- `product_media.disk` already existed for exactly this, one
+ * column per row rather than a single constant, so a file written before a
+ * later switch to Cloudflare R2 is still read from where it actually is.
  */
 class ProductMediaStore
 {
-    public const DISK = 'public';
-
     /** @var array<int, string> */
     public const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -58,7 +62,7 @@ class ProductMediaStore
     ];
 
     public function __construct(
-        protected FilesystemFactory $filesystem,
+        protected ManagedStorage $storage,
     ) {}
 
     /**
@@ -100,7 +104,7 @@ class ProductMediaStore
     /**
      * Store an upload against a product.
      *
-     * @return array{type: string, path: string, mime_type: string, size_bytes: int, width: int|null, height: int|null}
+     * @return array{type: string, path: string, disk: string, mime_type: string, size_bytes: int, width: int|null, height: int|null}
      *
      * @throws CatalogRefused
      */
@@ -138,11 +142,12 @@ class ProductMediaStore
             self::EXTENSIONS[$mime],
         );
 
-        $this->disk()->put($path, (string) file_get_contents($file->getRealPath()));
+        $this->storage->diskFor(StorageVisibility::Public)->put($path, (string) file_get_contents($file->getRealPath()));
 
         return [
             'type' => $type,
             'path' => $path,
+            'disk' => $this->storage->diskNameFor(StorageVisibility::Public),
             'mime_type' => $mime,
             'size_bytes' => $size,
             'width' => $width,
@@ -152,24 +157,31 @@ class ProductMediaStore
 
     /**
      * Remove a stored file. Silent about one already gone.
+     *
+     * `$disk` should be the row's own stored disk when the caller has it --
+     * {@see ManagedStorage::diskForPath()} is a path-based fallback for a
+     * caller that only has the path.
      */
-    public function delete(?string $path): void
+    public function delete(?string $path, ?string $disk = null): void
     {
         if ($path === null || $path === '') {
             return;
         }
 
-        $this->disk()->delete($path);
+        $target = $disk !== null
+            ? $this->storage->resolveNamedDisk($disk)
+            : $this->storage->diskForPath($path, StorageVisibility::Public);
+
+        $target->delete($path);
     }
 
-    public function url(string $path): string
+    public function url(string $path, ?string $disk = null): string
     {
-        return $this->disk()->url($path);
-    }
+        if ($disk !== null) {
+            return $this->storage->resolveNamedDisk($disk)->url($path);
+        }
 
-    protected function disk(): Filesystem
-    {
-        return $this->filesystem->disk(self::DISK);
+        return (string) $this->storage->urlForPath($path, StorageVisibility::Public);
     }
 
     protected static function iniBytes(string $value): int

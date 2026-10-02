@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import {
     Banknote,
     CreditCard,
+    HardDrive,
     ListChecks,
     MessageSquare,
     type LucideIcon,
@@ -49,6 +50,7 @@ const ICONS: Record<string, LucideIcon> = {
     kyc_requirements: ListChecks,
     sms: MessageSquare,
     branding: Palette,
+    storage: HardDrive,
 };
 
 /**
