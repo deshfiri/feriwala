@@ -6,6 +6,7 @@ import {
     ClipboardList,
     CreditCard,
     Globe,
+    HardDrive,
     LayoutGrid,
     MapPin,
     MonitorSmartphone,
@@ -61,6 +62,7 @@ import { index as roles } from '@/routes/admin/roles';
 import { index as shipments } from '@/routes/admin/shipments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as platformStaffIndex } from '@/routes/admin/staff';
+import { index as storageSettings } from '@/routes/admin/storage-settings';
 import { index as supplierAllocations } from '@/routes/admin/supplier-allocations';
 import { index as supplierListingLots } from '@/routes/admin/supplier-listing-lots';
 import { index as supplierListings } from '@/routes/admin/supplier-listings';
@@ -697,13 +699,16 @@ export function useNavigation(): {
                     : []),
 
                 ...(permissions['sms.view'] ||
-                permissions['system.manage_settings']
+                permissions['system.manage_settings'] ||
+                permissions['integration.view']
                     ? [
                           {
                               title: 'System',
                               href: permissions['sms.view']
                                   ? smsSettings()
-                                  : brandingSettings(),
+                                  : permissions['system.manage_settings']
+                                    ? brandingSettings()
+                                    : storageSettings(),
                               icon: Settings,
                               items: [
                                   ...(permissions['sms.view']
@@ -719,6 +724,17 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.branding'),
                                                 href: brandingSettings(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['integration.view']
+                                      ? [
+                                            {
+                                                title: t(
+                                                    'nav.storage_settings',
+                                                ),
+                                                href: storageSettings(),
+                                                icon: HardDrive,
                                             },
                                         ]
                                       : []),

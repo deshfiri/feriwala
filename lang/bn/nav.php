@@ -51,6 +51,7 @@ return [
     'platform_staff' => 'প্ল্যাটফর্ম স্টাফ',
     'sms' => 'এসএমএস',
     'branding' => 'ব্র্যান্ডিং',
+    'storage_settings' => 'স্টোরেজ (R2)',
     'stock' => 'স্টক',
     'warehouses' => 'গুদাম',
     'reservations' => 'সংরক্ষণ',

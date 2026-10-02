@@ -57,6 +57,7 @@ return [
     'platform_staff' => 'Platform Staff',
     'sms' => 'SMS',
     'branding' => 'Branding',
+    'storage_settings' => 'Storage (R2)',
     'stock' => 'Stock',
     'warehouses' => 'Warehouses',
     'reservations' => 'Reservations',

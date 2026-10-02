@@ -41,6 +41,15 @@ class SensitiveActionRequest
      * Actions that move money or release funds need two-factor on top of a
      * confirmed password. A stolen session is enough to satisfy a password
      * prompt if the password is also known; a second factor is not.
+     *
+     * `ManageIntegrations` joined this list for the Cloudflare R2 storage
+     * credentials (beta-critical batch, Commit 3): a leaked integration
+     * secret (an access key, a webhook signing key) is as consequential as a
+     * wallet adjustment, since it is standing access rather than a one-time
+     * transaction. This applies to every `*.manage_integrations` permission,
+     * not only storage -- the verb was already password-confirmed and
+     * audited for all of them, and two-factor is a strengthening of an
+     * existing control, never a new one.
      */
     public function requiresTwoFactor(): bool
     {
@@ -49,6 +58,7 @@ class SensitiveActionRequest
             PermissionAction::AdjustWallet,
             PermissionAction::ReverseTransaction,
             PermissionAction::ManageBackups,
+            PermissionAction::ManageIntegrations,
         ], true);
     }
 

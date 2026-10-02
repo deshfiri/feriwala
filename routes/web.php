@@ -46,6 +46,7 @@ use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
+use App\Http\Controllers\Admin\StorageSettingsController;
 use App\Http\Controllers\Admin\SupplierAllocationController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\SupplierListingController;
@@ -1219,6 +1220,23 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('delivery-settings.rules.store');
         Route::post('delivery-settings/rules/{rule}/close', [DeliverySettingsController::class, 'closeRule'])
             ->name('delivery-settings.rules.close');
+
+        /*
+         * Settings -> Storage: Cloudflare R2 (beta-critical batch, Commit 3).
+         * Saving credentials and switching R2 on both sit behind a freshly
+         * confirmed password, same as sending a refund -- holding an R2
+         * secret is standing access, not a one-time transaction.
+         */
+        Route::get('storage-settings', [StorageSettingsController::class, 'index'])
+            ->name('storage-settings.index');
+        Route::patch('storage-settings', [StorageSettingsController::class, 'update'])
+            ->middleware(RequirePassword::class)
+            ->name('storage-settings.update');
+        Route::put('storage-settings/enabled', [StorageSettingsController::class, 'enable'])
+            ->middleware(RequirePassword::class)
+            ->name('storage-settings.enable');
+        Route::post('storage-settings/test-connection', [StorageSettingsController::class, 'testConnection'])
+            ->name('storage-settings.test-connection');
 
         /*
          * The returns desk (§18.2, §19.1, §26.3, P6-12). Each step asks for its
