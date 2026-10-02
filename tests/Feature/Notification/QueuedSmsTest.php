@@ -53,6 +53,21 @@ function queuedSmsProvider(SmsResult $result): SmsProvider
         {
             return 'test';
         }
+
+        public function isConfigured(): bool
+        {
+            return true;
+        }
+
+        public function requiredConfiguration(): array
+        {
+            return [];
+        }
+
+        public function missingConfiguration(): array
+        {
+            return [];
+        }
     };
 }
 

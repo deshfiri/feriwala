@@ -73,6 +73,21 @@ beforeEach(function () {
         {
             return 'spy';
         }
+
+        public function isConfigured(): bool
+        {
+            return true;
+        }
+
+        public function requiredConfiguration(): array
+        {
+            return [];
+        }
+
+        public function missingConfiguration(): array
+        {
+            return [];
+        }
     });
 
     $settings = app(SettingsRepository::class);
@@ -459,6 +474,21 @@ describe('how many codes an order may have (§6.2)', function () {
             {
                 return 'down';
             }
+
+            public function isConfigured(): bool
+            {
+                return true;
+            }
+
+            public function requiredConfiguration(): array
+            {
+                return [];
+            }
+
+            public function missingConfiguration(): array
+            {
+                return [];
+            }
         });
 
         $this->travel(VerificationCodes::RESEND_COOLDOWN_SECONDS + 1)->seconds();
@@ -487,6 +517,21 @@ describe('how many codes an order may have (§6.2)', function () {
             public function name(): string
             {
                 return 'spy';
+            }
+
+            public function isConfigured(): bool
+            {
+                return true;
+            }
+
+            public function requiredConfiguration(): array
+            {
+                return [];
+            }
+
+            public function missingConfiguration(): array
+            {
+                return [];
             }
         });
 

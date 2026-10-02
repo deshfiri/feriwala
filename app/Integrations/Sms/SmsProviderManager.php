@@ -3,6 +3,7 @@
 namespace App\Integrations\Sms;
 
 use App\Domain\Settings\SettingsRepository;
+use App\Integrations\Payment\PaymentGatewayManager;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use Illuminate\Contracts\Container\Container;
 use InvalidArgumentException;
@@ -108,7 +109,9 @@ class SmsProviderManager
      */
     public function canSend(): bool
     {
-        return $this->isEnabled() && $this->isImplemented($this->active());
+        return $this->isEnabled()
+            && $this->isImplemented($this->active())
+            && $this->driver($this->active())->isConfigured();
     }
 
     /**
@@ -136,7 +139,13 @@ class SmsProviderManager
      * administrator asking why Twilio is not an option should see that it is
      * known about and not built, rather than an absence.
      *
-     * @return array<int, array{name: string, is_implemented: bool, is_active: bool}>
+     * A provider with no driver has nothing to ask about its own credentials,
+     * so `required_configuration`/`missing_configuration` stay empty for it
+     * -- the same "report presence, never pretend configuration" rule
+     * {@see PaymentGatewayManager::catalogue()}
+     * already holds payment gateways to.
+     *
+     * @return array<int, array{name: string, is_implemented: bool, is_active: bool, is_configured: bool, required_configuration: array<int, string>, missing_configuration: array<int, string>}>
      */
     public function catalogue(): array
     {
@@ -148,11 +157,25 @@ class SmsProviderManager
         $catalogue = [];
 
         foreach ($providers as $name => $config) {
-            $catalogue[] = [
+            $isImplemented = is_string($config['driver'] ?? null) && $config['driver'] !== '';
+
+            $entry = [
                 'name' => $name,
-                'is_implemented' => is_string($config['driver'] ?? null) && $config['driver'] !== '',
+                'is_implemented' => $isImplemented,
                 'is_active' => $name === $active,
+                'is_configured' => false,
+                'required_configuration' => [],
+                'missing_configuration' => [],
             ];
+
+            if ($isImplemented) {
+                $driver = $this->driver($name);
+                $entry['is_configured'] = $driver->isConfigured();
+                $entry['required_configuration'] = $driver->requiredConfiguration();
+                $entry['missing_configuration'] = $driver->missingConfiguration();
+            }
+
+            $catalogue[] = $entry;
         }
 
         return $catalogue;

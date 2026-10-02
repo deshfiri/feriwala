@@ -6,6 +6,7 @@ return [
     'nav' => 'SMS',
 
     'saved' => 'SMS settings saved.',
+    'credentials_saved' => 'SMS provider credentials saved.',
 
     'switch' => [
         'title' => 'Sending',
@@ -20,9 +21,20 @@ return [
         'description' => 'Every provider §30.1 names. Real providers arrive in a later phase; the log provider records messages instead of sending them.',
         'active' => 'In use',
         'not_implemented' => 'Not built yet',
+        'not_configured' => 'Needs credentials',
         'available' => 'Available',
         'choose' => 'Provider',
         'submit' => 'Save',
+    ],
+
+    'credentials' => [
+        'set' => 'Saved',
+        'missing' => 'Not set',
+        'blank_help' => 'Stored encrypted. Leave a field blank to keep the stored value.',
+        'submit' => 'Save credentials',
+        'fields' => [
+            //
+        ],
     ],
 
     /*

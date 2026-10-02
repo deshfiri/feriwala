@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Notification\Actions\ConfigureSms;
+use App\Domain\Notification\Actions\ConfigureSmsCredentials;
 use App\Domain\Notification\Actions\ToggleSmsEvent;
 use App\Domain\Notification\Enums\SmsEvent;
 use App\Domain\Notification\Enums\SmsStatus;
@@ -28,14 +29,17 @@ use InvalidArgumentException;
  * "why is Twilio not an option" is answered by seeing it marked as not built,
  * not by its absence.
  *
- * No provider credential is ever sent to the browser. There are none stored yet
- * either, but the screen is shaped so that adding them in Phase 8 does not need
- * this rule discovered again (§42).
+ * No provider credential is ever sent to the browser: the screen reports
+ * whether a credential is present and the *names* of the ones that are not;
+ * the value itself only travels inbound, exactly as
+ * {@see PaymentGatewayController} already holds
+ * gateway credentials to (§42).
  */
 class SmsController extends Controller
 {
     public function __construct(
         protected ConfigureSms $configure,
+        protected ConfigureSmsCredentials $configureCredentials,
         protected SmsProviderManager $providers,
         protected PaymentLogRedactor $redactor,
         protected SmsEventSwitch $events,
@@ -170,6 +174,36 @@ class SmsController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('sms.saved')]);
+
+        return back();
+    }
+
+    /**
+     * Store credentials for one SMS provider.
+     */
+    public function updateCredentials(Request $request): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(SmsSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            // Only providers with a driver can be configured.
+            'provider' => ['required', Rule::in($this->providers->available())],
+            'credentials' => ['array'],
+            'credentials.*' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        /** @var array<string, string|null> $credentials */
+        $credentials = $validated['credentials'] ?? [];
+
+        try {
+            $this->configureCredentials->handle($actor, $validated['provider'], $credentials);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['provider' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('sms.credentials_saved')]);
 
         return back();
     }

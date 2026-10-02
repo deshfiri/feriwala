@@ -850,6 +850,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('sms', [SmsController::class, 'index'])->name('sms.index');
         Route::put('sms', [SmsController::class, 'update'])->name('sms.update');
+        // Per-provider credentials, encrypted at rest (§30.1, §36) -- the
+        // same shape as a payment gateway's own credential form.
+        Route::put('sms/credentials', [SmsController::class, 'updateCredentials'])->name('sms.credentials.update');
         // §30's per-event switch: one business event's texts on or off.
         Route::put('sms/events', [SmsController::class, 'toggleEvent'])->name('sms.events.toggle');
 

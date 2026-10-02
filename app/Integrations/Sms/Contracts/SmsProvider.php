@@ -32,4 +32,30 @@ interface SmsProvider
      * Identifier used in config and logs.
      */
     public function name(): string;
+
+    /**
+     * Whether the credentials this provider needs are actually present.
+     *
+     * Asked before the provider can be chosen as active, and before a message
+     * is attempted through it -- a provider switched on but never
+     * credentialled would otherwise fail on the first real send.
+     */
+    public function isConfigured(): bool;
+
+    /**
+     * Every setting this provider cannot work without.
+     *
+     * Names only, never values -- this is what the administration screen
+     * renders a field for.
+     *
+     * @return array<int, string>
+     */
+    public function requiredConfiguration(): array;
+
+    /**
+     * Which of those settings are still empty. Names only, never values.
+     *
+     * @return array<int, string>
+     */
+    public function missingConfiguration(): array;
 }

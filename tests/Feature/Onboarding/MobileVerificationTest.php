@@ -72,6 +72,21 @@ it('texts a code that verifies the number, in the user\'s language', function (s
         {
             return 'spy';
         }
+
+        public function isConfigured(): bool
+        {
+            return true;
+        }
+
+        public function requiredConfiguration(): array
+        {
+            return [];
+        }
+
+        public function missingConfiguration(): array
+        {
+            return [];
+        }
     });
 
     $user = verifyingUser(['locale' => $locale]);

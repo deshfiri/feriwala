@@ -53,6 +53,21 @@ beforeEach(function () {
         {
             return null;
         }
+
+        public function isConfigured(): bool
+        {
+            return true;
+        }
+
+        public function requiredConfiguration(): array
+        {
+            return [];
+        }
+
+        public function missingConfiguration(): array
+        {
+            return [];
+        }
     });
 });
 

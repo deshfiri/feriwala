@@ -53,6 +53,21 @@ class LogSmsProvider implements SmsProvider
         return 'log';
     }
 
+    public function isConfigured(): bool
+    {
+        return true;
+    }
+
+    public function requiredConfiguration(): array
+    {
+        return [];
+    }
+
+    public function missingConfiguration(): array
+    {
+        return [];
+    }
+
     /**
      * `+8801712345678` becomes `+88017****5678`.
      */

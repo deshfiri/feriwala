@@ -3,15 +3,65 @@
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Notification\Actions\ConfigureSms;
+use App\Domain\Notification\Actions\ConfigureSmsCredentials;
+use App\Domain\Settings\Models\Setting;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Sms\Contracts\SmsProvider;
 use App\Integrations\Sms\Data\SmsMessage;
+use App\Integrations\Sms\Data\SmsResult;
 use App\Integrations\Sms\Providers\LogSmsProvider;
+use App\Integrations\Sms\SmsCredentials;
+use App\Integrations\Sms\SmsGateway;
 use App\Integrations\Sms\SmsProviderManager;
 use App\Support\Localization\Locale;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Log;
 use Inertia\Testing\AssertableInertia as Assert;
+
+/**
+ * A minimal credentialed driver, standing in for a real one (e.g. Novocom)
+ * so the generic credentials pipeline can be proven without any specific
+ * provider's protocol.
+ */
+class SmsProviderTestFakeCredentials extends SmsCredentials
+{
+    public function provider(): string
+    {
+        return 'fakesms';
+    }
+
+    public function requiredKeys(): array
+    {
+        return ['api_key', 'sender_id'];
+    }
+}
+
+class SmsProviderTestFakeGateway extends SmsGateway
+{
+    public function __construct(protected SmsProviderTestFakeCredentials $creds) {}
+
+    protected function credentials(): SmsCredentials
+    {
+        return $this->creds;
+    }
+
+    public function send(SmsMessage $message): SmsResult
+    {
+        $this->requireConfigured();
+
+        return SmsResult::accepted('fake-1');
+    }
+
+    public function balance(): ?string
+    {
+        return null;
+    }
+}
+
+function smsProviderTestRegisterFakeGateway(): void
+{
+    config()->set('sms.providers.fakesms', ['driver' => SmsProviderTestFakeGateway::class]);
+}
 
 /*
  * The SMS provider layer (P1-55, §30.1).
@@ -181,6 +231,106 @@ describe('the settings screen', function () {
 
         $this->actingAs($paymentManager)
             ->put(route('admin.sms.update'), ['enabled' => false])
+            ->assertForbidden();
+    });
+});
+
+/*
+ * Per-provider credentials (§30.1, §36) -- the same encrypted-settings shape
+ * ConfigureGateway already holds payment gateways to, proven here against a
+ * minimal fake driver rather than any specific real provider (e.g. Novocom),
+ * since the pipeline is generic and a real provider's own protocol is a
+ * separate concern from how its credentials are stored.
+ */
+describe('provider credentials', function () {
+    it('reports an implemented provider\'s required keys and what is still missing', function () {
+        smsProviderTestRegisterFakeGateway();
+
+        $entry = collect(app(SmsProviderManager::class)->catalogue())->firstWhere('name', 'fakesms');
+
+        expect($entry['is_implemented'])->toBeTrue()
+            ->and($entry['is_configured'])->toBeFalse()
+            ->and($entry['required_configuration'])->toBe(['api_key', 'sender_id'])
+            ->and($entry['missing_configuration'])->toBe(['api_key', 'sender_id']);
+    });
+
+    it('saves credentials encrypted at rest', function () {
+        smsProviderTestRegisterFakeGateway();
+
+        app(ConfigureSmsCredentials::class)->handle($this->manager, 'fakesms', [
+            'api_key' => 'a-real-key',
+            'sender_id' => 'FERIWALA',
+        ]);
+
+        $stored = Setting::query()->where('key', 'sms.fakesms.api_key')->value('value');
+
+        expect($stored)->not->toBe('a-real-key')
+            ->and(app(SettingsRepository::class)->get('sms.fakesms.api_key'))->toBe('a-real-key');
+
+        $entry = collect(app(SmsProviderManager::class)->catalogue())->firstWhere('name', 'fakesms');
+
+        expect($entry['is_configured'])->toBeTrue();
+    });
+
+    it('keeps what is stored when a field is left blank', function () {
+        smsProviderTestRegisterFakeGateway();
+
+        app(ConfigureSmsCredentials::class)->handle($this->manager, 'fakesms', [
+            'api_key' => 'a-real-key',
+            'sender_id' => 'FERIWALA',
+        ]);
+
+        app(ConfigureSmsCredentials::class)->handle($this->manager, 'fakesms', [
+            'api_key' => '',
+            'sender_id' => 'UPDATED',
+        ]);
+
+        expect(app(SettingsRepository::class)->get('sms.fakesms.api_key'))->toBe('a-real-key')
+            ->and(app(SettingsRepository::class)->get('sms.fakesms.sender_id'))->toBe('UPDATED');
+    });
+
+    it('records what changed without recording the secret', function () {
+        smsProviderTestRegisterFakeGateway();
+
+        app(ConfigureSmsCredentials::class)->handle($this->manager, 'fakesms', [
+            'api_key' => 'a-real-key',
+            'sender_id' => 'FERIWALA',
+        ]);
+
+        $entry = AuditLog::query()->where('action', 'sms.provider_configured')->firstOrFail();
+
+        expect(json_encode($entry->after))->not->toContain('a-real-key')
+            ->and($entry->after['credentials_set'])->toBe(['api_key', 'sender_id']);
+    });
+
+    it('refuses to hold credentials for a provider with no driver', function () {
+        expect(fn () => app(ConfigureSmsCredentials::class)->handle($this->manager, 'twilio', ['api_key' => 'x']))
+            ->toThrow(InvalidArgumentException::class);
+    });
+
+    it('saves credentials through the settings screen', function () {
+        smsProviderTestRegisterFakeGateway();
+
+        $this->actingAs($this->manager)
+            ->put(route('admin.sms.credentials.update'), [
+                'provider' => 'fakesms',
+                'credentials' => ['api_key' => 'a-real-key', 'sender_id' => 'FERIWALA'],
+            ])
+            ->assertRedirect();
+
+        expect(app(SettingsRepository::class)->get('sms.fakesms.api_key'))->toBe('a-real-key');
+    });
+
+    it('is closed to somebody without the SMS permission', function () {
+        smsProviderTestRegisterFakeGateway();
+
+        $paymentManager = testPlatformStaff(PlatformRole::PaymentManager);
+
+        $this->actingAs($paymentManager)
+            ->put(route('admin.sms.credentials.update'), [
+                'provider' => 'fakesms',
+                'credentials' => ['api_key' => 'x'],
+            ])
             ->assertForbidden();
     });
 });

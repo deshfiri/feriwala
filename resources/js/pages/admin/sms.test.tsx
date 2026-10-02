@@ -55,7 +55,16 @@ function renderSmsPage(manage = true) {
     return render(
         <AdminSms
             settings={{ enabled: true, provider: 'log', can_send: true }}
-            providers={[{ name: 'log', is_implemented: true, is_active: true }]}
+            providers={[
+                {
+                    name: 'log',
+                    is_implemented: true,
+                    is_active: true,
+                    is_configured: true,
+                    required_configuration: [],
+                    missing_configuration: [],
+                },
+            ]}
             messages={[]}
             events={smsEvents}
             can={{ manage }}

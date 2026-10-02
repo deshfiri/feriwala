@@ -15,6 +15,9 @@ type ProviderRow = {
     name: string;
     is_implemented: boolean;
     is_active: boolean;
+    is_configured: boolean;
+    required_configuration: string[];
+    missing_configuration: string[];
 };
 
 type MessageRow = {
@@ -213,31 +216,113 @@ export default function AdminSms({
                 >
                     <ul className="divide-border divide-y text-sm">
                         {providers.map((provider) => (
-                            <li
-                                key={provider.name}
-                                className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
-                            >
-                                <span className="font-medium">
-                                    {provider.name}
-                                </span>
+                            <li key={provider.name} className="px-5 py-3">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <span className="font-medium">
+                                        {provider.name}
+                                    </span>
 
-                                {/* Labelled, never colour alone (§33.9). */}
-                                <StatusPill
-                                    tone={
-                                        provider.is_active
-                                            ? 'success'
-                                            : provider.is_implemented
-                                              ? 'info'
-                                              : 'neutral'
-                                    }
-                                    label={t(
-                                        provider.is_active
-                                            ? 'sms.providers.active'
-                                            : provider.is_implemented
-                                              ? 'sms.providers.available'
-                                              : 'sms.providers.not_implemented',
-                                    )}
-                                />
+                                    {/* Labelled, never colour alone (§33.9). */}
+                                    <StatusPill
+                                        tone={
+                                            provider.is_active
+                                                ? 'success'
+                                                : !provider.is_implemented
+                                                  ? 'neutral'
+                                                  : provider.is_configured
+                                                    ? 'info'
+                                                    : 'warning'
+                                        }
+                                        label={t(
+                                            provider.is_active
+                                                ? 'sms.providers.active'
+                                                : !provider.is_implemented
+                                                  ? 'sms.providers.not_implemented'
+                                                  : provider.is_configured
+                                                    ? 'sms.providers.available'
+                                                    : 'sms.providers.not_configured',
+                                        )}
+                                    />
+                                </div>
+
+                                {provider.is_implemented && can.manage && (
+                                    <Form
+                                        {...SmsController.updateCredentials.form()}
+                                        options={{ preserveScroll: true }}
+                                        resetOnSuccess
+                                        className="mt-3 space-y-3"
+                                    >
+                                        {({ errors, processing }) => (
+                                            <>
+                                                <input
+                                                    type="hidden"
+                                                    name="provider"
+                                                    value={provider.name}
+                                                />
+
+                                                <div className="grid gap-3 sm:grid-cols-2">
+                                                    {provider.required_configuration.map(
+                                                        (key) => (
+                                                            <div
+                                                                key={key}
+                                                                className="grid gap-1.5"
+                                                            >
+                                                                <Label
+                                                                    htmlFor={`${provider.name}-${key}`}
+                                                                >
+                                                                    {t(
+                                                                        `sms.credentials.fields.${key}`,
+                                                                    )}
+                                                                </Label>
+                                                                {/*
+                                                                    type=password and no autofill: the
+                                                                    stored value is never sent here, so
+                                                                    there is nothing for a browser to
+                                                                    helpfully put back.
+                                                                */}
+                                                                <input
+                                                                    id={`${provider.name}-${key}`}
+                                                                    name={`credentials[${key}]`}
+                                                                    type="password"
+                                                                    autoComplete="new-password"
+                                                                    placeholder={t(
+                                                                        provider.missing_configuration.includes(
+                                                                            key,
+                                                                        )
+                                                                            ? 'sms.credentials.missing'
+                                                                            : 'sms.credentials.set',
+                                                                    )}
+                                                                    className="border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                                                />
+                                                            </div>
+                                                        ),
+                                                    )}
+                                                </div>
+
+                                                <p className="text-muted-foreground text-xs">
+                                                    {t(
+                                                        'sms.credentials.blank_help',
+                                                    )}
+                                                </p>
+
+                                                <InputError
+                                                    message={errors.provider}
+                                                />
+
+                                                <Button
+                                                    type="submit"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={processing}
+                                                >
+                                                    {t(
+                                                        'sms.credentials.submit',
+                                                    )}
+                                                </Button>
+                                            </>
+                                        )}
+                                    </Form>
+                                )}
                             </li>
                         ))}
                     </ul>
