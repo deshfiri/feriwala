@@ -179,7 +179,7 @@ enum PlatformRole: string
                  */
                 Module::Account->value => [
                     ...$manage, ...$review,
-                    Action::Suspend, Action::Reactivate,
+                    Action::Suspend, Action::Reactivate, Action::ManageSettings,
                 ],
                 Module::Package->value => $manage,
                 Module::Catalog->value => $manage,

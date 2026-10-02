@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Account\Actions\ActivateAccount;
+use App\Domain\Account\Actions\ConfigureMobileVerificationRequirement;
 use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Exceptions\ActivationBlocked;
@@ -113,6 +114,34 @@ describe('the three conditions (§5.1, §44)', function () {
 
         expect(fn () => activate())
             ->toThrow(ActivationBlocked::class, 'not both verified');
+    });
+
+    it('still refuses on an unverified email even when mobile verification is switched off', function () {
+        app(ConfigureMobileVerificationRequirement::class)->handle($this->admin, false);
+
+        approveKyc();
+        settleActivationPayment();
+
+        $this->applicant->owner->forceFill([
+            'email_verified_at' => null,
+            'mobile_verified_at' => null,
+        ])->save();
+
+        expect(fn () => activate())
+            ->toThrow(ActivationBlocked::class, 'not both verified');
+    });
+
+    it('activates with an unverified mobile once an administrator switches the requirement off', function () {
+        app(ConfigureMobileVerificationRequirement::class)->handle($this->admin, false);
+
+        approveKyc();
+        settleActivationPayment();
+
+        $this->applicant->owner->forceFill(['mobile_verified_at' => null])->save();
+
+        activate();
+
+        expect($this->applicant->fresh()->status)->toBe(AccountStatus::Active);
     });
 
     it('reports every unmet condition, not just the first', function () {

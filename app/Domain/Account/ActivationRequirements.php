@@ -8,6 +8,7 @@ use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Models\User;
 
 /**
  * Checks the three conditions §5.1 and §44 require before activation.
@@ -26,6 +27,10 @@ use App\Domain\Kyc\Models\KycSubmission;
  */
 class ActivationRequirements
 {
+    public function __construct(
+        protected MobileVerificationRequirement $mobileVerification,
+    ) {}
+
     /**
      * Reasons this account cannot yet be activated. Empty means it can.
      *
@@ -90,10 +95,26 @@ class ActivationRequirements
     }
 
     /**
-     * The owner's email and mobile, both verified (§5.1).
+     * The owner's email, and mobile when it is required (§5.1).
+     *
+     * Mobile is read directly rather than through {@see User::isVerified()},
+     * which always asks for both -- that method states a fact about the
+     * person, while this states what activation currently requires of them,
+     * and the two are allowed to differ once an administrator switches
+     * mobile verification off.
      */
     public function ownerVerified(BusinessAccount $account): bool
     {
-        return $account->owner?->isVerified() ?? false;
+        $owner = $account->owner;
+
+        if ($owner === null || $owner->email_verified_at === null) {
+            return false;
+        }
+
+        if (! $this->mobileVerification->isRequired()) {
+            return true;
+        }
+
+        return $owner->mobile_verified_at !== null;
     }
 }

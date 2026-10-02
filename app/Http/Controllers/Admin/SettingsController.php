@@ -135,6 +135,13 @@ class SettingsController extends Controller
                         'route' => 'admin.kyc.document-types.index',
                         'permission' => PermissionCatalogue::name(PermissionModule::Kyc, PermissionAction::ManageSettings),
                     ],
+                    [
+                        'key' => 'account_verification_settings',
+                        'title' => __('nav.account_verification_settings'),
+                        'description' => __('settings.hub.items.account_verification_settings'),
+                        'route' => 'admin.account-verification-settings.index',
+                        'permission' => PermissionCatalogue::name(PermissionModule::Account, PermissionAction::ManageSettings),
+                    ],
                 ],
             ],
             [

@@ -35,6 +35,7 @@ import {
 } from '@/routes/admin';
 import { index as accountDirectory } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
+import { index as accountVerificationSettings } from '@/routes/admin/account-verification-settings';
 import { index as accountWithdrawals } from '@/routes/admin/account-withdrawals';
 import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
@@ -502,6 +503,16 @@ export function useNavigation(): {
                                       title: t('nav.activation_approvals'),
                                       href: activationQueue(),
                                   },
+                                  ...(permissions['account.manage_settings']
+                                      ? [
+                                            {
+                                                title: t(
+                                                    'nav.account_verification_settings',
+                                                ),
+                                                href: accountVerificationSettings(),
+                                            },
+                                        ]
+                                      : []),
                               ],
                           },
                       ]

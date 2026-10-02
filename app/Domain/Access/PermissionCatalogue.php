@@ -60,6 +60,11 @@ class PermissionCatalogue
                 Action::Approve, Action::Reject, Action::Verify,
                 Action::Export, Action::Archive, Action::ViewSensitiveData,
                 Action::Suspend, Action::Reactivate,
+
+                // Whether mobile verification is a required onboarding step
+                // at all (§5.1) -- a policy decision, not a per-applicant
+                // one, so it sits apart from Approve/Reject/Verify.
+                Action::ManageSettings,
             ],
 
             // KYC is never deletable — submissions and their review history are

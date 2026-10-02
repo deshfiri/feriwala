@@ -92,6 +92,31 @@ it('shows the storage item under its own integrations section to a System Admini
         );
 });
 
+it('shows account verification only to a role holding account.manage_settings', function () {
+    $admin = testPlatformStaff(PlatformRole::Admin);
+
+    $response = $this->actingAs($admin)->get(route('admin.settings'))->assertOk();
+
+    $sections = $response->viewData('page')['props']['sections'];
+    $platform = collect($sections)->firstWhere('key', 'platform');
+    $item = collect($platform['items'])->firstWhere('key', 'account_verification_settings');
+
+    expect($item)->not->toBeNull()
+        ->and($item['href'])->toBe(route('admin.account-verification-settings.index'));
+
+    // PackageManager holds account.view but not account.manage_settings --
+    // confirms this is its own, narrower permission rather than inherited.
+    $packageManager = testPlatformStaff(PlatformRole::PackageManager);
+
+    $response = $this->actingAs($packageManager)->get(route('admin.settings'))->assertOk();
+
+    $sections = $response->viewData('page')['props']['sections'];
+    $platform = collect($sections)->firstWhere('key', 'platform');
+    $item = $platform === null ? null : collect($platform['items'])->firstWhere('key', 'account_verification_settings');
+
+    expect($item)->toBeNull();
+});
+
 it('shows an empty hub to a role holding none of the covered settings permissions', function () {
     $staff = testPlatformStaff(PlatformRole::SeoManager);
 
@@ -114,7 +139,7 @@ it('shows every section and every item to a Super Admin', function () {
             ->component('admin/settings/index')
             ->has('sections', 4)
             ->has('sections.0.items', 5)
-            ->has('sections.1.items', 4)
+            ->has('sections.1.items', 5)
             ->has('sections.2.items', 2)
             ->where('sections.3.key', 'integrations')
             ->has('sections.3.items', 1)

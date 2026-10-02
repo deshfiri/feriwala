@@ -58,6 +58,7 @@ return [
     'sms' => 'SMS',
     'branding' => 'Branding',
     'storage_settings' => 'Storage (R2)',
+    'account_verification_settings' => 'Account verification',
     'stock' => 'Stock',
     'warehouses' => 'Warehouses',
     'reservations' => 'Reservations',

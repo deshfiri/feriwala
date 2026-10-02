@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Domain\Account\Actions\SendMobileVerificationCode;
+use App\Domain\Account\Actions\SkipMobileVerificationIfNotRequired;
 use App\Domain\Account\Actions\VerifyMobile;
 use App\Domain\Account\Exceptions\ResendTooSoon;
+use App\Domain\Account\MobileVerificationRequirement;
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Notification\Exceptions\SmsEventSwitchedOff;
 use App\Http\Controllers\Controller;
@@ -32,11 +34,14 @@ class MobileVerificationController extends Controller
     public function __construct(
         protected VerificationCodes $codes,
         protected HomeRoute $home,
+        protected MobileVerificationRequirement $requirement,
+        protected SkipMobileVerificationIfNotRequired $skip,
     ) {}
 
     public function show(Request $request): Response|RedirectResponse
     {
         $user = $this->userFor($request);
+        $this->skipIfNotRequired($user);
 
         if (! $this->hasSomethingToVerify($user)) {
             return $this->onward($user);
@@ -55,6 +60,7 @@ class MobileVerificationController extends Controller
     public function send(Request $request, SendMobileVerificationCode $send): RedirectResponse
     {
         $user = $this->userFor($request);
+        $this->skipIfNotRequired($user);
 
         if (! $this->hasSomethingToVerify($user)) {
             return $this->onward($user);
@@ -85,6 +91,7 @@ class MobileVerificationController extends Controller
     public function verify(Request $request, VerifyMobile $verify): RedirectResponse
     {
         $user = $this->userFor($request);
+        $this->skipIfNotRequired($user);
 
         if (! $this->hasSomethingToVerify($user)) {
             return $this->onward($user);
@@ -120,14 +127,32 @@ class MobileVerificationController extends Controller
     }
 
     /**
-     * A number that is on file and not yet confirmed.
+     * A number that is on file, not yet confirmed, and actually required.
      *
-     * A confirmed number is not confirmed again, and a code cannot be sent to a
-     * number nobody gave us.
+     * A confirmed number is not confirmed again, a code cannot be sent to a
+     * number nobody gave us, and nothing is asked for at all once an
+     * administrator has switched the requirement off.
      */
     protected function hasSomethingToVerify(User $user): bool
     {
+        if (! $this->requirement->isRequired()) {
+            return false;
+        }
+
         return $user->mobile !== null && $user->mobile_verified_at === null;
+    }
+
+    /**
+     * Advance an account waiting only on mobile verification, the moment
+     * this screen is reached while the requirement is switched off -- so
+     * the redirect below sends them somewhere the funnel actually agrees
+     * they belong, rather than back to a stepper still pointing here.
+     */
+    protected function skipIfNotRequired(User $user): void
+    {
+        if ($user->businessAccount !== null) {
+            $this->skip->handle($user->businessAccount);
+        }
     }
 
     /**

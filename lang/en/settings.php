@@ -28,6 +28,7 @@ return [
             'referral_settings' => 'The multi-level referral programme configuration.',
             'packages' => 'The subscription packages accounts can choose from.',
             'kyc_requirements' => 'The verification documents a business is asked for.',
+            'account_verification_settings' => 'Whether mobile number verification is a required onboarding step.',
             'sms' => 'The SMS gateway and which notifications it sends.',
             'branding' => 'The platform logo and browser icon.',
             'storage' => 'Where uploaded files are kept, and the Cloudflare R2 connection.',

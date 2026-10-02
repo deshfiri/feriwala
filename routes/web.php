@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AccountController;
+use App\Http\Controllers\Admin\AccountVerificationSettingsController;
 use App\Http\Controllers\Admin\AccountWithdrawalController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\AvailabilityController;
@@ -1342,6 +1343,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('referral-settings.plans.store');
         Route::post('referral-settings/plans/{plan}/close', [ReferralSettingsController::class, 'close'])
             ->name('referral-settings.plans.close');
+
+        /*
+         * Whether mobile verification is a required onboarding step at all
+         * (§5.1) -- `account.view`/`account.manage_settings`.
+         */
+        Route::get('account-verification-settings', [AccountVerificationSettingsController::class, 'index'])
+            ->name('account-verification-settings.index');
+        Route::put('account-verification-settings', [AccountVerificationSettingsController::class, 'update'])
+            ->name('account-verification-settings.update');
 
         /*
          * Platform-wide referral commissions and chains (D24, P7-44). Seen

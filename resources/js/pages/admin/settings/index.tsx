@@ -13,6 +13,7 @@ import {
     Scale,
     ScrollText,
     Settings2,
+    ShieldCheck,
 } from 'lucide-react';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -48,6 +49,7 @@ const ICONS: Record<string, LucideIcon> = {
     referral_settings: Network,
     packages: PackageIcon,
     kyc_requirements: ListChecks,
+    account_verification_settings: ShieldCheck,
     sms: MessageSquare,
     branding: Palette,
     storage: HardDrive,
