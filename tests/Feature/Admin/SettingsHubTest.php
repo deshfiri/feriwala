@@ -70,6 +70,28 @@ it('shows only the sms item, never branding, to an SMS Manager', function () {
         );
 });
 
+it('shows the storage item under its own integrations section to a System Administrator', function () {
+    // System::ManageSettings is also granted to this role, so branding
+    // (communication) shows too -- the assertion here is only that
+    // integrations/storage exists and needs nothing else to appear.
+    $staff = testPlatformStaff(PlatformRole::SystemAdministrator);
+
+    $this->actingAs($staff)
+        ->get(route('admin.settings'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/settings/index')
+            ->has('sections', 2)
+            ->where('sections.0.key', 'communication')
+            ->has('sections.0.items', 1)
+            ->where('sections.0.items.0.key', 'branding')
+            ->where('sections.1.key', 'integrations')
+            ->has('sections.1.items', 1)
+            ->where('sections.1.items.0.key', 'storage')
+            ->where('sections.1.items.0.href', route('admin.storage-settings.index')),
+        );
+});
+
 it('shows an empty hub to a role holding none of the covered settings permissions', function () {
     $staff = testPlatformStaff(PlatformRole::SeoManager);
 
@@ -90,9 +112,13 @@ it('shows every section and every item to a Super Admin', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('admin/settings/index')
-            ->has('sections', 3)
+            ->has('sections', 4)
             ->has('sections.0.items', 5)
             ->has('sections.1.items', 4)
-            ->has('sections.2.items', 2),
+            ->has('sections.2.items', 2)
+            ->where('sections.3.key', 'integrations')
+            ->has('sections.3.items', 1)
+            ->where('sections.3.items.0.key', 'storage')
+            ->where('sections.3.items.0.href', route('admin.storage-settings.index')),
         );
 });
