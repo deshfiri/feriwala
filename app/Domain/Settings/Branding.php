@@ -3,7 +3,9 @@
 namespace App\Domain\Settings;
 
 use App\Domain\Settings\Enums\BrandingAsset;
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
+use App\Domain\Storage\Actions\StoreManagedFile;
+use App\Domain\Storage\Enums\StorageVisibility;
+use App\Domain\Storage\ManagedStorage;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Throwable;
 
@@ -25,8 +27,11 @@ use Throwable;
 class Branding
 {
     /**
-     * The disk brand images are written to — the configured public disk,
-     * symlinked into `public/storage`.
+     * The disk brand images are written to while Cloudflare R2 is switched
+     * off -- the configured public disk, symlinked into `public/storage`.
+     * {@see disk()} resolves through {@see ManagedStorage} instead of this
+     * constant directly, so brand images move to R2 the moment it is
+     * switched on.
      */
     public const DISK = 'public';
 
@@ -43,7 +48,7 @@ class Branding
 
     public function __construct(
         protected SettingsRepository $settings,
-        protected FilesystemFactory $filesystem,
+        protected ManagedStorage $storage,
     ) {}
 
     /**
@@ -155,16 +160,18 @@ class Branding
     }
 
     /**
-     * Whether a value is a path this feature wrote: `branding/<name>.<ext>`, with
-     * nothing that could climb out of the folder and no embedded data.
+     * Whether a value is a path this feature wrote: `branding/<asset>/<name>.<ext>`
+     * (the shape {@see StoreManagedFile} gives
+     * every file -- `<purpose>/<random>.<ext>`), with nothing that could
+     * climb out of the folder and no embedded data.
      */
     public static function isManagedPath(string $path): bool
     {
-        return preg_match('#^'.self::FOLDER.'/[A-Za-z0-9_-]+\.(png|jpg|webp|ico)$#', $path) === 1;
+        return preg_match('#^'.self::FOLDER.'/[a-z]+/[A-Za-z0-9_-]+\.(png|jpg|webp|ico)$#', $path) === 1;
     }
 
     public function disk(): Filesystem
     {
-        return $this->filesystem->disk(self::DISK);
+        return $this->storage->diskFor(StorageVisibility::Public);
     }
 }

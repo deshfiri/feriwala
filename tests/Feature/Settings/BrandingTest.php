@@ -98,7 +98,7 @@ describe('the shipped defaults', function () {
     it('falls back when the uploaded file has gone missing from the disk', function () {
         $settings = app(SettingsRepository::class);
         $settings->define(BrandingAsset::Logo->setting(), 'branding', SettingType::String);
-        $settings->set(BrandingAsset::Logo->setting(), 'branding/logo-'.str_repeat('a', 32).'.png');
+        $settings->set(BrandingAsset::Logo->setting(), 'branding/logo/'.str_repeat('a', 32).'.png');
 
         expect(app(Branding::class)->url(BrandingAsset::Logo))->toBe('/logo.png')
             ->and(app(Branding::class)->isCustom(BrandingAsset::Logo))->toBeFalse();
@@ -141,7 +141,7 @@ describe('uploading and restoring', function () {
 
         $path = brandingStoredPath(BrandingAsset::Logo);
 
-        expect($path)->toMatch('#^branding/logo-[a-f0-9]{32}\.png$#');
+        expect($path)->toMatch('#^branding/logo/[a-f0-9]{32}\.png$#');
         Storage::disk(Branding::DISK)->assertExists($path);
 
         $this->actingAs($this->admin)

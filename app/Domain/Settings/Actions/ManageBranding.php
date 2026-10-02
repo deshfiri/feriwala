@@ -10,11 +10,14 @@ use App\Domain\Settings\Enums\BrandingAsset;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\Policies\BrandingPolicy;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Storage\Actions\DeleteManagedFile;
+use App\Domain\Storage\Actions\StoreManagedFile;
+use App\Domain\Storage\Enums\StorageVisibility;
+use App\Domain\Storage\Exceptions\UnacceptableFile;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
-use Symfony\Component\Mime\MimeTypes;
 use Throwable;
 
 /**
@@ -37,6 +40,8 @@ class ManageBranding
         protected SettingsRepository $settings,
         protected Branding $branding,
         protected RecordAuditLog $audit,
+        protected StoreManagedFile $storeFile,
+        protected DeleteManagedFile $deleteFile,
     ) {}
 
     /**
@@ -47,28 +52,29 @@ class ManageBranding
     {
         $this->authorize($actor);
 
-        // Read from the file's own bytes, never from the name or the browser's claim.
-        $mime = (string) MimeTypes::getDefault()->guessMimeType((string) $file->getRealPath());
-        $extension = $asset->acceptedTypes()[$mime] ?? null;
-
-        if ($extension === null) {
-            throw new InvalidArgumentException("A file of type [{$mime}] is not accepted.");
-        }
-
-        if ((int) $file->getSize() > $asset->maxKilobytes() * 1024) {
-            throw new InvalidArgumentException('The file is larger than '.$asset->maxKilobytes().' KB.');
-        }
-
         $previous = $this->currentPath($asset);
-        $path = sprintf('%s/%s-%s.%s', Branding::FOLDER, $asset->value, bin2hex(random_bytes(16)), $extension);
 
-        $this->branding->disk()->put($path, (string) file_get_contents($file->getRealPath()));
+        try {
+            $stored = $this->storeFile->handle(
+                file: $file,
+                purpose: Branding::FOLDER.'/'.$asset->value,
+                visibility: StorageVisibility::Public,
+                allowedMimeTypes: array_keys($asset->acceptedTypes()),
+                maxBytes: $asset->maxKilobytes() * 1024,
+                createdBy: $actor->id,
+                extensionsByMime: $asset->acceptedTypes(),
+            );
+        } catch (UnacceptableFile $exception) {
+            throw new InvalidArgumentException($exception->getMessage(), previous: $exception);
+        }
+
+        $path = $stored->path;
 
         try {
             $this->define($asset);
             $this->settings->set($asset->setting(), $path, $actor->id);
         } catch (Throwable $failure) {
-            $this->branding->disk()->delete($path);
+            $this->deleteFile->handle($stored);
 
             throw $failure;
         }
@@ -159,9 +165,7 @@ class ManageBranding
 
     protected function removeFile(?string $path): void
     {
-        if ($path !== null) {
-            $this->branding->disk()->delete($path);
-        }
+        $this->deleteFile->forPath($path, StorageVisibility::Public);
     }
 
     protected function record(User $actor, BrandingAsset $asset, ?string $before, ?string $after): void

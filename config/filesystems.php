@@ -87,6 +87,23 @@ return [
             'report' => false,
         ],
 
+        /*
+         * The generic private target for the shared managed-storage
+         * abstraction (beta-critical batch, Commit 4) -- for a private file
+         * that isn't one of `kyc`/`supplier-media`'s own existing special
+         * cases. Same shape as those: `serve` off defeats Laravel's local-disk
+         * serving route, so the only way to read a file here is through a
+         * controller that checks permission first.
+         */
+        'private' => [
+            'driver' => env('PRIVATE_DISK_DRIVER', 'local'),
+            'root' => storage_path('app/private-media'),
+            'serve' => false,
+            'throw' => true,
+            'report' => true,
+            'visibility' => 'private',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

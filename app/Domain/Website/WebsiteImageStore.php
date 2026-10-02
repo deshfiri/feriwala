@@ -3,9 +3,12 @@
 namespace App\Domain\Website;
 
 use App\Domain\Catalog\CatalogImageStore;
+use App\Domain\Storage\Actions\DeleteManagedFile;
+use App\Domain\Storage\Actions\StoreManagedFile;
+use App\Domain\Storage\Enums\StorageVisibility;
+use App\Domain\Storage\Exceptions\UnacceptableFile;
+use App\Domain\Storage\ManagedStorage;
 use App\Domain\Website\Exceptions\WebsiteRefused;
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 
 /**
@@ -27,12 +30,17 @@ use Illuminate\Http\UploadedFile;
  *
  * Names are random. An original filename can carry a path fragment, a second
  * extension or somebody's name, and none of it is worth keeping for a logo.
+ *
+ * Writes through {@see StoreManagedFile} (beta-critical batch, Commit 4): the
+ * public contract here is unchanged -- a caller still gets back the same kind
+ * of path string it always did -- but the file now also carries a
+ * `stored_files` row with its mime type, size and checksum, and resolves to
+ * whichever disk {@see ManagedStorage} currently targets (the local `public`
+ * disk today, Cloudflare R2 once that is switched on) rather than a disk name
+ * hardcoded here.
  */
 class WebsiteImageStore
 {
-    /** The public disk, symlinked into `public/storage`. */
-    public const DISK = 'public';
-
     /** 2 MB for a logo, and the same again for a banner. */
     public const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -41,17 +49,10 @@ class WebsiteImageStore
      */
     public const ACCEPTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-    /**
-     * @var array<string, string>
-     */
-    protected const EXTENSIONS = [
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/webp' => 'webp',
-    ];
-
     public function __construct(
-        protected FilesystemFactory $filesystem,
+        protected StoreManagedFile $storeFile,
+        protected DeleteManagedFile $deleteFile,
+        protected ManagedStorage $storage,
     ) {}
 
     /**
@@ -64,27 +65,21 @@ class WebsiteImageStore
      */
     public function store(UploadedFile $file, string $websiteId, string $asset): string
     {
-        $mime = (string) $file->getMimeType();
-
-        if (! in_array($mime, self::ACCEPTED_MIME_TYPES, true)) {
-            throw WebsiteRefused::imageTypeNotAccepted();
+        try {
+            $stored = $this->storeFile->handle(
+                file: $file,
+                purpose: "websites/{$websiteId}/{$asset}",
+                visibility: StorageVisibility::Public,
+                allowedMimeTypes: self::ACCEPTED_MIME_TYPES,
+                maxBytes: self::MAX_BYTES,
+            );
+        } catch (UnacceptableFile $exception) {
+            throw $exception->reason === UnacceptableFile::TOO_LARGE
+                ? WebsiteRefused::imageTooLarge()
+                : WebsiteRefused::imageTypeNotAccepted();
         }
 
-        if ((int) $file->getSize() > self::MAX_BYTES) {
-            throw WebsiteRefused::imageTooLarge();
-        }
-
-        $path = sprintf(
-            'websites/%s/%s-%s.%s',
-            $websiteId,
-            $asset,
-            bin2hex(random_bytes(12)),
-            self::EXTENSIONS[$mime],
-        );
-
-        $this->disk()->put($path, (string) file_get_contents($file->getRealPath()));
-
-        return $path;
+        return $stored->path;
     }
 
     /**
@@ -96,11 +91,7 @@ class WebsiteImageStore
      */
     public function delete(?string $path): void
     {
-        if ($path === null || $path === '') {
-            return;
-        }
-
-        $this->disk()->delete($path);
+        $this->deleteFile->forPath($path, StorageVisibility::Public);
     }
 
     /**
@@ -112,11 +103,6 @@ class WebsiteImageStore
             return null;
         }
 
-        return $this->disk()->url($path);
-    }
-
-    protected function disk(): Filesystem
-    {
-        return $this->filesystem->disk(self::DISK);
+        return $this->storage->diskFor(StorageVisibility::Public)->url($path);
     }
 }
