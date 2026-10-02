@@ -57,6 +57,9 @@ enum PermissionModule: string
     /** What Feriwala owes a Supplier for allocated order lines (D25, P13-22). */
     case SupplierPayable = 'supplier_payable';
 
+    /** Weight-tier delivery-charge rules and their global settings (beta-critical batch, Commit 2). */
+    case DeliverySettings = 'delivery_settings';
+
     public function label(): string
     {
         return match ($this) {
@@ -94,6 +97,7 @@ enum PermissionModule: string
             self::SupplierPricing => 'Supplier pricing',
             self::SupplierStock => 'Supplier stock',
             self::SupplierPayable => 'Supplier payables',
+            self::DeliverySettings => 'Delivery charge settings',
         };
     }
 }

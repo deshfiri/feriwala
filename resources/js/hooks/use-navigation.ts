@@ -4,40 +4,24 @@ import {
     Boxes,
     Building2,
     ClipboardList,
-    Coins,
     CreditCard,
-    FolderTree,
     Globe,
     LayoutGrid,
-    ListChecks,
-    Lock,
     MapPin,
-    MessageSquare,
     MonitorSmartphone,
     Network,
-    Package as PackageIcon,
     PackageCheck,
-    PackageSearch,
-    Palette,
-    Receipt,
-    Scale,
-    ScrollText,
     Settings,
     Share2,
     ShieldCheck,
     ShoppingBag,
     ShoppingBasket,
     ShoppingCart,
-    SlidersHorizontal,
     Store,
-    Tags,
     Truck,
-    Undo2,
-    UserCheck,
-    UserCog,
     Users,
     Wallet as WalletIcon,
-    Warehouse,
+    Weight,
 } from 'lucide-react';
 
 import { useTranslation } from '@/hooks/use-translation';
@@ -57,6 +41,7 @@ import { index as productAttributes } from '@/routes/admin/catalog/attributes';
 import { index as productBrands } from '@/routes/admin/catalog/brands';
 import { index as productCategories } from '@/routes/admin/catalog/categories';
 import { index as productCatalogue } from '@/routes/admin/catalog/products';
+import { index as deliverySettings } from '@/routes/admin/delivery-settings';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as stockAllocations } from '@/routes/admin/inventory/allocations';
@@ -73,6 +58,7 @@ import { index as referralCommissions } from '@/routes/admin/referral-commission
 import { index as referralSettings } from '@/routes/admin/referral-settings';
 import { index as adminReturns } from '@/routes/admin/returns';
 import { index as roles } from '@/routes/admin/roles';
+import { index as shipments } from '@/routes/admin/shipments';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as platformStaffIndex } from '@/routes/admin/staff';
 import { index as supplierAllocations } from '@/routes/admin/supplier-allocations';
@@ -191,7 +177,8 @@ export function useNavigation(): {
                                     },
                                     {
                                         title:
-                                            (account?.wholesaleCartLines ?? 0) > 0
+                                            (account?.wholesaleCartLines ?? 0) >
+                                            0
                                                 ? `${t('nav.wholesale_cart')} (${account?.wholesaleCartLines})`
                                                 : t('nav.wholesale_cart'),
                                         href: wholesaleCart(),
@@ -199,7 +186,8 @@ export function useNavigation(): {
                                     },
                                 ]
                               : []),
-                          ...(account?.allowsWholesale || account?.hasWholesaleOrders
+                          ...(account?.allowsWholesale ||
+                          account?.hasWholesaleOrders
                               ? [
                                     {
                                         title: t('nav.wholesale_orders'),
@@ -315,7 +303,9 @@ export function useNavigation(): {
                                   ...(permissions['kyc.manage_settings']
                                       ? [
                                             {
-                                                title: t('nav.kyc_requirements'),
+                                                title: t(
+                                                    'nav.kyc_requirements',
+                                                ),
                                                 href: kycRequirements(),
                                             },
                                         ]
@@ -440,7 +430,9 @@ export function useNavigation(): {
                                   ...(permissions['website.view']
                                       ? [
                                             {
-                                                title: t('nav.partner_websites'),
+                                                title: t(
+                                                    'nav.partner_websites',
+                                                ),
                                                 href: adminWebsites(),
                                             },
                                         ]
@@ -471,7 +463,9 @@ export function useNavigation(): {
                                   ...(permissions['referral.view']
                                       ? [
                                             {
-                                                title: t('nav.referral_commissions'),
+                                                title: t(
+                                                    'nav.referral_commissions',
+                                                ),
                                                 href: referralCommissions(),
                                             },
                                         ]
@@ -479,7 +473,9 @@ export function useNavigation(): {
                                   ...(permissions['referral.view_settings']
                                       ? [
                                             {
-                                                title: t('nav.referral_settings'),
+                                                title: t(
+                                                    'nav.referral_settings',
+                                                ),
                                                 href: referralSettings(),
                                             },
                                         ]
@@ -529,7 +525,9 @@ export function useNavigation(): {
                                                 href: billingRules(),
                                             },
                                             {
-                                                title: t('nav.payment_gateways'),
+                                                title: t(
+                                                    'nav.payment_gateways',
+                                                ),
                                                 href: paymentGateways(),
                                             },
                                             {
@@ -553,7 +551,9 @@ export function useNavigation(): {
                                   ...(permissions['withdrawal.view']
                                       ? [
                                             {
-                                                title: t('nav.account_withdrawals'),
+                                                title: t(
+                                                    'nav.account_withdrawals',
+                                                ),
                                                 href: accountWithdrawals(),
                                             },
                                         ]
@@ -596,11 +596,15 @@ export function useNavigation(): {
                                   ...(permissions['supplier_listing.view']
                                       ? [
                                             {
-                                                title: t('nav.supplier_listings'),
+                                                title: t(
+                                                    'nav.supplier_listings',
+                                                ),
                                                 href: supplierListings(),
                                             },
                                             {
-                                                title: t('nav.supplier_listing_lots'),
+                                                title: t(
+                                                    'nav.supplier_listing_lots',
+                                                ),
                                                 href: supplierListingLots(),
                                             },
                                         ]
@@ -612,7 +616,9 @@ export function useNavigation(): {
                                                 href: supplierOffers(),
                                             },
                                             {
-                                                title: t('nav.supplier_allocations'),
+                                                title: t(
+                                                    'nav.supplier_allocations',
+                                                ),
                                                 href: supplierAllocations(),
                                             },
                                         ]
@@ -628,11 +634,15 @@ export function useNavigation(): {
                                   ...(permissions['supplier_payable.view']
                                       ? [
                                             {
-                                                title: t('nav.supplier_payables'),
+                                                title: t(
+                                                    'nav.supplier_payables',
+                                                ),
                                                 href: supplierPayables(),
                                             },
                                             {
-                                                title: t('nav.supplier_wallets'),
+                                                title: t(
+                                                    'nav.supplier_wallets',
+                                                ),
                                                 href: supplierWallets(),
                                             },
                                         ]
@@ -640,7 +650,9 @@ export function useNavigation(): {
                                   ...(permissions['withdrawal.view']
                                       ? [
                                             {
-                                                title: t('nav.supplier_withdrawals'),
+                                                title: t(
+                                                    'nav.supplier_withdrawals',
+                                                ),
                                                 href: supplierWithdrawals(),
                                             },
                                         ]
@@ -650,7 +662,42 @@ export function useNavigation(): {
                       ]
                     : []),
 
-                ...(permissions['sms.view'] || permissions['system.manage_settings']
+                ...(permissions['courier.view'] ||
+                permissions['delivery_settings.view']
+                    ? [
+                          {
+                              title: 'Shipments & Delivery',
+                              href: permissions['courier.view']
+                                  ? shipments()
+                                  : deliverySettings(),
+                              icon: PackageCheck,
+                              items: [
+                                  ...(permissions['courier.view']
+                                      ? [
+                                            {
+                                                title: t('nav.shipments'),
+                                                href: shipments(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['delivery_settings.view']
+                                      ? [
+                                            {
+                                                title: t(
+                                                    'nav.delivery_settings',
+                                                ),
+                                                href: deliverySettings(),
+                                                icon: Weight,
+                                            },
+                                        ]
+                                      : []),
+                              ],
+                          },
+                      ]
+                    : []),
+
+                ...(permissions['sms.view'] ||
+                permissions['system.manage_settings']
                     ? [
                           {
                               title: 'System',

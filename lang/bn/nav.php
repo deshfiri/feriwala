@@ -67,6 +67,8 @@ return [
     'supplier_payables' => 'সাপ্লায়ার পাওনা',
     'supplier_wallets' => 'সাপ্লায়ার ওয়ালেট',
     'supplier_withdrawals' => 'সাপ্লায়ার উত্তোলন',
+    'shipments' => 'শিপমেন্ট',
+    'delivery_settings' => 'ডেলিভারি সেটিংস',
 
     'search' => [
         'open' => 'পেজ খুঁজুন',

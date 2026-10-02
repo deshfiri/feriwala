@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
@@ -1204,6 +1205,20 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.shipments.store');
         Route::post('shipments/{shipment}/status/advance', [ShipmentController::class, 'advanceStatus'])
             ->name('shipments.status.advance');
+
+        /*
+         * Delivery-charge configuration (beta-critical batch, Commit 2) --
+         * its own `delivery_settings.*` permissions, never a courier or
+         * order ability.
+         */
+        Route::get('delivery-settings', [DeliverySettingsController::class, 'index'])
+            ->name('delivery-settings.index');
+        Route::patch('delivery-settings', [DeliverySettingsController::class, 'update'])
+            ->name('delivery-settings.update');
+        Route::post('delivery-settings/rules', [DeliverySettingsController::class, 'storeRule'])
+            ->name('delivery-settings.rules.store');
+        Route::post('delivery-settings/rules/{rule}/close', [DeliverySettingsController::class, 'closeRule'])
+            ->name('delivery-settings.rules.close');
 
         /*
          * The returns desk (§18.2, §19.1, §26.3, P6-12). Each step asks for its

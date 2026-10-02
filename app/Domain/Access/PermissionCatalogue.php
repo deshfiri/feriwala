@@ -231,6 +231,14 @@ class PermissionCatalogue
             Module::SupplierPayable->value => [
                 Action::View, Action::Approve,
             ],
+
+            // Weight-tier delivery-charge rules and the global knobs
+            // CalculateDeliveryCharge applies on top of them (beta-critical
+            // batch, Commit 2) -- a settings-only module, the same shape
+            // KycDocumentType's own module uses.
+            Module::DeliverySettings->value => [
+                Action::View, Action::Edit, Action::ManageSettings,
+            ],
         ];
     }
 

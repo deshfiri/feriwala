@@ -73,6 +73,8 @@ return [
     'supplier_payables' => 'Supplier payables',
     'supplier_wallets' => 'Supplier wallets',
     'supplier_withdrawals' => 'Supplier withdrawals',
+    'shipments' => 'Shipments',
+    'delivery_settings' => 'Delivery settings',
 
     'search' => [
         'open' => 'Search pages',

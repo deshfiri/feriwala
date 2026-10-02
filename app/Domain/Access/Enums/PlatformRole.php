@@ -262,6 +262,7 @@ enum PlatformRole: string
                 Module::Courier->value => [...$manage, Action::Approve, Action::ManageIntegrations],
                 Module::Order->value => [Action::View],
                 Module::Settlement->value => [Action::View, Action::Export],
+                Module::DeliverySettings->value => [Action::View, Action::Edit, Action::ManageSettings],
             ],
 
             // Sees the whole financial picture and may reverse, but releasing a

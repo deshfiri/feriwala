@@ -5,7 +5,7 @@ namespace App\Domain\Courier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
-use App\Domain\Billing\FeeRuleResolver;
+use App\Domain\Billing\Data\DeliveryChargeCalculation;
 use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Enums\ShipmentStatusChangeSource;
 use App\Domain\Courier\Exceptions\CourierProviderUnavailable;
@@ -28,11 +28,14 @@ use InvalidArgumentException;
  * Management batch, Commit 5; §18, §21).
  *
  * The decision this freezes -- which provider, what the delivery costs --
- * never changes afterwards (the migration's locked-columns trigger). D8
- * (manual-first): `delivery_charge` is a staff-entered figure in this batch,
- * not yet one {@see FeeRuleResolver}-style rule engine
- * computes (Commit 6), so `delivery_charge_rule_snapshot` stays null here --
- * there is no rule to snapshot when a person typed the number.
+ * never changes afterwards (the migration's locked-columns trigger).
+ * `delivery_charge` may be a staff-entered figure (D8's manual-first path,
+ * `$calculation` left null, `delivery_charge_rule_snapshot` stays null since
+ * there is no rule to snapshot when a person typed the number) or {@see
+ * \App\Domain\Billing\CalculateDeliveryCharge}'s own computed result (beta-
+ * critical batch, Commit 2) -- when a calculation is given, its exact
+ * breakdown is frozen into the snapshot column so a later rule or settings
+ * change can never reach back and alter what this shipment already charged.
  *
  * Moves the order's {@see OrderCourierStatus} to `Assigned` and its {@see
  * OrderDeliveryStatus} to `CourierAssigned` through the existing Commit 1
@@ -61,6 +64,7 @@ class CreateShipmentFromAllocations
         ?User $actor,
         ?string $trackingNumber = null,
         ?Money $codAmount = null,
+        ?DeliveryChargeCalculation $calculation = null,
     ): Shipment {
         if (! $this->courier->isAvailable($providerCode)) {
             throw CourierProviderUnavailable::forProvider($providerCode, $this->courier->isImplemented($providerCode));
@@ -70,7 +74,7 @@ class CreateShipmentFromAllocations
             throw new InvalidArgumentException('At least one package is required to create a shipment.');
         }
 
-        return $this->database->transaction(function () use ($order, $providerCode, $deliveryCharge, $packages, $actor, $trackingNumber, $codAmount) {
+        return $this->database->transaction(function () use ($order, $providerCode, $deliveryCharge, $packages, $actor, $trackingNumber, $codAmount, $calculation) {
             /** @var Order $locked */
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
 
@@ -83,7 +87,7 @@ class CreateShipmentFromAllocations
                 'status' => OrderCourierStatus::Assigned,
                 'tracking_number' => $trackingNumber,
                 'delivery_charge' => $deliveryCharge,
-                'delivery_charge_rule_snapshot' => null,
+                'delivery_charge_rule_snapshot' => $calculation?->toArray(),
                 'cod_amount' => $codAmount,
             ]);
 
