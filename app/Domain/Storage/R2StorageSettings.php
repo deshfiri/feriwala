@@ -185,6 +185,31 @@ class R2StorageSettings
         return trim($incoming);
     }
 
+    /**
+     * The currently stored configuration, trimmed to exactly the shape
+     * {@see R2Manager::disk()} expects -- the one
+     * place that shape is assembled, so {@see ManagedStorage}
+     * and the R2 migration command (beta-critical batch, Commit 5) build an
+     * R2 connection the same way.
+     *
+     * @return array{account_id: ?string, access_key_id: ?string, secret_access_key: ?string, bucket: ?string, endpoint: ?string, region: string, public_domain: ?string, default_visibility: string}
+     */
+    public function toR2ManagerCredentials(): array
+    {
+        $candidate = $this->candidate([]);
+
+        return [
+            'account_id' => $candidate['account_id'],
+            'access_key_id' => $candidate['access_key_id'],
+            'secret_access_key' => $candidate['secret_access_key'],
+            'bucket' => $candidate['bucket'],
+            'endpoint' => $candidate['endpoint'],
+            'region' => $candidate['region'],
+            'public_domain' => $candidate['public_domain'],
+            'default_visibility' => $candidate['default_visibility'],
+        ];
+    }
+
     protected function mask(?string $value): ?string
     {
         if ($value === null) {

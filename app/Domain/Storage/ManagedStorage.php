@@ -33,7 +33,7 @@ class ManagedStorage
     public function diskFor(StorageVisibility $visibility): Filesystem
     {
         if ($this->r2Settings->isAvailable()) {
-            return $this->r2->disk($this->r2Credentials());
+            return $this->r2->disk($this->r2Settings->toR2ManagerCredentials());
         }
 
         return $this->filesystem->disk($visibility === StorageVisibility::Public ? 'public' : 'private');
@@ -57,29 +57,10 @@ class ManagedStorage
     public function diskForFile(StoredFile $file): Filesystem
     {
         if ($file->disk === 'r2') {
-            return $this->r2->disk($this->r2Credentials());
+            return $this->r2->disk($this->r2Settings->toR2ManagerCredentials());
         }
 
         return $this->filesystem->disk($file->disk);
-    }
-
-    /**
-     * @return array{account_id: ?string, access_key_id: ?string, secret_access_key: ?string, bucket: ?string, endpoint: ?string, region: string, public_domain: ?string, default_visibility: string}
-     */
-    protected function r2Credentials(): array
-    {
-        $candidate = $this->r2Settings->candidate([]);
-
-        return [
-            'account_id' => $candidate['account_id'],
-            'access_key_id' => $candidate['access_key_id'],
-            'secret_access_key' => $candidate['secret_access_key'],
-            'bucket' => $candidate['bucket'],
-            'endpoint' => $candidate['endpoint'],
-            'region' => $candidate['region'],
-            'public_domain' => $candidate['public_domain'],
-            'default_visibility' => $candidate['default_visibility'],
-        ];
     }
 
     /**
