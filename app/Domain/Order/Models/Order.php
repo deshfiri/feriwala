@@ -9,6 +9,7 @@ use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Actions\AnnounceWebsiteOrderStatus;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderCourierStatus;
@@ -213,6 +214,18 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class)->orderBy('line_number');
+    }
+
+    /**
+     * Every shipment raised for this order, oldest first (Advanced Order
+     * Management batch, Commit 5) -- more than one when a failed delivery is
+     * retried through a fresh shipment rather than the same one.
+     *
+     * @return HasMany<Shipment, $this>
+     */
+    public function shipments(): HasMany
+    {
+        return $this->hasMany(Shipment::class)->orderBy('id');
     }
 
     /**

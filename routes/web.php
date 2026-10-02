@@ -40,6 +40,7 @@ use App\Http\Controllers\Admin\ReferralSettingsController;
 use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
@@ -1188,6 +1189,21 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.delivery-status.advance');
         Route::post('orders/{order}/courier-status/advance', [OrderController::class, 'advanceCourierStatus'])
             ->name('orders.courier-status.advance');
+
+        /*
+         * The courier-neutral shipment domain (Advanced Order Management
+         * batch, Commit 5; §21, D8). Creating one is reached from Order
+         * Detail's own "Create shipment" dialog; the index/show pair are
+         * their own screens under Shipments/Courier.
+         */
+        Route::get('shipments', [ShipmentController::class, 'index'])
+            ->name('shipments.index');
+        Route::get('shipments/{shipment}', [ShipmentController::class, 'show'])
+            ->name('shipments.show');
+        Route::post('orders/{order}/shipments', [ShipmentController::class, 'store'])
+            ->name('orders.shipments.store');
+        Route::post('shipments/{shipment}/status/advance', [ShipmentController::class, 'advanceStatus'])
+            ->name('shipments.status.advance');
 
         /*
          * The returns desk (§18.2, §19.1, §26.3, P6-12). Each step asks for its

@@ -31,6 +31,10 @@ import FulfilmentCommitmentPanel, {
 import OrderLifecyclePanel, {
     type OrderLifecycle,
 } from '@/pages/admin/orders/order-lifecycle-panel';
+import ShipmentsPanel, {
+    type CourierProviderOption,
+    type OrderShipment,
+} from '@/pages/admin/orders/shipments-panel';
 import { index } from '@/routes/admin/orders';
 
 export type SupplierPayableSummary = {
@@ -152,11 +156,14 @@ export type AdminOrderDetail = {
         reason: string | null;
         internal_note: string | null;
     }[];
+    /** Empty ([]) without manage_shipments (Advanced Order Management batch, Commit 5). */
+    shipments: OrderShipment[];
+    courier_providers: CourierProviderOption[];
 };
 
 type Props = {
     order: AdminOrderDetail;
-    can: { cancel: boolean };
+    can: { cancel: boolean; manage_shipments: boolean };
 };
 
 const controlClass =
@@ -230,6 +237,15 @@ export default function AdminOrder({ order, can }: Props) {
                     orderId={order.id}
                     lifecycle={order.lifecycle}
                 />
+
+                {can.manage_shipments && (
+                    <ShipmentsPanel
+                        orderId={order.id}
+                        orderReference={order.reference}
+                        shipments={order.shipments}
+                        courierProviders={order.courier_providers}
+                    />
+                )}
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                     <div className="min-w-0 space-y-6">

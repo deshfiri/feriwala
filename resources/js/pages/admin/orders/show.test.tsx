@@ -107,6 +107,8 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
                 internal_note: null,
             },
         ],
+        shipments: [],
+        courier_providers: [],
         ...overrides,
     };
 }
@@ -119,14 +121,22 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
 describe('admin order page', () => {
     it('offers cancelling an unpaid order only when the server allows it', () => {
         const { rerender } = render(
-            <AdminOrder order={order()} can={{ cancel: true }} />,
+            <AdminOrder
+                order={order()}
+                can={{ cancel: true, manage_shipments: false }}
+            />,
         );
 
         expect(
             screen.getByRole('button', { name: 'orders.admin.cancel' }),
         ).toBeInTheDocument();
 
-        rerender(<AdminOrder order={order()} can={{ cancel: false }} />);
+        rerender(
+            <AdminOrder
+                order={order()}
+                can={{ cancel: false, manage_shipments: false }}
+            />,
+        );
 
         expect(
             screen.queryByRole('button', { name: 'orders.admin.cancel' }),
@@ -153,7 +163,7 @@ describe('admin order page', () => {
                         },
                     ],
                 })}
-                can={{ cancel: false }}
+                can={{ cancel: false, manage_shipments: false }}
             />,
         );
 
@@ -188,7 +198,7 @@ describe('admin order page', () => {
                         is_guest: true,
                     },
                 })}
-                can={{ cancel: false }}
+                can={{ cancel: false, manage_shipments: false }}
             />,
         );
 
@@ -217,7 +227,7 @@ describe('admin order page', () => {
                             'The gateway confirmed this payment after the checkout was cancelled.',
                     },
                 })}
-                can={{ cancel: false }}
+                can={{ cancel: false, manage_shipments: false }}
             />,
         );
 
@@ -259,7 +269,7 @@ describe('admin order page', () => {
                         sends_allowed: 5,
                     },
                 })}
-                can={{ cancel: true }}
+                can={{ cancel: true, manage_shipments: false }}
             />,
         );
 

@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Actions\AdvanceOrderFulfilmentStatus;
@@ -37,6 +38,7 @@ use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Http\Controllers\Controller;
+use App\Integrations\Courier\CourierManager;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
@@ -81,6 +83,7 @@ class OrderController extends Controller
         protected AdvanceOrderFulfilmentStatus $advanceFulfilment,
         protected AdvanceOrderDeliveryStatus $advanceDelivery,
         protected AdvanceOrderCourierStatus $advanceCourier,
+        protected CourierManager $courier,
     ) {}
 
     public function index(Request $request): Response
@@ -149,6 +152,7 @@ class OrderController extends Controller
             'fulfillmentStatusHistory.changedBy:id,name',
             'deliveryStatusHistory.changedBy:id,name',
             'courierStatusHistory.changedBy:id,name',
+            'shipments.courierProvider:id,code,name',
         ]);
 
         $payment = $record->payment;
@@ -157,6 +161,7 @@ class OrderController extends Controller
         $canViewCatalogPricing = $actor->can(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View));
         $canManageFulfilmentCommitment = Gate::forUser($actor)->allows('manageFulfilmentCommitment', $record);
         $canOverrideFulfilmentState = Gate::forUser($actor)->allows('overrideFulfilmentState', $record);
+        $canManageShipments = Gate::forUser($actor)->allows('manageShipments', Shipment::class);
 
         return Inertia::render('admin/orders/show', [
             'order' => [
@@ -284,6 +289,26 @@ class OrderController extends Controller
                     'reason' => $change->reason,
                     'internal_note' => $change->internal_note,
                 ])->all(),
+                /*
+                 * Every shipment raised for this order (Advanced Order
+                 * Management batch, Commit 5) -- only ever shown to staff who
+                 * can manage them, since the figure is "what it costs to
+                 * ship" rather than any sensitive Supplier or margin figure,
+                 * but there is nothing to act on here without the ability
+                 * anyway.
+                 */
+                'shipments' => $canManageShipments
+                    ? $record->shipments->map(fn (Shipment $shipment) => [
+                        'id' => $shipment->public_id,
+                        'reference' => $shipment->reference,
+                        'provider' => $shipment->courierProvider->name,
+                        'status' => $shipment->status->value,
+                        'status_label' => $shipment->status->label(),
+                        'status_tone' => $shipment->status->tone(),
+                        'tracking_number' => $shipment->tracking_number,
+                    ])->all()
+                    : [],
+                'courier_providers' => $canManageShipments ? $this->courier->catalogue() : [],
             ],
             'can' => [
                 // Waiting for a payment, or for a cash-on-delivery customer to
@@ -294,6 +319,7 @@ class OrderController extends Controller
                     && $payment->status !== PaymentStatus::Pending
                     && ! $payment->status->isSettled(),
                 'override_fulfilment_state' => $canOverrideFulfilmentState,
+                'manage_shipments' => $canManageShipments,
             ],
         ]);
     }

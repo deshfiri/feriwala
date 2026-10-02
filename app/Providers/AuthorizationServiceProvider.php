@@ -13,6 +13,8 @@ use App\Domain\Address\Models\SharedAddress;
 use App\Domain\Address\Policies\SharedAddressPolicy;
 use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Courier\Models\Shipment;
+use App\Domain\Courier\Policies\ShipmentPolicy;
 use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
@@ -96,6 +98,12 @@ class AuthorizationServiceProvider extends ServiceProvider
         // A dedicated website is run by the account that owns it and
         // administered by staff who may administer websites (§16.3).
         Gate::policy(Website::class, WebsitePolicy::class);
+
+        // The courier-neutral shipment domain (Advanced Order Management
+        // batch, Commit 5; §21). Staff-only -- a shipment is seen and run
+        // through the admin Order/Shipment screens, never a Client/Partner
+        // or Supplier surface.
+        Gate::policy(Shipment::class, ShipmentPolicy::class);
 
         /*
          * The shared address book, Client/Partner side only — a Supplier's
