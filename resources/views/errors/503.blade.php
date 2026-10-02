@@ -1,123 +1,194 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="robots" content="noindex, nofollow">
-        <title>{{ config('app.name', 'Feriwala') }} — Under Maintenance</title>
 
-        {{--
-            This view is Laravel's documented customization point for maintenance
-            mode (resources/views/errors/503.blade.php) and, when `php artisan down`
-            is run with `--render="errors::503"`, gets pre-rendered to static HTML
-            before most of the framework boots. It must never depend on @vite,
-            the database, or any other app service — all of those may be exactly
-            what is down.
-        --}}
-        <style>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+
+    <title>{{ config('app.name', 'Banij') }} | Under Maintenance</title>
+
+    {{--
+    This page must remain independent from Vite, database connections,
+    external fonts and other application services.
+    --}}
+
+    <style>
+        :root {
+            color-scheme: light dark;
+            --background: #fffaf6;
+            --surface: #ffffff;
+            --border: rgba(202, 99, 48, 0.16);
+            --text: #121525;
+            --muted: #5d606b;
+            --brand: #f27622;
+        }
+
+        @media (prefers-color-scheme: dark) {
             :root {
-                color-scheme: light dark;
-                --bg: oklch(0.976 0.002 75);
-                --surface: oklch(1 0 0);
-                --border: oklch(0.89 0.004 75);
-                --text: oklch(0.2 0.01 60);
-                --muted: oklch(0.46 0.01 60);
-                --brand: #ca6330;
-                --brand-on: #ffffff;
+                --background: #161311;
+                --surface: #211c19;
+                --border: rgba(242, 118, 34, 0.25);
+                --text: #fffaf6;
+                --muted: #c9c2bd;
             }
+        }
 
-            @media (prefers-color-scheme: dark) {
-                :root {
-                    --bg: oklch(0.16 0.003 60);
-                    --surface: oklch(0.21 0.004 60);
-                    --border: oklch(0.3 0.006 60);
-                    --text: oklch(0.95 0.002 75);
-                    --muted: oklch(0.7 0.006 75);
-                }
-            }
+        * {
+            box-sizing: border-box;
+        }
 
-            * {
-                box-sizing: border-box;
-            }
+        html,
+        body {
+            min-height: 100%;
+        }
 
-            html, body {
-                height: 100%;
-            }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: clamp(1rem, 3vw, 2.5rem);
+            background:
+                radial-gradient(circle at top,
+                    rgba(242, 118, 34, 0.1),
+                    transparent 42%),
+                var(--background);
+            color: var(--text);
+            font-family:
+                ui-sans-serif,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                Roboto,
+                Helvetica,
+                Arial,
+                sans-serif;
+        }
 
+        .maintenance {
+            width: min(100%, 72rem);
+        }
+
+        .card {
+            overflow: hidden;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: clamp(1rem, 2vw, 1.5rem);
+            box-shadow:
+                0 1.5rem 4rem rgba(74, 35, 14, 0.12),
+                0 0.25rem 1rem rgba(74, 35, 14, 0.06);
+        }
+
+        .visual {
+            position: relative;
+            background: #fff8f2;
+        }
+
+        .visual img {
+            display: block;
+            width: 100%;
+            height: 80vh;
+            aspect-ratio: 3 / 2;
+            object-fit: contain;
+        }
+
+        .status {
+            padding: 1rem 1.5rem 1.25rem;
+            text-align: center;
+        }
+
+        .retry {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .retry strong {
+            color: var(--brand);
+            font-weight: 700;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        @media (max-width: 640px) {
             body {
-                margin: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                padding: 1.5rem;
-                background: var(--bg);
-                color: var(--text);
-                font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                padding: 0;
+                background: var(--surface);
+            }
+
+            .maintenance {
+                width: 100%;
+                min-height: 80vh;
+                display: grid;
+                place-items: center;
             }
 
             .card {
                 width: 100%;
-                max-width: 28rem;
-                background: var(--surface);
-                border: 1px solid var(--border);
-                border-radius: 0.75rem;
-                padding: 2.5rem 2rem;
-                text-align: center;
-                box-shadow: 0 1px 3px oklch(0 0 0 / 0.08);
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
             }
 
-            .badge {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 3rem;
-                height: 3rem;
-                border-radius: 9999px;
-                background: var(--brand);
-                color: var(--brand-on);
-                margin-bottom: 1.25rem;
+            .visual img {
+                width: 100%;
+                min-height: 21rem;
+                aspect-ratio: auto;
+                object-fit: contain;
             }
 
-            .badge svg {
-                width: 1.5rem;
-                height: 1.5rem;
+            .status {
+                padding: 0.875rem 1rem 1.5rem;
             }
 
-            h1 {
-                margin: 0 0 0.5rem;
-                font-size: 1.25rem;
-                font-weight: 600;
+            .retry {
+                font-size: 0.8125rem;
             }
+        }
 
-            p {
-                margin: 0;
-                color: var(--muted);
-                font-size: 0.9375rem;
-                line-height: 1.5;
+        @media (max-width: 400px) {
+            .visual img {
+                min-height: 17rem;
             }
+        }
 
-            p + p {
-                margin-top: 0.5rem;
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
             }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <span class="badge" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 6v6l4 2" />
-                    <circle cx="12" cy="12" r="9" />
-                </svg>
-            </span>
+        }
+    </style>
+</head>
 
-            <h1>{{ config('app.name', 'Feriwala') }} is down for maintenance</h1>
+<body>
+    <main class="maintenance" role="main">
+        <section class="card" aria-labelledby="maintenance-title">
+            <div class="visual">
+                <img src="/images/banij-maintanance.jpeg"
+                    alt="Banij is down for maintenance. We are making scheduled improvements and will be back shortly."
+                    width="1536" height="1024" fetchpriority="high">
+            </div>
+        </section>
+    </main>
+</body>
 
-            <p>We're making some scheduled improvements. We'll be back shortly — please check again in a few minutes.</p>
-
-            @if (isset($retryAfter))
-                <p>Expected back in about {{ $retryAfter }} seconds.</p>
-            @endif
-        </div>
-    </body>
 </html>
