@@ -170,7 +170,7 @@ test('full approval creates a Central Product through the catalogue action and o
 
     $this->actingAs($staff)->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Looks right.',
-        'create_product' => true,
+        'create_product' => true, 'sourcing_group_id' => supplierTestSourcingGroup()->public_id,
         'sku' => 'pj-001',
         'category_id' => $category,
         'items' => [[
@@ -213,7 +213,7 @@ test('approval opens the offer stock from the submitted availability and records
     $this->actingAs(supplierListingTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approved.',
-            'connect_product_id' => websiteTestProduct()->public_id,
+            ...supplierTestConnect(websiteTestProduct()),
             'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
         ])->assertSessionHasNoErrors();
 
@@ -239,7 +239,7 @@ test('a reviewer may open the offer at a different quantity, and the movement sa
     $this->actingAs(supplierListingTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approved at a lower opening figure.',
-            'connect_product_id' => websiteTestProduct()->public_id,
+            ...supplierTestConnect(websiteTestProduct()),
             'items' => [[
                 'item_id' => $item->public_id,
                 'decision' => 'approve',
@@ -263,7 +263,7 @@ test('an offer approved at zero availability opens with no units and no phantom 
     $this->actingAs(supplierListingTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approved, nothing in hand yet.',
-            'connect_product_id' => websiteTestProduct()->public_id,
+            ...supplierTestConnect(websiteTestProduct()),
             'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
         ])->assertSessionHasNoErrors();
 
@@ -283,7 +283,7 @@ test('a negative approved quantity is refused before any offer or stock exists',
     $this->actingAs(supplierListingTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approved.',
-            'connect_product_id' => websiteTestProduct()->public_id,
+            ...supplierTestConnect(websiteTestProduct()),
             'items' => [[
                 'item_id' => $item->public_id,
                 'decision' => 'approve',
@@ -310,7 +310,7 @@ test('each supplier approved against the same variation gets its own offer and i
         $this->actingAs(supplierListingTestReviewer())
             ->post(route('admin.supplier-listings.decision.store', $listing), [
                 'reason' => 'Approved.',
-                'connect_product_id' => $product->public_id,
+                ...supplierTestConnect($product),
                 'items' => [[
                     'item_id' => $listing->items()->firstOrFail()->public_id,
                     'decision' => 'approve',
@@ -338,7 +338,7 @@ test('creating a product needs the catalogue create permission on top of listing
     $before = Product::query()->count();
 
     $this->actingAs($staff)->post(route('admin.supplier-listings.decision.store', $listing), [
-        'reason' => 'Try.', 'create_product' => true, 'sku' => 'X-1',
+        'reason' => 'Try.', 'create_product' => true, 'sourcing_group_id' => supplierTestSourcingGroup()->public_id, 'sku' => 'X-1',
         'category_id' => $category,
         'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertForbidden();
@@ -355,7 +355,7 @@ test('a reviewer who cannot set pricing cannot approve, but can still reject', f
     $reviewer->givePermissionTo(['supplier_listing.view', 'supplier_listing.approve']);
 
     $this->actingAs($reviewer)->post(route('admin.supplier-listings.decision.store', $listing), [
-        'reason' => 'Ok', 'connect_product_id' => websiteTestProduct()->public_id,
+        'reason' => 'Ok', ...supplierTestConnect(websiteTestProduct()),
         'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertForbidden();
 
@@ -375,7 +375,7 @@ test('partial approval approves some variations and leaves the rest without offe
 
     $this->actingAs(supplierListingTestReviewer())->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'One is fine.',
-        'connect_product_id' => $product->public_id,
+        ...supplierTestConnect($product),
         'items' => [
             ['item_id' => $first->public_id, 'decision' => 'approve', 'platform_rate' => '1200.00'],
             ['item_id' => $second->public_id, 'decision' => 'reject', 'note' => 'Priced too high.'],
@@ -408,7 +408,7 @@ test('a platform rate below the supplier rate is refused and nothing is written'
     $product = websiteTestProduct();
 
     $this->actingAs(supplierListingTestReviewer())->post(route('admin.supplier-listings.decision.store', $listing), [
-        'reason' => 'Try.', 'connect_product_id' => $product->public_id,
+        'reason' => 'Try.', ...supplierTestConnect($product),
         'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate' => '999.99']],
     ])->assertSessionHasErrors('reason');
 
@@ -425,7 +425,7 @@ test('connecting to an existing product changes none of its catalogue data', fun
     $listing = supplierTestListing(Supplier::factory()->create());
 
     $this->actingAs(supplierListingTestReviewer())->post(route('admin.supplier-listings.decision.store', $listing), [
-        'reason' => 'Connect.', 'connect_product_id' => $product->public_id,
+        'reason' => 'Connect.', ...supplierTestConnect($product),
         'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertSessionHasNoErrors();
 
@@ -446,7 +446,7 @@ test('two suppliers on one product keep separate offers and the second never ove
         $listing = supplierTestListing($supplier, [['supplier_rate' => Money::fromDecimal($supplierRate, Currency::BDT)]]);
 
         test()->actingAs($reviewer)->post(route('admin.supplier-listings.decision.store', $listing), [
-            'reason' => 'Approve.', 'connect_product_id' => $product->public_id,
+            'reason' => 'Approve.', ...supplierTestConnect($product),
             'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate' => $platformRate]],
         ])->assertSessionHasNoErrors();
 

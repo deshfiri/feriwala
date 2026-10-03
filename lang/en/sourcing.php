@@ -87,6 +87,22 @@ return [
         ],
     ],
 
+    'picker' => [
+        'heading' => 'Sourcing group',
+        'help' => 'Decides which orders this offer can fulfil. Required to approve; only staff can choose or create a group.',
+        'search' => 'Search groups by name or code',
+        'none' => 'No group matches.',
+        'selected' => 'Selected',
+        'create' => 'Create new group',
+        'create_help' => 'The new group is selected as soon as it is created. Add its products later under Catalogue → Sourcing groups.',
+        'empty_group' => 'no products yet',
+        'canonical' => 'Fulfils orders for: :product',
+        'locked' => 'This product already belongs to :name.',
+        'canonical_variant' => 'Canonical variation it fulfils',
+        'canonical_variant_help' => 'Needed when this product is not the group\'s canonical product. Never matched by label.',
+        'canonical_variant_none' => 'Not needed / use existing mapping',
+    ],
+
     'activate' => 'Activate',
     'deactivate' => 'Deactivate',
 

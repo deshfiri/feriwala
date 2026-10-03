@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
+use App\Domain\Sourcing\Queries\SourcingGroupOptions;
 use App\Domain\Supplier\Actions\DecideSupplierListing;
 use App\Domain\Supplier\Actions\RequestSupplierListingCorrection;
 use App\Domain\Supplier\Enums\ListingStatus;
@@ -127,6 +128,9 @@ class SupplierListingController extends Controller
                 'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(['public_id', 'name'])
                     ->map(fn (Category $c) => ['value' => $c->public_id, 'label' => $c->name])->all(),
             ],
+            // Staff-only: which sourcing group the approved offers fulfil
+            // orders through.
+            'sourcing' => app(SourcingGroupOptions::class)->forReview($reviewer, $listing->connectedProduct),
             'history' => $listing->statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),
@@ -173,10 +177,16 @@ class SupplierListingController extends Controller
             'sku' => ['nullable', 'string', 'max:100', 'required_if:create_product,true'],
             'category_id' => ['nullable', 'string'],
             'brand_id' => ['nullable', 'string'],
+
+            // The sourcing group this product fulfils orders through; chosen
+            // by staff, required when approving unless the product is
+            // already in one.
+            'sourcing_group_id' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'string'],
             'items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
             'items.*.variant_id' => ['nullable', 'string'],
+            'items.*.canonical_variant_id' => ['nullable', 'string'],
 
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
@@ -225,6 +235,7 @@ class SupplierListingController extends Controller
                     'sku' => $validated['sku'] ?? null,
                     'category_id' => $validated['category_id'] ?? null,
                     'brand_id' => $validated['brand_id'] ?? null,
+                    'sourcing_group_id' => $validated['sourcing_group_id'] ?? null,
                 ],
                 $validated['items'],
                 $validated['reason'],

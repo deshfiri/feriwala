@@ -112,6 +112,17 @@ class ProductVariant extends Model
     }
 
     /**
+     * "SKU — Black / M": enough for staff to tell two variations apart without
+     * guessing from the SKU alone. Reads `values`, so eager-load it in lists.
+     */
+    public function label(): string
+    {
+        $values = $this->values->pluck('value')->filter()->implode(' / ');
+
+        return $values === '' ? $this->sku : $this->sku.' — '.$values;
+    }
+
+    /**
      * The wholesale price that applies: this variant's own, else the product's.
      */
     public function effectiveWholesalePrice(): Money

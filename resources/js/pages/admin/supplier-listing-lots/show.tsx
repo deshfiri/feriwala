@@ -3,6 +3,9 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import SourcingGroupPicker, {
+    type SourcingGroupOption,
+} from '@/components/sourcing-group-picker';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -46,6 +49,7 @@ type Entry = {
     status_label: string;
     status_tone: StatusTone;
     connected_product: string | null;
+    connected_group: string | null;
     primary_media_url: string | null;
     items: Item[];
 };
@@ -64,12 +68,19 @@ type Props = {
     };
     supplier: { id: string; business_name: string };
     options: { categories: { value: string; label: string }[] };
+    /** Staff-only: the groups an approved offer can fulfil orders through. */
+    sourcing: {
+        groups: SourcingGroupOption[];
+        can_select: boolean;
+        can_create: boolean;
+    };
 };
 
 type ItemDecision = {
     item_id: string;
     decision: 'skip' | 'approve' | 'reject' | 'correction';
     variant_id: string;
+    canonical_variant_id: string;
     platform_rate: string;
     approved_quantity: string;
     note: string;
@@ -82,6 +93,7 @@ type EntryDecision = {
     connect_product_id: string;
     sku: string;
     category_id: string;
+    sourcing_group_id: string;
     items: ItemDecision[];
 };
 
@@ -98,6 +110,7 @@ export default function AdminSupplierListingLotShow({
     lot,
     supplier,
     options,
+    sourcing,
 }: Props) {
     const { t, locale } = useTranslation();
 
@@ -113,12 +126,14 @@ export default function AdminSupplierListingLotShow({
             connect_product_id: entry.connected_product ?? '',
             sku: '',
             category_id: '',
+            sourcing_group_id: entry.connected_group ?? '',
             items: entry.items
                 .filter((item) => item.status === 'pending')
                 .map<ItemDecision>((item) => ({
                     item_id: item.id,
                     decision: 'skip',
                     variant_id: '',
+                    canonical_variant_id: '',
                     platform_rate: '',
                     approved_quantity: '',
                     note: '',
@@ -174,12 +189,15 @@ export default function AdminSupplierListingLotShow({
                         entry.mode === 'create'
                             ? entry.category_id || null
                             : null,
+                    sourcing_group_id: entry.sourcing_group_id || null,
                     items: entry.items
                         .filter((item) => item.decision !== 'skip')
                         .map((item) => ({
                             item_id: item.item_id,
                             decision: item.decision,
                             variant_id: item.variant_id || null,
+                            canonical_variant_id:
+                                item.canonical_variant_id || null,
                             platform_rate:
                                 item.decision === 'approve'
                                     ? item.platform_rate
@@ -353,6 +371,16 @@ export default function AdminSupplierListingLotShow({
                                                                     item.id,
                                                             )!}
                                                             locale={locale}
+                                                            canonicalVariants={
+                                                                sourcing.groups.find(
+                                                                    (group) =>
+                                                                        group.id ===
+                                                                        (entry.connected_group ??
+                                                                            entryDecision.sourcing_group_id),
+                                                                )
+                                                                    ?.canonical_variants ??
+                                                                []
+                                                            }
                                                             onChange={(patch) =>
                                                                 setItem(
                                                                     entryIndex,
@@ -500,6 +528,34 @@ export default function AdminSupplierListingLotShow({
                                                     )}
                                                 </>
                                             )}
+                                            {sourcing.can_select && (
+                                                <div className="sm:col-span-2">
+                                                    <SourcingGroupPicker
+                                                        groups={sourcing.groups}
+                                                        value={
+                                                            entryDecision.sourcing_group_id
+                                                        }
+                                                        onChange={(id) =>
+                                                            setEntry(
+                                                                entryIndex,
+                                                                {
+                                                                    sourcing_group_id:
+                                                                        id,
+                                                                },
+                                                            )
+                                                        }
+                                                        canCreate={
+                                                            sourcing.can_create
+                                                        }
+                                                        lockedTo={
+                                                            entry.connected_group
+                                                        }
+                                                        error={errorFor(
+                                                            `entries.${entryIndex}.sourcing_group_id`,
+                                                        )}
+                                                    />
+                                                </div>
+                                            )}
                                             <FormField
                                                 label={t(
                                                     'supplier.admin.listings.reason',
@@ -558,12 +614,14 @@ function ItemDecisionFields({
     item,
     decision,
     locale,
+    canonicalVariants,
     onChange,
     errorFor,
 }: {
     item: Item;
     decision: ItemDecision;
     locale: string;
+    canonicalVariants: { id: string; label: string }[];
     onChange: (patch: Partial<ItemDecision>) => void;
     errorFor: (key: string) => string | undefined;
 }) {
@@ -646,6 +704,43 @@ function ItemDecisionFields({
                             </select>
                         )}
                     </FormField>
+                    {canonicalVariants.length > 0 && (
+                        <FormField
+                            label={t('sourcing.picker.canonical_variant')}
+                            description={t(
+                                'sourcing.picker.canonical_variant_help',
+                            )}
+                            error={errorFor('canonical_variant_id')}
+                        >
+                            {(field) => (
+                                <select
+                                    {...field}
+                                    value={decision.canonical_variant_id}
+                                    onChange={(e) =>
+                                        onChange({
+                                            canonical_variant_id:
+                                                e.target.value,
+                                        })
+                                    }
+                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                                >
+                                    <option value="">
+                                        {t(
+                                            'sourcing.picker.canonical_variant_none',
+                                        )}
+                                    </option>
+                                    {canonicalVariants.map((variant) => (
+                                        <option
+                                            key={variant.id}
+                                            value={variant.id}
+                                        >
+                                            {variant.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </FormField>
+                    )}
                     {item.supply_mode === 'ready_stock' && (
                         <FormField
                             label={t(

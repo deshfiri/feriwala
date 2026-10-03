@@ -77,7 +77,7 @@ test('approving one entry and rejecting another rolls the lot up to partially ap
         [
             'listing_id' => $first->public_id,
             'reason' => 'Looks right.',
-            'product' => ['connect_product_id' => $product->public_id],
+            'product' => [...supplierTestConnect($product)],
             'items' => [['item_id' => $first->items()->firstOrFail()->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
         ],
         [
@@ -104,7 +104,7 @@ test('approving every entry rolls the lot up to fully approved', function () {
     app(DecideSupplierListingLot::class)->handle($lot, decideSupplierListingLotTestReviewer(), [[
         'listing_id' => $entry->public_id,
         'reason' => 'Approved.',
-        'product' => ['connect_product_id' => $product->public_id],
+        'product' => [...supplierTestConnect($product)],
         'items' => [['item_id' => $entry->items()->firstOrFail()->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ]]);
 
@@ -120,7 +120,7 @@ test('leaving one entry undecided keeps the lot at under review', function () {
     app(DecideSupplierListingLot::class)->handle($lot, decideSupplierListingLotTestReviewer(), [[
         'listing_id' => $first->public_id,
         'reason' => 'Approved.',
-        'product' => ['connect_product_id' => $product->public_id],
+        'product' => [...supplierTestConnect($product)],
         'items' => [['item_id' => $first->items()->firstOrFail()->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ]]);
 
@@ -140,13 +140,13 @@ test('one entry failing its own decision is reported and skipped, the other stil
             // Platform rate below the supplier rate -- DecideSupplierListing refuses this.
             'listing_id' => $bad->public_id,
             'reason' => 'Try.',
-            'product' => ['connect_product_id' => $product->public_id],
+            'product' => [...supplierTestConnect($product)],
             'items' => [['item_id' => $bad->items()->firstOrFail()->public_id, 'decision' => 'approve', 'platform_rate' => '1.00']],
         ],
         [
             'listing_id' => $good->public_id,
             'reason' => 'Approved.',
-            'product' => ['connect_product_id' => $product->public_id],
+            'product' => [...supplierTestConnect($product)],
             'items' => [['item_id' => $good->items()->firstOrFail()->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
         ],
     ]);
@@ -180,7 +180,7 @@ test('an approved offer carries the supply mode declared on the listing item', f
     app(DecideSupplierListingLot::class)->handle($lot, decideSupplierListingLotTestReviewer(), [[
         'listing_id' => $entry->public_id,
         'reason' => 'Approved.',
-        'product' => ['connect_product_id' => $product->public_id],
+        'product' => [...supplierTestConnect($product)],
         'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ]]);
 
@@ -206,7 +206,7 @@ test('ready stock with no declared quantity and no staff override opens no stock
     app(DecideSupplierListingLot::class)->handle($lot, decideSupplierListingLotTestReviewer(), [[
         'listing_id' => $entry->public_id,
         'reason' => 'Approved, nothing declared yet.',
-        'product' => ['connect_product_id' => $product->public_id],
+        'product' => [...supplierTestConnect($product)],
         'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ]]);
 
@@ -228,7 +228,7 @@ test('ready stock with no declared quantity opens stock once staff supplies an a
     app(DecideSupplierListingLot::class)->handle($lot, decideSupplierListingLotTestReviewer(), [[
         'listing_id' => $entry->public_id,
         'reason' => 'Approved with a staff-set opening figure.',
-        'product' => ['connect_product_id' => $product->public_id],
+        'product' => [...supplierTestConnect($product)],
         'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00', 'approved_quantity' => 20]],
     ]]);
 

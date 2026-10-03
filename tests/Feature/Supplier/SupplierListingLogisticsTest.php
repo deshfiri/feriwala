@@ -59,7 +59,7 @@ it('does not write any logistics to the central product when a reviewer approves
     $this->actingAs(supplierListingLogisticsTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approved as proposed.',
-            'connect_product_id' => $product->public_id,
+            ...supplierTestConnect($product),
             'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
         ])->assertSessionHasNoErrors();
 
@@ -77,7 +77,7 @@ it('writes a reviewer\'s confirmed logistics figures to the central product on a
     $this->actingAs(supplierListingLogisticsTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approved; logistics confirmed as proposed.',
-            'connect_product_id' => $product->public_id,
+            ...supplierTestConnect($product),
             'items' => [[
                 'item_id' => $item->public_id,
                 'decision' => 'approve',
@@ -106,7 +106,7 @@ it('lets a reviewer correct the supplier\'s proposed figure rather than merely c
     $this->actingAs(supplierListingLogisticsTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Supplier\'s proposed weight was wrong; corrected after measuring.',
-            'connect_product_id' => $product->public_id,
+            ...supplierTestConnect($product),
             'items' => [[
                 'item_id' => $item->public_id,
                 'decision' => 'approve',
@@ -135,7 +135,7 @@ it('writes confirmed logistics to the connected variant, not the product, when o
     $this->actingAs(supplierListingLogisticsTestReviewer())
         ->post(route('admin.supplier-listings.decision.store', $listing), [
             'reason' => 'Approved for the M variant.',
-            'connect_product_id' => $product->public_id,
+            ...supplierTestConnect($product),
             'items' => [[
                 'item_id' => $item->public_id,
                 'decision' => 'approve',

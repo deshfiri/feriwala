@@ -1241,6 +1241,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('sourcing-groups.index');
         Route::post('sourcing-groups', [SourcingGroupController::class, 'store'])
             ->name('sourcing-groups.store');
+        Route::post('sourcing-groups/quick', [SourcingGroupController::class, 'quickStore'])
+            ->name('sourcing-groups.quick-store');
         Route::get('sourcing-groups/{group}', [SourcingGroupController::class, 'show'])
             ->name('sourcing-groups.show');
         Route::patch('sourcing-groups/{group}', [SourcingGroupController::class, 'update'])
