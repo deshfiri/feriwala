@@ -481,7 +481,7 @@ export function useNavigation(): {
                 permissions['referral.view_settings']
                     ? [
                           {
-                              title: 'Referrals',
+                              title: 'Partner Network',
                               href: permissions['referral.view']
                                   ? referralCommissions()
                                   : referralSettings(),

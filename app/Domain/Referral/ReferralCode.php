@@ -38,7 +38,7 @@ class ReferralCode
         }
 
         throw new RuntimeException(
-            'Could not generate a unique referral code after '.self::ATTEMPTS.' attempts.'
+            'Could not generate a unique partner code after '.self::ATTEMPTS.' attempts.'
         );
     }
 

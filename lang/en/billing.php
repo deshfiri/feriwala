@@ -109,7 +109,7 @@ return [
         'add_rule' => 'Add a rule',
         'scope' => 'Applies to',
         'scope_value' => 'Which one',
-        'scope_value_help' => 'What the rule targets: a product SKU, a category slug, or a charge such as package_fee or wholesale_delivery. Leave blank for a rule covering everything.',
+        'scope_value_help' => 'What the rule targets: a product BPC, a category slug, or a charge such as package_fee or wholesale_delivery. Leave blank for a rule covering everything.',
         'mode' => 'Pricing',
         'priority' => 'Priority',
         'priority_help' => 'Higher wins between rules of the same specificity.',

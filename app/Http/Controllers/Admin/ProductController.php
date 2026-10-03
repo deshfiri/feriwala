@@ -27,6 +27,10 @@ use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Actions\SyncProductStockStatus;
 use App\Domain\Package\Models\Package;
+use App\Domain\Sourcing\Actions\ManageSourcingGroups;
+use App\Domain\Sourcing\Exceptions\SourcingGroupRefused;
+use App\Domain\Sourcing\Models\ProductSourcingGroup;
+use App\Domain\Sourcing\Queries\SourcingGroupOptions;
 use App\Domain\Storage\ManagedStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
@@ -199,6 +203,10 @@ class ProductController extends Controller
             'options' => $this->options(),
             'can' => $this->abilities($actor),
 
+            // Staff-only: lets the new product be put into a sourcing group
+            // from a pop-up while it is being added.
+            'sourcing' => app(SourcingGroupOptions::class)->forReview($actor, null),
+
             // Media and variations are added once the product exists to hang
             // them on.
             'media' => [],
@@ -224,9 +232,49 @@ class ProductController extends Controller
 
         $product = $this->products->create($actor, $request->productAttributes());
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.created', ['name' => $product->name])]);
+        $assigned = $this->assignToSourcingGroup($actor, $product, $request->validated('sourcing_group_id'));
+
+        // One toast: the product is created either way; a refused group
+        // assignment is said plainly beside it as a warning.
+        Inertia::flash('toast', [
+            'type' => is_string($assigned) ? 'warning' : 'success',
+            'message' => trim(__('catalog.products.created', ['name' => $product->name]).' '.match (true) {
+                $assigned === true => __('catalog.products.sourcing_assigned'),
+                is_string($assigned) => $assigned,
+                default => '',
+            }),
+        ]);
 
         return redirect()->route('admin.catalog.products.edit', $product->public_id);
+    }
+
+    /**
+     * Put a just-created product into the chosen sourcing group.
+     *
+     * Never blocks the product: the product already exists, so a refusal (no
+     * permission, inactive group) is reported beside the success rather than
+     * undoing it. Returns true on success, a message on refusal, null when no
+     * group was chosen.
+     */
+    protected function assignToSourcingGroup(User $actor, Product $product, ?string $groupId): bool|string|null
+    {
+        if (blank($groupId)) {
+            return null;
+        }
+
+        $group = ProductSourcingGroup::query()->where('public_id', $groupId)->first();
+
+        if ($group === null || ! $actor->can('update', $group)) {
+            return __('catalog.products.sourcing_forbidden');
+        }
+
+        try {
+            app(ManageSourcingGroups::class)->addProduct($actor, $group, $product, 'Assigned when the product was added.');
+        } catch (SourcingGroupRefused $exception) {
+            return $exception->getMessage();
+        }
+
+        return true;
     }
 
     public function edit(Request $request, string $product): Response

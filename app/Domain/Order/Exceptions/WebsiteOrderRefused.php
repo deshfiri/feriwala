@@ -51,7 +51,7 @@ class WebsiteOrderRefused extends RuntimeException
 
     public static function insufficientStock(string $sku, int $requested, int $available): self
     {
-        return new self(422, 'insufficient_stock', sprintf('Only %d units of SKU %s remain.', $available, $sku), [
+        return new self(422, 'insufficient_stock', sprintf('Only %d units of BPC %s remain.', $available, $sku), [
             'sku' => $sku,
             'requested' => $requested,
             'available' => $available,

@@ -373,4 +373,4 @@ Schedule::call(fn () => app(ReleaseDueReferralCommissions::class)->handle())
     ->everyFiveMinutes()
     ->onOneServer()
     ->withoutOverlapping()
-    ->description('Pay due referral commissions and retry owed reversals (D24)');
+    ->description('Pay due Partner Network commissions and retry owed reversals (D24)');

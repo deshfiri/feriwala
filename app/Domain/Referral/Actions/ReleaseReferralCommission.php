@@ -75,7 +75,7 @@ class ReleaseReferralCommission
                     source: 'referral',
                     description: $commission->isJoiningReward()
                         ? 'Joining reward'
-                        : 'Referral commission — level '.$commission->level,
+                        : 'Partner Network commission — level '.$commission->level,
                     idempotencyKey: $commission->idempotencyKey(),
                 ),
             );

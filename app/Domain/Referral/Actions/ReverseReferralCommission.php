@@ -88,7 +88,7 @@ class ReverseReferralCommission
                         source: 'referral',
                         description: $locked->isJoiningReward()
                             ? 'Joining reward reversed'
-                            : 'Referral commission reversed — level '.$locked->level,
+                            : 'Partner Network commission reversed — level '.$locked->level,
                         idempotencyKey: $locked->reversalKey(),
                         reason: (string) $locked->reversal_reason,
                         actorId: $actor?->id,

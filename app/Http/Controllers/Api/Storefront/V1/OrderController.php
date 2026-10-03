@@ -72,7 +72,7 @@ class OrderController extends StorefrontController
         $skus = array_map(fn (array $item) => mb_strtoupper(trim($item['sku'])), $input['items']);
 
         if (count(array_unique($skus)) !== count($skus)) {
-            return $this->invalid($request, ['items' => ['Each SKU may appear once; add the quantity to one line instead.']]);
+            return $this->invalid($request, ['items' => ['Each BPC may appear once; add the quantity to one line instead.']]);
         }
 
         $mobile = $this->mobiles->normalise((string) $input['customer']['phone']);

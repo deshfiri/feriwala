@@ -43,7 +43,7 @@ return [
         'canonical' => 'Canonical',
         'canonical_help' => 'Its variations define what an order requires.',
         'add_heading' => 'Add a product',
-        'search_label' => 'Search products by name or SKU',
+        'search_label' => 'Search products by name or BPC',
         'search_hint' => 'Type at least two letters. Products already in a group are not listed.',
         'no_matches' => 'No ungrouped product matches.',
         'add' => 'Add',

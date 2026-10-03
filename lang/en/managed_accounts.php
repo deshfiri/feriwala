@@ -26,7 +26,7 @@ return [
         'email' => 'Email',
         'mobile' => 'Mobile',
         'country' => 'Country',
-        'referral_code' => 'Referral code',
+        'referral_code' => 'Partner code',
         'referral_help' => 'Optional. Only an active account\'s code is accepted.',
         'contact_person_name' => 'Contact person',
         'business_address' => 'Business address',

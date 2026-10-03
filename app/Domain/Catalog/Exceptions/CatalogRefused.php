@@ -296,6 +296,6 @@ class CatalogRefused extends RuntimeException
 
     public static function noFreeSku(string $base): self
     {
-        return new self("No free SKU could be made from {$base}. Add this variation by hand with an SKU of your choosing.");
+        return new self("No free BPC could be made from {$base}. Add this variation by hand with a BPC of your choosing.");
     }
 }

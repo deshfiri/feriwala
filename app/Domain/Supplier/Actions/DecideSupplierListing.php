@@ -193,7 +193,7 @@ class DecideSupplierListing
             $category = $productDecision['category_id'] ?? $listing->category?->public_id;
 
             if (blank($category) || blank($productDecision['sku'] ?? null)) {
-                throw new InvalidArgumentException('Creating a product needs a SKU and a category.');
+                throw new InvalidArgumentException('Creating a product needs a BPC and a category.');
             }
 
             return $this->products->create($reviewer, [

@@ -63,7 +63,7 @@ enum PlatformRole: string
             self::WalletManager => 'Wallet Manager',
             self::WithdrawalApprover => 'Withdrawal Approver',
             self::PaymentManager => 'Payment Manager',
-            self::ReferralManager => 'Referral Manager',
+            self::ReferralManager => 'Partner Network Manager',
             self::SmsManager => 'SMS Manager',
             self::SeoManager => 'SEO Manager',
             self::ReportViewer => 'Report Viewer',

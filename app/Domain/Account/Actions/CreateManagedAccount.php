@@ -66,7 +66,7 @@ class CreateManagedAccount
 
             if (filled($data['referral_code'] ?? null) && $referrer === null) {
                 throw ValidationException::withMessages([
-                    'referral_code' => 'That referral code does not belong to an active account.',
+                    'referral_code' => 'That partner code does not belong to an active account.',
                 ]);
             }
 

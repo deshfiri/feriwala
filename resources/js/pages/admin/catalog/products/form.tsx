@@ -39,6 +39,9 @@ import type {
     VariantRow,
 } from '@/types';
 import SeoFields from './seo-fields';
+import SourcingGroupField, {
+    type ProductSourcing,
+} from './sourcing-group-field';
 import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
@@ -53,6 +56,8 @@ type Props = {
     product: ProductDetail | null;
     options: { categories: CatalogOption[]; brands: CatalogOption[] };
     can: CatalogAbilities;
+    /** Staff-only, new products only: the groups a product can be added to. */
+    sourcing?: ProductSourcing;
     variants: VariantRow[];
     attributes: AttributeOption[];
     media: MediaRow[];
@@ -154,6 +159,7 @@ export default function ProductForm({
     product,
     options,
     can,
+    sourcing,
     variants,
     attributes,
     media,
@@ -607,6 +613,12 @@ export default function ProductForm({
                                             </FormField>
                                         </div>
                                     </SectionCard>
+
+                                    {!editing && sourcing?.can_select && (
+                                        <SourcingGroupField
+                                            sourcing={sourcing}
+                                        />
+                                    )}
 
                                     <SectionCard
                                         title={t(

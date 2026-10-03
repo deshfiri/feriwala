@@ -141,7 +141,7 @@ enum LedgerTransactionType: string
             self::TopUpCredit => 'Top-up',
             self::SalesCredit => 'Sales earnings',
             self::CommissionCredit => 'Commission',
-            self::ReferralRewardCredit => 'Referral reward',
+            self::ReferralRewardCredit => 'Partner Network reward',
             self::JoiningRewardCredit => 'Joining reward',
             self::CodCollectionCredit => 'COD collection',
             self::PromotionalCredit => 'Promotional credit',
@@ -161,7 +161,7 @@ enum LedgerTransactionType: string
             self::RefundDebit => 'Refund',
             self::ReturnAdjustment => 'Return adjustment',
             self::CommissionReversal => 'Commission reversal',
-            self::ReferralRewardReversal => 'Referral reward reversal',
+            self::ReferralRewardReversal => 'Partner Network reward reversal',
             self::ManualAdjustment => 'Manual adjustment',
         };
     }

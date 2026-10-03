@@ -72,12 +72,12 @@ return [
 
         'inventory.stock_low' => [
             'title' => 'Stock is running low',
-            'description' => 'A SKU has fallen to its low-stock threshold in a warehouse.',
+            'description' => 'A BPC has fallen to its low-stock threshold in a warehouse.',
         ],
 
         'inventory.stock_out' => [
             'title' => 'Stock has run out',
-            'description' => 'A SKU has no stock available in a warehouse.',
+            'description' => 'A BPC has no stock available in a warehouse.',
         ],
 
         'orders.website_order_paid' => [
@@ -86,8 +86,8 @@ return [
         ],
 
         'referral.commission_paid' => [
-            'title' => 'A referral commission was paid',
-            'description' => 'It is in your wallet. Your referrals page shows each earning and its level.',
+            'title' => 'A Partner Network commission was paid',
+            'description' => 'It is in your wallet. Your Partner Network page shows each earning and its level.',
         ],
 
         'website.status_changed' => [

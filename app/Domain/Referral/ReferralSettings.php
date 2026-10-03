@@ -39,8 +39,8 @@ class ReferralSettings
             'referral',
             SettingType::Boolean,
             false,
-            label: 'Multi-level referral commission',
-            description: 'Whether qualifying events pay referral commission. Off by default (D24).',
+            label: 'Multi-level Partner Network commission',
+            description: 'Whether qualifying events pay Partner Network commission. Off by default (D24).',
         );
 
         $this->settings->set(self::ENABLED, $enabled, $actor->id);

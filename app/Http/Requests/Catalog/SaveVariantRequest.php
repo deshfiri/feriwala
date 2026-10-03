@@ -143,7 +143,7 @@ class SaveVariantRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'sku' => 'SKU',
+            'sku' => 'BPC',
             'values' => 'combination',
             'wholesale_price' => 'wholesale price',
             'base_cost' => 'base cost',

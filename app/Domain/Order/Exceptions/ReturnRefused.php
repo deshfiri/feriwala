@@ -49,7 +49,7 @@ class ReturnRefused extends RuntimeException
 
     public static function lineNotReturnable(string $sku, int $requested, int $returnable): self
     {
-        return new self(422, 'quantity_not_returnable', sprintf('Only %d of SKU %s can be sent back.', $returnable, $sku), [
+        return new self(422, 'quantity_not_returnable', sprintf('Only %d of BPC %s can be sent back.', $returnable, $sku), [
             'sku' => $sku,
             'requested' => $requested,
             'returnable' => $returnable,
@@ -81,7 +81,7 @@ class ReturnRefused extends RuntimeException
 
     public static function moreThanApproved(string $sku, int $received, int $approved): self
     {
-        return new self(422, 'more_than_approved', sprintf('Only %d of SKU %s was approved to come back.', $approved, $sku), [
+        return new self(422, 'more_than_approved', sprintf('Only %d of BPC %s was approved to come back.', $approved, $sku), [
             'sku' => $sku,
             'received' => $received,
             'approved' => $approved,
@@ -98,7 +98,7 @@ class ReturnRefused extends RuntimeException
     public static function nothingSoldToRestore(string $sku): self
     {
         return new self(409, 'stock_not_recorded_as_sold', sprintf(
-            'SKU %s was never recorded as sold, so it cannot be brought back into stock.',
+            'BPC %s was never recorded as sold, so it cannot be brought back into stock.',
             $sku,
         ), ['sku' => $sku]);
     }

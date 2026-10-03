@@ -74,7 +74,7 @@ return [
         'country' => 'Country',
         'nationality' => 'Nationality',
         'nationality_placeholder' => 'Bangladeshi',
-        'referral_code' => 'Referral code',
+        'referral_code' => 'Partner code',
         'referral_placeholder' => 'Optional',
         'terms' => 'I accept the terms and conditions',
         'privacy' => 'I accept the privacy policy',

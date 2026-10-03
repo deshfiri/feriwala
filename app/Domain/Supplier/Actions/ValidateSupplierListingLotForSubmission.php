@@ -66,7 +66,7 @@ class ValidateSupplierListingLotForSubmission
             }
 
             if ($entry->items->isEmpty()) {
-                $entryErrors[] = 'At least one Supplier rate/SKU entry is required.';
+                $entryErrors[] = 'At least one Supplier rate/BPC entry is required.';
             }
 
             if ($entry->primaryMedia() === null) {

@@ -377,7 +377,7 @@ return [
                 'suppliers' => 'All Suppliers',
                 'warehouses' => 'All Warehouses',
             ],
-            'catalogue_search' => 'Search by product, SKU, variant, Supplier or warehouse',
+            'catalogue_search' => 'Search by product, BPC, variant, Supplier or warehouse',
             'load_more' => 'Load more',
             'not_related' => 'Not yet linked to this product',
             'related' => 'Linked to this product',

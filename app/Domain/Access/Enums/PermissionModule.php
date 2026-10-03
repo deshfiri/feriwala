@@ -82,7 +82,7 @@ enum PermissionModule: string
             self::Fulfillment => 'Fulfillment',
             self::Courier => 'Couriers',
             self::Commission => 'Commissions',
-            self::Referral => 'Referrals',
+            self::Referral => 'Partner Network',
             self::Withdrawal => 'Withdrawals',
             self::Settlement => 'COD & settlement',
             self::Notification => 'Notifications',

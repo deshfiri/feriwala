@@ -32,6 +32,8 @@ type Props = {
     /** The group the connected product already belongs to, if any. */
     lockedTo?: string | null;
     error?: string;
+    /** Called with a group just created from the dialog, before it is selected. */
+    onCreated?: (group: SourcingGroupOption) => void;
 };
 
 /**
@@ -49,6 +51,7 @@ export default function SourcingGroupPicker({
     canCreate,
     lockedTo = null,
     error,
+    onCreated,
 }: Props) {
     const { t, locale } = useTranslation();
     const [groups, setGroups] = useState(initialGroups);
@@ -180,6 +183,7 @@ export default function SourcingGroupPicker({
                 onOpenChange={setCreating}
                 onCreated={(group) => {
                     setGroups((current) => [group, ...current]);
+                    onCreated?.(group);
                     onChange(group.id);
                     setCreating(false);
                 }}

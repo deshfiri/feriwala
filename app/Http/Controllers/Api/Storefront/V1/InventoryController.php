@@ -54,13 +54,13 @@ class InventoryController extends StorefrontController
         $sku = mb_strtoupper(trim($sku));
 
         if (! in_array($sku, $this->publishedSkus($website), true)) {
-            return StorefrontError::respond($request, 404, 'not_found', 'No such SKU on this website.');
+            return StorefrontError::respond($request, 404, 'not_found', 'No such BPC on this website.');
         }
 
         $availability = $this->stock->forSkus([$sku], $website->businessAccount)[$sku] ?? null;
 
         if ($availability === null) {
-            return StorefrontError::respond($request, 404, 'not_found', 'No such SKU on this website.');
+            return StorefrontError::respond($request, 404, 'not_found', 'No such BPC on this website.');
         }
 
         return new JsonResponse($availability);

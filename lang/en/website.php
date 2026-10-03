@@ -126,7 +126,7 @@ return [
 
     'products' => [
         'title' => 'Website products',
-        'search' => 'Search by product name or SKU',
+        'search' => 'Search by product name or BPC',
         'choose' => 'Choose products',
         'categories' => 'Categories',
         'empty' => 'This website sells nothing yet',

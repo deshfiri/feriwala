@@ -26,7 +26,7 @@ return [
         'email' => 'ইমেইল',
         'mobile' => 'মোবাইল',
         'country' => 'দেশ',
-        'referral_code' => 'রেফারেল কোড',
+        'referral_code' => 'পার্টনার কোড',
         'referral_help' => 'ঐচ্ছিক। শুধু সক্রিয় অ্যাকাউন্টের কোড গ্রহণযোগ্য।',
         'contact_person_name' => 'যোগাযোগকারী ব্যক্তি',
         'business_address' => 'ব্যবসার ঠিকানা',

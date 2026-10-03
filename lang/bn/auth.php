@@ -79,7 +79,7 @@ return [
         'country' => 'দেশ',
         'nationality' => 'জাতীয়তা',
         'nationality_placeholder' => 'বাংলাদেশি',
-        'referral_code' => 'রেফারেল কোড',
+        'referral_code' => 'পার্টনার কোড',
         'referral_placeholder' => 'ঐচ্ছিক',
         'terms' => 'আমি শর্তাবলি মেনে নিচ্ছি',
         'privacy' => 'আমি গোপনীয়তা নীতি মেনে নিচ্ছি',

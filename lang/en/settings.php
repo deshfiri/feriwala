@@ -25,7 +25,7 @@ return [
             'deposit_rules' => 'What accounts are required to deposit and keep.',
             'withdrawal_limits' => 'Minimum and maximum withdrawal amounts, and per-account overrides.',
             'website_pricing' => 'What partners may charge for what they sell.',
-            'referral_settings' => 'The multi-level referral programme configuration.',
+            'referral_settings' => 'The multi-level Partner Network programme configuration.',
             'packages' => 'The subscription packages accounts can choose from.',
             'kyc_requirements' => 'The verification documents a business is asked for.',
             'account_verification_settings' => 'Whether mobile number verification is a required onboarding step.',
