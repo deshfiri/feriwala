@@ -6,12 +6,13 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
 
 describe('the specification', function () {
-    it('defines exactly the twenty-four permission verbs in §32.2', function () {
+    it('defines exactly the twenty-five permission verbs in §32.2', function () {
         // Twenty from the original list, View settings added by D24, Suspend
-        // and Review added by D25 for the Supplier account domain, and
-        // Reactivate added when suspending a *trading* business became its own
-        // permission rather than riding on `account.reject`.
-        expect(PermissionAction::cases())->toHaveCount(24);
+        // and Review added by D25 for the Supplier account domain, Reactivate
+        // added when suspending a *trading* business became its own permission
+        // rather than riding on `account.reject`, and Settle manually added for
+        // marking a payment paid by hand.
+        expect(PermissionAction::cases())->toHaveCount(25);
     });
 
     it('defines exactly the twenty-one administrative roles in §32.1', function () {
