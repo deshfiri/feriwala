@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Actions\ManagePasswordSetup;
+use App\Domain\Account\Actions\VerifyContactManually;
 use App\Domain\Supplier\Actions\CreateManagedSupplier;
 use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
@@ -10,6 +11,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -61,6 +63,20 @@ class ManagedSupplierController extends Controller
         $this->guard(fn () => $setup->revoke($supplier, ManagePasswordSetup::SUPPLIERS, $this->actor($request), $validated['reason']));
 
         return back()->with('success', __('managed_accounts.link_revoked'));
+    }
+
+    public function verifyContact(Request $request, Supplier $supplier, VerifyContactManually $verify): RedirectResponse
+    {
+        Gate::authorize('verify', $supplier);
+
+        $validated = $request->validate([
+            'channel' => ['required', Rule::in([VerifyContactManually::EMAIL, VerifyContactManually::MOBILE])],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $this->guard(fn () => $verify->handle($this->actor($request), $supplier, $validated['channel'], $validated['reason']));
+
+        return back()->with('success', __('managed_accounts.verified'));
     }
 
     protected function guard(callable $change): void

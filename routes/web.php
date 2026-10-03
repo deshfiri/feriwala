@@ -651,6 +651,7 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('suppliers', [ManagedSupplierController::class, 'store'])->name('suppliers.store');
         Route::post('suppliers/{supplier}/setup-link', [ManagedSupplierController::class, 'sendSetupLink'])->name('suppliers.setup-link.store');
         Route::delete('suppliers/{supplier}/setup-link', [ManagedSupplierController::class, 'revokeSetupLink'])->name('suppliers.setup-link.destroy');
+        Route::post('suppliers/{supplier}/verify-contact', [ManagedSupplierController::class, 'verifyContact'])->name('suppliers.verify-contact');
         Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
         Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
         Route::get('suppliers/{supplier}/kyc/documents/{document}', [SupplierController::class, 'showDocument'])
@@ -744,6 +745,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('accounts.setup-link.store');
         Route::delete('accounts/{account}/setup-link', [ManagedAccountController::class, 'revokeSetupLink'])
             ->name('accounts.setup-link.destroy');
+        Route::post('accounts/{account}/verify-contact', [ManagedAccountController::class, 'verifyContact'])
+            ->name('accounts.verify-contact');
 
         Route::get('accounts/{account}', [AccountController::class, 'show'])
             ->name('accounts.show');

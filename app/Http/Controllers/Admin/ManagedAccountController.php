@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Actions\CreateManagedAccount;
 use App\Domain\Account\Actions\ManagePasswordSetup;
+use App\Domain\Account\Actions\VerifyContactManually;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Support\Localization\Countries;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -67,6 +69,20 @@ class ManagedAccountController extends Controller
         $this->guard(fn () => $setup->revoke($account->owner()->firstOrFail(), ManagePasswordSetup::USERS, $this->actor($request), $validated['reason']));
 
         return back()->with('success', __('managed_accounts.link_revoked'));
+    }
+
+    public function verifyContact(Request $request, BusinessAccount $account, VerifyContactManually $verify): RedirectResponse
+    {
+        Gate::authorize('verifyContact', $account);
+
+        $validated = $request->validate([
+            'channel' => ['required', Rule::in([VerifyContactManually::EMAIL, VerifyContactManually::MOBILE])],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $this->guard(fn () => $verify->handle($this->actor($request), $account->owner()->firstOrFail(), $validated['channel'], $validated['reason']));
+
+        return back()->with('success', __('managed_accounts.verified'));
     }
 
     protected function guard(callable $change): void

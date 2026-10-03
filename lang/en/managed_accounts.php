@@ -4,6 +4,12 @@ return [
     'created' => 'Account created. A password-setup link has been sent to the owner.',
     'link_sent' => 'A new password-setup link was sent. Any earlier link no longer works.',
     'link_revoked' => 'The password-setup link was revoked.',
+    'verified' => 'Confirmed by staff. The person has been notified.',
+    'channels' => ['email' => 'email address', 'mobile' => 'mobile number'],
+    'verified_mail' => [
+        'subject' => 'Your contact detail was confirmed',
+        'line' => 'A member of our team confirmed your :channel for you.',
+    ],
 
     'partner' => [
         'title' => 'Add Client/Partner',
