@@ -33,4 +33,20 @@ class SupplierKycField extends Model
     {
         return $this->belongsTo(SupplierKycSubmission::class, 'supplier_kyc_submission_id');
     }
+
+    /**
+     * All but the last four characters hidden, so the form can show that a
+     * value is on file without echoing it back in full.
+     */
+    public function masked(): string
+    {
+        $value = (string) $this->value;
+        $length = strlen($value);
+
+        if ($length <= 4) {
+            return str_repeat('•', $length);
+        }
+
+        return str_repeat('•', $length - 4).substr($value, -4);
+    }
 }

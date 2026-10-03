@@ -82,12 +82,12 @@ export default function WebsiteProducts({
     const allowance =
         publishing.limit === null
             ? t('website.products.published_unlimited', {
-                  used: String(publishing.used),
-              })
+                used: String(publishing.used),
+            })
             : t('website.products.published_of', {
-                  used: String(publishing.used),
-                  limit: String(publishing.limit),
-              });
+                used: String(publishing.used),
+                limit: String(publishing.limit),
+            });
 
     const priceCell = (row: WebsiteSelection) => (
         <div className="space-y-1">
