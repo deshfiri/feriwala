@@ -150,6 +150,10 @@ class HandleInertiaRequests extends Middleware
         [PermissionModule::Courier, PermissionAction::View],
         [PermissionModule::Integration, PermissionAction::View],
         [PermissionModule::Account, PermissionAction::ManageSettings],
+
+        // Opening a Client/Partner or Supplier account on someone's behalf.
+        [PermissionModule::Account, PermissionAction::Create],
+        [PermissionModule::Supplier, PermissionAction::Create],
     ];
 
     /**

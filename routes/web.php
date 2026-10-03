@@ -17,6 +17,8 @@ use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReverificationCancellationController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
+use App\Http\Controllers\Admin\ManagedAccountController;
+use App\Http\Controllers\Admin\ManagedSupplierController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderReturnController;
 use App\Http\Controllers\Admin\PackageAssignmentController;
@@ -644,6 +646,11 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * wholly separate queue from the Client/Partner KYC above — see
          * app/Domain/Supplier/Policies for who may reach each action.
          */
+        // Declared before `{supplier}` so "create" is never read as an id.
+        Route::get('suppliers/create', [ManagedSupplierController::class, 'create'])->name('suppliers.create');
+        Route::post('suppliers', [ManagedSupplierController::class, 'store'])->name('suppliers.store');
+        Route::post('suppliers/{supplier}/setup-link', [ManagedSupplierController::class, 'sendSetupLink'])->name('suppliers.setup-link.store');
+        Route::delete('suppliers/{supplier}/setup-link', [ManagedSupplierController::class, 'revokeSetupLink'])->name('suppliers.setup-link.destroy');
         Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
         Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
         Route::get('suppliers/{supplier}/kyc/documents/{document}', [SupplierController::class, 'showDocument'])
@@ -729,6 +736,14 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('accounts', [AccountController::class, 'index'])
             ->name('accounts.index');
+        Route::get('accounts/create', [ManagedAccountController::class, 'create'])
+            ->name('accounts.create');
+        Route::post('accounts', [ManagedAccountController::class, 'store'])
+            ->name('accounts.store');
+        Route::post('accounts/{account}/setup-link', [ManagedAccountController::class, 'sendSetupLink'])
+            ->name('accounts.setup-link.store');
+        Route::delete('accounts/{account}/setup-link', [ManagedAccountController::class, 'revokeSetupLink'])
+            ->name('accounts.setup-link.destroy');
 
         Route::get('accounts/{account}', [AccountController::class, 'show'])
             ->name('accounts.show');

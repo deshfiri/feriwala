@@ -72,6 +72,8 @@ return [
     'shipments' => 'শিপমেন্ট',
     'delivery_settings' => 'ডেলিভারি সেটিংস',
     'sourcing_groups' => 'সোর্সিং গ্রুপ',
+    'add_account' => 'ক্লায়েন্ট/পার্টনার যোগ করুন',
+    'add_supplier' => 'সরবরাহকারী যোগ করুন',
 
     'search' => [
         'open' => 'পেজ খুঁজুন',

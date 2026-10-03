@@ -78,6 +78,8 @@ return [
     'shipments' => 'Shipments',
     'delivery_settings' => 'Delivery settings',
     'sourcing_groups' => 'Sourcing groups',
+    'add_account' => 'Add Client/Partner',
+    'add_supplier' => 'Add Supplier',
 
     'search' => [
         'open' => 'Search pages',

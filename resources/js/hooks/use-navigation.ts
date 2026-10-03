@@ -33,7 +33,10 @@ import {
     dashboard as adminDashboard,
     settings as settingsHub,
 } from '@/routes/admin';
-import { index as accountDirectory } from '@/routes/admin/accounts';
+import {
+    create as createAccount,
+    index as accountDirectory,
+} from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as accountVerificationSettings } from '@/routes/admin/account-verification-settings';
 import { index as accountWithdrawals } from '@/routes/admin/account-withdrawals';
@@ -71,7 +74,10 @@ import { index as supplierListings } from '@/routes/admin/supplier-listings';
 import { index as supplierOffers } from '@/routes/admin/supplier-offers';
 import { index as supplierPayables } from '@/routes/admin/supplier-payables';
 import { index as supplierStock } from '@/routes/admin/supplier-stock';
-import { index as supplierApplications } from '@/routes/admin/suppliers';
+import {
+    create as createSupplier,
+    index as supplierApplications,
+} from '@/routes/admin/suppliers';
 import { index as supplierWallets } from '@/routes/admin/supplier-wallets';
 import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawals';
 import { index as accountWallets } from '@/routes/admin/wallets';
@@ -517,6 +523,14 @@ export function useNavigation(): {
                                       title: t('nav.accounts'),
                                       href: accountDirectory(),
                                   },
+                                  ...(permissions['account.create']
+                                      ? [
+                                            {
+                                                title: t('nav.add_account'),
+                                                href: createAccount(),
+                                            },
+                                        ]
+                                      : []),
                                   {
                                       title: t('nav.activation_approvals'),
                                       href: activationQueue(),
@@ -621,6 +635,14 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.suppliers'),
                                                 href: supplierApplications(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['supplier.create']
+                                      ? [
+                                            {
+                                                title: t('nav.add_supplier'),
+                                                href: createSupplier(),
                                             },
                                         ]
                                       : []),

@@ -203,6 +203,12 @@ class PermissionCatalogue
             //   supplier.view / supplier.approve / supplier.suspend
             Module::Supplier->value => [
                 Action::View, Action::Approve, Action::Suspend,
+
+                // Staff-managed Supplier accounts: opening one on a
+                // Supplier's behalf (`create`), changing its non-immutable
+                // profile and its password-setup invitation (`edit`), and
+                // manually confirming email or mobile (`verify`).
+                Action::Create, Action::Edit, Action::Verify,
             ],
 
             //   supplier.kyc.view / supplier.kyc.review

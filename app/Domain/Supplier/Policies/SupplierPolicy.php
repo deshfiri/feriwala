@@ -49,6 +49,31 @@ class SupplierPolicy
         return $user->can($this->permission(PermissionAction::Suspend));
     }
 
+    /**
+     * Opening a Supplier account on a Supplier's behalf.
+     */
+    public function create(User $user): bool
+    {
+        return $user->can($this->permission(PermissionAction::Create));
+    }
+
+    /**
+     * Changing a Supplier's non-immutable profile and managing their
+     * password-setup invitation.
+     */
+    public function update(User $user, Supplier $supplier): bool
+    {
+        return $user->can($this->permission(PermissionAction::Edit));
+    }
+
+    /**
+     * Manually confirming a Supplier's email or mobile.
+     */
+    public function verify(User $user, Supplier $supplier): bool
+    {
+        return $user->can($this->permission(PermissionAction::Verify));
+    }
+
     protected function permission(PermissionAction $action): string
     {
         return PermissionCatalogue::name(PermissionModule::Supplier, $action);

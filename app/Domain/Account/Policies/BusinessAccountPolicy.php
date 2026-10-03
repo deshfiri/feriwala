@@ -135,6 +135,40 @@ class BusinessAccountPolicy
         return $user->can($this->permission(PermissionAction::Reactivate));
     }
 
+    /**
+     * Opening an account on someone's behalf.
+     */
+    public function create(User $user): bool
+    {
+        return $user->can($this->permission(PermissionAction::Create));
+    }
+
+    /**
+     * Changing an account's non-immutable details and managing its
+     * password-setup invitation. Never one's own business: staff do not
+     * administer an account they belong to.
+     */
+    public function manageIdentity(User $user, BusinessAccount $account): bool
+    {
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::Edit));
+    }
+
+    /**
+     * Manually confirming the owner's email or mobile.
+     */
+    public function verifyContact(User $user, BusinessAccount $account): bool
+    {
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::Verify));
+    }
+
     protected function permission(PermissionAction $action): string
     {
         return PermissionCatalogue::name(PermissionModule::Account, $action);

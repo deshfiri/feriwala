@@ -355,7 +355,10 @@ enum PlatformRole: string
             // narrower roles can be split out once real usage shows where
             // the boundary actually falls.
             self::SupplierManager => [
-                Module::Supplier->value => [Action::View, Action::Approve, Action::Suspend],
+                Module::Supplier->value => [
+                    Action::View, Action::Approve, Action::Suspend,
+                    Action::Create, Action::Edit, Action::Verify,
+                ],
                 Module::SupplierKyc->value => [Action::View, Action::Review],
                 Module::SupplierListing->value => [Action::View, Action::Review, Action::Approve],
                 Module::SupplierPricing->value => [Action::View, Action::Edit],
