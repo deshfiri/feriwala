@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Erp;
 
+use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\SettlePayment;
 use App\Domain\Billing\Actions\VerifyGatewayReturn;
@@ -10,6 +11,7 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Http\Controllers\Controller;
+use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayResult;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
@@ -69,22 +71,39 @@ class PaymentReturnController extends Controller
 
         $callback = $this->callbackFor($payment, $request);
 
-        if ($callback === null || $callback->gatewayReference === null) {
-            // Returned to the success URL without a transaction to check. The
-            // IPN is the reliable half; say nothing definite.
-            return to_route('checkout.show')->with('info', __('payment.return.checking'));
+        /*
+         * Where to send a payer who still has no definite answer once every
+         * attempt below is exhausted — kept distinct from the generic "still
+         * open" landing a moment later, exactly as it was before the direct
+         * lookup was added: a callback with nothing usable in it reads as an
+         * ordinary "keep waiting", while the gateway being unreachable reads
+         * as "we genuinely could not ask" and goes to the status page instead
+         * of back to checkout.
+         */
+        $unresolved = fn () => to_route('checkout.show')->with('info', __('payment.return.checking'));
+
+        if ($callback !== null && $callback->gatewayReference !== null) {
+            try {
+                $settle->handle($payment, $callback->gatewayReference);
+            } catch (GatewayUnavailable $e) {
+                $log->channel('payment')->warning('Could not verify on return', [
+                    'payment' => $payment->reference,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $unresolved = fn () => to_route('onboarding.status')->with('info', __('payment.return.checking'));
+            }
         }
 
-        try {
-            $settle->handle($payment, $callback->gatewayReference);
-        } catch (GatewayUnavailable $e) {
-            // Not a failure — we simply could not ask. The IPN will settle it.
-            $log->channel('payment')->warning('Could not verify on return', [
-                'payment' => $payment->reference,
-                'error' => $e->getMessage(),
-            ]);
-
-            return to_route('onboarding.status')->with('info', __('payment.return.checking'));
+        /*
+         * Still not settled — ask the gateway directly, by our own
+         * reference, right now: the same lookup the hourly reconciliation
+         * sweep uses, just not deferred. A customer who genuinely paid
+         * should not have to wait on the IPN or that sweep, or have staff
+         * fix it by hand, to be told so.
+         */
+        if (! $payment->refresh()->isSettled()) {
+            $this->reconcileNow($payment, $settle, $log);
         }
 
         /*
@@ -102,10 +121,58 @@ class PaymentReturnController extends Controller
             $status->needsReconciliation() => to_route('checkout.show')
                 ->with('info', __('payment.return.reconciling')),
 
-            in_array($status, PaymentStatus::open(), true) => to_route('checkout.show')
-                ->with('info', __('payment.return.checking')),
+            in_array($status, PaymentStatus::open(), true) => $unresolved(),
             default => to_route('checkout.show')->with('error', __('payment.return.failed')),
         };
+    }
+
+    /**
+     * Ask the gateway directly whether this payment went through, by our own
+     * reference, instead of waiting for the hourly reconciliation sweep to
+     * get to it (§28.1).
+     *
+     * Only for providers that publish a status lookup — the same gate
+     * {@see ReconcileGatewayPayments} uses, since this is that same check,
+     * just run immediately rather than deferred. Never allowed to turn this
+     * page into an error: a provider that cannot
+     * be reached, or has nothing to say, leaves the payment exactly as it
+     * was for the sweep to pick up later.
+     */
+    protected function reconcileNow(Payment $payment, SettlePayment $settle, LogManager $log): void
+    {
+        $gateway = (string) $payment->gateway;
+
+        if ($gateway === '' || ! $this->gateways->isImplemented($gateway)) {
+            return;
+        }
+
+        $driver = $this->gateways->driver($gateway);
+
+        if (! $driver->supports(GatewayCapability::StatusQuery)) {
+            return;
+        }
+
+        try {
+            $result = $driver->status($payment->reference);
+        } catch (GatewayUnavailable $e) {
+            $log->channel('payment')->warning('Could not reconcile on return', [
+                'payment' => $payment->reference,
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if (! $result->isPaid() || $result->gatewayReference === null) {
+            return;
+        }
+
+        try {
+            $settle->handle($payment, $result->gatewayReference);
+        } catch (GatewayUnavailable) {
+            // Asked twice in one request and still could not confirm — the
+            // sweep will try again shortly.
+        }
     }
 
     /**
