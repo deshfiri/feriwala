@@ -341,6 +341,13 @@ return [
                 'margin_asc' => 'Margin, low to high',
             ],
             'eligible_only' => 'Only sources that can cover this line',
+            'source_filter' => 'Source type',
+            'source_filter_all' => 'Suppliers and warehouses',
+            'same_group' => 'Same sourcing group',
+            'group_title' => 'Sourcing group: :group',
+            'group_help' => 'Only sources whose variation is mapped to this canonical requirement are listed. Nothing is chosen for you.',
+            'unmatched_title' => 'Unmatched — manual review',
+            'unmatched_help' => 'This line was placed without a sourcing group, so only exact-product sources and confirmed links are shown. Nothing is guessed from names.',
             'columns' => [
                 'source' => 'Source',
                 'available' => 'Available',

@@ -6,6 +6,8 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
@@ -33,6 +35,7 @@ use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\SearchAllocationSources;
+use App\Domain\Sourcing\Models\ProductSourcingGroup;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
@@ -374,14 +377,97 @@ class OrderController extends Controller
             ->where('public_id', $replacing)
             ->first();
 
+        $filters = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'source_type' => ['sometimes', 'nullable', Rule::enum(AllocationSourceType::class)],
+            'availability' => ['sometimes', 'nullable', Rule::in(['available'])],
+            'sort' => ['sometimes', 'nullable', Rule::in(['cost_asc', 'cost_desc'])],
+        ]);
+
         return response()->json([
+            // The platform ranks nothing: these are the staff's own filters
+            // and sort, applied to what the line's sourcing group allows.
             'candidates' => array_map(
                 fn (AllocationCandidate $candidate) => $candidate->toArray(),
-                $this->candidates->forLine($line, $excluding),
+                $this->filterCandidates($this->candidates->forLine($line, $excluding), $filters),
             ),
             'already_allocated_quantity' => $line->quantity - $this->candidates->remainingQuantity($line, $excluding),
             'remaining_quantity' => $this->candidates->remainingQuantity($line, $excluding),
+            'sourcing' => $this->sourcingSummary($line),
         ]);
+    }
+
+    /**
+     * Staff's search, Supplier/Warehouse filter, availability filter and cost
+     * sort, applied after the line's sourcing rules have decided what may be
+     * offered at all.
+     *
+     * @param  list<AllocationCandidate>  $candidates
+     * @param  array<string, mixed>  $filters
+     * @return list<AllocationCandidate>
+     */
+    protected function filterCandidates(array $candidates, array $filters): array
+    {
+        $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
+        $type = filled($filters['source_type'] ?? null) ? AllocationSourceType::from($filters['source_type']) : null;
+
+        $kept = array_values(array_filter($candidates, function (AllocationCandidate $candidate) use ($search, $type, $filters) {
+            if ($type !== null && $candidate->sourceType !== $type) {
+                return false;
+            }
+
+            if (($filters['availability'] ?? null) === 'available' && ! $candidate->isEligible) {
+                return false;
+            }
+
+            if ($search === '') {
+                return true;
+            }
+
+            return str_contains(mb_strtolower(implode(' ', array_filter([
+                $candidate->sourceLabel, $candidate->supplierName, $candidate->sourceProductName, $candidate->sourceProductSku,
+            ]))), $search);
+        }));
+
+        $direction = $filters['sort'] ?? null;
+
+        if ($direction !== null) {
+            usort($kept, fn (AllocationCandidate $a, AllocationCandidate $b) => $direction === 'cost_asc'
+                ? $a->unitCost->toDecimal() <=> $b->unitCost->toDecimal()
+                : $b->unitCost->toDecimal() <=> $a->unitCost->toDecimal());
+        }
+
+        return $kept;
+    }
+
+    /**
+     * What this line froze about its fulfilment: the sourcing group and the
+     * canonical product/variation it requires, or an unmatched flag for an
+     * order placed before groups or without an explicit mapping.
+     *
+     * @return array<string, mixed>
+     */
+    protected function sourcingSummary(OrderItem $line): array
+    {
+        if ($line->sourcing_group_id === null) {
+            return ['state' => 'unmatched', 'group' => null, 'canonical_product' => null, 'canonical_variant' => null];
+        }
+
+        $group = ProductSourcingGroup::query()->find($line->sourcing_group_id);
+        $product = Product::query()->find($line->sourcing_canonical_product_id);
+        $variant = $line->sourcing_canonical_variant_id === null
+            ? null
+            : ProductVariant::query()->with('values')->find($line->sourcing_canonical_variant_id);
+
+        return [
+            'state' => 'matched',
+            'group' => $group === null ? null : [
+                'id' => $group->public_id, 'code' => $group->code, 'name_en' => $group->name_en, 'name_bn' => $group->name_bn,
+                'is_active' => $group->is_active,
+            ],
+            'canonical_product' => $product === null ? null : ['name' => $product->name, 'sku' => $product->sku],
+            'canonical_variant' => $variant?->label(),
+        ];
     }
 
     /**
@@ -604,6 +690,24 @@ class OrderController extends Controller
 
         $type = isset($validated['source_type']) ? AllocationSourceType::from($validated['source_type']) : null;
         $page = (int) ($validated['page'] ?? 1);
+
+        // A line with a frozen sourcing group only ever sees its group's
+        // compatible sources -- the catalogue-wide search would show unrelated
+        // products, so it is answered from the same group-scoped list.
+        if ($this->candidates->isGrouped($line)) {
+            $scoped = $this->filterCandidates($this->candidates->forLine($line), [
+                'search' => $validated['query'] ?? '',
+                'source_type' => $validated['source_type'] ?? null,
+            ]);
+
+            return response()->json([
+                'candidates' => array_map(fn (AllocationCandidate $candidate) => $candidate->toArray(), $scoped),
+                'page' => 1,
+                'per_page' => count($scoped),
+                'total' => count($scoped),
+                'has_more' => false,
+            ]);
+        }
 
         $results = $this->search->search($line, $type, (string) ($validated['query'] ?? ''), $page);
 

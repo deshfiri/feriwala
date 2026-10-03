@@ -55,6 +55,26 @@ type Candidate = {
     is_related: boolean;
     source_product_name: string | null;
     source_product_sku: string | null;
+    /** How this source came to be offered: exact product, sourcing group, or a confirmed link. */
+    match_kind: 'exact' | 'group' | 'linked';
+};
+
+/**
+ * What the order line froze about its fulfilment when it was placed: the
+ * sourcing group and canonical product/variation, or unmatched for an order
+ * placed before groups or without an explicit mapping.
+ */
+type Sourcing = {
+    state: 'matched' | 'unmatched';
+    group: {
+        id: string;
+        code: string;
+        name_en: string;
+        name_bn: string;
+        is_active: boolean;
+    } | null;
+    canonical_product: { name: string; sku: string } | null;
+    canonical_variant: string | null;
 };
 
 type SortKey = 'cost_asc' | 'cost_desc' | 'margin_desc' | 'margin_asc';
@@ -101,8 +121,12 @@ export default function AllocationPanel({
     orderId: string;
     line: AllocationLine | null;
 }) {
-    const { t } = useTranslation();
+    const { t, locale } = useTranslation();
     const [tab, setTab] = useState<Tab>('recommended');
+    const [sourcing, setSourcing] = useState<Sourcing | null>(null);
+    const [typeFilter, setTypeFilter] = useState<
+        'all' | 'supplier_offer' | 'warehouse'
+    >('all');
     const [recommended, setRecommended] = useState<Candidate[] | null>(null);
     const [search, setSearch] = useState('');
     const [sort, setSort] = useState<SortKey>('margin_desc');
@@ -120,6 +144,8 @@ export default function AllocationPanel({
             setLinking(null);
             setTab('recommended');
             setRemainingQuantity(null);
+            setSourcing(null);
+            setTypeFilter('all');
 
             return;
         }
@@ -147,9 +173,11 @@ export default function AllocationPanel({
                 (body: {
                     candidates: Candidate[];
                     remaining_quantity: number;
+                    sourcing: Sourcing;
                 }) => {
                     if (cancelled) return;
                     setRecommended(body.candidates);
+                    setSourcing(body.sourcing);
                     setRemainingQuantity(body.remaining_quantity);
                 },
             )
@@ -175,8 +203,22 @@ export default function AllocationPanel({
             .filter((candidate) => !eligibleOnly || candidate.is_eligible)
             .filter(
                 (candidate) =>
+                    typeFilter === 'all' ||
+                    candidate.source_type === typeFilter,
+            )
+            .filter(
+                (candidate) =>
                     term === '' ||
-                    candidate.source_label.toLowerCase().includes(term),
+                    [
+                        candidate.source_label,
+                        candidate.supplier_name,
+                        candidate.source_product_name,
+                        candidate.source_product_sku,
+                    ]
+                        .filter(Boolean)
+                        .join(' ')
+                        .toLowerCase()
+                        .includes(term),
             )
             .sort((a, b) => {
                 switch (sort) {
@@ -190,7 +232,7 @@ export default function AllocationPanel({
                         return margin(b) - margin(a);
                 }
             });
-    }, [recommended, search, sort, eligibleOnly]);
+    }, [recommended, search, sort, eligibleOnly, typeFilter]);
 
     function selectCandidate(candidate: Candidate) {
         if (candidate.is_related) {
@@ -220,21 +262,27 @@ export default function AllocationPanel({
                     </SheetHeader>
 
                     <div className="flex flex-wrap gap-1 px-4">
-                        {(
-                            [
-                                [
-                                    'recommended',
-                                    'orders.admin.allocation.tabs.recommended',
-                                ],
-                                [
-                                    'suppliers',
-                                    'orders.admin.allocation.tabs.suppliers',
-                                ],
-                                [
-                                    'warehouses',
-                                    'orders.admin.allocation.tabs.warehouses',
-                                ],
-                            ] as const
+                        {(sourcing?.state === 'matched'
+                            ? ([
+                                  [
+                                      'recommended',
+                                      'orders.admin.allocation.tabs.recommended',
+                                  ],
+                              ] as const)
+                            : ([
+                                  [
+                                      'recommended',
+                                      'orders.admin.allocation.tabs.recommended',
+                                  ],
+                                  [
+                                      'suppliers',
+                                      'orders.admin.allocation.tabs.suppliers',
+                                  ],
+                                  [
+                                      'warehouses',
+                                      'orders.admin.allocation.tabs.warehouses',
+                                  ],
+                              ] as const)
                         ).map(([key, label]) => (
                             <Button
                                 key={key}
@@ -251,6 +299,11 @@ export default function AllocationPanel({
                     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4">
                         {tab === 'recommended' && (
                             <>
+                                <SourcingBanner
+                                    sourcing={sourcing}
+                                    locale={locale}
+                                />
+
                                 <div className="flex flex-wrap gap-2">
                                     <Input
                                         placeholder={t(
@@ -262,6 +315,35 @@ export default function AllocationPanel({
                                         }
                                         className="min-w-40 flex-1"
                                     />
+                                    <select
+                                        value={typeFilter}
+                                        onChange={(event) =>
+                                            setTypeFilter(
+                                                event.target
+                                                    .value as typeof typeFilter,
+                                            )
+                                        }
+                                        className={controlClass}
+                                        aria-label={t(
+                                            'orders.admin.allocation.source_filter',
+                                        )}
+                                    >
+                                        <option value="all">
+                                            {t(
+                                                'orders.admin.allocation.source_filter_all',
+                                            )}
+                                        </option>
+                                        <option value="supplier_offer">
+                                            {t(
+                                                'status.allocation_source.supplier_offer',
+                                            )}
+                                        </option>
+                                        <option value="warehouse">
+                                            {t(
+                                                'status.allocation_source.warehouse',
+                                            )}
+                                        </option>
+                                    </select>
                                     <select
                                         value={sort}
                                         onChange={(event) =>
@@ -441,7 +523,7 @@ function CandidateCard({
                             </>
                         )}
                     </p>
-                    {candidate.requires_confirmation && (
+                    {candidate.source_type === 'supplier_offer' && (
                         <p className="text-muted-foreground text-xs">
                             {candidate.supply_mode_label}
                             {candidate.lead_time_days !== null &&
@@ -474,6 +556,12 @@ function CandidateCard({
                                 : 'orders.admin.allocation.not_related',
                         )}
                     />
+                    {candidate.match_kind === 'group' && (
+                        <StatusPill
+                            tone="info"
+                            label={t('orders.admin.allocation.same_group')}
+                        />
+                    )}
                     {candidate.requires_confirmation && (
                         <StatusPill
                             tone="warning"
@@ -979,5 +1067,63 @@ function ConfirmAllocationDialog({
                 </Form>
             </DialogContent>
         </Dialog>
+    );
+}
+
+/**
+ * Why these sources are listed: the sourcing group the order line froze when
+ * it was placed -- or a flag that it has none and needs manual review.
+ */
+function SourcingBanner({
+    sourcing,
+    locale,
+}: {
+    sourcing: Sourcing | null;
+    locale: string;
+}) {
+    const { t } = useTranslation();
+
+    if (sourcing === null) {
+        return null;
+    }
+
+    if (sourcing.state === 'unmatched' || sourcing.group === null) {
+        return (
+            <div
+                role="status"
+                className="border-warning/40 bg-warning/10 rounded-lg border p-3 text-sm"
+            >
+                <p className="font-medium">
+                    {t('orders.admin.allocation.unmatched_title')}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                    {t('orders.admin.allocation.unmatched_help')}
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div role="status" className="bg-muted rounded-lg p-3 text-sm">
+            <p className="font-medium">
+                {t('orders.admin.allocation.group_title', {
+                    group:
+                        locale === 'bn'
+                            ? sourcing.group.name_bn
+                            : sourcing.group.name_en,
+                })}
+            </p>
+            <p className="text-muted-foreground text-xs">
+                {sourcing.canonical_product
+                    ? `${sourcing.canonical_product.name} (${sourcing.canonical_product.sku})`
+                    : ''}
+                {sourcing.canonical_variant
+                    ? ` · ${sourcing.canonical_variant}`
+                    : ''}
+            </p>
+            <p className="text-muted-foreground text-xs">
+                {t('orders.admin.allocation.group_help')}
+            </p>
+        </div>
     );
 }

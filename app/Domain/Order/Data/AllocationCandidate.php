@@ -90,6 +90,14 @@ class AllocationCandidate
         public readonly ?int $sourceProductVariantId = null,
         public readonly ?string $sourceProductName = null,
         public readonly ?string $sourceProductSku = null,
+
+        /**
+         * How this source came to be offered: `exact` (catalogued under the
+         * ordered product/variation), `group` (a compatible member of the
+         * line's frozen sourcing group) or `linked` (a staff-confirmed
+         * cross-catalogue link, for lines with no sourcing group).
+         */
+        public readonly string $matchKind = 'exact',
     ) {}
 
     /**
@@ -130,6 +138,6 @@ class AllocationCandidate
             'is_related' => $this->isRelated,
             'source_product_name' => $this->sourceProductName,
             'source_product_sku' => $this->sourceProductSku,
-        ];
+            'match_kind' => $this->matchKind,        ];
     }
 }
