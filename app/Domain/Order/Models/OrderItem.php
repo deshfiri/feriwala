@@ -178,7 +178,7 @@ class OrderItem extends Model
         // reach an existing line; a line with no explicit mapping is left
         // unmatched for manual review, never guessed.
         static::creating(function (self $line) {
-            if ($line->sourcing_group_id !== null || $line->product_id === null) {
+            if ($line->sourcing_group_id !== null) {
                 return;
             }
 
