@@ -264,15 +264,11 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                 {checkout.non_conditional && (
                                     <div className="border-border flex items-baseline justify-between gap-3 border-t pt-3">
                                         <dt className="font-medium">
-                                            {t(
-                                                'wholesale.checkout.due_now',
-                                            )}
+                                            {t('wholesale.checkout.due_now')}
                                         </dt>
                                         <dd>
                                             <MoneyAmount
-                                                amount={
-                                                    checkout.amount_due_now
-                                                }
+                                                amount={checkout.amount_due_now}
                                                 size="large"
                                             />
                                         </dd>

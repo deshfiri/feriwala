@@ -259,7 +259,7 @@ class SettlePayment
      * two orders is the failure the unique index exists to make impossible, and
      * this is the same check with a readable answer instead of a 500.
      */
-    protected function belongsToPayment(
+    public function belongsToPayment(
         Payment $payment,
         GatewayResult $result,
         string $gatewayReference,
@@ -383,7 +383,7 @@ class SettlePayment
      * callers, because every route into settlement — redirect, IPN,
      * reconciliation, manual retry — has to produce the same consequence.
      */
-    protected function applyPurpose(Payment $payment): void
+    public function applyPurpose(Payment $payment): void
     {
         /*
          * A coupon held against this payment becomes a use, whatever the

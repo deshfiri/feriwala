@@ -49,6 +49,21 @@ return [
         'help' => 'The gateway confirmed this payment after the checkout had closed. The account was not activated and the invoice was not changed. Refund or reconcile it with the provider, then record what was done.',
     ],
 
+    'manual' => [
+        'title' => 'Mark as paid',
+        'help' => 'Use this when the customer paid at the gateway but the payment still reads failed, cancelled or stuck here. The gateway is asked to confirm the transaction first. Everything the payment unlocks then happens exactly as if the gateway had confirmed it, and your name and reason are recorded.',
+        'confirm_first' => 'Marking a payment as paid needs your password again. Confirm it, and you will come back here.',
+        'confirm' => 'Confirm your password',
+        'reference' => 'Gateway transaction ID',
+        'reference_hint' => 'The provider\'s own transaction or validation ID, from the gateway dashboard or the customer\'s receipt.',
+        'reason' => 'Why you are marking it paid',
+        'override' => 'The gateway could not confirm it, but I have seen the money arrive another way. Mark it paid anyway.',
+        'confirm_box' => 'I confirm this money has really been received.',
+        'submit' => 'Mark as paid',
+        'done' => 'Payment :reference has been marked as paid.',
+        'already' => 'Payment :reference was already paid. Nothing was changed.',
+    ],
+
     'log' => [
         'title' => 'Gateway trail',
         'description' => 'Redacted before it was stored, and again before it was sent here: no credentials, no signatures, no unmasked personal data (§42).',

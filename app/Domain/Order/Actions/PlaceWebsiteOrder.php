@@ -10,6 +10,8 @@ use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\ReservationWindows;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Order\Data\WebsiteOrderLine;
 use App\Domain\Order\Data\WebsiteOrderPaymentQuote;
@@ -92,6 +94,8 @@ class PlaceWebsiteOrder
         protected KycRestrictions $kycRestrictions,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
+        protected StockEnforcement $enforcement,
+        protected ReservationWindows $windows,
     ) {}
 
     /**
@@ -260,13 +264,13 @@ class PlaceWebsiteOrder
          * has and §28 has something to settle against.
          */
         $payment->forceFill($submission->isCashOnDelivery()
-            ? ['expires_at' => $this->paymentDeadline($reservations)]
+            ? ['expires_at' => $this->paymentDeadline($reservations, $submission->reservationKind())]
             : [
                 'gateway' => $gateway = $this->gateway($submission, $quote),
                 'gateway_mode' => $this->gateways->driver($gateway)->isSandbox()
                     ? GatewayCredentials::SANDBOX
                     : GatewayCredentials::LIVE,
-                'expires_at' => $this->paymentDeadline($reservations),
+                'expires_at' => $this->paymentDeadline($reservations, $submission->reservationKind()),
             ])->save();
 
         $order->recordPlacement(
@@ -335,7 +339,7 @@ class PlaceWebsiteOrder
      * a Supplier's preferred offer where the variation is Supplier-sourced
      * (D25, P13-21), and from central stock otherwise.
      *
-     * @return array{0: array<int, StockReservation>, 1: array<int, SupplierAllocation|null>} both keyed by the line's position
+     * @return array{0: array<int, StockReservation|null>, 1: array<int, SupplierAllocation|null>} both keyed by the line's position
      *
      * @throws WebsiteOrderRefused
      */
@@ -366,12 +370,15 @@ class PlaceWebsiteOrder
                     $order->reference.'-L'.($position + 1),
                     $website->businessAccount,
                 );
-            } catch (SupplierAllocationRefused) {
+            } catch (SupplierAllocationRefused|InventoryRefused) {
                 // Never named to the storefront's customer: which Supplier, or
                 // why its offer could not serve, is Feriwala's own business (D25).
-                throw WebsiteOrderRefused::insufficientStock($line->sku, $line->quantity, $this->available($line, $website));
-            } catch (InventoryRefused) {
-                throw WebsiteOrderRefused::insufficientStock($line->sku, $line->quantity, $this->available($line, $website));
+                if ($this->enforcement->enforced()) {
+                    throw WebsiteOrderRefused::insufficientStock($line->sku, $line->quantity, $this->available($line, $website));
+                }
+
+                $reservations[$position] = null;
+                $allocations[$position] = null;
             } catch (LockTimeout) {
                 throw WebsiteOrderRefused::busy();
             }
@@ -396,7 +403,7 @@ class PlaceWebsiteOrder
      * the rate in force, the website selection it came from, the stock held,
      * and — for a Supplier-sourced line — the Supplier allocation (D25, P13-21).
      *
-     * @param  array<int, StockReservation>  $reservations
+     * @param  array<int, StockReservation|null>  $reservations
      * @param  array<int, SupplierAllocation|null>  $allocations
      * @return Collection<int, OrderItem>
      */
@@ -429,7 +436,7 @@ class PlaceWebsiteOrder
                 'tax_code' => $taxed ? $line->tax->code : null,
                 'tax_rate_basis_points' => $taxed ? $line->tax->rateBasisPoints : null,
                 'tax_mode' => $taxed ? $line->tax->mode->value : null,
-                'stock_reservation_id' => $reservations[$position]->id,
+                'stock_reservation_id' => $reservations[$position]?->id,
                 ...($allocations[$position]?->lineSnapshot() ?? []),
             ]));
         }
@@ -440,21 +447,22 @@ class PlaceWebsiteOrder
     /**
      * The payment window: closed a margin before the first reservation runs out.
      *
-     * @param  array<int, StockReservation>  $reservations
+     * With no stock held at all (stock does not block orders), the window is the
+     * reservation window for the order's kind.
+     *
+     * @param  array<int, StockReservation|null>  $reservations
      */
-    protected function paymentDeadline(array $reservations): CarbonImmutable
+    protected function paymentDeadline(array $reservations, ReservationKind $kind): CarbonImmutable
     {
         $first = null;
 
         foreach ($reservations as $reservation) {
-            if ($first === null || $reservation->expires_at->lessThan($first)) {
+            if ($reservation !== null && ($first === null || $reservation->expires_at->lessThan($first))) {
                 $first = $reservation->expires_at;
             }
         }
 
-        if ($first === null) {
-            throw new LogicException('An order holds stock for at least one line.');
-        }
+        $first ??= $this->windows->expiryFor($kind);
 
         return $first->subSeconds(self::SETTLEMENT_MARGIN_SECONDS);
     }

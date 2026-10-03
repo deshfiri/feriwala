@@ -53,6 +53,14 @@ enum PermissionAction: string
      */
     case Reactivate = 'reactivate';
 
+    /**
+     * Marking a payment paid by hand when the gateway's own confirmation did not
+     * land. Its own verb, not `approve` or `reverse_transaction`: it brings money
+     * onto the books rather than sending it back, and who may do it is worth
+     * granting separately.
+     */
+    case SettleManually = 'settle_manually';
+
     public function label(): string
     {
         return match ($this) {
@@ -80,6 +88,7 @@ enum PermissionAction: string
             self::Suspend => 'Suspend',
             self::Review => 'Review',
             self::Reactivate => 'Reactivate',
+            self::SettleManually => 'Settle manually',
         };
     }
 
@@ -114,6 +123,7 @@ enum PermissionAction: string
              * same terms as imposing one.
              */
             self::Reactivate,
+            self::SettleManually,
             self::Delete => true,
             default => false,
         };

@@ -83,6 +83,7 @@ class PermissionCatalogue
             Module::Payment->value => [
                 Action::View, Action::Create, Action::Verify,
                 Action::Approve, Action::Reject, Action::ReverseTransaction,
+                Action::SettleManually,
                 Action::Export, Action::ManageSettings, Action::ManageIntegrations,
             ],
 

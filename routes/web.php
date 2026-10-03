@@ -25,6 +25,7 @@ use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
 use App\Http\Controllers\Admin\PaymentLogController;
+use App\Http\Controllers\Admin\PaymentManualSettlementController;
 use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\PermissionsController;
 use App\Http\Controllers\Admin\PlatformStaffController;
@@ -965,6 +966,16 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('payments.wallet-credit');
 
         /*
+         * Marking a payment paid by hand when the gateway's confirmation never
+         * landed. Behind `payment.settle_manually`, a freshly confirmed password,
+         * two-factor and a reason; the gateway is asked first and the override is
+         * an explicit, audited choice.
+         */
+        Route::post('payments/{payment}/manual-settlement', [PaymentManualSettlementController::class, 'store'])
+            ->middleware(RequirePassword::class)
+            ->name('payments.manual-settlement');
+
+        /*
          * Sending an approved refund to the gateway (§26.3, P2-31).
          *
          * Separate from approving it: D17 makes the refund a decision, and this
@@ -1336,6 +1347,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.reservations.index');
         Route::put('inventory/reservations/windows', [ReservationController::class, 'windows'])
             ->name('inventory.reservations.windows');
+        Route::put('inventory/reservations/enforcement', [ReservationController::class, 'enforcement'])
+            ->name('inventory.reservations.enforcement');
         Route::post('inventory/reservations/{reservation}/release', [ReservationController::class, 'release'])
             ->name('inventory.reservations.release');
         Route::patch('inventory/reservations/{reservation}/expiry', [ReservationController::class, 'extend'])

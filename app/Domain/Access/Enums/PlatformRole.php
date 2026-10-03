@@ -190,6 +190,14 @@ enum PlatformRole: string
                 Module::Notification->value => [Action::View, Action::Create, Action::Edit],
                 Module::Audit->value => [Action::ViewAuditLogs],
 
+                /*
+                 * The one piece of money handling an Admin holds: seeing a
+                 * payment and marking it paid by hand when the gateway's
+                 * confirmation never landed. Sensitive, so it still needs a
+                 * confirmed password, two-factor and a reason every time.
+                 */
+                Module::Payment->value => [Action::View, Action::SettleManually],
+
                 // Oversight only (D25) — deliberately not pricing or stock,
                 // for the same reason Admin holds no Payment permission at
                 // all: approving Suppliers and reviewing listings is

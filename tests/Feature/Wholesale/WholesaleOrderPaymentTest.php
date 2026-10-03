@@ -29,6 +29,7 @@ use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\ReservationWindows;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Actions\ExpireUnpaidOrders;
@@ -468,6 +469,36 @@ describe('placing the order (P4-9, P4-10)', function () {
             ->and($this->stock->refresh()->reserved)->toBe(0)
             ->and($this->stock->available)->toBe(50)
             ->and($teaStock->refresh()->reserved)->toBe(0);
+    });
+
+    it('still places the order when a line\'s stock is gone and stock does not block orders', function () {
+        $teaSet = wholesaleOrderProduct('Tea set', 'FW-TS', '1000.00');
+        wholesaleOrderStock($teaSet, 20);
+
+        $this->post(route('wholesale.cart.items.store'), ['product' => $teaSet->slug, 'quantity' => 5])->assertSessionHasNoErrors();
+        wholesaleOrderConfirm($this->karim);
+
+        app(StockEnforcement::class)->switchTo(false, $this->karim->owner, 'Partners must always be able to order.');
+
+        app()->instance(StockReservations::class, new class(app(StockLedger::class), app(DistributedLock::class), app(ReservationWindows::class), app(DatabaseManager::class), app(SupplierStockReservations::class)) extends StockReservations
+        {
+            public int $calls = 0;
+
+            public function reserve(Product $product, ?ProductVariant $variant, int $quantity, ReservationKind $kind, string $reference, ?BusinessAccount $account = null): StockReservation
+            {
+                if (++$this->calls === 2) {
+                    throw InventoryRefused::outOfStock($product->sku, $quantity, 0);
+                }
+
+                return parent::reserve($product, $variant, $quantity, $kind, $reference, $account);
+            }
+        });
+
+        wholesaleOrderPlace()->assertSessionHasNoErrors();
+
+        expect(Order::query()->count())->toBe(1)
+            ->and(DB::table('order_items')->whereNull('stock_reservation_id')->count())->toBe(1)
+            ->and(DB::table('order_items')->whereNotNull('stock_reservation_id')->count())->toBe(1);
     });
 
     it('is only for an account whose package includes wholesale', function () {

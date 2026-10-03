@@ -5,6 +5,7 @@ namespace App\Domain\Order\Actions;
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
@@ -43,6 +44,7 @@ class ConfirmCodOrder
         protected StockReservations $reservations,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
+        protected StockEnforcement $enforcement,
     ) {}
 
     /**
@@ -125,6 +127,12 @@ class ConfirmCodOrder
             ->filter()
             ->min();
 
+        // Nothing held (stock does not block orders): the order's own payment
+        // window is the deadline.
+        if ($deadline === null && ! $this->enforcement->enforced()) {
+            $deadline = $order->payment?->expires_at;
+        }
+
         return $deadline === null || $deadline->lessThanOrEqualTo(CarbonImmutable::now());
     }
 
@@ -142,6 +150,10 @@ class ConfirmCodOrder
             $reservation = $item->stockReservation;
 
             if ($reservation === null || $reservation->status !== StockReservationStatus::Active) {
+                if (! $this->enforcement->enforced()) {
+                    continue;
+                }
+
                 throw WebsiteOrderRefused::confirmationExpired();
             }
 

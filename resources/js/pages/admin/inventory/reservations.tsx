@@ -61,6 +61,7 @@ type Props = {
         cod_bounds: [number, number];
         defaults: [number, number];
     };
+    stock_enforced: boolean;
     max_extension_hours: number;
     can: { override: boolean };
 };
@@ -84,6 +85,7 @@ export default function AdminReservations({
     reservations,
     filters,
     windows,
+    stock_enforced,
     max_extension_hours,
     can,
 }: Props) {
@@ -321,6 +323,88 @@ export default function AdminReservations({
                                 </dd>
                             </div>
                         </dl>
+                    )}
+                </SectionCard>
+
+                <SectionCard
+                    title={t('inventory.reservations.enforcement_title')}
+                    description={t(
+                        'inventory.reservations.enforcement_description',
+                    )}
+                >
+                    {can.override ? (
+                        <Form
+                            {...ReservationController.enforcement.form()}
+                            options={{ preserveScroll: true }}
+                            className="grid gap-4 sm:grid-cols-[1fr_2fr_auto] sm:items-start"
+                        >
+                            {({ errors, processing }) => (
+                                <>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="stock-enforced">
+                                            {t(
+                                                'inventory.reservations.enforcement_label',
+                                            )}
+                                        </Label>
+                                        <select
+                                            id="stock-enforced"
+                                            name="enforced"
+                                            defaultValue={
+                                                stock_enforced ? '1' : '0'
+                                            }
+                                            className={selectClass}
+                                        >
+                                            <option value="1">
+                                                {t(
+                                                    'inventory.reservations.enforcement_on',
+                                                )}
+                                            </option>
+                                            <option value="0">
+                                                {t(
+                                                    'inventory.reservations.enforcement_off',
+                                                )}
+                                            </option>
+                                        </select>
+                                        <InputError message={errors.enforced} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="stock-enforced-reason">
+                                            {t('inventory.reservations.reason')}
+                                        </Label>
+                                        <textarea
+                                            id="stock-enforced-reason"
+                                            name="reason"
+                                            rows={2}
+                                            minLength={10}
+                                            maxLength={1000}
+                                            required
+                                            className={controlClass}
+                                        />
+                                        <InputError message={errors.reason} />
+                                    </div>
+
+                                    <Button
+                                        type="submit"
+                                        disabled={processing}
+                                        className="sm:mt-6"
+                                    >
+                                        {processing && <Spinner />}
+                                        {t(
+                                            'inventory.reservations.windows_save',
+                                        )}
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                    ) : (
+                        <p className="text-sm">
+                            {t(
+                                stock_enforced
+                                    ? 'inventory.reservations.enforcement_on'
+                                    : 'inventory.reservations.enforcement_off',
+                            )}
+                        </p>
                     )}
                 </SectionCard>
 

@@ -63,6 +63,7 @@ function order(
         paid_at: null,
         cancelled_at: null,
         placed_by: 'Karim Uddin',
+        account_type: 'conditional',
         total: money('20000.00'),
         item_count: 1,
         lines: [
@@ -77,6 +78,7 @@ function order(
                 discount: money('0.00'),
                 tax: money('0.00'),
                 total: money('20000.00'),
+                resale_amount: null,
             },
         ],
         totals: {

@@ -8,6 +8,7 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
@@ -63,6 +64,7 @@ class ConfirmOrderPayment
         protected HoldSupplierPayable $supplierHold,
         protected DatabaseManager $database,
         protected LogManager $log,
+        protected StockEnforcement $enforcement,
     ) {}
 
     public function handle(Payment $payment): ?Order
@@ -138,8 +140,16 @@ class ConfirmOrderPayment
             throw new OrderStockUnconfirmable('The order has no lines to commit stock for.');
         }
 
+        $enforced = $this->enforcement->enforced();
+
         foreach ($items as $item) {
             $reservation = $item->stockReservation;
+
+            // With stock not blocking orders, a line that was never held, or
+            // whose hold has lapsed, is simply not committed: the payment stands.
+            if (! $enforced && ($reservation === null || $reservation->status !== StockReservationStatus::Active)) {
+                continue;
+            }
 
             if ($reservation === null) {
                 throw new OrderStockUnconfirmable(sprintf('Line %d has no stock reservation.', $item->line_number));
@@ -156,8 +166,10 @@ class ConfirmOrderPayment
         }
 
         foreach ($items as $item) {
-            if ($item->stockReservation !== null) {
-                $this->reservations->commit($item->stockReservation);
+            $reservation = $item->stockReservation;
+
+            if ($reservation !== null && ($enforced || $reservation->status === StockReservationStatus::Active)) {
+                $this->reservations->commit($reservation);
             }
         }
 

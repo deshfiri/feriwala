@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
@@ -144,6 +147,17 @@ class PaymentLogController extends Controller
             })
             ->all();
 
+        $mayMarkPaid = $record->canBeSettledManually()
+            && $actor->can(PermissionCatalogue::name(PermissionModule::Payment, PermissionAction::SettleManually));
+
+        $passwordConfirmed = time() - (int) $request->session()->get('auth.password_confirmed_at', 0) < (int) config('auth.password_timeout', 10800);
+
+        // Confirming the password brings the person back here, to the form —
+        // not to the endpoint, which only takes a submission.
+        if ($mayMarkPaid && ! $passwordConfirmed) {
+            redirect()->setIntendedUrl($request->fullUrl());
+        }
+
         return Inertia::render('admin/payments/show', [
             'payment' => array_merge($this->summary($record), [
                 'purpose_label' => $record->purpose->label(),
@@ -157,6 +171,14 @@ class PaymentLogController extends Controller
                 'reconciliation_reason' => $record->reconciliation_reason,
                 'reconciliation_required_at' => $record->reconciliation_required_at?->toIso8601String(),
             ]),
+
+            // Whether to offer the manual "mark paid" form. A convenience only:
+            // the route and the action enforce the permission again.
+            'manual' => [
+                'available' => $mayMarkPaid,
+                'password_confirmed' => $passwordConfirmed,
+                'can_override' => (bool) $request->session()->get('can_override', false),
+            ],
             'logs' => $logs,
         ]);
     }

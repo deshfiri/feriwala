@@ -1,14 +1,20 @@
-import { Head, Link } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import { useState, type ReactNode } from 'react';
+import PaymentManualSettlementController from '@/actions/App/Http/Controllers/Admin/PaymentManualSettlementController';
+import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import { index } from '@/routes/admin/payments';
+import { confirm as confirmPassword } from '@/routes/password';
 import type { PaymentRow } from './index';
 
 type LogEntry = {
@@ -30,7 +36,14 @@ type LogEntry = {
     withheld: number;
 };
 
+type Manual = {
+    available: boolean;
+    password_confirmed: boolean;
+    can_override: boolean;
+};
+
 type Props = {
+    manual: Manual;
     payment: PaymentRow & {
         purpose_label: string;
         settled_amount: Money | null;
@@ -61,7 +74,7 @@ type Props = {
  * came from — so what reaches this screen is a count of what was withheld, and
  * nothing else about it (§42).
  */
-export default function AdminPaymentShow({ payment, logs }: Props) {
+export default function AdminPaymentShow({ payment, logs, manual }: Props) {
     const { t, locale } = useTranslation();
     const [open, setOpen] = useState<string | null>(null);
 
@@ -187,6 +200,114 @@ export default function AdminPaymentShow({ payment, logs }: Props) {
                             )}
                     </dl>
                 </SectionCard>
+
+                {manual.available && !manual.password_confirmed && (
+                    <SectionCard
+                        title={t('payments.manual.title')}
+                        description={t('payments.manual.confirm_first')}
+                    >
+                        <Button size="sm" variant="outline" asChild>
+                            <Link href={confirmPassword()}>
+                                {t('payments.manual.confirm')}
+                            </Link>
+                        </Button>
+                    </SectionCard>
+                )}
+
+                {manual.available && manual.password_confirmed && (
+                    <SectionCard
+                        title={t('payments.manual.title')}
+                        description={t('payments.manual.help')}
+                    >
+                        <Form
+                            {...PaymentManualSettlementController.store.form(
+                                payment.id,
+                            )}
+                            options={{ preserveScroll: true }}
+                            className="grid gap-3"
+                        >
+                            {({ processing, errors }) => (
+                                <>
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="manual-reference">
+                                            {t('payments.manual.reference')}
+                                        </Label>
+                                        <Input
+                                            id="manual-reference"
+                                            name="gateway_reference"
+                                            maxLength={255}
+                                            required
+                                            defaultValue={
+                                                payment.gateway_reference ?? ''
+                                            }
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            {t('payments.manual.reference_hint')}
+                                        </p>
+                                        <InputError
+                                            message={errors.gateway_reference}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="manual-reason">
+                                            {t('payments.manual.reason')}
+                                        </Label>
+                                        <Input
+                                            id="manual-reason"
+                                            name="reason"
+                                            minLength={10}
+                                            maxLength={1000}
+                                            required
+                                        />
+                                        <InputError message={errors.reason} />
+                                    </div>
+
+                                    {manual.can_override && (
+                                        <div className="flex items-start gap-2">
+                                            <input
+                                                id="manual-override"
+                                                type="checkbox"
+                                                name="override"
+                                                value="1"
+                                                className="mt-1"
+                                            />
+                                            <Label htmlFor="manual-override">
+                                                {t('payments.manual.override')}
+                                            </Label>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-start gap-2">
+                                        <input
+                                            id="manual-confirm"
+                                            type="checkbox"
+                                            name="confirm"
+                                            value="1"
+                                            required
+                                            className="mt-1"
+                                        />
+                                        <Label htmlFor="manual-confirm">
+                                            {t('payments.manual.confirm_box')}
+                                        </Label>
+                                    </div>
+                                    <InputError message={errors.confirm} />
+
+                                    <div>
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            disabled={processing}
+                                        >
+                                            {processing && <Spinner />}
+                                            {t('payments.manual.submit')}
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+                        </Form>
+                    </SectionCard>
+                )}
 
                 <SectionCard
                     title={t('payments.log.title')}

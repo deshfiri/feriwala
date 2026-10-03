@@ -17,6 +17,7 @@ use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Storage\ManagedStorage;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
@@ -64,6 +65,7 @@ class CatalogController extends Controller
         protected WholesalePriceResolver $prices,
         protected StockAvailability $stock,
         protected ManagedStorage $storage,
+        protected StockEnforcement $enforcement,
     ) {}
 
     public function wholesale(Request $request): Response
@@ -291,6 +293,7 @@ class CatalogController extends Controller
             'account_type' => $account->account_type->value,
             'product' => $detail,
             'related' => $related,
+            'stock_enforced' => $this->enforcement->enforced(),
 
             /*
              * The storefronts this product could be sold on (§15, P5-1, P5-2).

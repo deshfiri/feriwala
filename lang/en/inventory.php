@@ -266,6 +266,12 @@ return [
         'cod_help' => 'Between :min and :max. The contract default is :default.',
         'windows_save' => 'Save windows',
         'windows_saved' => 'Reservation windows saved. New reservations use them.',
+        'enforcement_title' => 'Stock and orders',
+        'enforcement_description' => 'Choose whether stock can stop an order. When off, stock is only used for platform calculation and partners can always order, available or not.',
+        'enforcement_label' => 'Stock blocks orders',
+        'enforcement_on' => 'On — orders beyond available stock are refused',
+        'enforcement_off' => 'Off — partners can order whether or not stock is available',
+        'enforcement_saved' => 'Stock setting saved.',
 
         'empty' => 'Nothing is reserved',
         'empty_help' => 'Reservations appear here when orders set stock aside.',

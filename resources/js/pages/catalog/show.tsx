@@ -43,6 +43,8 @@ type Props = {
     product_id?: string;
     /** Updates published for this product, newest first (new feature). */
     content: ContentRow[];
+    /** Whether stock can stop an order; when off, out-of-stock products can still be added. */
+    stock_enforced?: boolean;
 };
 
 /**
@@ -61,6 +63,7 @@ export default function CatalogueProduct({
     websites = [],
     product_id: productId,
     content,
+    stock_enforced: stockEnforced = true,
 }: Props) {
     const { t } = useTranslation();
     const [active, setActive] = useState(0);
@@ -275,6 +278,7 @@ export default function CatalogueProduct({
                                     nonConditional={
                                         accountType === 'non_conditional'
                                     }
+                                    stockEnforced={stockEnforced}
                                 />
                             </>
                         ) : (
@@ -554,9 +558,11 @@ function WholesaleTerms({ product }: { product: BrowseDetail }) {
 function AddToCart({
     product,
     nonConditional,
+    stockEnforced,
 }: {
     product: BrowseDetail;
     nonConditional: boolean;
+    stockEnforced: boolean;
 }) {
     const { t } = useTranslation();
     const min = product.min_order_quantity ?? 1;
@@ -634,12 +640,9 @@ function AddToCart({
                                 <MoneyInput
                                     id="cart-resale-amount"
                                     name="resale_amount"
-                                    label={t(
-                                        'wholesale.cart.resale_amount',
-                                    )}
+                                    label={t('wholesale.cart.resale_amount')}
                                     defaultValue={
-                                        product.suggested_selling_price
-                                            ?.amount
+                                        product.suggested_selling_price?.amount
                                     }
                                     required
                                     error={errors.resale_amount}
@@ -663,7 +666,10 @@ function AddToCart({
                         <div className="flex flex-wrap items-center gap-3">
                             <Button
                                 type="submit"
-                                disabled={processing || !product.in_stock}
+                                disabled={
+                                    processing ||
+                                    (stockEnforced && !product.in_stock)
+                                }
                             >
                                 {processing ? (
                                     <Spinner />

@@ -57,6 +57,7 @@ class SensitiveActionRequest
             PermissionAction::ReleasePayment,
             PermissionAction::AdjustWallet,
             PermissionAction::ReverseTransaction,
+            PermissionAction::SettleManually,
             PermissionAction::ManageBackups,
             PermissionAction::ManageIntegrations,
         ], true);

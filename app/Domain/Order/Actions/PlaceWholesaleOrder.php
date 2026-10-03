@@ -11,6 +11,8 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
+use App\Domain\Inventory\ReservationWindows;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderSource;
@@ -93,6 +95,8 @@ class PlaceWholesaleOrder
         protected AccrueSupplierPayable $supplierPayables,
         protected KycRestrictions $kycRestrictions,
         protected DatabaseManager $database,
+        protected StockEnforcement $enforcement,
+        protected ReservationWindows $windows,
     ) {}
 
     /**
@@ -354,7 +358,7 @@ class PlaceWholesaleOrder
      * from a Supplier's preferred offer where the variation is Supplier-sourced
      * (D25, P13-21), and from central stock otherwise.
      *
-     * @return array{0: array<int, StockReservation>, 1: array<int, SupplierAllocation|null>} both keyed by the line's position in the checkout
+     * @return array{0: array<int, StockReservation|null>, 1: array<int, SupplierAllocation|null>} both keyed by the line's position in the checkout
      *
      * @throws OrderRefused
      */
@@ -389,12 +393,15 @@ class PlaceWholesaleOrder
                     $order->reference.'-L'.($position + 1),
                     $account,
                 );
-            } catch (SupplierAllocationRefused) {
+            } catch (SupplierAllocationRefused|InventoryRefused) {
                 // Never named to the buyer: which Supplier, or why its offer
                 // could not serve, is Feriwala's own business (D25).
-                throw OrderRefused::stockUnavailable();
-            } catch (InventoryRefused) {
-                throw OrderRefused::stockUnavailable();
+                if ($this->enforcement->enforced()) {
+                    throw OrderRefused::stockUnavailable();
+                }
+
+                $reservations[$position] = null;
+                $allocations[$position] = null;
             } catch (LockTimeout) {
                 throw OrderRefused::busy();
             }
@@ -408,7 +415,7 @@ class PlaceWholesaleOrder
      * share of the discount, its tax at the rate in force, the stock held, and
      * — for a Supplier-sourced line — the Supplier allocation (D25, P13-21).
      *
-     * @param  array<int, StockReservation>  $reservations
+     * @param  array<int, StockReservation|null>  $reservations
      * @param  array<int, SupplierAllocation|null>  $allocations
      * @return Collection<int, OrderItem>
      */
@@ -424,7 +431,7 @@ class PlaceWholesaleOrder
     /**
      * @return array<string, mixed>
      */
-    protected function line(CheckoutLineCharge $charge, int $position, StockReservation $reservation, ?SupplierAllocation $allocation = null): array
+    protected function line(CheckoutLineCharge $charge, int $position, ?StockReservation $reservation, ?SupplierAllocation $allocation = null): array
     {
         $item = $charge->line->item;
         $variant = $item->variant;
@@ -460,7 +467,7 @@ class PlaceWholesaleOrder
             'tax_code' => $taxed ? $charge->tax->code : null,
             'tax_rate_basis_points' => $taxed ? $charge->tax->rateBasisPoints : null,
             'tax_mode' => $taxed ? $charge->tax->mode->value : null,
-            'stock_reservation_id' => $reservation->id,
+            'stock_reservation_id' => $reservation?->id,
             ...($allocation?->lineSnapshot() ?? []),
         ];
     }
@@ -468,21 +475,22 @@ class PlaceWholesaleOrder
     /**
      * The payment window: closed a margin before the first reservation runs out.
      *
-     * @param  array<int, StockReservation>  $reservations
+     * With no stock held at all (stock does not block orders), the window is the
+     * online-payment reservation window.
+     *
+     * @param  array<int, StockReservation|null>  $reservations
      */
     protected function paymentDeadline(array $reservations): CarbonImmutable
     {
         $first = null;
 
         foreach ($reservations as $reservation) {
-            if ($first === null || $reservation->expires_at->lessThan($first)) {
+            if ($reservation !== null && ($first === null || $reservation->expires_at->lessThan($first))) {
                 $first = $reservation->expires_at;
             }
         }
 
-        if ($first === null) {
-            throw new LogicException('An order holds stock for at least one line.');
-        }
+        $first ??= $this->windows->expiryFor(ReservationKind::OnlinePayment);
 
         return $first->subSeconds(self::SETTLEMENT_MARGIN_SECONDS);
     }

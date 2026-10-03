@@ -7,6 +7,7 @@ use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Wholesale\Data\CartLineQuote;
 use App\Domain\Wholesale\Data\CartQuote;
 use App\Domain\Wholesale\Models\Cart;
@@ -40,6 +41,7 @@ class PriceCart
         protected ProductEligibility $eligibility,
         protected WholesalePriceResolver $prices,
         protected StockAvailability $stock,
+        protected StockEnforcement $enforcement,
     ) {}
 
     public function quote(?Cart $cart, BusinessAccount $account): CartQuote
@@ -119,7 +121,7 @@ class PriceCart
         $sku = $variant !== null ? $variant->sku : $product->sku;
         $units = $available[$sku]['quantity'] ?? 0;
 
-        if ($eligible && $units < $item->quantity) {
+        if ($eligible && $units < $item->quantity && $this->enforcement->enforced()) {
             $problems[] = CartLineQuote::INSUFFICIENT_STOCK;
         }
 

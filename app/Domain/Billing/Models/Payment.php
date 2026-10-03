@@ -12,6 +12,7 @@ use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
+use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -179,6 +180,34 @@ class Payment extends Model
     public function isSettled(): bool
     {
         return $this->status->isSettled();
+    }
+
+    /**
+     * Whether a person may mark this payment paid by hand.
+     */
+    public function canBeSettledManually(): bool
+    {
+        return in_array($this->status, PaymentStatus::manuallySettleable(), true);
+    }
+
+    /**
+     * Move to `Paid` from a status the ordinary state machine will not leave.
+     *
+     * The single exception to "a failed payment is retried as a new attempt".
+     * Does not persist, like {@see HasStateMachine::transitionTo()}; the manual
+     * settlement action calls it inside its own transaction and row lock.
+     *
+     * @throws IllegalStateTransition
+     */
+    public function transitionToPaidManually(): static
+    {
+        if (! $this->canBeSettledManually()) {
+            throw IllegalStateTransition::between(static::class, $this->status, PaymentStatus::Paid);
+        }
+
+        $this->setAttribute('status', PaymentStatus::Paid);
+
+        return $this;
     }
 
     /**

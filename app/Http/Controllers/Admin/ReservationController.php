@@ -10,6 +10,7 @@ use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Domain\Inventory\ReservationWindows;
+use App\Domain\Inventory\StockEnforcement;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -35,6 +36,7 @@ class ReservationController extends Controller
         protected OverrideReservation $override,
         protected SetReservationWindows $setWindows,
         protected ReservationWindows $windows,
+        protected StockEnforcement $enforcement,
     ) {}
 
     public function index(Request $request): Response
@@ -99,6 +101,7 @@ class ReservationController extends Controller
                 'cod_bounds' => [ReservationWindows::MINIMUM_COD_HOURS, ReservationWindows::MAXIMUM_COD_HOURS],
                 'defaults' => [ReservationWindows::DEFAULT_ONLINE_MINUTES, ReservationWindows::DEFAULT_COD_HOURS],
             ],
+            'stock_enforced' => $this->enforcement->enforced(),
             'max_extension_hours' => OverrideReservation::MAXIMUM_EXTENSION_HOURS,
             'can' => [
                 'override' => InventoryPolicy::canApprove($actor),
@@ -170,6 +173,24 @@ class ReservationController extends Controller
         $this->setWindows->handle($actor, (int) $validated['online_minutes'], (int) $validated['cod_hours']);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('inventory.reservations.windows_saved')]);
+
+        return back();
+    }
+
+    public function enforcement(Request $request): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(InventoryPolicy::canApprove($actor), 403);
+
+        $validated = $request->validate([
+            'enforced' => ['required', 'boolean'],
+            'reason' => ['required', 'string', 'min:'.OverrideReservation::MINIMUM_REASON, 'max:1000'],
+        ]);
+
+        $this->enforcement->switchTo((bool) $validated['enforced'], $actor, $validated['reason']);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('inventory.reservations.enforcement_saved')]);
 
         return back();
     }

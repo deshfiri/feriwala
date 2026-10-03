@@ -352,11 +352,11 @@ export default function Register({
                                 href={
                                     staffInvitation
                                         ? login.url({
-                                              query: {
-                                                  invitation:
-                                                      staffInvitation.token,
-                                              },
-                                          })
+                                            query: {
+                                                invitation:
+                                                    staffInvitation.token,
+                                            },
+                                        })
                                         : login()
                                 }
                                 data-test="staff-invitation-login-link"

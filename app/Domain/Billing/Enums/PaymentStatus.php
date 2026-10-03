@@ -2,6 +2,7 @@
 
 namespace App\Domain\Billing\Enums;
 
+use App\Domain\Billing\Models\Payment;
 use App\Support\StateMachine\TransitionableState;
 use App\Support\Status\HasTranslatedLabel;
 
@@ -70,6 +71,29 @@ enum PaymentStatus: string implements TransitionableState
             self::PartiallyRefunded => [self::Refunded],
             self::Refunded => [],
         };
+    }
+
+    /**
+     * The statuses a person may mark paid by hand (`payment.settle_manually`).
+     *
+     * Deliberately **not** part of {@see transitionsTo()}: no callback, sweep or
+     * stray request may revive a payment that ended. Only the audited manual
+     * settlement reads this list, through
+     * {@see Payment::transitionToPaidManually()}.
+     * `Draft` is left out because it was never sent to a gateway, so there is no
+     * money to account for.
+     *
+     * @return array<int, self>
+     */
+    public static function manuallySettleable(): array
+    {
+        return [
+            self::Initiated,
+            self::Pending,
+            self::Failed,
+            self::Cancelled,
+            self::ReconciliationRequired,
+        ];
     }
 
     /**

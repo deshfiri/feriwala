@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Wholesale\Exceptions\CartRefused;
 use App\Domain\Wholesale\Models\Cart;
 use App\Domain\Wholesale\Models\CartItem;
@@ -42,6 +43,7 @@ class SetCartLine
         protected ProductEligibility $eligibility,
         protected WholesalePriceResolver $prices,
         protected StockAvailability $stock,
+        protected StockEnforcement $enforcement,
     ) {}
 
     /**
@@ -77,7 +79,7 @@ class SetCartLine
             $account,
         )[$sku]['quantity'] ?? 0;
 
-        if ($available < $quantity) {
+        if ($available < $quantity && $this->enforcement->enforced()) {
             throw CartRefused::insufficientStock($available);
         }
 

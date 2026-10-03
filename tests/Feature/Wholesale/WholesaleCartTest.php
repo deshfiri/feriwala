@@ -15,6 +15,7 @@ use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockAllocations;
+use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
@@ -249,6 +250,15 @@ describe('setting a line', function () {
 
         expect(wholesaleCartLinesOf($this->karim)->sole()->quantity)->toBe(5)
             ->and(wholesaleCartLinesOf($this->rahim))->toHaveCount(0);
+    });
+
+    it('lets a cart line exceed stock when stock does not block orders', function () {
+        app(StockEnforcement::class)->switchTo(false, $this->karim->owner, 'Partners must always be able to order.');
+
+        wholesaleCartAdd($this->karim->owner, ['product' => $this->pan->slug, 'quantity' => 1])->assertSessionHasNoErrors();
+        wholesaleCartAdd($this->karim->owner, ['product' => $this->pot->slug, 'quantity' => 6])->assertSessionHasNoErrors();
+
+        expect(wholesaleCartLinesOf($this->karim))->toHaveCount(2);
     });
 
     it('buys a product with variations per active variation of its own', function () {
