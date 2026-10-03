@@ -14,10 +14,10 @@ use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
 use App\Domain\Storage\Models\StoredFile;
-use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -99,7 +99,7 @@ describe('only the platform publishes content (§12)', function () {
         $owner = testBusinessAccount(AccountStatus::Active)->owner;
 
         expect(fn () => app(PublishProductContent::class)->handle($owner, $this->product, 'x', null, null, null))
-            ->toThrow(Illuminate\Auth\Access\AuthorizationException::class);
+            ->toThrow(AuthorizationException::class);
     });
 });
 
