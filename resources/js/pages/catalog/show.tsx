@@ -1,5 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, ImageOff, ShoppingBasket } from 'lucide-react';
+import { ArrowLeft, ImageOff, Paperclip, ShoppingBasket } from 'lucide-react';
 import { useState } from 'react';
 import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
@@ -61,8 +61,12 @@ export default function CatalogueProduct({
 }: Props) {
     const { t } = useTranslation();
     const [active, setActive] = useState(0);
+    const [broken, setBroken] = useState<Set<number>>(() => new Set());
 
-    const current = product.media[active];
+    const current =
+        product.media[active] && !broken.has(active)
+            ? product.media[active]
+            : undefined;
 
     return (
         <>
@@ -181,6 +185,11 @@ export default function CatalogueProduct({
                                         src={current.url}
                                         alt={current.alt ?? product.name}
                                         className="size-full object-contain"
+                                        onError={() =>
+                                            setBroken((prev) =>
+                                                new Set(prev).add(active),
+                                            )
+                                        }
                                     />
                                 ) : (
                                     <video
@@ -215,11 +224,24 @@ export default function CatalogueProduct({
                                             }
                                             className="bg-muted focus-visible:ring-ring aria-pressed:border-foreground size-16 overflow-hidden rounded-md border-2 focus-visible:ring-2 focus-visible:outline-none"
                                         >
-                                            {item.type === 'image' ? (
+                                            {item.type === 'image' &&
+                                            !broken.has(index) ? (
                                                 <img
                                                     src={item.url}
                                                     alt=""
                                                     className="size-full object-cover"
+                                                    onError={() =>
+                                                        setBroken((prev) =>
+                                                            new Set(prev).add(
+                                                                index,
+                                                            ),
+                                                        )
+                                                    }
+                                                />
+                                            ) : item.type === 'image' ? (
+                                                <ImageOff
+                                                    className="text-muted-foreground m-auto size-4"
+                                                    aria-hidden="true"
                                                 />
                                             ) : (
                                                 <span className="text-muted-foreground text-xs">
@@ -315,51 +337,76 @@ export default function CatalogueProduct({
                         title={t('catalog.content.title')}
                         description={t('catalog.content.description')}
                     >
-                        <ol className="space-y-4">
-                            {content.map((item) => (
+                        <ol className="space-y-0">
+                            {content.map((item, index) => (
                                 <li
                                     key={item.id}
-                                    className="bg-card space-y-2 rounded-lg border p-4"
+                                    className="relative flex gap-3"
                                 >
-                                    <div>
-                                        <p className="font-medium">
-                                            {item.title}
-                                        </p>
-                                        <p className="text-muted-foreground text-xs">
-                                            {new Date(
-                                                item.published_at,
-                                            ).toLocaleDateString()}
-                                        </p>
+                                    <div className="flex flex-col items-center">
+                                        <span
+                                            className="bg-primary mt-1.5 size-2.5 shrink-0 rounded-full"
+                                            aria-hidden="true"
+                                        />
+                                        {index < content.length - 1 && (
+                                            <span
+                                                className="bg-border w-px flex-1"
+                                                aria-hidden="true"
+                                            />
+                                        )}
                                     </div>
 
-                                    {item.body && (
-                                        <p className="text-sm whitespace-pre-line">
-                                            {item.body}
-                                        </p>
-                                    )}
+                                    <div className="min-w-0 flex-1 space-y-2 pb-6">
+                                        <div>
+                                            <p className="font-medium">
+                                                {item.title}
+                                            </p>
+                                            <p className="text-muted-foreground text-xs">
+                                                {new Date(
+                                                    item.published_at,
+                                                ).toLocaleString()}
+                                            </p>
+                                        </div>
 
-                                    {item.attachment &&
-                                        (item.attachment.is_image &&
-                                        item.attachment.url ? (
-                                            <img
-                                                src={item.attachment.url}
-                                                alt=""
-                                                className="max-h-48 rounded-md border object-cover"
-                                            />
-                                        ) : (
-                                            item.attachment.url && (
-                                                <a
-                                                    href={item.attachment.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="text-primary inline-flex items-center gap-1.5 text-sm underline"
-                                                >
-                                                    {t(
-                                                        'catalog.content.post_file',
-                                                    )}
-                                                </a>
-                                            )
-                                        ))}
+                                        {item.body && (
+                                            <p className="text-sm whitespace-pre-line">
+                                                {item.body}
+                                            </p>
+                                        )}
+
+                                        {item.attachment &&
+                                            (item.attachment.is_image &&
+                                            item.attachment.url ? (
+                                                <img
+                                                    src={item.attachment.url}
+                                                    alt=""
+                                                    className="max-h-48 rounded-md border object-cover"
+                                                    onError={(event) => {
+                                                        event.currentTarget.style.display =
+                                                            'none';
+                                                    }}
+                                                />
+                                            ) : (
+                                                item.attachment.url && (
+                                                    <a
+                                                        href={
+                                                            item.attachment.url
+                                                        }
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-primary bg-muted/50 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm underline"
+                                                    >
+                                                        <Paperclip
+                                                            className="size-4"
+                                                            aria-hidden="true"
+                                                        />
+                                                        {t(
+                                                            'catalog.content.post_file',
+                                                        )}
+                                                    </a>
+                                                )
+                                            ))}
+                                    </div>
                                 </li>
                             ))}
                         </ol>

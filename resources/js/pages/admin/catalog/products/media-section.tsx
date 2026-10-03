@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import { cn } from '@/lib/utils';
 import type { MediaLimits, MediaRow, ProductDetail, VariantRow } from '@/types';
 
 type Props = {
@@ -111,9 +112,13 @@ export default function MediaSection({
                         {media.map((item, index) => (
                             <li
                                 key={item.id}
-                                className="bg-card overflow-hidden rounded-lg border"
+                                className={cn(
+                                    'bg-card overflow-hidden rounded-lg border',
+                                    item.position === 1 &&
+                                        'ring-success/40 ring-2',
+                                )}
                             >
-                                <div className="bg-muted aspect-square">
+                                <div className="bg-muted relative aspect-square">
                                     {item.type === 'image' ? (
                                         <img
                                             src={item.url}
@@ -122,6 +127,10 @@ export default function MediaSection({
                                             height={item.height ?? undefined}
                                             className="size-full object-cover"
                                             loading="lazy"
+                                            onError={(event) => {
+                                                event.currentTarget.style.visibility =
+                                                    'hidden';
+                                            }}
                                         />
                                     ) : (
                                         <video
@@ -132,16 +141,29 @@ export default function MediaSection({
                                             aria-label={item.alt_text ?? ''}
                                         />
                                     )}
+
+                                    {item.position === 1 && (
+                                        <StatusPill
+                                            tone="success"
+                                            label={t('catalog.media.primary')}
+                                            className="absolute top-2 left-2 shadow-sm"
+                                        />
+                                    )}
                                 </div>
 
                                 <div className="space-y-2 p-3">
                                     <div className="flex flex-wrap items-center gap-1.5">
-                                        <StatusPill
-                                            tone="neutral"
-                                            label={t('catalog.media.position', {
-                                                position: item.position,
-                                            })}
-                                        />
+                                        {item.position !== 1 && (
+                                            <StatusPill
+                                                tone="neutral"
+                                                label={t(
+                                                    'catalog.media.position',
+                                                    {
+                                                        position: item.position,
+                                                    },
+                                                )}
+                                            />
+                                        )}
                                         <StatusPill
                                             tone="info"
                                             label={t(

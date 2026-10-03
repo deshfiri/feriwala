@@ -67,85 +67,103 @@ export default function ContentSection({
                         )}
                     />
                 ) : (
-                    <ol className="space-y-4">
-                        {content.map((item) => (
-                            <li
-                                key={item.id}
-                                className="bg-card space-y-2 rounded-lg border p-4"
-                            >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p className="font-medium">
-                                            {item.title}
-                                        </p>
-                                        <p className="text-muted-foreground text-xs">
-                                            {new Date(
-                                                item.published_at,
-                                            ).toLocaleDateString()}
-                                            {item.creator &&
-                                                ' · ' +
-                                                    t(
-                                                        'catalog.content.posted_by',
-                                                        {
-                                                            name: item.creator,
-                                                        },
-                                                    )}
-                                        </p>
-                                    </div>
-
-                                    {canEdit && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="size-8"
-                                            onClick={() => remove(item)}
-                                        >
-                                            <Trash2
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            <span className="sr-only">
-                                                {t('common.actions.delete')}
-                                            </span>
-                                        </Button>
+                    <ol className="space-y-0">
+                        {content.map((item, index) => (
+                            <li key={item.id} className="relative flex gap-3">
+                                <div className="flex flex-col items-center">
+                                    <span
+                                        className="bg-primary mt-1.5 size-2.5 shrink-0 rounded-full"
+                                        aria-hidden="true"
+                                    />
+                                    {index < content.length - 1 && (
+                                        <span
+                                            className="bg-border w-px flex-1"
+                                            aria-hidden="true"
+                                        />
                                     )}
                                 </div>
 
-                                {item.body && (
-                                    <p className="text-sm whitespace-pre-line">
-                                        {item.body}
-                                    </p>
-                                )}
+                                <div className="min-w-0 flex-1 space-y-2 pb-6">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p className="font-medium">
+                                                {item.title}
+                                            </p>
+                                            <p className="text-muted-foreground text-xs">
+                                                {new Date(
+                                                    item.published_at,
+                                                ).toLocaleString()}
+                                                {item.creator &&
+                                                    ' · ' +
+                                                        t(
+                                                            'catalog.content.posted_by',
+                                                            {
+                                                                name: item.creator,
+                                                            },
+                                                        )}
+                                            </p>
+                                        </div>
 
-                                {item.attachment && (
-                                    <div>
-                                        {item.attachment.is_image &&
-                                        item.attachment.url ? (
-                                            <img
-                                                src={item.attachment.url}
-                                                alt=""
-                                                className="max-h-48 rounded-md border object-cover"
-                                            />
-                                        ) : (
-                                            item.attachment.url && (
-                                                <a
-                                                    href={item.attachment.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="text-primary inline-flex items-center gap-1.5 text-sm underline"
-                                                >
-                                                    <Paperclip
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                    {t(
-                                                        'catalog.content.post_file',
-                                                    )}
-                                                </a>
-                                            )
+                                        {canEdit && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-8"
+                                                onClick={() => remove(item)}
+                                            >
+                                                <Trash2
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                <span className="sr-only">
+                                                    {t('common.actions.delete')}
+                                                </span>
+                                            </Button>
                                         )}
                                     </div>
-                                )}
+
+                                    {item.body && (
+                                        <p className="text-sm whitespace-pre-line">
+                                            {item.body}
+                                        </p>
+                                    )}
+
+                                    {item.attachment && (
+                                        <div>
+                                            {item.attachment.is_image &&
+                                            item.attachment.url ? (
+                                                <img
+                                                    src={item.attachment.url}
+                                                    alt=""
+                                                    className="max-h-48 rounded-md border object-cover"
+                                                    onError={(event) => {
+                                                        event.currentTarget.style.display =
+                                                            'none';
+                                                    }}
+                                                />
+                                            ) : (
+                                                item.attachment.url && (
+                                                    <a
+                                                        href={
+                                                            item.attachment.url
+                                                        }
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-primary bg-muted/50 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm underline"
+                                                    >
+                                                        <Paperclip
+                                                            className="size-4"
+                                                            aria-hidden="true"
+                                                        />
+                                                        {t(
+                                                            'catalog.content.post_file',
+                                                        )}
+                                                    </a>
+                                                )
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </li>
                         ))}
                     </ol>

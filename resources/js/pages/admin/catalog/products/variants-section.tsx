@@ -163,36 +163,24 @@ export default function VariantsSection({
                     )}
                 />
             ) : (
-                <ul className="divide-border divide-y">
+                <ul className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
                     {variants.map((variant) => (
                         <li
                             key={variant.id}
-                            className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                            className="bg-card flex flex-col gap-3 rounded-lg border p-3"
                         >
-                            <div className="min-w-0 space-y-0.5">
-                                <p className="font-medium">{variant.label}</p>
-                                <p className="text-muted-foreground font-mono text-xs">
-                                    {variant.sku}
-                                    {variant.barcode
-                                        ? ` · ${variant.barcode}`
-                                        : ''}
-                                </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3">
-                                <div className="text-right">
-                                    <MoneyAmount
-                                        amount={variant.wholesale_price}
-                                    />
-                                    <p className="text-muted-foreground text-xs">
-                                        {t(
-                                            variant.overrides_price
-                                                ? 'catalog.variants.own_price'
-                                                : 'catalog.variants.product_price',
-                                        )}
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="truncate font-medium">
+                                        {variant.label}
+                                    </p>
+                                    <p className="text-muted-foreground truncate font-mono text-xs">
+                                        {variant.sku}
+                                        {variant.barcode
+                                            ? ` · ${variant.barcode}`
+                                            : ''}
                                     </p>
                                 </div>
-
                                 <StatusPill
                                     tone={
                                         variant.is_active
@@ -205,58 +193,76 @@ export default function VariantsSection({
                                             : 'catalog.variants.switched_off',
                                     )}
                                 />
-
-                                {can.edit && (
-                                    <>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setEditing(variant)}
-                                        >
-                                            <Pencil
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            <span className="sr-only sm:not-sr-only">
-                                                {t('common.actions.edit')}
-                                            </span>
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => toggle(variant)}
-                                        >
-                                            <Power
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                            <span className="sr-only sm:not-sr-only">
-                                                {t(
-                                                    variant.is_active
-                                                        ? 'catalog.variants.disable'
-                                                        : 'catalog.variants.enable',
-                                                )}
-                                            </span>
-                                        </Button>
-                                    </>
-                                )}
-
-                                {can.delete && product.status === 'draft' && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => remove(variant)}
-                                    >
-                                        <Trash2
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        <span className="sr-only">
-                                            {t('common.actions.delete')}
-                                        </span>
-                                    </Button>
-                                )}
                             </div>
+
+                            <div>
+                                <MoneyAmount amount={variant.wholesale_price} />
+                                <p className="text-muted-foreground text-xs">
+                                    {t(
+                                        variant.overrides_price
+                                            ? 'catalog.variants.own_price'
+                                            : 'catalog.variants.product_price',
+                                    )}
+                                </p>
+                            </div>
+
+                            {(can.edit ||
+                                (can.delete && product.status === 'draft')) && (
+                                <div className="mt-auto flex flex-wrap items-center gap-1 border-t pt-2">
+                                    {can.edit && (
+                                        <>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setEditing(variant)
+                                                }
+                                            >
+                                                <Pencil
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                {t('common.actions.edit')}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => toggle(variant)}
+                                            >
+                                                <Power
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                <span className="sr-only sm:not-sr-only">
+                                                    {t(
+                                                        variant.is_active
+                                                            ? 'catalog.variants.disable'
+                                                            : 'catalog.variants.enable',
+                                                    )}
+                                                </span>
+                                            </Button>
+                                        </>
+                                    )}
+
+                                    {can.delete &&
+                                        product.status === 'draft' && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="ml-auto"
+                                                onClick={() => remove(variant)}
+                                            >
+                                                <Trash2
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                <span className="sr-only">
+                                                    {t('common.actions.delete')}
+                                                </span>
+                                            </Button>
+                                        )}
+                                </div>
+                            )}
                         </li>
                     ))}
                 </ul>

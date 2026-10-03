@@ -99,13 +99,27 @@ return [
             'content_help' => 'What partners and their customers read about it.',
             'placement' => 'Placement',
             'placement_help' => 'Where it sits in the catalogue.',
-            'bounds' => 'Order quantities and selling prices',
-            'bounds_help' => 'How many units one wholesale order may carry, and the prices partners are guided to sell at. Blank means no bound; the selling prices are never what Feriwala charges.',
+            'bounds' => 'Order limits',
+            'bounds_help' => 'How many units one wholesale order may carry. Blank means no bound.',
             'pricing' => 'Pricing',
             'pricing_help' => 'Entered in Taka. What was saved is shown beneath each figure, so a misplaced digit is visible.',
+            'selling_guidance' => 'Selling guidance',
+            'selling_guidance_help' => 'The prices partners are guided to sell at. Blank means no bound; these are never what Feriwala charges.',
             'logistics' => 'Logistics and packaging',
             'logistics_help' => 'Weight in grams, every dimension in centimetres -- used by the delivery-charge calculator and courier shipments.',
         ],
+
+        'tabs' => [
+            'basic' => 'Basic Information',
+            'pricing' => 'Pricing',
+            'variants' => 'Variants',
+            'media' => 'Media',
+            'logistics' => 'Logistics',
+            'content' => 'Content & Updates',
+            'seo' => 'SEO',
+        ],
+
+        'more_actions' => 'More actions',
 
         'fields' => [
             'name' => 'Product name',
@@ -406,6 +420,7 @@ return [
         'type_video' => 'Video',
         'missing_alt' => 'No alt text',
         'position' => 'Position :position',
+        'primary' => 'Primary image',
         'move_earlier' => 'Move earlier',
         'move_later' => 'Move later',
         'edit_title' => 'Describe this file',
