@@ -28,6 +28,8 @@ use App\Domain\Package\Models\Package;
 use App\Domain\Package\Policies\PackagePolicy;
 use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Payout\Policies\PayoutMethodPolicy;
+use App\Domain\Sourcing\Models\ProductSourcingGroup;
+use App\Domain\Sourcing\Policies\ProductSourcingGroupPolicy;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
 use App\Domain\Supplier\Models\SupplierOffer;
@@ -68,6 +70,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // Shaping what Feriwala sells is its own permission set (§8.1):
         // writing package copy and withdrawing a plan are different jobs.
         Gate::policy(Package::class, PackagePolicy::class);
+
+        // Which catalogue products can fulfil one another's orders: a
+        // platform-staff decision, never a Supplier's.
+        Gate::policy(ProductSourcingGroup::class, ProductSourcingGroupPolicy::class);
 
         // Both staff management and invitations answer to the membership policy:
         // the question in each case is what the actor's own membership permits.

@@ -244,6 +244,14 @@ class PermissionCatalogue
             Module::DeliverySettings->value => [
                 Action::View, Action::Edit, Action::ManageSettings,
             ],
+
+            // Product Sourcing Groups: which catalogue products fulfil the
+            // same order. `create`/`edit` shape groups and their mappings;
+            // `archive` switches a group off. Nothing is deletable -- mapping
+            // history is what explains an earlier allocation.
+            Module::SourcingGroup->value => [
+                Action::View, Action::Create, Action::Edit, Action::Archive,
+            ],
         ];
     }
 

@@ -196,6 +196,7 @@ enum PlatformRole: string
                 // operational; setting a confidential rate is not.
                 Module::Supplier->value => [Action::View],
                 Module::SupplierListing->value => [Action::View],
+                Module::SourcingGroup->value => [Action::View],
             ],
 
             self::ContentManager => [
@@ -232,6 +233,7 @@ enum PlatformRole: string
                  * its Platform Rate stay with `SupplierManager`.
                  */
                 Module::SupplierListing->value => [Action::View],
+                Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit, Action::Archive],
             ],
 
             self::InventoryManager => [
@@ -360,6 +362,10 @@ enum PlatformRole: string
                 Module::SupplierStock->value => [Action::View, Action::Edit],
                 Module::SupplierPayable->value => [Action::View, Action::Approve],
                 Module::Catalog->value => [Action::View],
+
+                // Deciding which Supplier listings fulfil which product is
+                // part of reviewing them.
+                Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit],
 
                 /*
                  * View, decide and reject a Supplier withdrawal (D25,

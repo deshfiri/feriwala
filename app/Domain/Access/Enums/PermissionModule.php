@@ -60,6 +60,9 @@ enum PermissionModule: string
     /** Weight-tier delivery-charge rules and their global settings (beta-critical batch, Commit 2). */
     case DeliverySettings = 'delivery_settings';
 
+    /** Which catalogue products can fulfil one another's orders (Product Sourcing Groups). */
+    case SourcingGroup = 'sourcing_group';
+
     public function label(): string
     {
         return match ($this) {
@@ -98,6 +101,7 @@ enum PermissionModule: string
             self::SupplierStock => 'Supplier stock',
             self::SupplierPayable => 'Supplier payables',
             self::DeliverySettings => 'Delivery charge settings',
+            self::SourcingGroup => 'Product sourcing groups',
         };
     }
 }
