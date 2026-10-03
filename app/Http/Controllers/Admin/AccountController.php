@@ -8,6 +8,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\AccountDirectory;
 use App\Domain\Account\Queries\AccountDossier;
+use App\Domain\Account\Queries\ContactVerificationState;
 use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -229,7 +230,16 @@ class AccountController extends Controller
                     : Gate::allows('suspendTrading', $account),
                 'reactivate' => $account->status === AccountStatus::Suspended
                     && Gate::allows('reactivate', $account),
+
+                // Confirming a contact by hand and managing the owner's
+                // password-setup link: each its own permission.
+                'verify_contact' => Gate::allows('verifyContact', $account),
+                'manage_identity' => Gate::allows('manageIdentity', $account),
             ],
+
+            // Email/mobile standing, including what staff confirmed by hand
+            // and why (staff-only).
+            'contact' => $account->owner === null ? null : app(ContactVerificationState::class)->for($account->owner),
 
             'blockers' => $blockers,
         ]);

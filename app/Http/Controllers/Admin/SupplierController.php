@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Account\Queries\ContactVerificationState;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Supplier\Actions\ApproveSupplierKyc;
@@ -109,6 +110,8 @@ class SupplierController extends Controller
                 'status_label' => $supplier->status->label(),
                 'status_tone' => $supplier->status->tone(),
                 'submitted_at' => $supplier->submitted_at?->toIso8601String(),
+                'can_verify_contact' => Gate::allows('verify', $supplier),
+                'can_manage_setup' => Gate::allows('update', $supplier),
                 'can_decide' => Gate::allows('decide', Supplier::class),
                 'can_suspend' => $supplier->status === SupplierStatus::Approved && Gate::allows('suspend', $supplier),
                 'can_reactivate' => $supplier->status === SupplierStatus::Suspended && Gate::allows('reactivate', $supplier),
@@ -142,6 +145,7 @@ class SupplierController extends Controller
                     ->values()
                     ->all(),
             ],
+            'contact' => app(ContactVerificationState::class)->for($supplier),
             'status_history' => $statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),

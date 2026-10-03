@@ -1,5 +1,8 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft, Eye, FileText } from 'lucide-react';
+import ContactVerificationCard, {
+    type ContactState,
+} from '@/components/contact-verification-card';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import TextArea from '@/components/forms/text-area';
@@ -11,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
+import ManagedSupplierController from '@/actions/App/Http/Controllers/Admin/ManagedSupplierController';
 import { index } from '@/routes/admin/suppliers';
 import { show as documentShow } from '@/routes/admin/suppliers/kyc/documents';
 import { store as correction } from '@/routes/admin/suppliers/kyc/correction';
@@ -34,6 +38,8 @@ type Props = {
         status_label: string;
         status_tone: StatusTone;
         can_decide: boolean;
+        can_verify_contact: boolean;
+        can_manage_setup: boolean;
         can_suspend: boolean;
         can_reactivate: boolean;
     };
@@ -54,6 +60,8 @@ type Props = {
         fields: { label: string; value: string }[];
         missing_required: string[];
     } | null;
+    /** Email/mobile standing, including what staff confirmed by hand. */
+    contact: ContactState;
     status_history: {
         previous_status: string | null;
         new_status: string;
@@ -75,6 +83,7 @@ const RAW_ROOT =
 export default function AdminSupplierShow({
     supplier,
     round,
+    contact,
     status_history,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -219,6 +228,21 @@ export default function AdminSupplierShow({
                                 ))}
                             </dl>
                         </SectionCard>
+
+                        <ContactVerificationCard
+                            contact={contact}
+                            canVerify={supplier.can_verify_contact}
+                            canManageSetup={supplier.can_manage_setup}
+                            verifyForm={ManagedSupplierController.verifyContact.form(
+                                supplier.id,
+                            )}
+                            sendLinkForm={ManagedSupplierController.sendSetupLink.form(
+                                supplier.id,
+                            )}
+                            revokeLinkForm={ManagedSupplierController.revokeSetupLink.form(
+                                supplier.id,
+                            )}
+                        />
 
                         <SectionCard
                             title={t('supplier.admin.suppliers.evidence')}
