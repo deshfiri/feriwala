@@ -20,7 +20,7 @@ import { store } from '@/routes/supplier/login';
 import { request } from '@/routes/supplier/password';
 
 const inputClass =
-    'h-[52px] rounded-xl border-slate-200 bg-white px-4 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.02)] placeholder:text-slate-400 focus-visible:border-[var(--brand)] focus-visible:ring-[3px] focus-visible:ring-[var(--brand)]/10';
+    'h-[48px] rounded-xl border-slate-200 bg-white px-4 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.02)] placeholder:text-slate-400 focus-visible:border-[var(--brand)] focus-visible:ring-[3px] focus-visible:ring-[var(--brand)]/10';
 
 /**
  * Supplier sign in (D25). The Supplier account is a separate domain from the
@@ -35,48 +35,58 @@ export default function SupplierLogin({ status }: { status?: string }) {
             <Head title={t('supplier.auth.login_title')} />
             <BrandingHead />
 
-            <main className="min-h-screen overflow-hidden bg-[#fafaf9] text-slate-950">
-                <div className="grid min-h-screen lg:grid-cols-[44%_56%]">
-                    <section className="relative flex min-h-screen flex-col bg-[#fafaf9] px-6 sm:px-10 lg:px-12 xl:px-20">
-                        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                            <div className="absolute -top-40 -left-32 h-[380px] w-[380px] rounded-full bg-slate-100/60 blur-[100px]" />
-                        </div>
+            <main className="relative h-dvh overflow-hidden bg-[#fafaf9] text-slate-950">
+                {/* Subtle background */}
+                <div
+                    className="pointer-events-none absolute inset-0"
+                    aria-hidden="true"
+                >
+                    <div className="absolute -top-40 left-1/2 h-[460px] w-[460px] -translate-x-1/2 rounded-full bg-slate-100/80 blur-[110px]" />
+                    <div className="absolute -bottom-48 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-[var(--brand)]/[0.035] blur-[120px]" />
+                </div>
 
-                        <header className="relative z-10 flex h-24 shrink-0 items-center justify-between">
-                            <Link
-                                href={home()}
-                                className="inline-flex items-center"
-                            >
-                                <AppLogoIcon className="h-11 w-auto max-w-[190px]" />
-                            </Link>
+                <div className="relative z-10 flex h-full min-h-0 flex-col">
+                    {/* Header */}
+                    <header className="mx-auto flex h-[72px] w-full max-w-6xl shrink-0 items-center justify-between px-6 sm:px-8 lg:px-10">
+                        <Link
+                            href={home()}
+                            className="inline-flex items-center"
+                            aria-label="Home"
+                        >
+                            <AppLogoIcon className="h-9 w-auto max-w-[175px]" />
+                        </Link>
 
-                            <LanguageSwitcher />
-                        </header>
+                        <LanguageSwitcher />
+                    </header>
 
-                        <div className="relative z-10 flex flex-1 items-center py-8 lg:py-10">
-                            <div className="w-full max-w-[430px]">
-                                <div className="mb-8">
-                                    <div className="mb-4 flex items-center gap-3">
-                                        <span className="h-2 w-2 rounded-full bg-[var(--brand)]" />
+                    {/* Centered supplier login */}
+                    <section className="flex min-h-0 flex-1 items-center justify-center px-6 py-3 sm:px-8 lg:px-10">
+                        <div className="w-full max-w-[420px]">
+                            {/* Heading */}
+                            <div className="mb-5 text-center">
+                                <div className="mb-3 flex items-center justify-center gap-2.5">
+                                    <span className="h-2 w-2 rounded-full bg-[var(--brand)]" />
 
-                                        <span className="text-[11px] font-semibold tracking-[0.22em] text-slate-400 uppercase">
-                                            {t('supplier.portal_name')}
-                                        </span>
-                                    </div>
-
-                                    <h1 className="text-[34px] leading-tight font-semibold tracking-[-0.045em] text-slate-950 sm:text-[38px]">
-                                        {t('supplier.auth.login_heading')}
-                                    </h1>
-
-                                    <p className="mt-3 max-w-[360px] text-[14px] leading-6 text-slate-500">
-                                        {t('supplier.auth.login_intro')}
-                                    </p>
+                                    <span className="text-[10px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
+                                        {t('supplier.portal_name')}
+                                    </span>
                                 </div>
 
+                                <h1 className="text-[30px] leading-tight font-semibold tracking-[-0.045em] text-slate-950 sm:text-[34px]">
+                                    {t('supplier.auth.login_heading')}
+                                </h1>
+
+                                <p className="mx-auto mt-2 max-w-[360px] text-[13px] leading-5 text-slate-500">
+                                    {t('supplier.auth.login_intro')}
+                                </p>
+                            </div>
+
+                            {/* Login card */}
+                            <div className="rounded-[22px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_60px_-35px_rgba(15,23,42,0.20)] sm:p-6">
                                 {status && (
                                     <div
                                         role="status"
-                                        className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
+                                        className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700"
                                     >
                                         {status}
                                     </div>
@@ -87,7 +97,7 @@ export default function SupplierLogin({ status }: { status?: string }) {
                                     resetOnSuccess={['password']}
                                 >
                                     {({ processing, errors }) => (
-                                        <div className="space-y-5">
+                                        <div className="space-y-4">
                                             <FormField
                                                 label={t(
                                                     'supplier.fields.email',
@@ -158,7 +168,9 @@ export default function SupplierLogin({ status }: { status?: string }) {
                                                     tabIndex={5}
                                                     className="text-xs font-semibold text-[var(--brand)] transition-opacity hover:opacity-70"
                                                 >
-                                                    {t('supplier.auth.forgot')}
+                                                    {t(
+                                                        'supplier.auth.forgot',
+                                                    )}
                                                 </Link>
                                             </div>
 
@@ -167,7 +179,7 @@ export default function SupplierLogin({ status }: { status?: string }) {
                                                 disabled={processing}
                                                 tabIndex={4}
                                                 data-test="supplier-login-button"
-                                                className="mt-2 h-[52px] w-full rounded-xl bg-[var(--brand)] text-sm font-semibold text-white shadow-[0_8px_20px_-10px_var(--brand)] transition-all hover:bg-[var(--brand)] hover:opacity-90"
+                                                className="mt-1 h-[48px] w-full rounded-xl bg-[var(--brand)] text-sm font-semibold text-white shadow-[0_8px_20px_-10px_var(--brand)] transition-all hover:bg-[var(--brand)] hover:opacity-90"
                                             >
                                                 {processing && (
                                                     <Spinner className="mr-2" />
@@ -185,91 +197,37 @@ export default function SupplierLogin({ status }: { status?: string }) {
                                     )}
                                 </Form>
 
-                                <p className="mt-6 text-center text-[13px] text-slate-500">
+                                {/* Supplier registration */}
+                                <p className="mt-4 text-center text-[13px] text-slate-500">
                                     {t('supplier.auth.no_account')}{' '}
                                     <Link
                                         href={register()}
                                         tabIndex={6}
                                         className="font-semibold text-[var(--brand)] transition-opacity hover:opacity-70"
                                     >
-                                        {t('supplier.auth.register_title')}
+                                        {t(
+                                            'supplier.auth.register_title',
+                                        )}
                                     </Link>
                                 </p>
 
-                                <p className="mt-8 border-t border-slate-200/80 pt-6 text-center text-xs text-slate-400">
+                                {/* Client login */}
+                                <p className="mt-4 border-t border-slate-200/80 pt-4 text-center text-xs text-slate-400">
                                     {t('supplier.auth.client_prompt')}{' '}
                                     <Link
                                         href={clientLogin()}
-                                        className="font-semibold text-slate-600 transition-opacity hover:opacity-70"
+                                        className="font-semibold text-slate-600 transition-opacity hover:text-[var(--brand)] hover:opacity-80"
                                     >
-                                        {t('supplier.auth.login_submit')}
+                                        {t(
+                                            'supplier.auth.login_submit',
+                                        )}
                                     </Link>
                                 </p>
                             </div>
                         </div>
-
-                        <div className="relative z-10 h-8 shrink-0" />
                     </section>
 
-                    <section
-                        aria-hidden="true"
-                        className="relative hidden min-h-screen overflow-hidden bg-[var(--brand)] lg:block"
-                    >
-                        <div
-                            className="absolute inset-0 opacity-[0.08]"
-                            style={{
-                                backgroundImage:
-                                    'radial-gradient(circle, rgba(255,255,255,0.9) 1px, transparent 1px)',
-                                backgroundSize: '28px 28px',
-                            }}
-                        />
-
-                        <div className="absolute -top-[180px] -right-[190px] h-[520px] w-[520px] rounded-full border border-white/10" />
-                        <div className="absolute -top-[90px] -right-[95px] h-[340px] w-[340px] rounded-full border border-white/10" />
-                        <div className="absolute -bottom-[300px] -left-[200px] h-[650px] w-[650px] rounded-full bg-white/[0.055]" />
-
-                        <div className="relative z-10 flex min-h-screen items-center px-12 py-14 xl:px-20">
-                            <div className="mx-auto w-full max-w-[600px]">
-                                <span className="text-[11px] font-semibold tracking-[0.22em] text-white/80 uppercase">
-                                    {t('supplier.auth.showcase.eyebrow')}
-                                </span>
-
-                                <h2 className="mt-5 text-[44px] leading-[1.08] font-semibold tracking-[-0.05em] text-white xl:text-[56px]">
-                                    {t('supplier.auth.showcase.heading')}
-                                    <span className="block text-white/70">
-                                        {t(
-                                            'supplier.auth.showcase.heading_muted',
-                                        )}
-                                    </span>
-                                </h2>
-
-                                <p className="mt-5 max-w-[470px] text-[15px] leading-7 text-white/75">
-                                    {t('supplier.auth.showcase.description')}
-                                </p>
-
-                                <div className="mt-10 grid max-w-[520px] grid-cols-3 gap-3">
-                                    {(
-                                        [
-                                            'products',
-                                            'inventory',
-                                            'orders',
-                                        ] as const
-                                    ).map((key) => (
-                                        <div
-                                            key={key}
-                                            className="rounded-2xl border border-white/20 bg-white/10 px-4 py-5 text-sm font-semibold text-white backdrop-blur-sm"
-                                        >
-                                            {t(`supplier.auth.showcase.${key}`)}
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <p className="mt-7 text-xs font-medium text-white/70">
-                                    {t('supplier.auth.showcase.trust')}
-                                </p>
-                            </div>
-                        </div>
-                    </section>
+                    <div className="h-3 shrink-0" />
                 </div>
             </main>
         </>
