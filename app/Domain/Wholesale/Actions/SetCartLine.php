@@ -14,6 +14,7 @@ use App\Domain\Wholesale\Models\Cart;
 use App\Domain\Wholesale\Models\CartItem;
 use App\Domain\Wholesale\Queries\PriceCart;
 use App\Models\User;
+use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -46,7 +47,7 @@ class SetCartLine
     /**
      * @throws CartRefused
      */
-    public function handle(User $user, BusinessAccount $account, Product $product, ?ProductVariant $variant, int $quantity): CartItem
+    public function handle(User $user, BusinessAccount $account, Product $product, ?ProductVariant $variant, int $quantity, ?Money $resaleAmount = null): CartItem
     {
         if (! $this->eligibility->isEligible($product, $account, SalesChannel::Wholesale)) {
             throw CartRefused::unavailable();
@@ -81,9 +82,10 @@ class SetCartLine
         }
 
         $unit = $this->prices->unitPrice($product, $variant, $quantity);
+        $resaleAmount = $this->resolveResaleAmount($account, $product, $unit, $resaleAmount);
         $cart = $this->carts->forUser($user, $account);
 
-        return DB::transaction(function () use ($cart, $product, $variant, $quantity, $unit) {
+        return DB::transaction(function () use ($cart, $product, $variant, $quantity, $unit, $resaleAmount) {
             // One writer per cart at a time, so the line cap and the upsert see
             // the same cart.
             Cart::query()->lockForUpdate()->findOrFail($cart->id);
@@ -96,7 +98,7 @@ class SetCartLine
                 ->first();
 
             if ($line !== null) {
-                $line->forceFill(['quantity' => $quantity, 'unit_price_seen' => $unit])->save();
+                $line->forceFill(['quantity' => $quantity, 'unit_price_seen' => $unit, 'resale_amount' => $resaleAmount])->save();
 
                 return $line;
             }
@@ -112,7 +114,40 @@ class SetCartLine
                 'quantity' => $quantity,
                 'currency_code' => $unit->currency->value,
                 'unit_price_seen' => $unit,
+                'resale_amount' => $resaleAmount,
             ]);
         });
+    }
+
+    /**
+     * A Non-Conditional account must declare a resale/COD amount for this
+     * line, bounded by the product's own selling-price guidance — the same
+     * `minimum_selling_price`/`maximum_selling_price` already shown to every
+     * partner today. A Conditional account's line carries none: the product
+     * cost is charged upfront, so there is nothing to recover later against.
+     *
+     * @throws CartRefused
+     */
+    protected function resolveResaleAmount(BusinessAccount $account, Product $product, Money $unit, ?Money $resaleAmount): ?Money
+    {
+        if (! $account->isNonConditional()) {
+            return null;
+        }
+
+        if ($resaleAmount === null) {
+            throw CartRefused::resaleAmountRequired();
+        }
+
+        $minimum = $product->minimum_selling_price ?? $unit;
+
+        if ($resaleAmount->lessThan($minimum)) {
+            throw CartRefused::resaleAmountBelowMinimum($minimum);
+        }
+
+        if ($product->maximum_selling_price !== null && $resaleAmount->greaterThan($product->maximum_selling_price)) {
+            throw CartRefused::resaleAmountAboveMaximum($product->maximum_selling_price);
+        }
+
+        return $resaleAmount;
     }
 }

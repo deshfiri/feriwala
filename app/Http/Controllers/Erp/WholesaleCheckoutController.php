@@ -69,10 +69,16 @@ class WholesaleCheckoutController extends Controller
         $methods = $this->gateways->availableFor($quote->total->currency);
         $fingerprint = $quote->fingerprint();
         $pending = $orders->awaitingPaymentFor($cart);
+        $nonConditional = $account->isNonConditional();
 
         return Inertia::render('wholesale/checkout', [
             'checkout' => [
                 'fingerprint' => $fingerprint,
+                'non_conditional' => $nonConditional,
+                // What is actually charged today — the delivery charge alone
+                // for a Non-Conditional account, the full total otherwise
+                // (D-new). `total` below stays the order's real value.
+                'amount_due_now' => ($nonConditional ? $quote->delivery : $quote->total)->jsonSerialize(),
                 'payment_methods' => array_map(fn (string $name) => [
                     'name' => $name,
                     'label' => $this->gatewayLabel($name),

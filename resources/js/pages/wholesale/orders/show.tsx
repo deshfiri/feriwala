@@ -126,6 +126,18 @@ export default function WholesaleOrder({
                                                 {isPositive(line.tax) &&
                                                     ` · ${t('orders.lines.tax', { amount: line.tax.formatted })}`}
                                             </p>
+                                            {line.resale_amount && (
+                                                <p className="text-muted-foreground text-xs">
+                                                    {t(
+                                                        'orders.lines.resale_amount',
+                                                        {
+                                                            amount: line
+                                                                .resale_amount
+                                                                .formatted,
+                                                        },
+                                                    )}
+                                                </p>
+                                            )}
                                         </div>
                                         <MoneyAmount
                                             amount={line.total}

@@ -260,7 +260,31 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                         />
                                     </dd>
                                 </div>
+
+                                {checkout.non_conditional && (
+                                    <div className="border-border flex items-baseline justify-between gap-3 border-t pt-3">
+                                        <dt className="font-medium">
+                                            {t(
+                                                'wholesale.checkout.due_now',
+                                            )}
+                                        </dt>
+                                        <dd>
+                                            <MoneyAmount
+                                                amount={
+                                                    checkout.amount_due_now
+                                                }
+                                                size="large"
+                                            />
+                                        </dd>
+                                    </div>
+                                )}
                             </dl>
+
+                            {checkout.non_conditional && (
+                                <p className="text-muted-foreground mt-3 text-xs">
+                                    {t('wholesale.checkout.due_now_help')}
+                                </p>
+                            )}
 
                             {/*
                                 Tax per rate (D19). Inclusive tax appears here and
@@ -501,7 +525,11 @@ const controlClass =
  */
 function PayPanel({ checkout }: { checkout: CheckoutSummary }) {
     const { t } = useTranslation();
-    const total = checkout.confirmation?.total.formatted ?? '';
+    // What is actually charged now — the delivery charge alone for a
+    // Non-Conditional account, the confirmed total otherwise (D-new).
+    const total = checkout.non_conditional
+        ? checkout.amount_due_now.formatted
+        : (checkout.confirmation?.total.formatted ?? '');
     const gateway = checkout.confirmation?.payment_method.label ?? '';
 
     return (
@@ -521,6 +549,12 @@ function PayPanel({ checkout }: { checkout: CheckoutSummary }) {
                         <p className="text-sm">
                             {t('orders.pay.body', { total, gateway })}
                         </p>
+
+                        {checkout.non_conditional && (
+                            <p className="text-muted-foreground text-xs">
+                                {t('orders.pay.non_conditional_note')}
+                            </p>
+                        )}
 
                         <div className="grid gap-1.5">
                             <Label htmlFor="order-note">

@@ -51,6 +51,16 @@ class OrderRefused extends RuntimeException
         return new self(__('wholesale.refused.addresses_missing'), 'addresses');
     }
 
+    /**
+     * A Non-Conditional account's line has no declared resale/COD amount —
+     * most likely because it was added to the cart before the account's type
+     * last changed.
+     */
+    public static function resaleAmountRequired(): self
+    {
+        return new self(__('wholesale.refused.resale_amount_required'), 'cart');
+    }
+
     public static function paymentMethodUnavailable(): self
     {
         return new self(__('wholesale.refused.payment_method_unavailable'), 'payment_method');

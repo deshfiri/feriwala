@@ -252,6 +252,11 @@ class CatalogController extends Controller
                 'in_stock' => collect($available)->contains(fn (int $units) => $units > 0),
                 'available' => $hasVariants ? null : ($available[$product->sku] ?? 0),
             ];
+
+            // A Non-Conditional account declares a resale/COD amount per line
+            // (D-new), bounded by the same guidance a dropshipping partner
+            // already sees — so it is surfaced here too, not computed from it.
+            $detail += $this->sellingGuidance($product);
         } else {
             $detail += $this->sellingGuidance($product);
         }
@@ -283,6 +288,7 @@ class CatalogController extends Controller
 
         return Inertia::render('catalog/show', [
             'channel' => $channel->value,
+            'account_type' => $account->account_type->value,
             'product' => $detail,
             'related' => $related,
 

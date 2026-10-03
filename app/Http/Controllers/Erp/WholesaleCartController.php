@@ -19,6 +19,9 @@ use App\Domain\Wholesale\Models\CartItem;
 use App\Domain\Wholesale\Queries\PriceCart;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -59,6 +62,7 @@ class WholesaleCartController extends Controller
 
         return Inertia::render('wholesale/cart', [
             'facility_allowed' => $allowed,
+            'account_type' => $account->account_type->value,
             'cart' => $quote === null ? null : [
                 'lines' => array_map(fn (CartLineQuote $line) => $this->line($line), $quote->lines),
                 'subtotal' => $quote->subtotal->jsonSerialize(),
@@ -78,6 +82,7 @@ class WholesaleCartController extends Controller
             'product' => ['required', 'string', 'max:255'],
             'variant' => ['nullable', 'string', 'max:64'],
             'quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'resale_amount' => ['nullable', new DecimalAmountRule],
         ]);
 
         // Only a product this account may buy wholesale is found at all; anything
@@ -96,7 +101,9 @@ class WholesaleCartController extends Controller
             throw ValidationException::withMessages(['variant' => CartRefused::variationUnavailable()->getMessage()]);
         }
 
-        $this->set($request, $account, fn () => $this->setLine->handle($this->person($request), $account, $product, $variant, (int) $validated['quantity']));
+        $resaleAmount = DecimalAmount::parseOrNull($validated['resale_amount'] ?? null, Currency::base());
+
+        $this->set($request, $account, fn () => $this->setLine->handle($this->person($request), $account, $product, $variant, (int) $validated['quantity'], $resaleAmount));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('wholesale.cart.added', ['name' => $product->name])]);
 
@@ -110,7 +117,10 @@ class WholesaleCartController extends Controller
 
         $validated = $request->validate([
             'quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'resale_amount' => ['nullable', new DecimalAmountRule],
         ]);
+
+        $resaleAmount = DecimalAmount::parseOrNull($validated['resale_amount'] ?? null, Currency::base());
 
         $this->set($request, $account, fn () => $this->setLine->handle(
             $this->person($request),
@@ -118,6 +128,7 @@ class WholesaleCartController extends Controller
             $line->product,
             $line->variant,
             (int) $validated['quantity'],
+            $resaleAmount,
         ));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('wholesale.cart.updated')]);
@@ -218,6 +229,14 @@ class WholesaleCartController extends Controller
             'price_changed' => $line->priceChanged,
             'problems' => $line->problems,
             'purchasable' => $line->isPurchasable(),
+            // A Non-Conditional account declares this per line (D-new); shown
+            // only so the form can be pre-filled, never computed from it.
+            'resale_amount' => $item->resale_amount?->jsonSerialize(),
+            'resale_guidance' => [
+                'suggested' => $product->suggested_selling_price?->jsonSerialize(),
+                'minimum' => ($product->minimum_selling_price ?? $line->unitPrice)?->jsonSerialize(),
+                'maximum' => $product->maximum_selling_price?->jsonSerialize(),
+            ],
         ];
     }
 

@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
+use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Courier\Models\Shipment;
@@ -52,6 +53,7 @@ use LogicException;
  * @property OrderSource $source
  * @property OrderStatus $status
  * @property int $business_account_id
+ * @property AccountType $account_type the placing account's type, snapshotted at placement (D-new)
  * @property int|null $placed_by
  * @property int|null $website_id
  * @property int|null $website_customer_id
@@ -113,6 +115,7 @@ class Order extends Model
         return [
             'source' => OrderSource::class,
             'status' => OrderStatus::class,
+            'account_type' => AccountType::class,
             'fulfillment_status' => OrderFulfillmentStatus::class,
             'courier_status' => OrderCourierStatus::class,
             'delivery_status' => OrderDeliveryStatus::class,
@@ -279,6 +282,16 @@ class Order extends Model
         return $this->source === OrderSource::Website
             && $this->payment_id !== null
             && ($this->payment?->gateway === null);
+    }
+
+    /**
+     * Whether this order's product cost was deferred to delivery (D-new):
+     * only the delivery charge was collected upfront, from a Non-Conditional
+     * account at the time it was placed.
+     */
+    public function isNonConditional(): bool
+    {
+        return $this->account_type === AccountType::NonConditional;
     }
 
     /**

@@ -5,6 +5,7 @@ import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/Wholesal
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -28,6 +29,7 @@ import { ProductCard } from './browse';
 
 type Props = {
     channel: SalesChannelName;
+    account_type: 'conditional' | 'non_conditional';
     product: BrowseDetail;
     /** Only the recommendations this account may itself open on this channel. */
     related: BrowseCard[];
@@ -53,6 +55,7 @@ type Props = {
  */
 export default function CatalogueProduct({
     channel,
+    account_type: accountType,
     product,
     related,
     websites = [],
@@ -267,7 +270,12 @@ export default function CatalogueProduct({
                         {channel === 'wholesale' ? (
                             <>
                                 <WholesaleTerms product={product} />
-                                <AddToCart product={product} />
+                                <AddToCart
+                                    product={product}
+                                    nonConditional={
+                                        accountType === 'non_conditional'
+                                    }
+                                />
                             </>
                         ) : (
                             <SellingGuidance product={product} />
@@ -543,7 +551,13 @@ function WholesaleTerms({ product }: { product: BrowseDetail }) {
  * quantity rules and stock again and prices the line itself; the numbers shown
  * here are guidance, not what is charged.
  */
-function AddToCart({ product }: { product: BrowseDetail }) {
+function AddToCart({
+    product,
+    nonConditional,
+}: {
+    product: BrowseDetail;
+    nonConditional: boolean;
+}) {
     const { t } = useTranslation();
     const min = product.min_order_quantity ?? 1;
     const hasVariants = product.variants.length > 0;
@@ -614,6 +628,37 @@ function AddToCart({ product }: { product: BrowseDetail }) {
                                 message={errors.quantity ?? errors.product}
                             />
                         </div>
+
+                        {nonConditional && (
+                            <div className="grid gap-2">
+                                <MoneyInput
+                                    id="cart-resale-amount"
+                                    name="resale_amount"
+                                    label={t(
+                                        'wholesale.cart.resale_amount',
+                                    )}
+                                    defaultValue={
+                                        product.suggested_selling_price
+                                            ?.amount
+                                    }
+                                    required
+                                    error={errors.resale_amount}
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                    {t('wholesale.cart.resale_guidance', {
+                                        minimum:
+                                            (
+                                                product.minimum_selling_price ??
+                                                product.wholesale_price
+                                            )?.formatted ?? '—',
+                                        maximum:
+                                            product.maximum_selling_price
+                                                ?.formatted ??
+                                            t('wholesale.cart.no_maximum'),
+                                    })}
+                                </p>
+                            </div>
+                        )}
 
                         <div className="flex flex-wrap items-center gap-3">
                             <Button

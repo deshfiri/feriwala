@@ -2,6 +2,7 @@
 
 namespace App\Domain\Wholesale\Exceptions;
 
+use App\Support\Money\Money;
 use RuntimeException;
 
 /**
@@ -51,5 +52,27 @@ class CartRefused extends RuntimeException
     public static function cartFull(int $maximum): self
     {
         return new self(__('wholesale.refused.cart_full', ['max' => $maximum]), 'product');
+    }
+
+    /** A Non-Conditional account's line needs a declared resale/COD amount. */
+    public static function resaleAmountRequired(): self
+    {
+        return new self(__('wholesale.refused.resale_amount_required_line'), 'resale_amount');
+    }
+
+    public static function resaleAmountBelowMinimum(Money $minimum): self
+    {
+        return new self(
+            __('wholesale.refused.resale_amount_below_minimum', ['minimum' => $minimum->toDecimal()]),
+            'resale_amount',
+        );
+    }
+
+    public static function resaleAmountAboveMaximum(Money $maximum): self
+    {
+        return new self(
+            __('wholesale.refused.resale_amount_above_maximum', ['maximum' => $maximum->toDecimal()]),
+            'resale_amount',
+        );
     }
 }

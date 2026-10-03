@@ -46,6 +46,7 @@ use LogicException;
  * @property Money $tax
  * @property Money $tax_included
  * @property Money $line_total
+ * @property Money|null $resale_amount a Non-Conditional account's declared resale/COD amount for this line
  * @property string|null $tax_code
  * @property int|null $tax_rate_basis_points
  * @property string|null $tax_mode
@@ -99,6 +100,7 @@ class OrderItem extends Model
             'tax' => MoneyCast::class,
             'tax_included' => MoneyCast::class,
             'line_total' => MoneyCast::class,
+            'resale_amount' => MoneyCast::class,
             'tax_rate_basis_points' => 'integer',
             'supplier_rate' => MoneyCast::class.':supplier_currency_code',
             'platform_rate' => MoneyCast::class.':supplier_currency_code',

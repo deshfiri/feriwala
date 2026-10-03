@@ -87,12 +87,15 @@ export type WholesaleOrderLine = {
     discount: Money;
     tax: Money;
     total: Money;
+    /** A Non-Conditional account's declared resale/COD amount (D-new). */
+    resale_amount: Money | null;
 };
 
 export type WholesaleOrderDetail = WholesaleOrderSummary & {
     paid_at: string | null;
     cancelled_at: string | null;
     placed_by: string | null;
+    account_type: 'conditional' | 'non_conditional';
     lines: WholesaleOrderLine[];
     totals: {
         subtotal: Money;

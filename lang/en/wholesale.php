@@ -43,6 +43,10 @@ return [
         'choose_variation' => 'Choose a variation',
         'view_cart' => 'View cart',
 
+        'resale_amount' => 'Resale / COD amount',
+        'resale_guidance' => 'Must be between :minimum and :maximum.',
+        'no_maximum' => 'no maximum',
+
         'added' => ':name is in your cart.',
         'updated' => 'Cart updated.',
         'removed' => ':name removed from your cart.',
@@ -70,6 +74,8 @@ return [
         'delivery' => 'Delivery',
         'tax' => 'Tax',
         'total' => 'Total',
+        'due_now' => 'Due now',
+        'due_now_help' => 'Your account pays only the delivery charge upfront. The product cost is recovered from the amount collected at delivery.',
         'tax_breakdown' => 'Tax breakdown',
         'addresses_needed' => 'Add a billing and a shipping address to continue.',
 
@@ -139,5 +145,9 @@ return [
         'addresses_missing' => 'Add a billing and a shipping address before confirming.',
         'payment_method_unavailable' => 'Choose one of the payment methods offered.',
         'checkout_changed' => 'Your order changed while this page was open. Review the updated summary and confirm again.',
+        'resale_amount_required' => 'One or more lines need a resale amount before this order can be placed. Review your cart.',
+        'resale_amount_required_line' => 'Enter the resale/COD amount for this line.',
+        'resale_amount_below_minimum' => 'The resale amount cannot be less than :minimum.',
+        'resale_amount_above_maximum' => 'The resale amount cannot be more than :maximum.',
     ],
 ];

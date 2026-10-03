@@ -91,6 +91,7 @@ class WholesaleOrderTracking
             'paid_at' => $order->paid_at?->toIso8601String(),
             'cancelled_at' => $order->cancelled_at?->toIso8601String(),
             'placed_by' => $order->placedBy?->name,
+            'account_type' => $order->account_type->value,
             'lines' => $order->items->map(fn (OrderItem $item) => [
                 'id' => $item->public_id,
                 'name' => $item->product_name,
@@ -102,6 +103,7 @@ class WholesaleOrderTracking
                 'discount' => $item->discount->jsonSerialize(),
                 'tax' => $item->tax->jsonSerialize(),
                 'total' => $item->line_total->jsonSerialize(),
+                'resale_amount' => $item->resale_amount?->jsonSerialize(),
             ])->all(),
             'totals' => [
                 'subtotal' => $order->subtotal->jsonSerialize(),

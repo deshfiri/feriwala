@@ -35,6 +35,13 @@ export type CartLine = {
     price_changed: boolean;
     problems: CartProblem[];
     purchasable: boolean;
+    /** A Non-Conditional account's declared resale/COD amount for this line. */
+    resale_amount: Money | null;
+    resale_guidance: {
+        suggested: Money | null;
+        minimum: Money | null;
+        maximum: Money | null;
+    };
 };
 
 export type CartSummary = {
@@ -108,6 +115,10 @@ export type CheckoutConfirmation = {
 
 export type CheckoutSummary = {
     fingerprint: string;
+    /** Whether the product cost is deferred to delivery for this account (D-new). */
+    non_conditional: boolean;
+    /** What is actually charged today — `total` below stays the order's real value. */
+    amount_due_now: Money;
     payment_methods: CheckoutPaymentMethod[];
     confirmation: CheckoutConfirmation | null;
     lines: CheckoutLine[];

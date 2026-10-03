@@ -96,6 +96,7 @@ return [
         'quantity_each' => ':quantity × :amount',
         'discount' => 'Discount :amount',
         'tax' => 'Tax :amount',
+        'resale_amount' => 'Resale/COD amount: :amount',
     ],
 
     'summary' => [
@@ -427,6 +428,7 @@ return [
     'pay' => [
         'title' => 'Pay and place order',
         'body' => 'The stock is held for you while you pay. You pay :total through :gateway.',
+        'non_conditional_note' => 'This is the delivery charge only. The product cost is recovered from the amount collected at delivery, not charged now.',
         'note' => 'Note for this order (optional)',
         'submit' => 'Pay :total',
         'submitting' => 'Placing your order…',

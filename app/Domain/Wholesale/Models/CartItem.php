@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $product_variant_id
  * @property int $quantity
  * @property Money|null $unit_price_seen
+ * @property Money|null $resale_amount
  * @property string $currency_code
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
@@ -46,6 +47,7 @@ class CartItem extends Model
         return [
             'quantity' => 'integer',
             'unit_price_seen' => MoneyCast::class,
+            'resale_amount' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

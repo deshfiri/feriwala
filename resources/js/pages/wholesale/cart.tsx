@@ -3,6 +3,7 @@ import { AlertTriangle, ImageOff, ShoppingBasket, Trash2 } from 'lucide-react';
 import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -22,6 +23,7 @@ import type { CartLine, CartProblem, CartSummary } from '@/types/wholesale';
 
 type Props = {
     facility_allowed: boolean;
+    account_type: 'conditional' | 'non_conditional';
     cart: CartSummary | null;
 };
 
@@ -33,7 +35,11 @@ type Props = {
  * stock for this account, and whether each line may be bought at all. The page
  * sends only a quantity; it never totals, discounts or prices anything.
  */
-export default function WholesaleCart({ facility_allowed, cart }: Props) {
+export default function WholesaleCart({
+    facility_allowed,
+    account_type: accountType,
+    cart,
+}: Props) {
     const { t } = useTranslation();
     const title = t('wholesale.cart.title');
 
@@ -147,7 +153,13 @@ export default function WholesaleCart({ facility_allowed, cart }: Props) {
                                 <ul className="divide-border divide-y">
                                     {cart.lines.map((line) => (
                                         <li key={line.id}>
-                                            <CartLineRow line={line} />
+                                            <CartLineRow
+                                                line={line}
+                                                nonConditional={
+                                                    accountType ===
+                                                    'non_conditional'
+                                                }
+                                            />
                                         </li>
                                     ))}
                                 </ul>
@@ -211,7 +223,13 @@ export default function WholesaleCart({ facility_allowed, cart }: Props) {
     );
 }
 
-function CartLineRow({ line }: { line: CartLine }) {
+function CartLineRow({
+    line,
+    nonConditional,
+}: {
+    line: CartLine;
+    nonConditional: boolean;
+}) {
     const { t } = useTranslation();
 
     const problem = (code: CartProblem) =>
@@ -312,6 +330,18 @@ function CartLineRow({ line }: { line: CartLine }) {
                     </ul>
                 )}
 
+                {nonConditional && (
+                    <p className="text-muted-foreground text-xs">
+                        {t('wholesale.cart.resale_guidance', {
+                            minimum:
+                                line.resale_guidance.minimum?.formatted ?? '—',
+                            maximum:
+                                line.resale_guidance.maximum?.formatted ??
+                                t('wholesale.cart.no_maximum'),
+                        })}
+                    </p>
+                )}
+
                 <div className="flex flex-wrap items-start gap-2">
                     <Form
                         {...WholesaleCartController.update.form(line.id)}
@@ -335,6 +365,24 @@ function CartLineRow({ line }: { line: CartLine }) {
                                     />
                                     <InputError message={errors.quantity} />
                                 </div>
+
+                                {nonConditional && (
+                                    <MoneyInput
+                                        id={`resale-amount-${line.id}`}
+                                        name="resale_amount"
+                                        label={t(
+                                            'wholesale.cart.resale_amount',
+                                        )}
+                                        defaultValue={
+                                            line.resale_amount?.amount ??
+                                            line.resale_guidance.suggested
+                                                ?.amount
+                                        }
+                                        error={errors.resale_amount}
+                                        className="w-36"
+                                    />
+                                )}
+
                                 <Button
                                     type="submit"
                                     variant="outline"
