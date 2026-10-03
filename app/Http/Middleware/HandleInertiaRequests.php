@@ -143,6 +143,13 @@ class HandleInertiaRequests extends Middleware
         // this key but the key was never shipped, so it stayed hidden for
         // everyone, Super Admin included.
         [PermissionModule::DeliverySettings, PermissionAction::View],
+
+        // Three more links gated on abilities that were never shipped (found
+        // by NavigationPermissionsTest): Shipments, Integrations and the
+        // account verification settings.
+        [PermissionModule::Courier, PermissionAction::View],
+        [PermissionModule::Integration, PermissionAction::View],
+        [PermissionModule::Account, PermissionAction::ManageSettings],
     ];
 
     /**

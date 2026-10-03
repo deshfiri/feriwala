@@ -162,7 +162,7 @@ class SourcingGroupController extends Controller
                 'reason' => $log->reason,
                 'before' => $log->before,
                 'after' => $log->after,
-                'at' => $log->created_at?->toIso8601String(),
+                'at' => $log->created_at->toIso8601String(),
             ])->values();
 
         $search = trim($request->string('product_search')->toString());

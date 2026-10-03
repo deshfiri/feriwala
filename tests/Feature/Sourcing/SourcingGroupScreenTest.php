@@ -186,13 +186,18 @@ describe('access', function () {
             ->assertInertia(fn (Assert $page) => $page->where('permissions', fn ($permissions) => $permissions['sourcing_group.view'] === false));
     });
 
-    it('keeps a Supplier session out entirely', function () {
+    it('keeps a Supplier session out entirely', function (string $route) {
         $group = sourcingScreenGroup();
         $supplier = Supplier::factory()->create();
 
-        $this->actingAs($supplier, 'supplier')->get(route('admin.sourcing-groups.index'))->assertRedirect(route('login'));
-        $this->get(route('admin.sourcing-groups.show', $group))->assertRedirect(route('login'));
-    });
+        // Signed in on the named guard only, as a real browser holds it;
+        // actingAs() would make 'supplier' the default guard and defeat the point.
+        supplierTestSignIn($supplier);
+
+        $this
+            ->get($route === 'index' ? route('admin.sourcing-groups.index') : route('admin.sourcing-groups.show', $group))
+            ->assertRedirect(route('login'));
+    })->with(['the list' => 'index', 'one group' => 'show']);
 
     it('keeps a Client/Partner session out', function () {
         $group = sourcingScreenGroup();
