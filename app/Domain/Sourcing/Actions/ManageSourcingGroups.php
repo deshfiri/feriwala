@@ -173,7 +173,7 @@ class ManageSourcingGroups
                 throw SourcingGroupRefused::canonicalHasMembers();
             }
 
-            if ($this->hasOpenAllocationOnProduct($product)) {
+            if ($this->hasOpenAllocationOnProduct($product, null, $group->id)) {
                 throw SourcingGroupRefused::inUseByOpenAllocation();
             }
 
@@ -288,7 +288,7 @@ class ManageSourcingGroups
                 return;
             }
 
-            if ($this->hasOpenAllocationOnProduct($locked->product, $locked->product_variant_id)) {
+            if ($this->hasOpenAllocationOnProduct($locked->product, $locked->product_variant_id, $locked->sourcing_group_id)) {
                 throw SourcingGroupRefused::inUseByOpenAllocation();
             }
 
@@ -308,11 +308,12 @@ class ManageSourcingGroups
     }
 
     /**
-     * Whether an active allocation fulfils an order for a *different* product
-     * from the given one's offer or stock -- the only case that relies on a
-     * sourcing mapping. A same-product allocation never needed one.
+     * Whether an active allocation fulfils an order line of this group from
+     * the given product's offer or stock -- the only case that relies on the
+     * membership or mapping. Judged from the group frozen on the order line,
+     * so a same-product allocation (which never needed one) is not counted.
      */
-    protected function hasOpenAllocationOnProduct(Product $product, ?int $variantId = null): bool
+    protected function hasOpenAllocationOnProduct(Product $product, ?int $variantId = null, ?int $groupId = null): bool
     {
         $offerIds = SupplierOffer::query()
             ->where('product_id', $product->id)
@@ -329,7 +330,9 @@ class ManageSourcingGroups
             ->where(fn ($query) => $query
                 ->whereIn('supplier_offer_id', $offerIds)
                 ->orWhereIn('linked_stock_item_id', $stockItemIds))
-            ->whereHas('orderItem', fn ($query) => $query->where('product_id', '!=', $product->id))
+            ->whereHas('orderItem', fn ($query) => $query
+                ->where('product_id', '!=', $product->id)
+                ->when($groupId !== null, fn ($inner) => $inner->where('sourcing_group_id', $groupId)))
             ->exists();
     }
 
