@@ -46,6 +46,8 @@ class AccountDossier
             'status' => $account->status->value,
             'status_label' => $account->status->label(),
             'status_tone' => $account->status->tone(),
+            'account_type' => $account->account_type->value,
+            'account_type_label' => $account->account_type->label(),
             'registered_at' => $account->created_at?->toIso8601String(),
             'activated_at' => $account->activated_at?->toIso8601String(),
 

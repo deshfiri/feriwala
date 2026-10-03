@@ -7,6 +7,7 @@ use App\Concerns\HasSlug;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Enums\AccountType;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Entitlements;
@@ -54,6 +55,7 @@ use Illuminate\Support\Carbon;
  * @property string $slug
  * @property int $owner_id
  * @property AccountStatus $status
+ * @property AccountType $account_type
  * @property CarbonImmutable|null $activated_at
  * @property CarbonImmutable|null $approval_pending_at
  * @property string|null $activation_hold_reason
@@ -71,7 +73,7 @@ use Illuminate\Support\Carbon;
  * @property-read AccountReferral|null $referral
  * @property-read Collection<int, AccountReferral> $directReferrals
  */
-#[Fillable(['name', 'slug', 'owner_id', 'status'])]
+#[Fillable(['name', 'slug', 'owner_id', 'status', 'account_type'])]
 class BusinessAccount extends Model
 {
     /** @use HasFactory<BusinessAccountFactory> */
@@ -105,6 +107,7 @@ class BusinessAccount extends Model
     {
         return [
             'status' => AccountStatus::class,
+            'account_type' => AccountType::class,
             'activated_at' => 'immutable_datetime',
             'approval_pending_at' => 'immutable_datetime',
             'activation_held_at' => 'immutable_datetime',
@@ -119,6 +122,7 @@ class BusinessAccount extends Model
      */
     protected $attributes = [
         'status' => AccountStatus::Registered->value,
+        'account_type' => AccountType::Conditional->value,
     ];
 
     /**
@@ -234,6 +238,16 @@ class BusinessAccount extends Model
     public function isActivated(): bool
     {
         return $this->status->isActivated();
+    }
+
+    /**
+     * Whether this account funds a wholesale order's product cost upfront
+     * (Conditional) or only after delivery, from the collected COD amount
+     * (Non-Conditional).
+     */
+    public function isNonConditional(): bool
+    {
+        return $this->account_type === AccountType::NonConditional;
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Account\Actions\ReactivateAccount;
 use App\Domain\Account\Actions\SuspendAccount;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\AccountDirectory;
 use App\Domain\Account\Queries\AccountDossier;
@@ -128,6 +129,7 @@ class AccountController extends Controller
              * appearing for platform staff who have no account at all.
              */
             'business' => $this->dossier->identity($account),
+            'account_type_options' => AccountType::options(),
             'status_history' => $this->dossier->statusHistory($account),
             'kyc_rounds' => $this->dossier->kycRounds($account),
             'subscription' => $subscription['current'],

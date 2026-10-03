@@ -23,6 +23,9 @@ import RequestKycUpdateDialog, {
 import AssignPackageDialog, {
     type AssignablePackage,
 } from './assign-package-dialog';
+import AccountTypeDialog, {
+    type AccountTypeOption,
+} from './account-type-dialog';
 import SignInAccessDialog, { type Person } from './sign-in-access-dialog';
 import WithdrawKycRequestDialog from './withdraw-kyc-request-dialog';
 import SuspensionDialog from './suspension-dialog';
@@ -74,10 +77,13 @@ type Props = {
         status: string;
         status_label: string;
         status_tone: StatusTone;
+        account_type: string;
+        account_type_label: string;
         registered_at: string | null;
         activated_at: string | null;
         owner: Owner | null;
     };
+    account_type_options: AccountTypeOption[];
     status_history: {
         id: number;
         to_status: string | null;
@@ -143,6 +149,7 @@ type Props = {
  */
 export default function AdminAccountShow({
     business,
+    account_type_options: accountTypeOptions,
     status_history: statusHistory,
     kyc_rounds: kycRounds,
     subscription,
@@ -166,6 +173,7 @@ export default function AdminAccountShow({
         null,
     );
     const [assigning, setAssigning] = useState(false);
+    const [changingAccountType, setChangingAccountType] = useState(false);
     const [suspending, setSuspending] = useState<
         'suspend' | 'reactivate' | null
     >(null);
@@ -276,10 +284,26 @@ export default function AdminAccountShow({
                 />
 
                 <SectionTabPanel tab="overview" active={tab}>
-                    <SectionCard title={t('account.detail.identity')}>
+                    <SectionCard
+                        title={t('account.detail.identity')}
+                        actions={
+                            can.manage_identity ? (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setChangingAccountType(true)}
+                                >
+                                    {t('account.account_type.action')}
+                                </Button>
+                            ) : undefined
+                        }
+                    >
                         <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                             <Detail label={t('account.detail.owner')}>
                                 {business.owner?.name ?? '—'}
+                            </Detail>
+                            <Detail label={t('account.account_type.field')}>
+                                {business.account_type_label}
                             </Detail>
                             <Detail label={t('account.detail.email')}>
                                 {business.owner?.email ?? '—'}
@@ -811,6 +835,14 @@ export default function AdminAccountShow({
                 packages={assignablePackages}
                 open={assigning}
                 onOpenChange={setAssigning}
+            />
+
+            <AccountTypeDialog
+                accountId={business.id}
+                currentType={business.account_type}
+                options={accountTypeOptions}
+                open={changingAccountType}
+                onOpenChange={setChangingAccountType}
             />
 
             <SignInAccessDialog

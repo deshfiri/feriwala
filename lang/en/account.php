@@ -14,6 +14,17 @@ return [
         'activated_at' => 'Activated',
         'identity_status' => 'Sign-in status',
 
+        'account_type' => [
+            'action' => 'Change account type',
+            'title' => 'Change account type',
+            'description' => 'Decide whether this account funds a wholesale order\'s product cost upfront, or only after delivery.',
+            'field' => 'Account type',
+            'reason' => 'Reason',
+            'reason_help' => 'Recorded in the audit trail. Not shown to the account.',
+            'submit' => 'Save',
+            'changed' => 'Account type updated.',
+        ],
+
         'verification' => 'Verification rounds',
         'verification_help' => 'Every round this account has been through, newest first. Rounds an administrator asked for show the reason and the instructions that were sent.',
         'no_verification' => 'This account has never submitted verification.',

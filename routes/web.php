@@ -747,6 +747,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('accounts.setup-link.destroy');
         Route::post('accounts/{account}/verify-contact', [ManagedAccountController::class, 'verifyContact'])
             ->name('accounts.verify-contact');
+        Route::post('accounts/{account}/account-type', [ManagedAccountController::class, 'changeAccountType'])
+            ->name('accounts.account-type.update');
 
         Route::get('accounts/{account}', [AccountController::class, 'show'])
             ->name('accounts.show');

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Account\Actions\ChangeAccountType;
 use App\Domain\Account\Actions\CreateManagedAccount;
 use App\Domain\Account\Actions\ManagePasswordSetup;
 use App\Domain\Account\Actions\VerifyContactManually;
+use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -69,6 +71,25 @@ class ManagedAccountController extends Controller
         $this->guard(fn () => $setup->revoke($account->owner()->firstOrFail(), ManagePasswordSetup::USERS, $this->actor($request), $validated['reason']));
 
         return back()->with('success', __('managed_accounts.link_revoked'));
+    }
+
+    public function changeAccountType(Request $request, BusinessAccount $account, ChangeAccountType $change): RedirectResponse
+    {
+        Gate::authorize('manageIdentity', $account);
+
+        $validated = $request->validate([
+            'account_type' => ['required', Rule::enum(AccountType::class)],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $this->guard(fn () => $change->handle(
+            $this->actor($request),
+            $account,
+            AccountType::from($validated['account_type']),
+            $validated['reason'],
+        ));
+
+        return back()->with('success', __('account.account_type.changed'));
     }
 
     public function verifyContact(Request $request, BusinessAccount $account, VerifyContactManually $verify): RedirectResponse
