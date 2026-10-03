@@ -124,14 +124,14 @@ class SupplierController extends Controller
                 'documents' => $round->documents->map(fn (SupplierKycDocument $document) => [
                     'id' => $document->public_id,
                     'type' => $document->document_type,
-                    'label' => $round->requirements->firstWhere('key', $document->document_type)?->name
+                    'label' => $round->requirements->firstWhere('key', $document->document_type)->name
                         ?? $document->document_type,
                     'original_name' => $document->original_name,
                     'size_bytes' => $document->size_bytes,
                     'mime_type' => $document->mime_type,
                 ])->all(),
                 'fields' => $round->fields->map(fn ($field) => [
-                    'label' => $round->requirements->firstWhere('key', $field->key)?->name ?? $field->key,
+                    'label' => $round->requirements->firstWhere('key', $field->key)->name ?? $field->key,
                     'value' => $field->value,
                 ])->all(),
                 'missing_required' => $round->requirements

@@ -96,7 +96,7 @@ it('takes a typed value for a value-only item and stores it encrypted', function
         ->and(DB::table('supplier_kyc_fields')->value('value'))->not->toContain('123456789012');
 
     $this->get(route('supplier.kyc.create'))
-        ->assertInertia(fn (Assert $page) => $page->where('requirements.0.value_preview', 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢9012'));
+        ->assertInertia(fn (Assert $page) => $page->where('requirements.0.value_preview', str_repeat('•', 8).'9012'));
 
     $this->post(route('supplier.kyc.submit'))->assertSessionHasNoErrors();
 });

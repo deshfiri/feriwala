@@ -52,7 +52,7 @@ class KycController extends Controller
                 'documents' => $round->documents->map(fn ($document) => [
                     'id' => $document->public_id,
                     'type' => $document->document_type,
-                    'label' => $requirements->firstWhere('key', $document->document_type)?->name
+                    'label' => $requirements->firstWhere('key', $document->document_type)->name
                         ?? $document->document_type,
                     'original_name' => $document->original_name,
                     'size_bytes' => $document->size_bytes,
