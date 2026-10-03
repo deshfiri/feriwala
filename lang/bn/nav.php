@@ -71,6 +71,7 @@ return [
     'supplier_withdrawals' => 'সাপ্লায়ার উত্তোলন',
     'shipments' => 'শিপমেন্ট',
     'delivery_settings' => 'ডেলিভারি সেটিংস',
+    'sourcing_groups' => 'সোর্সিং গ্রুপ',
 
     'search' => [
         'open' => 'পেজ খুঁজুন',

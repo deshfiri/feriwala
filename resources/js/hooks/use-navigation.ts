@@ -44,6 +44,7 @@ import { index as productBrands } from '@/routes/admin/catalog/brands';
 import { index as productCategories } from '@/routes/admin/catalog/categories';
 import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as deliverySettings } from '@/routes/admin/delivery-settings';
+import { index as sourcingGroups } from '@/routes/admin/sourcing-groups';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as stockAllocations } from '@/routes/admin/inventory/allocations';
@@ -326,29 +327,46 @@ export function useNavigation(): {
                       ]
                     : []),
 
-                ...(permissions['catalog.view']
+                ...(permissions['catalog.view'] ||
+                permissions['sourcing_group.view']
                     ? [
                           {
                               title: 'Catalogue',
-                              href: productCatalogue(),
+                              href: permissions['catalog.view']
+                                  ? productCatalogue()
+                                  : sourcingGroups(),
                               icon: ShoppingBag,
                               items: [
-                                  {
-                                      title: t('nav.products'),
-                                      href: productCatalogue(),
-                                  },
-                                  {
-                                      title: t('nav.product_categories'),
-                                      href: productCategories(),
-                                  },
-                                  {
-                                      title: t('nav.brands'),
-                                      href: productBrands(),
-                                  },
-                                  {
-                                      title: t('nav.attributes'),
-                                      href: productAttributes(),
-                                  },
+                                  ...(permissions['catalog.view']
+                                      ? [
+                                            {
+                                                title: t('nav.products'),
+                                                href: productCatalogue(),
+                                            },
+                                            {
+                                                title: t(
+                                                    'nav.product_categories',
+                                                ),
+                                                href: productCategories(),
+                                            },
+                                            {
+                                                title: t('nav.brands'),
+                                                href: productBrands(),
+                                            },
+                                            {
+                                                title: t('nav.attributes'),
+                                                href: productAttributes(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['sourcing_group.view']
+                                      ? [
+                                            {
+                                                title: t('nav.sourcing_groups'),
+                                                href: sourcingGroups(),
+                                            },
+                                        ]
+                                      : []),
                               ],
                           },
                       ]

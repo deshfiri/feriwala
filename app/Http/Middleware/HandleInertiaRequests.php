@@ -135,6 +135,14 @@ class HandleInertiaRequests extends Middleware
         // included (Gate::before grants the ability; it does not add a
         // missing entry to this list).
         [PermissionModule::Access, PermissionAction::View],
+
+        // Product Sourcing Groups under Catalogue.
+        [PermissionModule::SourcingGroup, PermissionAction::View],
+
+        // Delivery settings under Shipments & Delivery. The link was gated on
+        // this key but the key was never shipped, so it stayed hidden for
+        // everyone, Super Admin included.
+        [PermissionModule::DeliverySettings, PermissionAction::View],
     ];
 
     /**

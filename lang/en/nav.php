@@ -77,6 +77,7 @@ return [
     'supplier_withdrawals' => 'Supplier withdrawals',
     'shipments' => 'Shipments',
     'delivery_settings' => 'Delivery settings',
+    'sourcing_groups' => 'Sourcing groups',
 
     'search' => [
         'open' => 'Search pages',

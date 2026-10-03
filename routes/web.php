@@ -45,6 +45,7 @@ use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Admin\SourcingGroupController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
@@ -1231,6 +1232,29 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('delivery-settings.rules.store');
         Route::post('delivery-settings/rules/{rule}/close', [DeliverySettingsController::class, 'closeRule'])
             ->name('delivery-settings.rules.close');
+
+        /*
+         * Product Sourcing Groups: which catalogue products can fulfil one
+         * another's orders. Staff-only, behind `sourcing_group.*`.
+         */
+        Route::get('sourcing-groups', [SourcingGroupController::class, 'index'])
+            ->name('sourcing-groups.index');
+        Route::post('sourcing-groups', [SourcingGroupController::class, 'store'])
+            ->name('sourcing-groups.store');
+        Route::get('sourcing-groups/{group}', [SourcingGroupController::class, 'show'])
+            ->name('sourcing-groups.show');
+        Route::patch('sourcing-groups/{group}', [SourcingGroupController::class, 'update'])
+            ->name('sourcing-groups.update');
+        Route::post('sourcing-groups/{group}/toggle', [SourcingGroupController::class, 'toggle'])
+            ->name('sourcing-groups.toggle');
+        Route::post('sourcing-groups/{group}/products', [SourcingGroupController::class, 'addProduct'])
+            ->name('sourcing-groups.products.store');
+        Route::delete('sourcing-groups/{group}/products/{product}', [SourcingGroupController::class, 'removeProduct'])
+            ->name('sourcing-groups.products.destroy');
+        Route::post('sourcing-groups/{group}/mappings', [SourcingGroupController::class, 'mapVariant'])
+            ->name('sourcing-groups.mappings.store');
+        Route::delete('sourcing-groups/{group}/mappings/{mapping}', [SourcingGroupController::class, 'unmapVariant'])
+            ->name('sourcing-groups.mappings.destroy');
 
         /*
          * Settings -> Storage: Cloudflare R2 (beta-critical batch, Commit 3).
