@@ -49,6 +49,7 @@ use App\Domain\Website\Policies\WebsitePolicy;
 use App\Domain\Withdrawal\Models\AccountWithdrawal;
 use App\Domain\Withdrawal\Policies\AccountWithdrawalPolicy;
 use App\Models\User;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -166,7 +167,19 @@ class AuthorizationServiceProvider extends ServiceProvider
          * is off so the permission package does not register its own check
          * ahead of this one.
          */
-        Gate::before(function (User $user, string $ability, array &$arguments = []) {
+        Gate::before(function (Authenticatable $user, string $ability, array &$arguments = []) {
+            /*
+             * 0. Only a platform/Client/Partner `User` can ever be granted
+             *    anything here. A Supplier session is a different
+             *    authenticatable on its own guard and holds no platform
+             *    permission whatsoever -- refused outright rather than allowed
+             *    to fall through to a policy that would reject it with a
+             *    TypeError.
+             */
+            if (! $user instanceof User) {
+                return false;
+            }
+
             // The permission package's guard convention: `can('x', 'web')`.
             if (is_string($arguments[0] ?? null) && ! class_exists($arguments[0])) {
                 $guard = array_shift($arguments);
@@ -211,7 +224,14 @@ class AuthorizationServiceProvider extends ServiceProvider
                 return true;
             }
 
-            // 3. Super Admin, for everything else.
+            // 3. Super Admin, for everything else -- never for somebody who
+            //    trades on the platform. A business identity that has been
+            //    handed the role (by mistake or on purpose) still gets no
+            //    platform-wide grant through this hook.
+            if (CatalogPolicy::isBusinessIdentity($user)) {
+                return null;
+            }
+
             return $user->hasRole(PlatformRole::SuperAdmin->value) ? true : null;
         });
     }
