@@ -15,6 +15,8 @@ use App\Domain\Order\Actions\AdvanceOrderFulfilmentStatus;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
 use App\Domain\Order\Actions\ConfirmProductSourceLink;
+use App\Domain\Order\Actions\EvaluateOrderProceedsEligibility;
+use App\Domain\Order\Actions\RecordCodCollection;
 use App\Domain\Order\Data\AllocationCandidate;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\OrderCourierStatus;
@@ -44,6 +46,8 @@ use App\Http\Controllers\Controller;
 use App\Integrations\Courier\CourierManager;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use App\Support\StateMachine\TransitionableState;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -150,6 +154,7 @@ class OrderController extends Controller
             'items.activeAllocations.warehouse', 'items.activeAllocations.supplier', 'items.activeAllocations.offer',
             'items.activeAllocations.fulfilmentCommitment.statusHistory.changedBy:id,name',
             'items.activeAllocations.payable',
+            'items.proceedsSettlement',
             'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain',
             'websiteCustomer:id,public_id,mobile,is_guest',
             'fulfillmentStatusHistory.changedBy:id,name',
@@ -165,6 +170,7 @@ class OrderController extends Controller
         $canManageFulfilmentCommitment = Gate::forUser($actor)->allows('manageFulfilmentCommitment', $record);
         $canOverrideFulfilmentState = Gate::forUser($actor)->allows('overrideFulfilmentState', $record);
         $canManageShipments = Gate::forUser($actor)->allows('manageShipments', Shipment::class);
+        $canRecordCodCollection = Gate::forUser($actor)->allows('recordCodCollection', $record);
 
         return Inertia::render('admin/orders/show', [
             'order' => [
@@ -173,6 +179,7 @@ class OrderController extends Controller
                 'source' => $record->source->value,
                 'status' => $record->status->value,
                 'status_tone' => $record->status->tone(),
+                'account_type' => $record->account_type->value,
                 'lifecycle' => [
                     'fulfillment' => $this->lifecycleSummary(
                         $record->fulfillment_status,
@@ -239,6 +246,27 @@ class OrderController extends Controller
                     'discount' => $item->discount->jsonSerialize(),
                     'tax' => $item->tax->jsonSerialize(),
                     'total' => $item->line_total->jsonSerialize(),
+                    'resale_amount' => $item->resale_amount?->jsonSerialize(),
+                    /*
+                     * A Non-Conditional line's reseller-earning settlement
+                     * (D-new) — two independent facts, `Delivered` and the
+                     * COD cash actually collected, neither of which alone
+                     * credits anything. Null until `Delivered` is reached
+                     * once.
+                     */
+                    'proceeds' => $item->proceedsSettlement === null ? null : [
+                        'resale_amount' => $item->proceedsSettlement->resale_amount->jsonSerialize(),
+                        'recovered_amount' => $item->proceedsSettlement->recovered_amount->jsonSerialize(),
+                        'delivered_at' => $item->proceedsSettlement->delivered_at?->toIso8601String(),
+                        'cod_collected_at' => $item->proceedsSettlement->cod_collected_at?->toIso8601String(),
+                        'cod_amount_collected' => $item->proceedsSettlement->cod_amount_collected?->jsonSerialize(),
+                        'eligible_at' => $item->proceedsSettlement->eligible_at?->toIso8601String(),
+                        'reseller_earning' => $item->proceedsSettlement->reseller_earning?->jsonSerialize(),
+                        'flagged_for_review' => $item->proceedsSettlement->flagged_for_review,
+                    ],
+                    'can_record_cod_collection' => $canRecordCodCollection
+                        && $record->isNonConditional()
+                        && $item->proceedsSettlement?->cod_collected_at === null,
                     'reservation' => $item->stockReservation === null ? null : [
                         'reference' => $item->stockReservation->reference,
                         'status' => $item->stockReservation->status->value,
@@ -323,8 +351,39 @@ class OrderController extends Controller
                     && ! $payment->status->isSettled(),
                 'override_fulfilment_state' => $canOverrideFulfilmentState,
                 'manage_shipments' => $canManageShipments,
+                'record_cod_collection' => $canRecordCodCollection,
             ],
         ]);
+    }
+
+    /**
+     * Staff confirm the cash actually collected for a Non-Conditional line's
+     * COD delivery (D-new) — the authoritative event
+     * {@see EvaluateOrderProceedsEligibility} waits on, alongside `Delivered`,
+     * before a reseller's earning on that line becomes real.
+     */
+    public function recordCodCollection(Request $request, string $order, string $item, RecordCodCollection $record): RedirectResponse
+    {
+        $actor = $this->actor($request);
+        $orderRecord = $this->order($order);
+
+        Gate::forUser($actor)->authorize('recordCodCollection', $orderRecord);
+
+        $line = $this->line($orderRecord, $item);
+
+        $validated = $request->validate([
+            'amount_collected' => ['required', new DecimalAmountRule],
+        ]);
+
+        try {
+            $record->handle($actor, $line, DecimalAmount::parse($validated['amount_collected'], $line->unit_price->currency));
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['amount_collected' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('orders.admin.cod_collection_recorded')]);
+
+        return back();
     }
 
     public function cancel(Request $request, string $order): RedirectResponse

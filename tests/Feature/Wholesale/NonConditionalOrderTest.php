@@ -21,6 +21,8 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Settings\Enums\SettingType;
+use App\Domain\Settings\SettingsRepository;
 use App\Domain\Wholesale\Actions\ConfirmCheckout;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
@@ -30,7 +32,9 @@ use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 
@@ -46,6 +50,15 @@ use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
+
+    $settings = app(SettingsRepository::class);
+    $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
+    $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
+    $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
+
+    Http::fake(fn (ClientRequest $request) => str_contains($request->url(), 'gwprocess')
+        ? Http::response(['status' => 'SUCCESS', 'GatewayPageURL' => 'https://pay.test/go', 'sessionkey' => 'session-1'])
+        : Http::response(['status' => 'VALID', 'currency_amount' => '0.00', 'currency_type' => 'BDT']));
 
     $this->package = ncoPackage();
     $this->warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
@@ -257,8 +270,11 @@ describe('placing the order', function () {
         ncoAddressAndConfirm($account);
 
         // Flips to Non-Conditional after the cart line and the confirmation
-        // already exist.
+        // already exist. The owner's cached `businessAccount` relation is
+        // refreshed too, so the next request actually sees the new type
+        // rather than the one cached from the earlier requests above.
         $account->forceFill(['account_type' => AccountType::NonConditional])->save();
+        $account->owner->refresh();
 
         ncoPlaceOrder($account)->assertSessionHasErrors(['cart' => __('wholesale.refused.resale_amount_required')]);
 

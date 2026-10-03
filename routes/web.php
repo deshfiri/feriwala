@@ -1213,6 +1213,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.lines.fulfilment-commitments.advance');
 
         /*
+         * The cash actually collected for a Non-Conditional line's COD
+         * delivery (D-new) — the authoritative event the reseller-earning
+         * eligibility gate waits on, alongside `Delivered`. `order.edit`,
+         * the same ability every other staff mutation on an order requires.
+         */
+        Route::post('orders/{order}/lines/{item}/cod-collection', [OrderController::class, 'recordCodCollection'])
+            ->name('orders.lines.cod-collection.store');
+
+        /*
          * The order's own fulfilment/delivery/courier lifecycle (§18, §20,
          * §21) — three independent axes beside the order's own status, each
          * its own guarded transition map.

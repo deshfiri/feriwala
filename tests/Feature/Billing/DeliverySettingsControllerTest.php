@@ -32,6 +32,7 @@ it('lets a CourierManager view, save settings and manage rules', function () {
         'per_box_charge' => '15.00',
         'fragile_handling_charge' => '20.00',
         'minimum_charge' => '50.00',
+        'delivery_success_fee_percent' => '1.00',
     ])->assertSessionHasNoErrors();
 
     $this->actingAs($staff)->post(route('admin.delivery-settings.rules.store'), [
@@ -67,5 +68,6 @@ it('shows view-only screen state without edit abilities for a viewer without the
         'per_box_charge' => '15.00',
         'fragile_handling_charge' => '20.00',
         'minimum_charge' => '50.00',
+        'delivery_success_fee_percent' => '1.00',
     ])->assertForbidden();
 });

@@ -17,6 +17,8 @@ return [
         'maximum_charge_help' => 'ফাঁকা মানে কোনো সীমা নেই।',
         'free_delivery_threshold' => 'বিনামূল্যে ডেলিভারির অর্ডার সীমা',
         'free_delivery_threshold_help' => 'ফাঁকা মানে অর্ডারের মূল্য নির্বিশেষে ডেলিভারি কখনো বিনামূল্যে হবে না।',
+        'delivery_success_fee_percent' => 'ডেলিভারি সাফল্য ফি (%)',
+        'delivery_success_fee_percent_help' => 'ডেলিভারি নিশ্চিত হওয়ার সাথে সাথে সরবরাহকারীর নিজস্ব গ্রস প্রদেয় থেকে কাটা হয়।',
         'settings_saved' => 'ডেলিভারি চার্জ সেটিংস সংরক্ষিত হয়েছে।',
 
         'rules_title' => 'ওজন-স্তরের নিয়ম',

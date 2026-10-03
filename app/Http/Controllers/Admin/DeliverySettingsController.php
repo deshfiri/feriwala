@@ -59,6 +59,7 @@ class DeliverySettingsController extends Controller
                 'minimum_charge' => $this->settings->minimumCharge($currency)->jsonSerialize(),
                 'maximum_charge' => $this->settings->maximumCharge($currency)?->jsonSerialize(),
                 'free_delivery_threshold' => $this->settings->freeDeliveryThreshold($currency)?->jsonSerialize(),
+                'delivery_success_fee_percent' => $this->settings->deliverySuccessFeePercent(),
             ],
             'rules' => DeliveryChargeRule::query()
                 ->with('courierProvider:id,code,name')
@@ -109,6 +110,7 @@ class DeliverySettingsController extends Controller
             'minimum_charge' => ['required', new DecimalAmountRule],
             'maximum_charge' => ['nullable', new DecimalAmountRule],
             'free_delivery_threshold' => ['nullable', new DecimalAmountRule],
+            'delivery_success_fee_percent' => ['required', 'numeric', 'between:0,100', 'regex:/^\d{1,3}(\.\d{1,2})?$/'],
         ]);
 
         try {
@@ -122,6 +124,7 @@ class DeliverySettingsController extends Controller
                 minimumCharge: DecimalAmount::parse($validated['minimum_charge'], $currency),
                 maximumCharge: DecimalAmount::parseOrNull($validated['maximum_charge'] ?? null, $currency),
                 freeDeliveryThreshold: DecimalAmount::parseOrNull($validated['free_delivery_threshold'] ?? null, $currency),
+                deliverySuccessFeePercent: (string) $validated['delivery_success_fee_percent'],
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['minimum_charge' => $exception->getMessage()]);

@@ -34,6 +34,14 @@ class DeliveryChargeSettings
 
     public const FREE_DELIVERY_THRESHOLD = 'delivery.free_delivery_threshold';
 
+    public const SUCCESS_FEE_PERCENT = 'delivery.success_fee_percent';
+
+    /**
+     * The Delivery Success Fee's own default (D-new): 1% of the supplier's
+     * gross payable per line, applied once at `Delivered`.
+     */
+    public const DEFAULT_SUCCESS_FEE_PERCENT = '1';
+
     /**
      * A courier's common 5000 divisor (centimetres cubed per kilogram) --
      * administrators change it per their own courier's convention.
@@ -96,6 +104,17 @@ class DeliveryChargeSettings
         $value = $this->settings->get(self::FREE_DELIVERY_THRESHOLD);
 
         return $value instanceof Money ? $value : null;
+    }
+
+    /**
+     * The Delivery Success Fee's rate, as a plain decimal string — never a
+     * float, since it is about to multiply a Money amount (D-new).
+     */
+    public function deliverySuccessFeePercent(): string
+    {
+        $value = $this->settings->get(self::SUCCESS_FEE_PERCENT);
+
+        return is_string($value) && $value !== '' ? $value : self::DEFAULT_SUCCESS_FEE_PERCENT;
     }
 
     protected function moneyOrZero(string $key, Currency $currency): Money

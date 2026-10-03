@@ -26,6 +26,13 @@ use InvalidArgumentException;
  * transaction: reaching `Delivered` is what marks every Supplier payable on
  * the order delivered (closes P13-26), and reaching `FailedDelivery`,
  * `Cancelled` or `Returned` cancels any that are still `Pending`.
+ *
+ * {@see SynchronizeDeliverySuccessFeesWithDelivery} and {@see
+ * SynchronizeOrderProceedsWithDelivery} run here too (D-new): reaching
+ * `Delivered` is what charges the Delivery Success Fee against every
+ * Supplier payable on the order, and what records the "delivered" half of a
+ * Non-Conditional order's reseller-earning eligibility — never, by itself,
+ * what credits a reseller's wallet.
  */
 class AdvanceOrderDeliveryStatus
 {
@@ -42,6 +49,8 @@ class AdvanceOrderDeliveryStatus
         protected DatabaseManager $database,
         protected RollUpOrderStatus $rollUp,
         protected SynchronizeSupplierPayablesWithDelivery $supplierPayables,
+        protected SynchronizeDeliverySuccessFeesWithDelivery $deliverySuccessFees,
+        protected SynchronizeOrderProceedsWithDelivery $orderProceeds,
     ) {}
 
     public function handle(
@@ -71,6 +80,8 @@ class AdvanceOrderDeliveryStatus
             $this->rollUp->handle($locked);
 
             $this->supplierPayables->handle($locked, $to, $reason);
+            $this->deliverySuccessFees->handle($locked, $to);
+            $this->orderProceeds->handle($locked, $to);
 
             $this->audit->handle(new AuditEntry(
                 action: 'order.delivery_status.advanced',

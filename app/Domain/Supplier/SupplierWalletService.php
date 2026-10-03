@@ -94,6 +94,38 @@ class SupplierWalletService
     }
 
     /**
+     * The Delivery Success Fee, charged the moment the order reaches
+     * Delivered — independent of whether the payable itself has settled, so
+     * the wallet may not yet hold enough. Mirrors {@see debitForReversal()}'s
+     * available/recovery split for exactly that reason: debits whatever is
+     * available and raises `recovery` by the rest, never a negative balance,
+     * never a refused delivery confirmation (D-new).
+     */
+    public function debitFee(SupplierWallet $wallet, Money $amount, SupplierPostingContext $context): SupplierLedgerEntry
+    {
+        $this->assertPostable(SupplierLedgerEntryType::DeliverySuccessFeeDebit, $context);
+        $this->assertCurrency($wallet, $amount);
+
+        if (! $amount->isPositive()) {
+            throw SupplierWalletOperationRefused::notPositive();
+        }
+
+        return $this->withLockedWallet($wallet, $context->idempotencyKey, function (SupplierWallet $locked) use ($amount, $context) {
+            $available = $locked->availableBalance();
+            $toDebit = $amount->lessThanOrEqualTo($available) ? $amount : $available;
+            $toRecover = $amount->minus($toDebit);
+
+            return $this->write(
+                $locked, SupplierLedgerEntryType::DeliverySuccessFeeDebit, $context,
+                debit: $toDebit,
+                credit: Money::zero($amount->currency),
+                reservedDelta: Money::zero($amount->currency),
+                recoveryDelta: $toRecover,
+            );
+        });
+    }
+
+    /**
      * A withdrawal request sets money aside. Refused when less than the
      * amount is available — checked under the lock, not before it.
      */

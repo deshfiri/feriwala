@@ -281,6 +281,7 @@ return [
         'allocated' => 'লাইন বরাদ্দ করা হয়েছে।',
         'commitment_updated' => 'সরবরাহ প্রতিশ্রুতি হালনাগাদ হয়েছে।',
         'lifecycle_updated' => 'অর্ডারের অবস্থা হালনাগাদ হয়েছে।',
+        'cod_collection_recorded' => 'সিওডি সংগ্রহ রেকর্ড করা হয়েছে।',
         'lifecycle' => [
             'title' => 'পরিপূরণ ও সরবরাহ',
             'fulfilment_label' => 'পরিপূরণ',
@@ -319,6 +320,23 @@ return [
             'eligible_at' => ':date থেকে যোগ্য',
             'settled_at' => ':date তারিখে নিষ্পত্তি হয়েছে',
             'cancelled_at' => ':date তারিখে বাতিল হয়েছে',
+        ],
+        'proceeds' => [
+            'resale_amount' => 'ঘোষিত রিসেল/সিওডি পরিমাণ',
+            'recovered_amount' => 'বানিজ আদায় করবে',
+            'collected_amount' => 'সংগৃহীত',
+            'earning' => 'রিসেলারের আয়',
+            'awaiting_delivery' => 'ডেলিভারির অপেক্ষায়।',
+            'settled' => 'নিষ্পত্তি হয়েছে',
+            'flagged' => 'পর্যালোচনার জন্য চিহ্নিত',
+        ],
+        'cod_collection' => [
+            'action' => 'সিওডি সংগ্রহ রেকর্ড করুন',
+            'title' => 'সিওডি সংগ্রহ রেকর্ড করুন',
+            'description' => ':name-এর জন্য নগদে আসলে কত সংগ্রহ করা হয়েছে।',
+            'amount_collected' => 'সংগৃহীত পরিমাণ',
+            'amount_help' => 'ঘোষিত রিসেল পরিমাণ দিয়ে পূরণ করা আছে। প্রকৃত সংগ্রহ কম হলে পরিবর্তন করুন।',
+            'submit' => 'সংগ্রহ রেকর্ড করুন',
         ],
         'allocation' => [
             'action' => 'উৎস নির্ধারণ করুন',

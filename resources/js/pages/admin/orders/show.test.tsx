@@ -63,6 +63,7 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
         source: 'erp_wholesale',
         status: 'payment_pending',
         status_tone: 'warning',
+        account_type: 'conditional',
         lifecycle: {
             fulfillment: lifecycleAxis('pending_review'),
             delivery: lifecycleAxis('not_shipped'),
@@ -123,7 +124,11 @@ describe('admin order page', () => {
         const { rerender } = render(
             <AdminOrder
                 order={order()}
-                can={{ cancel: true, manage_shipments: false }}
+                can={{
+                    cancel: true,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
             />,
         );
 
@@ -134,7 +139,11 @@ describe('admin order page', () => {
         rerender(
             <AdminOrder
                 order={order()}
-                can={{ cancel: false, manage_shipments: false }}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
             />,
         );
 
@@ -163,7 +172,11 @@ describe('admin order page', () => {
                         },
                     ],
                 })}
-                can={{ cancel: false, manage_shipments: false }}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
             />,
         );
 
@@ -198,7 +211,11 @@ describe('admin order page', () => {
                         is_guest: true,
                     },
                 })}
-                can={{ cancel: false, manage_shipments: false }}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
             />,
         );
 
@@ -227,7 +244,11 @@ describe('admin order page', () => {
                             'The gateway confirmed this payment after the checkout was cancelled.',
                     },
                 })}
-                can={{ cancel: false, manage_shipments: false }}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
             />,
         );
 
@@ -269,7 +290,11 @@ describe('admin order page', () => {
                         sends_allowed: 5,
                     },
                 })}
-                can={{ cancel: true, manage_shipments: false }}
+                can={{
+                    cancel: true,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
             />,
         );
 

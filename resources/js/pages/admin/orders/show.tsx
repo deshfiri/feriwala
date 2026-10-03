@@ -58,6 +58,7 @@ export type AdminOrderDetail = {
     source: string;
     status: string;
     status_tone: StatusTone;
+    account_type: 'conditional' | 'non_conditional';
     lifecycle: OrderLifecycle;
     account: string;
     placed_by: string | null;
@@ -87,6 +88,25 @@ export type AdminOrderDetail = {
         quantity: number;
         unit_price: Money;
         total: Money;
+        /** A Non-Conditional account's declared resale/COD amount (D-new). */
+        resale_amount: Money | null;
+        /**
+         * This line's reseller-earning settlement (D-new): two independent
+         * facts, `Delivered` and the COD cash actually collected, neither of
+         * which alone credits anything. Null until `Delivered` is reached
+         * once.
+         */
+        proceeds: {
+            resale_amount: Money;
+            recovered_amount: Money;
+            delivered_at: string | null;
+            cod_collected_at: string | null;
+            cod_amount_collected: Money | null;
+            eligible_at: string | null;
+            reseller_earning: Money | null;
+            flagged_for_review: boolean;
+        } | null;
+        can_record_cod_collection: boolean;
         reservation: {
             reference: string;
             status: string;
@@ -163,7 +183,11 @@ export type AdminOrderDetail = {
 
 type Props = {
     order: AdminOrderDetail;
-    can: { cancel: boolean; manage_shipments: boolean };
+    can: {
+        cancel: boolean;
+        manage_shipments: boolean;
+        record_cod_collection: boolean;
+    };
 };
 
 const controlClass =
@@ -181,6 +205,11 @@ export default function AdminOrder({ order, can }: Props) {
     const { t, locale } = useTranslation();
     const [cancelling, setCancelling] = useState(false);
     const [allocating, setAllocating] = useState<AllocationLine | null>(null);
+    const [recordingCod, setRecordingCod] = useState<{
+        id: string;
+        name: string;
+        resaleAmount: Money | null;
+    } | null>(null);
     const at = (value: string | null) =>
         value ? new Date(value).toLocaleString(locale) : '—';
 
@@ -412,6 +441,21 @@ export default function AdminOrder({ order, can }: Props) {
                                                     </div>
                                                 ),
                                             )}
+                                            {order.account_type ===
+                                                'non_conditional' &&
+                                                line.resale_amount && (
+                                                    <ProceedsBlock
+                                                        line={line}
+                                                        onRecordCollection={() =>
+                                                            setRecordingCod({
+                                                                id: line.id,
+                                                                name: line.name,
+                                                                resaleAmount:
+                                                                    line.resale_amount,
+                                                            })
+                                                        }
+                                                    />
+                                                )}
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
                                             <MoneyAmount
@@ -854,7 +898,180 @@ export default function AdminOrder({ order, can }: Props) {
                 orderId={order.id}
                 line={allocating}
             />
+
+            {can.record_cod_collection && recordingCod && (
+                <Dialog
+                    open
+                    onOpenChange={(next) => !next && setRecordingCod(null)}
+                >
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>
+                                {t('orders.admin.cod_collection.title')}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {t('orders.admin.cod_collection.description', {
+                                    name: recordingCod.name,
+                                })}
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <Form
+                            {...OrderController.recordCodCollection.form({
+                                order: order.id,
+                                item: recordingCod.id,
+                            })}
+                            options={{ preserveScroll: true }}
+                            onSuccess={() => setRecordingCod(null)}
+                            className="space-y-4"
+                        >
+                            {({ errors, processing }) => (
+                                <>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="cod-amount-collected">
+                                            {t(
+                                                'orders.admin.cod_collection.amount_collected',
+                                            )}
+                                        </Label>
+                                        <input
+                                            id="cod-amount-collected"
+                                            name="amount_collected"
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="^\d+(\.\d{1,2})?$"
+                                            required
+                                            defaultValue={
+                                                recordingCod.resaleAmount
+                                                    ?.amount
+                                            }
+                                            className={controlClass}
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            {t(
+                                                'orders.admin.cod_collection.amount_help',
+                                            )}
+                                        </p>
+                                        <InputError
+                                            message={errors.amount_collected}
+                                        />
+                                    </div>
+
+                                    <DialogFooter>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() =>
+                                                setRecordingCod(null)
+                                            }
+                                        >
+                                            {t('common.actions.cancel')}
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                        >
+                                            {processing && <Spinner />}
+                                            {t(
+                                                'orders.admin.cod_collection.submit',
+                                            )}
+                                        </Button>
+                                    </DialogFooter>
+                                </>
+                            )}
+                        </Form>
+                    </DialogContent>
+                </Dialog>
+            )}
         </>
+    );
+}
+
+function ProceedsBlock({
+    line,
+    onRecordCollection,
+}: {
+    line: AdminOrderDetail['lines'][number];
+    onRecordCollection: () => void;
+}) {
+    const { t } = useTranslation();
+    const proceeds = line.proceeds;
+
+    return (
+        <div className="border-border mt-1 rounded-md border border-dashed p-2">
+            <p className="text-muted-foreground text-xs">
+                {t('orders.admin.proceeds.resale_amount')}
+                {': '}
+                <span className="text-foreground font-medium">
+                    {line.resale_amount?.formatted}
+                </span>
+            </p>
+
+            {proceeds === null ? (
+                <p className="text-muted-foreground mt-1 text-xs">
+                    {t('orders.admin.proceeds.awaiting_delivery')}
+                </p>
+            ) : (
+                <>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        {t('orders.admin.proceeds.recovered_amount')}
+                        {': '}
+                        {proceeds.recovered_amount.formatted}
+                    </p>
+
+                    {proceeds.cod_collected_at !== null && (
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            {t('orders.admin.proceeds.collected_amount')}
+                            {': '}
+                            {proceeds.cod_amount_collected?.formatted}
+                        </p>
+                    )}
+
+                    {proceeds.eligible_at !== null &&
+                        proceeds.reseller_earning && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+                                <StatusPill
+                                    tone={
+                                        proceeds.flagged_for_review
+                                            ? 'warning'
+                                            : 'success'
+                                    }
+                                    label={
+                                        proceeds.flagged_for_review
+                                            ? t('orders.admin.proceeds.flagged')
+                                            : t('orders.admin.proceeds.settled')
+                                    }
+                                />
+                                <span className="text-muted-foreground text-xs">
+                                    {t('orders.admin.proceeds.earning')}
+                                    {': '}
+                                </span>
+                                <MoneyAmount
+                                    amount={proceeds.reseller_earning}
+                                    size="small"
+                                />
+                            </div>
+                        )}
+                </>
+            )}
+
+            {/*
+                Independent of whether `Delivered` has been reached yet — the
+                two facts can arrive in either order (D-new) — so this is
+                offered whenever it is not yet recorded, not only once a
+                settlement row exists.
+            */}
+            {!proceeds?.cod_collected_at && line.can_record_cod_collection && (
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="mt-1"
+                    onClick={onRecordCollection}
+                >
+                    {t('orders.admin.cod_collection.action')}
+                </Button>
+            )}
+        </div>
     );
 }
 

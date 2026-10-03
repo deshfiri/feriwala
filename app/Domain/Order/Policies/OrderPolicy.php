@@ -164,6 +164,18 @@ class OrderPolicy
     }
 
     /**
+     * Confirm the cash actually collected for a Non-Conditional line's COD
+     * delivery (D-new). The same boundary as every other staff mutation on
+     * an order: `order.edit`, via {@see transition()} — there is nothing in
+     * the existing permission matrix that suggests a dedicated, narrower
+     * permission for this one fact.
+     */
+    public function recordCodCollection(User $user, Order $order): bool
+    {
+        return $this->transition($user, $order);
+    }
+
+    /**
      * Cancel an order nobody has paid for: the account that placed it, or staff
      * who may move orders.
      */

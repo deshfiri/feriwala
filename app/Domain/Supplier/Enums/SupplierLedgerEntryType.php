@@ -40,11 +40,19 @@ enum SupplierLedgerEntryType: string
     /** A correction made by a person, not a workflow. */
     case ManualAdjustment = 'manual_adjustment';
 
+    /**
+     * The configured percentage of a payable's gross amount, charged the
+     * moment its order reaches Delivered — identically for every account
+     * type, and independent of whether the payable itself has settled
+     * (D-new).
+     */
+    case DeliverySuccessFeeDebit = 'delivery_success_fee_debit';
+
     public function direction(): ?LedgerDirection
     {
         return match ($this) {
             self::SettlementCredit => LedgerDirection::Credit,
-            self::PayableReversalDebit, self::WithdrawalPaidDebit => LedgerDirection::Debit,
+            self::PayableReversalDebit, self::WithdrawalPaidDebit, self::DeliverySuccessFeeDebit => LedgerDirection::Debit,
             self::WithdrawalReserved, self::WithdrawalReservationReleased, self::ManualAdjustment => null,
         };
     }
@@ -60,7 +68,8 @@ enum SupplierLedgerEntryType: string
     {
         return match ($this) {
             self::PayableReversalDebit, self::WithdrawalReservationReleased, self::ManualAdjustment => true,
-            default => false,
+            // Explains itself through the payable and order it points at.
+            self::SettlementCredit, self::WithdrawalReserved, self::WithdrawalPaidDebit, self::DeliverySuccessFeeDebit => false,
         };
     }
 
@@ -78,6 +87,7 @@ enum SupplierLedgerEntryType: string
             self::WithdrawalReservationReleased => 'Withdrawal reservation released',
             self::WithdrawalPaidDebit => 'Withdrawal paid',
             self::ManualAdjustment => 'Manual adjustment',
+            self::DeliverySuccessFeeDebit => 'Delivery success fee',
         };
     }
 }

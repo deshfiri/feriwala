@@ -144,6 +144,17 @@ class OrderItem extends Model
     }
 
     /**
+     * This line's reseller-earning settlement, for a Non-Conditional order
+     * (D-new). Null until `Delivered` is reached at least once.
+     *
+     * @return HasOne<OrderProceedsSettlement, $this>
+     */
+    public function proceedsSettlement(): HasOne
+    {
+        return $this->hasOne(OrderProceedsSettlement::class);
+    }
+
+    /**
      * The staff-chosen source currently holding this line, if any
      * ({@see AllocateOrderLineSource}) — separate
      * from the columns above, which snapshot what a dropshipping/wholesale

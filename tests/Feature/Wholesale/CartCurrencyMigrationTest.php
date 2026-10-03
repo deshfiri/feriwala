@@ -124,7 +124,15 @@ function cartCurrencyP48Carts(): array
     DB::setDefaultConnection(CART_CURRENCY_CONNECTION);
 
     try {
-        $account = BusinessAccount::factory()->create();
+        // `make()`, not `create()`: `account_type` was added to
+        // `business_accounts` long after P4-8 and carries a model-level
+        // default, which would otherwise insert a column this throwaway
+        // schema does not have. Unset before saving — everything else about
+        // the row still comes from the ordinary factory.
+        $account = BusinessAccount::factory()->make();
+        unset($account->account_type);
+        $account->save();
+
         $others = User::factory()->count(2)->create();
     } finally {
         DB::setDefaultConnection($previous);

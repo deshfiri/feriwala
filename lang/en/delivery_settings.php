@@ -17,6 +17,8 @@ return [
         'maximum_charge_help' => 'Blank means no cap.',
         'free_delivery_threshold' => 'Free-delivery order threshold',
         'free_delivery_threshold_help' => 'Blank means delivery is never free regardless of order value.',
+        'delivery_success_fee_percent' => 'Delivery success fee (%)',
+        'delivery_success_fee_percent_help' => 'Charged to the supplier, on their own gross payable for the line, the moment delivery is confirmed.',
         'settings_saved' => 'Delivery charge settings saved.',
 
         'rules_title' => 'Weight-tier rules',

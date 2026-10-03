@@ -31,6 +31,7 @@ type Settings = {
     minimum_charge: Money;
     maximum_charge: Money | null;
     free_delivery_threshold: Money | null;
+    delivery_success_fee_percent: string;
 };
 
 type RuleRow = {
@@ -272,6 +273,37 @@ export default function DeliverySettingsIndex({
                                                     settings
                                                         .free_delivery_threshold
                                                         ?.amount
+                                                }
+                                            />
+                                        )}
+                                    </FormField>
+                                </div>
+
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    <FormField
+                                        label={t(
+                                            'delivery_settings.admin.delivery_success_fee_percent',
+                                        )}
+                                        hint={t(
+                                            'delivery_settings.admin.delivery_success_fee_percent_help',
+                                        )}
+                                        error={
+                                            errors.delivery_success_fee_percent
+                                        }
+                                        required
+                                    >
+                                        {(field) => (
+                                            <Input
+                                                {...field}
+                                                name="delivery_success_fee_percent"
+                                                type="number"
+                                                inputMode="decimal"
+                                                min={0}
+                                                max={100}
+                                                step="0.01"
+                                                className="tabular-nums"
+                                                defaultValue={
+                                                    settings.delivery_success_fee_percent
                                                 }
                                             />
                                         )}

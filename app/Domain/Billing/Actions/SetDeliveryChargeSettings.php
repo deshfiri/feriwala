@@ -40,9 +40,14 @@ class SetDeliveryChargeSettings
         Money $minimumCharge,
         ?Money $maximumCharge,
         ?Money $freeDeliveryThreshold,
+        string $deliverySuccessFeePercent = DeliveryChargeSettings::DEFAULT_SUCCESS_FEE_PERCENT,
     ): void {
         if ($volumetricDivisor <= 0) {
             throw new InvalidArgumentException('The volumetric divisor must be greater than zero.');
+        }
+
+        if (! is_numeric($deliverySuccessFeePercent) || bccomp($deliverySuccessFeePercent, '0', 4) < 0 || bccomp($deliverySuccessFeePercent, '100', 4) > 0) {
+            throw new InvalidArgumentException('The delivery success fee must be a percentage between 0 and 100.');
         }
 
         foreach ([$additionalPerKgCharge, $perBoxCharge, $fragileHandlingCharge, $minimumCharge] as $amount) {
@@ -74,6 +79,7 @@ class SetDeliveryChargeSettings
             'minimum_charge' => $this->current->minimumCharge($minimumCharge->currency)->toDecimal(),
             'maximum_charge' => $this->current->maximumCharge($minimumCharge->currency)?->toDecimal(),
             'free_delivery_threshold' => $this->current->freeDeliveryThreshold($minimumCharge->currency)?->toDecimal(),
+            'delivery_success_fee_percent' => $this->current->deliverySuccessFeePercent(),
         ];
 
         $this->settings->define(DeliveryChargeSettings::VOLUMETRIC_DIVISOR, 'delivery', SettingType::Integer, label: 'Volumetric-weight divisor');
@@ -84,6 +90,7 @@ class SetDeliveryChargeSettings
         $this->settings->define(DeliveryChargeSettings::MINIMUM_CHARGE, 'delivery', SettingType::Money, label: 'Minimum delivery charge');
         $this->settings->define(DeliveryChargeSettings::MAXIMUM_CHARGE, 'delivery', SettingType::Money, label: 'Maximum delivery charge');
         $this->settings->define(DeliveryChargeSettings::FREE_DELIVERY_THRESHOLD, 'delivery', SettingType::Money, label: 'Free-delivery order threshold');
+        $this->settings->define(DeliveryChargeSettings::SUCCESS_FEE_PERCENT, 'delivery', SettingType::Decimal, label: 'Delivery success fee (%)');
 
         $this->settings->set(DeliveryChargeSettings::VOLUMETRIC_DIVISOR, $volumetricDivisor, $actor->id);
         $this->settings->set(DeliveryChargeSettings::USE_GREATER_OF_ACTUAL_AND_VOLUMETRIC, $useGreaterOfActualAndVolumetric, $actor->id);
@@ -93,6 +100,7 @@ class SetDeliveryChargeSettings
         $this->settings->set(DeliveryChargeSettings::MINIMUM_CHARGE, $minimumCharge, $actor->id);
         $this->settings->set(DeliveryChargeSettings::MAXIMUM_CHARGE, $maximumCharge, $actor->id);
         $this->settings->set(DeliveryChargeSettings::FREE_DELIVERY_THRESHOLD, $freeDeliveryThreshold, $actor->id);
+        $this->settings->set(DeliveryChargeSettings::SUCCESS_FEE_PERCENT, $deliverySuccessFeePercent, $actor->id);
 
         $this->audit->handle(new AuditEntry(
             action: 'delivery_settings.updated',
@@ -107,6 +115,7 @@ class SetDeliveryChargeSettings
                 'minimum_charge' => $minimumCharge->toDecimal(),
                 'maximum_charge' => $maximumCharge?->toDecimal(),
                 'free_delivery_threshold' => $freeDeliveryThreshold?->toDecimal(),
+                'delivery_success_fee_percent' => $deliverySuccessFeePercent,
             ],
             module: 'delivery_settings',
         ));

@@ -286,6 +286,7 @@ return [
         'allocated' => 'Line allocated.',
         'commitment_updated' => 'Fulfilment commitment updated.',
         'lifecycle_updated' => 'Order status updated.',
+        'cod_collection_recorded' => 'COD collection recorded.',
         'lifecycle' => [
             'title' => 'Fulfilment & delivery',
             'fulfilment_label' => 'Fulfilment',
@@ -324,6 +325,23 @@ return [
             'eligible_at' => 'Eligible since :date',
             'settled_at' => 'Settled :date',
             'cancelled_at' => 'Cancelled :date',
+        ],
+        'proceeds' => [
+            'resale_amount' => 'Declared resale/COD amount',
+            'recovered_amount' => 'Banij recovers',
+            'collected_amount' => 'Collected',
+            'earning' => 'Reseller earning',
+            'awaiting_delivery' => 'Awaiting delivery.',
+            'settled' => 'Settled',
+            'flagged' => 'Flagged for review',
+        ],
+        'cod_collection' => [
+            'action' => 'Record COD collection',
+            'title' => 'Record COD collection',
+            'description' => 'How much was actually collected in cash for :name.',
+            'amount_collected' => 'Amount collected',
+            'amount_help' => 'Pre-filled with the declared resale amount. Edit if the real collection came up short.',
+            'submit' => 'Record collection',
         ],
         'allocation' => [
             'action' => 'Assign source',
