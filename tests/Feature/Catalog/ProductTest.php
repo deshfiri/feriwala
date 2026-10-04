@@ -306,6 +306,25 @@ describe('deleting', function () {
 
         expect(Product::query()->count())->toBe(1);
     });
+
+    it('refuses to delete a draft that has already been through review, even once it is back to draft', function () {
+        // Archived is the only status that returns to Draft (§11.2), and it
+        // arrives with history — a draft in that shape is not the same thing
+        // as one that has never left the author's hands.
+        $product = catalogProduct(['status' => 'draft']);
+
+        $product->statusHistory()->create([
+            'axis' => ProductStatus::AXIS_LIFECYCLE,
+            'from_status' => ProductStatus::Archived,
+            'to_status' => ProductStatus::Draft,
+        ]);
+
+        $this->actingAs($this->manager)
+            ->delete(route('admin.catalog.products.destroy', $product->public_id))
+            ->assertSessionHasErrors('product');
+
+        expect(Product::query()->count())->toBe(1);
+    });
 });
 
 describe('categories and brands keep their products (§11.3)', function () {
