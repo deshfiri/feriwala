@@ -75,9 +75,11 @@ class SaveProductRequest extends FormRequest
              * The central SKU (§12). Letters, digits, dots, dashes and
              * underscores, starting with a letter or digit — the characters a
              * label printer, a barcode scanner and a spreadsheet all agree on.
+             * Left blank, {@see \App\Domain\Catalog\Actions\ManageProducts}
+             * invents one rather than demanding it.
              */
             'sku' => [
-                'required', 'string', 'max:64', 'regex:/^[A-Z0-9][A-Z0-9._-]*$/',
+                'nullable', 'string', 'max:64', 'regex:/^[A-Z0-9][A-Z0-9._-]*$/',
                 Rule::unique(Product::class, 'sku')->ignore($existing?->id),
 
                 // One namespace with variants; the database trigger holds it too.
@@ -88,8 +90,13 @@ class SaveProductRequest extends FormRequest
                 },
             ],
 
+            /*
+             * Always a 13-digit EAN-13 code. Left blank, ManageProducts
+             * generates one with a valid check digit, so a downloaded
+             * barcode always actually scans.
+             */
             'barcode' => [
-                'nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9-]+$/',
+                'nullable', 'digits:13',
                 Rule::unique(Product::class, 'barcode')->ignore($existing?->id),
                 function (string $attribute, mixed $value, Closure $fail): void {
                     if (ProductVariant::query()->where('barcode', $value)->exists()) {

@@ -1101,6 +1101,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.update');
         Route::delete('catalog/products/{product}', [ProductController::class, 'destroy'])
             ->name('catalog.products.destroy');
+        Route::get('catalog/products/{product}/barcode', [ProductController::class, 'barcode'])
+            ->name('catalog.products.barcode');
 
         /*
          * Variations, always addressed through their product (§11.1, §12), and

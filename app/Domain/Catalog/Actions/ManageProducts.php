@@ -37,6 +37,7 @@ class ManageProducts
         protected RecordAuditLog $audit,
         protected ProductMediaStore $mediaStore,
         protected DatabaseManager $database,
+        protected GenerateProductIdentifiers $identifiers,
     ) {}
 
     /**
@@ -155,7 +156,7 @@ class ManageProducts
         $fields = [];
 
         foreach ([
-            'name', 'short_description', 'description', 'barcode',
+            'name', 'short_description', 'description',
             'meta_title', 'meta_description', 'meta_keywords', 'mpn',
         ] as $field) {
             if (array_key_exists($field, $attributes)) {
@@ -181,10 +182,25 @@ class ManageProducts
                     ->value('id');
         }
 
-        // Upper-case, matching the CHECK on the column: one SKU is one product
-        // to a warehouse picker whatever the casing it was typed in.
+        /*
+         * Upper-case, matching the CHECK on the column: one SKU is one
+         * product to a warehouse picker whatever the casing it was typed
+         * in. Left blank, the BPC and the barcode are invented rather than
+         * demanded — a BPC is housekeeping, not something worth blocking a
+         * draft on.
+         */
         if (array_key_exists('sku', $attributes)) {
-            $fields['sku'] = mb_strtoupper(trim((string) $attributes['sku']));
+            $sku = mb_strtoupper(trim((string) $attributes['sku']));
+            $fallbackName = $product !== null ? $product->name : '';
+            $fields['sku'] = $sku !== ''
+                ? $sku
+                : $this->identifiers->sku((string) ($attributes['name'] ?? $fallbackName));
+        }
+
+        if (array_key_exists('barcode', $attributes)) {
+            $fields['barcode'] = blank($attributes['barcode'])
+                ? $this->identifiers->barcode()
+                : $attributes['barcode'];
         }
 
         /*

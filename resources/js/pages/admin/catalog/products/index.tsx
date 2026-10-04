@@ -1,7 +1,8 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ImageOff, Plus, ShoppingBag, X } from 'lucide-react';
+import { ImageOff, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import ProductBulkController from '@/actions/App/Http/Controllers/Admin/ProductBulkController';
+import ProductController from '@/actions/App/Http/Controllers/Admin/ProductController';
 import AlertError from '@/components/alert-error';
 import DataTable from '@/components/data-table/data-table';
 import FormField from '@/components/forms/form-field';
@@ -167,7 +168,7 @@ export default function AdminProducts({
             header: '',
             align: 'end',
             alwaysVisible: true,
-            cell: (row) => <RowLinks row={row} />,
+            cell: (row) => <RowLinks row={row} can={can} />,
         },
     ];
 
@@ -496,7 +497,7 @@ export default function AdminProducts({
                                         </span>
                                     </label>
                                 )}
-                                <RowLinks row={row} />
+                                <RowLinks row={row} can={can} />
                             </div>
                         </div>
                     )}
@@ -895,10 +896,20 @@ function ChannelPills({ row }: { row: ProductRow }) {
 
 /**
  * Straight to the editor's media manager and variation builder, with how much
- * each already holds.
+ * each already holds, plus delete for a draft that hasn't gone anywhere yet.
  */
-function RowLinks({ row }: { row: ProductRow }) {
+function RowLinks({ row, can }: { row: ProductRow; can: CatalogAbilities }) {
     const { t } = useTranslation();
+
+    const remove = () => {
+        if (!window.confirm(t('catalog.products.delete_confirm'))) {
+            return;
+        }
+
+        router.delete(ProductController.destroy.url(row.id), {
+            preserveScroll: true,
+        });
+    };
 
     return (
         <div className="flex flex-wrap items-center justify-end gap-1">
@@ -918,6 +929,14 @@ function RowLinks({ row }: { row: ProductRow }) {
                     </span>
                 </Link>
             </Button>
+            {can.delete && row.status === 'draft' && (
+                <Button variant="ghost" size="sm" onClick={remove}>
+                    <Trash2 className="size-4" aria-hidden="true" />
+                    <span className="sr-only">
+                        {t('common.actions.delete')}
+                    </span>
+                </Button>
+            )}
         </div>
     );
 }

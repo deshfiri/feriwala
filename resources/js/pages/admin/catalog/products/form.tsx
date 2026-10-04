@@ -1,6 +1,7 @@
 import { Form, Head, router, usePage } from '@inertiajs/react';
 import {
     Boxes,
+    Download,
     Image as ImageIcon,
     Info,
     Layers,
@@ -393,7 +394,6 @@ export default function ProductForm({
                                                     'catalog.products.fields.sku_help',
                                                 )}
                                                 error={formErrors.sku}
-                                                required
                                             >
                                                 {(field) => (
                                                     <Input
@@ -418,16 +418,44 @@ export default function ProductForm({
                                                 error={formErrors.barcode}
                                             >
                                                 {(field) => (
-                                                    <Input
-                                                        {...field}
-                                                        name="barcode"
-                                                        maxLength={64}
-                                                        className="font-mono"
-                                                        defaultValue={
-                                                            product?.barcode ??
-                                                            ''
-                                                        }
-                                                    />
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            {...field}
+                                                            name="barcode"
+                                                            maxLength={13}
+                                                            inputMode="numeric"
+                                                            className="font-mono"
+                                                            defaultValue={
+                                                                product?.barcode ??
+                                                                ''
+                                                            }
+                                                        />
+                                                        {product?.barcode && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                asChild
+                                                            >
+                                                                <a
+                                                                    href={ProductController.barcode.url(
+                                                                        product.id,
+                                                                    )}
+                                                                    download
+                                                                >
+                                                                    <Download
+                                                                        className="size-4"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                    <span className="sr-only sm:not-sr-only">
+                                                                        {t(
+                                                                            'catalog.products.fields.download_barcode',
+                                                                        )}
+                                                                    </span>
+                                                                </a>
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </FormField>
 

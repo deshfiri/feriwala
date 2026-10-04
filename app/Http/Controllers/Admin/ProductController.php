@@ -22,6 +22,7 @@ use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Catalog\ProductBarcode;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
@@ -38,6 +39,7 @@ use App\Models\User;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Arr;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -470,6 +472,30 @@ class ProductController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.deleted')]);
 
         return redirect()->route('admin.catalog.products.index');
+    }
+
+    /**
+     * The product's barcode, as a downloadable EAN-13 SVG.
+     *
+     * Anyone who may see the catalogue may print its labels; this is read
+     * only, so it asks no more of the policy than the editor already does.
+     */
+    public function barcode(Request $request, string $product): HttpResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(CatalogPolicy::canViewAny($actor), 403);
+
+        $record = $this->product($product);
+
+        abort_if($record->barcode === null, 404);
+
+        $svg = ProductBarcode::toSvg($record->barcode);
+
+        return response($svg, 200, [
+            'Content-Type' => 'image/svg+xml',
+            'Content-Disposition' => 'attachment; filename="'.$record->sku.'-barcode.svg"',
+        ]);
     }
 
     /**

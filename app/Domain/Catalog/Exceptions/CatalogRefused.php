@@ -298,4 +298,9 @@ class CatalogRefused extends RuntimeException
     {
         return new self("No free BPC could be made from {$base}. Add this variation by hand with a BPC of your choosing.");
     }
+
+    public static function noFreeBarcode(): self
+    {
+        return new self('No free 13-digit barcode could be generated. Enter one by hand, or try saving again.');
+    }
 }

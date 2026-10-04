@@ -6,6 +6,7 @@ use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\ProductBarcode;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -152,10 +153,28 @@ describe('only the platform writes products (§12)', function () {
 });
 
 describe('validation and database constraints', function () {
-    it('requires a name, a SKU, a category and both figures', function () {
+    it('requires a name, a category and both figures, but invents a BPC and a barcode', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), [])
-            ->assertSessionHasErrors(['name', 'sku', 'category_id', 'base_cost', 'wholesale_price']);
+            ->assertSessionHasErrors(['name', 'category_id', 'base_cost', 'wholesale_price'])
+            ->assertSessionDoesntHaveErrors(['sku', 'barcode']);
+    });
+
+    it('generates a BPC and a 13-digit barcode when both are left blank', function () {
+        $this->actingAs($this->manager)
+            ->post(route('admin.catalog.products.store'), catalogProductPayload([
+                'sku' => '',
+                'barcode' => '',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $product = Product::query()->firstOrFail();
+
+        expect($product->sku)->toMatch('/^[A-Z0-9][A-Z0-9._-]*$/')
+            ->and($product->barcode)->toMatch('/^\d{13}$/')
+            ->and((int) $product->barcode[12])->toBe(
+                ProductBarcode::checkDigit(substr($product->barcode, 0, 12)),
+            );
     });
 
     it('refuses a price with more than two decimal places, or that is negative', function () {
@@ -367,5 +386,36 @@ describe('the screens', function () {
                 ->component('admin/catalog/products/form')
                 ->where('product', null),
             );
+    });
+});
+
+describe('downloading a barcode', function () {
+    it('serves the EAN-13 as a downloadable SVG', function () {
+        $product = catalogProduct(['barcode' => '8941100500012']);
+
+        $response = $this->actingAs($this->manager)
+            ->get(route('admin.catalog.products.barcode', $product->public_id))
+            ->assertOk();
+
+        $response->assertHeader('content-type', 'image/svg+xml');
+        expect($response->headers->get('content-disposition'))->toContain('attachment');
+        expect($response->getContent())->toContain('<svg')->toContain('8941100500012');
+    });
+
+    it('has nothing to serve for a product without a barcode', function () {
+        $product = catalogProduct();
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.catalog.products.barcode', $product->public_id))
+            ->assertNotFound();
+    });
+
+    it('lets a read-only viewer download it too', function () {
+        $viewer = testPlatformStaff(PlatformRole::InventoryManager);
+        $product = catalogProduct(['barcode' => '8941100500012']);
+
+        $this->actingAs($viewer)
+            ->get(route('admin.catalog.products.barcode', $product->public_id))
+            ->assertOk();
     });
 });
