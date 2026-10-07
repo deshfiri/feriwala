@@ -77,29 +77,29 @@ class CatalogRefused extends RuntimeException
     }
 
     /**
-     * Only a draft is ever removed outright.
+     * A trashed product is still named by a real business record.
      *
-     * A product that has been through review or offered to anybody is part of
-     * the record of what the catalogue said, and archiving is what retires it.
+     * Trash itself destroys nothing — it only takes the product out of every
+     * catalogue, cart and allocation lookup. Permanent removal is for a product
+     * nothing has ever actually used, and `$by` is why this one does not
+     * qualify: it stays a tombstone rather than becoming an unexplained gap in
+     * somebody else's record.
      */
-    public static function productNotDraft(): self
+    public static function productHasBusinessHistory(string $by): self
     {
         return new self(
-            'Only a draft product can be deleted. Archive it instead — that stops it being offered '
-            .'without erasing what the catalogue said about it.'
+            "This product cannot be permanently deleted because {$by}. It stays safely in Trash — "
+            .'nobody can select it, and its history is kept intact.'
         );
     }
 
     /**
-     * A product that has moved through its lifecycle even once is part of the
-     * record, and its history cannot be deleted from under it.
+     * Restoring or permanently deleting only ever makes sense for a product
+     * that is actually in Trash.
      */
-    public static function productHasHistory(): self
+    public static function productNotTrashed(): self
     {
-        return new self(
-            'This draft has already been through review, and its status history stays on record. '
-            .'Archive it instead of deleting it.'
-        );
+        return new self('Only a product already in Trash can be restored or permanently deleted.');
     }
 
     public static function notLifecycleStatus(string $status): self

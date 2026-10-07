@@ -274,13 +274,14 @@ describe('the editor', function () {
             );
     });
 
-    it('removes a draft together with its eligibility, explicitly', function () {
+    it('removes a product together with its eligibility, on permanent delete', function () {
         $product = catalogEligibilityProduct('FW-1', ['status' => ProductStatus::Draft]);
         $product->eligiblePackages()->attach($this->basic->id);
 
-        app(ManageProducts::class)->delete($this->manager, $product);
+        app(ManageProducts::class)->trash($this->manager, $product, 'Test.');
+        app(ManageProducts::class)->permanentlyDelete($this->manager, $product->refresh());
 
-        expect(Product::query()->count())->toBe(0)
+        expect(Product::withTrashed()->count())->toBe(0)
             ->and(DB::table('product_package_eligibility')->count())->toBe(0);
     });
 });

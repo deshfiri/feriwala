@@ -84,14 +84,23 @@ class InventoryController extends StorefrontController
 
         return DB::table('products')
             ->whereIn('products.id', $productIds)
+            ->whereNull('products.deleted_at')
             ->whereNotExists(fn ($query) => $query
                 ->selectRaw('1')
                 ->from('product_variants')
                 ->whereColumn('product_variants.product_id', 'products.id'))
             ->pluck('sku')
+            // A trashed product's variations are unstockable too (urgent
+            // product-management fix) — raw SQL, so not scoped the way
+            // `Product::query()` is by Eloquent's own soft-delete scope.
             ->merge(DB::table('product_variants')
                 ->whereIn('product_id', $productIds)
                 ->where('is_active', true)
+                ->whereNotExists(fn ($query) => $query
+                    ->selectRaw('1')
+                    ->from('products')
+                    ->whereColumn('products.id', 'product_variants.product_id')
+                    ->whereNotNull('products.deleted_at'))
                 ->pluck('sku'))
             ->map(fn (mixed $sku) => mb_strtoupper((string) $sku))
             ->unique()

@@ -284,12 +284,13 @@ describe('describing, ordering and removing', function () {
             );
     });
 
-    it('goes with its draft product, explicitly, files included', function () {
+    it('goes with its permanently deleted product, explicitly, files included', function () {
         ProductVariant::create(['product_id' => $this->product->id, 'sku' => 'FW-1043-M', 'combination_key' => 'k']);
 
-        app(ManageProducts::class)->delete($this->manager, $this->product);
+        app(ManageProducts::class)->trash($this->manager, $this->product, 'Test.');
+        app(ManageProducts::class)->permanentlyDelete($this->manager, $this->product->refresh());
 
-        expect(Product::query()->count())->toBe(0)
+        expect(Product::withTrashed()->count())->toBe(0)
             ->and(ProductMedia::query()->count())->toBe(0)
             ->and(ProductVariant::query()->count())->toBe(0)
             ->and(Storage::disk('public')->allFiles())->toBe([]);

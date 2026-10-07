@@ -24,6 +24,7 @@ import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { create, edit } from '@/routes/admin/catalog/products';
+import { index as trashIndex } from '@/routes/admin/catalog/products/trash';
 import type {
     CatalogAbilities,
     CatalogOption,
@@ -35,6 +36,7 @@ import type {
     ProductRow,
     SalesChannelName,
 } from '@/types';
+import TrashReasonDialog from './trash-reason-dialog';
 
 type Props = {
     products: Paginator<ProductRow>;
@@ -207,17 +209,30 @@ export default function AdminProducts({
                     title={t('catalog.products.title')}
                     description={t('catalog.products.description')}
                     actions={
-                        can.create ? (
-                            <Button asChild>
-                                <Link href={create()}>
-                                    <Plus
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    {t('catalog.products.create')}
-                                </Link>
-                            </Button>
-                        ) : undefined
+                        <>
+                            {can.delete && (
+                                <Button variant="outline" asChild>
+                                    <Link href={trashIndex()}>
+                                        <Trash2
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {t('catalog.products.trash.open')}
+                                    </Link>
+                                </Button>
+                            )}
+                            {can.create && (
+                                <Button asChild>
+                                    <Link href={create()}>
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {t('catalog.products.create')}
+                                    </Link>
+                                </Button>
+                            )}
+                        </>
                     }
                 />
 
@@ -896,20 +911,11 @@ function ChannelPills({ row }: { row: ProductRow }) {
 
 /**
  * Straight to the editor's media manager and variation builder, with how much
- * each already holds, plus delete for a draft that hasn't gone anywhere yet.
+ * each already holds, plus Trash for any status.
  */
 function RowLinks({ row, can }: { row: ProductRow; can: CatalogAbilities }) {
     const { t } = useTranslation();
-
-    const remove = () => {
-        if (!window.confirm(t('catalog.products.delete_confirm'))) {
-            return;
-        }
-
-        router.delete(ProductController.destroy.url(row.id), {
-            preserveScroll: true,
-        });
-    };
+    const [trashOpen, setTrashOpen] = useState(false);
 
     return (
         <div className="flex flex-wrap items-center justify-end gap-1">
@@ -929,13 +935,25 @@ function RowLinks({ row, can }: { row: ProductRow; can: CatalogAbilities }) {
                     </span>
                 </Link>
             </Button>
-            {can.delete && row.status === 'draft' && (
-                <Button variant="ghost" size="sm" onClick={remove}>
-                    <Trash2 className="size-4" aria-hidden="true" />
-                    <span className="sr-only">
-                        {t('common.actions.delete')}
-                    </span>
-                </Button>
+            {can.delete && (
+                <>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setTrashOpen(true)}
+                    >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        <span className="sr-only">
+                            {t('common.actions.delete')}
+                        </span>
+                    </Button>
+                    <TrashReasonDialog
+                        open={trashOpen}
+                        onOpenChange={setTrashOpen}
+                        productName={row.name}
+                        url={ProductController.destroy.url(row.id)}
+                    />
+                </>
             )}
         </div>
     );

@@ -20,7 +20,7 @@ type Props = {
     saveLabel: string;
     processing: boolean;
     canSave: boolean;
-    canDeleteDraft: boolean;
+    canDelete: boolean;
     onDelete: () => void;
     deleteError?: ReactNode;
 };
@@ -38,7 +38,7 @@ export default function ProductHeader({
     saveLabel,
     processing,
     canSave,
-    canDeleteDraft,
+    canDelete,
     onDelete,
     deleteError,
 }: Props) {
@@ -105,7 +105,7 @@ export default function ProductHeader({
                         </Button>
                     )}
 
-                    {canDeleteDraft && (
+                    {canDelete && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button

@@ -53,6 +53,21 @@ export type ProductRow = {
     updated_at: string;
 };
 
+/** One product on the admin Trash screen (urgent product-management fix). */
+export type TrashedProductRow = {
+    id: string;
+    name: string;
+    sku: string;
+    category: string;
+    brand: string | null;
+    status: string;
+    status_tone: StatusTone;
+    deleted_at: string;
+    /** Null for a system-trashed product (no staff actor). */
+    deleted_by: string | null;
+    deletion_reason: string | null;
+};
+
 /** The product list's filters, as the server accepted them. */
 export type ProductListFilters = {
     status: string | null;

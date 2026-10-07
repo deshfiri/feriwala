@@ -15,6 +15,7 @@ use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Package\Models\Package;
+use App\Models\User;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -22,6 +23,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * One product in the central catalogue (§11.1).
@@ -78,10 +80,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property CarbonImmutable|null $deleted_at
+ * @property int|null $deleted_by
+ * @property string|null $deletion_reason
  * @property-read Category $category
  * @property-read Brand|null $brand
  * @property-read Collection<int, ProductVariant> $variants
  * @property-read Collection<int, ProductMedia> $media
+ * @property-read User|null $deleter
  */
 class Product extends Model
 {
@@ -101,6 +107,15 @@ class Product extends Model
      * statuses whatever writes it.
      */
     use HasStateMachine;
+
+    /*
+     * Trash (urgent product-management fix). A trashed product disappears from
+     * every catalogue, cart, storefront and allocation lookup immediately —
+     * every one of them reads through `Product::query()`, so this one trait
+     * scopes all of them at once. Nothing it names (status history, stock,
+     * supplier offers, sourcing, orders) is touched; only this row is marked.
+     */
+    use SoftDeletes;
 
     /**
      * The column defaults, stated on the model as well as in the table.
@@ -166,6 +181,7 @@ class Product extends Model
             'published_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
+            'deleted_at' => 'immutable_datetime',
         ];
     }
 
@@ -260,6 +276,16 @@ class Product extends Model
     public function socialImage(): BelongsTo
     {
         return $this->belongsTo(ProductMedia::class, 'social_media_id');
+    }
+
+    /**
+     * Who sent this product to Trash, for the Trash screen.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function deleter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 
     /**

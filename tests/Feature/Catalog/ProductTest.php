@@ -7,6 +7,11 @@ use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\ProductBarcode;
+use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderItem;
+use App\Domain\Supplier\Models\Supplier;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -286,44 +291,201 @@ describe('editing', function () {
     });
 });
 
-describe('deleting', function () {
-    it('deletes a draft', function () {
+describe('trash (urgent product-management fix)', function () {
+    it('trashes a product in any status, with a reason recorded', function () {
+        $product = catalogProduct(['status' => 'active']);
+
+        $this->actingAs($this->manager)
+            ->delete(route('admin.catalog.products.destroy', $product->public_id), [
+                'reason' => 'Added by mistake during testing.',
+            ])
+            ->assertRedirect(route('admin.catalog.products.index'));
+
+        $product->refresh();
+
+        expect($product->trashed())->toBeTrue()
+            ->and($product->deletion_reason)->toBe('Added by mistake during testing.')
+            ->and($product->deleter->id)->toBe($this->manager->id)
+            ->and(Product::query()->count())->toBe(0)
+            ->and(Product::withTrashed()->count())->toBe(1);
+    });
+
+    it('requires a reason', function () {
         $product = catalogProduct();
 
         $this->actingAs($this->manager)
             ->delete(route('admin.catalog.products.destroy', $product->public_id))
-            ->assertRedirect(route('admin.catalog.products.index'));
+            ->assertSessionHasErrors('reason');
 
-        expect(Product::query()->count())->toBe(0);
+        expect($product->refresh()->trashed())->toBeFalse();
     });
 
-    it('refuses to delete a product that has left draft', function () {
+    it('disappears from the active list and search immediately', function () {
+        catalogProduct(['sku' => 'FW-KEEP']);
+        $trashed = catalogProduct(['sku' => 'FW-GONE', 'name' => 'Trashed cooker']);
+        $trashed->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'Test product.'])->save();
+        $trashed->delete();
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.catalog.products.index'))
+            ->assertInertia(fn (Assert $page) => $page->has('products.data', 1)
+                ->where('products.data.0.sku', 'FW-KEEP'));
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.catalog.products.index', ['search' => 'Trashed cooker']))
+            ->assertInertia(fn (Assert $page) => $page->has('products.data', 0));
+    });
+
+    it('restores a trashed product exactly as it was', function () {
         $product = catalogProduct(['status' => 'active']);
+        $product->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'By mistake.'])->save();
+        $product->delete();
 
         $this->actingAs($this->manager)
-            ->delete(route('admin.catalog.products.destroy', $product->public_id))
-            ->assertSessionHasErrors('product');
+            ->post(route('admin.catalog.products.trash.restore', $product->public_id))
+            ->assertSessionHasNoErrors();
 
-        expect(Product::query()->count())->toBe(1);
+        $product->refresh();
+
+        expect($product->trashed())->toBeFalse()
+            ->and($product->deleted_by)->toBeNull()
+            ->and($product->deletion_reason)->toBeNull()
+            ->and($product->status)->toBe(ProductStatus::Active);
     });
 
-    it('refuses to delete a draft that has already been through review, even once it is back to draft', function () {
-        // Archived is the only status that returns to Draft (§11.2), and it
-        // arrives with history — a draft in that shape is not the same thing
-        // as one that has never left the author's hands.
-        $product = catalogProduct(['status' => 'draft']);
+    describe('permanent delete', function () {
+        it('erases a genuinely unused trashed product outright', function () {
+            $product = catalogProduct();
+            $product->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'Never used.'])->save();
+            $product->delete();
 
-        $product->statusHistory()->create([
-            'axis' => ProductStatus::AXIS_LIFECYCLE,
-            'from_status' => ProductStatus::Archived,
-            'to_status' => ProductStatus::Draft,
-        ]);
+            $this->actingAs($this->manager)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertSessionHasNoErrors();
 
-        $this->actingAs($this->manager)
-            ->delete(route('admin.catalog.products.destroy', $product->public_id))
-            ->assertSessionHasErrors('product');
+            expect(Product::withTrashed()->whereKey($product->id)->exists())->toBeFalse();
+        });
 
-        expect(Product::query()->count())->toBe(1);
+        it('refuses a product with lifecycle history, keeping it a tombstone (§7)', function () {
+            $product = catalogProduct();
+            $product->statusHistory()->create([
+                'axis' => ProductStatus::AXIS_LIFECYCLE,
+                'from_status' => ProductStatus::Draft,
+                'to_status' => ProductStatus::PendingReview,
+            ]);
+            $product->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'Test.'])->save();
+            $product->delete();
+
+            $this->actingAs($this->manager)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertSessionHasErrors('product');
+
+            expect(Product::withTrashed()->whereKey($product->id)->exists())->toBeTrue();
+        });
+
+        it('refuses a product orders refer to', function () {
+            $product = catalogProduct();
+            $order = Order::factory()->create();
+
+            OrderItem::create([
+                'order_id' => $order->id,
+                'line_number' => 1,
+                'product_id' => $product->id,
+                'sku' => $product->sku,
+                'product_name' => $product->name,
+                'quantity' => 1,
+                'currency_code' => 'BDT',
+                'unit_price' => Money::fromDecimal('1800.00', Currency::BDT),
+                'line_subtotal' => Money::fromDecimal('1800.00', Currency::BDT),
+                'line_total' => Money::fromDecimal('1800.00', Currency::BDT),
+                'created_at' => now(),
+            ]);
+
+            $product->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'Test.'])->save();
+            $product->delete();
+
+            $this->actingAs($this->manager)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertSessionHasErrors('product');
+
+            expect(Product::withTrashed()->whereKey($product->id)->exists())->toBeTrue();
+        });
+
+        it('refuses a product with warehouse stock recorded against it', function () {
+            $product = catalogProduct();
+            $warehouse = Warehouse::create(['name' => 'Dhaka Depot', 'code' => 'DHK-'.random_int(100, 999), 'is_active' => true]);
+
+            StockItem::create([
+                'warehouse_id' => $warehouse->id,
+                'product_id' => $product->id,
+                'product_variant_id' => null,
+                'available' => 5,
+            ]);
+
+            $product->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'Test.'])->save();
+            $product->delete();
+
+            $this->actingAs($this->manager)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertSessionHasErrors('product');
+
+            expect(Product::withTrashed()->whereKey($product->id)->exists())->toBeTrue();
+        });
+
+        it('refuses a product a supplier has offered', function () {
+            $product = catalogProduct();
+            supplierTestOffer(Supplier::factory()->create(), $product);
+
+            $product->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'Test.'])->save();
+            $product->delete();
+
+            $this->actingAs($this->manager)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertSessionHasErrors('product');
+
+            expect(Product::withTrashed()->whereKey($product->id)->exists())->toBeTrue();
+        });
+
+        it('refuses to permanently delete a product that is not trashed', function () {
+            $product = catalogProduct();
+
+            $this->actingAs($this->manager)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertNotFound();
+        });
+    });
+
+    describe('authorization', function () {
+        it('refuses a business account holder every trash action', function () {
+            $owner = testBusinessAccount(AccountStatus::Active)->owner;
+            $product = catalogProduct();
+            $product->forceFill(['deleted_by' => $this->manager->id])->save();
+            $product->delete();
+
+            $this->actingAs($owner)
+                ->post(route('admin.catalog.products.trash.restore', $product->public_id))
+                ->assertForbidden();
+            $this->actingAs($owner)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertForbidden();
+            $this->actingAs($owner)
+                ->get(route('admin.catalog.products.trash.index'))
+                ->assertForbidden();
+        });
+
+        it('refuses staff with no delete permission', function () {
+            $viewer = testPlatformStaff(PlatformRole::InventoryManager);
+            $product = catalogProduct();
+            $product->forceFill(['deleted_by' => $this->manager->id])->save();
+            $product->delete();
+
+            $this->actingAs($viewer)
+                ->post(route('admin.catalog.products.trash.restore', $product->public_id))
+                ->assertForbidden();
+            $this->actingAs($viewer)
+                ->delete(route('admin.catalog.products.trash.destroy', $product->public_id))
+                ->assertForbidden();
+        });
     });
 });
 

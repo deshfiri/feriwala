@@ -15,10 +15,19 @@ use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductMediaStore;
+use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Order\Models\OrderItem;
+use App\Domain\Order\Models\ProductSourceLink;
+use App\Domain\Sourcing\Models\ProductSourcingGroupProduct;
+use App\Domain\Sourcing\Models\ProductSourcingVariantMapping;
+use App\Domain\Supplier\Models\SupplierOffer;
+use App\Domain\Website\Models\WebsiteProduct;
+use App\Domain\Wholesale\Models\CartItem;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Database\QueryException;
 
 /**
  * Creating, editing and removing central products (§11.1, §12).
@@ -83,21 +92,85 @@ class ManageProducts
     }
 
     /**
-     * Remove a product outright — only ever a draft.
+     * Take a product out of circulation, whatever its status (urgent
+     * product-management fix).
      *
-     * Anything further along is archived instead. The rows that will come to
-     * point at a product (orders, invoices, website selections) are what make a
-     * delete dangerous, and none of them can exist for a product that was never
-     * offered.
-     *
-     * A draft's own variations and media are removed with it, **explicitly**:
-     * the foreign keys restrict rather than cascade, so nothing disappears
-     * without this method naming it, and the audit entry lists what went. The
-     * media files are deleted only after the removal commits.
+     * Trash is reversible and touches nothing but this one row: the product
+     * disappears from every admin list, partner catalogue, storefront, cart and
+     * allocation lookup immediately (every one of them reads through
+     * `Product::query()`, and the soft-delete scope is Eloquent's own), while
+     * every table that actually names it — status history, stock, supplier
+     * offers, sourcing, orders — is left completely alone. A reason is always
+     * recorded: somebody will eventually ask why a product vanished.
      *
      * @throws CatalogRefused
      */
-    public function delete(User $actor, Product $product): void
+    public function trash(User $actor, Product $product, string $reason): void
+    {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete products.');
+
+        $this->database->transaction(function () use ($actor, $product, $reason) {
+            /** @var Product $locked */
+            $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+
+            $locked->forceFill([
+                'deleted_by' => $actor->id,
+                'deletion_reason' => $reason,
+            ])->save();
+
+            $this->record($actor, 'catalog.product_trashed', $locked, reason: $reason, before: $this->snapshot($locked));
+
+            $locked->delete();
+        });
+    }
+
+    /**
+     * Bring a trashed product back exactly as it was.
+     *
+     * Clears who trashed it and why along with the soft-delete itself, so a
+     * product restored and trashed again later starts that record fresh.
+     *
+     * @throws CatalogRefused
+     */
+    public function restore(User $actor, Product $product): void
+    {
+        CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete products.');
+
+        $this->database->transaction(function () use ($actor, $product) {
+            /** @var Product $locked */
+            $locked = Product::withTrashed()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+
+            if (! $locked->trashed()) {
+                throw CatalogRefused::productNotTrashed();
+            }
+
+            $this->record($actor, 'catalog.product_restored', $locked, before: [
+                'deletion_reason' => $locked->deletion_reason,
+            ]);
+
+            $locked->forceFill(['deleted_by' => null, 'deletion_reason' => null]);
+            $locked->restore();
+        });
+    }
+
+    /**
+     * Erase a trashed product outright — only once nothing real has ever used
+     * it.
+     *
+     * Every one of §6's categories is checked before anything is touched: an
+     * order line, a supplier offer, a stock item, a cart, a storefront listing,
+     * a sourcing group or source link, or even a plain status-history row (its
+     * own append-only trigger would refuse the delete anyway, and this method
+     * never attempts to go around it — see the migration that added Trash).
+     * Only once every one of them comes back empty does this remove the
+     * product's own catalogue rows — media, price tiers, variants, pivots — and
+     * the product itself. The final `forceDelete()` is still wrapped in case a
+     * reference this method did not think to name exists; the database's own
+     * constraints are the backstop, never routed around.
+     *
+     * @throws CatalogRefused
+     */
+    public function permanentlyDelete(User $actor, Product $product): void
     {
         CatalogPolicy::authorize(CatalogPolicy::canDelete($actor), 'You may not delete products.');
 
@@ -105,22 +178,19 @@ class ManageProducts
 
         $this->database->transaction(function () use ($actor, $product, &$media) {
             /** @var Product $locked */
-            $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $locked = Product::withTrashed()->whereKey($product->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->status !== ProductStatus::Draft) {
-                throw CatalogRefused::productNotDraft();
+            if (! $locked->trashed()) {
+                throw CatalogRefused::productNotTrashed();
             }
 
-            // A draft sent back from review has a history, and the history
-            // is append-only: it is archived, not deleted.
-            if ($locked->statusHistory()->exists()) {
-                throw CatalogRefused::productHasHistory();
-            }
+            $this->assertPermanentlyDeletable($locked);
 
             $media = ProductMedia::query()->where('product_id', $locked->id)->get(['path', 'disk']);
 
-            $this->record($actor, 'catalog.product_deleted', $locked, before: [
+            $this->record($actor, 'catalog.product_permanently_deleted', $locked, before: [
                 ...$this->snapshot($locked),
+                'deletion_reason' => $locked->deletion_reason,
                 'variants' => ProductVariant::query()->where('product_id', $locked->id)->pluck('sku')->all(),
                 'media' => $media->pluck('path')->all(),
             ]);
@@ -139,11 +209,80 @@ class ManageProducts
             // A variant's value links are part of the variant and go with it.
             ProductVariant::query()->where('product_id', $locked->id)->delete();
 
-            $locked->delete();
+            try {
+                $locked->forceDelete();
+            } catch (QueryException $exception) {
+                throw CatalogRefused::productHasBusinessHistory('it is still referenced elsewhere in the system');
+            }
         });
 
         foreach ($media as $item) {
             $this->mediaStore->delete($item->path, $item->disk);
+        }
+    }
+
+    /**
+     * Refuse outright unless this product is genuinely unused — never
+     * cascade-deleted, never worked around (§6, §7, §8 of the Trash batch).
+     *
+     * @throws CatalogRefused
+     */
+    protected function assertPermanentlyDeletable(Product $locked): void
+    {
+        // A status-history row, even alone, has its own append-only trigger —
+        // forcing the delete through would only turn into an unhandled database
+        // error. Refusing here keeps the product a tombstone instead.
+        if ($locked->statusHistory()->exists()) {
+            throw CatalogRefused::productHasBusinessHistory('it has lifecycle history on record');
+        }
+
+        $variantIds = ProductVariant::query()->where('product_id', $locked->id)->pluck('id');
+
+        if (
+            OrderItem::query()->where('product_id', $locked->id)
+                ->orWhereIn('product_variant_id', $variantIds)
+                ->orWhere('sourcing_canonical_product_id', $locked->id)
+                ->orWhereIn('sourcing_canonical_variant_id', $variantIds)
+                ->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory('orders refer to it');
+        }
+
+        if (CartItem::query()->where('product_id', $locked->id)->exists()) {
+            throw CatalogRefused::productHasBusinessHistory('a cart still holds it');
+        }
+
+        if (WebsiteProduct::query()->where('product_id', $locked->id)->exists()) {
+            throw CatalogRefused::productHasBusinessHistory('it is published on a partner storefront');
+        }
+
+        if (
+            ProductSourcingGroupProduct::query()->where('product_id', $locked->id)->exists()
+            || ProductSourcingVariantMapping::query()->where('product_id', $locked->id)->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory('it belongs to a product sourcing group');
+        }
+
+        // A stock item or a supplier offer existing at all is a real inventory
+        // or supplier-facing record, whether or not it has ever moved — so
+        // either one blocks here. With neither existing for this product,
+        // nothing it owns could be named as a *different* product's confirmed
+        // fulfilment source either (§6's "linked as another product's source").
+        if (StockItem::query()->where('product_id', $locked->id)->exists()) {
+            throw CatalogRefused::productHasBusinessHistory('it has warehouse stock recorded against it');
+        }
+
+        if (SupplierOffer::query()->where('product_id', $locked->id)->exists()) {
+            throw CatalogRefused::productHasBusinessHistory('a supplier has offered it');
+        }
+
+        if (
+            ProductSourceLink::query()
+                ->where('ordered_product_id', $locked->id)
+                ->orWhereIn('ordered_product_variant_id', $variantIds)
+                ->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory("it is linked as another product's fulfilment source");
         }
     }
 
@@ -331,6 +470,7 @@ class ManageProducts
         Product $product,
         ?array $before = null,
         ?array $after = null,
+        ?string $reason = null,
     ): void {
         $this->audit->handle(new AuditEntry(
             action: $action,
@@ -339,6 +479,7 @@ class ManageProducts
             auditableId: $product->id,
             before: $before,
             after: $after,
+            reason: $reason,
             module: 'catalog',
         ));
     }

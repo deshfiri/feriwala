@@ -39,6 +39,7 @@ use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
+use App\Http\Controllers\Admin\ProductTrashController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\ReferralChainController;
 use App\Http\Controllers\Admin\ReferralCommissionController;
@@ -1103,6 +1104,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.destroy');
         Route::get('catalog/products/{product}/barcode', [ProductController::class, 'barcode'])
             ->name('catalog.products.barcode');
+
+        /*
+         * Trash (urgent product-management fix). Reversible until Permanent
+         * Delete confirms nothing real ever used the product — see
+         * ProductTrashController and ManageProducts::assertPermanentlyDeletable().
+         */
+        Route::get('catalog/products/trash', [ProductTrashController::class, 'index'])
+            ->name('catalog.products.trash.index');
+        Route::post('catalog/products/trash/{product}/restore', [ProductTrashController::class, 'restore'])
+            ->name('catalog.products.trash.restore');
+        Route::delete('catalog/products/trash/{product}', [ProductTrashController::class, 'destroy'])
+            ->name('catalog.products.trash.destroy');
 
         /*
          * Variations, always addressed through their product (§11.1, §12), and

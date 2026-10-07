@@ -238,12 +238,13 @@ describe('removing a draft', function () {
             ->and(ProductPriceTier::query()->count())->toBe(0);
     });
 
-    it('removes a draft product together with every tier', function () {
+    it('removes a product together with every tier, on permanent delete', function () {
         ProductPriceTier::create(['product_id' => $this->product->id, 'min_quantity' => 5, 'unit_price' => Money::fromDecimal('0.01', Currency::BDT)]);
 
-        app(ManageProducts::class)->delete($this->manager, $this->product);
+        app(ManageProducts::class)->trash($this->manager, $this->product, 'Test.');
+        app(ManageProducts::class)->permanentlyDelete($this->manager, $this->product->refresh());
 
-        expect(Product::query()->count())->toBe(0)
+        expect(Product::withTrashed()->count())->toBe(0)
             ->and(ProductPriceTier::query()->count())->toBe(0);
     });
 });

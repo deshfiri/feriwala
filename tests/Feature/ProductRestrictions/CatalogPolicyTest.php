@@ -158,7 +158,7 @@ describe('the actions refuse on their own', function () {
 
         expect(fn () => app(ManageProducts::class)->update($viewer, $this->product, ['name' => 'Renamed']))
             ->toThrow(AuthorizationException::class)
-            ->and(fn () => app(ManageProducts::class)->delete($viewer, $this->product))
+            ->and(fn () => app(ManageProducts::class)->trash($viewer, $this->product, 'Test.'))
             ->toThrow(AuthorizationException::class)
             ->and(fn () => app(ManageCategories::class)->setActive($viewer, $this->category, false))
             ->toThrow(AuthorizationException::class);

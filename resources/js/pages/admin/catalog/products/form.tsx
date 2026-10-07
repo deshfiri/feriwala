@@ -1,4 +1,4 @@
-import { Form, Head, router, usePage } from '@inertiajs/react';
+import { Form, Head, usePage } from '@inertiajs/react';
 import {
     Boxes,
     Download,
@@ -51,6 +51,7 @@ import ContentSection from './content-section';
 import MediaSection from './media-section';
 import PriceTiersSection from './price-tiers-section';
 import ProductHeader from './product-header';
+import TrashReasonDialog from './trash-reason-dialog';
 import VariantsSection from './variants-section';
 
 type Props = {
@@ -252,13 +253,7 @@ export default function ProductForm({
             .filter((tab): tab is string => Boolean(tab)),
     );
 
-    const removeDraft = () => {
-        if (!product || !window.confirm(t('catalog.products.delete_confirm'))) {
-            return;
-        }
-
-        router.delete(ProductController.destroy.url(product.id));
-    };
+    const [trashOpen, setTrashOpen] = useState(false);
 
     const optionLabel = (option: CatalogOption) =>
         option.is_available
@@ -304,12 +299,8 @@ export default function ProductForm({
                                 }
                                 processing={processing}
                                 canSave={writable}
-                                canDeleteDraft={
-                                    editing &&
-                                    can.delete &&
-                                    product.status === 'draft'
-                                }
-                                onDelete={removeDraft}
+                                canDelete={editing && can.delete}
+                                onDelete={() => setTrashOpen(true)}
                                 deleteError={
                                     formErrors.product ? (
                                         <InputError
@@ -318,6 +309,17 @@ export default function ProductForm({
                                     ) : undefined
                                 }
                             />
+
+                            {editing && (
+                                <TrashReasonDialog
+                                    open={trashOpen}
+                                    onOpenChange={setTrashOpen}
+                                    productName={product.name}
+                                    url={ProductController.destroy.url(
+                                        product.id,
+                                    )}
+                                />
+                            )}
 
                             {!editing && (
                                 <p className="text-muted-foreground -mt-2 text-sm">

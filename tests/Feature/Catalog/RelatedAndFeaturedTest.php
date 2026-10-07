@@ -139,12 +139,13 @@ describe('related products', function () {
         expect($this->cooker->relatedProducts()->count())->toBe(0);
     });
 
-    it('goes with a deleted draft in both directions', function () {
+    it('goes with a permanently deleted draft in both directions', function () {
         $draft = catalogMerchProduct('FW-DRAFT', 'Draft', ['status' => ProductStatus::Draft]);
         $draft->relatedProducts()->attach($this->steamer->id, ['position' => 1]);
         $this->cooker->relatedProducts()->attach($draft->id, ['position' => 1]);
 
-        app(ManageProducts::class)->delete($this->manager, $draft);
+        app(ManageProducts::class)->trash($this->manager, $draft, 'Test.');
+        app(ManageProducts::class)->permanentlyDelete($this->manager, $draft->refresh());
 
         expect(DB::table('product_related')->count())->toBe(0);
     });

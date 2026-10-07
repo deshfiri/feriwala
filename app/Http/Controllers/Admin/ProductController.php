@@ -457,19 +457,28 @@ class ProductController extends Controller
         return back();
     }
 
+    /**
+     * Move a product to Trash — any status, with a reason always on record
+     * (urgent product-management fix). Reversible: see {@see ProductTrashController}
+     * for restoring it, or permanently deleting it once nothing real uses it.
+     */
     public function destroy(Request $request, string $product): RedirectResponse
     {
         $actor = $this->actor($request);
 
         abort_unless(CatalogPolicy::canDelete($actor), 403);
 
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:2000'],
+        ]);
+
         try {
-            $this->products->delete($actor, $this->product($product));
+            $this->products->trash($actor, $this->product($product), $validated['reason']);
         } catch (CatalogRefused $refused) {
             return back()->withErrors(['product' => $refused->getMessage()]);
         }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.deleted')]);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.trashed')]);
 
         return redirect()->route('admin.catalog.products.index');
     }

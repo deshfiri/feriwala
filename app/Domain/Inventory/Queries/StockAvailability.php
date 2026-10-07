@@ -65,6 +65,7 @@ class StockAvailability
 
         $units = DB::table('products')
             ->whereIn('products.sku', $skus)
+            ->whereNull('products.deleted_at')
             ->whereNotExists(fn ($query) => $query
                 ->selectRaw('1')
                 ->from('product_variants')
@@ -72,6 +73,14 @@ class StockAvailability
             ->select(['products.sku', 'products.id as product_id', DB::raw('NULL::bigint as variant_id')])
             ->unionAll(DB::table('product_variants')
                 ->whereIn('product_variants.sku', $skus)
+                // A trashed product's variations are unstockable too (urgent
+                // product-management fix) — raw SQL, so not scoped the way
+                // `Product::query()` is by Eloquent's own soft-delete scope.
+                ->whereNotExists(fn ($query) => $query
+                    ->selectRaw('1')
+                    ->from('products')
+                    ->whereColumn('products.id', 'product_variants.product_id')
+                    ->whereNotNull('products.deleted_at'))
                 ->select(['product_variants.sku', 'product_variants.product_id', 'product_variants.id as variant_id']))
             ->get();
 
