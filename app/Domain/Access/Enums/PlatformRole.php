@@ -204,7 +204,8 @@ enum PlatformRole: string
                 // operational; setting a confidential rate is not.
                 Module::Supplier->value => [Action::View],
                 Module::SupplierListing->value => [Action::View],
-                Module::SourcingGroup->value => [Action::View],
+                // Linking Products as the same Product is an administrator's call too.
+                Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit],
             ],
 
             self::ContentManager => [
