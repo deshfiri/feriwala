@@ -239,7 +239,7 @@ return [
             'restore' => 'Restore',
             'restore_confirm' => 'Restore :name from Trash?',
             'permanent_delete' => 'Permanently delete',
-            'permanent_delete_confirm' => 'Permanently delete :name? This cannot be undone.',
+            'permanent_delete_confirm' => 'Permanently delete :name? Only unused draft products can be deleted. Its media and variations are removed; its status history is kept as an audit record. This cannot be undone.',
             'deleted_at' => 'Deleted',
             'deleted_by' => 'Deleted by',
             'deletion_reason' => 'Reason',

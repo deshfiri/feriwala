@@ -161,19 +161,23 @@ class ManageProducts
     }
 
     /**
-     * Erase a trashed product outright — only once nothing real has ever used
-     * it.
+     * Erase a trashed Draft product outright — only once nothing real has ever
+     * used it.
      *
-     * Every one of §6's categories is checked before anything is touched: an
-     * order line, a supplier offer, a stock item, a cart, a storefront listing,
-     * a sourcing group or source link, or even a plain status-history row (its
-     * own append-only trigger would refuse the delete anyway, and this method
-     * never attempts to go around it — see the migration that added Trash).
-     * Only once every one of them comes back empty does this remove the
-     * product's own catalogue rows — media, price tiers, variants, pivots — and
-     * the product itself. The final `forceDelete()` is still wrapped in case a
-     * reference this method did not think to name exists; the database's own
-     * constraints are the backstop, never routed around.
+     * The product must currently be Draft, and every operational or financial
+     * reference is checked before anything is touched: an order line, a supplier
+     * offer or listing, a stock item or movement, a cart, a storefront listing,
+     * a sourcing group or source link. Only once every one comes back empty does
+     * this remove the product's own draft-only rows — media, price tiers,
+     * variants, pivots — and the product itself.
+     *
+     * Its status history is never deleted. Each row is stamped with the
+     * product's public id, SKU, name and status, then detached by the foreign
+     * key's `ON DELETE SET NULL`, so it survives as a tombstone. The append-only
+     * trigger permits exactly those two moves and nothing else. The final
+     * `forceDelete()` is still wrapped in case a reference this method did not
+     * think to name exists; the database's own constraints are the backstop,
+     * never routed around.
      *
      * @throws CatalogRefused
      */
@@ -195,8 +199,12 @@ class ManageProducts
 
             $media = ProductMedia::query()->where('product_id', $locked->id)->get(['path', 'disk']);
 
+            $historyRows = $this->database->table('product_status_history')->where('product_id', $locked->id)->count();
+
             $this->record($actor, 'catalog.product_permanently_deleted', $locked, before: [
                 ...$this->snapshot($locked),
+                'public_id' => $locked->public_id,
+                'status_history_rows_kept' => $historyRows,
                 'deletion_reason' => $locked->deletion_reason,
                 'variants' => ProductVariant::query()->where('product_id', $locked->id)->pluck('sku')->all(),
                 'media' => $media->pluck('path')->all(),
@@ -215,6 +223,20 @@ class ManageProducts
 
             // A variant's value links are part of the variant and go with it.
             ProductVariant::query()->where('product_id', $locked->id)->delete();
+
+            // Tombstone: rows written before the snapshot columns existed are
+            // stamped now, through the one UPDATE the append-only trigger allows,
+            // so the foreign key can detach them without losing which product
+            // they were about.
+            $this->database->table('product_status_history')
+                ->where('product_id', $locked->id)
+                ->whereNull('product_public_id')
+                ->update([
+                    'product_public_id' => $locked->public_id,
+                    'product_sku' => $locked->sku,
+                    'product_name' => $locked->name,
+                    'product_status' => $locked->status->value,
+                ]);
 
             try {
                 $locked->forceDelete();
@@ -236,14 +258,54 @@ class ManageProducts
      */
     protected function assertPermanentlyDeletable(Product $locked): void
     {
-        // A status-history row, even alone, has its own append-only trigger —
-        // forcing the delete through would only turn into an unhandled database
-        // error. Refusing here keeps the product a tombstone instead.
-        if ($locked->statusHistory()->exists()) {
-            throw CatalogRefused::productHasBusinessHistory('it has lifecycle history on record');
+        // Status history does not block: every product has some from creation,
+        // and it is kept as a tombstone rather than deleted.
+        if ($locked->status !== ProductStatus::Draft) {
+            throw CatalogRefused::productNotDraft($locked->status->value);
         }
 
         $variantIds = ProductVariant::query()->where('product_id', $locked->id)->pluck('id');
+
+        if ($locked->contents()->exists()) {
+            throw CatalogRefused::productHasBusinessHistory('it has published updates');
+        }
+
+        if (
+            $this->database->table('stock_movements')
+                ->where('product_id', $locked->id)
+                ->orWhereIn('product_variant_id', $variantIds)
+                ->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory('stock movements refer to it');
+        }
+
+        if (
+            $this->database->table('supplier_product_listings')->where('connected_product_id', $locked->id)->exists()
+            || $this->database->table('supplier_product_listing_items')->whereIn('connected_product_variant_id', $variantIds)->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory('a supplier listing is connected to it');
+        }
+
+        if (
+            StockItem::query()->where('product_id', $locked->id)->orWhereIn('product_variant_id', $variantIds)->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory('it has warehouse stock recorded against it');
+        }
+
+        if (
+            SupplierOffer::query()->where('product_id', $locked->id)->orWhereIn('product_variant_id', $variantIds)->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory('a supplier has offered it');
+        }
+
+        if (
+            $this->database->table('product_sourcing_variant_mappings')
+                ->whereIn('canonical_product_variant_id', $variantIds)
+                ->orWhereIn('product_variant_id', $variantIds)
+                ->exists()
+        ) {
+            throw CatalogRefused::productHasBusinessHistory('it belongs to a product sourcing group');
+        }
 
         if (
             OrderItem::query()->where('product_id', $locked->id)
@@ -274,19 +336,6 @@ class ManageProducts
         // and is never deleted.
         if (ProductLink::query()->touching($locked->id)->exists()) {
             throw CatalogRefused::productHasBusinessHistory('it has been linked as the same Product as another');
-        }
-
-        // A stock item or a supplier offer existing at all is a real inventory
-        // or supplier-facing record, whether or not it has ever moved — so
-        // either one blocks here. With neither existing for this product,
-        // nothing it owns could be named as a *different* product's confirmed
-        // fulfilment source either (§6's "linked as another product's source").
-        if (StockItem::query()->where('product_id', $locked->id)->exists()) {
-            throw CatalogRefused::productHasBusinessHistory('it has warehouse stock recorded against it');
-        }
-
-        if (SupplierOffer::query()->where('product_id', $locked->id)->exists()) {
-            throw CatalogRefused::productHasBusinessHistory('a supplier has offered it');
         }
 
         if (

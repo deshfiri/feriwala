@@ -106,6 +106,17 @@ class CatalogRefused extends RuntimeException
     }
 
     /**
+     * Permanent deletion is for products that never left Draft.
+     */
+    public static function productNotDraft(string $status): self
+    {
+        return new self(
+            "Only a product that is still a draft can be permanently deleted, and this one is {$status}. "
+            .'It stays safely in Trash.'
+        );
+    }
+
+    /**
      * Restoring or permanently deleting only ever makes sense for a product
      * that is actually in Trash.
      */

@@ -376,13 +376,8 @@ describe('trash (urgent product-management fix)', function () {
             expect(Product::withTrashed()->whereKey($product->id)->exists())->toBeFalse();
         });
 
-        it('refuses a product with lifecycle history, keeping it a tombstone (§7)', function () {
-            $product = catalogProduct();
-            $product->statusHistory()->create([
-                'axis' => ProductStatus::AXIS_LIFECYCLE,
-                'from_status' => ProductStatus::Draft,
-                'to_status' => ProductStatus::PendingReview,
-            ]);
+        it('refuses a product that is no longer a draft', function () {
+            $product = catalogProduct(['status' => ProductStatus::Inactive]);
             $product->forceFill(['deleted_by' => $this->manager->id, 'deletion_reason' => 'Test.'])->save();
             $product->delete();
 

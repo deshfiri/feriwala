@@ -192,7 +192,9 @@ class ManageCategories
                 throw CatalogRefused::categoryHasChildren($children);
             }
 
-            $products = $category->products()->count();
+            // Trashed products still hold the category: the foreign key restricts
+            // on them too, and they only leave once permanently deleted.
+            $products = $category->products()->withTrashed()->count();
 
             if ($products > 0) {
                 throw CatalogRefused::categoryHasProducts($products);

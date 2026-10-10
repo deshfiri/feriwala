@@ -225,13 +225,12 @@ describe('the record of every move', function () {
             ->toThrow(QueryException::class);
     });
 
-    it('keeps a draft that has been through review from being permanently deleted', function () {
+    it('keeps a product that left Draft from being permanently deleted', function () {
         app(TransitionProduct::class)->handle($this->manager, $this->product, ProductStatus::PendingReview);
-        app(TransitionProduct::class)->handle($this->manager, $this->product->refresh(), ProductStatus::Draft);
 
         app(ManageProducts::class)->trash($this->manager, $this->product->refresh(), 'Test.');
 
         expect(fn () => app(ManageProducts::class)->permanentlyDelete($this->manager, $this->product->refresh()))
-            ->toThrow(CatalogRefused::class, 'lifecycle history');
+            ->toThrow(CatalogRefused::class, 'still a draft');
     });
 });
