@@ -11,6 +11,7 @@ return [
         'overview' => 'Overview',
         'business' => 'My business',
         'administration' => 'Administration',
+        'platform_settings' => 'Platform settings',
         'settings' => 'Settings',
     ],
 

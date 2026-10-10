@@ -5,6 +5,7 @@ return [
         'overview' => 'সংক্ষিপ্ত চিত্র',
         'business' => 'আমার ব্যবসা',
         'administration' => 'প্রশাসন',
+        'platform_settings' => 'প্ল্যাটফর্ম সেটিংস',
         'settings' => 'সেটিংস',
     ],
 
