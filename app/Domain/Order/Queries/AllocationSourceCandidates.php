@@ -10,8 +10,7 @@ use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\ProductSourceLink;
-use App\Domain\Sourcing\Models\ProductSourcingGroupProduct;
-use App\Domain\Sourcing\Models\ProductSourcingVariantMapping;
+use App\Domain\Sourcing\Queries\ResolveProductNetwork;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
@@ -35,6 +34,14 @@ use Illuminate\Support\Collection;
  * for a bug; one that shows "no stock" or "Supplier suspended" answers the
  * question on the spot.
  *
+ * Sources come from the ordered Product itself and from every Product linked to
+ * it as the same Product ({@see ResolveProductNetwork}), directly or through
+ * other links, on the variations staff matched. The network is read **now**,
+ * when the panel is opened and again when staff confirm, never from anything
+ * frozen on the order line: what was linked when the order was placed is not
+ * what decides where it can be fulfilled today. A source reachable by several
+ * paths is listed once.
+ *
  * **Staff-only output.** Every candidate carries the Supplier's identity, the
  * Supplier Rate and the margin — the three things D25 keeps out of Client and
  * Partner responses, the Storefront API and partner-facing order views. The
@@ -43,6 +50,8 @@ use Illuminate\Support\Collection;
  */
 class AllocationSourceCandidates
 {
+    public function __construct(protected ResolveProductNetwork $network) {}
+
     /**
      * @param  OrderItemAllocation|null  $excluding  a specific active allocation
      *                                               to leave out of "already
@@ -63,50 +72,80 @@ class AllocationSourceCandidates
             ->where('status', AllocationStatus::Active)
             ->get();
 
-        return [
+        $candidates = [
             ...$this->warehouseCandidates($line, $remaining, $platformRate, $currency, $active),
             ...$this->supplierCandidates($line, $remaining, $platformRate, $currency, $active),
+            ...$this->linkedProductCandidates($line, $remaining, $platformRate, $currency, $active),
 
-            // A line with a frozen sourcing group sees that group's compatible
-            // sources and nothing else; one without (an order placed before
-            // groups, or with no explicit mapping) keeps the confirmed-link
-            // behaviour and is shown as unmatched / manual review.
-            ...($line->sourcing_group_id !== null
-                ? $this->groupCandidates($line, $remaining, $platformRate, $currency, $active)
-                : $this->linkedCandidates($line, $remaining, $platformRate, $currency, $active)),
+            // Sources staff confirmed one by one, before Products could be
+            // linked; still honoured, and still shown as what they are.
+            ...$this->linkedCandidates($line, $remaining, $platformRate, $currency, $active),
         ];
+
+        return $this->withoutDuplicates($candidates);
     }
 
     /**
-     * Whether this line carries a frozen sourcing requirement.
+     * How many other Products this line's Product is linked to, directly or
+     * not, whose sources are offered for it. Zero means a unique Product.
      */
-    public function isGrouped(OrderItem $line): bool
+    public function linkedProductCount(OrderItem $line): int
     {
-        return $line->sourcing_group_id !== null;
+        return count($this->network->network($line->product_id));
     }
 
     /**
-     * Sources on *other* products of the line's sourcing group whose variation
-     * is explicitly mapped to the canonical variation the line froze at
-     * placement -- Supplier offers and Central Warehouse stock together.
+     * One entry per source, however many paths led to it. The first wins, and
+     * the list is built exact-first, so a source reached both ways keeps the
+     * more direct label.
      *
-     * Judged by the mappings that hold now: a mapping removed since the order
-     * was placed makes its source incompatible again, which is the safe
-     * direction. Exact-product sources are not repeated here (the two methods
+     * @param  list<AllocationCandidate>  $candidates
+     * @return list<AllocationCandidate>
+     */
+    protected function withoutDuplicates(array $candidates): array
+    {
+        $seen = [];
+        $unique = [];
+
+        foreach ($candidates as $candidate) {
+            $key = $candidate->sourceType->value.':'.$candidate->sourceId;
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $unique[] = $candidate;
+        }
+
+        return $unique;
+    }
+
+    /**
+     * Sources on *other* Products linked to the ordered one as the same
+     * Product, on a variation staff matched to the ordered variation — Supplier
+     * offers and Central Warehouse stock together.
+     *
+     * Judged by the links and matches that hold now: one removed since the
+     * order was placed makes its sources unavailable again, which is the safe
+     * direction. Exact-Product sources are not repeated here (the two methods
      * above already list them); inactive warehouses, suspended offers and
      * non-operational Suppliers are left out rather than shown as options.
      *
      * @param  Collection<int, OrderItemAllocation>  $active
      * @return list<AllocationCandidate>
      */
-    protected function groupCandidates(
+    protected function linkedProductCandidates(
         OrderItem $line,
         int $quantity,
         Money $platformRate,
         Currency $currency,
         Collection $active,
     ): array {
-        $pairs = $this->compatiblePairs($line);
+        $pairs = array_values(array_filter(
+            $this->network->compatiblePairs($line->product_id, $line->product_variant_id),
+            fn (array $pair) => ! $this->isExactPair($line, $pair[0], $pair[1]),
+        ));
 
         if ($pairs === []) {
             return [];
@@ -140,61 +179,14 @@ class AllocationSourceCandidates
         $candidates = [];
 
         foreach ($items as $item) {
-            if ($this->isExactPair($line, $item->product_id, $item->product_variant_id)) {
-                continue;
-            }
-
-            $candidates[] = $this->warehouseCandidateFromStock($item, $quantity, $platformRate, $currency, $active, 'group');
+            $candidates[] = $this->warehouseCandidateFromStock($item, $quantity, $platformRate, $currency, $active, 'linked_product');
         }
 
         foreach ($offers as $offer) {
-            if ($this->isExactPair($line, $offer->product_id, $offer->product_variant_id)) {
-                continue;
-            }
-
-            $candidates[] = $this->supplierCandidateFromOffer($offer, $quantity, $platformRate, $currency, $active, 'group');
+            $candidates[] = $this->supplierCandidateFromOffer($offer, $quantity, $platformRate, $currency, $active, 'linked_product');
         }
 
         return array_values(array_filter($candidates));
-    }
-
-    /**
-     * Every (product, variation) whose source can fulfil what this line froze:
-     * the canonical product's own variation, plus each member variation
-     * explicitly mapped to it.
-     *
-     * @return list<array{0: int, 1: int|null}>
-     */
-    protected function compatiblePairs(OrderItem $line): array
-    {
-        $groupId = (int) $line->sourcing_group_id;
-        $pairs = [];
-
-        $canonicalMember = ProductSourcingGroupProduct::query()
-            ->active()
-            ->where('sourcing_group_id', $groupId)
-            ->where('product_id', $line->sourcing_canonical_product_id)
-            ->exists();
-
-        if ($canonicalMember) {
-            $pairs[] = [(int) $line->sourcing_canonical_product_id, $line->sourcing_canonical_variant_id];
-        }
-
-        $mappings = ProductSourcingVariantMapping::query()
-            ->active()
-            ->where('sourcing_group_id', $groupId)
-            ->where(fn ($query) => $line->sourcing_canonical_variant_id === null
-                ? $query->whereNull('canonical_product_variant_id')
-                : $query->where('canonical_product_variant_id', $line->sourcing_canonical_variant_id))
-            // A mapping only counts while its product is still a member.
-            ->whereIn('product_id', ProductSourcingGroupProduct::query()->active()->where('sourcing_group_id', $groupId)->select('product_id'))
-            ->get(['product_id', 'product_variant_id']);
-
-        foreach ($mappings as $mapping) {
-            $pairs[] = [$mapping->product_id, $mapping->product_variant_id];
-        }
-
-        return $pairs;
     }
 
     protected function isExactPair(OrderItem $line, int $productId, ?int $variantId): bool
@@ -302,6 +294,8 @@ class AllocationSourceCandidates
             sourceProductName: $item->product->name,
             sourceProductSku: $item->sku(),
             matchKind: $matchKind,
+            sourceProductBpc: $item->product->sku,
+            sourceVariantLabel: $variant?->label(),
         );
     }
 
@@ -345,7 +339,7 @@ class AllocationSourceCandidates
             isCurrentlyAllocated: $active->contains(fn (OrderItemAllocation $allocation) => $allocation->supplier_offer_id === $offer->id),
             supplierId: $offer->supplier->public_id,
             supplierName: $offer->supplier->business_name,
-            leadTimeDays: $offer->lead_time_days,
+            leadTimeDays: $offer->lead_time_days ?? $offer->originatingListingItem?->lead_time_days,
             isPreferred: (bool) $offer->is_preferred,
             supplierStatus: $offer->supplier->status->value,
             offerStatus: $offer->status->value,
@@ -358,6 +352,9 @@ class AllocationSourceCandidates
             sourceProductName: $offer->product->name,
             sourceProductSku: $offer->variant === null ? $offer->product->sku : $offer->variant->sku,
             matchKind: $matchKind,
+            sourceProductBpc: $offer->product->sku,
+            sourceVariantLabel: $offer->variant?->label(),
+            expectedPayable: $offer->currency_code === $currency->value ? $rate->multipliedBy((int) $quantity) : null,
         );
     }
 
@@ -396,7 +393,7 @@ class AllocationSourceCandidates
             ->pluck('quantity', 'stock_item_id');
 
         $candidates = $items->map(function (StockItem $item) use (
-            $quantity, $cost, $platformRate, $currency, $active, $setAside
+            $line, $variant, $quantity, $cost, $platformRate, $currency, $active, $setAside
         ) {
             $atp = (int) $item->available + (int) ($setAside[$item->id] ?? 0);
             $isEligible = $atp >= $quantity;
@@ -418,6 +415,10 @@ class AllocationSourceCandidates
                     fn (OrderItemAllocation $allocation) => $allocation->source_type === AllocationSourceType::Warehouse
                         && $allocation->warehouse_id === $item->warehouse_id,
                 ),
+                sourceProductName: $line->product->name,
+                sourceProductSku: $variant === null ? $line->product->sku : $variant->sku,
+                sourceProductBpc: $line->product->sku,
+                sourceVariantLabel: $variant?->label(),
             );
         })->values()->all();
 
@@ -442,7 +443,7 @@ class AllocationSourceCandidates
         Collection $active,
     ): array {
         $offers = SupplierOffer::query()
-            ->with(['supplier', 'stock', 'originatingListingItem'])
+            ->with(['supplier', 'stock', 'originatingListingItem', 'product', 'variant'])
             ->where('product_id', $line->product_id)
             ->where('product_variant_id', $line->product_variant_id)
             ->get();
@@ -487,6 +488,11 @@ class AllocationSourceCandidates
                 supplyMode: $offer->supply_mode,
                 fulfilmentCapacity: $offer->fulfilment_capacity,
                 requiresConfirmation: $offer->supply_mode->requiresStaffConfirmationAtAllocation(),
+                sourceProductName: $offer->product->name,
+                sourceProductSku: $offer->variant === null ? $offer->product->sku : $offer->variant->sku,
+                sourceProductBpc: $offer->product->sku,
+                sourceVariantLabel: $offer->variant?->label(),
+                expectedPayable: $offer->currency_code === $currency->value ? $rate->multipliedBy($quantity) : null,
             );
         })->values()->all();
 

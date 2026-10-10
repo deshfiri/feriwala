@@ -93,11 +93,25 @@ class AllocationCandidate
 
         /**
          * How this source came to be offered: `exact` (catalogued under the
-         * ordered product/variation), `group` (a compatible member of the
-         * line's frozen sourcing group) or `linked` (a staff-confirmed
-         * cross-catalogue link, for lines with no sourcing group).
+         * ordered product/variation), `linked_product` (a Product staff
+         * linked as the same Product, on a variation they matched) or
+         * `linked` (a source staff confirmed one by one).
          */
         public readonly string $matchKind = 'exact',
+
+        /** The 9-character BPC of the Product this source is catalogued under. */
+        public readonly ?string $sourceProductBpc = null,
+
+        /** The variation of that Product, when it has one. */
+        public readonly ?string $sourceVariantLabel = null,
+
+        /**
+         * What the Supplier would be owed for the quantity this candidate was
+         * judged against, at the offer's Supplier Rate. Display only — the
+         * payable itself is raised by the allocation, from the snapshotted
+         * rate. Null for a warehouse, which owes nobody.
+         */
+        public readonly ?Money $expectedPayable = null,
     ) {}
 
     /**
@@ -138,6 +152,10 @@ class AllocationCandidate
             'is_related' => $this->isRelated,
             'source_product_name' => $this->sourceProductName,
             'source_product_sku' => $this->sourceProductSku,
-            'match_kind' => $this->matchKind,        ];
+            'source_product_bpc' => $this->sourceProductBpc,
+            'source_variant_label' => $this->sourceVariantLabel,
+            'expected_payable' => $this->expectedPayable,
+            'match_kind' => $this->matchKind,
+        ];
     }
 }

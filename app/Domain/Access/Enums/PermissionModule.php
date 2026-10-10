@@ -63,6 +63,9 @@ enum PermissionModule: string
     /** Which catalogue products can fulfil one another's orders (Product Sourcing Groups). */
     case SourcingGroup = 'sourcing_group';
 
+    /** Which Product records are confirmed as the same physical Product (Same Product links). */
+    case ProductLink = 'product_link';
+
     public function label(): string
     {
         return match ($this) {
@@ -102,6 +105,7 @@ enum PermissionModule: string
             self::SupplierPayable => 'Supplier payables',
             self::DeliverySettings => 'Delivery charge settings',
             self::SourcingGroup => 'Product sourcing groups',
+            self::ProductLink => 'Product links',
         };
     }
 }

@@ -58,7 +58,7 @@ type Props = {
     product: ProductDetail | null;
     options: { categories: CatalogOption[]; brands: CatalogOption[] };
     can: CatalogAbilities;
-    /** Staff-only: Same Product links; null without `sourcing_group.view`. */
+    /** Staff-only: Same Product links; null without `product_link.view`. */
     linked_products?: LinkedProductsState | null;
     variants: VariantRow[];
     attributes: AttributeOption[];

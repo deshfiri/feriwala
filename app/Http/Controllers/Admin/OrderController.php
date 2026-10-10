@@ -6,8 +6,6 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
-use App\Domain\Catalog\Models\Product;
-use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
@@ -37,10 +35,10 @@ use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\SearchAllocationSources;
-use App\Domain\Sourcing\Models\ProductSourcingGroup;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
+use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Http\Controllers\Controller;
 use App\Integrations\Courier\CourierManager;
@@ -78,6 +76,14 @@ use InvalidArgumentException;
 class OrderController extends Controller
 {
     public const PER_PAGE = 25;
+
+    /**
+     * The orderings staff may ask the allocation panel for. None is ever
+     * applied on their behalf.
+     *
+     * @var list<string>
+     */
+    public const CANDIDATE_SORTS = ['cost_asc', 'cost_desc', 'availability_desc', 'lead_time_asc', 'name_asc'];
 
     public function __construct(
         protected CancelUnpaidOrderByStaff $cancel,
@@ -440,26 +446,30 @@ class OrderController extends Controller
             'search' => ['sometimes', 'nullable', 'string', 'max:150'],
             'source_type' => ['sometimes', 'nullable', Rule::enum(AllocationSourceType::class)],
             'availability' => ['sometimes', 'nullable', Rule::in(['available'])],
-            'sort' => ['sometimes', 'nullable', Rule::in(['cost_asc', 'cost_desc'])],
+            'supplier' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'supply_mode' => ['sometimes', 'nullable', Rule::enum(SupplyMode::class)],
+            'sort' => ['sometimes', 'nullable', Rule::in(self::CANDIDATE_SORTS)],
         ]);
 
         return response()->json([
             // The platform ranks nothing: these are the staff's own filters
-            // and sort, applied to what the line's sourcing group allows.
+            // and sort, applied to what the ordered Product and the Products
+            // linked to it as the same Product offer.
             'candidates' => array_map(
                 fn (AllocationCandidate $candidate) => $candidate->toArray(),
                 $this->filterCandidates($this->candidates->forLine($line, $excluding), $filters),
             ),
             'already_allocated_quantity' => $line->quantity - $this->candidates->remainingQuantity($line, $excluding),
             'remaining_quantity' => $this->candidates->remainingQuantity($line, $excluding),
-            'sourcing' => $this->sourcingSummary($line),
+            'sourcing' => ['linked_product_count' => $this->candidates->linkedProductCount($line)],
         ]);
     }
 
     /**
-     * Staff's search, Supplier/Warehouse filter, availability filter and cost
-     * sort, applied after the line's sourcing rules have decided what may be
-     * offered at all.
+     * Staff's search, Supplier/Warehouse filter, supply-mode filter,
+     * availability filter and sort (price, availability, Supplier name, lead
+     * time), applied after the Product links have decided what may be offered
+     * at all. Without a sort the platform imposes no ranking whatsoever.
      *
      * @param  list<AllocationCandidate>  $candidates
      * @param  array<string, mixed>  $filters
@@ -479,54 +489,39 @@ class OrderController extends Controller
                 return false;
             }
 
+            if (filled($filters['supplier'] ?? null) && $candidate->supplierId !== $filters['supplier']) {
+                return false;
+            }
+
+            if (filled($filters['supply_mode'] ?? null) && $candidate->supplyMode->value !== $filters['supply_mode']) {
+                return false;
+            }
+
             if ($search === '') {
                 return true;
             }
 
             return str_contains(mb_strtolower(implode(' ', array_filter([
-                $candidate->sourceLabel, $candidate->supplierName, $candidate->sourceProductName, $candidate->sourceProductSku,
+                $candidate->sourceLabel, $candidate->supplierName, $candidate->sourceProductName,
+                $candidate->sourceProductSku, $candidate->sourceProductBpc,
             ]))), $search);
         }));
 
-        $direction = $filters['sort'] ?? null;
+        $sort = $filters['sort'] ?? null;
 
-        if ($direction !== null) {
-            usort($kept, fn (AllocationCandidate $a, AllocationCandidate $b) => $direction === 'cost_asc'
-                ? $a->unitCost->toDecimal() <=> $b->unitCost->toDecimal()
-                : $b->unitCost->toDecimal() <=> $a->unitCost->toDecimal());
+        if ($sort !== null) {
+            usort($kept, fn (AllocationCandidate $a, AllocationCandidate $b) => match ($sort) {
+                'cost_asc' => $a->unitCost->toDecimal() <=> $b->unitCost->toDecimal(),
+                'cost_desc' => $b->unitCost->toDecimal() <=> $a->unitCost->toDecimal(),
+                'availability_desc' => $b->availableToPromise <=> $a->availableToPromise,
+                // A source that declares no lead time sorts last.
+                'lead_time_asc' => ($a->leadTimeDays ?? PHP_INT_MAX) <=> ($b->leadTimeDays ?? PHP_INT_MAX),
+                'name_asc' => strcmp(mb_strtolower($a->sourceLabel), mb_strtolower($b->sourceLabel)),
+                default => 0,
+            });
         }
 
         return $kept;
-    }
-
-    /**
-     * What this line froze about its fulfilment: the sourcing group and the
-     * canonical product/variation it requires, or an unmatched flag for an
-     * order placed before groups or without an explicit mapping.
-     *
-     * @return array<string, mixed>
-     */
-    protected function sourcingSummary(OrderItem $line): array
-    {
-        if ($line->sourcing_group_id === null) {
-            return ['state' => 'unmatched', 'group' => null, 'canonical_product' => null, 'canonical_variant' => null];
-        }
-
-        $group = ProductSourcingGroup::query()->find($line->sourcing_group_id);
-        $product = Product::query()->find($line->sourcing_canonical_product_id);
-        $variant = $line->sourcing_canonical_variant_id === null
-            ? null
-            : ProductVariant::query()->with('values')->find($line->sourcing_canonical_variant_id);
-
-        return [
-            'state' => 'matched',
-            'group' => $group === null ? null : [
-                'id' => $group->public_id, 'code' => $group->code, 'name_en' => $group->name_en, 'name_bn' => $group->name_bn,
-                'is_active' => $group->is_active,
-            ],
-            'canonical_product' => $product === null ? null : ['name' => $product->name, 'sku' => $product->sku],
-            'canonical_variant' => $variant?->label(),
-        ];
     }
 
     /**
@@ -750,10 +745,10 @@ class OrderController extends Controller
         $type = isset($validated['source_type']) ? AllocationSourceType::from($validated['source_type']) : null;
         $page = (int) ($validated['page'] ?? 1);
 
-        // A line with a frozen sourcing group only ever sees its group's
-        // compatible sources -- the catalogue-wide search would show unrelated
-        // products, so it is answered from the same group-scoped list.
-        if ($this->candidates->isGrouped($line)) {
+        // A line whose Product is linked to others only ever sees the sources
+        // of that network -- the catalogue-wide search would show unrelated
+        // Products, so it is answered from the same network-scoped list.
+        if ($this->candidates->linkedProductCount($line) > 0) {
             $scoped = $this->filterCandidates($this->candidates->forLine($line), [
                 'search' => $validated['query'] ?? '',
                 'source_type' => $validated['source_type'] ?? null,

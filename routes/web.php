@@ -1122,8 +1122,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         /*
          * Same Product links: staff-confirmed, bidirectional connections
          * between independent Product records. Seen with
-         * `sourcing_group.view`, made with `sourcing_group.create`, removed or
-         * variation-matched with `sourcing_group.edit`.
+         * `product_link.view`, made with `product_link.create`, removed or
+         * variation-matched with `product_link.edit`.
          */
         Route::get('catalog/product-links/search', [ProductLinkController::class, 'search'])
             ->name('catalog.product-links.search');

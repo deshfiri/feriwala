@@ -55,29 +55,37 @@ type Candidate = {
     is_related: boolean;
     source_product_name: string | null;
     source_product_sku: string | null;
-    /** How this source came to be offered: exact product, sourcing group, or a confirmed link. */
-    match_kind: 'exact' | 'group' | 'linked';
+    /** The 9-character BPC of the Product this source is catalogued under. */
+    source_product_bpc: string | null;
+    /** The variation of that Product, when it has one. */
+    source_variant_label: string | null;
+    /** What the Supplier would be owed for the quantity still to allocate; null for a warehouse. */
+    expected_payable: Money | null;
+    /**
+     * How this source came to be offered: the ordered Product itself
+     * (`exact`), a Product linked as the same Product (`linked_product`), or a
+     * source staff confirmed one by one (`linked`).
+     */
+    match_kind: 'exact' | 'linked_product' | 'linked';
 };
 
 /**
- * What the order line froze about its fulfilment when it was placed: the
- * sourcing group and canonical product/variation, or unmatched for an order
- * placed before groups or without an explicit mapping.
+ * Which Products the line's sources come from: the ordered Product and the
+ * other Products linked to it as the same Product. Zero means the Product is
+ * unique and only its own sources are offered.
  */
 type Sourcing = {
-    state: 'matched' | 'unmatched';
-    group: {
-        id: string;
-        code: string;
-        name_en: string;
-        name_bn: string;
-        is_active: boolean;
-    } | null;
-    canonical_product: { name: string; sku: string } | null;
-    canonical_variant: string | null;
+    linked_product_count: number;
 };
 
-type SortKey = 'cost_asc' | 'cost_desc' | 'margin_desc' | 'margin_asc';
+type SortKey =
+    | 'cost_asc'
+    | 'cost_desc'
+    | 'margin_desc'
+    | 'margin_asc'
+    | 'availability_desc'
+    | 'lead_time_asc'
+    | 'name_asc';
 type Tab = 'recommended' | 'suppliers' | 'warehouses';
 
 export type AllocationLine = {
@@ -121,11 +129,14 @@ export default function AllocationPanel({
     orderId: string;
     line: AllocationLine | null;
 }) {
-    const { t, locale } = useTranslation();
+    const { t } = useTranslation();
     const [tab, setTab] = useState<Tab>('recommended');
     const [sourcing, setSourcing] = useState<Sourcing | null>(null);
     const [typeFilter, setTypeFilter] = useState<
         'all' | 'supplier_offer' | 'warehouse'
+    >('all');
+    const [modeFilter, setModeFilter] = useState<
+        'all' | 'ready_stock' | 'on_demand' | 'pre_order'
     >('all');
     const [recommended, setRecommended] = useState<Candidate[] | null>(null);
     const [search, setSearch] = useState('');
@@ -146,6 +157,7 @@ export default function AllocationPanel({
             setRemainingQuantity(null);
             setSourcing(null);
             setTypeFilter('all');
+            setModeFilter('all');
 
             return;
         }
@@ -208,12 +220,21 @@ export default function AllocationPanel({
             )
             .filter(
                 (candidate) =>
+                    modeFilter === 'all' ||
+                    (candidate.source_type === 'supplier_offer' &&
+                        candidate.supply_mode === modeFilter) ||
+                    (candidate.source_type === 'warehouse' &&
+                        modeFilter === 'ready_stock'),
+            )
+            .filter(
+                (candidate) =>
                     term === '' ||
                     [
                         candidate.source_label,
                         candidate.supplier_name,
                         candidate.source_product_name,
                         candidate.source_product_sku,
+                        candidate.source_product_bpc,
                     ]
                         .filter(Boolean)
                         .join(' ')
@@ -228,11 +249,21 @@ export default function AllocationPanel({
                         return cost(b) - cost(a);
                     case 'margin_asc':
                         return margin(a) - margin(b);
+                    case 'availability_desc':
+                        return b.available_to_promise - a.available_to_promise;
+                    case 'lead_time_asc':
+                        // A source with no declared lead time sorts last.
+                        return (
+                            (a.lead_time_days ?? Number.MAX_SAFE_INTEGER) -
+                            (b.lead_time_days ?? Number.MAX_SAFE_INTEGER)
+                        );
+                    case 'name_asc':
+                        return a.source_label.localeCompare(b.source_label);
                     default:
                         return margin(b) - margin(a);
                 }
             });
-    }, [recommended, search, sort, eligibleOnly, typeFilter]);
+    }, [recommended, search, sort, eligibleOnly, typeFilter, modeFilter]);
 
     function selectCandidate(candidate: Candidate) {
         if (candidate.is_related) {
@@ -262,7 +293,7 @@ export default function AllocationPanel({
                     </SheetHeader>
 
                     <div className="flex flex-wrap gap-1 px-4">
-                        {(sourcing?.state === 'matched'
+                        {((sourcing?.linked_product_count ?? 0) > 0
                             ? ([
                                   [
                                       'recommended',
@@ -299,10 +330,7 @@ export default function AllocationPanel({
                     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4">
                         {tab === 'recommended' && (
                             <>
-                                <SourcingBanner
-                                    sourcing={sourcing}
-                                    locale={locale}
-                                />
+                                <SourcingBanner sourcing={sourcing} />
 
                                 <div className="flex flex-wrap gap-2">
                                     <Input
@@ -345,6 +373,40 @@ export default function AllocationPanel({
                                         </option>
                                     </select>
                                     <select
+                                        value={modeFilter}
+                                        onChange={(event) =>
+                                            setModeFilter(
+                                                event.target
+                                                    .value as typeof modeFilter,
+                                            )
+                                        }
+                                        className={controlClass}
+                                        aria-label={t(
+                                            'orders.admin.allocation.mode_filter',
+                                        )}
+                                    >
+                                        <option value="all">
+                                            {t(
+                                                'orders.admin.allocation.mode_filter_all',
+                                            )}
+                                        </option>
+                                        <option value="ready_stock">
+                                            {t(
+                                                'orders.admin.allocation.mode_options.ready_stock',
+                                            )}
+                                        </option>
+                                        <option value="on_demand">
+                                            {t(
+                                                'orders.admin.allocation.mode_options.on_demand',
+                                            )}
+                                        </option>
+                                        <option value="pre_order">
+                                            {t(
+                                                'orders.admin.allocation.mode_options.pre_order',
+                                            )}
+                                        </option>
+                                    </select>
+                                    <select
                                         value={sort}
                                         onChange={(event) =>
                                             setSort(
@@ -374,6 +436,21 @@ export default function AllocationPanel({
                                         <option value="cost_desc">
                                             {t(
                                                 'orders.admin.allocation.sort_options.cost_desc',
+                                            )}
+                                        </option>
+                                        <option value="availability_desc">
+                                            {t(
+                                                'orders.admin.allocation.sort_options.availability_desc',
+                                            )}
+                                        </option>
+                                        <option value="lead_time_asc">
+                                            {t(
+                                                'orders.admin.allocation.sort_options.lead_time_asc',
+                                            )}
+                                        </option>
+                                        <option value="name_asc">
+                                            {t(
+                                                'orders.admin.allocation.sort_options.name_asc',
                                             )}
                                         </option>
                                     </select>
@@ -535,8 +612,13 @@ function CandidateCard({
                     {candidate.source_product_name && (
                         <p className="text-muted-foreground truncate text-xs">
                             {candidate.source_product_name}
-                            {candidate.source_product_sku
-                                ? ` · ${candidate.source_product_sku}`
+                            {candidate.source_product_bpc
+                                ? ` · ${t('product_links.summary.bpc')} ${candidate.source_product_bpc}`
+                                : candidate.source_product_sku
+                                  ? ` · ${candidate.source_product_sku}`
+                                  : ''}
+                            {candidate.source_variant_label
+                                ? ` · ${candidate.source_variant_label}`
                                 : ''}
                         </p>
                     )}
@@ -556,10 +638,10 @@ function CandidateCard({
                                 : 'orders.admin.allocation.not_related',
                         )}
                     />
-                    {candidate.match_kind === 'group' && (
+                    {candidate.match_kind === 'linked_product' && (
                         <StatusPill
                             tone="info"
-                            label={t('orders.admin.allocation.same_group')}
+                            label={t('orders.admin.allocation.same_product')}
                         />
                     )}
                     {candidate.requires_confirmation && (
@@ -573,13 +655,21 @@ function CandidateCard({
                 </div>
             </div>
 
-            <div className="mt-2 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div>
                     <p className="text-muted-foreground text-xs">
                         {t('orders.admin.allocation.columns.unit_cost')}
                     </p>
                     <MoneyAmount amount={candidate.unit_cost} />
                 </div>
+                {candidate.expected_payable && (
+                    <div>
+                        <p className="text-muted-foreground text-xs">
+                            {t('orders.admin.allocation.columns.payable')}
+                        </p>
+                        <MoneyAmount amount={candidate.expected_payable} />
+                    </div>
+                )}
                 <div>
                     <p className="text-muted-foreground text-xs">
                         {t('orders.admin.allocation.columns.platform_rate')}
@@ -1071,33 +1161,25 @@ function ConfirmAllocationDialog({
 }
 
 /**
- * Why these sources are listed: the sourcing group the order line froze when
- * it was placed -- or a flag that it has none and needs manual review.
+ * Why these sources are listed: the ordered Product plus the Products staff
+ * linked to it as the same Product — or a note that it is unique, so only its
+ * own sources appear.
  */
-function SourcingBanner({
-    sourcing,
-    locale,
-}: {
-    sourcing: Sourcing | null;
-    locale: string;
-}) {
+function SourcingBanner({ sourcing }: { sourcing: Sourcing | null }) {
     const { t } = useTranslation();
 
     if (sourcing === null) {
         return null;
     }
 
-    if (sourcing.state === 'unmatched' || sourcing.group === null) {
+    if (sourcing.linked_product_count === 0) {
         return (
-            <div
-                role="status"
-                className="border-warning/40 bg-warning/10 rounded-lg border p-3 text-sm"
-            >
+            <div role="status" className="bg-muted rounded-lg p-3 text-sm">
                 <p className="font-medium">
-                    {t('orders.admin.allocation.unmatched_title')}
+                    {t('orders.admin.allocation.unique_title')}
                 </p>
                 <p className="text-muted-foreground text-xs">
-                    {t('orders.admin.allocation.unmatched_help')}
+                    {t('orders.admin.allocation.unique_help')}
                 </p>
             </div>
         );
@@ -1106,23 +1188,12 @@ function SourcingBanner({
     return (
         <div role="status" className="bg-muted rounded-lg p-3 text-sm">
             <p className="font-medium">
-                {t('orders.admin.allocation.group_title', {
-                    group:
-                        locale === 'bn'
-                            ? sourcing.group.name_bn
-                            : sourcing.group.name_en,
+                {t('orders.admin.allocation.linked_title', {
+                    count: sourcing.linked_product_count,
                 })}
             </p>
             <p className="text-muted-foreground text-xs">
-                {sourcing.canonical_product
-                    ? `${sourcing.canonical_product.name} (${sourcing.canonical_product.sku})`
-                    : ''}
-                {sourcing.canonical_variant
-                    ? ` · ${sourcing.canonical_variant}`
-                    : ''}
-            </p>
-            <p className="text-muted-foreground text-xs">
-                {t('orders.admin.allocation.group_help')}
+                {t('orders.admin.allocation.linked_help')}
             </p>
         </div>
     );

@@ -119,7 +119,7 @@ describe('keeping the Product unique, or linking it', function () {
         $other = websiteTestProduct();
         $staff = testPlatformStaff(PlatformRole::SupplierManager);
         $staff->assignRole(PlatformRole::ProductManager->value);
-        $staff->roles->each(fn ($role) => $role->revokePermissionTo('sourcing_group.create'));
+        $staff->roles->each(fn ($role) => $role->revokePermissionTo('product_link.create'));
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         $this->reviewer = $staff->fresh();
 
@@ -184,7 +184,7 @@ describe('lot review and access', function () {
             ->assertInertia(fn (Assert $page) => $page->where('can_link_products', true));
 
         $viewer = testPlatformStaff(PlatformRole::SupplierManager);
-        $viewer->roles->each(fn ($role) => $role->revokePermissionTo('sourcing_group.create'));
+        $viewer->roles->each(fn ($role) => $role->revokePermissionTo('product_link.create'));
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->actingAs($viewer->fresh())->get(route('admin.supplier-listings.show', $listing))

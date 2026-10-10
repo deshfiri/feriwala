@@ -122,7 +122,7 @@ describe('linking and unlinking', function () {
 
     it('is refused to staff who may only view, and to business accounts', function () {
         $viewer = testPlatformStaff(PlatformRole::Admin);
-        $viewer->roles->each(fn ($role) => $role->revokePermissionTo(['sourcing_group.create', 'sourcing_group.edit']));
+        $viewer->roles->each(fn ($role) => $role->revokePermissionTo(['product_link.create', 'product_link.edit']));
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         $viewer = $viewer->fresh();
 
@@ -143,7 +143,7 @@ describe('linking and unlinking', function () {
 
     it('hides the section from staff who may not view links', function () {
         $viewer = testPlatformStaff(PlatformRole::InventoryManager);
-        $viewer->roles->each(fn ($role) => $role->revokePermissionTo('sourcing_group.view'));
+        $viewer->roles->each(fn ($role) => $role->revokePermissionTo('product_link.view'));
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->actingAs($viewer->fresh())->get(route('admin.catalog.products.edit', $this->a->public_id))

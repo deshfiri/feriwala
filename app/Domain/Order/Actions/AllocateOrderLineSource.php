@@ -325,6 +325,15 @@ class AllocateOrderLineSource
                 'supplier_offer_price_change_id' => $offer === null
                     ? null
                     : $this->currentPriceVersionId($offer),
+
+                // Which Product and variation staff actually drew this source
+                // from, and how it came to be offered, frozen here so that
+                // linking or unlinking Products later never rewrites it.
+                'source_product_id' => $candidate->sourceProductId ?? $line->product_id,
+                'source_product_variant_id' => $candidate->sourceProductId === null
+                    ? $line->product_variant_id
+                    : $candidate->sourceProductVariantId,
+                'source_match_kind' => $candidate->matchKind,
                 'stock_reservation_id' => $reservation?->id,
                 'quantity' => $quantity,
                 'unit_cost' => $candidate->unitCost,

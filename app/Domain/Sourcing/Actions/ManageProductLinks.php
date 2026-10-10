@@ -258,7 +258,7 @@ class ManageProductLinks
             before: $before,
             after: $after,
             reason: $this->clean($reason),
-            module: PermissionModule::SourcingGroup->value,
+            module: PermissionModule::ProductLink->value,
         ));
     }
 }

@@ -6,6 +6,7 @@ import DataTable from '@/components/data-table/data-table';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import PageContainer from '@/components/page-container';
+import Notice from '@/components/notice';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
@@ -134,6 +135,10 @@ export default function SourcingGroupsIndex({
                     description={t('sourcing.description')}
                     actions={createButton}
                 />
+
+                <Notice tone="info" title={t('sourcing.legacy_notice_title')}>
+                    {t('sourcing.legacy_notice')}
+                </Notice>
 
                 <DataTable
                     columns={columns}

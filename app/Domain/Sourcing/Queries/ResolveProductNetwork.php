@@ -62,11 +62,11 @@ class ResolveProductNetwork
      */
     public function directLinks(int $productId): array
     {
-        return ProductLink::query()->active()->touching($productId)
+        return array_values(ProductLink::query()->active()->touching($productId)
             ->with(['productA', 'productB'])
             ->orderBy('id')
             ->get()
-            ->all();
+            ->all());
     }
 
     /**

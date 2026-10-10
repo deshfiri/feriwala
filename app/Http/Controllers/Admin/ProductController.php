@@ -249,7 +249,7 @@ class ProductController extends Controller
             'options' => $this->options(),
             'can' => $this->abilities($actor),
 
-            // Same Product links: staff-only, null without `sourcing_group.view`.
+            // Same Product links: staff-only, null without `product_link.view`.
             'linked_products' => app(LinkedProductsSection::class)->for($record, $actor),
 
             /*

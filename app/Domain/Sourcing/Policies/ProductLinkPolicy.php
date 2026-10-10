@@ -12,9 +12,10 @@ use Illuminate\Auth\Access\AuthorizationException;
 /**
  * Who may see and shape Same Product links.
  *
- * Reuses the `sourcing_group` permissions, which already mean "may decide which
- * Products fulfil one another's orders": `view` reads links, `create` makes
- * one, `edit` unlinks or maps variations. Written as static checks (like
+ * Its own `product_link` permissions, kept apart from the legacy
+ * `sourcing_group` ones so that who may shape groups and who may confirm that
+ * two Products are the same are separate decisions: `view` reads links,
+ * `create` confirms one, `edit` unlinks or matches variations. Written as static checks (like
  * {@see CatalogPolicy}) because the actions need
  * the same answer the controllers get. Platform staff only: Supplier, Client
  * and Partner sessions are separate authenticatables and never reach these.
@@ -48,6 +49,6 @@ class ProductLinkPolicy
 
     protected static function permission(PermissionAction $action): string
     {
-        return PermissionCatalogue::name(PermissionModule::SourcingGroup, $action);
+        return PermissionCatalogue::name(PermissionModule::ProductLink, $action);
     }
 }

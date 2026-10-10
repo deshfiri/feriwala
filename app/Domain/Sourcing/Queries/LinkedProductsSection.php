@@ -32,9 +32,7 @@ class LinkedProductsSection
             return null;
         }
 
-        $links = collect($this->network->directLinks($product->id))
-            ->filter(fn (ProductLink $link) => $link->productA !== null && $link->productB !== null)
-            ->values();
+        $links = collect($this->network->directLinks($product->id));
 
         $network = $this->network->network($product->id);
 
@@ -61,7 +59,7 @@ class LinkedProductsSection
             return [
                 'id' => $link->public_id,
                 'product' => $summaries[$otherId],
-                'linked_by' => $link->linker?->name,
+                'linked_by' => $link->linker->name,
                 'linked_at' => $link->linked_at->toIso8601String(),
                 'reason' => $link->link_reason,
                 'my_variants' => $variantOptions($product->id),
