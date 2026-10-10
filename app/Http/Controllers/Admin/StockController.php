@@ -276,7 +276,12 @@ class StockController extends Controller
                 ->whereHas('product', fn (Builder $product) => $product
                     ->where('name', 'ilike', "%{$term}%")
                     ->orWhere('sku', 'ilike', "%{$term}%"))
-                ->orWhereHas('variant', fn (Builder $variant) => $variant->where('sku', 'ilike', "%{$term}%"))))
+                ->orWhereHas('variant', fn (Builder $variant) => $variant->where('sku', 'ilike', "%{$term}%"))
+                // A force-deleted Product leaves only its snapshot on the row.
+                ->orWhere(fn (Builder $deleted) => $deleted->whereNull('product_id')
+                    ->where(fn (Builder $snapshot) => $snapshot
+                        ->whereRaw("product_id_snapshot->>'name' ilike ?", ["%{$term}%"])
+                        ->orWhereRaw("product_id_snapshot->>'sku' ilike ?", ["%{$term}%"])))))
             ->when($filters['warehouse'] !== null, fn (Builder $query) => $query
                 ->whereHas('warehouse', fn (Builder $warehouse) => $warehouse->where('public_id', $filters['warehouse'])))
             ->when($filters['state'] === 'in_stock', fn (Builder $query) => $query->where('available', '>', 0))
@@ -300,10 +305,11 @@ class StockController extends Controller
             'id' => $item->public_id,
             'sku' => $item->sku(),
             'product' => [
-                'id' => $item->product->public_id,
-                'name' => $item->product->name,
+                'id' => $item->productPublicId(),
+                'name' => $item->productName(),
+                'deleted' => $item->productWasDeleted(),
             ],
-            'variant_id' => $item->variant?->public_id,
+            'variant_id' => $item->variantPublicId(),
             'warehouse' => [
                 'id' => $item->warehouse->public_id,
                 'code' => $item->warehouse->code,

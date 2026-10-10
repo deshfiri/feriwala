@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Catalog\Actions\ForceDeleteProduct;
 use App\Domain\Catalog\Actions\ManageProducts;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Catalog\ProductForceDeletion;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -55,7 +58,10 @@ class ProductTrashController extends Controller
 
         return Inertia::render('admin/catalog/products/trash', [
             'products' => $products,
-            'can' => ['delete' => CatalogPolicy::canDelete($actor)],
+            'can' => [
+                'delete' => CatalogPolicy::canDelete($actor),
+                'force_delete' => CatalogPolicy::canForceDelete($actor),
+            ],
         ]);
     }
 
@@ -89,6 +95,48 @@ class ProductTrashController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.permanently_deleted')]);
+
+        return back();
+    }
+
+    /**
+     * What a force delete of this Product would touch, for the dialog's
+     * warning. Super Admin only, like the delete itself.
+     */
+    public function forceDeleteImpact(Request $request, string $product, ProductForceDeletion $deletion): JsonResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(CatalogPolicy::canForceDelete($actor), 403);
+
+        $record = $this->product($product);
+
+        return response()->json([
+            'name' => $record->name,
+            'sku' => $record->sku,
+            'impact' => $deletion->impact($record),
+        ]);
+    }
+
+    public function forceDestroy(Request $request, string $product, ForceDeleteProduct $forceDelete): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(CatalogPolicy::canForceDelete($actor), 403);
+
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'current_password'],
+            'reason' => ['required', 'string', 'min:'.ForceDeleteProduct::MINIMUM_REASON, 'max:1000'],
+            'confirmation' => ['required', 'string'],
+        ]);
+
+        try {
+            $forceDelete->handle($actor, $this->product($product), $validated['reason'], $validated['confirmation']);
+        } catch (CatalogRefused $refused) {
+            return back()->withErrors(['product' => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.force_delete.done')]);
 
         return back();
     }

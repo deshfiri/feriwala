@@ -1065,6 +1065,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.categories.active');
         Route::delete('catalog/categories/{category}', [CategoryController::class, 'destroy'])
             ->name('catalog.categories.destroy');
+        Route::delete('catalog/categories/{category}/purge', [CategoryController::class, 'purge'])
+            ->name('catalog.categories.purge');
 
         /*
          * Brands (§11.3). The same shape as categories without the tree. The
@@ -1118,6 +1120,12 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.trash.restore');
         Route::delete('catalog/products/trash/{product}', [ProductTrashController::class, 'destroy'])
             ->name('catalog.products.trash.destroy');
+
+        // Super Admin only: erase a trashed Product that history refers to.
+        Route::get('catalog/products/trash/{product}/force-delete', [ProductTrashController::class, 'forceDeleteImpact'])
+            ->name('catalog.products.trash.force-delete.impact');
+        Route::delete('catalog/products/trash/{product}/force-delete', [ProductTrashController::class, 'forceDestroy'])
+            ->name('catalog.products.trash.force-delete');
 
         /*
          * Same Product links: staff-confirmed, bidirectional connections

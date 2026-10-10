@@ -68,7 +68,7 @@ class StockAllocationController extends Controller
             ->through(fn (StockAllocation $allocation) => [
                 ...$this->row($allocation),
                 'sku' => $allocation->item->sku(),
-                'product' => $allocation->item->product->name,
+                'product' => $allocation->item->productName(),
                 'item_id' => $allocation->item->public_id,
                 'warehouse' => [
                     'code' => $allocation->item->warehouse->code,

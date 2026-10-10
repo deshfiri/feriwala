@@ -32,7 +32,9 @@ use LogicException;
  * @property string $public_id
  * @property int $order_id
  * @property int $line_number
- * @property int $product_id
+ * @property int|null $product_id
+ * @property array<string, mixed>|null $product_id_snapshot
+ * @property array<string, mixed>|null $product_variant_id_snapshot
  * @property int|null $product_variant_id
  * @property string $sku
  * @property string $product_name
@@ -64,7 +66,7 @@ use LogicException;
  * @property int|null $sourcing_canonical_variant_id legacy, see above
  * @property CarbonImmutable|null $created_at
  * @property-read Order $order
- * @property-read Product $product
+ * @property-read Product|null $product
  * @property-read ProductVariant|null $variant
  * @property-read StockReservation|null $stockReservation
  * @property-read Supplier|null $supplier
@@ -93,6 +95,8 @@ class OrderItem extends Model
         return [
             'quantity' => 'integer',
             'line_number' => 'integer',
+            'product_id_snapshot' => 'array',
+            'product_variant_id_snapshot' => 'array',
             'unit_price' => MoneyCast::class,
             'line_subtotal' => MoneyCast::class,
             'discount' => MoneyCast::class,
@@ -202,7 +206,7 @@ class OrderItem extends Model
      */
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class)->withTrashed();
     }
 
     /**

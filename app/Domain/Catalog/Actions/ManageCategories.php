@@ -7,6 +7,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\CatalogImageStore;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Category;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -208,6 +209,57 @@ class ManageCategories
         // After the row is gone, and only then — a refused delete must leave the
         // tile where the category still pointing at it expects to find it.
         $this->images->delete($imagePath);
+    }
+
+    /**
+     * Delete a category and every subcategory under it, deepest first, in one
+     * confirmed step (Super Admin only).
+     *
+     * The same rule as {@see delete()} applied to the whole branch: if any
+     * category in it still holds a Product — trashed ones included, until they
+     * are permanently or force deleted — nothing is deleted at all.
+     *
+     * @return int how many categories were deleted
+     *
+     * @throws CatalogRefused
+     */
+    public function purge(User $actor, Category $category): int
+    {
+        CatalogPolicy::authorize(CatalogPolicy::canForceDelete($actor), 'Only a Super Admin may purge a category tree.');
+
+        $imagePaths = [];
+        $deleted = 0;
+
+        $this->database->transaction(function () use ($actor, $category, &$imagePaths, &$deleted) {
+            $ids = [$category->id];
+
+            for ($index = 0; $index < count($ids); $index++) {
+                array_push($ids, ...Category::query()->where('parent_id', $ids[$index])->pluck('id')->all());
+            }
+
+            $products = Product::withTrashed()->whereIn('category_id', $ids)->count();
+
+            if ($products > 0) {
+                throw CatalogRefused::categoryHasProducts($products);
+            }
+
+            foreach (array_reverse($ids) as $id) {
+                /** @var Category $node */
+                $node = Category::query()->lockForUpdate()->findOrFail($id);
+
+                $this->record($actor, 'catalog.category_deleted', $node, before: $this->snapshot($node));
+
+                $imagePaths[] = $node->image_path;
+                $node->delete();
+                $deleted++;
+            }
+        });
+
+        foreach ($imagePaths as $path) {
+            $this->images->delete($path);
+        }
+
+        return $deleted;
     }
 
     /**

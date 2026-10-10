@@ -422,6 +422,15 @@ class OrderController extends Controller
      * allocation panel. The platform ranks nothing here; the panel sorts and
      * filters what this returns, never the query.
      */
+    /**
+     * A line whose Product was force deleted is history: nothing can be
+     * sourced for it, and its own snapshot is all there is to show.
+     */
+    protected function assertLineProductExists(OrderItem $line): void
+    {
+        abort_if($line->product_id === null, 422, __('catalog.products.force_delete.line_product_deleted'));
+    }
+
     public function allocationCandidates(Request $request, string $order, string $item): JsonResponse
     {
         $actor = $this->actor($request);
@@ -430,6 +439,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('viewAllocationSources', $record);
 
         $line = $this->line($record, $item);
+        $this->assertLineProductExists($line);
 
         // When browsing candidates to replace one specific existing split
         // (Advanced Order Management batch, Commit 3), that allocation's own
@@ -536,6 +546,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('transition', $record);
 
         $line = $this->line($record, $item);
+        $this->assertLineProductExists($line);
 
         $validated = $request->validate([
             'source_type' => ['required', Rule::enum(AllocationSourceType::class)],
@@ -735,6 +746,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('viewAllocationSources', $record);
 
         $line = $this->line($record, $item);
+        $this->assertLineProductExists($line);
 
         $validated = $request->validate([
             'query' => ['sometimes', 'string', 'max:150'],
@@ -804,7 +816,7 @@ class OrderController extends Controller
 
         try {
             $link = $this->confirmLink->handle(
-                $line->product,
+                $line->product ?? abort(422, __('catalog.products.force_delete.line_product_deleted')),
                 $line->product_variant_id === null ? null : $line->variant,
                 $sourceType,
                 $validated['source_id'],

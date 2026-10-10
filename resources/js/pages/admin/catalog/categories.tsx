@@ -6,6 +6,7 @@ import {
     Pencil,
     Plus,
     Power,
+    ShieldAlert,
     ShoppingBag,
     Trash2,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ import type { StatusTone } from '@/lib/status';
 import { index as productsIndex } from '@/routes/admin/catalog/products';
 import type { CatalogImageLimits } from './brands';
 import CategoryDialog from './category-dialog';
+import PurgeCategoryDialog from './purge-category-dialog';
 
 export type CategoryRow = {
     id: string;
@@ -46,7 +48,7 @@ export type CategoryRow = {
 
 type Props = {
     categories: CategoryRow[];
-    can: { create: boolean; edit: boolean; delete: boolean };
+    can: { create: boolean; edit: boolean; delete: boolean; purge: boolean };
     limits: CatalogImageLimits;
 };
 
@@ -67,6 +69,7 @@ export default function AdminCategories({ categories, can, limits }: Props) {
     const [editing, setEditing] = useState<CategoryRow | null>(null);
     const [creating, setCreating] = useState(false);
     const [search, setSearch] = useState('');
+    const [purging, setPurging] = useState<CategoryRow | null>(null);
 
     // Moving is offered only on the whole tree: a filtered one hides neighbours.
     const searching = search.trim() !== '';
@@ -314,6 +317,22 @@ export default function AdminCategories({ categories, can, limits }: Props) {
                         </span>
                     </Button>
                 )}
+
+                {can.purge && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setPurging(category)}
+                    >
+                        <ShieldAlert
+                            className="text-danger size-4"
+                            aria-hidden="true"
+                        />
+                        <span className="sr-only sm:not-sr-only">
+                            {t('catalog.categories.purge.button')}
+                        </span>
+                    </Button>
+                )}
             </div>
         </li>
     );
@@ -392,6 +411,11 @@ export default function AdminCategories({ categories, can, limits }: Props) {
                 category={editing}
                 parents={parentCandidates}
                 limits={limits}
+            />
+
+            <PurgeCategoryDialog
+                category={purging}
+                onClose={() => setPurging(null)}
             />
         </>
     );
