@@ -40,9 +40,6 @@ use App\Domain\Referral\Enums\ReferralTrigger;
 use App\Domain\Referral\Enums\RewardType;
 use App\Domain\Referral\Models\ReferralPlan;
 use App\Domain\Referral\ReferralSettings;
-use App\Domain\Sourcing\Actions\ManageSourcingGroups;
-use App\Domain\Sourcing\Models\ProductSourcingGroup;
-use App\Domain\Sourcing\Models\ProductSourcingGroupProduct;
 use App\Domain\Supplier\Actions\SetSupplierOfferRates;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\OfferStatus;
@@ -740,40 +737,15 @@ function supplierTestOffer(
 }
 
 /**
- * A fresh, empty, active sourcing group -- what a reviewer selects when
- * approving a listing whose product is not yet in one.
- */
-function supplierTestSourcingGroup(): ProductSourcingGroup
-{
-    $creator = User::factory()->staff()->create();
-
-    return app(ManageSourcingGroups::class)->create($creator, [
-        'code' => 'grp-'.Str::lower(Str::random(8)),
-        'name_en' => 'Test group',
-        'name_bn' => 'টেস্ট গ্রুপ',
-    ]);
-}
-
-/**
- * The decision keys for connecting a listing to an existing product: the
- * product itself and the sourcing group it fulfils orders through (every
- * approval needs one). A product already in a group keeps it; otherwise it
- * becomes the canonical product of a new one.
+ * The decision keys for connecting a listing to an existing product. Nothing
+ * else is needed to approve: the Product may stay unique, and linking it as the
+ * same as other Products is a separate, optional choice.
  *
- * @return array{connect_product_id: string, sourcing_group_id: string}
+ * @return array{connect_product_id: string}
  */
 function supplierTestConnect(Product $product): array
 {
-    $membership = ProductSourcingGroupProduct::query()->active()->where('product_id', $product->id)->with('group')->first();
-
-    if ($membership === null) {
-        $group = supplierTestSourcingGroup();
-        app(ManageSourcingGroups::class)->addProduct($group->creator, $group, $product, 'Test fixture.');
-    } else {
-        $group = $membership->group;
-    }
-
-    return ['connect_product_id' => $product->public_id, 'sourcing_group_id' => $group->public_id];
+    return ['connect_product_id' => $product->public_id];
 }
 
 /*

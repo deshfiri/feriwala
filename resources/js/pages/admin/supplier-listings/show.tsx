@@ -3,9 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
-import SourcingGroupPicker, {
-    type SourcingGroupOption,
-} from '@/components/sourcing-group-picker';
+import ProductLinkPicker from '@/components/product-links/product-link-picker';
 import TextArea from '@/components/forms/text-area';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -18,6 +16,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import { index } from '@/routes/admin/supplier-listings';
+import type { ProductLinkSummary } from '@/types';
 import { store as correction } from '@/routes/admin/supplier-listings/correction';
 import { store as decision } from '@/routes/admin/supplier-listings/decision';
 
@@ -58,13 +57,8 @@ type Props = {
     };
     supplier: { id: string; business_name: string; status_label: string };
     options: { categories: { value: string; label: string }[] };
-    /** Staff-only: the groups an approved offer can fulfil orders through. */
-    sourcing: {
-        groups: SourcingGroupOption[];
-        can_select: boolean;
-        can_create: boolean;
-        connected_group: string | null;
-    };
+    /** Staff-only: whether this reviewer may link the Product as the same as others. */
+    can_link_products: boolean;
     history: {
         new_status: string;
         changed_by: string | null;
@@ -78,8 +72,6 @@ type ItemDecision = {
     item_id: string;
     decision: 'skip' | 'approve' | 'reject' | 'correction';
     variant_id: string;
-    /** The canonical variation this one fulfils; never matched by label. */
-    canonical_variant_id: string;
     /** Flat-Taka decimal typed by the reviewer, submitted exactly as typed. */
     platform_rate: string;
     /**
@@ -104,7 +96,7 @@ export default function AdminSupplierListingShow({
     listing,
     supplier,
     options,
-    sourcing,
+    can_link_products,
     history,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -116,7 +108,7 @@ export default function AdminSupplierListingShow({
         connect_product_id: '',
         sku: '',
         category_id: '',
-        sourcing_group_id: sourcing.connected_group ?? '',
+        linked_products: [] as ProductLinkSummary[],
         reason: '',
         items: listing.items
             .filter((item) => item.status === 'pending')
@@ -124,7 +116,6 @@ export default function AdminSupplierListingShow({
                 item_id: item.id,
                 decision: 'skip',
                 variant_id: '',
-                canonical_variant_id: '',
                 platform_rate: '',
                 approved_quantity: '',
                 wholesale_enabled: true,
@@ -154,14 +145,14 @@ export default function AdminSupplierListingShow({
             sku: data.mode === 'create' ? data.sku : null,
             category_id:
                 data.mode === 'create' ? data.category_id || null : null,
-            sourcing_group_id: data.sourcing_group_id || null,
+            // Only what the reviewer picked; empty keeps the Product unique.
+            link_product_ids: data.linked_products.map((linked) => linked.id),
             items: data.items
                 .filter((item) => item.decision !== 'skip')
                 .map((item) => ({
                     item_id: item.item_id,
                     decision: item.decision,
                     variant_id: item.variant_id || null,
-                    canonical_variant_id: item.canonical_variant_id || null,
                     // The Taka string exactly as typed; the server is the
                     // only place that parses it (§36.1).
                     platform_rate:
@@ -184,10 +175,6 @@ export default function AdminSupplierListingShow({
 
     const errorFor = (key: string) =>
         (form.errors as Record<string, string | undefined>)[key];
-
-    const selectedGroup = sourcing.groups.find(
-        (group) => group.id === form.data.sourcing_group_id,
-    );
 
     return (
         <>
@@ -527,19 +514,19 @@ export default function AdminSupplierListingShow({
                                     </div>
                                 )}
 
-                                {sourcing.can_select && (
-                                    <SourcingGroupPicker
-                                        groups={sourcing.groups}
-                                        value={form.data.sourcing_group_id}
-                                        onChange={(id) =>
+                                {can_link_products && (
+                                    <ProductLinkPicker
+                                        value={form.data.linked_products}
+                                        onChange={(next) =>
                                             form.setData(
-                                                'sourcing_group_id',
-                                                id,
+                                                'linked_products',
+                                                next,
                                             )
                                         }
-                                        canCreate={sourcing.can_create}
-                                        lockedTo={sourcing.connected_group}
-                                        error={errorFor('sourcing_group_id')}
+                                        excludeProductId={
+                                            listing.connected_product
+                                        }
+                                        error={errorFor('link_product_ids')}
                                     />
                                 )}
 
@@ -666,70 +653,6 @@ export default function AdminSupplierListingShow({
                                                             />
                                                         )}
                                                     </FormField>
-                                                    {selectedGroup !==
-                                                        undefined &&
-                                                        selectedGroup
-                                                            .canonical_variants
-                                                            .length > 0 && (
-                                                            <FormField
-                                                                label={t(
-                                                                    'sourcing.picker.canonical_variant',
-                                                                )}
-                                                                description={t(
-                                                                    'sourcing.picker.canonical_variant_help',
-                                                                )}
-                                                                error={errorFor(
-                                                                    `items.${index}.canonical_variant_id`,
-                                                                )}
-                                                            >
-                                                                {(field) => (
-                                                                    <select
-                                                                        {...field}
-                                                                        value={
-                                                                            decisionItem.canonical_variant_id
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            setItem(
-                                                                                index,
-                                                                                {
-                                                                                    canonical_variant_id:
-                                                                                        e
-                                                                                            .target
-                                                                                            .value,
-                                                                                },
-                                                                            )
-                                                                        }
-                                                                        className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                                                    >
-                                                                        <option value="">
-                                                                            {t(
-                                                                                'sourcing.picker.canonical_variant_none',
-                                                                            )}
-                                                                        </option>
-                                                                        {selectedGroup.canonical_variants.map(
-                                                                            (
-                                                                                variant,
-                                                                            ) => (
-                                                                                <option
-                                                                                    key={
-                                                                                        variant.id
-                                                                                    }
-                                                                                    value={
-                                                                                        variant.id
-                                                                                    }
-                                                                                >
-                                                                                    {
-                                                                                        variant.label
-                                                                                    }
-                                                                                </option>
-                                                                            ),
-                                                                        )}
-                                                                    </select>
-                                                                )}
-                                                            </FormField>
-                                                        )}
                                                     <FormField
                                                         label={t(
                                                             'supplier.admin.listings.approved_quantity',

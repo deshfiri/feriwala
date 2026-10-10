@@ -6,7 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
-use App\Domain\Sourcing\Queries\SourcingGroupOptions;
+use App\Domain\Sourcing\Policies\ProductLinkPolicy;
 use App\Domain\Supplier\Actions\DecideSupplierListing;
 use App\Domain\Supplier\Actions\RequestSupplierListingCorrection;
 use App\Domain\Supplier\Enums\ListingStatus;
@@ -128,9 +128,9 @@ class SupplierListingController extends Controller
                 'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(['public_id', 'name'])
                     ->map(fn (Category $c) => ['value' => $c->public_id, 'label' => $c->name])->all(),
             ],
-            // Staff-only: which sourcing group the approved offers fulfil
-            // orders through.
-            'sourcing' => app(SourcingGroupOptions::class)->forReview($reviewer, $listing->connectedProduct),
+            // Staff-only: whether this reviewer may link the approved Product
+            // as the same as existing ones (Same Product links).
+            'can_link_products' => ProductLinkPolicy::canLink($reviewer),
             'history' => $listing->statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),
@@ -178,15 +178,14 @@ class SupplierListingController extends Controller
             'category_id' => ['nullable', 'string'],
             'brand_id' => ['nullable', 'string'],
 
-            // The sourcing group this product fulfils orders through; chosen
-            // by staff, required when approving unless the product is
-            // already in one.
-            'sourcing_group_id' => ['nullable', 'string'],
+            // Existing Products staff confirmed are the same physical Product
+            // as this one. Optional: left empty, the Product stays unique.
+            'link_product_ids' => ['nullable', 'array', 'max:20'],
+            'link_product_ids.*' => ['string', 'max:40'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'string'],
             'items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
             'items.*.variant_id' => ['nullable', 'string'],
-            'items.*.canonical_variant_id' => ['nullable', 'string'],
 
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
@@ -235,7 +234,7 @@ class SupplierListingController extends Controller
                     'sku' => $validated['sku'] ?? null,
                     'category_id' => $validated['category_id'] ?? null,
                     'brand_id' => $validated['brand_id'] ?? null,
-                    'sourcing_group_id' => $validated['sourcing_group_id'] ?? null,
+                    'link_product_ids' => $validated['link_product_ids'] ?? [],
                 ],
                 $validated['items'],
                 $validated['reason'],

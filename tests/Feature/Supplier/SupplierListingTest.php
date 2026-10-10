@@ -170,7 +170,7 @@ test('full approval creates a Central Product through the catalogue action and o
 
     $this->actingAs($staff)->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Looks right.',
-        'create_product' => true, 'sourcing_group_id' => supplierTestSourcingGroup()->public_id,
+        'create_product' => true,
         'sku' => 'pj-001',
         'category_id' => $category,
         'items' => [[
@@ -338,7 +338,7 @@ test('creating a product needs the catalogue create permission on top of listing
     $before = Product::query()->count();
 
     $this->actingAs($staff)->post(route('admin.supplier-listings.decision.store', $listing), [
-        'reason' => 'Try.', 'create_product' => true, 'sourcing_group_id' => supplierTestSourcingGroup()->public_id, 'sku' => 'X-1',
+        'reason' => 'Try.', 'create_product' => true, 'sku' => 'X-1',
         'category_id' => $category,
         'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertForbidden();

@@ -14,7 +14,6 @@ use App\Domain\Sourcing\Models\ProductSourcingVariantMapping;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -88,34 +87,6 @@ class SourcingGroupController extends Controller
 
         return to_route('admin.sourcing-groups.show', $group)
             ->with('success', __('sourcing.messages.created'));
-    }
-
-    /**
-     * Create a group from inside another screen (Supplier listing review)
-     * without leaving it: answers with the new group as JSON so the caller can
-     * select it at once. Same rules, permission and audit as {@see store()}.
-     */
-    public function quickStore(Request $request, ManageSourcingGroups $manage): JsonResponse
-    {
-        Gate::authorize('create', ProductSourcingGroup::class);
-
-        $validated = $request->validate([
-            'code' => ['required', 'string', 'max:48', 'regex:/^[a-z0-9][a-z0-9_-]*$/', Rule::unique(ProductSourcingGroup::class, 'code')],
-            'name_en' => ['required', 'string', 'max:255'],
-            'name_bn' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:2000'],
-        ]);
-
-        $group = $manage->create($this->actor($request), $validated);
-
-        return response()->json([
-            'id' => $group->public_id,
-            'code' => $group->code,
-            'name_en' => $group->name_en,
-            'name_bn' => $group->name_bn,
-            'canonical_product' => null,
-            'canonical_variants' => [],
-        ], 201);
     }
 
     public function show(Request $request, ProductSourcingGroup $group): Response

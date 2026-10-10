@@ -118,6 +118,7 @@ return [
             'media' => 'Media',
             'logistics' => 'Logistics',
             'content' => 'Content & Updates',
+            'links' => 'Linked Products',
             'seo' => 'SEO',
         ],
 

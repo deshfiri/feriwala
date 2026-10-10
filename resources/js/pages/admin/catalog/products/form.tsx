@@ -5,6 +5,7 @@ import {
     Image as ImageIcon,
     Info,
     Layers,
+    Link2,
     Megaphone,
     Search,
     Tag,
@@ -29,6 +30,7 @@ import type {
     ContentRow,
     MediaLimits,
     MediaRow,
+    LinkedProductsState,
     MerchandisingState,
     PriceTierScope,
     ProductDetail,
@@ -40,9 +42,7 @@ import type {
     VariantRow,
 } from '@/types';
 import SeoFields from './seo-fields';
-import SourcingGroupField, {
-    type ProductSourcing,
-} from './sourcing-group-field';
+import LinkedProductsSection from './linked-products-section';
 import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
@@ -58,8 +58,8 @@ type Props = {
     product: ProductDetail | null;
     options: { categories: CatalogOption[]; brands: CatalogOption[] };
     can: CatalogAbilities;
-    /** Staff-only, new products only: the groups a product can be added to. */
-    sourcing?: ProductSourcing;
+    /** Staff-only: Same Product links; null without `sourcing_group.view`. */
+    linked_products?: LinkedProductsState | null;
     variants: VariantRow[];
     attributes: AttributeOption[];
     media: MediaRow[];
@@ -161,7 +161,7 @@ export default function ProductForm({
     product,
     options,
     can,
-    sourcing,
+    linked_products,
     variants,
     attributes,
     media,
@@ -218,6 +218,15 @@ export default function ProductForm({
                       key: 'content',
                       label: t('catalog.products.tabs.content'),
                       icon: Megaphone,
+                  },
+              ]
+            : []),
+        ...(editing && linked_products
+            ? [
+                  {
+                      key: 'links',
+                      label: t('catalog.products.tabs.links'),
+                      icon: Link2,
                   },
               ]
             : []),
@@ -648,12 +657,6 @@ export default function ProductForm({
                                         </div>
                                     </SectionCard>
 
-                                    {!editing && sourcing?.can_select && (
-                                        <SourcingGroupField
-                                            sourcing={sourcing}
-                                        />
-                                    )}
-
                                     <SectionCard
                                         title={t(
                                             'catalog.products.sections.bounds',
@@ -969,6 +972,15 @@ export default function ProductForm({
                             limits={media_limits}
                             variants={variants}
                             canEdit={can.edit}
+                        />
+                    </SectionTabPanel>
+                )}
+
+                {editing && linked_products && (
+                    <SectionTabPanel tab="links" active={activeTab}>
+                        <LinkedProductsSection
+                            product={product}
+                            linked={linked_products}
                         />
                     </SectionTabPanel>
                 )}

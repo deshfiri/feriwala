@@ -1,6 +1,53 @@
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 
+/**
+ * What staff need to recognise a Product when deciding whether it is the same
+ * as another (Same Product links). Staff-only: the source counts hint at who
+ * supplies it.
+ */
+export type ProductLinkSummary = {
+    id: string;
+    name: string;
+    /** The 9-character BPC (older products may carry a longer legacy one). */
+    bpc: string;
+    sku: string;
+    barcode: string | null;
+    status: string;
+    image_url: string | null;
+    variant_count: number;
+    variant_labels: string[];
+    supplier_sources: number;
+    warehouse_sources: number;
+};
+
+export type LinkedVariantOption = { id: string; label: string };
+
+/** One direct connection, unlinkable on its own. */
+export type DirectProductLink = {
+    id: string;
+    product: ProductLinkSummary;
+    linked_by: string | null;
+    linked_at: string;
+    reason: string | null;
+    my_variants: LinkedVariantOption[];
+    their_variants: LinkedVariantOption[];
+    variant_matches: {
+        id: string;
+        mine: LinkedVariantOption | null;
+        theirs: LinkedVariantOption | null;
+    }[];
+};
+
+/** The "Linked Products" section of the Admin Product workspace. */
+export type LinkedProductsState = {
+    current: ProductLinkSummary;
+    direct: DirectProductLink[];
+    /** Reachable only through other linked Products; never unlinked from here. */
+    indirect: { product: ProductLinkSummary; distance: number }[];
+    can: { link: boolean; unlink: boolean };
+};
+
 /** A lifecycle move this person may make from the product's current status. */
 export type ProductTransition = {
     value: string;

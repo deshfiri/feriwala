@@ -36,6 +36,7 @@ use App\Http\Controllers\Admin\ProductContentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductDeletionSettingsController;
 use App\Http\Controllers\Admin\ProductEligibilityController;
+use App\Http\Controllers\Admin\ProductLinkController;
 use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
@@ -1119,6 +1120,23 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.trash.destroy');
 
         /*
+         * Same Product links: staff-confirmed, bidirectional connections
+         * between independent Product records. Seen with
+         * `sourcing_group.view`, made with `sourcing_group.create`, removed or
+         * variation-matched with `sourcing_group.edit`.
+         */
+        Route::get('catalog/product-links/search', [ProductLinkController::class, 'search'])
+            ->name('catalog.product-links.search');
+        Route::post('catalog/products/{product}/links', [ProductLinkController::class, 'store'])
+            ->name('catalog.products.links.store');
+        Route::delete('catalog/products/{product}/links/{link}', [ProductLinkController::class, 'destroy'])
+            ->name('catalog.products.links.destroy');
+        Route::post('catalog/products/{product}/links/{link}/variants', [ProductLinkController::class, 'mapVariants'])
+            ->name('catalog.products.links.variants.store');
+        Route::delete('catalog/products/{product}/links/{link}/variants/{mapping}', [ProductLinkController::class, 'unmapVariants'])
+            ->name('catalog.products.links.variants.destroy');
+
+        /*
          * Variations, always addressed through their product (§11.1, §12), and
          * the shared attributes they are built from.
          */
@@ -1290,15 +1308,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('delivery-settings.rules.close');
 
         /*
-         * Product Sourcing Groups: which catalogue products can fulfil one
-         * another's orders. Staff-only, behind `sourcing_group.*`.
+         * Product Sourcing Groups: legacy. Same Product links
+         * (`catalog/products/{product}/links`) now decide which Products can
+         * fulfil one another's orders; groups are kept as history only and
+         * no longer affect allocation. Staff-only, behind `sourcing_group.*`.
          */
         Route::get('sourcing-groups', [SourcingGroupController::class, 'index'])
             ->name('sourcing-groups.index');
         Route::post('sourcing-groups', [SourcingGroupController::class, 'store'])
             ->name('sourcing-groups.store');
-        Route::post('sourcing-groups/quick', [SourcingGroupController::class, 'quickStore'])
-            ->name('sourcing-groups.quick-store');
         Route::get('sourcing-groups/{group}', [SourcingGroupController::class, 'show'])
             ->name('sourcing-groups.show');
         Route::patch('sourcing-groups/{group}', [SourcingGroupController::class, 'update'])

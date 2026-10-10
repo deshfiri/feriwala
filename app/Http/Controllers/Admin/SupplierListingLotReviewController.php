@@ -6,7 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
-use App\Domain\Sourcing\Queries\SourcingGroupOptions;
+use App\Domain\Sourcing\Policies\ProductLinkPolicy;
 use App\Domain\Supplier\Actions\DecideSupplierListingLot;
 use App\Domain\Supplier\Actions\MatchSupplierListingItemToVariant;
 use App\Domain\Supplier\Enums\LotStatus;
@@ -107,7 +107,6 @@ class SupplierListingLotReviewController extends Controller
                     'status_label' => $entry->status->label(),
                     'status_tone' => $entry->status->tone(),
                     'connected_product' => $entry->connectedProduct?->public_id,
-                    'connected_group' => app(SourcingGroupOptions::class)->forReview($reviewer, $entry->connectedProduct)['connected_group'],
                     'primary_media_url' => $entry->primaryMedia() !== null
                         ? route('supplier.listings.media.download', $entry->primaryMedia()->public_id)
                         : null,
@@ -140,7 +139,9 @@ class SupplierListingLotReviewController extends Controller
                 'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(['public_id', 'name'])
                     ->map(fn (Category $c) => ['value' => $c->public_id, 'label' => $c->name])->all(),
             ],
-            'sourcing' => app(SourcingGroupOptions::class)->forReview($reviewer, null),
+            // Staff-only: whether this reviewer may link an approved Product
+            // as the same as existing ones (Same Product links).
+            'can_link_products' => ProductLinkPolicy::canLink($reviewer),
         ]);
     }
 
@@ -160,12 +161,15 @@ class SupplierListingLotReviewController extends Controller
             'entries.*.sku' => ['nullable', 'string', 'max:100', 'required_if:entries.*.create_product,true'],
             'entries.*.category_id' => ['nullable', 'string'],
             'entries.*.brand_id' => ['nullable', 'string'],
-            'entries.*.sourcing_group_id' => ['nullable', 'string'],
+
+            // Existing Products staff confirmed are the same physical Product
+            // as this entry's. Optional: left empty, the Product stays unique.
+            'entries.*.link_product_ids' => ['nullable', 'array', 'max:20'],
+            'entries.*.link_product_ids.*' => ['string', 'max:40'],
             'entries.*.items' => ['required', 'array', 'min:1'],
             'entries.*.items.*.item_id' => ['required', 'string'],
             'entries.*.items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
             'entries.*.items.*.variant_id' => ['nullable', 'string'],
-            'entries.*.items.*.canonical_variant_id' => ['nullable', 'string'],
 
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
@@ -205,7 +209,7 @@ class SupplierListingLotReviewController extends Controller
                     'sku' => $entry['sku'] ?? null,
                     'category_id' => $entry['category_id'] ?? null,
                     'brand_id' => $entry['brand_id'] ?? null,
-                    'sourcing_group_id' => $entry['sourcing_group_id'] ?? null,
+                    'link_product_ids' => $entry['link_product_ids'] ?? [],
                 ],
                 'items' => $items,
             ];

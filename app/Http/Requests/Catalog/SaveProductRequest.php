@@ -11,13 +11,11 @@ use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
-use App\Domain\Sourcing\Models\ProductSourcingGroup;
 use App\Support\Money\DecimalAmount;
 use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -137,10 +135,6 @@ class SaveProductRequest extends FormRequest
              * what a search engine will actually show. Blank falls back to the
              * product's own name and description.
              */
-            // Optional, on create only: put the new product straight into a
-            // sourcing group. Handled by the controller, never stored on the product.
-            'sourcing_group_id' => ['nullable', 'string', Rule::exists(ProductSourcingGroup::class, 'public_id')],
-
             'meta_title' => ['nullable', 'string', 'max:70'],
             'meta_description' => ['nullable', 'string', 'max:200'],
             'meta_keywords' => ['nullable', 'string', 'max:255'],
@@ -295,7 +289,7 @@ class SaveProductRequest extends FormRequest
      */
     public function productAttributes(): array
     {
-        $validated = Arr::except($this->validated(), ['sourcing_group_id']);
+        $validated = $this->validated();
 
         foreach (['base_cost', 'wholesale_price'] as $field) {
             if (array_key_exists($field, $validated)) {
