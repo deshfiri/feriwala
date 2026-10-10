@@ -33,6 +33,7 @@ import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as rolesIndex } from '@/routes/admin/roles';
 import type { Column, Paginator } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type PermissionRow = {
     name: string;
@@ -332,7 +333,8 @@ export default function PermissionsIndex({ permissions, modules, can }: Props) {
                                     <Label htmlFor="permission-reason">
                                         {t('access.permissions.reason')}
                                     </Label>
-                                    <textarea
+                                    <ReasonTextarea
+                                        context="access"
                                         id="permission-reason"
                                         name="reason"
                                         rows={2}
@@ -410,7 +412,8 @@ export default function PermissionsIndex({ permissions, modules, can }: Props) {
                                         <Label htmlFor="permission-edit-reason">
                                             {t('access.permissions.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="access"
                                             id="permission-edit-reason"
                                             name="reason"
                                             rows={2}

@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { TrashedProductRow } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type ImpactGroup = 'removed' | 'deactivated' | 'preserved';
 
@@ -196,7 +197,8 @@ export default function ForceDeleteDialog({ row, open, onOpenChange }: Props) {
                     required
                 >
                     {(field) => (
-                        <textarea
+                        <ReasonTextarea
+                            context="product"
                             {...field}
                             value={reason}
                             onChange={(event) => setReason(event.target.value)}

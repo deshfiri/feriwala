@@ -397,7 +397,7 @@ export default function ContentLibraryForm({ item, limits, can }: Props) {
 
 ContentLibraryForm.layout = {
     breadcrumbs: [
-        { title: 'Content library', href: index() },
-        { title: 'Release content' },
+        { title: 'nav.content_library', href: index() },
+        { title: 'content_library.release_title' },
     ],
 };

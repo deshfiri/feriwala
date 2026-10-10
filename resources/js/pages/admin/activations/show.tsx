@@ -8,7 +8,6 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     approve,
@@ -23,6 +22,7 @@ import type {
     ActivationCondition,
     ActivationOutcome,
 } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 const textareaClasses =
     'border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]';
@@ -223,7 +223,8 @@ export default function AdminActivationsShow({
                                                 required
                                             >
                                                 {(field) => (
-                                                    <Input
+                                                    <ReasonTextarea
+                                                        context="account"
                                                         {...field}
                                                         name="reason"
                                                         required
@@ -471,7 +472,8 @@ export default function AdminActivationsShow({
                                                         required
                                                     >
                                                         {(field) => (
-                                                            <Input
+                                                            <ReasonTextarea
+                                                                context="account"
                                                                 {...field}
                                                                 name="reason"
                                                                 maxLength={1000}

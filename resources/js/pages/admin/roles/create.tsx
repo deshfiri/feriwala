@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import RolesController from '@/actions/App/Http/Controllers/Admin/RolesController';
 import { index as rolesIndex } from '@/routes/admin/roles';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type PermissionOption = { name: string; label: string };
 type PermissionGroup = { module: string; permissions: PermissionOption[] };
@@ -122,7 +123,8 @@ export default function RoleCreate({ permissionGroups }: Props) {
                                     <Label htmlFor="role-reason">
                                         {t('access.roles.reason')}
                                     </Label>
-                                    <textarea
+                                    <ReasonTextarea
+                                        context="access"
                                         id="role-reason"
                                         name="reason"
                                         rows={2}

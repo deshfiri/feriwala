@@ -25,6 +25,7 @@ import type {
     ProductDetail,
     ProductLinkSummary,
 } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
     product: ProductDetail;
@@ -494,7 +495,8 @@ function LinkConfirmDialog({
 
                 <FormField label={t('product_links.reason_label')}>
                     {(field) => (
-                        <textarea
+                        <ReasonTextarea
+                            context="product"
                             {...field}
                             value={reason}
                             onChange={(event) => setReason(event.target.value)}
@@ -598,7 +600,8 @@ function UnlinkConfirmDialog({
 
                 <FormField label={t('product_links.reason_label')}>
                     {(field) => (
-                        <textarea
+                        <ReasonTextarea
+                            context="product"
                             {...field}
                             value={reason}
                             onChange={(event) => setReason(event.target.value)}

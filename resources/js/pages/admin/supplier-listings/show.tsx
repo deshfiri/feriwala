@@ -19,6 +19,7 @@ import { index } from '@/routes/admin/supplier-listings';
 import type { ProductLinkSummary } from '@/types';
 import { store as correction } from '@/routes/admin/supplier-listings/correction';
 import { store as decision } from '@/routes/admin/supplier-listings/decision';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Item = {
     id: string;
@@ -773,7 +774,8 @@ export default function AdminSupplierListingShow({
                                     required
                                 >
                                     {(field) => (
-                                        <Input
+                                        <ReasonTextarea
+                                            context="supplier"
                                             {...field}
                                             value={form.data.reason}
                                             onChange={(e) =>

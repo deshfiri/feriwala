@@ -24,6 +24,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import { index } from '@/routes/admin/supplier-withdrawals';
 import { confirm as confirmPassword } from '@/routes/password';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Withdrawal = {
     id: string;
@@ -396,7 +397,8 @@ function ReasonDialog({
                         <>
                             <div className="grid gap-2">
                                 <Label htmlFor="reason">{label}</Label>
-                                <textarea
+                                <ReasonTextarea
+                                    context="supplier"
                                     id="reason"
                                     name="reason"
                                     rows={3}

@@ -2,12 +2,12 @@ import { Form, Head } from '@inertiajs/react';
 import ManagedSupplierController from '@/actions/App/Http/Controllers/Admin/ManagedSupplierController';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
-import TextArea from '@/components/forms/text-area';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 /**
  * Staff opening a Supplier account on a Supplier's behalf. No password field:
@@ -145,7 +145,8 @@ export default function CreateSupplier() {
                                     required
                                 >
                                     {(field) => (
-                                        <TextArea
+                                        <ReasonTextarea
+                                            context="supplier"
                                             {...field}
                                             name="reason"
                                             required

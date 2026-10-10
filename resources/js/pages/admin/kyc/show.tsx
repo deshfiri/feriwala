@@ -15,7 +15,6 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import { show as accountDossier } from '@/routes/admin/accounts';
 import { decide, index } from '@/routes/admin/kyc';
@@ -28,6 +27,7 @@ import type {
     KycReviewHistoryEntry,
     KycSubmissionSummary,
 } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 /**
  * One KYC submission, and the decision on it (§7.3).
@@ -412,7 +412,8 @@ export default function AdminKycShow({
                                                     required
                                                 >
                                                     {(field) => (
-                                                        <Input
+                                                        <ReasonTextarea
+                                                            context="kyc"
                                                             {...field}
                                                             name="reason"
                                                             maxLength={1000}

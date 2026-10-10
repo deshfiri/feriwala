@@ -26,6 +26,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Candidate = {
     source_type: 'warehouse' | 'supplier_offer';
@@ -926,7 +927,8 @@ function ConfirmRelationshipDialog({
                                         'orders.admin.allocation.relationship_reason',
                                     )}
                                 </Label>
-                                <textarea
+                                <ReasonTextarea
+                                    context="order"
                                     id="relationship-reason"
                                     name="reason"
                                     rows={3}
@@ -1116,7 +1118,8 @@ function ConfirmAllocationDialog({
                                 <Label htmlFor="allocation-reason">
                                     {t('orders.admin.allocation.reason')}
                                 </Label>
-                                <textarea
+                                <ReasonTextarea
+                                    context="order"
                                     id="allocation-reason"
                                     name="reason"
                                     rows={3}

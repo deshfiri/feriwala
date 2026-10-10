@@ -18,6 +18,7 @@ import { store as preferred } from '@/routes/admin/supplier-offers/preferred';
 import { store as rates } from '@/routes/admin/supplier-offers/rates';
 import { store as stockAdjustment } from '@/routes/admin/supplier-offers/stock-adjustment';
 import { store as suspension } from '@/routes/admin/supplier-offers/suspension';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Offer = {
     id: string;
@@ -205,7 +206,8 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                 required
                                             >
                                                 {(field) => (
-                                                    <Input
+                                                    <ReasonTextarea
+                                                        context="supplier"
                                                         {...field}
                                                         name="reason"
                                                         required
@@ -241,7 +243,8 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                         )}
                                                     >
                                                         {(field) => (
-                                                            <Input
+                                                            <ReasonTextarea
+                                                                context="supplier"
                                                                 {...field}
                                                                 name="reason"
                                                             />
@@ -337,7 +340,8 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                 required
                                             >
                                                 {(field) => (
-                                                    <Input
+                                                    <ReasonTextarea
+                                                        context="supplier"
                                                         {...field}
                                                         name="reason"
                                                         required

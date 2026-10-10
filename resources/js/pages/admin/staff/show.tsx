@@ -13,6 +13,7 @@ import { confirm as confirmPassword } from '@/routes/password';
 import PlatformStaffController from '@/actions/App/Http/Controllers/Admin/PlatformStaffController';
 import { index as staffIndex } from '@/routes/admin/staff';
 import type { StatusTone } from '@/lib/status';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type StaffMember = {
     public_id: string;
@@ -196,7 +197,8 @@ export default function PlatformStaffShow({
                                             <Label htmlFor="status-reason">
                                                 {t('access.staff.reason')}
                                             </Label>
-                                            <textarea
+                                            <ReasonTextarea
+                                                context="access"
                                                 id="status-reason"
                                                 name="reason"
                                                 rows={2}
@@ -274,7 +276,8 @@ export default function PlatformStaffShow({
                                         <Label htmlFor="roles-reason">
                                             {t('access.staff.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="access"
                                             id="roles-reason"
                                             name="reason"
                                             rows={2}

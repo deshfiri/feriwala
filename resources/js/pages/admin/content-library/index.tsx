@@ -183,5 +183,5 @@ export default function ContentLibraryIndex({ items, can }: Props) {
 }
 
 ContentLibraryIndex.layout = {
-    breadcrumbs: [{ title: 'Content library' }],
+    breadcrumbs: [{ title: 'nav.content_library' }],
 };

@@ -17,6 +17,7 @@ import type { StatusTone } from '@/lib/status';
 import type { ProductLinkSummary } from '@/types';
 import { index } from '@/routes/admin/supplier-listing-lots';
 import { store as decision } from '@/routes/admin/supplier-listing-lots/decision';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Item = {
     id: string;
@@ -546,7 +547,8 @@ export default function AdminSupplierListingLotShow({
                                                 className="sm:col-span-2"
                                             >
                                                 {(field) => (
-                                                    <Input
+                                                    <ReasonTextarea
+                                                        context="supplier"
                                                         {...field}
                                                         value={
                                                             entryDecision.reason

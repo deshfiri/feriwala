@@ -22,6 +22,7 @@ import type {
     ProductStatusChangeRow,
     ProductTransition,
 } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
     product: ProductDetail;
@@ -254,7 +255,8 @@ export default function StatusPanel({
                                         error={errors.reason}
                                     >
                                         {(field) => (
-                                            <textarea
+                                            <ReasonTextarea
+                                                context="product"
                                                 {...field}
                                                 name="reason"
                                                 rows={3}

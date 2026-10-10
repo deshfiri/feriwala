@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type DocumentTypeOption = { id: string; name: string };
 
@@ -128,7 +129,8 @@ export default function RequestKycUpdateDialog({
                                 <Label htmlFor="reason">
                                     {t('account.kyc_update.reason')}
                                 </Label>
-                                <textarea
+                                <ReasonTextarea
+                                    context="account"
                                     id="reason"
                                     name="reason"
                                     rows={2}

@@ -21,6 +21,7 @@ import {
 } from '@/lib/website';
 import { index } from '@/routes/admin/websites';
 import type { WebsiteDetail } from '@/types/website';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
     website: WebsiteDetail;
@@ -158,7 +159,8 @@ export default function AdminWebsiteShow({ website, can, transitions }: Props) {
                                             <Label htmlFor="website-reason">
                                                 {t('website.admin.move_reason')}
                                             </Label>
-                                            <textarea
+                                            <ReasonTextarea
+                                                context="generic"
                                                 id="website-reason"
                                                 name="reason"
                                                 rows={2}

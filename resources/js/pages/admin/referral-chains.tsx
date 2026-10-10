@@ -13,6 +13,7 @@ import ReferralChainController from '@/actions/App/Http/Controllers/Admin/Referr
 import { show } from '@/routes/admin/referral-chains';
 import { index as commissions } from '@/routes/admin/referral-commissions';
 import type { ChainAccount } from '@/types/referral';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type ChainView = {
     account: ChainAccount;
@@ -284,7 +285,8 @@ export default function ReferralChains({
                                                         'referral.chains.reason',
                                                     )}
                                                 </Label>
-                                                <Input
+                                                <ReasonTextarea
+                                                    context="referral"
                                                     id="referrer-reason"
                                                     name="reason"
                                                     minLength={10}

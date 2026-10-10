@@ -23,6 +23,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import RolesController from '@/actions/App/Http/Controllers/Admin/RolesController';
 import { index as rolesIndex } from '@/routes/admin/roles';
 import type { StatusTone } from '@/lib/status';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type RoleSummary = {
     key: string;
@@ -247,7 +248,8 @@ export default function RoleShow({
                                         <Label htmlFor="role-edit-reason">
                                             {t('access.roles.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="access"
                                             id="role-edit-reason"
                                             name="reason"
                                             rows={2}
@@ -399,7 +401,8 @@ export default function RoleShow({
                                         <Label htmlFor="clone-reason">
                                             {t('access.roles.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="access"
                                             id="clone-reason"
                                             name="reason"
                                             rows={2}

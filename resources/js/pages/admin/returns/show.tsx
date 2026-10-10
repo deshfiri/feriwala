@@ -17,6 +17,7 @@ import OrderReturnController from '@/actions/App/Http/Controllers/Admin/OrderRet
 import PaymentRefundController from '@/actions/App/Http/Controllers/Admin/PaymentRefundController';
 import { show as orderShow } from '@/routes/admin/orders';
 import { index } from '@/routes/admin/returns';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type ReturnLine = {
     id: string;
@@ -120,7 +121,8 @@ export default function AdminReturn({
             required
         >
             {(field) => (
-                <textarea
+                <ReasonTextarea
+                    context="return"
                     {...field}
                     name="reason"
                     rows={3}

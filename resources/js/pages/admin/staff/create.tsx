@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import PlatformStaffController from '@/actions/App/Http/Controllers/Admin/PlatformStaffController';
 import { index as staffIndex } from '@/routes/admin/staff';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type RoleOption = {
     key: string;
@@ -120,7 +121,8 @@ export default function PlatformStaffCreate({ roles }: Props) {
                                     <Label htmlFor="staff-reason">
                                         {t('access.staff.reason')}
                                     </Label>
-                                    <textarea
+                                    <ReasonTextarea
+                                        context="access"
                                         id="staff-reason"
                                         name="reason"
                                         rows={2}

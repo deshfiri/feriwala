@@ -19,6 +19,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { index } from '@/routes/admin/deposit-rules';
 import type { Money } from '@/lib/money';
 import type { Column, Paginator } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Option = { value: string | number; label: string };
 
@@ -459,7 +460,8 @@ export default function AdminDepositRules({
                                         <Label htmlFor="rule-reason">
                                             {t('wallet.rules.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="generic"
                                             id="rule-reason"
                                             name="reason"
                                             rows={2}

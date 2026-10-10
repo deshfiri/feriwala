@@ -6,7 +6,6 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
@@ -17,6 +16,7 @@ import { show as chains } from '@/routes/admin/referral-chains';
 import { confirm as confirmPassword } from '@/routes/password';
 import { index } from '@/routes/admin/referral-commissions';
 import type { AccountRef, CommissionRow } from '@/types/referral';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type EventDetail = {
     id: string;
@@ -91,7 +91,8 @@ export default function ReferralEvent({
                 <Label htmlFor={`reason-${id}`}>
                     {t('referral.event.reason')}
                 </Label>
-                <Input
+                <ReasonTextarea
+                    context="referral"
                     id={`reason-${id}`}
                     name="reason"
                     minLength={10}

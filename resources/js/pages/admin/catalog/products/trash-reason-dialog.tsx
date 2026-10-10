@@ -12,6 +12,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
     open: boolean;
@@ -88,7 +89,8 @@ export default function TrashReasonDialog({
                     required
                 >
                     {(field) => (
-                        <textarea
+                        <ReasonTextarea
+                            context="product"
                             {...field}
                             value={reason}
                             onChange={(event) => setReason(event.target.value)}

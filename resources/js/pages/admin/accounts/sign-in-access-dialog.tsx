@@ -13,6 +13,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type Person = {
     id: string;
@@ -94,7 +95,8 @@ export default function SignInAccessDialog({
                                     {t('security.lock.reason')}
                                 </Label>
 
-                                <textarea
+                                <ReasonTextarea
+                                    context="account"
                                     id="reason"
                                     name="reason"
                                     rows={3}

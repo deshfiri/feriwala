@@ -13,6 +13,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type VariantOption = { id: string; label: string };
 
@@ -229,7 +230,8 @@ export default function SourcingGroupShow({
                                             required
                                         >
                                             {(field) => (
-                                                <Input
+                                                <ReasonTextarea
+                                                    context="generic"
                                                     {...field}
                                                     name="reason"
                                                     required
@@ -309,7 +311,8 @@ export default function SourcingGroupShow({
                                             >
                                                 {({ processing }) => (
                                                     <>
-                                                        <Input
+                                                        <ReasonTextarea
+                                                            context="generic"
                                                             name="reason"
                                                             required
                                                             className="h-8 w-44"
@@ -384,7 +387,8 @@ export default function SourcingGroupShow({
                                                                 {match.sku}
                                                             </span>
                                                         </span>
-                                                        <Input
+                                                        <ReasonTextarea
+                                                            context="generic"
                                                             name="reason"
                                                             required
                                                             className="h-8 w-48"
@@ -472,7 +476,8 @@ export default function SourcingGroupShow({
                                             >
                                                 {({ processing }) => (
                                                     <>
-                                                        <Input
+                                                        <ReasonTextarea
+                                                            context="generic"
                                                             name="reason"
                                                             required
                                                             className="h-8 w-44"
@@ -732,7 +737,14 @@ function MappingForm({
                         error={errors.reason ?? errors.group}
                         required
                     >
-                        {(field) => <Input {...field} name="reason" required />}
+                        {(field) => (
+                            <ReasonTextarea
+                                context="generic"
+                                {...field}
+                                name="reason"
+                                required
+                            />
+                        )}
                     </FormField>
 
                     <div className="sm:col-span-2">

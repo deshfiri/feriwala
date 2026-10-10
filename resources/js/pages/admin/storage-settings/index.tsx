@@ -10,6 +10,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Settings = {
     enabled: boolean;
@@ -188,7 +189,8 @@ export default function StorageSettingsIndex({ settings, can }: Props) {
                                         className="mb-3 max-w-md"
                                     >
                                         {(f) => (
-                                            <Input
+                                            <ReasonTextarea
+                                                context="generic"
                                                 {...f}
                                                 name="reason"
                                                 placeholder={t(
@@ -502,7 +504,8 @@ export default function StorageSettingsIndex({ settings, can }: Props) {
                                         className="max-w-md"
                                     >
                                         {(f) => (
-                                            <Input
+                                            <ReasonTextarea
+                                                context="generic"
                                                 {...f}
                                                 name="reason"
                                                 placeholder={t(
