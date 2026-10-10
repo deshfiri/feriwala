@@ -22,12 +22,6 @@ type Props = {
     /** Public ids already picked in this dialog's caller; shown as picked. */
     pickedIds?: string[];
     onPick: (product: ProductLinkSummary) => void;
-    /**
-     * Another endpoint with the same `q` / `exclude[]` contract, for a caller
-     * with its own permission (the Content Library). Defaults to the Product
-     * links search.
-     */
-    searchUrl?: string;
 };
 
 /**
@@ -43,7 +37,6 @@ export default function ProductSearchDialog({
     excludeIds,
     pickedIds = [],
     onPick,
-    searchUrl,
 }: Props) {
     const { t } = useTranslation();
     const [query, setQuery] = useState('');
@@ -72,26 +65,19 @@ export default function ProductSearchDialog({
             setFailed(false);
 
             try {
-                const address =
-                    searchUrl === undefined
-                        ? ProductLinkController.search.url({
-                              query: { q: query.trim(), exclude: excludeIds },
-                          })
-                        : `${searchUrl}?${new URLSearchParams([
-                              ['q', query.trim()],
-                              ...excludeIds.map(
-                                  (id) => ['exclude[]', id] as [string, string],
-                              ),
-                          ]).toString()}`;
-
-                const response = await fetch(address, {
-                    headers: {
-                        Accept: 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
+                const response = await fetch(
+                    ProductLinkController.search.url({
+                        query: { q: query.trim(), exclude: excludeIds },
+                    }),
+                    {
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                        signal: controller.signal,
                     },
-                    credentials: 'same-origin',
-                    signal: controller.signal,
-                });
+                );
 
                 if (!response.ok) {
                     throw new Error('search failed');
@@ -116,7 +102,7 @@ export default function ProductSearchDialog({
             controller.abort();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, open, excludeIds.join(','), searchUrl]);
+    }, [query, open, excludeIds.join(',')]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

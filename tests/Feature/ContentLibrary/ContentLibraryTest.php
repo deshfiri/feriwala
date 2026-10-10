@@ -221,6 +221,15 @@ describe('who may use it', function () {
         expect($item->refresh()->title)->toBe('Care guide');
     });
 
+    it('lists Products for the side panel before any search, and a search narrows the list', function () {
+        $all = collect($this->actingAs($this->staff)->getJson(route('admin.content-library.products'))->assertOk()->json('data'))->pluck('id')->all();
+
+        expect($all)->toContain($this->a->public_id, $this->b->public_id);
+
+        // The Product links search is unchanged: nothing without a real term.
+        $this->getJson(route('admin.catalog.product-links.search', ['q' => '']))->assertForbidden();
+    });
+
     it('searches Products for the picker by BPC and title', function () {
         $found = collect($this->actingAs($this->staff)->getJson(route('admin.content-library.products', ['q' => 'denim']))->assertOk()->json('data'))->pluck('id')->all();
 

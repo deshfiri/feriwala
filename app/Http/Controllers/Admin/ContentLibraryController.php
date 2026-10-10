@@ -196,7 +196,9 @@ class ContentLibraryController extends Controller
         ]);
 
         return response()->json([
-            'data' => $this->summaries->search((string) ($validated['q'] ?? ''), $validated['exclude'] ?? []),
+            // Browsable: the picker opens already listing Products, and a
+            // search narrows that list.
+            'data' => $this->summaries->search((string) ($validated['q'] ?? ''), $validated['exclude'] ?? [], browse: true),
         ]);
     }
 

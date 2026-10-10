@@ -7,7 +7,7 @@ import BlockView from '@/components/content-library/block-view';
 import FormField from '@/components/forms/form-field';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
-import ProductSearchDialog from '@/components/product-links/product-search-dialog';
+import ProductPickerSheet from '@/components/content-library/product-picker-sheet';
 import ProductSummary from '@/components/product-links/product-summary';
 import SectionCard from '@/components/section-card';
 import { Button } from '@/components/ui/button';
@@ -385,19 +385,12 @@ export default function ContentLibraryForm({ item, limits, can }: Props) {
                 </div>
             </PageContainer>
 
-            <ProductSearchDialog
+            <ProductPickerSheet
                 open={searching}
                 onOpenChange={setSearching}
-                excludeIds={[]}
-                pickedIds={products.map((product) => product.id)}
+                selected={products}
+                onChange={setProducts}
                 searchUrl={ContentLibraryController.products.url()}
-                onPick={(picked) =>
-                    setProducts((current) =>
-                        current.some((product) => product.id === picked.id)
-                            ? current
-                            : [...current, picked],
-                    )
-                }
             />
         </>
     );

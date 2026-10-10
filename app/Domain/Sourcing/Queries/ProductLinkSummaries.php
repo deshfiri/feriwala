@@ -25,6 +25,8 @@ class ProductLinkSummaries
 
     public const SEARCH_LIMIT = 15;
 
+    public const BROWSE_LIMIT = 40;
+
     public function __construct(protected ProductMediaStore $media) {}
 
     /**
@@ -103,14 +105,19 @@ class ProductLinkSummaries
      * Products whose BPC, title, SKU or barcode matches — a suggestion list
      * only. Nothing in it is selected, linked or ranked as "probably the same".
      *
+     * With `$browse`, an empty or short term lists Products alphabetically
+     * instead of nothing — for a picker that opens already showing the
+     * catalogue, up to {@see BROWSE_LIMIT} at a time.
+     *
      * @param  list<string>  $excludePublicIds
      * @return list<array<string, mixed>>
      */
-    public function search(string $term, array $excludePublicIds = []): array
+    public function search(string $term, array $excludePublicIds = [], bool $browse = false): array
     {
         $term = trim($term);
+        $filtering = mb_strlen($term) >= 2;
 
-        if (mb_strlen($term) < 2) {
+        if (! $filtering && ! $browse) {
             return [];
         }
 
@@ -118,12 +125,12 @@ class ProductLinkSummaries
 
         $products = Product::query()
             ->when($excludePublicIds !== [], fn (Builder $query) => $query->whereNotIn('public_id', $excludePublicIds))
-            ->where(fn (Builder $query) => $query
+            ->when($filtering, fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
                 ->where('name', 'ilike', $pattern)
                 ->orWhere('sku', 'ilike', $pattern)
-                ->orWhere('barcode', 'ilike', $pattern))
+                ->orWhere('barcode', 'ilike', $pattern)))
             ->orderBy('name')
-            ->limit(self::SEARCH_LIMIT)
+            ->limit($browse ? self::BROWSE_LIMIT : self::SEARCH_LIMIT)
             ->get();
 
         $summaries = $this->for($products);

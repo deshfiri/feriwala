@@ -8,6 +8,7 @@ import {
     Globe,
     HardDrive,
     LayoutGrid,
+    Library,
     MapPin,
     MonitorSmartphone,
     Network,
@@ -307,16 +308,13 @@ export function useNavigation(): {
                     : []),
 
                 ...(permissions['catalog.view'] ||
-                permissions['content_library.view'] ||
                 permissions['sourcing_group.view']
                     ? [
                           {
                               title: 'Catalogue',
                               href: permissions['catalog.view']
                                   ? productCatalogue()
-                                  : permissions['content_library.view']
-                                    ? contentLibrary()
-                                    : sourcingGroups(),
+                                  : sourcingGroups(),
                               icon: ShoppingBag,
                               items: [
                                   ...(permissions['catalog.view']
@@ -341,14 +339,6 @@ export function useNavigation(): {
                                             },
                                         ]
                                       : []),
-                                  ...(permissions['content_library.view']
-                                      ? [
-                                            {
-                                                title: t('nav.content_library'),
-                                                href: contentLibrary(),
-                                            },
-                                        ]
-                                      : []),
                                   ...(permissions['sourcing_group.view']
                                       ? [
                                             {
@@ -358,6 +348,18 @@ export function useNavigation(): {
                                         ]
                                       : []),
                               ],
+                          },
+                      ]
+                    : []),
+
+                // Its own entry: content is released to Products from here, but
+                // it is a library of its own, not part of the catalogue.
+                ...(permissions['content_library.view']
+                    ? [
+                          {
+                              title: t('nav.content_library'),
+                              href: contentLibrary(),
+                              icon: Library,
                           },
                       ]
                     : []),

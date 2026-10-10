@@ -50,6 +50,16 @@ return [
     'save' => 'Save changes',
     'publish' => 'Publish content',
 
+    'picker' => [
+        'title' => 'Select products',
+        'description' => 'Pick the Products this content is released to. Search by BPC, title, SKU or barcode.',
+        'select' => 'Select',
+        'selected' => 'Selected',
+        'count' => ':count selected',
+        'done' => 'Done',
+        'narrow' => 'Showing the first 40. Search to narrow the list.',
+    ],
+
     'editor' => [
         'toolbar' => 'Add a block',
         'add' => 'Add',
