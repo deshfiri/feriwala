@@ -61,6 +61,15 @@ export type LibraryContent = {
     blocks: PresentedBlock[];
 };
 
+/** Library content on one Product's page in the admin, with what the viewer may do. */
+export type ProductLibraryContent = {
+    items: (LibraryContent & {
+        published_by: string | null;
+        products_count: number;
+    })[];
+    can: { publish: boolean; edit: boolean; delete: boolean };
+};
+
 export type LibraryLimits = {
     image_types: string[];
     video_types: string[];

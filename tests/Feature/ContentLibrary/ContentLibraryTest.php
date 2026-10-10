@@ -195,6 +195,29 @@ describe('what partners see', function () {
             ->and($presented[2]['embed_url'])->toBeNull();
     });
 
+    it('shows library content in the admin Product\'s Content section, with what the viewer may do', function () {
+        $admin = testPlatformStaff(PlatformRole::Admin);
+        $this->actingAs($admin)->post(route('admin.content-library.store'), contentLibraryPayload())->assertRedirect();
+        $item = ContentLibraryItem::query()->firstOrFail();
+
+        $this->get(route('admin.catalog.products.edit', $this->a->public_id))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('library_content.items', 1)
+                ->where('library_content.items.0.id', $item->public_id)
+                ->has('library_content.items.0.blocks', 2)
+                ->where('library_content.can.edit', true)
+                ->where('library_content.can.delete', true));
+
+        // A Product it was not released to shows nothing; a viewer without
+        // library access gets no section at all.
+        $this->get(route('admin.catalog.products.edit', $this->b->public_id))
+            ->assertInertia(fn (Assert $page) => $page->has('library_content.items', 0));
+
+        $this->actingAs(testPlatformStaff(PlatformRole::InventoryManager))
+            ->get(route('admin.catalog.products.edit', $this->a->public_id))
+            ->assertInertia(fn (Assert $page) => $page->where('library_content', null));
+    });
+
     it('shows released content on the Product page, and not once it is removed', function () {
         $this->actingAs($this->staff)->post(route('admin.content-library.store'), contentLibraryPayload());
         $item = ContentLibraryItem::query()->firstOrFail();

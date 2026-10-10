@@ -27,6 +27,9 @@ use App\Domain\Catalog\ProductDeletionRule;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
+use App\Domain\ContentLibrary\ContentBlocks;
+use App\Domain\ContentLibrary\Models\ContentLibraryItem;
+use App\Domain\ContentLibrary\Policies\ContentLibraryPolicy;
 use App\Domain\Inventory\Actions\SyncProductStockStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Sourcing\Queries\LinkedProductsSection;
@@ -393,6 +396,11 @@ class ProductController extends Controller
 
             // Updates published for this product, newest first (new feature).
             'content' => $record->contents->map(fn (ProductContent $content) => $this->contentRow($content))->all(),
+
+            // Content Library items released to this product, shown beside its
+            // own updates so everything published for it reads in one place.
+            // Null for someone who may not view the library.
+            'library_content' => $this->libraryContent($record, $actor),
             'content_limits' => [
                 'image_types' => PublishProductContent::IMAGE_TYPES,
                 'file_types' => PublishProductContent::FILE_TYPES,
@@ -400,6 +408,40 @@ class ProductController extends Controller
                 'file_max_mb' => $this->megabytes(PublishProductContent::FILE_MAX_BYTES),
             ],
         ]);
+    }
+
+    /**
+     * @return array{items: list<array<string, mixed>>, can: array<string, bool>}|null
+     */
+    protected function libraryContent(Product $product, User $actor): ?array
+    {
+        if (! ContentLibraryPolicy::canView($actor)) {
+            return null;
+        }
+
+        $blocks = app(ContentBlocks::class);
+
+        return [
+            'items' => $product->libraryContent()
+                ->with('creator:id,name')
+                ->withCount('products')
+                ->get()
+                ->map(fn (ContentLibraryItem $item) => [
+                    'id' => $item->public_id,
+                    'title' => $item->title,
+                    'published_at' => $item->published_at->toIso8601String(),
+                    'published_by' => $item->creator?->name,
+                    'products_count' => (int) $item->getAttribute('products_count'),
+                    'blocks' => $blocks->present($item->blocks),
+                ])
+                ->values()
+                ->all(),
+            'can' => [
+                'publish' => ContentLibraryPolicy::canPublish($actor),
+                'edit' => ContentLibraryPolicy::canEdit($actor),
+                'delete' => ContentLibraryPolicy::canDelete($actor),
+            ],
+        ];
     }
 
     public function update(SaveProductRequest $request, string $product): RedirectResponse

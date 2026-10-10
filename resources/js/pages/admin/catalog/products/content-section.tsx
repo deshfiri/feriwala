@@ -1,17 +1,27 @@
-import { Form, router } from '@inertiajs/react';
-import { FileText, Megaphone, Paperclip, Trash2 } from 'lucide-react';
+import { Form, Link, router } from '@inertiajs/react';
+import { FileText, Megaphone, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import ContentLibraryController from '@/actions/App/Http/Controllers/Admin/ContentLibraryController';
 import ProductContentController from '@/actions/App/Http/Controllers/Admin/ProductContentController';
+import BlockView from '@/components/content-library/block-view';
 import FormField from '@/components/forms/form-field';
 import SectionCard from '@/components/section-card';
 import EmptyState from '@/components/states/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import {
+    create as libraryCreate,
+    edit as libraryEdit,
+    index as libraryIndex,
+} from '@/routes/admin/content-library';
 import type { ContentLimits, ContentRow, ProductDetail } from '@/types';
+import type { ProductLibraryContent } from '@/types/content-library';
 
 type Props = {
     product: ProductDetail;
     content: ContentRow[];
+    /** Content Library items released to this product; null without library access. */
+    library: ProductLibraryContent | null;
     limits: ContentLimits;
     canEdit: boolean;
 };
@@ -31,10 +41,21 @@ const textareaClass =
 export default function ContentSection({
     product,
     content,
+    library,
     limits,
     canEdit,
 }: Props) {
     const { t } = useTranslation();
+
+    const removeLibraryItem = (id: string, title: string) => {
+        if (!window.confirm(t('content_library.delete_confirm', { title }))) {
+            return;
+        }
+
+        router.delete(ContentLibraryController.destroy.url(id), {
+            preserveScroll: true,
+        });
+    };
 
     const remove = (item: ContentRow) => {
         if (!window.confirm(t('catalog.content.delete_confirm'))) {
@@ -56,16 +77,135 @@ export default function ContentSection({
             description={t('catalog.content.description')}
         >
             <div className="space-y-5">
-                {content.length === 0 ? (
-                    <EmptyState
-                        icon={Megaphone}
-                        title={t('catalog.content.empty')}
-                        description={t(
-                            canEdit
-                                ? 'catalog.content.empty_help'
-                                : 'catalog.content.empty_help_read_only',
+                {library !== null && (
+                    <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-sm font-medium">
+                                {t('content_library.on_product.title')}
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={libraryIndex()}>
+                                        {t('content_library.on_product.open')}
+                                    </Link>
+                                </Button>
+                                {library.can.publish && (
+                                    <Button size="sm" asChild>
+                                        <Link href={libraryCreate()}>
+                                            {t('content_library.release')}
+                                        </Link>
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        {library.items.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                {t('content_library.on_product.none')}
+                            </p>
+                        ) : (
+                            <ul className="space-y-3">
+                                {library.items.map((item) => (
+                                    <li
+                                        key={item.id}
+                                        className="space-y-3 rounded-lg border p-4"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="font-medium">
+                                                    {item.title}
+                                                </p>
+                                                <p className="text-muted-foreground text-xs">
+                                                    {new Date(
+                                                        item.published_at,
+                                                    ).toLocaleString()}
+                                                    {item.published_by &&
+                                                        ` · ${item.published_by}`}
+                                                    {' · '}
+                                                    {t(
+                                                        'content_library.on_product.released_to',
+                                                        {
+                                                            count: item.products_count,
+                                                        },
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <div className="flex shrink-0 gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    asChild
+                                                >
+                                                    <Link
+                                                        href={libraryEdit.url(
+                                                            item.id,
+                                                        )}
+                                                    >
+                                                        <Pencil
+                                                            className="size-4"
+                                                            aria-hidden="true"
+                                                        />
+                                                        {library.can.edit
+                                                            ? t(
+                                                                  'common.actions.edit',
+                                                              )
+                                                            : t(
+                                                                  'content_library.open',
+                                                              )}
+                                                    </Link>
+                                                </Button>
+                                                {library.can.delete && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="size-8"
+                                                        onClick={() =>
+                                                            removeLibraryItem(
+                                                                item.id,
+                                                                item.title,
+                                                            )
+                                                        }
+                                                    >
+                                                        <Trash2
+                                                            className="size-4"
+                                                            aria-hidden="true"
+                                                        />
+                                                        <span className="sr-only">
+                                                            {t(
+                                                                'common.actions.delete',
+                                                            )}
+                                                        </span>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <BlockView blocks={item.blocks} />
+                                    </li>
+                                ))}
+                            </ul>
                         )}
-                    />
+                    </div>
+                )}
+
+                {content.length > 0 && library !== null && (
+                    <h3 className="text-sm font-medium">
+                        {t('content_library.on_product.updates')}
+                    </h3>
+                )}
+
+                {content.length === 0 ? (
+                    (library === null || library.items.length === 0) && (
+                        <EmptyState
+                            icon={Megaphone}
+                            title={t('catalog.content.empty')}
+                            description={t(
+                                canEdit
+                                    ? 'catalog.content.empty_help'
+                                    : 'catalog.content.empty_help_read_only',
+                            )}
+                        />
+                    )
                 ) : (
                     <ol className="space-y-0">
                         {content.map((item, index) => (

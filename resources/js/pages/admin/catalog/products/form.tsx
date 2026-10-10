@@ -47,6 +47,7 @@ import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
+import type { ProductLibraryContent } from '@/types/content-library';
 import ContentSection from './content-section';
 import MediaSection from './media-section';
 import PriceTiersSection from './price-tiers-section';
@@ -75,6 +76,8 @@ type Props = {
     related_matches?: RelatedProductRow[];
     seo_preview: SeoPreview | null;
     content: ContentRow[];
+    /** Content Library items released to this product; null without library access. */
+    library_content?: ProductLibraryContent | null;
     content_limits: ContentLimits;
 };
 
@@ -177,6 +180,7 @@ export default function ProductForm({
     related_matches,
     seo_preview,
     content,
+    library_content,
     content_limits,
 }: Props) {
     const { t } = useTranslation();
@@ -990,6 +994,7 @@ export default function ProductForm({
                         <ContentSection
                             product={product}
                             content={content}
+                            library={library_content ?? null}
                             limits={content_limits}
                             canEdit={can.edit}
                         />

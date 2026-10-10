@@ -50,6 +50,14 @@ return [
     'save' => 'Save changes',
     'publish' => 'Publish content',
 
+    'on_product' => [
+        'title' => 'From the content library',
+        'open' => 'Open library',
+        'none' => 'Nothing from the content library is released to this Product yet.',
+        'released_to' => 'Released to :count Product(s)',
+        'updates' => 'Updates posted on this Product',
+    ],
+
     'picker' => [
         'title' => 'Select products',
         'description' => 'Pick the Products this content is released to. Search by BPC, title, SKU or barcode.',
