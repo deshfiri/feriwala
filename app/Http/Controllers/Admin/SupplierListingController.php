@@ -7,6 +7,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Sourcing\Policies\ProductLinkPolicy;
+use App\Domain\Sourcing\Queries\ProductLinkSummaries;
 use App\Domain\Supplier\Actions\DecideSupplierListing;
 use App\Domain\Supplier\Actions\RequestSupplierListingCorrection;
 use App\Domain\Supplier\Enums\ListingStatus;
@@ -103,6 +104,11 @@ class SupplierListingController extends Controller
                 'can_decide' => Gate::allows('decide', $listing) && $mayEditPricing,
                 'may_view_pricing' => $mayViewPricing,
                 'connected_product' => $listing->connectedProduct?->public_id,
+                // Said back in full once it is connected, so the page never asks
+                // "link an existing or create new" again for it.
+                'connected_product_summary' => $listing->connectedProduct === null
+                    ? null
+                    : app(ProductLinkSummaries::class)->one($listing->connectedProduct),
                 'items' => $listing->items->map(fn (SupplierProductListingItem $item) => [
                     'id' => $item->public_id,
                     'variant_label' => $item->variant_label,

@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import ProductConnectField from '@/components/product-links/product-connect-field';
 import ProductLinkPicker from '@/components/product-links/product-link-picker';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -49,6 +50,7 @@ type Entry = {
     status_label: string;
     status_tone: StatusTone;
     connected_product: string | null;
+    connected_product_summary: ProductLinkSummary | null;
     primary_media_url: string | null;
     items: Item[];
 };
@@ -85,6 +87,7 @@ type EntryDecision = {
     reason: string;
     mode: 'connect' | 'create';
     connect_product_id: string;
+    connected: ProductLinkSummary | null;
     sku: string;
     category_id: string;
     linked_products: ProductLinkSummary[];
@@ -118,6 +121,7 @@ export default function AdminSupplierListingLotShow({
             reason: '',
             mode: 'connect',
             connect_product_id: entry.connected_product ?? '',
+            connected: null,
             sku: '',
             category_id: '',
             linked_products: [] as ProductLinkSummary[],
@@ -395,37 +399,44 @@ export default function AdminSupplierListingLotShow({
 
                                     {entryDecision && (
                                         <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+                                            {entry.connected_product_summary && (
+                                                <div className="sm:col-span-2">
+                                                    <ProductConnectField
+                                                        value={null}
+                                                        onChange={() =>
+                                                            undefined
+                                                        }
+                                                        locked={
+                                                            entry.connected_product_summary
+                                                        }
+                                                    />
+                                                </div>
+                                            )}
                                             {!entry.connected_product && (
                                                 <>
-                                                    <FormField
-                                                        label={t(
-                                                            'supplier.admin.listings.product_id',
-                                                        )}
-                                                        error={errorFor(
-                                                            `entries.${entryIndex}.connect_product_id`,
-                                                        )}
-                                                    >
-                                                        {(field) => (
-                                                            <Input
-                                                                {...field}
-                                                                value={
-                                                                    entryDecision.connect_product_id
-                                                                }
-                                                                onChange={(e) =>
-                                                                    setEntry(
-                                                                        entryIndex,
-                                                                        {
-                                                                            mode: 'connect',
-                                                                            connect_product_id:
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        )}
-                                                    </FormField>
+                                                    <div className="sm:col-span-2">
+                                                        <ProductConnectField
+                                                            value={
+                                                                entryDecision.connected
+                                                            }
+                                                            onChange={(next) =>
+                                                                setEntry(
+                                                                    entryIndex,
+                                                                    {
+                                                                        mode: 'connect',
+                                                                        connected:
+                                                                            next,
+                                                                        connect_product_id:
+                                                                            next?.id ??
+                                                                            '',
+                                                                    },
+                                                                )
+                                                            }
+                                                            error={errorFor(
+                                                                `entries.${entryIndex}.connect_product_id`,
+                                                            )}
+                                                        />
+                                                    </div>
                                                     <FormField
                                                         label={t(
                                                             'supplier.admin.listings.sku',
@@ -529,6 +540,14 @@ export default function AdminSupplierListingLotShow({
                                                         }
                                                         excludeProductId={
                                                             entry.connected_product
+                                                        }
+                                                        alsoExclude={
+                                                            entryDecision.mode ===
+                                                            'connect'
+                                                                ? entryDecision
+                                                                      .connected
+                                                                      ?.id
+                                                                : null
                                                         }
                                                         error={errorFor(
                                                             `entries.${entryIndex}.link_product_ids`,

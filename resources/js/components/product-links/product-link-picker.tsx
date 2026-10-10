@@ -1,6 +1,7 @@
 import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
-import ProductSearchDialog from '@/components/product-links/product-search-dialog';
+import ProductLinkController from '@/actions/App/Http/Controllers/Admin/ProductLinkController';
+import ProductPickerSheet from '@/components/content-library/product-picker-sheet';
 import ProductSummary from '@/components/product-links/product-summary';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
@@ -12,6 +13,8 @@ type Props = {
     onChange: (next: ProductLinkSummary[]) => void;
     /** The Product being reviewed, when it already exists: never offered to itself. */
     excludeProductId?: string | null;
+    /** The Product just chosen to connect to, when the listing is not yet connected. */
+    alsoExclude?: string | null;
     error?: string;
 };
 
@@ -19,24 +22,21 @@ type Props = {
  * "Keep this Product unique, or link it with existing Products."
  *
  * Starts empty and stays that way until a person picks: nothing is preselected,
- * and approving without picking anything is the normal, supported outcome.
- * Variations are not matched here; a linked Product's variations stay unmatched
- * (so are never offered as substitutes) until staff match them from the
- * Product's Linked Products section.
+ * and approving without picking anything is the normal, supported outcome. The
+ * Products are chosen in a right-hand panel that lists every Product with
+ * search. Variations are not matched here; a linked Product's variations stay
+ * unmatched (so are never offered as substitutes) until staff match them from
+ * the Product's Linked Products section.
  */
 export default function ProductLinkPicker({
     value,
     onChange,
     excludeProductId = null,
+    alsoExclude = null,
     error,
 }: Props) {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);
-
-    const excluded = [
-        ...(excludeProductId ? [excludeProductId] : []),
-        ...value.map((product) => product.id),
-    ];
 
     return (
         <fieldset className="space-y-3 rounded-lg border p-3">
@@ -100,15 +100,17 @@ export default function ProductLinkPicker({
                 </p>
             )}
 
-            <ProductSearchDialog
+            <ProductPickerSheet
                 open={open}
                 onOpenChange={setOpen}
-                excludeIds={excluded}
-                pickedIds={value.map((product) => product.id)}
-                onPick={(product) => {
-                    onChange([...value, product]);
-                    setOpen(false);
-                }}
+                selected={value}
+                onChange={onChange}
+                searchUrl={ProductLinkController.browse.url()}
+                excludeIds={[excludeProductId, alsoExclude].filter(
+                    (id): id is string => id !== null && id !== undefined,
+                )}
+                title={t('product_links.picker.panel_title')}
+                description={t('product_links.picker.panel_description')}
             />
         </fieldset>
     );

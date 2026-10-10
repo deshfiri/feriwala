@@ -71,7 +71,19 @@ return [
         'remove' => 'Remove match',
     ],
 
+    'connect' => [
+        'choose' => 'Choose an existing Product',
+        'change' => 'Change',
+        'clear' => 'Clear',
+        'connected' => 'Connected to this Product',
+        'locked_help' => 'This listing is already connected, so it will not be asked again. New approvals use this Product.',
+        'panel_title' => 'Choose a Product',
+        'panel_description' => 'Pick the Product this listing connects to. Search by BPC, title, SKU or barcode.',
+    ],
+
     'picker' => [
+        'panel_title' => 'Link with existing Products',
+        'panel_description' => 'Pick every Product that is the same physical Product. Nothing is linked until you publish the decision.',
         'heading' => 'Same Product as an existing one?',
         'help' => 'Optional. Link this Product with existing Products you have confirmed are the same physical Product. Nothing is selected for you.',
         'unique' => 'Keep as a unique Product — not linked to any other.',

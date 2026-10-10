@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import ProductConnectField from '@/components/product-links/product-connect-field';
 import ProductLinkPicker from '@/components/product-links/product-link-picker';
 import TextArea from '@/components/forms/text-area';
 import MoneyAmount from '@/components/money-amount';
@@ -54,6 +55,8 @@ type Props = {
         can_decide: boolean;
         may_view_pricing: boolean;
         connected_product: string | null;
+        /** The connected Product in full, once there is one. */
+        connected_product_summary: ProductLinkSummary | null;
         items: Item[];
     };
     supplier: { id: string; business_name: string; status_label: string };
@@ -107,6 +110,7 @@ export default function AdminSupplierListingShow({
     const form = useForm({
         mode: 'connect' as 'connect' | 'create',
         connect_product_id: '',
+        connected: null as ProductLinkSummary | null,
         sku: '',
         category_id: '',
         linked_products: [] as ProductLinkSummary[],
@@ -394,125 +398,151 @@ export default function AdminSupplierListingShow({
                             </p>
                         ) : (
                             <form onSubmit={submit} className="space-y-6">
-                                <fieldset className="grid gap-3 sm:grid-cols-2">
-                                    <legend className="sr-only">
-                                        {t('supplier.admin.listings.connect')}
-                                    </legend>
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="radio"
-                                            name="mode"
-                                            checked={
-                                                form.data.mode === 'connect'
-                                            }
-                                            onChange={() =>
-                                                form.setData('mode', 'connect')
-                                            }
-                                        />
-                                        {t(
-                                            'supplier.admin.listings.connect_existing',
-                                        )}
-                                    </label>
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="radio"
-                                            name="mode"
-                                            checked={
-                                                form.data.mode === 'create'
-                                            }
-                                            onChange={() =>
-                                                form.setData('mode', 'create')
-                                            }
-                                        />
-                                        {t(
-                                            'supplier.admin.listings.create_new',
-                                        )}
-                                    </label>
-                                </fieldset>
-
-                                {form.data.mode === 'connect' ? (
-                                    <FormField
-                                        label={t(
-                                            'supplier.admin.listings.product_id',
-                                        )}
-                                        error={errorFor('connect_product_id')}
-                                    >
-                                        {(field) => (
-                                            <Input
-                                                {...field}
-                                                value={
-                                                    form.data.connect_product_id
-                                                }
-                                                onChange={(e) =>
-                                                    form.setData(
-                                                        'connect_product_id',
-                                                        e.target.value,
-                                                    )
-                                                }
-                                            />
-                                        )}
-                                    </FormField>
+                                {listing.connected_product_summary ? (
+                                    <ProductConnectField
+                                        value={null}
+                                        onChange={() => undefined}
+                                        locked={
+                                            listing.connected_product_summary
+                                        }
+                                    />
                                 ) : (
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <FormField
-                                            label={t(
-                                                'supplier.admin.listings.sku',
-                                            )}
-                                            error={errorFor('sku')}
-                                            required
-                                        >
-                                            {(field) => (
-                                                <Input
-                                                    {...field}
-                                                    value={form.data.sku}
-                                                    onChange={(e) =>
+                                    <>
+                                        <fieldset className="grid gap-3 sm:grid-cols-2">
+                                            <legend className="sr-only">
+                                                {t(
+                                                    'supplier.admin.listings.connect',
+                                                )}
+                                            </legend>
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="radio"
+                                                    name="mode"
+                                                    checked={
+                                                        form.data.mode ===
+                                                        'connect'
+                                                    }
+                                                    onChange={() =>
                                                         form.setData(
-                                                            'sku',
-                                                            e.target.value,
+                                                            'mode',
+                                                            'connect',
                                                         )
                                                     }
                                                 />
-                                            )}
-                                        </FormField>
-                                        <FormField
-                                            label={t(
-                                                'supplier.admin.listings.category',
-                                            )}
-                                            error={errorFor('category_id')}
-                                        >
-                                            {(field) => (
-                                                <select
-                                                    {...field}
-                                                    value={
-                                                        form.data.category_id
+                                                {t(
+                                                    'supplier.admin.listings.connect_existing',
+                                                )}
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="radio"
+                                                    name="mode"
+                                                    checked={
+                                                        form.data.mode ===
+                                                        'create'
                                                     }
-                                                    onChange={(e) =>
+                                                    onChange={() =>
                                                         form.setData(
-                                                            'category_id',
-                                                            e.target.value,
+                                                            'mode',
+                                                            'create',
                                                         )
                                                     }
-                                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                                >
-                                                    <option value="">—</option>
-                                                    {options.categories.map(
-                                                        (option) => (
-                                                            <option
-                                                                key={
-                                                                    option.value
-                                                                }
-                                                                value={
-                                                                    option.value
-                                                                }
-                                                            >
-                                                                {option.label}
-                                                            </option>
-                                                        ),
+                                                />
+                                                {t(
+                                                    'supplier.admin.listings.create_new',
+                                                )}
+                                            </label>
+                                        </fieldset>
+
+                                        {form.data.mode === 'connect' ? (
+                                            <ProductConnectField
+                                                value={form.data.connected}
+                                                onChange={(next) => {
+                                                    form.setData({
+                                                        ...form.data,
+                                                        connected: next,
+                                                        connect_product_id:
+                                                            next?.id ?? '',
+                                                    });
+                                                }}
+                                                error={errorFor(
+                                                    'connect_product_id',
+                                                )}
+                                            />
+                                        ) : (
+                                            <div className="grid gap-4 sm:grid-cols-2">
+                                                <FormField
+                                                    label={t(
+                                                        'supplier.admin.listings.sku',
                                                     )}
-                                                </select>
-                                            )}
-                                        </FormField>
-                                    </div>
+                                                    error={errorFor('sku')}
+                                                    required
+                                                >
+                                                    {(field) => (
+                                                        <Input
+                                                            {...field}
+                                                            value={
+                                                                form.data.sku
+                                                            }
+                                                            onChange={(e) =>
+                                                                form.setData(
+                                                                    'sku',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    )}
+                                                </FormField>
+                                                <FormField
+                                                    label={t(
+                                                        'supplier.admin.listings.category',
+                                                    )}
+                                                    error={errorFor(
+                                                        'category_id',
+                                                    )}
+                                                >
+                                                    {(field) => (
+                                                        <select
+                                                            {...field}
+                                                            value={
+                                                                form.data
+                                                                    .category_id
+                                                            }
+                                                            onChange={(e) =>
+                                                                form.setData(
+                                                                    'category_id',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                                                        >
+                                                            <option value="">
+                                                                —
+                                                            </option>
+                                                            {options.categories.map(
+                                                                (option) => (
+                                                                    <option
+                                                                        key={
+                                                                            option.value
+                                                                        }
+                                                                        value={
+                                                                            option.value
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            option.label
+                                                                        }
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </select>
+                                                    )}
+                                                </FormField>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
 
                                 {can_link_products && (
@@ -526,6 +556,11 @@ export default function AdminSupplierListingShow({
                                         }
                                         excludeProductId={
                                             listing.connected_product
+                                        }
+                                        alsoExclude={
+                                            form.data.mode === 'connect'
+                                                ? form.data.connected?.id
+                                                : null
                                         }
                                         error={errorFor('link_product_ids')}
                                     />

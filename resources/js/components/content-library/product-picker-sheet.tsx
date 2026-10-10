@@ -23,6 +23,12 @@ type Props = {
     onChange: (next: ProductLinkSummary[]) => void;
     /** An endpoint taking `q` and `page` that lists every Product page by page. */
     searchUrl: string;
+    /** Choose exactly one Product: picking a row selects it and closes the panel. */
+    single?: boolean;
+    /** Products that must not be offered, e.g. the one already being worked on. */
+    excludeIds?: string[];
+    title?: string;
+    description?: string;
 };
 
 /**
@@ -37,6 +43,10 @@ export default function ProductPickerSheet({
     selected,
     onChange,
     searchUrl,
+    single = false,
+    excludeIds = [],
+    title,
+    description,
 }: Props) {
     const { t } = useTranslation();
     const [query, setQuery] = useState('');
@@ -120,27 +130,41 @@ export default function ProductPickerSheet({
     const isSelected = (product: ProductLinkSummary) =>
         selected.some((candidate) => candidate.id === product.id);
 
-    const toggle = (product: ProductLinkSummary) =>
+    const toggle = (product: ProductLinkSummary) => {
+        if (single) {
+            onChange([product]);
+            onOpenChange(false);
+
+            return;
+        }
+
         onChange(
             isSelected(product)
                 ? selected.filter((candidate) => candidate.id !== product.id)
                 : [...selected, product],
         );
+    };
+
+    const shown = (results ?? []).filter(
+        (product) => !excludeIds.includes(product.id),
+    );
 
     // Every listed Product that is not yet chosen, in one press.
     const selectAllShown = () =>
         onChange([
             ...selected,
-            ...(results ?? []).filter((product) => !isSelected(product)),
+            ...shown.filter((product) => !isSelected(product)),
         ]);
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-full sm:max-w-xl">
                 <SheetHeader>
-                    <SheetTitle>{t('content_library.picker.title')}</SheetTitle>
+                    <SheetTitle>
+                        {title ?? t('content_library.picker.title')}
+                    </SheetTitle>
                     <SheetDescription>
-                        {t('content_library.picker.description')}
+                        {description ?? t('content_library.picker.description')}
                     </SheetDescription>
                 </SheetHeader>
 
@@ -160,15 +184,17 @@ export default function ProductPickerSheet({
                             autoFocus
                         />
                     </div>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={results === null || results.length === 0}
-                        onClick={selectAllShown}
-                    >
-                        {t('content_library.picker.select_all')}
-                    </Button>
+                    {!single && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={shown.length === 0}
+                            onClick={selectAllShown}
+                        >
+                            {t('content_library.picker.select_all')}
+                        </Button>
+                    )}
                 </div>
 
                 <div
@@ -187,15 +213,15 @@ export default function ProductPickerSheet({
                         </div>
                     )}
 
-                    {results !== null && results.length === 0 && (
+                    {results !== null && shown.length === 0 && (
                         <p className="text-muted-foreground text-sm">
                             {t('product_links.search.none')}
                         </p>
                     )}
 
-                    {results !== null && results.length > 0 && (
+                    {results !== null && shown.length > 0 && (
                         <ul className="divide-border divide-y rounded-md border">
-                            {results.map((product) => (
+                            {shown.map((product) => (
                                 <li key={product.id} className="p-3">
                                     <ProductSummary
                                         product={product}
@@ -259,9 +285,11 @@ export default function ProductPickerSheet({
 
                 <SheetFooter>
                     <p className="text-muted-foreground me-auto self-center text-sm">
-                        {t('content_library.picker.count', {
-                            count: selected.length,
-                        })}
+                        {single
+                            ? ''
+                            : t('content_library.picker.count', {
+                                  count: selected.length,
+                              })}
                     </p>
                     <Button type="button" onClick={() => onOpenChange(false)}>
                         {t('content_library.picker.done')}

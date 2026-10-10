@@ -7,6 +7,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Sourcing\Policies\ProductLinkPolicy;
+use App\Domain\Sourcing\Queries\ProductLinkSummaries;
 use App\Domain\Supplier\Actions\DecideSupplierListingLot;
 use App\Domain\Supplier\Actions\MatchSupplierListingItemToVariant;
 use App\Domain\Supplier\Enums\LotStatus;
@@ -107,6 +108,9 @@ class SupplierListingLotReviewController extends Controller
                     'status_label' => $entry->status->label(),
                     'status_tone' => $entry->status->tone(),
                     'connected_product' => $entry->connectedProduct?->public_id,
+                    'connected_product_summary' => $entry->connectedProduct === null
+                        ? null
+                        : app(ProductLinkSummaries::class)->one($entry->connectedProduct),
                     'primary_media_url' => $entry->primaryMedia() !== null
                         ? route('supplier.listings.media.download', $entry->primaryMedia()->public_id)
                         : null,

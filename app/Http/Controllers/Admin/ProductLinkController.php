@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Sourcing\Actions\ManageProductLinks;
 use App\Domain\Sourcing\Exceptions\ProductLinkRefused;
 use App\Domain\Sourcing\Models\ProductLink;
@@ -52,6 +56,31 @@ class ProductLinkController extends Controller
         return response()->json([
             'data' => $this->summaries->search((string) ($validated['q'] ?? ''), $validated['exclude'] ?? []),
         ]);
+    }
+
+    /**
+     * Every Product, page by page, for the right-hand panel that picks the
+     * Product a Supplier listing connects to, or the ones it is linked with.
+     * Open to anyone who may link Products, see the catalogue, or approve a
+     * Supplier listing — the people who make that choice.
+     */
+    public function browse(Request $request): JsonResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(
+            ProductLinkPolicy::canView($actor)
+            || CatalogPolicy::canViewAny($actor)
+            || $actor->can(PermissionCatalogue::name(PermissionModule::SupplierListing, PermissionAction::Approve)),
+            403,
+        );
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        return response()->json($this->summaries->listing((string) ($validated['q'] ?? ''), (int) ($validated['page'] ?? 1)));
     }
 
     public function store(Request $request, string $product): RedirectResponse

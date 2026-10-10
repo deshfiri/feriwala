@@ -1158,6 +1158,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('catalog/product-links/search', [ProductLinkController::class, 'search'])
             ->name('catalog.product-links.search');
+        Route::get('catalog/product-links/browse', [ProductLinkController::class, 'browse'])
+            ->name('catalog.product-links.browse');
         Route::post('catalog/products/{product}/links', [ProductLinkController::class, 'store'])
             ->name('catalog.products.links.store');
         Route::delete('catalog/products/{product}/links/{link}', [ProductLinkController::class, 'destroy'])
