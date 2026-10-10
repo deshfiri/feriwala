@@ -139,6 +139,9 @@ class HandleInertiaRequests extends Middleware
         // Product Sourcing Groups under Catalogue.
         [PermissionModule::SourcingGroup, PermissionAction::View],
 
+        // The Content Library under Catalogue.
+        [PermissionModule::ContentLibrary, PermissionAction::View],
+
         // Delivery settings under Shipments & Delivery. The link was gated on
         // this key but the key was never shipped, so it stayed hidden for
         // everyone, Super Admin included.

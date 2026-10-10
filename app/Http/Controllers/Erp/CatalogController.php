@@ -16,6 +16,8 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\WholesalePriceResolver;
+use App\Domain\ContentLibrary\ContentBlocks;
+use App\Domain\ContentLibrary\Models\ContentLibraryItem;
 use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Storage\ManagedStorage;
@@ -191,6 +193,7 @@ class CatalogController extends Controller
             ->where('slug', $slug)
             ->with(['category.parent', 'brand', 'media', 'variants.values.attribute', 'variants.product'])
             ->with(['contents' => fn ($query) => $query->with('attachment')])
+            ->with('libraryContent')
             ->first();
 
         abort_if($product === null, 404);
@@ -326,6 +329,18 @@ class CatalogController extends Controller
                         'mime_type' => $content->attachment->mime_type,
                         'is_image' => str_starts_with($content->attachment->mime_type, 'image/'),
                     ],
+                ])
+                ->all(),
+
+            // Content Library items released to this product, newest first.
+            // Structured blocks the page renders itself, never HTML; removed
+            // items are soft-deleted and so never reach here.
+            'library_content' => $product->libraryContent
+                ->map(fn (ContentLibraryItem $item) => [
+                    'id' => $item->public_id,
+                    'title' => $item->title,
+                    'published_at' => $item->published_at->toIso8601String(),
+                    'blocks' => app(ContentBlocks::class)->present($item->blocks),
                 ])
                 ->all(),
         ]);

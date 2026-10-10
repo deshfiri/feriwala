@@ -3,6 +3,7 @@ import { ArrowLeft, ImageOff, Paperclip, ShoppingBasket } from 'lucide-react';
 import { useState } from 'react';
 import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
+import BlockView from '@/components/content-library/block-view';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import MoneyInput from '@/components/money-input';
@@ -25,6 +26,7 @@ import type {
     ContentRow,
     SalesChannelName,
 } from '@/types';
+import type { LibraryContent } from '@/types/content-library';
 import { ProductCard } from './browse';
 
 type Props = {
@@ -43,6 +45,8 @@ type Props = {
     product_id?: string;
     /** Updates published for this product, newest first (new feature). */
     content: ContentRow[];
+    /** Content Library items released to this product, newest first. */
+    library_content?: LibraryContent[];
     /** Whether stock can stop an order; when off, out-of-stock products can still be added. */
     stock_enforced?: boolean;
 };
@@ -63,6 +67,7 @@ export default function CatalogueProduct({
     websites = [],
     product_id: productId,
     content,
+    library_content: libraryContent = [],
     stock_enforced: stockEnforced = true,
 }: Props) {
     const { t } = useTranslation();
@@ -424,6 +429,18 @@ export default function CatalogueProduct({
                         </ol>
                     </SectionCard>
                 )}
+
+                {libraryContent.map((entry) => (
+                    <SectionCard
+                        key={entry.id}
+                        title={entry.title}
+                        description={new Date(
+                            entry.published_at,
+                        ).toLocaleDateString()}
+                    >
+                        <BlockView blocks={entry.blocks} />
+                    </SectionCard>
+                ))}
 
                 {related.length > 0 && (
                     <SectionCard

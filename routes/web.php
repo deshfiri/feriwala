@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\ContentLibraryController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
@@ -1126,6 +1127,28 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.trash.force-delete.impact');
         Route::delete('catalog/products/trash/{product}/force-delete', [ProductTrashController::class, 'forceDestroy'])
             ->name('catalog.products.trash.force-delete');
+
+        /*
+         * The Content Library: content written once and released to chosen
+         * Products. `content_library.view` to read, `.create` to release,
+         * `.edit` to change, `.delete` to take down.
+         */
+        Route::get('content-library', [ContentLibraryController::class, 'index'])
+            ->name('content-library.index');
+        Route::get('content-library/create', [ContentLibraryController::class, 'create'])
+            ->name('content-library.create');
+        Route::post('content-library', [ContentLibraryController::class, 'store'])
+            ->name('content-library.store');
+        Route::post('content-library/uploads', [ContentLibraryController::class, 'upload'])
+            ->name('content-library.uploads.store');
+        Route::get('content-library/products', [ContentLibraryController::class, 'products'])
+            ->name('content-library.products');
+        Route::get('content-library/{item}/edit', [ContentLibraryController::class, 'edit'])
+            ->name('content-library.edit');
+        Route::patch('content-library/{item}', [ContentLibraryController::class, 'update'])
+            ->name('content-library.update');
+        Route::delete('content-library/{item}', [ContentLibraryController::class, 'destroy'])
+            ->name('content-library.destroy');
 
         /*
          * Same Product links: staff-confirmed, bidirectional connections

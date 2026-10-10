@@ -269,6 +269,12 @@ class PermissionCatalogue
             Module::ProductLink->value => [
                 Action::View, Action::Create, Action::Edit,
             ],
+
+            // The Content Library: `create` releases content to Products,
+            // `edit` changes what was released, `delete` takes it down.
+            Module::ContentLibrary->value => [
+                Action::View, Action::Create, Action::Edit, Action::Delete,
+            ],
         ];
     }
 

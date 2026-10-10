@@ -208,9 +208,12 @@ enum PlatformRole: string
 
                 // Linking Products as the same Product is an administrator's call too.
                 Module::ProductLink->value => [Action::View, Action::Create, Action::Edit],
+                Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
             ],
 
             self::ContentManager => [
+                Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
+                Module::Catalog->value => [Action::View],
                 Module::Cms->value => [...$manage, Action::Publish, Action::Unpublish, Action::Archive],
                 Module::Seo->value => [Action::View, Action::Edit],
             ],
@@ -246,6 +249,7 @@ enum PlatformRole: string
                 Module::SupplierListing->value => [Action::View],
                 Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit, Action::Archive],
                 Module::ProductLink->value => [Action::View, Action::Create, Action::Edit],
+                Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
             ],
 
             self::InventoryManager => [

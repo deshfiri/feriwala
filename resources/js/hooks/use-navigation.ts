@@ -39,6 +39,7 @@ import {
 } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as accountVerificationSettings } from '@/routes/admin/account-verification-settings';
+import { index as contentLibrary } from '@/routes/admin/content-library';
 import { index as productDeletionSettings } from '@/routes/admin/product-deletion-settings';
 import { index as accountWithdrawals } from '@/routes/admin/account-withdrawals';
 import { edit as brandingSettings } from '@/routes/admin/branding';
@@ -360,6 +361,18 @@ export function useNavigation(): {
                                                 title: t('nav.brands'),
                                                 href: productBrands(),
                                             },
+                                            ...(permissions[
+                                                'content_library.view'
+                                            ]
+                                                ? [
+                                                      {
+                                                          title: t(
+                                                              'nav.content_library',
+                                                          ),
+                                                          href: contentLibrary(),
+                                                      },
+                                                  ]
+                                                : []),
                                             {
                                                 title: t(
                                                     'nav.product_deletion_settings',

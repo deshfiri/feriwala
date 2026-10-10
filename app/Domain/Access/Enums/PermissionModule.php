@@ -66,6 +66,9 @@ enum PermissionModule: string
     /** Which Product records are confirmed as the same physical Product (Same Product links). */
     case ProductLink = 'product_link';
 
+    /** Content written once and released to chosen Products (Content Library). */
+    case ContentLibrary = 'content_library';
+
     public function label(): string
     {
         return match ($this) {
@@ -106,6 +109,7 @@ enum PermissionModule: string
             self::DeliverySettings => 'Delivery charge settings',
             self::SourcingGroup => 'Product sourcing groups',
             self::ProductLink => 'Product links',
+            self::ContentLibrary => 'Content library',
         };
     }
 }
