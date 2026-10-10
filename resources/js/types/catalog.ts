@@ -44,6 +44,8 @@ export type ProductRow = {
     wholesale_price: Money;
     status: string;
     status_tone: StatusTone;
+    /** Whether the deletion setting allows this status to be deleted. */
+    is_deletable: boolean;
     is_featured: boolean;
     channels: ProductChannelState[];
     /** The listing image (position one), or null when there is none. */
@@ -128,6 +130,8 @@ export type ProductDetail = {
     maximum_selling_price: Money | null;
     status: string;
     status_tone: StatusTone;
+    /** Whether the deletion setting allows this status to be deleted. */
+    is_deletable: boolean;
     /** The first moment the product went live; never moved afterwards. */
     published_at: string | null;
     channels: ProductChannelState[];

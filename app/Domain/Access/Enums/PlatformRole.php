@@ -182,7 +182,7 @@ enum PlatformRole: string
                     Action::Suspend, Action::Reactivate, Action::ManageSettings,
                 ],
                 Module::Package->value => $manage,
-                Module::Catalog->value => $manage,
+                Module::Catalog->value => [...$manage, Action::ManageSettings],
                 Module::Order->value => [...$manage, ...$review],
                 Module::Inventory->value => $read,
                 Module::Website->value => $manage,

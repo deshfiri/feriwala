@@ -94,6 +94,18 @@ class CatalogRefused extends RuntimeException
     }
 
     /**
+     * The administrator has limited deletion to drafts, and this product is not
+     * one.
+     */
+    public static function productNotDeletableInStatus(string $status): self
+    {
+        return new self(
+            "Only draft products can be deleted right now, and this one is {$status}. "
+            .'Archive it instead, or ask an administrator to change the deletion setting.'
+        );
+    }
+
+    /**
      * Restoring or permanently deleting only ever makes sense for a product
      * that is actually in Trash.
      */
@@ -294,9 +306,11 @@ class CatalogRefused extends RuntimeException
         return new self("Those values make {$count} combinations. Build up to {$max} at a time.");
     }
 
-    public static function noFreeSku(string $base): self
+    public static function noFreeSku(string $base = ''): self
     {
-        return new self("No free BPC could be made from {$base}. Add this variation by hand with a BPC of your choosing.");
+        return $base === ''
+            ? new self('No free BPC could be generated. Enter one by hand, or try saving again.')
+            : new self("No free BPC could be made from {$base}. Add this variation by hand with a BPC of your choosing.");
     }
 
     public static function noFreeBarcode(): self

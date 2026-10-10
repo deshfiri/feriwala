@@ -142,6 +142,13 @@ class SettingsController extends Controller
                         'route' => 'admin.account-verification-settings.index',
                         'permission' => PermissionCatalogue::name(PermissionModule::Account, PermissionAction::ManageSettings),
                     ],
+                    [
+                        'key' => 'product_deletion_settings',
+                        'title' => __('nav.product_deletion_settings'),
+                        'description' => __('settings.hub.items.product_deletion_settings'),
+                        'route' => 'admin.product-deletion-settings.index',
+                        'permission' => PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View),
+                    ],
                 ],
             ],
             [

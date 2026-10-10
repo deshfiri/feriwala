@@ -59,6 +59,7 @@ return [
     'branding' => 'Branding',
     'storage_settings' => 'Storage (R2)',
     'account_verification_settings' => 'Account verification',
+    'product_deletion_settings' => 'Product deletion',
     'stock' => 'Stock',
     'warehouses' => 'Warehouses',
     'reservations' => 'Reservations',

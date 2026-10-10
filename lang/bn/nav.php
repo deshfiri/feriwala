@@ -53,6 +53,7 @@ return [
     'branding' => 'ব্র্যান্ডিং',
     'storage_settings' => 'স্টোরেজ (R2)',
     'account_verification_settings' => 'অ্যাকাউন্ট ভেরিফিকেশন',
+    'product_deletion_settings' => 'পণ্য মুছে ফেলা',
     'stock' => 'স্টক',
     'warehouses' => 'গুদাম',
     'reservations' => 'সংরক্ষণ',

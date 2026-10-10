@@ -14,6 +14,7 @@ use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Catalog\ProductDeletionRule;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Order\Models\OrderItem;
@@ -47,6 +48,7 @@ class ManageProducts
         protected ProductMediaStore $mediaStore,
         protected DatabaseManager $database,
         protected GenerateProductIdentifiers $identifiers,
+        protected ProductDeletionRule $deletionRule,
     ) {}
 
     /**
@@ -92,8 +94,8 @@ class ManageProducts
     }
 
     /**
-     * Take a product out of circulation, whatever its status (urgent
-     * product-management fix).
+     * Take a product out of circulation, in any status the administrator's
+     * deletion setting allows ({@see ProductDeletionRule}).
      *
      * Trash is reversible and touches nothing but this one row: the product
      * disappears from every admin list, partner catalogue, storefront, cart and
@@ -112,6 +114,10 @@ class ManageProducts
         $this->database->transaction(function () use ($actor, $product, $reason) {
             /** @var Product $locked */
             $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+
+            if (! $this->deletionRule->allows($locked->status)) {
+                throw CatalogRefused::productNotDeletableInStatus($locked->status->value);
+            }
 
             $locked->forceFill([
                 'deleted_by' => $actor->id,
@@ -330,10 +336,7 @@ class ManageProducts
          */
         if (array_key_exists('sku', $attributes)) {
             $sku = mb_strtoupper(trim((string) $attributes['sku']));
-            $fallbackName = $product !== null ? $product->name : '';
-            $fields['sku'] = $sku !== ''
-                ? $sku
-                : $this->identifiers->sku((string) ($attributes['name'] ?? $fallbackName));
+            $fields['sku'] = $sku !== '' ? $sku : $this->identifiers->sku();
         }
 
         if (array_key_exists('barcode', $attributes)) {

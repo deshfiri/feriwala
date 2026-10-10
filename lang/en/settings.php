@@ -29,6 +29,7 @@ return [
             'packages' => 'The subscription packages accounts can choose from.',
             'kyc_requirements' => 'The verification documents a business is asked for.',
             'account_verification_settings' => 'Whether mobile number verification is a required onboarding step.',
+            'product_deletion_settings' => 'Which product statuses may be deleted: all statuses, or drafts only.',
             'sms' => 'The SMS gateway and which notifications it sends.',
             'branding' => 'The platform logo and browser icon.',
             'storage' => 'Where uploaded files are kept, and the Cloudflare R2 connection.',

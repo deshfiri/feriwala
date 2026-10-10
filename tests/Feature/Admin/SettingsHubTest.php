@@ -139,7 +139,7 @@ it('shows every section and every item to a Super Admin', function () {
             ->component('admin/settings/index')
             ->has('sections', 4)
             ->has('sections.0.items', 5)
-            ->has('sections.1.items', 5)
+            ->has('sections.1.items', 6)
             ->has('sections.2.items', 2)
             ->where('sections.3.key', 'integrations')
             ->has('sections.3.items', 1)

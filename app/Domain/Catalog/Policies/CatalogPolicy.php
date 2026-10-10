@@ -138,6 +138,15 @@ class CatalogPolicy
         return self::allows($user, PermissionAction::Delete);
     }
 
+    /**
+     * Whether this person may change catalogue-wide rules, such as which
+     * product statuses may be deleted.
+     */
+    public static function canManageSettings(User $user): bool
+    {
+        return self::allows($user, PermissionAction::ManageSettings);
+    }
+
     public static function canArchive(User $user): bool
     {
         return self::allows($user, PermissionAction::Archive);

@@ -59,7 +59,7 @@ function catalogProductPayload(array $overrides = []): array
 {
     return [
         'name' => 'Walton Rice Cooker 2.8L',
-        'sku' => 'fw-rc-28',
+        'sku' => 'fwrc28abc',
         'barcode' => '8941100500012',
         'short_description' => 'Non-stick, 2.8 litre.',
         'description' => 'A rice cooker.',
@@ -131,7 +131,7 @@ describe('only the platform writes products (§12)', function () {
 
         $response->assertRedirect(route('admin.catalog.products.edit', $product->public_id));
 
-        expect($product->sku)->toBe('FW-RC-28')
+        expect($product->sku)->toBe('FWRC28ABC')
             ->and($product->status)->toBe(ProductStatus::Draft)
             ->and($product->currency_code)->toBe('BDT')
             ->and($product->category_id)->toBe($this->category->id)
@@ -144,13 +144,13 @@ describe('only the platform writes products (§12)', function () {
     it('converts Taka form input to an exact flat-Taka decimal', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), catalogProductPayload([
-                'sku' => 'fw-rc-taka',
+                'sku' => 'fwrctaka9',
                 'wholesale_price' => '2490.50',
                 'base_cost' => '1800.25',
             ]))
             ->assertSessionHasNoErrors();
 
-        $product = Product::query()->where('sku', 'FW-RC-TAKA')->firstOrFail();
+        $product = Product::query()->where('sku', 'FWRCTAKA9')->firstOrFail();
 
         expect($product->wholesale_price->toDecimal())->toBe('2490.50')
             ->and($product->base_cost->toDecimal())->toBe('1800.25');
@@ -165,9 +165,10 @@ describe('validation and database constraints', function () {
             ->assertSessionDoesntHaveErrors(['sku', 'barcode']);
     });
 
-    it('generates a BPC and a 13-digit barcode when both are left blank', function () {
+    it('generates a 9-character alphanumeric BPC, not a slug, and a 13-digit barcode when both are left blank', function () {
         $this->actingAs($this->manager)
             ->post(route('admin.catalog.products.store'), catalogProductPayload([
+                'name' => 'Walton Rice Cooker',
                 'sku' => '',
                 'barcode' => '',
             ]))
@@ -175,7 +176,8 @@ describe('validation and database constraints', function () {
 
         $product = Product::query()->firstOrFail();
 
-        expect($product->sku)->toMatch('/^[A-Z0-9][A-Z0-9._-]*$/')
+        expect($product->sku)->toMatch('/^(?=.*[A-Z])(?=.*[0-9])[A-Z0-9]{9}$/')
+            ->and($product->sku)->not->toContain('WALTON')
             ->and($product->barcode)->toMatch('/^\d{13}$/')
             ->and((int) $product->barcode[12])->toBe(
                 ProductBarcode::checkDigit(substr($product->barcode, 0, 12)),
@@ -196,12 +198,20 @@ describe('validation and database constraints', function () {
     });
 
     it('refuses a SKU another product holds, whatever the casing', function () {
-        catalogProduct(['sku' => 'FW-RC-28']);
+        catalogProduct(['sku' => 'FWRC28ABC']);
 
         $this->actingAs($this->manager)
-            ->post(route('admin.catalog.products.store'), catalogProductPayload(['sku' => 'fw-rc-28']))
+            ->post(route('admin.catalog.products.store'), catalogProductPayload(['sku' => 'fwrc28abc']))
             ->assertSessionHasErrors('sku');
     });
+
+    it('refuses a new BPC that is not exactly nine letters or digits', function (string $sku) {
+        $this->actingAs($this->manager)
+            ->post(route('admin.catalog.products.store'), catalogProductPayload(['sku' => $sku]))
+            ->assertSessionHasErrors('sku');
+
+        expect(Product::query()->count())->toBe(0);
+    })->with(['too short' => 'ABC12345', 'too long' => 'ABC1234567', 'slug-like' => 'FW-RC-28', 'symbols' => 'ABC12345!']);
 
     it('refuses SKU characters a label printer and a spreadsheet would disagree about', function () {
         $this->actingAs($this->manager)

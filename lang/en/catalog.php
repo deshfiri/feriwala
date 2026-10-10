@@ -10,6 +10,8 @@ return [
     'forbidden_back' => 'Back to the dashboard',
 
     'products' => [
+        'bpc_format' => 'The BPC must be exactly 9 letters or digits, with no spaces or symbols.',
+        'delete_drafts_only' => 'Only draft products can be deleted. Change this under Settings → Product deletion.',
         'title' => 'Products',
         'description' => 'The central catalogue. Partners select from it and buy from it; nobody outside Feriwala adds to it.',
         'caption' => 'Central products',
@@ -127,7 +129,7 @@ return [
             'slug_placeholder' => 'Left blank, one is made from the name',
             'slug_help' => 'Not changed automatically when the name changes, so storefront links keep working.',
             'sku' => 'BPC',
-            'sku_help' => 'The central BPC. Letters, digits, dots, dashes and underscores; stored in capitals. Left blank, one is made for you.',
+            'sku_help' => 'The central BPC: exactly 9 letters or digits, stored in capitals. Left blank, one is made for you.',
             'barcode' => 'Barcode',
             'barcode_help' => 'A 13-digit EAN-13 code. Left blank, one is generated and ready to download. Two products cannot share a barcode.',
             'download_barcode' => 'Download barcode',

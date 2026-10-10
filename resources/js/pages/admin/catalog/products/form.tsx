@@ -299,7 +299,11 @@ export default function ProductForm({
                                 }
                                 processing={processing}
                                 canSave={writable}
-                                canDelete={editing && can.delete}
+                                canDelete={
+                                    editing &&
+                                    can.delete &&
+                                    (product?.is_deletable ?? false)
+                                }
                                 onDelete={() => setTrashOpen(true)}
                                 deleteError={
                                     formErrors.product ? (

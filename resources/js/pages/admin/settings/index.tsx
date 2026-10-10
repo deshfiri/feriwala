@@ -14,6 +14,7 @@ import {
     ScrollText,
     Settings2,
     ShieldCheck,
+    Trash2,
 } from 'lucide-react';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -50,6 +51,7 @@ const ICONS: Record<string, LucideIcon> = {
     packages: PackageIcon,
     kyc_requirements: ListChecks,
     account_verification_settings: ShieldCheck,
+    product_deletion_settings: Trash2,
     sms: MessageSquare,
     branding: Palette,
     storage: HardDrive,

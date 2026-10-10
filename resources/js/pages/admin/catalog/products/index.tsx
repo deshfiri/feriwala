@@ -935,7 +935,7 @@ function RowLinks({ row, can }: { row: ProductRow; can: CatalogAbilities }) {
                     </span>
                 </Link>
             </Button>
-            {can.delete && (
+            {can.delete && row.is_deletable && (
                 <>
                     <Button
                         variant="ghost"

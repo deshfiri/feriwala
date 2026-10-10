@@ -72,14 +72,24 @@ class SaveProductRequest extends FormRequest
             ],
 
             /*
-             * The central SKU (§12). Letters, digits, dots, dashes and
-             * underscores, starting with a letter or digit — the characters a
-             * label printer, a barcode scanner and a spreadsheet all agree on.
-             * Left blank, {@see \App\Domain\Catalog\Actions\ManageProducts}
-             * invents one rather than demanding it.
+             * The central SKU (§12), the BPC: exactly nine letters or digits,
+             * a code rather than a slug. Left blank,
+             * {@see \App\Domain\Catalog\Actions\ManageProducts} invents one
+             * rather than demanding it. A product that already carries an
+             * older-format BPC keeps it: the format is only asked of a BPC
+             * being set or changed.
              */
             'sku' => [
-                'nullable', 'string', 'max:64', 'regex:/^[A-Z0-9][A-Z0-9._-]*$/',
+                'nullable', 'string', 'max:64',
+                function (string $attribute, mixed $value, Closure $fail) use ($existing): void {
+                    if ($existing !== null && $existing->sku === $value) {
+                        return;
+                    }
+
+                    if (preg_match('/^[A-Z0-9]{9}$/', (string) $value) !== 1) {
+                        $fail(__('catalog.products.bpc_format'));
+                    }
+                },
                 Rule::unique(Product::class, 'sku')->ignore($existing?->id),
 
                 // One namespace with variants; the database trigger holds it too.

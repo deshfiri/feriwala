@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\ProductBulkController;
 use App\Http\Controllers\Admin\ProductChannelController;
 use App\Http\Controllers\Admin\ProductContentController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductDeletionSettingsController;
 use App\Http\Controllers\Admin\ProductEligibilityController;
 use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductMerchandisingController;
@@ -1442,6 +1443,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('account-verification-settings.index');
         Route::put('account-verification-settings', [AccountVerificationSettingsController::class, 'update'])
             ->name('account-verification-settings.update');
+
+        /*
+         * Which product statuses may be deleted -- `catalog.view` to see,
+         * `catalog.manage_settings` to change.
+         */
+        Route::get('product-deletion-settings', [ProductDeletionSettingsController::class, 'index'])
+            ->name('product-deletion-settings.index');
+        Route::put('product-deletion-settings', [ProductDeletionSettingsController::class, 'update'])
+            ->name('product-deletion-settings.update');
 
         /*
          * Platform-wide referral commissions and chains (D24, P7-44). Seen

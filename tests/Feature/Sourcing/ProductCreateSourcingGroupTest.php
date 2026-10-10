@@ -27,7 +27,7 @@ function productCreatePayload(array $overrides = []): array
 {
     return [
         'name' => 'Cotton pants',
-        'sku' => 'CP-100',
+        'sku' => 'CP100ABCD',
         'category_id' => Category::query()->value('public_id'),
         'base_cost' => '700.00',
         'wholesale_price' => '900.00',
@@ -49,7 +49,7 @@ it('adds the new product to the chosen group in the same step, as its canonical 
         ->post(route('admin.catalog.products.store'), productCreatePayload(['sourcing_group_id' => $this->group->public_id]))
         ->assertSessionHasNoErrors();
 
-    $product = Product::query()->where('sku', 'CP-100')->firstOrFail();
+    $product = Product::query()->where('sku', 'CP100ABCD')->firstOrFail();
     $membership = ProductSourcingGroupProduct::query()->active()->where('product_id', $product->id)->firstOrFail();
 
     expect($membership->sourcing_group_id)->toBe($this->group->id)
@@ -60,7 +60,7 @@ it('adds the new product to the chosen group in the same step, as its canonical 
 it('creates the product normally when no group is chosen', function () {
     $this->actingAs($this->manager)->post(route('admin.catalog.products.store'), productCreatePayload())->assertSessionHasNoErrors();
 
-    expect(Product::query()->where('sku', 'CP-100')->exists())->toBeTrue()
+    expect(Product::query()->where('sku', 'CP100ABCD')->exists())->toBeTrue()
         ->and(ProductSourcingGroupProduct::query()->count())->toBe(0);
 });
 
@@ -68,7 +68,7 @@ it('rejects an unknown group without creating the product', function () {
     $this->actingAs($this->manager)->post(route('admin.catalog.products.store'), productCreatePayload(['sourcing_group_id' => 'nope']))
         ->assertSessionHasErrors('sourcing_group_id');
 
-    expect(Product::query()->where('sku', 'CP-100')->exists())->toBeFalse();
+    expect(Product::query()->where('sku', 'CP100ABCD')->exists())->toBeFalse();
 });
 
 it('still creates the product but warns when the group is inactive', function () {
@@ -78,14 +78,14 @@ it('still creates the product but warns when the group is inactive', function ()
         ->post(route('admin.catalog.products.store'), productCreatePayload(['sourcing_group_id' => $this->group->public_id]))
         ->assertSessionHasNoErrors();
 
-    expect(Product::query()->where('sku', 'CP-100')->exists())->toBeTrue()
+    expect(Product::query()->where('sku', 'CP100ABCD')->exists())->toBeTrue()
         ->and(ProductSourcingGroupProduct::query()->count())->toBe(0);
 });
 
 it('never stores the group on the product itself', function () {
     $this->actingAs($this->manager)->post(route('admin.catalog.products.store'), productCreatePayload(['sourcing_group_id' => $this->group->public_id]));
 
-    expect(array_key_exists('sourcing_group_id', Product::query()->where('sku', 'CP-100')->firstOrFail()->getAttributes()))->toBeFalse();
+    expect(array_key_exists('sourcing_group_id', Product::query()->where('sku', 'CP100ABCD')->firstOrFail()->getAttributes()))->toBeFalse();
 });
 
 it('creates the product but does not assign it when the staff member may not change groups', function () {
@@ -97,7 +97,7 @@ it('creates the product but does not assign it when the staff member may not cha
     $this->actingAs($staff->fresh())
         ->post(route('admin.catalog.products.store'), productCreatePayload(['sourcing_group_id' => $this->group->public_id]));
 
-    expect(Product::query()->where('sku', 'CP-100')->exists())->toBeTrue()
+    expect(Product::query()->where('sku', 'CP100ABCD')->exists())->toBeTrue()
         ->and(ProductSourcingGroupProduct::query()->count())->toBe(0);
 
     $this->get(route('admin.catalog.products.create'))

@@ -39,6 +39,7 @@ import {
 } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as accountVerificationSettings } from '@/routes/admin/account-verification-settings';
+import { index as productDeletionSettings } from '@/routes/admin/product-deletion-settings';
 import { index as accountWithdrawals } from '@/routes/admin/account-withdrawals';
 import { edit as brandingSettings } from '@/routes/admin/branding';
 import { index as billingRules } from '@/routes/admin/billing';
@@ -358,6 +359,12 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.brands'),
                                                 href: productBrands(),
+                                            },
+                                            {
+                                                title: t(
+                                                    'nav.product_deletion_settings',
+                                                ),
+                                                href: productDeletionSettings(),
                                             },
                                             {
                                                 title: t('nav.attributes'),

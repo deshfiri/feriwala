@@ -23,6 +23,7 @@ use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Catalog\ProductBarcode;
+use App\Domain\Catalog\ProductDeletionRule;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
@@ -72,6 +73,7 @@ class ProductController extends Controller
         protected WholesalePriceResolver $prices,
         protected ProductSeo $seo,
         protected ManagedStorage $storage,
+        protected ProductDeletionRule $deletionRule,
     ) {}
 
     public function index(Request $request): Response
@@ -458,8 +460,8 @@ class ProductController extends Controller
     }
 
     /**
-     * Move a product to Trash — any status, with a reason always on record
-     * (urgent product-management fix). Reversible: see {@see ProductTrashController}
+     * Move a product to Trash — in any status the deletion setting allows, with
+     * a reason always on record. Reversible: see {@see ProductTrashController}
      * for restoring it, or permanently deleting it once nothing real uses it.
      */
     public function destroy(Request $request, string $product): RedirectResponse
@@ -527,6 +529,7 @@ class ProductController extends Controller
             'wholesale_price' => $product->wholesale_price->jsonSerialize(),
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
+            'is_deletable' => $this->deletionRule->allows($product->status),
             'is_featured' => $product->is_featured,
             'channels' => array_map(fn (SalesChannel $channel) => [
                 'channel' => $channel->value,
@@ -593,6 +596,7 @@ class ProductController extends Controller
 
             'status' => $product->status->value,
             'status_tone' => $product->status->tone(),
+            'is_deletable' => $this->deletionRule->allows($product->status),
             'published_at' => $product->published_at?->toIso8601String(),
 
             // Each channel separately: they are separate decisions (§11.1).

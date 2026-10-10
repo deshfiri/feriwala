@@ -6,7 +6,6 @@ use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductBarcode;
-use Illuminate\Support\Str;
 
 /**
  * A BPC (SKU) or barcode an administrator left blank, invented rather than
@@ -24,25 +23,35 @@ class GenerateProductIdentifiers
     public const MAX_ATTEMPTS = 50;
 
     /**
-     * A BPC built from the product's name, with a random tail so two
-     * products named alike never collide.
+     * A BPC is exactly nine upper-case letters and digits, with at least one
+     * of each — a code, not a slug, so it carries nothing of the product's name.
+     */
+    public const BPC_LENGTH = 9;
+
+    public const BPC_PATTERN = '/^(?=.*[A-Z])(?=.*[0-9])[A-Z0-9]{9}$/';
+
+    private const BPC_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+    /**
+     * A free nine-character alphanumeric BPC.
      *
      * @throws CatalogRefused
      */
-    public function sku(string $name): string
+    public function sku(): string
     {
-        $base = trim((string) preg_replace('/[^A-Z0-9]+/', '-', mb_strtoupper(Str::ascii($name))), '-');
-        $base = $base !== '' ? mb_substr($base, 0, 40) : 'PRODUCT';
-
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
-            $candidate = $base.'-'.mb_strtoupper(Str::random(6));
+            $candidate = '';
 
-            if (! $this->skuTaken($candidate)) {
+            for ($position = 0; $position < self::BPC_LENGTH; $position++) {
+                $candidate .= self::BPC_ALPHABET[random_int(0, strlen(self::BPC_ALPHABET) - 1)];
+            }
+
+            if (preg_match(self::BPC_PATTERN, $candidate) === 1 && ! $this->skuTaken($candidate)) {
                 return $candidate;
             }
         }
 
-        throw CatalogRefused::noFreeSku($base);
+        throw CatalogRefused::noFreeSku();
     }
 
     /**

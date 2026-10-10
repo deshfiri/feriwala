@@ -102,6 +102,9 @@ class PermissionCatalogue
             Module::Catalog->value => [
                 ...self::crud(),
                 Action::Archive, Action::Publish, Action::Unpublish, Action::Export,
+
+                // Catalogue-wide rules, such as which statuses may be deleted.
+                Action::ManageSettings,
             ],
 
             Module::Inventory->value => [
