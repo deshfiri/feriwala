@@ -25,7 +25,7 @@ class ProductLinkSummaries
 
     public const SEARCH_LIMIT = 15;
 
-    public const BROWSE_LIMIT = 40;
+    public const PAGE_SIZE = 40;
 
     public function __construct(protected ProductMediaStore $media) {}
 
@@ -105,36 +105,69 @@ class ProductLinkSummaries
      * Products whose BPC, title, SKU or barcode matches — a suggestion list
      * only. Nothing in it is selected, linked or ranked as "probably the same".
      *
-     * With `$browse`, an empty or short term lists Products alphabetically
-     * instead of nothing — for a picker that opens already showing the
-     * catalogue, up to {@see BROWSE_LIMIT} at a time.
-     *
      * @param  list<string>  $excludePublicIds
      * @return list<array<string, mixed>>
      */
-    public function search(string $term, array $excludePublicIds = [], bool $browse = false): array
+    public function search(string $term, array $excludePublicIds = []): array
     {
         $term = trim($term);
-        $filtering = mb_strlen($term) >= 2;
 
-        if (! $filtering && ! $browse) {
+        if (mb_strlen($term) < 2) {
             return [];
         }
 
+        return $this->summarise($this->matching($term, $excludePublicIds)->limit(self::SEARCH_LIMIT)->get());
+    }
+
+    /**
+     * Every Product, alphabetically, page by page, optionally narrowed by a
+     * term — for a picker that opens already listing the catalogue. Nothing is
+     * ever left out: the next page is always there until `has_more` says not.
+     *
+     * @return array{data: list<array<string, mixed>>, has_more: bool}
+     */
+    public function listing(string $term, int $page): array
+    {
+        $term = trim($term);
+        $page = max(1, $page);
+
+        $rows = $this->matching($term, [])
+            ->offset(($page - 1) * self::PAGE_SIZE)
+            ->limit(self::PAGE_SIZE + 1)
+            ->get();
+
+        return [
+            'data' => $this->summarise($rows->take(self::PAGE_SIZE)),
+            'has_more' => $rows->count() > self::PAGE_SIZE,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $excludePublicIds
+     * @return Builder<Product>
+     */
+    protected function matching(string $term, array $excludePublicIds): Builder
+    {
         $pattern = '%'.addcslashes($term, '%_\\').'%';
 
-        $products = Product::query()
+        return Product::query()
             ->when($excludePublicIds !== [], fn (Builder $query) => $query->whereNotIn('public_id', $excludePublicIds))
-            ->when($filtering, fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
+            ->when($term !== '', fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
                 ->where('name', 'ilike', $pattern)
                 ->orWhere('sku', 'ilike', $pattern)
                 ->orWhere('barcode', 'ilike', $pattern)))
             ->orderBy('name')
-            ->limit($browse ? self::BROWSE_LIMIT : self::SEARCH_LIMIT)
-            ->get();
+            ->orderBy('id');
+    }
 
+    /**
+     * @param  Collection<int, Product>  $products
+     * @return list<array<string, mixed>>
+     */
+    protected function summarise(Collection $products): array
+    {
         $summaries = $this->for($products);
 
-        return array_values(array_map(fn (Product $product) => $summaries[$product->id], $products->all()));
+        return array_values(array_map(fn (Product $product) => $summaries[$product->id], $products->values()->all()));
     }
 }

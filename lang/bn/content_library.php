@@ -57,7 +57,8 @@ return [
         'selected' => 'বাছা হয়েছে',
         'count' => ':count টি বাছা হয়েছে',
         'done' => 'সম্পন্ন',
-        'narrow' => 'প্রথম ৪০টি দেখানো হচ্ছে। তালিকা ছোট করতে খুঁজুন।',
+        'select_all' => 'দেখানো সবগুলো বাছুন',
+        'load_more' => 'আরও দেখুন',
     ],
 
     'editor' => [
@@ -76,8 +77,8 @@ return [
         'text_placeholder' => 'এখানে লিখুন। লাইন ব্রেক থাকবে।',
         'choose_image' => 'একটি ছবি বেছে নিন',
         'choose_video' => 'একটি ভিডিও বেছে নিন',
-        'image_hint' => 'JPEG, PNG বা WebP, সর্বোচ্চ :mb এমবি।',
-        'video_hint' => 'MP4 বা WebM, সর্বোচ্চ :mb এমবি।',
+        'image_hint' => 'JPEG, PNG, WebP, GIF বা AVIF। এখানে কোনো আকারের সীমা নেই।',
+        'video_hint' => 'MP4, WebM, Ogg বা MOV। এখানে কোনো আকারের সীমা নেই।',
         'uploading' => 'আপলোড হচ্ছে…',
         'upload_failed' => 'আপলোড ব্যর্থ হয়েছে। আবার চেষ্টা করুন।',
         'alt' => 'স্ক্রিন রিডারের জন্য বর্ণনা',

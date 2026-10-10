@@ -242,7 +242,6 @@ export default function ContentLibraryForm({ item, limits, can }: Props) {
                                 <Input
                                     {...field}
                                     value={title}
-                                    maxLength={255}
                                     onChange={(event) =>
                                         setTitle(event.target.value)
                                     }

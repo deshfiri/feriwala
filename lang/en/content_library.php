@@ -57,7 +57,8 @@ return [
         'selected' => 'Selected',
         'count' => ':count selected',
         'done' => 'Done',
-        'narrow' => 'Showing the first 40. Search to narrow the list.',
+        'select_all' => 'Select all shown',
+        'load_more' => 'Load more',
     ],
 
     'editor' => [
@@ -76,8 +77,8 @@ return [
         'text_placeholder' => 'Write here. Line breaks are kept.',
         'choose_image' => 'Choose an image',
         'choose_video' => 'Choose a video',
-        'image_hint' => 'JPEG, PNG or WebP, up to :mb MB.',
-        'video_hint' => 'MP4 or WebM, up to :mb MB.',
+        'image_hint' => 'JPEG, PNG, WebP, GIF or AVIF. No size limit set here.',
+        'video_hint' => 'MP4, WebM, Ogg or MOV. No size limit set here.',
         'uploading' => 'Uploading…',
         'upload_failed' => 'The upload failed. Try again.',
         'alt' => 'Description for screen readers',

@@ -21,14 +21,15 @@ type Props = {
     /** The Products chosen so far, in the order picked. */
     selected: ProductLinkSummary[];
     onChange: (next: ProductLinkSummary[]) => void;
-    /** A search endpoint taking `q`, which lists Products even for an empty `q`. */
+    /** An endpoint taking `q` and `page` that lists every Product page by page. */
     searchUrl: string;
 };
 
 /**
  * A right-hand panel that opens already listing Products. Searching narrows the
- * list by BPC, title, SKU or barcode, and each row toggles in or out of the
- * selection, so several Products can be chosen without leaving the panel.
+ * list by BPC, title, SKU or barcode, "Load more" pages through all of them, and
+ * each row toggles in or out of the selection, so any number of Products can be
+ * chosen without leaving the panel.
  */
 export default function ProductPickerSheet({
     open,
@@ -39,28 +40,41 @@ export default function ProductPickerSheet({
 }: Props) {
     const { t } = useTranslation();
     const [query, setQuery] = useState('');
+    const [page, setPage] = useState(1);
     const [results, setResults] = useState<ProductLinkSummary[] | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [failed, setFailed] = useState(false);
+
+    // A new search starts again from the first page.
+    useEffect(() => {
+        setPage(1);
+    }, [query, open]);
 
     useEffect(() => {
         if (!open) {
             setQuery('');
             setResults(null);
+            setHasMore(false);
             setFailed(false);
 
             return;
         }
 
         const controller = new AbortController();
-        // Typing waits a moment; the first, empty load does not.
+        // Typing waits a moment; the first, empty load and "load more" do not.
         const timer = window.setTimeout(
             async () => {
                 setFailed(false);
-                setResults(null);
+                setLoading(true);
+
+                if (page === 1) {
+                    setResults(null);
+                }
 
                 try {
                     const response = await fetch(
-                        `${searchUrl}?${new URLSearchParams({ q: query.trim() }).toString()}`,
+                        `${searchUrl}?${new URLSearchParams({ q: query.trim(), page: String(page) }).toString()}`,
                         {
                             headers: {
                                 Accept: 'application/json',
@@ -77,23 +91,31 @@ export default function ProductPickerSheet({
 
                     const body = (await response.json()) as {
                         data: ProductLinkSummary[];
+                        has_more: boolean;
                     };
 
-                    setResults(body.data);
+                    setResults((current) =>
+                        page === 1
+                            ? body.data
+                            : [...(current ?? []), ...body.data],
+                    );
+                    setHasMore(body.has_more);
                 } catch (error) {
                     if ((error as Error).name !== 'AbortError') {
                         setFailed(true);
                     }
+                } finally {
+                    setLoading(false);
                 }
             },
-            query === '' ? 0 : 300,
+            query === '' || page > 1 ? 0 : 300,
         );
 
         return () => {
             window.clearTimeout(timer);
             controller.abort();
         };
-    }, [open, query, searchUrl]);
+    }, [open, query, page, searchUrl]);
 
     const isSelected = (product: ProductLinkSummary) =>
         selected.some((candidate) => candidate.id === product.id);
@@ -105,6 +127,13 @@ export default function ProductPickerSheet({
                 : [...selected, product],
         );
 
+    // Every listed Product that is not yet chosen, in one press.
+    const selectAllShown = () =>
+        onChange([
+            ...selected,
+            ...(results ?? []).filter((product) => !isSelected(product)),
+        ]);
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-full sm:max-w-xl">
@@ -115,8 +144,8 @@ export default function ProductPickerSheet({
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="px-4">
-                    <div className="relative">
+                <div className="flex items-center gap-2 px-4">
+                    <div className="relative flex-1">
                         <Search
                             className="text-muted-foreground absolute top-2.5 left-3 size-4"
                             aria-hidden="true"
@@ -131,6 +160,15 @@ export default function ProductPickerSheet({
                             autoFocus
                         />
                     </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={results === null || results.length === 0}
+                        onClick={selectAllShown}
+                    >
+                        {t('content_library.picker.select_all')}
+                    </Button>
                 </div>
 
                 <div
@@ -201,10 +239,21 @@ export default function ProductPickerSheet({
                         </ul>
                     )}
 
-                    {results !== null && results.length >= 40 && (
-                        <p className="text-muted-foreground pb-2 text-xs">
-                            {t('content_library.picker.narrow')}
-                        </p>
+                    {hasMore && (
+                        <div className="flex justify-center pb-3">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={loading}
+                                onClick={() =>
+                                    setPage((current) => current + 1)
+                                }
+                            >
+                                {loading && <Spinner />}
+                                {t('content_library.picker.load_more')}
+                            </Button>
+                        </div>
                     )}
                 </div>
 

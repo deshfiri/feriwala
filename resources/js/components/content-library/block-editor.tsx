@@ -53,8 +53,6 @@ export default function BlockEditor({
         {},
     );
 
-    const full = blocks.length >= limits.max_blocks;
-
     const add = (type: EditorBlock['type']) => {
         const key = newKey();
 
@@ -181,7 +179,6 @@ export default function BlockEditor({
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={full}
                         onClick={() => add(type)}
                     >
                         <Icon className="size-4" aria-hidden="true" />
@@ -189,7 +186,7 @@ export default function BlockEditor({
                     </Button>
                 ))}
                 <span className="text-muted-foreground ms-auto px-1 text-xs tabular-nums">
-                    {blocks.length}/{limits.max_blocks}
+                    {blocks.length}
                 </span>
             </div>
 
@@ -275,7 +272,6 @@ export default function BlockEditor({
                                         })
                                     }
                                     rows={5}
-                                    maxLength={limits.text_max}
                                     placeholder={t(
                                         'content_library.editor.text_placeholder',
                                     )}
@@ -284,9 +280,6 @@ export default function BlockEditor({
                                     )}
                                     className={textareaClass}
                                 />
-                                <p className="text-muted-foreground text-end text-xs tabular-nums">
-                                    {block.text.length}/{limits.text_max}
-                                </p>
                             </div>
                         )}
 
@@ -300,9 +293,6 @@ export default function BlockEditor({
                                     accept={limits.image_types.join(',')}
                                     hint={t(
                                         'content_library.editor.image_hint',
-                                        {
-                                            mb: limits.image_max_mb,
-                                        },
                                     )}
                                     onFile={(file) =>
                                         void upload(block.key, 'image', file)
@@ -316,7 +306,6 @@ export default function BlockEditor({
                                         <Input
                                             id={`alt-${block.key}`}
                                             value={block.alt}
-                                            maxLength={255}
                                             onChange={(event) =>
                                                 patch(block.key, {
                                                     alt: event.target.value,
@@ -333,7 +322,6 @@ export default function BlockEditor({
                                         <Input
                                             id={`cap-${block.key}`}
                                             value={block.caption}
-                                            maxLength={500}
                                             onChange={(event) =>
                                                 patch(block.key, {
                                                     caption: event.target.value,
@@ -389,7 +377,6 @@ export default function BlockEditor({
                                         accept={limits.video_types.join(',')}
                                         hint={t(
                                             'content_library.editor.video_hint',
-                                            { mb: limits.video_max_mb },
                                         )}
                                         onFile={(file) =>
                                             void upload(
@@ -412,7 +399,6 @@ export default function BlockEditor({
                                             inputMode="url"
                                             placeholder="https://www.youtube.com/watch?v=…"
                                             value={block.url}
-                                            maxLength={2000}
                                             onChange={(event) =>
                                                 patch(block.key, {
                                                     url: event.target.value,
@@ -434,7 +420,6 @@ export default function BlockEditor({
                                     <Input
                                         id={`vcap-${block.key}`}
                                         value={block.caption}
-                                        maxLength={500}
                                         onChange={(event) =>
                                             patch(block.key, {
                                                 caption: event.target.value,
@@ -457,7 +442,6 @@ export default function BlockEditor({
                                         inputMode="url"
                                         placeholder="https://"
                                         value={block.url}
-                                        maxLength={2000}
                                         onChange={(event) =>
                                             patch(block.key, {
                                                 url: event.target.value,
@@ -472,7 +456,6 @@ export default function BlockEditor({
                                     <Input
                                         id={`label-${block.key}`}
                                         value={block.label}
-                                        maxLength={255}
                                         onChange={(event) =>
                                             patch(block.key, {
                                                 label: event.target.value,
@@ -489,7 +472,6 @@ export default function BlockEditor({
                                     <Input
                                         id={`desc-${block.key}`}
                                         value={block.description}
-                                        maxLength={500}
                                         onChange={(event) =>
                                             patch(block.key, {
                                                 description: event.target.value,

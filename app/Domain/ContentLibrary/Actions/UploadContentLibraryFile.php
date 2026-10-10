@@ -44,7 +44,7 @@ class UploadContentLibraryFile
             purpose: ContentBlocks::PURPOSE,
             visibility: StorageVisibility::Public,
             allowedMimeTypes: $isImage ? ContentBlocks::IMAGE_TYPES : ContentBlocks::VIDEO_TYPES,
-            maxBytes: $isImage ? ContentBlocks::IMAGE_MAX_BYTES : ContentBlocks::VIDEO_MAX_BYTES,
+            maxBytes: ContentBlocks::NO_LIMIT,
             createdBy: $actor->id,
         );
     }

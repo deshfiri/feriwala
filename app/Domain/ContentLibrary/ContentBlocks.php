@@ -26,19 +26,19 @@ class ContentBlocks
 {
     public const TYPES = ['text', 'image', 'video', 'link'];
 
-    public const MAX_BLOCKS = 50;
-
-    public const TEXT_MAX = 20000;
+    /**
+     * No cap on how many blocks, how long a text, or how big a file: nothing in
+     * the library is limited by this application. (The web server's own upload
+     * ceiling still applies to a single file.) Only what a browser may be handed
+     * safely is restricted: SVG is left out because it can carry script.
+     */
+    public const NO_LIMIT = PHP_INT_MAX;
 
     /** @var list<string> */
-    public const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+    public const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 
     /** @var list<string> */
-    public const VIDEO_TYPES = ['video/mp4', 'video/webm'];
-
-    public const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-
-    public const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+    public const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
 
     /** Where every library upload lives, so a block can only name such a file. */
     public const PURPOSE = 'content-library';

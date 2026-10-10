@@ -99,8 +99,8 @@ class SaveContentLibraryItem
      */
     protected function clean(array $blocks): array
     {
-        if ($blocks === [] || count($blocks) > ContentBlocks::MAX_BLOCKS) {
-            throw new InvalidArgumentException('Add between 1 and '.ContentBlocks::MAX_BLOCKS.' blocks.');
+        if ($blocks === []) {
+            throw new InvalidArgumentException('Add at least one block.');
         }
 
         $clean = [];
@@ -109,19 +109,19 @@ class SaveContentLibraryItem
             $type = $block['type'] ?? null;
 
             $clean[] = match ($type) {
-                'text' => ['type' => 'text', 'text' => $this->text($block, 'text', ContentBlocks::TEXT_MAX)],
+                'text' => ['type' => 'text', 'text' => $this->text($block, 'text')],
                 'image' => [
                     'type' => 'image',
                     'file_id' => $this->file($block, ContentBlocks::IMAGE_TYPES),
-                    'alt' => $this->optional($block, 'alt', 255),
-                    'caption' => $this->optional($block, 'caption', 500),
+                    'alt' => $this->optional($block, 'alt'),
+                    'caption' => $this->optional($block, 'caption'),
                 ],
                 'video' => $this->video($block),
                 'link' => [
                     'type' => 'link',
                     'url' => $this->url($block['url'] ?? null),
-                    'label' => $this->text($block, 'label', 255),
-                    'description' => $this->optional($block, 'description', 500),
+                    'label' => $this->text($block, 'label'),
+                    'description' => $this->optional($block, 'description'),
                 ],
                 default => throw new InvalidArgumentException('Unknown content block type.'),
             };
@@ -144,19 +144,21 @@ class SaveContentLibraryItem
         }
 
         return $hasFile
-            ? ['type' => 'video', 'file_id' => $this->file($block, ContentBlocks::VIDEO_TYPES), 'caption' => $this->optional($block, 'caption', 500)]
-            : ['type' => 'video', 'url' => $this->url($block['url']), 'caption' => $this->optional($block, 'caption', 500)];
+            ? ['type' => 'video', 'file_id' => $this->file($block, ContentBlocks::VIDEO_TYPES), 'caption' => $this->optional($block, 'caption')]
+            : ['type' => 'video', 'url' => $this->url($block['url']), 'caption' => $this->optional($block, 'caption')];
     }
 
     /**
+     * Required, and as long as it needs to be.
+     *
      * @param  array<string, mixed>  $block
      */
-    protected function text(array $block, string $key, int $max): string
+    protected function text(array $block, string $key): string
     {
         $value = trim((string) ($block[$key] ?? ''));
 
-        if ($value === '' || mb_strlen($value) > $max) {
-            throw new InvalidArgumentException("A {$key} of 1 to {$max} characters is required.");
+        if ($value === '') {
+            throw new InvalidArgumentException("A {$key} is required.");
         }
 
         return $value;
@@ -165,11 +167,11 @@ class SaveContentLibraryItem
     /**
      * @param  array<string, mixed>  $block
      */
-    protected function optional(array $block, string $key, int $max): ?string
+    protected function optional(array $block, string $key): ?string
     {
         $value = trim((string) ($block[$key] ?? ''));
 
-        return $value === '' ? null : mb_substr($value, 0, $max);
+        return $value === '' ? null : $value;
     }
 
     protected function url(mixed $value): string
@@ -177,7 +179,7 @@ class SaveContentLibraryItem
         $url = trim((string) $value);
         $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
 
-        if ($url === '' || mb_strlen($url) > 2000 || ! in_array($scheme, ['http', 'https'], true) || filter_var($url, FILTER_VALIDATE_URL) === false) {
+        if ($url === '' || ! in_array($scheme, ['http', 'https'], true) || filter_var($url, FILTER_VALIDATE_URL) === false) {
             throw new InvalidArgumentException('Links must be full http or https addresses.');
         }
 

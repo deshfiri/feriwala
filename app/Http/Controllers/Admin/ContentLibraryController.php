@@ -190,16 +190,13 @@ class ContentLibraryController extends Controller
         abort_unless(ContentLibraryPolicy::canPublish($actor) || ContentLibraryPolicy::canEdit($actor), 403);
 
         $validated = $request->validate([
-            'q' => ['nullable', 'string', 'max:100'],
-            'exclude' => ['nullable', 'array', 'max:500'],
-            'exclude.*' => ['string', 'max:40'],
+            'q' => ['nullable', 'string'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        return response()->json([
-            // Browsable: the picker opens already listing Products, and a
-            // search narrows that list.
-            'data' => $this->summaries->search((string) ($validated['q'] ?? ''), $validated['exclude'] ?? [], browse: true),
-        ]);
+        // Every Product, page by page: the panel opens already listing them, a
+        // search narrows the list, and "load more" never runs out early.
+        return response()->json($this->summaries->listing((string) ($validated['q'] ?? ''), (int) ($validated['page'] ?? 1)));
     }
 
     protected function persist(User $actor, ?ContentLibraryItem $item, SaveContentLibraryItemRequest $request): ContentLibraryItem
@@ -221,10 +218,6 @@ class ContentLibraryController extends Controller
         return [
             'image_types' => ContentBlocks::IMAGE_TYPES,
             'video_types' => ContentBlocks::VIDEO_TYPES,
-            'image_max_mb' => intdiv(ContentBlocks::IMAGE_MAX_BYTES, 1024 * 1024),
-            'video_max_mb' => intdiv(ContentBlocks::VIDEO_MAX_BYTES, 1024 * 1024),
-            'max_blocks' => ContentBlocks::MAX_BLOCKS,
-            'text_max' => ContentBlocks::TEXT_MAX,
         ];
     }
 

@@ -64,10 +64,6 @@ export type LibraryContent = {
 export type LibraryLimits = {
     image_types: string[];
     video_types: string[];
-    image_max_mb: number;
-    video_max_mb: number;
-    max_blocks: number;
-    text_max: number;
 };
 
 export type LibraryRow = {

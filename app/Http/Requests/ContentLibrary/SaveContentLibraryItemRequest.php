@@ -29,18 +29,19 @@ class SaveContentLibraryItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title' => ['required', 'string', 'max:255'],
-            'product_ids' => ['required', 'array', 'min:1', 'max:500'],
-            'product_ids.*' => ['required', 'string', 'max:40', 'distinct'],
-            'blocks' => ['required', 'array', 'min:1', 'max:'.ContentBlocks::MAX_BLOCKS],
+            // No length or count limits anywhere: only the shape is checked.
+            'title' => ['required', 'string'],
+            'product_ids' => ['required', 'array', 'min:1'],
+            'product_ids.*' => ['required', 'string', 'distinct'],
+            'blocks' => ['required', 'array', 'min:1'],
             'blocks.*.type' => ['required', Rule::in(ContentBlocks::TYPES)],
-            'blocks.*.text' => ['nullable', 'string', 'max:'.ContentBlocks::TEXT_MAX],
-            'blocks.*.file_id' => ['nullable', 'string', 'max:40'],
-            'blocks.*.url' => ['nullable', 'string', 'max:2000'],
-            'blocks.*.label' => ['nullable', 'string', 'max:255'],
-            'blocks.*.description' => ['nullable', 'string', 'max:500'],
-            'blocks.*.alt' => ['nullable', 'string', 'max:255'],
-            'blocks.*.caption' => ['nullable', 'string', 'max:500'],
+            'blocks.*.text' => ['nullable', 'string'],
+            'blocks.*.file_id' => ['nullable', 'string'],
+            'blocks.*.url' => ['nullable', 'string'],
+            'blocks.*.label' => ['nullable', 'string'],
+            'blocks.*.description' => ['nullable', 'string'],
+            'blocks.*.alt' => ['nullable', 'string'],
+            'blocks.*.caption' => ['nullable', 'string'],
         ];
     }
 }

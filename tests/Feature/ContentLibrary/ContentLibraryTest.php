@@ -52,6 +52,24 @@ describe('releasing content', function () {
             ->and($this->b->libraryContent()->count())->toBe(1);
     });
 
+    it('sets no limit on how many blocks, how long a text or how many Products', function () {
+        $products = collect(range(1, 60))->map(fn ($n) => websiteTestProduct(['name' => "Bulk {$n}"]))->pluck('public_id')->all();
+        $blocks = array_map(fn ($n) => ['type' => 'text', 'text' => "Block {$n}"], range(1, 120));
+        $blocks[] = ['type' => 'text', 'text' => str_repeat('long text ', 5000)];
+
+        $this->actingAs($this->staff)
+            ->post(route('admin.content-library.store'), contentLibraryPayload([
+                'title' => str_repeat('T', 400), 'product_ids' => $products, 'blocks' => $blocks,
+            ]))
+            ->assertSessionHasNoErrors()->assertRedirect();
+
+        $item = ContentLibraryItem::query()->firstOrFail();
+
+        expect($item->blocks)->toHaveCount(121)
+            ->and(mb_strlen($item->title))->toBe(400)
+            ->and($item->products()->count())->toBe(60);
+    });
+
     it('needs a title, at least one Product and at least one block', function () {
         $this->actingAs($this->staff)
             ->post(route('admin.content-library.store'), ['title' => '', 'product_ids' => [], 'blocks' => []])
@@ -225,6 +243,17 @@ describe('who may use it', function () {
         $all = collect($this->actingAs($this->staff)->getJson(route('admin.content-library.products'))->assertOk()->json('data'))->pluck('id')->all();
 
         expect($all)->toContain($this->a->public_id, $this->b->public_id);
+
+        // Past one page, every Product is still reachable: nothing is cut off.
+        foreach (range(1, 45) as $n) {
+            websiteTestProduct(['name' => sprintf('Zed %02d', $n)]);
+        }
+
+        $first = $this->getJson(route('admin.content-library.products', ['q' => 'Zed']))->assertOk()->json();
+        $second = $this->getJson(route('admin.content-library.products', ['q' => 'Zed', 'page' => 2]))->assertOk()->json();
+
+        expect($first['data'])->toHaveCount(40)->and($first['has_more'])->toBeTrue()
+            ->and($second['data'])->toHaveCount(5)->and($second['has_more'])->toBeFalse();
 
         // The Product links search is unchanged: nothing without a real term.
         $this->getJson(route('admin.catalog.product-links.search', ['q' => '']))->assertForbidden();
