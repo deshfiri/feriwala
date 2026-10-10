@@ -10,12 +10,14 @@ return [
      * leaving the reader to work out why two figures differ.
      */
     'balances' => [
-        'total' => 'Total balance',
-        'total_help' => 'Everything in the wallet, including money already spoken for.',
-        'usable' => 'Available to spend',
-        'usable_help' => 'The total, less anything reserved, held or still clearing.',
-        'withdrawable' => 'Available to withdraw',
-        'withdrawable_help' => 'What could leave the wallet, after the deposit you must keep in place.',
+        'details_title' => 'Balance details',
+        'details_description' => 'What sits behind the figures above.',
+        'total' => 'Total Balance',
+        'total_help' => 'Your total wallet balance.',
+        'usable' => 'Available Balance',
+        'usable_help' => 'Available to use for orders and fees.',
+        'withdrawable' => 'Withdrawable Balance',
+        'withdrawable_help' => 'Available to withdraw to your bank or mobile wallet.',
         'required_deposit' => 'Required deposit',
         'required_deposit_help' => 'Held against your trading, not spent.',
         'minimum_balance' => 'Minimum balance',
@@ -26,7 +28,7 @@ return [
         'pending_help' => 'Credited, not yet cleared.',
         'hold' => 'On hold',
         'hold_help' => 'Frozen while something is reviewed.',
-        'cod_receivable' => 'COD receivable',
+        'cod_receivable' => 'COD Awaiting Settlement',
         'cod_receivable_help' => 'Collected by a courier, not yet settled to you.',
     ],
 
