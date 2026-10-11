@@ -417,6 +417,24 @@ describe('the IPN', function () {
         expect($payment->refresh()->status)->toBe(PaymentStatus::Initiated);
     });
 
+    it('settles in the request itself, without waiting for a queue worker', function () {
+        /*
+         * Money paid should be seen as paid at once. The null queue driver
+         * discards anything pushed to it — standing in for a worker that is
+         * not running — so only inline settlement can mark this paid.
+         */
+        config(['queue.default' => 'null']);
+
+        $payment = ($this->start)();
+
+        $this->post(
+            route('webhooks.payment', 'sslcommerz'),
+            gatewayFlowSignedIpn($payment->reference),
+        )->assertOk();
+
+        expect($payment->refresh()->status)->toBe(PaymentStatus::Paid);
+    });
+
     it('refuses an unsigned notification before looking anything up', function () {
         $payment = ($this->start)();
 

@@ -92,6 +92,27 @@ class SettleGatewayNotification implements ShouldQueue
         ];
     }
 
+    /**
+     * Settle now, in this request, and fall back to the queue only if that
+     * could not be done.
+     *
+     * A payer who has just paid should see it paid, and a payment must not wait
+     * on a queue worker that may not be running. Asking the gateway here costs
+     * one verification call; if that fails for any reason — the gateway is
+     * unreachable, anything throws — the same job is queued exactly as before,
+     * with its retries, so nothing that used to be settled eventually stops
+     * being settled. Settlement is idempotent under its own lock, so running it
+     * twice is harmless.
+     */
+    public static function now(int $paymentId, string $gatewayReference, string $source = 'ipn'): void
+    {
+        try {
+            static::dispatchSync($paymentId, $gatewayReference, $source);
+        } catch (Throwable) {
+            static::dispatch($paymentId, $gatewayReference, $source);
+        }
+    }
+
     public function handle(SettlePayment $settle, RecordPaymentLog $logs, LogManager $log): void
     {
         $payment = Payment::query()->find($this->paymentId);

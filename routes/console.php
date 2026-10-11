@@ -178,7 +178,7 @@ Schedule::call(fn () => app(VerifyLedgerIntegrity::class)->handle())
  */
 Schedule::call(fn () => app(ReconcileGatewayPayments::class)->handle())
     ->name('gateway-reconciliation')
-    ->hourly()
+    ->everyTwoMinutes()
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Ask each gateway what it thinks happened to our payments (§28.1)');

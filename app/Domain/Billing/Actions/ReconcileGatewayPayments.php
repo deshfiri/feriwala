@@ -44,10 +44,11 @@ class ReconcileGatewayPayments
     /**
      * How long a payment is left alone before it is worth asking about.
      *
-     * Long enough that an ordinary checkout has finished one way or the other,
-     * short enough that money sitting at a provider is found the same day.
+     * Long enough that an ordinary checkout has finished one way or the other
+     * (the return and notification settle it first), short enough that money
+     * sitting at a provider is found within minutes, not the next hour.
      */
-    public const SETTLE_AFTER_MINUTES = 30;
+    public const SETTLE_AFTER_MINUTES = 2;
 
     /** How many payments one pass will look at. */
     public const BATCH = 200;
