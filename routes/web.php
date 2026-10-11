@@ -332,6 +332,9 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // below stay as the product detail routes and for direct links.
         Route::get('catalog', [BusinessCatalogController::class, 'products'])
             ->name('catalog.index');
+        Route::get('catalog/{product}', [BusinessCatalogController::class, 'product'])
+            ->name('catalog.show')
+            ->where('product', '(?!wholesale$|dropshipping$)[^/]+');
         Route::get('catalog/wholesale', [BusinessCatalogController::class, 'wholesale'])
             ->name('catalog.wholesale.index');
         Route::get('catalog/wholesale/{product}', [BusinessCatalogController::class, 'showWholesale'])

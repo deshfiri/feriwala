@@ -154,6 +154,62 @@ describe('the unified Products page', function () {
     });
 });
 
+describe('the unified product page', function () {
+    it('shows one product with the terms of both ways and every figure the server gives', function () {
+        $this->both->priceTiers()->create(['min_quantity' => 10, 'unit_price' => Money::fromDecimal('1800.00', Currency::BDT)]);
+        $this->both->forceFill([
+            'min_order_quantity' => 2,
+            'maximum_selling_price' => Money::fromDecimal('3000.00', Currency::BDT),
+        ])->save();
+
+        $this->actingAs($this->account->owner)->get(route('catalog.show', $this->both->slug))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('catalog/show')
+                ->where('channel', 'all')
+                ->where('modes', ['wholesale' => true, 'partner_selling' => true])
+                ->where('product.bpc', 'PP-BOTH')
+                ->where('product.package_scope', 'all')
+                ->where('product.wholesale_price.amount', '2000.00')
+                ->where('product.min_order_quantity', 2)
+                ->where('product.quantity_pricing.0.unit_price.amount', '1800.00')
+                ->where('product.suggested_selling_price.amount', '2600.00')
+                ->where('product.minimum_selling_price.amount', '2300.00')
+                ->where('product.maximum_selling_price.amount', '3000.00')
+                ->has('websites')
+                ->missing('product.base_cost'));
+    });
+
+    it('carries only the terms of the way a product is actually offered', function () {
+        $this->actingAs($this->account->owner)->get(route('catalog.show', $this->wholesaleOnly->slug))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('modes', ['wholesale' => true, 'partner_selling' => false])
+                ->where('product.wholesale_price.amount', '2000.00')
+                ->missing('product.suggested_selling_price'));
+
+        $this->get(route('catalog.show', $this->sellingOnly->slug))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('modes', ['wholesale' => false, 'partner_selling' => true])
+                ->missing('product.wholesale_price'));
+    });
+
+    it('is a 404 for a product the account may not use, however the address was typed', function () {
+        $this->actingAs($this->account->owner)->get(route('catalog.show', $this->neither->slug))->assertNotFound();
+
+        $other = partnerProductsProduct('PP-OTHERPKG', 'Other package', $this->category, [
+            'package_scope' => PackageScope::SelectedPackages,
+            'wholesale_status' => ProductStatus::WholesaleEnabled,
+        ]);
+
+        $this->get(route('catalog.show', $other->slug))->assertNotFound();
+    });
+
+    it('does not swallow the channel screens that share its address prefix', function () {
+        $this->actingAs($this->account->owner)->get(route('catalog.wholesale.index'))
+            ->assertInertia(fn (Assert $page) => $page->component('catalog/browse'));
+    });
+});
+
 describe('the wallet quick view', function () {
     it('gives the account its own usable balance and nothing else', function () {
         $wallet = app(OpenWallet::class)->handle($this->account);

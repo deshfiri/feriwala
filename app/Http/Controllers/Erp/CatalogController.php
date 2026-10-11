@@ -234,6 +234,15 @@ class CatalogController extends Controller
         ];
     }
 
+    /**
+     * One product with everything this account may know about it, across both
+     * ways of using it: the same detail the two channel screens show, merged.
+     */
+    public function product(Request $request, string $product): Response
+    {
+        return $this->show($request, null, $product);
+    }
+
     public function showWholesale(Request $request, string $product): Response
     {
         return $this->show($request, SalesChannel::Wholesale, $product);
@@ -338,12 +347,49 @@ class CatalogController extends Controller
         ]);
     }
 
-    protected function show(Request $request, SalesChannel $channel, string $slug): Response
+    /**
+     * The channels this account's package lets it use.
+     *
+     * @return array<int, SalesChannel>
+     */
+    protected function usableChannels(BusinessAccount $account): array
+    {
+        return array_values(array_filter(
+            [SalesChannel::Wholesale, SalesChannel::Dropshipping],
+            fn (SalesChannel $channel) => $this->eligibility->allowsChannel($account, $channel),
+        ));
+    }
+
+    /**
+     * What the account may see: one channel's products, or — with no channel —
+     * every product on any channel its package includes.
+     *
+     * @return Builder<Product>
+     */
+    protected function visibleQuery(BusinessAccount $account, ?SalesChannel $channel): Builder
+    {
+        if ($channel !== null) {
+            return $this->eligibility->query($account, $channel);
+        }
+
+        $channels = $this->usableChannels($account);
+
+        return $this->eligibility->query($account)
+            ->where(function (Builder $inner) use ($channels) {
+                foreach ($channels as $usable) {
+                    $inner->orWhere($usable->column(), $usable->enabled());
+                }
+            })
+            ->when($channels === [], fn (Builder $query) => $query->whereRaw('1 = 0'));
+    }
+
+    protected function show(Request $request, ?SalesChannel $channel, string $slug): Response
     {
         $account = $this->businessAccountFor($request);
+        $channels = $this->usableChannels($account);
 
         /** @var Product|null $product */
-        $product = $this->eligibility->query($account, $channel)
+        $product = $this->visibleQuery($account, $channel)
             ->where('slug', $slug)
             ->with(['category.parent', 'brand', 'media', 'variants.values.attribute', 'variants.product'])
             ->with(['contents' => fn ($query) => $query->with('attachment')])
@@ -352,10 +398,19 @@ class CatalogController extends Controller
 
         abort_if($product === null, 404);
 
-        $wholesale = $channel === SalesChannel::Wholesale;
+        // The ways this product can be used by this account: a single channel
+        // screen is that channel only; the unified page is each that applies.
+        $wholesale = $channel === null
+            ? in_array(SalesChannel::Wholesale, $channels, true) && $product->sellsThrough(SalesChannel::Wholesale)
+            : $channel === SalesChannel::Wholesale;
+        $partnerSelling = $channel === null
+            ? in_array(SalesChannel::Dropshipping, $channels, true) && $product->sellsThrough(SalesChannel::Dropshipping)
+            : $channel === SalesChannel::Dropshipping;
         $available = $wholesale ? $this->orderableUnits($product, $account) : [];
 
         $detail = [
+            'bpc' => $product->sku,
+            'package_scope' => $product->package_scope->value,
             'slug' => $product->slug,
             'name' => $product->name,
             'sku' => $product->sku,
@@ -415,7 +470,9 @@ class CatalogController extends Controller
             // A Non-Conditional account declares a resale/COD amount per line
             // (D-new), bounded by the same guidance a dropshipping partner
             // already sees — so it is surfaced here too, not computed from it.
-            $detail += $this->sellingGuidance($product);
+            if ($channel !== null || $partnerSelling) {
+                $detail += $this->sellingGuidance($product);
+            }
         } else {
             $detail += $this->sellingGuidance($product);
         }
@@ -431,7 +488,7 @@ class CatalogController extends Controller
         /** @var Collection<int, Product> $relatedProducts */
         $relatedProducts = $relatedIds === []
             ? collect()
-            : $this->eligibility->query($account, $channel)
+            : $this->visibleQuery($account, $channel)
                 ->whereIn('id', $relatedIds)
                 ->with(['category:id,name', 'brand:id,name', 'media' => fn ($query) => $query->where('type', ProductMedia::TYPE_IMAGE)])
                 ->withExists('priceTiers')
@@ -439,14 +496,15 @@ class CatalogController extends Controller
                 ->sortBy(fn (Product $related) => $positions[$related->id] ?? PHP_INT_MAX)
                 ->values();
 
-        $relatedStock = $wholesale ? $this->stockStates($relatedProducts, $account) : [];
+        $relatedStock = in_array(SalesChannel::Wholesale, $channels, true) ? $this->stockStates($relatedProducts, $account) : [];
 
         $related = $relatedProducts
-            ->map(fn (Product $related) => $this->card($related, $channel, $relatedStock[$related->id] ?? null))
+            ->map(fn (Product $related) => $this->unifiedCard($related->loadCount('variants'), $channels, $relatedStock[$related->id] ?? null))
             ->all();
 
         return Inertia::render('catalog/show', [
-            'channel' => $channel->value,
+            'channel' => $channel?->value ?? 'all',
+            'modes' => ['wholesale' => $wholesale, 'partner_selling' => $partnerSelling],
             'account_type' => $account->account_type->value,
             'product' => $detail,
             'related' => $related,
@@ -461,7 +519,7 @@ class CatalogController extends Controller
              * is what makes the door reachable from where a partner is already
              * standing.
              */
-            'websites' => $channel === SalesChannel::Dropshipping
+            'websites' => $partnerSelling
                 ? $this->websitesFor($account, $product)
                 : [],
 

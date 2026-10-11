@@ -416,6 +416,8 @@ export type PartnerProductCard = {
 
 export type BrowseDetail = {
     slug: string;
+    bpc?: string;
+    package_scope: 'all' | 'selected';
     name: string;
     sku: string;
     short_description: string | null;

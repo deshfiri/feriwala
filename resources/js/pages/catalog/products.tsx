@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
-import { show as dropshippingShow } from '@/routes/catalog/dropshipping';
+import { show as productShow } from '@/routes/catalog';
 import { show as wholesaleShow } from '@/routes/catalog/wholesale';
 import type { Paginator, PartnerProductCard, SelectOption } from '@/types';
 
@@ -251,7 +251,7 @@ export default function PartnerProducts({
     );
 }
 
-function ProductTile({ product }: { product: PartnerProductCard }) {
+export function ProductTile({ product }: { product: PartnerProductCard }) {
     const { t } = useTranslation();
     const { account } = usePage().props;
     const wholesale = product.wholesale;
@@ -309,7 +309,12 @@ function ProductTile({ product }: { product: PartnerProductCard }) {
 
                 <div className="min-w-0 space-y-0.5">
                     <h3 className="line-clamp-2 leading-snug font-medium">
-                        {product.name}
+                        <Link
+                            href={productShow(product.slug)}
+                            className="focus-visible:ring-ring rounded-sm hover:underline focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                            {product.name}
+                        </Link>
                     </h3>
                     <p className="text-muted-foreground truncate text-xs">
                         {t('partner_products.details.bpc')} {product.bpc}
@@ -449,18 +454,16 @@ function ProductTile({ product }: { product: PartnerProductCard }) {
                     )}
                     {canPublish && (
                         <Button asChild size="sm" variant="outline">
-                            <Link href={dropshippingShow(product.slug)}>
+                            <Link href={productShow(product.slug)}>
                                 {t('partner_products.actions.publish')}
                             </Link>
                         </Button>
                     )}
-                    {!wholesale && !canPublish && (
-                        <Button asChild size="sm" variant="outline">
-                            <Link href={dropshippingShow(product.slug)}>
-                                {t('partner_products.actions.view')}
-                            </Link>
-                        </Button>
-                    )}
+                    <Button asChild size="sm" variant="ghost">
+                        <Link href={productShow(product.slug)}>
+                            {t('partner_products.actions.view')}
+                        </Link>
+                    </Button>
                 </div>
             </div>
         </Card>
