@@ -27,6 +27,7 @@ import type { StatusTone } from '@/lib/status';
 import { index } from '@/routes/admin/inventory/reservations';
 import { show as stockItem } from '@/routes/admin/inventory/stock';
 import type { Column, Paginator } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type ReservationRow = {
     id: string;
@@ -372,7 +373,8 @@ export default function AdminReservations({
                                         <Label htmlFor="stock-enforced-reason">
                                             {t('inventory.reservations.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="stock"
                                             id="stock-enforced-reason"
                                             name="reason"
                                             rows={2}
@@ -587,7 +589,8 @@ export default function AdminReservations({
                                         <Label htmlFor="override-reason">
                                             {t('inventory.reservations.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="stock"
                                             id="override-reason"
                                             name="reason"
                                             rows={3}

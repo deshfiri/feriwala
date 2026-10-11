@@ -2,13 +2,13 @@ import { Form, Head } from '@inertiajs/react';
 import ManagedAccountController from '@/actions/App/Http/Controllers/Admin/ManagedAccountController';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
-import TextArea from '@/components/forms/text-area';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { SelectOption } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 /**
  * Staff opening a Client/Partner account on someone's behalf. There is no
@@ -148,7 +148,8 @@ export default function CreateAccount({
                                     required
                                 >
                                     {(field) => (
-                                        <TextArea
+                                        <ReasonTextarea
+                                            context="account"
                                             {...field}
                                             name="reason"
                                             required

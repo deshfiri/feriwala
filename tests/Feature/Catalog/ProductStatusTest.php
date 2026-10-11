@@ -103,8 +103,32 @@ describe('moving a product', function () {
             ->toBe(['active', 'inactive', 'active', 'pending_review']);
     });
 
-    it('refuses a move the lifecycle does not declare', function () {
+    it('lets somebody who may publish activate a draft directly, without a separate review step', function () {
         [$url, $payload] = catalogStatusMove($this->product, 'active');
+
+        $this->actingAs($this->manager)->patch($url, $payload)->assertSessionHasNoErrors()->assertRedirect();
+
+        expect($this->product->refresh()->status)->toBe(ProductStatus::Active)
+            ->and($this->product->published_at)->not->toBeNull();
+    });
+
+    it('still checks a draft is ready before activating it, and who may publish', function () {
+        $this->product->forceFill(['wholesale_price' => Money::zero(Currency::BDT)])->save();
+
+        [$url, $payload] = catalogStatusMove($this->product, 'active');
+        $this->actingAs($this->manager)->patch($url, $payload)->assertSessionHasErrors();
+
+        expect($this->product->refresh()->status)->toBe(ProductStatus::Draft);
+
+        $this->product->forceFill(['wholesale_price' => Money::fromDecimal('2500.00', Currency::BDT)])->save();
+
+        $this->actingAs(testPlatformStaff(PlatformRole::Admin))->patch($url, $payload)->assertForbidden();
+
+        expect($this->product->refresh()->status)->toBe(ProductStatus::Draft);
+    });
+
+    it('refuses a move the lifecycle does not declare', function () {
+        [$url, $payload] = catalogStatusMove($this->product, 'inactive');
 
         $this->actingAs($this->manager)->patch($url, $payload)->assertSessionHasErrors('status');
 
@@ -225,13 +249,12 @@ describe('the record of every move', function () {
             ->toThrow(QueryException::class);
     });
 
-    it('keeps a draft that has been through review from being permanently deleted', function () {
+    it('keeps a product that left Draft from being permanently deleted', function () {
         app(TransitionProduct::class)->handle($this->manager, $this->product, ProductStatus::PendingReview);
-        app(TransitionProduct::class)->handle($this->manager, $this->product->refresh(), ProductStatus::Draft);
 
         app(ManageProducts::class)->trash($this->manager, $this->product->refresh(), 'Test.');
 
         expect(fn () => app(ManageProducts::class)->permanentlyDelete($this->manager, $this->product->refresh()))
-            ->toThrow(CatalogRefused::class, 'lifecycle history');
+            ->toThrow(CatalogRefused::class, 'still a draft');
     });
 });

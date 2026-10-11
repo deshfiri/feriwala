@@ -1,5 +1,5 @@
 import { Head, router } from '@inertiajs/react';
-import { ArchiveX, RotateCcw, Trash2 } from 'lucide-react';
+import { ArchiveX, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import ProductTrashController from '@/actions/App/Http/Controllers/Admin/ProductTrashController';
 import AlertError from '@/components/alert-error';
@@ -10,13 +10,14 @@ import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTableQuery } from '@/hooks/use-table-query';
+import ForceDeleteDialog from './force-delete-dialog';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as productsIndex } from '@/routes/admin/catalog/products';
 import type { Column, Paginator, TrashedProductRow } from '@/types';
 
 type Props = {
     products: Paginator<TrashedProductRow>;
-    can: { delete: boolean };
+    can: { delete: boolean; force_delete: boolean };
 };
 
 /**
@@ -148,10 +149,11 @@ function RowActions({
     setError,
 }: {
     row: TrashedProductRow;
-    can: { delete: boolean };
+    can: { delete: boolean; force_delete: boolean };
     setError: (error: string | undefined) => void;
 }) {
     const { t } = useTranslation();
+    const [forceOpen, setForceOpen] = useState(false);
 
     if (!can.delete) {
         return null;
@@ -199,6 +201,23 @@ function RowActions({
                 <Trash2 className="text-danger size-4" aria-hidden="true" />
                 {t('catalog.products.trash.permanent_delete')}
             </Button>
+            {can.force_delete && (
+                <>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setForceOpen(true)}
+                    >
+                        <ShieldAlert className="size-4" aria-hidden="true" />
+                        {t('catalog.products.force_delete.button')}
+                    </Button>
+                    <ForceDeleteDialog
+                        row={row}
+                        open={forceOpen}
+                        onOpenChange={setForceOpen}
+                    />
+                </>
+            )}
         </div>
     );
 }

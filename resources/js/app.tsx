@@ -21,7 +21,6 @@ router.on('success', (event) => syncDocumentLocale(event.detail.page.props));
  */
 const fullScreenPages = new Set([
     'welcome',
-    'auth/login',
     'supplier/auth/login',
     'supplier/auth/register',
 ]);

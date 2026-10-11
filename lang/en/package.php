@@ -2,7 +2,7 @@
 
 return [
     'title' => 'Packages',
-    'description' => 'What Feriwala sells, and what each plan grants.',
+    'description' => 'What Banij sells, and what each plan grants.',
     'nav' => 'Packages',
 
     'empty_title' => 'No packages yet',

@@ -2,7 +2,9 @@
 
 return [
     'title' => 'Sourcing groups',
-    'description' => 'Groups of catalogue products that can fulfil the same order. Suppliers and warehouses holding any product in a group appear together when allocating an order.',
+    'description' => 'The older way of grouping catalogue products that can fulfil the same order. Kept as history.',
+    'legacy_notice_title' => 'No longer used for allocation',
+    'legacy_notice' => 'Order allocation now follows Same Product links, set from a Product\'s Linked Products tab. Groups already here were converted into links and are kept only as a record.',
     'search_placeholder' => 'Search by code or name',
     'all_statuses' => 'All statuses',
     'create' => 'New group',

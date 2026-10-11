@@ -105,7 +105,7 @@ return [
 
     'staff' => [
         'title' => 'Platform staff',
-        'description' => 'Everyone who administers Feriwala, and the role each one holds.',
+        'description' => 'Everyone who administers Banij, and the role each one holds.',
         'search_placeholder' => 'Search by name or email',
         'empty_title' => 'No platform staff yet',
         'empty_description' => 'A platform staff login has no business account (D23).',
@@ -143,7 +143,7 @@ return [
         'activate' => 'Activate',
         'suspend' => 'Suspend',
         'deactivate' => 'Deactivate',
-        'confirm_activate' => 'Restore this person\'s access to Feriwala.',
+        'confirm_activate' => 'Restore this person\'s access to Banij.',
         'confirm_suspend' => 'Suspend this person\'s sign-in until it is restored.',
         'confirm_deactivate' => 'Permanently close this person\'s sign-in.',
         'deactivate_is_permanent' => 'This cannot be undone. A closed login can never be reactivated.',

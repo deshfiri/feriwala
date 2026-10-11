@@ -53,8 +53,11 @@ enum ProductStatus: string implements TransitionableState
     public function transitionsTo(): array
     {
         return match ($this) {
-            // Nothing reaches a partner without somebody reviewing it first.
-            self::Draft => [self::PendingReview, self::Archived],
+            // Nothing reaches a partner without somebody who may publish
+            // deciding it. Someone holding that permission is the reviewer, so
+            // they go straight to Active; Pending Review remains for an author
+            // who cannot publish to hand it on.
+            self::Draft => [self::PendingReview, self::Active, self::Archived],
 
             // Review ends in approval or a return to the author.
             self::PendingReview => [self::Draft, self::Active, self::Archived],

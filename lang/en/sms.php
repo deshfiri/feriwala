@@ -43,11 +43,11 @@ return [
      * as one message in English can quietly cost three in Bangla.
      */
     'templates' => [
-        'mobile_verification' => 'Your Feriwala verification code is :code. It expires in 5 minutes. Do not share it with anyone.',
+        'mobile_verification' => 'Your Banij verification code is :code. It expires in 5 minutes. Do not share it with anyone.',
         'cod_confirmation' => 'Your code to confirm order :reference is :code. It expires in 5 minutes. Do not share it with anyone.',
-        'kyc_deadline_missed' => 'Your Feriwala verification deadline has passed. Send your documents to restore your account.',
-        'account_activated' => 'Your Feriwala account is now active. You can sign in and start trading.',
-        'payment_received' => 'Feriwala received your payment of :amount. Reference :reference.',
+        'kyc_deadline_missed' => 'Your Banij verification deadline has passed. Send your documents to restore your account.',
+        'account_activated' => 'Your Banij account is now active. You can sign in and start trading.',
+        'payment_received' => 'Banij received your payment of :amount. Reference :reference.',
         'payment_received_subject' => 'We received your payment',
     ],
 

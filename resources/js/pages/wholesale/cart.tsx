@@ -13,10 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import {
-    index as wholesaleIndex,
-    show as wholesaleProduct,
-} from '@/routes/catalog/wholesale';
+import { index as wholesaleIndex } from '@/routes/catalog';
+import { show as wholesaleProduct } from '@/routes/catalog/wholesale';
 import { show } from '@/routes/wholesale/cart';
 import { show as checkoutShow } from '@/routes/wholesale/checkout';
 import type { CartLine, CartProblem, CartSummary } from '@/types/wholesale';

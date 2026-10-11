@@ -14,6 +14,7 @@ use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
+use App\Domain\ContentLibrary\Models\ContentLibraryItem;
 use App\Domain\Package\Models\Package;
 use App\Models\User;
 use App\Support\Money\Money;
@@ -350,5 +351,16 @@ class Product extends Model
     public function contents(): HasMany
     {
         return $this->hasMany(ProductContent::class)->orderByDesc('published_at');
+    }
+
+    /**
+     * Content Library items released to this product, newest first.
+     *
+     * @return BelongsToMany<ContentLibraryItem, $this>
+     */
+    public function libraryContent(): BelongsToMany
+    {
+        return $this->belongsToMany(ContentLibraryItem::class, 'content_library_item_product')
+            ->orderByDesc('content_library_items.published_at');
     }
 }

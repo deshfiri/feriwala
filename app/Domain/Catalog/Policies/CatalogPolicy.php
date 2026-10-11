@@ -4,6 +4,7 @@ namespace App\Domain\Catalog\Policies;
 
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Brand;
@@ -136,6 +137,17 @@ class CatalogPolicy
     public static function canDelete(User $user): bool
     {
         return self::allows($user, PermissionAction::Delete);
+    }
+
+    /**
+     * Whether this person may Force Delete a Product or purge a Category tree.
+     *
+     * Super Admin only. Not a permission that can be granted to a custom role:
+     * it erases the live record of a Product that has history behind it.
+     */
+    public static function canForceDelete(User $user): bool
+    {
+        return $user->hasRole(PlatformRole::SuperAdmin->value);
     }
 
     /**

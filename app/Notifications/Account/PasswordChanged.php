@@ -41,7 +41,7 @@ class PasswordChanged extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $message = (new MailMessage)
-            ->subject(__('Your Feriwala password was changed'))
+            ->subject(__('Your Banij password was changed'))
             ->line($this->viaReset
                 ? __('Your password was changed using a reset link.')
                 : __('Your password was changed from your security settings.'));

@@ -3,9 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
-import SourcingGroupPicker, {
-    type SourcingGroupOption,
-} from '@/components/sourcing-group-picker';
+import ProductConnectField from '@/components/product-links/product-connect-field';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -16,8 +14,10 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
+import type { ProductLinkSummary } from '@/types';
 import { index } from '@/routes/admin/supplier-listing-lots';
 import { store as decision } from '@/routes/admin/supplier-listing-lots/decision';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Item = {
     id: string;
@@ -49,7 +49,7 @@ type Entry = {
     status_label: string;
     status_tone: StatusTone;
     connected_product: string | null;
-    connected_group: string | null;
+    connected_product_summary: ProductLinkSummary | null;
     primary_media_url: string | null;
     items: Item[];
 };
@@ -68,20 +68,15 @@ type Props = {
     };
     supplier: { id: string; business_name: string };
     options: { categories: { value: string; label: string }[] };
-    /** Staff-only: the groups an approved offer can fulfil orders through. */
-    sourcing: {
-        groups: SourcingGroupOption[];
-        can_select: boolean;
-        can_create: boolean;
-    };
 };
 
 type ItemDecision = {
     item_id: string;
     decision: 'skip' | 'approve' | 'reject' | 'correction';
     variant_id: string;
-    canonical_variant_id: string;
     platform_rate: string;
+    /** Blank keeps the Supplier's own proposed Supplier Base Price. */
+    supplier_rate: string;
     approved_quantity: string;
     note: string;
 };
@@ -91,9 +86,9 @@ type EntryDecision = {
     reason: string;
     mode: 'connect' | 'create';
     connect_product_id: string;
+    connected: ProductLinkSummary | null;
     sku: string;
     category_id: string;
-    sourcing_group_id: string;
     items: ItemDecision[];
 };
 
@@ -110,7 +105,6 @@ export default function AdminSupplierListingLotShow({
     lot,
     supplier,
     options,
-    sourcing,
 }: Props) {
     const { t, locale } = useTranslation();
 
@@ -124,17 +118,17 @@ export default function AdminSupplierListingLotShow({
             reason: '',
             mode: 'connect',
             connect_product_id: entry.connected_product ?? '',
+            connected: null,
             sku: '',
             category_id: '',
-            sourcing_group_id: entry.connected_group ?? '',
             items: entry.items
                 .filter((item) => item.status === 'pending')
                 .map<ItemDecision>((item) => ({
                     item_id: item.id,
                     decision: 'skip',
                     variant_id: '',
-                    canonical_variant_id: '',
                     platform_rate: '',
+                    supplier_rate: '',
                     approved_quantity: '',
                     note: '',
                 })),
@@ -189,18 +183,20 @@ export default function AdminSupplierListingLotShow({
                         entry.mode === 'create'
                             ? entry.category_id || null
                             : null,
-                    sourcing_group_id: entry.sourcing_group_id || null,
                     items: entry.items
                         .filter((item) => item.decision !== 'skip')
                         .map((item) => ({
                             item_id: item.item_id,
                             decision: item.decision,
                             variant_id: item.variant_id || null,
-                            canonical_variant_id:
-                                item.canonical_variant_id || null,
                             platform_rate:
                                 item.decision === 'approve'
                                     ? item.platform_rate
+                                    : null,
+                            supplier_rate:
+                                item.decision === 'approve' &&
+                                item.supplier_rate.trim() !== ''
+                                    ? item.supplier_rate
                                     : null,
                             approved_quantity:
                                 item.decision === 'approve' &&
@@ -371,16 +367,6 @@ export default function AdminSupplierListingLotShow({
                                                                     item.id,
                                                             )!}
                                                             locale={locale}
-                                                            canonicalVariants={
-                                                                sourcing.groups.find(
-                                                                    (group) =>
-                                                                        group.id ===
-                                                                        (entry.connected_group ??
-                                                                            entryDecision.sourcing_group_id),
-                                                                )
-                                                                    ?.canonical_variants ??
-                                                                []
-                                                            }
                                                             onChange={(patch) =>
                                                                 setItem(
                                                                     entryIndex,
@@ -411,37 +397,44 @@ export default function AdminSupplierListingLotShow({
 
                                     {entryDecision && (
                                         <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+                                            {entry.connected_product_summary && (
+                                                <div className="sm:col-span-2">
+                                                    <ProductConnectField
+                                                        value={null}
+                                                        onChange={() =>
+                                                            undefined
+                                                        }
+                                                        locked={
+                                                            entry.connected_product_summary
+                                                        }
+                                                    />
+                                                </div>
+                                            )}
                                             {!entry.connected_product && (
                                                 <>
-                                                    <FormField
-                                                        label={t(
-                                                            'supplier.admin.listings.product_id',
-                                                        )}
-                                                        error={errorFor(
-                                                            `entries.${entryIndex}.connect_product_id`,
-                                                        )}
-                                                    >
-                                                        {(field) => (
-                                                            <Input
-                                                                {...field}
-                                                                value={
-                                                                    entryDecision.connect_product_id
-                                                                }
-                                                                onChange={(e) =>
-                                                                    setEntry(
-                                                                        entryIndex,
-                                                                        {
-                                                                            mode: 'connect',
-                                                                            connect_product_id:
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        )}
-                                                    </FormField>
+                                                    <div className="sm:col-span-2">
+                                                        <ProductConnectField
+                                                            value={
+                                                                entryDecision.connected
+                                                            }
+                                                            onChange={(next) =>
+                                                                setEntry(
+                                                                    entryIndex,
+                                                                    {
+                                                                        mode: 'connect',
+                                                                        connected:
+                                                                            next,
+                                                                        connect_product_id:
+                                                                            next?.id ??
+                                                                            '',
+                                                                    },
+                                                                )
+                                                            }
+                                                            error={errorFor(
+                                                                `entries.${entryIndex}.connect_product_id`,
+                                                            )}
+                                                        />
+                                                    </div>
                                                     <FormField
                                                         label={t(
                                                             'supplier.admin.listings.sku',
@@ -528,34 +521,6 @@ export default function AdminSupplierListingLotShow({
                                                     )}
                                                 </>
                                             )}
-                                            {sourcing.can_select && (
-                                                <div className="sm:col-span-2">
-                                                    <SourcingGroupPicker
-                                                        groups={sourcing.groups}
-                                                        value={
-                                                            entryDecision.sourcing_group_id
-                                                        }
-                                                        onChange={(id) =>
-                                                            setEntry(
-                                                                entryIndex,
-                                                                {
-                                                                    sourcing_group_id:
-                                                                        id,
-                                                                },
-                                                            )
-                                                        }
-                                                        canCreate={
-                                                            sourcing.can_create
-                                                        }
-                                                        lockedTo={
-                                                            entry.connected_group
-                                                        }
-                                                        error={errorFor(
-                                                            `entries.${entryIndex}.sourcing_group_id`,
-                                                        )}
-                                                    />
-                                                </div>
-                                            )}
                                             <FormField
                                                 label={t(
                                                     'supplier.admin.listings.reason',
@@ -567,7 +532,8 @@ export default function AdminSupplierListingLotShow({
                                                 className="sm:col-span-2"
                                             >
                                                 {(field) => (
-                                                    <Input
+                                                    <ReasonTextarea
+                                                        context="supplier"
                                                         {...field}
                                                         value={
                                                             entryDecision.reason
@@ -614,14 +580,12 @@ function ItemDecisionFields({
     item,
     decision,
     locale,
-    canonicalVariants,
     onChange,
     errorFor,
 }: {
     item: Item;
     decision: ItemDecision;
     locale: string;
-    canonicalVariants: { id: string; label: string }[];
     onChange: (patch: Partial<ItemDecision>) => void;
     errorFor: (key: string) => string | undefined;
 }) {
@@ -683,6 +647,24 @@ function ItemDecisionFields({
                         )}
                     </FormField>
                     <FormField
+                        label={t('supplier.admin.listings.supplier_base_price')}
+                        error={errorFor('supplier_rate')}
+                    >
+                        {(field) => (
+                            <Input
+                                {...field}
+                                inputMode="decimal"
+                                value={decision.supplier_rate}
+                                placeholder={item.supplier_rate?.amount ?? ''}
+                                onChange={(e) =>
+                                    onChange({
+                                        supplier_rate: e.target.value,
+                                    })
+                                }
+                            />
+                        )}
+                    </FormField>
+                    <FormField
                         label={t('supplier.admin.listings.variant_id')}
                         error={errorFor('variant_id')}
                     >
@@ -704,43 +686,6 @@ function ItemDecisionFields({
                             </select>
                         )}
                     </FormField>
-                    {canonicalVariants.length > 0 && (
-                        <FormField
-                            label={t('sourcing.picker.canonical_variant')}
-                            description={t(
-                                'sourcing.picker.canonical_variant_help',
-                            )}
-                            error={errorFor('canonical_variant_id')}
-                        >
-                            {(field) => (
-                                <select
-                                    {...field}
-                                    value={decision.canonical_variant_id}
-                                    onChange={(e) =>
-                                        onChange({
-                                            canonical_variant_id:
-                                                e.target.value,
-                                        })
-                                    }
-                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                >
-                                    <option value="">
-                                        {t(
-                                            'sourcing.picker.canonical_variant_none',
-                                        )}
-                                    </option>
-                                    {canonicalVariants.map((variant) => (
-                                        <option
-                                            key={variant.id}
-                                            value={variant.id}
-                                        >
-                                            {variant.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </FormField>
-                    )}
                     {item.supply_mode === 'ready_stock' && (
                         <FormField
                             label={t(

@@ -28,8 +28,8 @@ class IdentityClosed extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject(__('Your Feriwala sign-in has been closed'))
-            ->line(__('Your sign-in has been permanently closed and you will not be able to access Feriwala.'))
+            ->subject(__('Your Banij sign-in has been closed'))
+            ->line(__('Your sign-in has been permanently closed and you will not be able to access Banij.'))
             ->line(__('Any sessions you had open have been ended.'))
             ->line(__('Contact support if you believe this is a mistake.'));
     }

@@ -106,6 +106,35 @@ class CatalogRefused extends RuntimeException
     }
 
     /**
+     * Permanent deletion is for products that never left Draft.
+     */
+    public static function productNotDraft(string $status): self
+    {
+        return new self(
+            "Only a product that is still a draft can be permanently deleted, and this one is {$status}. "
+            .'It stays safely in Trash.'
+        );
+    }
+
+    public static function forceDeleteNeedsReason(int $minimum): self
+    {
+        return new self("A force delete needs a reason of at least {$minimum} characters.");
+    }
+
+    public static function forceDeleteConfirmationMismatch(): self
+    {
+        return new self('Type the Product\'s BPC (SKU) or its exact name to confirm the force delete.');
+    }
+
+    /**
+     * @param  array<int, string>  $blockers
+     */
+    public static function forceDeleteBlocked(array $blockers): self
+    {
+        return new self('This Product cannot be force deleted while work is still in flight: '.implode(' ', $blockers));
+    }
+
+    /**
      * Restoring or permanently deleting only ever makes sense for a product
      * that is actually in Trash.
      */

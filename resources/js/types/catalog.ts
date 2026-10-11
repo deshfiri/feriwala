@@ -1,6 +1,102 @@
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 
+/**
+ * What staff need to recognise a Product when deciding whether it is the same
+ * as another (Same Product links). Staff-only: the source counts hint at who
+ * supplies it.
+ */
+export type ProductLinkSummary = {
+    id: string;
+    name: string;
+    /** The 9-character BPC (older products may carry a longer legacy one). */
+    bpc: string;
+    sku: string;
+    barcode: string | null;
+    status: string;
+    image_url: string | null;
+    variant_count: number;
+    variant_labels: string[];
+    supplier_sources: number;
+    warehouse_sources: number;
+};
+
+/** A Supplier as the assignment screens show it. */
+export type AssignableSupplier = {
+    id: string;
+    reference: string;
+    name: string;
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+};
+
+/**
+ * One Supplier Offer: a Supplier holding a Product (or one variation), however
+ * it got there. The base price is `null` for staff who may not see Supplier
+ * pricing, and the platform's own rate is never part of it.
+ */
+export type SupplierOfferRow = {
+    id: string;
+    reference: string;
+    supplier: AssignableSupplier | null;
+    product: { id: string; name: string; bpc: string } | null;
+    variant: { id: string; label: string; sku: string } | null;
+    supplier_base_price: Money | null;
+    supply_mode: 'ready_stock' | 'on_demand' | 'pre_order';
+    supply_mode_label: string;
+    available_quantity: number | null;
+    fulfilment_capacity: number | null;
+    lead_time_days: number | null;
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+    origin: 'supplier_listing' | 'admin_assignment';
+    origin_label: string;
+    assigned_by: string | null;
+    assigned_at: string | null;
+    updated_at: string | null;
+};
+
+/** The "Suppliers" section of the Admin Product workspace. */
+export type ProductSuppliersState = {
+    offers: SupplierOfferRow[];
+    variants: { id: string; label: string }[];
+    can: { assign: boolean; edit: boolean; view_prices: boolean };
+};
+
+/**
+ * A Supplier's own view of one of its offers ("My Products"). Carries the
+ * Supplier Base Price and nothing of the platform's own pricing.
+ */
+export type SupplierOwnOffer = {
+    id: string;
+    reference: string;
+    product_name: string;
+    product_slug: string;
+    bpc: string;
+    image: { url: string; alt: string | null } | null;
+    variant: { label: string; sku: string } | null;
+    status: string;
+    status_label: string;
+    is_preferred: boolean;
+    supplier_rate: Money;
+    supply_mode: 'ready_stock' | 'on_demand' | 'pre_order';
+    supply_mode_label: string;
+    available_quantity: number | null;
+    fulfilment_capacity: number | null;
+    lead_time_days: number | null;
+    origin: 'supplier_listing' | 'admin_assignment';
+    origin_label: string;
+    updated_at: string | null;
+};
+
+/** The "Products" section of the Admin Supplier page. */
+export type SupplierProductsState = {
+    offers: SupplierOfferRow[];
+    can: { view_prices: boolean };
+};
+
 /** A lifecycle move this person may make from the product's current status. */
 export type ProductTransition = {
     value: string;
@@ -330,8 +426,40 @@ export type BrowseCard = {
     maximum_selling_price?: Money | null;
 };
 
+/**
+ * One product on the Partner's unified Products page: once, with the terms of
+ * each way the account may use it. A mode the account cannot use is `null`.
+ */
+export type PartnerProductCard = {
+    slug: string;
+    name: string;
+    bpc: string;
+    sku: string;
+    category: string;
+    brand: string | null;
+    is_featured: boolean;
+    variant_count: number;
+    package_scope: 'all' | 'selected';
+    image: { url: string; alt: string | null } | null;
+    modes: { wholesale: boolean; partner_selling: boolean };
+    wholesale: {
+        price: Money;
+        min_order_quantity: number;
+        max_order_quantity: number | null;
+        in_stock: boolean;
+        tiers: { min_quantity: number; unit_price: Money }[];
+    } | null;
+    partner_selling: {
+        suggested_selling_price: Money | null;
+        minimum_selling_price: Money | null;
+        maximum_selling_price: Money | null;
+    } | null;
+};
+
 export type BrowseDetail = {
     slug: string;
+    bpc?: string;
+    package_scope: 'all' | 'selected';
     name: string;
     sku: string;
     short_description: string | null;

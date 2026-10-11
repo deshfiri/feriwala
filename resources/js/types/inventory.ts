@@ -36,7 +36,7 @@ export type WarehouseRow = WarehouseOption & {
 export type StockRow = {
     id: string;
     sku: string;
-    product: { id: string; name: string };
+    product: { id: string | null; name: string; deleted: boolean };
     variant_id: string | null;
     warehouse: WarehouseOption;
     buckets: StockBuckets;

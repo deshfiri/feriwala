@@ -8,18 +8,20 @@ import {
     Globe,
     HardDrive,
     LayoutGrid,
+    Library,
     MapPin,
     MonitorSmartphone,
     Network,
     PackageCheck,
+    Palette,
     Settings,
+    Receipt,
+    ReceiptText,
     Share2,
     ShieldCheck,
     ShoppingBag,
-    ShoppingBasket,
-    ShoppingCart,
-    Store,
     Truck,
+    UserRound,
     Users,
     Wallet as WalletIcon,
     Weight,
@@ -39,6 +41,7 @@ import {
 } from '@/routes/admin/accounts';
 import { index as activationQueue } from '@/routes/admin/activations';
 import { index as accountVerificationSettings } from '@/routes/admin/account-verification-settings';
+import { index as contentLibrary } from '@/routes/admin/content-library';
 import { index as productDeletionSettings } from '@/routes/admin/product-deletion-settings';
 import { index as accountWithdrawals } from '@/routes/admin/account-withdrawals';
 import { edit as brandingSettings } from '@/routes/admin/branding';
@@ -84,8 +87,10 @@ import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawal
 import { index as accountWallets } from '@/routes/admin/wallets';
 import { index as adminWebsites } from '@/routes/admin/websites';
 import { index as websitePricing } from '@/routes/admin/website-pricing';
-import { index as dropshippingCatalogue } from '@/routes/catalog/dropshipping';
-import { index as wholesaleCatalogue } from '@/routes/catalog/wholesale';
+import { index as productsIndex } from '@/routes/catalog';
+import { edit as appearanceSettings } from '@/routes/appearance';
+import { index as invoices } from '@/routes/subscription/invoices';
+import { index as receipts } from '@/routes/subscription/receipts';
 import { history as kycHistory } from '@/routes/kyc';
 import { index as payoutMethods } from '@/routes/payout-methods';
 import { edit as profileSettings } from '@/routes/profile';
@@ -95,7 +100,6 @@ import { index as staffDirectory } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
 import { show as wallet } from '@/routes/wallet';
 import { index as websites } from '@/routes/websites';
-import { show as wholesaleCart } from '@/routes/wholesale/cart';
 import { index as wholesaleOrders } from '@/routes/wholesale/orders';
 import { index as clientWithdrawals } from '@/routes/withdrawals';
 import type { NavGroup, NavItem } from '@/types';
@@ -128,6 +132,165 @@ export function useNavigation(): {
     const permissions = page.props.permissions ?? {};
     const account = page.props.account;
 
+    const active = account?.status === 'active';
+    const buys = Boolean(
+        account?.allowsWholesale || account?.allowsDropshipping,
+    );
+
+    /*
+     * The Partner sidebar: one entry per real, authorised destination, grouped
+     * by what the person is doing. The cart is not here — it sits in the top
+     * bar beside the wallet quick view.
+     */
+    const partnerGroups: NavGroup[] =
+        account === null || account === undefined
+            ? []
+            : [
+                  {
+                      label: t('nav.groups.products'),
+                      items: [
+                          ...(buys
+                              ? [
+                                    {
+                                        title: t('nav.products'),
+                                        href: productsIndex(),
+                                        icon: ShoppingBag,
+                                    },
+                                ]
+                              : []),
+                          ...(account.holdsAllocatedStock
+                              ? [
+                                    {
+                                        title: t('nav.allocated_stock'),
+                                        href: allocatedStock(),
+                                        icon: PackageCheck,
+                                    },
+                                ]
+                              : []),
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.sales'),
+                      items: [
+                          ...(account.allowsWholesale ||
+                          account.hasWholesaleOrders
+                              ? [
+                                    {
+                                        title: t('nav.orders'),
+                                        href: wholesaleOrders(),
+                                        icon: ClipboardList,
+                                    },
+                                ]
+                              : []),
+                          ...(account.allowsWebsites || account.hasWebsites
+                              ? [
+                                    {
+                                        title: t('nav.websites'),
+                                        href: websites(),
+                                        icon: Globe,
+                                    },
+                                ]
+                              : []),
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.finance'),
+                      items: [
+                          ...(active
+                              ? [
+                                    {
+                                        title: t('nav.wallet'),
+                                        href: wallet(),
+                                        icon: WalletIcon,
+                                    },
+                                    {
+                                        title: t('withdrawal.erp.title'),
+                                        href: clientWithdrawals(),
+                                        icon: Banknote,
+                                    },
+                                    {
+                                        title: t('payout.nav.payout_methods'),
+                                        href: payoutMethods(),
+                                        icon: CreditCard,
+                                    },
+                                ]
+                              : []),
+                          {
+                              title: t('common.settings.nav.invoices'),
+                              href: invoices(),
+                              icon: Receipt,
+                          },
+                          {
+                              title: t('common.settings.nav.receipts'),
+                              href: receipts(),
+                              icon: ReceiptText,
+                          },
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.business'),
+                      items: [
+                          {
+                              title: t('nav.verification'),
+                              href: kycHistory(),
+                              icon: ShieldCheck,
+                          },
+                          {
+                              title: t('nav.subscription'),
+                              href: subscription(),
+                              icon: CreditCard,
+                          },
+                          ...(account.viewsReferrals
+                              ? [
+                                    {
+                                        title: t('nav.referrals'),
+                                        href: referrals(),
+                                        icon: Share2,
+                                    },
+                                ]
+                              : []),
+                          ...(account.managesStaff
+                              ? [
+                                    {
+                                        title: t('nav.staff'),
+                                        href: staffDirectory(),
+                                        icon: Users,
+                                    },
+                                ]
+                              : []),
+                          ...(active
+                              ? [
+                                    {
+                                        title: t('nav.addresses'),
+                                        href: addresses(),
+                                        icon: MapPin,
+                                    },
+                                ]
+                              : []),
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.account'),
+                      items: [
+                          {
+                              title: t('nav.profile'),
+                              href: profileSettings(),
+                              icon: UserRound,
+                          },
+                          {
+                              title: t('nav.security'),
+                              href: securitySettings(),
+                              icon: ShieldCheck,
+                          },
+                          {
+                              title: t('nav.appearance'),
+                              href: appearanceSettings(),
+                              icon: Palette,
+                          },
+                      ],
+                  },
+              ];
+
     const sidebarGroups: NavGroup[] = [
         {
             label: t('nav.groups.overview'),
@@ -139,124 +302,14 @@ export function useNavigation(): {
                 },
             ],
         },
-        {
-            label: t('nav.groups.business'),
-            items:
-                account === null || account === undefined
-                    ? []
-                    : [
-                          {
-                              title: t('nav.verification'),
-                              href: kycHistory(),
-                              icon: ShieldCheck,
-                          },
-                          {
-                              title: t('nav.subscription'),
-                              href: subscription(),
-                              icon: CreditCard,
-                          },
-                          ...(account?.status === 'active'
-                              ? [
-                                    {
-                                        title: t('nav.wallet'),
-                                        href: wallet(),
-                                        icon: WalletIcon,
-                                    },
-                                    {
-                                        title: t('nav.addresses'),
-                                        href: addresses(),
-                                        icon: MapPin,
-                                    },
-                                    {
-                                        title: t('payout.nav.payout_methods'),
-                                        href: payoutMethods(),
-                                        icon: CreditCard,
-                                    },
-                                    {
-                                        title: t('withdrawal.erp.title'),
-                                        href: clientWithdrawals(),
-                                        icon: Banknote,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsWholesale
-                              ? [
-                                    {
-                                        title: t('nav.wholesale_catalogue'),
-                                        href: wholesaleCatalogue(),
-                                        icon: ShoppingCart,
-                                    },
-                                    {
-                                        title:
-                                            (account?.wholesaleCartLines ?? 0) >
-                                            0
-                                                ? `${t('nav.wholesale_cart')} (${account?.wholesaleCartLines})`
-                                                : t('nav.wholesale_cart'),
-                                        href: wholesaleCart(),
-                                        icon: ShoppingBasket,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsWholesale ||
-                          account?.hasWholesaleOrders
-                              ? [
-                                    {
-                                        title: t('nav.wholesale_orders'),
-                                        href: wholesaleOrders(),
-                                        icon: ClipboardList,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsDropshipping
-                              ? [
-                                    {
-                                        title: t('nav.dropshipping_catalogue'),
-                                        href: dropshippingCatalogue(),
-                                        icon: Store,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsWebsites || account?.hasWebsites
-                              ? [
-                                    {
-                                        title: t('nav.websites'),
-                                        href: websites(),
-                                        icon: Globe,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.viewsReferrals
-                              ? [
-                                    {
-                                        title: t('nav.referrals'),
-                                        href: referrals(),
-                                        icon: Share2,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.holdsAllocatedStock
-                              ? [
-                                    {
-                                        title: t('nav.allocated_stock'),
-                                        href: allocatedStock(),
-                                        icon: PackageCheck,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.managesStaff
-                              ? [
-                                    {
-                                        title: t('nav.staff'),
-                                        href: staffDirectory(),
-                                        icon: Users,
-                                    },
-                                ]
-                              : []),
-                      ],
-        },
+        ...partnerGroups,
         {
             label: t('nav.groups.administration'),
             items: [
+                // Every configuration screen lives behind this one entry (and is
+                // searchable from the command palette), so none of them is
+                // repeated in a group below. Gated on every permission the hub
+                // itself filters its cards by.
                 ...(permissions['payment.view'] ||
                 permissions['wallet.view'] ||
                 permissions['withdrawal.view'] ||
@@ -264,8 +317,11 @@ export function useNavigation(): {
                 permissions['referral.view_settings'] ||
                 permissions['package.view'] ||
                 permissions['kyc.manage_settings'] ||
+                permissions['account.manage_settings'] ||
+                permissions['catalog.view'] ||
                 permissions['sms.view'] ||
-                permissions['system.manage_settings']
+                permissions['system.manage_settings'] ||
+                permissions['integration.view']
                     ? [
                           {
                               title: t('nav.settings_hub'),
@@ -275,60 +331,24 @@ export function useNavigation(): {
                       ]
                     : []),
 
-                ...(permissions['access.view'] ||
-                permissions['kyc.view'] ||
-                permissions['kyc.manage_settings'] ||
-                permissions['package.view']
+                // Who can do what on the platform. KYC review is an account
+                // queue and lives under Accounts; packages and KYC
+                // requirements are settings and live in the Settings hub.
+                ...(permissions['access.view']
                     ? [
                           {
-                              title: 'Access & KYC',
-                              href: permissions['access.view']
-                                  ? roles()
-                                  : permissions['kyc.view']
-                                    ? kycQueue()
-                                    : permissions['kyc.manage_settings']
-                                      ? kycRequirements()
-                                      : packageCatalogue(),
+                              title: 'Access',
+                              href: roles(),
                               icon: ShieldCheck,
                               items: [
-                                  ...(permissions['access.view']
-                                      ? [
-                                            {
-                                                title: t('nav.roles'),
-                                                href: roles(),
-                                            },
-                                            {
-                                                title: t('nav.platform_staff'),
-                                                href: platformStaffIndex(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['kyc.view']
-                                      ? [
-                                            {
-                                                title: t('nav.kyc_review'),
-                                                href: kycQueue(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['kyc.manage_settings']
-                                      ? [
-                                            {
-                                                title: t(
-                                                    'nav.kyc_requirements',
-                                                ),
-                                                href: kycRequirements(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['package.view']
-                                      ? [
-                                            {
-                                                title: t('nav.packages'),
-                                                href: packageCatalogue(),
-                                            },
-                                        ]
-                                      : []),
+                                  {
+                                      title: t('nav.roles'),
+                                      href: roles(),
+                                  },
+                                  {
+                                      title: t('nav.platform_staff'),
+                                      href: platformStaffIndex(),
+                                  },
                               ],
                           },
                       ]
@@ -361,12 +381,6 @@ export function useNavigation(): {
                                                 href: productBrands(),
                                             },
                                             {
-                                                title: t(
-                                                    'nav.product_deletion_settings',
-                                                ),
-                                                href: productDeletionSettings(),
-                                            },
-                                            {
                                                 title: t('nav.attributes'),
                                                 href: productAttributes(),
                                             },
@@ -381,6 +395,18 @@ export function useNavigation(): {
                                         ]
                                       : []),
                               ],
+                          },
+                      ]
+                    : []),
+
+                // Its own entry: content is released to Products from here, but
+                // it is a library of its own, not part of the catalogue.
+                ...(permissions['content_library.view']
+                    ? [
+                          {
+                              title: t('nav.content_library'),
+                              href: contentLibrary(),
+                              icon: Library,
                           },
                       ]
                     : []),
@@ -451,85 +477,57 @@ export function useNavigation(): {
                       ]
                     : []),
 
-                ...(permissions['website.view'] ||
-                permissions['website.manage_settings']
+                ...(permissions['website.view']
                     ? [
                           {
                               title: 'Websites',
-                              href: permissions['website.view']
-                                  ? adminWebsites()
-                                  : websitePricing(),
+                              href: adminWebsites(),
                               icon: MonitorSmartphone,
                               items: [
-                                  ...(permissions['website.view']
-                                      ? [
-                                            {
-                                                title: t(
-                                                    'nav.partner_websites',
-                                                ),
-                                                href: adminWebsites(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['website.manage_settings']
-                                      ? [
-                                            {
-                                                title: t('nav.website_pricing'),
-                                                href: websitePricing(),
-                                            },
-                                        ]
-                                      : []),
+                                  {
+                                      title: t('nav.partner_websites'),
+                                      href: adminWebsites(),
+                                  },
                               ],
                           },
                       ]
                     : []),
 
-                ...(permissions['referral.view'] ||
-                permissions['referral.view_settings']
+                ...(permissions['referral.view']
                     ? [
                           {
                               title: 'Partner Network',
-                              href: permissions['referral.view']
-                                  ? referralCommissions()
-                                  : referralSettings(),
+                              href: referralCommissions(),
                               icon: Network,
                               items: [
-                                  ...(permissions['referral.view']
-                                      ? [
-                                            {
-                                                title: t(
-                                                    'nav.referral_commissions',
-                                                ),
-                                                href: referralCommissions(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['referral.view_settings']
-                                      ? [
-                                            {
-                                                title: t(
-                                                    'nav.referral_settings',
-                                                ),
-                                                href: referralSettings(),
-                                            },
-                                        ]
-                                      : []),
+                                  {
+                                      title: t('nav.referral_commissions'),
+                                      href: referralCommissions(),
+                                  },
                               ],
                           },
                       ]
                     : []),
 
-                ...(permissions['account.view']
+                // The account queues: the directory, new accounts, activation
+                // approvals and KYC review. Verification rules are settings.
+                ...(permissions['account.view'] || permissions['kyc.view']
                     ? [
                           {
                               title: 'Accounts',
-                              href: accountDirectory(),
+                              href: permissions['account.view']
+                                  ? accountDirectory()
+                                  : kycQueue(),
                               icon: Building2,
                               items: [
-                                  {
-                                      title: t('nav.accounts'),
-                                      href: accountDirectory(),
-                                  },
+                                  ...(permissions['account.view']
+                                      ? [
+                                            {
+                                                title: t('nav.accounts'),
+                                                href: accountDirectory(),
+                                            },
+                                        ]
+                                      : []),
                                   ...(permissions['account.create']
                                       ? [
                                             {
@@ -538,17 +536,21 @@ export function useNavigation(): {
                                             },
                                         ]
                                       : []),
-                                  {
-                                      title: t('nav.activation_approvals'),
-                                      href: activationQueue(),
-                                  },
-                                  ...(permissions['account.manage_settings']
+                                  ...(permissions['account.view']
                                       ? [
                                             {
                                                 title: t(
-                                                    'nav.account_verification_settings',
+                                                    'nav.activation_approvals',
                                                 ),
-                                                href: accountVerificationSettings(),
+                                                href: activationQueue(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['kyc.view']
+                                      ? [
+                                            {
+                                                title: t('nav.kyc_review'),
+                                                href: kycQueue(),
                                             },
                                         ]
                                       : []),
@@ -557,6 +559,8 @@ export function useNavigation(): {
                       ]
                     : []),
 
+                // Money in motion. Billing rules, gateways and deposit rules
+                // are settings and live in the Settings hub.
                 ...(permissions['payment.view'] ||
                 permissions['wallet.view'] ||
                 permissions['withdrawal.view']
@@ -573,16 +577,6 @@ export function useNavigation(): {
                                   ...(permissions['payment.view']
                                       ? [
                                             {
-                                                title: t('nav.billing_rules'),
-                                                href: billingRules(),
-                                            },
-                                            {
-                                                title: t(
-                                                    'nav.payment_gateways',
-                                                ),
-                                                href: paymentGateways(),
-                                            },
-                                            {
                                                 title: t('nav.payments'),
                                                 href: paymentLog(),
                                             },
@@ -593,10 +587,6 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.wallets'),
                                                 href: accountWallets(),
-                                            },
-                                            {
-                                                title: t('nav.deposit_rules'),
-                                                href: depositRules(),
                                             },
                                         ]
                                       : []),
@@ -755,51 +745,6 @@ export function useNavigation(): {
                           },
                       ]
                     : []),
-
-                ...(permissions['sms.view'] ||
-                permissions['system.manage_settings'] ||
-                permissions['integration.view']
-                    ? [
-                          {
-                              title: 'System',
-                              href: permissions['sms.view']
-                                  ? smsSettings()
-                                  : permissions['system.manage_settings']
-                                    ? brandingSettings()
-                                    : storageSettings(),
-                              icon: Settings,
-                              items: [
-                                  ...(permissions['sms.view']
-                                      ? [
-                                            {
-                                                title: t('nav.sms'),
-                                                href: smsSettings(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['system.manage_settings']
-                                      ? [
-                                            {
-                                                title: t('nav.branding'),
-                                                href: brandingSettings(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['integration.view']
-                                      ? [
-                                            {
-                                                title: t(
-                                                    'nav.storage_settings',
-                                                ),
-                                                href: storageSettings(),
-                                                icon: HardDrive,
-                                            },
-                                        ]
-                                      : []),
-                              ],
-                          },
-                      ]
-                    : []),
             ],
         },
     ];
@@ -814,19 +759,132 @@ export function useNavigation(): {
             items: flattenNavItems(group.items),
         })),
         {
-            label: t('nav.groups.settings'),
+            // The configuration screens: reached from the sidebar through the
+            // Settings hub, and found here by name.
+            label: t('nav.groups.platform_settings'),
             items: [
-                {
-                    title: t('nav.profile'),
-                    href: profileSettings(),
-                    icon: Settings,
-                },
-                {
-                    title: t('nav.security'),
-                    href: securitySettings(),
-                    icon: ShieldCheck,
-                },
+                ...(permissions['payment.view']
+                    ? [
+                          {
+                              title: t('nav.billing_rules'),
+                              href: billingRules(),
+                              icon: Settings,
+                          },
+                          {
+                              title: t('nav.payment_gateways'),
+                              href: paymentGateways(),
+                              icon: CreditCard,
+                          },
+                      ]
+                    : []),
+                ...(permissions['wallet.view']
+                    ? [
+                          {
+                              title: t('nav.deposit_rules'),
+                              href: depositRules(),
+                              icon: WalletIcon,
+                          },
+                      ]
+                    : []),
+                ...(permissions['website.manage_settings']
+                    ? [
+                          {
+                              title: t('nav.website_pricing'),
+                              href: websitePricing(),
+                              icon: MonitorSmartphone,
+                          },
+                      ]
+                    : []),
+                ...(permissions['referral.view_settings']
+                    ? [
+                          {
+                              title: t('nav.referral_settings'),
+                              href: referralSettings(),
+                              icon: Network,
+                          },
+                      ]
+                    : []),
+                ...(permissions['package.view']
+                    ? [
+                          {
+                              title: t('nav.packages'),
+                              href: packageCatalogue(),
+                              icon: Boxes,
+                          },
+                      ]
+                    : []),
+                ...(permissions['kyc.manage_settings']
+                    ? [
+                          {
+                              title: t('nav.kyc_requirements'),
+                              href: kycRequirements(),
+                              icon: ShieldCheck,
+                          },
+                      ]
+                    : []),
+                ...(permissions['account.manage_settings']
+                    ? [
+                          {
+                              title: t('nav.account_verification_settings'),
+                              href: accountVerificationSettings(),
+                              icon: ShieldCheck,
+                          },
+                      ]
+                    : []),
+                ...(permissions['catalog.view']
+                    ? [
+                          {
+                              title: t('nav.product_deletion_settings'),
+                              href: productDeletionSettings(),
+                              icon: ShoppingBag,
+                          },
+                      ]
+                    : []),
+                ...(permissions['sms.view']
+                    ? [
+                          {
+                              title: t('nav.sms'),
+                              href: smsSettings(),
+                              icon: Settings,
+                          },
+                      ]
+                    : []),
+                ...(permissions['system.manage_settings']
+                    ? [
+                          {
+                              title: t('nav.branding'),
+                              href: brandingSettings(),
+                              icon: Settings,
+                          },
+                      ]
+                    : []),
+                ...(permissions['integration.view']
+                    ? [
+                          {
+                              title: t('nav.storage_settings'),
+                              href: storageSettings(),
+                              icon: HardDrive,
+                          },
+                      ]
+                    : []),
             ],
+        },
+        {
+            label: t('nav.groups.settings'),
+            items: account
+                ? []
+                : [
+                      {
+                          title: t('nav.profile'),
+                          href: profileSettings(),
+                          icon: Settings,
+                      },
+                      {
+                          title: t('nav.security'),
+                          href: securitySettings(),
+                          icon: ShieldCheck,
+                      },
+                  ],
         },
     ];
 

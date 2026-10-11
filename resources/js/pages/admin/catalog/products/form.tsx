@@ -5,9 +5,9 @@ import {
     Image as ImageIcon,
     Info,
     Layers,
-    Megaphone,
     Search,
     Tag,
+    Truck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ProductController from '@/actions/App/Http/Controllers/Admin/ProductController';
@@ -25,10 +25,9 @@ import type {
     AttributeOption,
     CatalogAbilities,
     CatalogOption,
-    ContentLimits,
-    ContentRow,
     MediaLimits,
     MediaRow,
+    ProductSuppliersState,
     MerchandisingState,
     PriceTierScope,
     ProductDetail,
@@ -40,14 +39,11 @@ import type {
     VariantRow,
 } from '@/types';
 import SeoFields from './seo-fields';
-import SourcingGroupField, {
-    type ProductSourcing,
-} from './sourcing-group-field';
+import SuppliersSection from './suppliers-section';
 import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
-import ContentSection from './content-section';
 import MediaSection from './media-section';
 import PriceTiersSection from './price-tiers-section';
 import ProductHeader from './product-header';
@@ -58,8 +54,8 @@ type Props = {
     product: ProductDetail | null;
     options: { categories: CatalogOption[]; brands: CatalogOption[] };
     can: CatalogAbilities;
-    /** Staff-only, new products only: the groups a product can be added to. */
-    sourcing?: ProductSourcing;
+    /** Staff-only: which Suppliers have it; null without product_supplier.view. */
+    product_suppliers?: ProductSuppliersState | null;
     variants: VariantRow[];
     attributes: AttributeOption[];
     media: MediaRow[];
@@ -74,8 +70,6 @@ type Props = {
     merchandising: MerchandisingState | null;
     related_matches?: RelatedProductRow[];
     seo_preview: SeoPreview | null;
-    content: ContentRow[];
-    content_limits: ContentLimits;
 };
 
 const selectClass =
@@ -129,9 +123,6 @@ const FIELD_TAB: Record<string, string> = {
     box_width_cm: 'logistics',
     box_height_cm: 'logistics',
     is_fragile: 'logistics',
-    title: 'content',
-    body: 'content',
-    image: 'content',
     file: 'media',
     meta_title: 'seo',
     meta_description: 'seo',
@@ -161,7 +152,7 @@ export default function ProductForm({
     product,
     options,
     can,
-    sourcing,
+    product_suppliers,
     variants,
     attributes,
     media,
@@ -176,8 +167,6 @@ export default function ProductForm({
     merchandising,
     related_matches,
     seo_preview,
-    content,
-    content_limits,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -212,12 +201,12 @@ export default function ProductForm({
             label: t('catalog.products.tabs.logistics'),
             icon: Boxes,
         },
-        ...(editing
+        ...(editing && product_suppliers
             ? [
                   {
-                      key: 'content',
-                      label: t('catalog.products.tabs.content'),
-                      icon: Megaphone,
+                      key: 'suppliers',
+                      label: t('catalog.products.tabs.suppliers'),
+                      icon: Truck,
                   },
               ]
             : []),
@@ -648,12 +637,6 @@ export default function ProductForm({
                                         </div>
                                     </SectionCard>
 
-                                    {!editing && sourcing?.can_select && (
-                                        <SourcingGroupField
-                                            sourcing={sourcing}
-                                        />
-                                    )}
-
                                     <SectionCard
                                         title={t(
                                             'catalog.products.sections.bounds',
@@ -973,13 +956,11 @@ export default function ProductForm({
                     </SectionTabPanel>
                 )}
 
-                {editing && (
-                    <SectionTabPanel tab="content" active={activeTab}>
-                        <ContentSection
+                {editing && product_suppliers && (
+                    <SectionTabPanel tab="suppliers" active={activeTab}>
+                        <SuppliersSection
                             product={product}
-                            content={content}
-                            limits={content_limits}
-                            canEdit={can.edit}
+                            suppliers={product_suppliers}
                         />
                     </SectionTabPanel>
                 )}

@@ -20,6 +20,7 @@ import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import { index } from '@/routes/admin/referral-settings';
 import type { Paginator } from '@/types';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type RewardView = {
     type: 'fixed' | 'percentage';
@@ -208,7 +209,8 @@ export default function ReferralSettings({
                                             required
                                         >
                                             {(field) => (
-                                                <Input
+                                                <ReasonTextarea
+                                                    context="referral"
                                                     {...field}
                                                     name="reason"
                                                     minLength={10}
@@ -706,7 +708,8 @@ export default function ReferralSettings({
                                         required
                                     >
                                         {(field) => (
-                                            <Input
+                                            <ReasonTextarea
+                                                context="referral"
                                                 {...field}
                                                 name="reason"
                                                 minLength={10}
@@ -907,7 +910,8 @@ export default function ReferralSettings({
                                                                 'referral.settings.close_reason',
                                                             )}
                                                         </Label>
-                                                        <Input
+                                                        <ReasonTextarea
+                                                            context="referral"
                                                             id={`close-${plan.id}`}
                                                             name="reason"
                                                             minLength={10}

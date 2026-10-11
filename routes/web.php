@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\ContentLibraryController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\PermissionsController;
 use App\Http\Controllers\Admin\PlatformStaffController;
 use App\Http\Controllers\Admin\ProductAttributeController;
+use App\Http\Controllers\Admin\ProductBrowseController;
 use App\Http\Controllers\Admin\ProductBulkController;
 use App\Http\Controllers\Admin\ProductChannelController;
 use App\Http\Controllers\Admin\ProductContentController;
@@ -40,6 +42,7 @@ use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
+use App\Http\Controllers\Admin\ProductSupplierController;
 use App\Http\Controllers\Admin\ProductTrashController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\ReferralChainController;
@@ -239,6 +242,11 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          */
         Route::get('wallet', [WalletController::class, 'show'])->name('wallet.show');
 
+        // The header's quick look: one figure, fetched only when asked for and
+        // never part of the page source. Scoped to the signed-in account.
+        Route::get('wallet/quick-view', [WalletController::class, 'quickView'])
+            ->name('wallet.quick-view');
+
         /*
          * Putting money in (§24, §26.3, P2-19).
          *
@@ -319,6 +327,14 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          * query — a product switched on only for wholesale cannot be opened on
          * the dropshipping route by typing its address. Nothing here writes.
          */
+        // The one Products workspace: every product the account may use, once,
+        // with its wholesale and Partner Selling terms. The two channel screens
+        // below stay as the product detail routes and for direct links.
+        Route::get('catalog', [BusinessCatalogController::class, 'products'])
+            ->name('catalog.index');
+        Route::get('catalog/{product}', [BusinessCatalogController::class, 'product'])
+            ->name('catalog.show')
+            ->where('product', '(?!wholesale$|dropshipping$)[^/]+');
         Route::get('catalog/wholesale', [BusinessCatalogController::class, 'wholesale'])
             ->name('catalog.wholesale.index');
         Route::get('catalog/wholesale/{product}', [BusinessCatalogController::class, 'showWholesale'])
@@ -1064,6 +1080,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.categories.active');
         Route::delete('catalog/categories/{category}', [CategoryController::class, 'destroy'])
             ->name('catalog.categories.destroy');
+        Route::delete('catalog/categories/{category}/purge', [CategoryController::class, 'purge'])
+            ->name('catalog.categories.purge');
 
         /*
          * Brands (§11.3). The same shape as categories without the tree. The
@@ -1117,6 +1135,50 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.trash.restore');
         Route::delete('catalog/products/trash/{product}', [ProductTrashController::class, 'destroy'])
             ->name('catalog.products.trash.destroy');
+
+        // Super Admin only: erase a trashed Product that history refers to.
+        Route::get('catalog/products/trash/{product}/force-delete', [ProductTrashController::class, 'forceDeleteImpact'])
+            ->name('catalog.products.trash.force-delete.impact');
+        Route::delete('catalog/products/trash/{product}/force-delete', [ProductTrashController::class, 'forceDestroy'])
+            ->name('catalog.products.trash.force-delete');
+
+        /*
+         * The Content Library: content written once and released to chosen
+         * Products. `content_library.view` to read, `.create` to release,
+         * `.edit` to change, `.delete` to take down.
+         */
+        Route::get('content-library', [ContentLibraryController::class, 'index'])
+            ->name('content-library.index');
+        Route::get('content-library/create', [ContentLibraryController::class, 'create'])
+            ->name('content-library.create');
+        Route::post('content-library', [ContentLibraryController::class, 'store'])
+            ->name('content-library.store');
+        Route::post('content-library/uploads', [ContentLibraryController::class, 'upload'])
+            ->name('content-library.uploads.store');
+        Route::get('content-library/products', [ContentLibraryController::class, 'products'])
+            ->name('content-library.products');
+        Route::get('content-library/{item}/edit', [ContentLibraryController::class, 'edit'])
+            ->name('content-library.edit');
+        Route::patch('content-library/{item}', [ContentLibraryController::class, 'update'])
+            ->name('content-library.update');
+        Route::delete('content-library/{item}', [ContentLibraryController::class, 'destroy'])
+            ->name('content-library.destroy');
+
+        // Every Product, page by page, for the right-hand Product pickers.
+        Route::get('catalog/product-browse', [ProductBrowseController::class, 'index'])
+            ->name('catalog.product-browse');
+
+        /*
+         * Product suppliers: which Suppliers actually have which Product. Seen
+         * with `product_supplier.view`, assigned with `.create`, removed with
+         * `.edit`. Carries no price.
+         */
+        Route::get('product-suppliers/suppliers', [ProductSupplierController::class, 'browse'])
+            ->name('product-suppliers.suppliers');
+        Route::post('product-suppliers', [ProductSupplierController::class, 'store'])
+            ->name('product-suppliers.store');
+        Route::patch('product-suppliers/{offer}/price', [ProductSupplierController::class, 'updatePrice'])
+            ->name('product-suppliers.price.update');
 
         /*
          * Variations, always addressed through their product (§11.1, §12), and
@@ -1232,8 +1294,6 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.lines.sources');
         Route::get('orders/{order}/lines/{item}/sources/search', [OrderController::class, 'searchAllocationSources'])
             ->name('orders.lines.sources.search');
-        Route::post('orders/{order}/lines/{item}/sources/confirm-link', [OrderController::class, 'confirmSourceLink'])
-            ->name('orders.lines.sources.confirm-link');
         Route::post('orders/{order}/lines/{item}/allocation', [OrderController::class, 'allocate'])
             ->name('orders.lines.allocation.store');
         Route::post('orders/{order}/lines/{item}/fulfilment-commitments/{commitment}/advance', [OrderController::class, 'advanceFulfilmentCommitment'])
@@ -1290,15 +1350,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('delivery-settings.rules.close');
 
         /*
-         * Product Sourcing Groups: which catalogue products can fulfil one
-         * another's orders. Staff-only, behind `sourcing_group.*`.
+         * Product Sourcing Groups: legacy. Same Product links
+         * (`catalog/products/{product}/links`) now decide which Products can
+         * fulfil one another's orders; groups are kept as history only and
+         * no longer affect allocation. Staff-only, behind `sourcing_group.*`.
          */
         Route::get('sourcing-groups', [SourcingGroupController::class, 'index'])
             ->name('sourcing-groups.index');
         Route::post('sourcing-groups', [SourcingGroupController::class, 'store'])
             ->name('sourcing-groups.store');
-        Route::post('sourcing-groups/quick', [SourcingGroupController::class, 'quickStore'])
-            ->name('sourcing-groups.quick-store');
         Route::get('sourcing-groups/{group}', [SourcingGroupController::class, 'show'])
             ->name('sourcing-groups.show');
         Route::patch('sourcing-groups/{group}', [SourcingGroupController::class, 'update'])

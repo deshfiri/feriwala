@@ -23,8 +23,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $public_id
  * @property int $stock_item_id
  * @property int $warehouse_id
- * @property int $product_id
+ * @property int|null $product_id
  * @property int|null $product_variant_id
+ * @property array<string, mixed>|null $product_id_snapshot
+ * @property array<string, mixed>|null $product_variant_id_snapshot
  * @property StockMovementType $type
  * @property StockBucket|null $from_bucket
  * @property StockBucket|null $to_bucket
@@ -58,6 +60,8 @@ class StockMovement extends Model
             'from_bucket' => StockBucket::class,
             'to_bucket' => StockBucket::class,
             'quantity' => 'integer',
+            'product_id_snapshot' => 'array',
+            'product_variant_id_snapshot' => 'array',
             'occurred_at' => 'immutable_datetime',
         ];
     }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const translations = {
@@ -13,11 +13,21 @@ const translations = {
                 sort: 'Sort',
                 source_filter: 'Source type',
                 source_filter_all: 'Suppliers and warehouses',
+                mode_filter: 'Supply mode',
+                mode_filter_all: 'Any supply mode',
+                mode_options: {
+                    ready_stock: 'Ready stock',
+                    on_demand: 'On demand',
+                    pre_order: 'Pre-order',
+                },
                 sort_options: {
                     margin_desc: 'Margin high',
                     margin_asc: 'Margin low',
                     cost_asc: 'Cost low',
                     cost_desc: 'Cost high',
+                    availability_desc: 'Availability',
+                    lead_time_asc: 'Lead time',
+                    name_asc: 'Name',
                 },
                 eligible_only: 'Only eligible',
                 empty: 'No sources',
@@ -25,17 +35,18 @@ const translations = {
                 close: 'Close',
                 confirm: 'Confirm',
                 preferred: 'Preferred',
-                same_group: 'Same sourcing group',
-                group_title: 'Sourcing group: :group',
-                group_help: 'Nothing is chosen for you.',
-                unmatched_title: 'Unmatched — manual review',
-                unmatched_help: 'No group.',
+                same_product: 'Linked Product',
+                unique_title: 'Unique Product',
+                unique_help: 'Not linked to any other.',
+                linked_title: ':count linked Product(s) included',
+                linked_help: 'Nothing is chosen for you.',
                 related: 'Related',
                 not_related: 'Not related',
                 lead_time: ':days days',
                 capacity: 'Capacity :capacity',
                 columns: {
                     available: 'Available',
+                    payable: 'Payable',
                     unit_cost: 'Cost',
                     platform_rate: 'Rate',
                     margin: 'Margin',
@@ -48,6 +59,7 @@ const translations = {
             },
         },
     },
+    product_links: { summary: { bpc: 'BPC' } },
     status: {
         allocation_source: {
             supplier_offer: 'Supplier',
@@ -95,6 +107,7 @@ const candidate = (overrides: Record<string, unknown>) => ({
     unit_cost: money('780.00'),
     platform_rate: money('1300.00'),
     expected_margin: money('1040.00'),
+    expected_payable: money('1560.00'),
     currency_code: 'BDT',
     is_eligible: true,
     ineligible_reason: null,
@@ -113,7 +126,9 @@ const candidate = (overrides: Record<string, unknown>) => ({
     is_related: true,
     source_product_name: 'Cotton Pants',
     source_product_sku: 'CP-1',
-    match_kind: 'group',
+    source_product_bpc: 'AB12CD34E',
+    source_variant_label: 'Black / XL',
+    match_kind: 'exact',
     ...overrides,
 });
 
@@ -139,21 +154,9 @@ const renderPanel = () =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the allocation panel', () => {
-    it('explains the sourcing group and marks group sources, hiding catalogue-wide tabs', async () => {
+    it('shows each source with its BPC, variation and payable', async () => {
         mockSources({
             remaining_quantity: 2,
-            sourcing: {
-                state: 'matched',
-                group: {
-                    id: 'g1',
-                    code: 'regular-pants',
-                    name_en: "Men's regular pants",
-                    name_bn: 'প্যান্ট',
-                    is_active: true,
-                },
-                canonical_product: { name: 'Regular Pants', sku: 'RP' },
-                canonical_variant: 'RP-M — M',
-            },
             candidates: [
                 candidate({}),
                 candidate({
@@ -161,41 +164,33 @@ describe('the allocation panel', () => {
                     source_id: 'w1',
                     source_label: 'Dhaka Central',
                     supplier_name: null,
-                    supply_mode_label: 'Ready stock',
+                    expected_payable: null,
                 }),
             ],
         });
 
         renderPanel();
 
-        await waitFor(() =>
-            expect(
-                screen.getByText("Sourcing group: Men's regular pants"),
-            ).toBeInTheDocument(),
+        await screen.findByText('Dhaka Central');
+        expect(screen.getAllByText(/BPC AB12CD34E · Black \/ XL/)).toHaveLength(
+            2,
         );
-        expect(screen.getAllByText('Same sourcing group')).toHaveLength(2);
-        expect(
-            screen.queryByRole('button', { name: 'All suppliers' }),
-        ).not.toBeInTheDocument();
+        // Only a Supplier source carries a payable.
+        expect(screen.getAllByText('Payable')).toHaveLength(1);
     });
 
-    it('filters between Supplier and Warehouse sources', async () => {
+    it('filters between Supplier and Warehouse sources, and by supply mode', async () => {
         mockSources({
             remaining_quantity: 2,
-            sourcing: {
-                state: 'matched',
-                group: {
-                    id: 'g1',
-                    code: 'x',
-                    name_en: 'Group',
-                    name_bn: 'গ্রুপ',
-                    is_active: true,
-                },
-                canonical_product: null,
-                canonical_variant: null,
-            },
             candidates: [
                 candidate({}),
+                candidate({
+                    source_id: 'c2',
+                    source_label: 'Beta Mills',
+                    supplier_name: 'Beta Mills',
+                    supply_mode: 'pre_order',
+                    supply_mode_label: 'Pre-order',
+                }),
                 candidate({
                     source_type: 'warehouse',
                     source_id: 'w1',
@@ -215,27 +210,33 @@ describe('the allocation panel', () => {
 
         expect(screen.queryByText('Alpha Textiles')).not.toBeInTheDocument();
         expect(screen.getByText('Dhaka Central')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('Source type'), {
+            target: { value: 'all' },
+        });
+        fireEvent.change(screen.getByLabelText('Supply mode'), {
+            target: { value: 'pre_order' },
+        });
+
+        expect(screen.getByText('Beta Mills')).toBeInTheDocument();
+        expect(screen.queryByText('Alpha Textiles')).not.toBeInTheDocument();
+        expect(screen.queryByText('Dhaka Central')).not.toBeInTheDocument();
     });
 
-    it('flags an unmatched line for manual review and keeps the catalogue tabs', async () => {
+    it("offers only this line's own sources: no catalogue-wide tabs", async () => {
         mockSources({
             remaining_quantity: 1,
-            sourcing: {
-                state: 'unmatched',
-                group: null,
-                canonical_product: null,
-                canonical_variant: null,
-            },
             candidates: [candidate({ match_kind: 'exact' })],
         });
 
         renderPanel();
 
+        await screen.findByText('Alpha Textiles');
         expect(
-            await screen.findByText('Unmatched — manual review'),
-        ).toBeInTheDocument();
+            screen.queryByRole('button', { name: 'All suppliers' }),
+        ).not.toBeInTheDocument();
         expect(
-            screen.getByRole('button', { name: 'All suppliers' }),
-        ).toBeInTheDocument();
+            screen.queryByRole('button', { name: 'All warehouses' }),
+        ).not.toBeInTheDocument();
     });
 });

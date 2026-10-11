@@ -45,7 +45,7 @@ class NewDeviceSignIn extends Notification implements ShouldQueue
     {
         return (new MailMessage)
             ->subject(__('A new device signed in to your account'))
-            ->line(__('Your Feriwala account was signed in to from a device we have not seen before.'))
+            ->line(__('Your Banij account was signed in to from a device we have not seen before.'))
             ->line(__('Device: :device', ['device' => $this->device]))
             ->line(__('IP address: :ip', ['ip' => $this->ipAddress ?? __('Unknown')]))
             ->line(__('Time: :time', ['time' => $this->signedInAt]))

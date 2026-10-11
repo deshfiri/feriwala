@@ -6,15 +6,12 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
-use App\Domain\Catalog\Models\Product;
-use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Actions\AdvanceOrderFulfilmentStatus;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
-use App\Domain\Order\Actions\ConfirmProductSourceLink;
 use App\Domain\Order\Actions\EvaluateOrderProceedsEligibility;
 use App\Domain\Order\Actions\RecordCodCollection;
 use App\Domain\Order\Data\AllocationCandidate;
@@ -33,14 +30,13 @@ use App\Domain\Order\Models\OrderFulfillmentStatusChange;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\OrderStatusChange;
-use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\SearchAllocationSources;
-use App\Domain\Sourcing\Models\ProductSourcingGroup;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
+use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Http\Controllers\Controller;
 use App\Integrations\Courier\CourierManager;
@@ -79,13 +75,20 @@ class OrderController extends Controller
 {
     public const PER_PAGE = 25;
 
+    /**
+     * The orderings staff may ask the allocation panel for. None is ever
+     * applied on their behalf.
+     *
+     * @var list<string>
+     */
+    public const CANDIDATE_SORTS = ['cost_asc', 'cost_desc', 'availability_desc', 'lead_time_asc', 'name_asc'];
+
     public function __construct(
         protected CancelUnpaidOrderByStaff $cancel,
         protected CodConfirmationState $confirmations,
         protected AllocationSourceCandidates $candidates,
         protected AllocateOrderLineSource $allocate,
         protected SearchAllocationSources $search,
-        protected ConfirmProductSourceLink $confirmLink,
         protected AdvanceSupplierFulfilmentCommitment $advanceCommitment,
         protected AdvanceOrderFulfilmentStatus $advanceFulfilment,
         protected AdvanceOrderDeliveryStatus $advanceDelivery,
@@ -416,6 +419,15 @@ class OrderController extends Controller
      * allocation panel. The platform ranks nothing here; the panel sorts and
      * filters what this returns, never the query.
      */
+    /**
+     * A line whose Product was force deleted is history: nothing can be
+     * sourced for it, and its own snapshot is all there is to show.
+     */
+    protected function assertLineProductExists(OrderItem $line): void
+    {
+        abort_if($line->product_id === null, 422, __('catalog.products.force_delete.line_product_deleted'));
+    }
+
     public function allocationCandidates(Request $request, string $order, string $item): JsonResponse
     {
         $actor = $this->actor($request);
@@ -424,6 +436,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('viewAllocationSources', $record);
 
         $line = $this->line($record, $item);
+        $this->assertLineProductExists($line);
 
         // When browsing candidates to replace one specific existing split
         // (Advanced Order Management batch, Commit 3), that allocation's own
@@ -440,26 +453,29 @@ class OrderController extends Controller
             'search' => ['sometimes', 'nullable', 'string', 'max:150'],
             'source_type' => ['sometimes', 'nullable', Rule::enum(AllocationSourceType::class)],
             'availability' => ['sometimes', 'nullable', Rule::in(['available'])],
-            'sort' => ['sometimes', 'nullable', Rule::in(['cost_asc', 'cost_desc'])],
+            'supplier' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'supply_mode' => ['sometimes', 'nullable', Rule::enum(SupplyMode::class)],
+            'sort' => ['sometimes', 'nullable', Rule::in(self::CANDIDATE_SORTS)],
         ]);
 
         return response()->json([
             // The platform ranks nothing: these are the staff's own filters
-            // and sort, applied to what the line's sourcing group allows.
+            // and sort, applied to what the ordered Product and the Products
+            // linked to it as the same Product offer.
             'candidates' => array_map(
                 fn (AllocationCandidate $candidate) => $candidate->toArray(),
                 $this->filterCandidates($this->candidates->forLine($line, $excluding), $filters),
             ),
             'already_allocated_quantity' => $line->quantity - $this->candidates->remainingQuantity($line, $excluding),
             'remaining_quantity' => $this->candidates->remainingQuantity($line, $excluding),
-            'sourcing' => $this->sourcingSummary($line),
         ]);
     }
 
     /**
-     * Staff's search, Supplier/Warehouse filter, availability filter and cost
-     * sort, applied after the line's sourcing rules have decided what may be
-     * offered at all.
+     * Staff's search, Supplier/Warehouse filter, supply-mode filter,
+     * availability filter and sort (price, availability, Supplier name, lead
+     * time), applied after the Product links have decided what may be offered
+     * at all. Without a sort the platform imposes no ranking whatsoever.
      *
      * @param  list<AllocationCandidate>  $candidates
      * @param  array<string, mixed>  $filters
@@ -479,54 +495,39 @@ class OrderController extends Controller
                 return false;
             }
 
+            if (filled($filters['supplier'] ?? null) && $candidate->supplierId !== $filters['supplier']) {
+                return false;
+            }
+
+            if (filled($filters['supply_mode'] ?? null) && $candidate->supplyMode->value !== $filters['supply_mode']) {
+                return false;
+            }
+
             if ($search === '') {
                 return true;
             }
 
             return str_contains(mb_strtolower(implode(' ', array_filter([
-                $candidate->sourceLabel, $candidate->supplierName, $candidate->sourceProductName, $candidate->sourceProductSku,
+                $candidate->sourceLabel, $candidate->supplierName, $candidate->sourceProductName,
+                $candidate->sourceProductSku, $candidate->sourceProductBpc,
             ]))), $search);
         }));
 
-        $direction = $filters['sort'] ?? null;
+        $sort = $filters['sort'] ?? null;
 
-        if ($direction !== null) {
-            usort($kept, fn (AllocationCandidate $a, AllocationCandidate $b) => $direction === 'cost_asc'
-                ? $a->unitCost->toDecimal() <=> $b->unitCost->toDecimal()
-                : $b->unitCost->toDecimal() <=> $a->unitCost->toDecimal());
+        if ($sort !== null) {
+            usort($kept, fn (AllocationCandidate $a, AllocationCandidate $b) => match ($sort) {
+                'cost_asc' => $a->unitCost->toDecimal() <=> $b->unitCost->toDecimal(),
+                'cost_desc' => $b->unitCost->toDecimal() <=> $a->unitCost->toDecimal(),
+                'availability_desc' => $b->availableToPromise <=> $a->availableToPromise,
+                // A source that declares no lead time sorts last.
+                'lead_time_asc' => ($a->leadTimeDays ?? PHP_INT_MAX) <=> ($b->leadTimeDays ?? PHP_INT_MAX),
+                'name_asc' => strcmp(mb_strtolower($a->sourceLabel), mb_strtolower($b->sourceLabel)),
+                default => 0,
+            });
         }
 
         return $kept;
-    }
-
-    /**
-     * What this line froze about its fulfilment: the sourcing group and the
-     * canonical product/variation it requires, or an unmatched flag for an
-     * order placed before groups or without an explicit mapping.
-     *
-     * @return array<string, mixed>
-     */
-    protected function sourcingSummary(OrderItem $line): array
-    {
-        if ($line->sourcing_group_id === null) {
-            return ['state' => 'unmatched', 'group' => null, 'canonical_product' => null, 'canonical_variant' => null];
-        }
-
-        $group = ProductSourcingGroup::query()->find($line->sourcing_group_id);
-        $product = Product::query()->find($line->sourcing_canonical_product_id);
-        $variant = $line->sourcing_canonical_variant_id === null
-            ? null
-            : ProductVariant::query()->with('values')->find($line->sourcing_canonical_variant_id);
-
-        return [
-            'state' => 'matched',
-            'group' => $group === null ? null : [
-                'id' => $group->public_id, 'code' => $group->code, 'name_en' => $group->name_en, 'name_bn' => $group->name_bn,
-                'is_active' => $group->is_active,
-            ],
-            'canonical_product' => $product === null ? null : ['name' => $product->name, 'sku' => $product->sku],
-            'canonical_variant' => $variant?->label(),
-        ];
     }
 
     /**
@@ -541,6 +542,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('transition', $record);
 
         $line = $this->line($record, $item);
+        $this->assertLineProductExists($line);
 
         $validated = $request->validate([
             'source_type' => ['required', Rule::enum(AllocationSourceType::class)],
@@ -724,13 +726,9 @@ class OrderController extends Controller
     }
 
     /**
-     * The full eligible catalogue for one line — every approved, active
-     * Supplier offer and every active warehouse stock item, regardless of
-     * which product they are catalogued under — paginated and searchable by
-     * product, SKU, variant, Supplier or warehouse. Gated the same as
-     * {@see allocationCandidates()}: this exposes the same Supplier
-     * identity/rate and warehouse cost/margin figures, just across the
-     * whole catalogue instead of one product.
+     * The same candidates as {@see allocationCandidates()}, narrowed by a
+     * search term or source type: only sources for exactly this line's Product
+     * and variation, never another Product or BPC.
      */
     public function searchAllocationSources(Request $request, string $order, string $item): JsonResponse
     {
@@ -740,6 +738,7 @@ class OrderController extends Controller
         Gate::forUser($actor)->authorize('viewAllocationSources', $record);
 
         $line = $this->line($record, $item);
+        $this->assertLineProductExists($line);
 
         $validated = $request->validate([
             'query' => ['sometimes', 'string', 'max:150'],
@@ -747,80 +746,18 @@ class OrderController extends Controller
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
 
-        $type = isset($validated['source_type']) ? AllocationSourceType::from($validated['source_type']) : null;
-        $page = (int) ($validated['page'] ?? 1);
-
-        // A line with a frozen sourcing group only ever sees its group's
-        // compatible sources -- the catalogue-wide search would show unrelated
-        // products, so it is answered from the same group-scoped list.
-        if ($this->candidates->isGrouped($line)) {
-            $scoped = $this->filterCandidates($this->candidates->forLine($line), [
-                'search' => $validated['query'] ?? '',
-                'source_type' => $validated['source_type'] ?? null,
-            ]);
-
-            return response()->json([
-                'candidates' => array_map(fn (AllocationCandidate $candidate) => $candidate->toArray(), $scoped),
-                'page' => 1,
-                'per_page' => count($scoped),
-                'total' => count($scoped),
-                'has_more' => false,
-            ]);
-        }
-
-        $results = $this->search->search($line, $type, (string) ($validated['query'] ?? ''), $page);
+        $scoped = $this->filterCandidates($this->candidates->forLine($line), [
+            'search' => $validated['query'] ?? '',
+            'source_type' => $validated['source_type'] ?? null,
+        ]);
 
         return response()->json([
-            'candidates' => array_map(
-                fn (AllocationCandidate $candidate) => $candidate->toArray(),
-                $results->items(),
-            ),
-            'page' => $results->currentPage(),
-            'per_page' => $results->perPage(),
-            'total' => $results->total(),
-            'has_more' => $results->hasMorePages(),
+            'candidates' => array_map(fn (AllocationCandidate $candidate) => $candidate->toArray(), $scoped),
+            'page' => 1,
+            'per_page' => count($scoped),
+            'total' => count($scoped),
+            'has_more' => false,
         ]);
-    }
-
-    /**
-     * Confirm that a Supplier offer or warehouse stock item catalogued under
-     * a different product fulfils this line's own product — a durable,
-     * audited {@see ProductSourceLink}, reused (not
-     * duplicated) by every future order for the same product. Never
-     * allocates by itself; a materially different product is refused by the
-     * Action, and staff choosing not to confirm simply never allocates from
-     * that source.
-     */
-    public function confirmSourceLink(Request $request, string $order, string $item): JsonResponse
-    {
-        $actor = $this->actor($request);
-        $record = $this->order($order);
-        $line = $this->line($record, $item);
-
-        $validated = $request->validate([
-            'source_type' => ['required', Rule::enum(AllocationSourceType::class)],
-            'source_id' => ['required', 'string'],
-            'reason' => ['required', 'string', 'min:10', 'max:1000'],
-        ]);
-
-        $sourceType = AllocationSourceType::from($validated['source_type']);
-
-        Gate::forUser($actor)->authorize('confirmSourceLink', [$record, $sourceType]);
-
-        try {
-            $link = $this->confirmLink->handle(
-                $line->product,
-                $line->product_variant_id === null ? null : $line->variant,
-                $sourceType,
-                $validated['source_id'],
-                $actor,
-                $validated['reason'],
-            );
-        } catch (AllocationRefused $refused) {
-            throw ValidationException::withMessages(['source_id' => $refused->getMessage()]);
-        }
-
-        return response()->json(['link' => ['id' => $link->public_id]]);
     }
 
     /**

@@ -75,6 +75,7 @@ class CategoryController extends Controller
                 'create' => CatalogPolicy::canCreate($actor),
                 'edit' => CatalogPolicy::canEdit($actor),
                 'delete' => CatalogPolicy::canDelete($actor),
+                'purge' => CatalogPolicy::canForceDelete($actor),
             ],
 
             // Stated to the form so the help text cannot drift from the check.
@@ -197,6 +198,30 @@ class CategoryController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.categories.deleted')]);
+
+        return back();
+    }
+
+    /**
+     * Delete a category with all its subcategories, after the Super Admin has
+     * confirmed with their password. Refused while any Product still sits in
+     * the branch.
+     */
+    public function purge(Request $request, string $category): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(CatalogPolicy::canForceDelete($actor), 403);
+
+        $request->validate(['password' => ['required', 'string', 'current_password']]);
+
+        try {
+            $deleted = $this->categories->purge($actor, $this->category($category));
+        } catch (CatalogRefused $refused) {
+            return back()->withErrors(['category' => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.categories.purged', ['count' => $deleted])]);
 
         return back();
     }

@@ -7,7 +7,7 @@ import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
-import { index as wholesaleCatalogue } from '@/routes/catalog/wholesale';
+import { index as wholesaleCatalogue } from '@/routes/catalog';
 import { index, show } from '@/routes/wholesale/orders';
 import type { Paginated, WholesaleOrderSummary } from '@/types/orders';
 

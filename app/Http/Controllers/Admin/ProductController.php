@@ -27,12 +27,12 @@ use App\Domain\Catalog\ProductDeletionRule;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\ProductSeo;
 use App\Domain\Catalog\WholesalePriceResolver;
+use App\Domain\ContentLibrary\ContentBlocks;
+use App\Domain\ContentLibrary\Models\ContentLibraryItem;
+use App\Domain\ContentLibrary\Policies\ContentLibraryPolicy;
 use App\Domain\Inventory\Actions\SyncProductStockStatus;
 use App\Domain\Package\Models\Package;
-use App\Domain\Sourcing\Actions\ManageSourcingGroups;
-use App\Domain\Sourcing\Exceptions\SourcingGroupRefused;
-use App\Domain\Sourcing\Models\ProductSourcingGroup;
-use App\Domain\Sourcing\Queries\SourcingGroupOptions;
+use App\Domain\Sourcing\Queries\ProductSuppliersSection;
 use App\Domain\Storage\ManagedStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
@@ -207,10 +207,6 @@ class ProductController extends Controller
             'options' => $this->options(),
             'can' => $this->abilities($actor),
 
-            // Staff-only: lets the new product be put into a sourcing group
-            // from a pop-up while it is being added.
-            'sourcing' => app(SourcingGroupOptions::class)->forReview($actor, null),
-
             // Media and variations are added once the product exists to hang
             // them on.
             'media' => [],
@@ -236,49 +232,9 @@ class ProductController extends Controller
 
         $product = $this->products->create($actor, $request->productAttributes());
 
-        $assigned = $this->assignToSourcingGroup($actor, $product, $request->validated('sourcing_group_id'));
-
-        // One toast: the product is created either way; a refused group
-        // assignment is said plainly beside it as a warning.
-        Inertia::flash('toast', [
-            'type' => is_string($assigned) ? 'warning' : 'success',
-            'message' => trim(__('catalog.products.created', ['name' => $product->name]).' '.match (true) {
-                $assigned === true => __('catalog.products.sourcing_assigned'),
-                is_string($assigned) => $assigned,
-                default => '',
-            }),
-        ]);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('catalog.products.created', ['name' => $product->name])]);
 
         return redirect()->route('admin.catalog.products.edit', $product->public_id);
-    }
-
-    /**
-     * Put a just-created product into the chosen sourcing group.
-     *
-     * Never blocks the product: the product already exists, so a refusal (no
-     * permission, inactive group) is reported beside the success rather than
-     * undoing it. Returns true on success, a message on refusal, null when no
-     * group was chosen.
-     */
-    protected function assignToSourcingGroup(User $actor, Product $product, ?string $groupId): bool|string|null
-    {
-        if (blank($groupId)) {
-            return null;
-        }
-
-        $group = ProductSourcingGroup::query()->where('public_id', $groupId)->first();
-
-        if ($group === null || ! $actor->can('update', $group)) {
-            return __('catalog.products.sourcing_forbidden');
-        }
-
-        try {
-            app(ManageSourcingGroups::class)->addProduct($actor, $group, $product, 'Assigned when the product was added.');
-        } catch (SourcingGroupRefused $exception) {
-            return $exception->getMessage();
-        }
-
-        return true;
     }
 
     public function edit(Request $request, string $product): Response
@@ -295,6 +251,9 @@ class ProductController extends Controller
             'product' => $this->detail($record),
             'options' => $this->options(),
             'can' => $this->abilities($actor),
+
+            // Which Suppliers actually have it: null without `product_supplier.view`.
+            'product_suppliers' => app(ProductSuppliersSection::class)->forProduct($record, $actor),
 
             /*
              * The lifecycle moves this person may make from here (§11.2). Only
@@ -437,6 +396,11 @@ class ProductController extends Controller
 
             // Updates published for this product, newest first (new feature).
             'content' => $record->contents->map(fn (ProductContent $content) => $this->contentRow($content))->all(),
+
+            // Content Library items released to this product, shown beside its
+            // own updates so everything published for it reads in one place.
+            // Null for someone who may not view the library.
+            'library_content' => $this->libraryContent($record, $actor),
             'content_limits' => [
                 'image_types' => PublishProductContent::IMAGE_TYPES,
                 'file_types' => PublishProductContent::FILE_TYPES,
@@ -444,6 +408,40 @@ class ProductController extends Controller
                 'file_max_mb' => $this->megabytes(PublishProductContent::FILE_MAX_BYTES),
             ],
         ]);
+    }
+
+    /**
+     * @return array{items: list<array<string, mixed>>, can: array<string, bool>}|null
+     */
+    protected function libraryContent(Product $product, User $actor): ?array
+    {
+        if (! ContentLibraryPolicy::canView($actor)) {
+            return null;
+        }
+
+        $blocks = app(ContentBlocks::class);
+
+        return [
+            'items' => $product->libraryContent()
+                ->with('creator:id,name')
+                ->withCount('products')
+                ->get()
+                ->map(fn (ContentLibraryItem $item) => [
+                    'id' => $item->public_id,
+                    'title' => $item->title,
+                    'published_at' => $item->published_at->toIso8601String(),
+                    'published_by' => $item->creator?->name,
+                    'products_count' => (int) $item->getAttribute('products_count'),
+                    'blocks' => $blocks->present($item->blocks),
+                ])
+                ->values()
+                ->all(),
+            'can' => [
+                'publish' => ContentLibraryPolicy::canPublish($actor),
+                'edit' => ContentLibraryPolicy::canEdit($actor),
+                'delete' => ContentLibraryPolicy::canDelete($actor),
+            ],
+        ];
     }
 
     public function update(SaveProductRequest $request, string $product): RedirectResponse

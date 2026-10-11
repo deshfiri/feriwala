@@ -6,7 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
-use App\Domain\Sourcing\Queries\SourcingGroupOptions;
+use App\Domain\Sourcing\Queries\ProductLinkSummaries;
 use App\Domain\Supplier\Actions\DecideSupplierListing;
 use App\Domain\Supplier\Actions\RequestSupplierListingCorrection;
 use App\Domain\Supplier\Enums\ListingStatus;
@@ -50,6 +50,9 @@ class SupplierListingController extends Controller
             ->when($request->filled('submitted_from'), fn ($q) => $q->where('submitted_at', '>=', $request->date('submitted_from')))
             ->when($request->filled('submitted_to'), fn ($q) => $q->where('submitted_at', '<=', $request->date('submitted_to')))
             ->where('status', '!=', ListingStatus::Draft->value)
+            // A batch's entries are reviewed together, as one batch, on the lot
+            // screen -- never as scattered single rows beside it.
+            ->whereNull('lot_id')
             ->orderBy('submitted_at')
             ->paginate(25)
             ->withQueryString()
@@ -72,9 +75,15 @@ class SupplierListingController extends Controller
         ]);
     }
 
-    public function show(Request $request, SupplierProductListing $listing): Response
+    public function show(Request $request, SupplierProductListing $listing): Response|RedirectResponse
     {
         Gate::authorize('view', $listing);
+
+        $lot = $listing->lot;
+
+        if ($lot !== null) {
+            return to_route('admin.supplier-listing-lots.show', $lot->public_id);
+        }
 
         /** @var User $reviewer */
         $reviewer = $request->user();
@@ -103,6 +112,11 @@ class SupplierListingController extends Controller
                 'can_decide' => Gate::allows('decide', $listing) && $mayEditPricing,
                 'may_view_pricing' => $mayViewPricing,
                 'connected_product' => $listing->connectedProduct?->public_id,
+                // Said back in full once it is connected, so the page never asks
+                // "link an existing or create new" again for it.
+                'connected_product_summary' => $listing->connectedProduct === null
+                    ? null
+                    : app(ProductLinkSummaries::class)->one($listing->connectedProduct),
                 'items' => $listing->items->map(fn (SupplierProductListingItem $item) => [
                     'id' => $item->public_id,
                     'variant_label' => $item->variant_label,
@@ -128,9 +142,6 @@ class SupplierListingController extends Controller
                 'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(['public_id', 'name'])
                     ->map(fn (Category $c) => ['value' => $c->public_id, 'label' => $c->name])->all(),
             ],
-            // Staff-only: which sourcing group the approved offers fulfil
-            // orders through.
-            'sourcing' => app(SourcingGroupOptions::class)->forReview($reviewer, $listing->connectedProduct),
             'history' => $listing->statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),
@@ -167,6 +178,11 @@ class SupplierListingController extends Controller
     {
         Gate::authorize('decide', $listing);
 
+        // Deciding a batch entry alone would leave the batch's own status stale.
+        if ($listing->lot_id !== null) {
+            throw ValidationException::withMessages(['listing' => __('supplier.admin.listing_lots.decide_in_batch')]);
+        }
+
         /** @var User $reviewer */
         $reviewer = $request->user();
 
@@ -178,19 +194,18 @@ class SupplierListingController extends Controller
             'category_id' => ['nullable', 'string'],
             'brand_id' => ['nullable', 'string'],
 
-            // The sourcing group this product fulfils orders through; chosen
-            // by staff, required when approving unless the product is
-            // already in one.
-            'sourcing_group_id' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'string'],
             'items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
             'items.*.variant_id' => ['nullable', 'string'],
-            'items.*.canonical_variant_id' => ['nullable', 'string'],
 
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
             'items.*.platform_rate' => ['nullable', new DecimalAmountRule],
+
+            // The Supplier Base Price a reviewer confirms or overrides at
+            // approval; left out, the Supplier's own proposed price stands.
+            'items.*.supplier_rate' => ['nullable', new DecimalAmountRule],
 
             // Left out to open the offer at the quantity the Supplier said
             // they could supply; sent only when a reviewer approves a
@@ -209,6 +224,10 @@ class SupplierListingController extends Controller
         $validated['items'] = array_values(array_map(function (array $item) {
             if (isset($item['platform_rate'])) {
                 $item['platform_rate'] = DecimalAmount::parse($item['platform_rate']);
+            }
+
+            if (isset($item['supplier_rate'])) {
+                $item['supplier_rate'] = DecimalAmount::parse($item['supplier_rate']);
             }
 
             return $item;
@@ -235,7 +254,6 @@ class SupplierListingController extends Controller
                     'sku' => $validated['sku'] ?? null,
                     'category_id' => $validated['category_id'] ?? null,
                     'brand_id' => $validated['brand_id'] ?? null,
-                    'sourcing_group_id' => $validated['sourcing_group_id'] ?? null,
                 ],
                 $validated['items'],
                 $validated['reason'],

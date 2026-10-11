@@ -37,6 +37,7 @@ import type {
     SalesChannelName,
 } from '@/types';
 import TrashReasonDialog from './trash-reason-dialog';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
     products: Paginator<ProductRow>;
@@ -773,7 +774,8 @@ function BulkConfirmDialog({
                             error={errors.reason}
                         >
                             {(field) => (
-                                <textarea
+                                <ReasonTextarea
+                                    context="product"
                                     {...field}
                                     rows={3}
                                     maxLength={2000}

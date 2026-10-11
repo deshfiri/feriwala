@@ -63,6 +63,12 @@ enum PermissionModule: string
     /** Which catalogue products can fulfil one another's orders (Product Sourcing Groups). */
     case SourcingGroup = 'sourcing_group';
 
+    /** Content written once and released to chosen Products (Content Library). */
+    case ContentLibrary = 'content_library';
+
+    /** Which Suppliers actually have which Product (Product supplier assignments). */
+    case ProductSupplier = 'product_supplier';
+
     public function label(): string
     {
         return match ($this) {
@@ -102,6 +108,8 @@ enum PermissionModule: string
             self::SupplierPayable => 'Supplier payables',
             self::DeliverySettings => 'Delivery charge settings',
             self::SourcingGroup => 'Product sourcing groups',
+            self::ContentLibrary => 'Content library',
+            self::ProductSupplier => 'Product suppliers',
         };
     }
 }

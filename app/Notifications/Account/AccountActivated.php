@@ -54,7 +54,7 @@ class AccountActivated extends Notification implements ShouldQueue
     {
         $message = (new MailMessage)
             ->subject(__('Your account is now active'))
-            ->line(__('Your Feriwala account has been approved and is ready to use.'));
+            ->line(__('Your Banij account has been approved and is ready to use.'));
 
         if ($this->note !== null && trim($this->note) !== '') {
             $message->line($this->note);

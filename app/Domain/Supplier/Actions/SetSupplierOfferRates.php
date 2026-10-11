@@ -42,10 +42,6 @@ class SetSupplierOfferRates
             throw new InvalidArgumentException('Neither rate may be negative.');
         }
 
-        if ($platformRate->lessThan($supplierRate)) {
-            throw new InvalidArgumentException('The Platform Rate cannot be lower than the Supplier Rate.');
-        }
-
         return $this->database->transaction(function () use ($offer, $reviewerId, $supplierRate, $platformRate, $reason) {
             /** @var SupplierOffer $locked */
             $locked = SupplierOffer::query()->lockForUpdate()->findOrFail($offer->id);

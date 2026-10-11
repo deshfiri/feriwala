@@ -60,7 +60,7 @@ describe('catalogue navigation', () => {
         titles = [];
     });
 
-    it('gives a partner their own catalogue and none of the administration', () => {
+    it('gives a partner one Products door and none of the administration', () => {
         renderFor({
             permissions: { 'catalog.view': false },
             account: {
@@ -71,12 +71,17 @@ describe('catalogue navigation', () => {
             },
         });
 
-        expect(titles).toContain('nav.wholesale_catalogue');
-        expect(titles).toContain('nav.dropshipping_catalogue');
-        ADMIN_CATALOGUE.forEach((title) => expect(titles).not.toContain(title));
+        expect(titles.filter((title) => title === 'nav.products')).toHaveLength(
+            1,
+        );
+        expect(titles).not.toContain('nav.wholesale_catalogue');
+        expect(titles).not.toContain('nav.dropshipping_catalogue');
+        ADMIN_CATALOGUE.filter((title) => title !== 'nav.products').forEach(
+            (title) => expect(titles).not.toContain(title),
+        );
     });
 
-    it('drops a partner catalogue their package does not include', () => {
+    it('drops the Products door when the package includes neither way of using them', () => {
         renderFor({
             permissions: {},
             account: {
@@ -87,8 +92,7 @@ describe('catalogue navigation', () => {
             },
         });
 
-        expect(titles).not.toContain('nav.wholesale_catalogue');
-        expect(titles).not.toContain('nav.dropshipping_catalogue');
+        expect(titles).not.toContain('nav.products');
     });
 
     it('gives staff who may view the catalogue its administration, and no partner doors', () => {
@@ -106,16 +110,10 @@ describe('catalogue navigation', () => {
 });
 
 /**
- * The wholesale cart (§14, P4-4): a door for an account that may buy wholesale,
- * with the count in words, and none for anybody else.
+ * The cart is a top-bar control (PartnerHeaderTools), never a sidebar entry.
  */
 describe('wholesale cart navigation', () => {
     let root: Root;
-
-    const renderFor = (props: Record<string, unknown>) => {
-        page.props = { translations: {}, ...props };
-        act(() => root.render(<Harness />));
-    };
 
     beforeEach(() => {
         globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -127,8 +125,9 @@ describe('wholesale cart navigation', () => {
         titles = [];
     });
 
-    it('offers the cart, with its count, to an account that may buy wholesale', () => {
-        renderFor({
+    it('keeps the cart out of the sidebar, whatever the account may buy', () => {
+        page.props = {
+            translations: {},
             permissions: {},
             account: {
                 status: 'active',
@@ -137,30 +136,9 @@ describe('wholesale cart navigation', () => {
                 managesStaff: false,
                 wholesaleCartLines: 3,
             },
-        });
+        };
+        act(() => root.render(<Harness />));
 
-        expect(titles).toContain('nav.wholesale_cart (3)');
-    });
-
-    it('offers no cart where wholesale is not included, nor to platform staff', () => {
-        renderFor({
-            permissions: { 'catalog.view': true },
-            account: {
-                status: 'active',
-                allowsWholesale: false,
-                allowsDropshipping: true,
-                managesStaff: false,
-                wholesaleCartLines: 0,
-            },
-        });
-        expect(
-            titles.some((title) => title.startsWith('nav.wholesale_cart')),
-        ).toBe(false);
-
-        act(() => root.unmount());
-        root = createRoot(document.createElement('div'));
-
-        renderFor({ permissions: { 'catalog.view': true }, account: null });
         expect(
             titles.some((title) => title.startsWith('nav.wholesale_cart')),
         ).toBe(false);
@@ -206,7 +184,7 @@ describe('wholesale order navigation', () => {
             },
         });
 
-        expect(titles).toContain('nav.wholesale_orders');
+        expect(titles).toContain('nav.orders');
     });
 
     it('keeps the orders door while there are orders to follow, after wholesale is no longer included', () => {
@@ -219,7 +197,7 @@ describe('wholesale order navigation', () => {
             },
         });
 
-        expect(titles).toContain('nav.wholesale_orders');
+        expect(titles).toContain('nav.orders');
         expect(titles).not.toContain('nav.wholesale_cart');
     });
 
@@ -232,13 +210,13 @@ describe('wholesale order navigation', () => {
                 hasWholesaleOrders: false,
             },
         });
-        expect(titles).not.toContain('nav.wholesale_orders');
+        expect(titles).not.toContain('nav.orders');
 
         act(() => root.unmount());
         root = createRoot(document.createElement('div'));
 
-        renderFor({ permissions: { 'order.view': true }, account: null });
-        expect(titles).not.toContain('nav.wholesale_orders');
+        renderFor({ permissions: {}, account: null });
+        expect(titles).not.toContain('nav.orders');
     });
 });
 
@@ -281,8 +259,8 @@ describe('order review navigation', () => {
                 hasWholesaleOrders: true,
             },
         });
-        expect(titles).toContain('nav.wholesale_orders');
-        expect(titles).not.toContain('nav.orders');
+        expect(titles).toContain('nav.orders');
+        expect(titles).not.toContain('nav.returns');
 
         act(() => root.unmount());
         root = createRoot(document.createElement('div'));

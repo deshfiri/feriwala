@@ -205,9 +205,14 @@ enum PlatformRole: string
                 Module::Supplier->value => [Action::View],
                 Module::SupplierListing->value => [Action::View],
                 Module::SourcingGroup->value => [Action::View],
+
+                Module::ProductSupplier->value => [Action::View, Action::Create, Action::Edit],
+                Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
             ],
 
             self::ContentManager => [
+                Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
+                Module::Catalog->value => [Action::View],
                 Module::Cms->value => [...$manage, Action::Publish, Action::Unpublish, Action::Archive],
                 Module::Seo->value => [Action::View, Action::Edit],
             ],
@@ -242,6 +247,8 @@ enum PlatformRole: string
                  */
                 Module::SupplierListing->value => [Action::View],
                 Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit, Action::Archive],
+                Module::ProductSupplier->value => [Action::View, Action::Create, Action::Edit],
+                Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
             ],
 
             self::InventoryManager => [
@@ -377,6 +384,7 @@ enum PlatformRole: string
                 // Deciding which Supplier listings fulfil which product is
                 // part of reviewing them.
                 Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit],
+                Module::ProductSupplier->value => [Action::View, Action::Create, Action::Edit],
 
                 /*
                  * View, decide and reject a Supplier withdrawal (D25,

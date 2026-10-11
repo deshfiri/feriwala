@@ -12,7 +12,7 @@ return [
     ],
 
     'partner' => [
-        'title' => 'Add Client/Partner',
+        'title' => 'Add Partner',
         'description' => 'Open an account on someone\'s behalf. The owner sets their own password from an emailed link; you never see or choose one.',
     ],
     'supplier' => [

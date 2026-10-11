@@ -160,7 +160,8 @@ describe('admin return page', () => {
             screen.getByRole('button', { name: 'returns.admin.reject' }),
         ).toBeInTheDocument();
 
-        for (const reason of screen.getAllByRole('textbox')) {
+        // A reason is chosen from the ready-made list (or written under Other).
+        for (const reason of screen.getAllByRole('combobox')) {
             expect(reason).toBeRequired();
         }
 

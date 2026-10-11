@@ -14,6 +14,10 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
+ * **Legacy — no longer used by allocation.** Allocation offers only sources for
+ * the exact ordered Product and variation; confirmed source links are kept as
+ * inactive history and never produce a candidate. Do not build on this.
+ *
  * The full eligible Supplier-offer and warehouse-stock catalogue, searchable
  * by product, SKU, variant, Supplier or warehouse — not limited to a source
  * already catalogued under the ordered product/variation.

@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { WalletMovement } from '@/types/wallet';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 const controlClass =
     'border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
@@ -92,7 +93,8 @@ export default function ReverseMovementDialog({
                                     {t('wallet.admin.reverse.reason')}
                                 </Label>
 
-                                <textarea
+                                <ReasonTextarea
+                                    context="wallet"
                                     id="reverse-reason"
                                     name="reason"
                                     rows={3}

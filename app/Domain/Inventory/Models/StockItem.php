@@ -22,8 +22,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property string $public_id
  * @property int $warehouse_id
- * @property int $product_id
+ * @property int|null $product_id
  * @property int|null $product_variant_id
+ * @property array<string, mixed>|null $product_id_snapshot
+ * @property array<string, mixed>|null $product_variant_id_snapshot
  * @property int $available
  * @property int $reserved
  * @property int $processing
@@ -36,7 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read Warehouse $warehouse
- * @property-read Product $product
+ * @property-read Product|null $product
  * @property-read ProductVariant|null $variant
  */
 class StockItem extends Model
@@ -59,6 +61,8 @@ class StockItem extends Model
             'damaged' => 'integer',
             'allocated' => 'integer',
             'low_stock_threshold' => 'integer',
+            'product_id_snapshot' => 'array',
+            'product_variant_id_snapshot' => 'array',
             'low_stock_alerted_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -74,11 +78,14 @@ class StockItem extends Model
     }
 
     /**
+     * The Product, trashed or not. Null once a Super Admin has force deleted it;
+     * {@see productName()} and friends then read the snapshot kept on this row.
+     *
      * @return BelongsTo<Product, $this>
      */
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class)->withTrashed();
     }
 
     /**
@@ -129,7 +136,61 @@ class StockItem extends Model
      */
     public function sku(): string
     {
-        return $this->variant !== null ? $this->variant->sku : $this->product->sku;
+        $variant = $this->liveVariant();
+
+        if ($variant !== null) {
+            return $variant->sku;
+        }
+
+        if ($this->product_variant_id === null && $this->product_variant_id_snapshot !== null) {
+            return (string) ($this->product_variant_id_snapshot['sku'] ?? '');
+        }
+
+        $product = $this->liveProduct();
+
+        return $product !== null ? $product->sku : (string) ($this->product_id_snapshot['sku'] ?? '');
+    }
+
+    public function productName(): string
+    {
+        $product = $this->liveProduct();
+
+        return $product !== null ? $product->name : (string) ($this->product_id_snapshot['name'] ?? '');
+    }
+
+    public function productPublicId(): ?string
+    {
+        $product = $this->liveProduct();
+
+        return $product !== null ? $product->public_id : ($this->product_id_snapshot['public_id'] ?? null);
+    }
+
+    public function variantPublicId(): ?string
+    {
+        $variant = $this->liveVariant();
+
+        return $variant !== null ? $variant->public_id : ($this->product_variant_id_snapshot['public_id'] ?? null);
+    }
+
+    /**
+     * The Product while it exists, trashed or not; null once force deleted.
+     */
+    protected function liveProduct(): ?Product
+    {
+        return $this->product_id === null ? null : $this->product;
+    }
+
+    protected function liveVariant(): ?ProductVariant
+    {
+        return $this->product_variant_id === null ? null : $this->variant;
+    }
+
+    /**
+     * Whether the Product this stock was held for has been force deleted.
+     */
+    public function productWasDeleted(): bool
+    {
+        return $this->product_id === null;
     }
 
     /**

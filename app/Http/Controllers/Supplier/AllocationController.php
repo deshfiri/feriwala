@@ -64,7 +64,7 @@ class AllocationController extends Controller
             'order_reference' => $item->order->reference,
             'order_status' => $item->order->status->value,
             'placed_at' => $item->order->placed_at->toIso8601String(),
-            'product_name' => $item->product->name,
+            'product_name' => $item->product_name,
             'variant' => $item->variant?->public_id,
             'quantity' => $item->supplier_allocated_quantity,
             'supplier_rate' => $item->supplier_rate?->jsonSerialize(),

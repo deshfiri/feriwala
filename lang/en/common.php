@@ -144,7 +144,7 @@ return [
         'label' => 'Appearance',
         // Stored per browser, not on the account, so say so rather than let
         // someone wonder why their phone did not change with their laptop.
-        'description' => 'Choose how Feriwala looks on this device.',
+        'description' => 'Choose how Banij looks on this device.',
         'light' => 'Light',
         'dark' => 'Dark',
         'system' => 'System',

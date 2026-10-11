@@ -3,6 +3,7 @@ import { ArrowLeft, ImageOff, Paperclip, ShoppingBasket } from 'lucide-react';
 import { useState } from 'react';
 import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
+import BlockView from '@/components/content-library/block-view';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import MoneyInput from '@/components/money-input';
@@ -15,24 +16,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import { index as dropshippingIndex } from '@/routes/catalog/dropshipping';
-import { index as wholesaleIndex } from '@/routes/catalog/wholesale';
+import { index as productsIndex } from '@/routes/catalog';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { index as websiteProducts } from '@/routes/websites/products';
 import type {
-    BrowseCard,
     BrowseDetail,
     ContentRow,
+    PartnerProductCard,
     SalesChannelName,
 } from '@/types';
-import { ProductCard } from './browse';
+import type { LibraryContent } from '@/types/content-library';
+import { ProductTile } from './products';
 
 type Props = {
-    channel: SalesChannelName;
+    channel: SalesChannelName | 'all';
+    /** The ways this account can use the product; both for a unified page. */
+    modes: { wholesale: boolean; partner_selling: boolean };
     account_type: 'conditional' | 'non_conditional';
     product: BrowseDetail;
     /** Only the recommendations this account may itself open on this channel. */
-    related: BrowseCard[];
+    related: PartnerProductCard[];
     /**
      * The account's open storefronts, and whether each already sells this
      * (§15, P5-1). Empty on the wholesale screen and for an account with no
@@ -43,6 +46,8 @@ type Props = {
     product_id?: string;
     /** Updates published for this product, newest first (new feature). */
     content: ContentRow[];
+    /** Content Library items released to this product, newest first. */
+    library_content?: LibraryContent[];
     /** Whether stock can stop an order; when off, out-of-stock products can still be added. */
     stock_enforced?: boolean;
 };
@@ -56,13 +61,14 @@ type Props = {
  * arrives, so a band the base price has since undercut shows what is charged.
  */
 export default function CatalogueProduct({
-    channel,
+    modes,
     account_type: accountType,
     product,
     related,
     websites = [],
     product_id: productId,
     content,
+    library_content: libraryContent = [],
     stock_enforced: stockEnforced = true,
 }: Props) {
     const { t } = useTranslation();
@@ -80,15 +86,11 @@ export default function CatalogueProduct({
 
             <PageContainer>
                 <Link
-                    href={
-                        channel === 'wholesale'
-                            ? wholesaleIndex()
-                            : dropshippingIndex()
-                    }
+                    href={productsIndex()}
                     className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm"
                 >
                     <ArrowLeft className="size-4" aria-hidden="true" />
-                    {t(`catalog.browse.back_${channel}`)}
+                    {t('partner_products.title')}
                 </Link>
 
                 <PageHeader
@@ -96,91 +98,81 @@ export default function CatalogueProduct({
                     description={`${product.category}${product.brand ? ` · ${product.brand}` : ''}`}
                 />
 
-                {channel === 'dropshipping' &&
-                    productId &&
-                    websites.length > 0 && (
-                        <SectionCard
-                            title={t('catalog.websites.title')}
-                            description={t('catalog.websites.description')}
-                        >
-                            <ul className="divide-border divide-y">
-                                {websites.map((website) => (
-                                    <li
-                                        key={website.id}
-                                        className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                                    >
-                                        <div className="min-w-0">
-                                            <div className="truncate text-sm font-medium">
-                                                {website.name}
-                                            </div>
-                                            {website.selected && (
-                                                <div className="text-muted-foreground text-xs">
-                                                    {t(
-                                                        'catalog.websites.already',
-                                                    )}
-                                                </div>
-                                            )}
+                {modes.partner_selling && productId && websites.length > 0 && (
+                    <SectionCard
+                        title={t('catalog.websites.title')}
+                        description={t('catalog.websites.description')}
+                    >
+                        <ul className="divide-border divide-y">
+                            {websites.map((website) => (
+                                <li
+                                    key={website.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="truncate text-sm font-medium">
+                                            {website.name}
                                         </div>
+                                        {website.selected && (
+                                            <div className="text-muted-foreground text-xs">
+                                                {t('catalog.websites.already')}
+                                            </div>
+                                        )}
+                                    </div>
 
-                                        {website.selected ? (
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                asChild
-                                            >
-                                                <Link
-                                                    href={websiteProducts(
-                                                        website.id,
-                                                    )}
-                                                >
-                                                    {t(
-                                                        'catalog.websites.manage',
-                                                    )}
-                                                </Link>
-                                            </Button>
-                                        ) : (
-                                            <Form
-                                                {...WebsiteProductController.store.form(
+                                    {website.selected ? (
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={websiteProducts(
                                                     website.id,
                                                 )}
-                                                options={{
-                                                    preserveScroll: true,
-                                                }}
-                                                transform={(data) => ({
-                                                    ...data,
-                                                    product: productId,
-                                                })}
                                             >
-                                                {({ processing, errors }) => (
-                                                    <div className="space-y-1">
-                                                        <Button
-                                                            type="submit"
-                                                            size="sm"
-                                                            disabled={
-                                                                processing
-                                                            }
-                                                        >
-                                                            {processing && (
-                                                                <Spinner />
-                                                            )}
-                                                            {t(
-                                                                'catalog.websites.add',
-                                                            )}
-                                                        </Button>
-                                                        <InputError
-                                                            message={
-                                                                errors.product
-                                                            }
-                                                        />
-                                                    </div>
-                                                )}
-                                            </Form>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        </SectionCard>
-                    )}
+                                                {t('catalog.websites.manage')}
+                                            </Link>
+                                        </Button>
+                                    ) : (
+                                        <Form
+                                            {...WebsiteProductController.store.form(
+                                                website.id,
+                                            )}
+                                            options={{
+                                                preserveScroll: true,
+                                            }}
+                                            transform={(data) => ({
+                                                ...data,
+                                                product: productId,
+                                            })}
+                                        >
+                                            {({ processing, errors }) => (
+                                                <div className="space-y-1">
+                                                    <Button
+                                                        type="submit"
+                                                        size="sm"
+                                                        disabled={processing}
+                                                    >
+                                                        {processing && (
+                                                            <Spinner />
+                                                        )}
+                                                        {t(
+                                                            'catalog.websites.add',
+                                                        )}
+                                                    </Button>
+                                                    <InputError
+                                                        message={errors.product}
+                                                    />
+                                                </div>
+                                            )}
+                                        </Form>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </SectionCard>
+                )}
 
                 <div className="grid gap-6 lg:grid-cols-2">
                     <div className="space-y-3">
@@ -262,15 +254,41 @@ export default function CatalogueProduct({
                     </div>
 
                     <div className="space-y-4">
-                        <p className="text-muted-foreground font-mono text-xs">
-                            {t('catalog.browse.sku', { sku: product.sku })}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-muted-foreground font-mono text-xs">
+                                {t('catalog.browse.sku', { sku: product.sku })}
+                            </p>
+                            {modes.wholesale && (
+                                <StatusPill
+                                    tone="info"
+                                    label={t(
+                                        'partner_products.modes.wholesale',
+                                    )}
+                                />
+                            )}
+                            {modes.partner_selling && (
+                                <StatusPill
+                                    tone="success"
+                                    label={t(
+                                        'partner_products.modes.partner_selling',
+                                    )}
+                                />
+                            )}
+                            <StatusPill
+                                tone="neutral"
+                                label={t(
+                                    product.package_scope === 'selected'
+                                        ? 'partner_products.details.package_selected'
+                                        : 'partner_products.details.package_all',
+                                )}
+                            />
+                        </div>
 
                         {product.short_description && (
                             <p>{product.short_description}</p>
                         )}
 
-                        {channel === 'wholesale' ? (
+                        {modes.wholesale && (
                             <>
                                 <WholesaleTerms product={product} />
                                 <AddToCart
@@ -281,7 +299,8 @@ export default function CatalogueProduct({
                                     stockEnforced={stockEnforced}
                                 />
                             </>
-                        ) : (
+                        )}
+                        {modes.partner_selling && (
                             <SellingGuidance product={product} />
                         )}
                     </div>
@@ -328,7 +347,7 @@ export default function CatalogueProduct({
                                                 amount={variant.wholesale_price}
                                             />
                                         )}
-                                        {channel === 'wholesale' &&
+                                        {modes.wholesale &&
                                             variant.in_stock !== undefined && (
                                                 <StockLine
                                                     inStock={variant.in_stock}
@@ -425,21 +444,27 @@ export default function CatalogueProduct({
                     </SectionCard>
                 )}
 
+                {libraryContent.map((entry) => (
+                    <SectionCard
+                        key={entry.id}
+                        title={entry.title}
+                        description={new Date(
+                            entry.published_at,
+                        ).toLocaleDateString()}
+                    >
+                        <BlockView blocks={entry.blocks} />
+                    </SectionCard>
+                ))}
+
                 {related.length > 0 && (
                     <SectionCard
                         title={t('catalog.browse.related')}
                         contentClassName="p-0"
                     >
-                        <ul className="grid gap-px sm:grid-cols-2 lg:grid-cols-4">
+                        <ul className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
                             {related.map((item) => (
-                                <li
-                                    key={item.slug}
-                                    className="border-border border-b sm:border-r"
-                                >
-                                    <ProductCard
-                                        channel={channel}
-                                        product={item}
-                                    />
+                                <li key={item.slug} className="flex">
+                                    <ProductTile product={item} />
                                 </li>
                             ))}
                         </ul>

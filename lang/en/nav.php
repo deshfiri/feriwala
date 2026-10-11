@@ -9,8 +9,13 @@ return [
      */
     'groups' => [
         'overview' => 'Overview',
-        'business' => 'My business',
+        'products' => 'Products',
+        'sales' => 'Sales & Orders',
+        'finance' => 'Finance',
+        'business' => 'Business',
+        'account' => 'Account',
         'administration' => 'Administration',
+        'platform_settings' => 'Platform settings',
         'settings' => 'Settings',
     ],
 
@@ -22,11 +27,12 @@ return [
     'wholesale_catalogue' => 'Wholesale catalogue',
     'wholesale_cart' => 'Wholesale cart',
     'wholesale_orders' => 'Wholesale orders',
-    'dropshipping_catalogue' => 'Dropshipping catalogue',
+    'dropshipping_catalogue' => 'Partner Selling Products',
     'websites' => 'My websites',
     'staff' => 'Staff',
     'profile' => 'Profile',
     'security' => 'Security',
+    'appearance' => 'Appearance',
 
     'kyc_review' => 'KYC review',
     'kyc_requirements' => 'Verification requirements',
@@ -50,7 +56,7 @@ return [
     'payments' => 'Payments',
     'wallets' => 'Account wallets',
     'deposit_rules' => 'Deposit rules',
-    'account_withdrawals' => 'Client/Partner withdrawals',
+    'account_withdrawals' => 'Partner withdrawals',
     'withdrawal_limits' => 'Withdrawal limits',
     'settings_hub' => 'Settings',
     'roles' => 'Roles & permissions',
@@ -60,6 +66,7 @@ return [
     'storage_settings' => 'Storage (R2)',
     'account_verification_settings' => 'Account verification',
     'product_deletion_settings' => 'Product deletion',
+    'content_library' => 'Content library',
     'stock' => 'Stock',
     'warehouses' => 'Warehouses',
     'reservations' => 'Reservations',
@@ -79,7 +86,7 @@ return [
     'shipments' => 'Shipments',
     'delivery_settings' => 'Delivery settings',
     'sourcing_groups' => 'Sourcing groups',
-    'add_account' => 'Add Client/Partner',
+    'add_account' => 'Add Partner',
     'add_supplier' => 'Add Supplier',
 
     'search' => [

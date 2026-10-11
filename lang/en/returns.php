@@ -4,7 +4,7 @@
  * Returns and their refunds (§18.2, §26.3, contract §6.3, P6-12).
  *
  * The notes are what a customer and their shop read on a return's timeline, so
- * they say what happened in plain words and never how Feriwala keeps its stock.
+ * they say what happened in plain words and never how Banij keeps its stock.
  */
 return [
     'notes' => [

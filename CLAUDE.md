@@ -203,7 +203,7 @@ Use Wayfinder to generate TypeScript functions for Laravel routes. Import from `
 
 </laravel-boost-guidelines>
 
-# Feriwala ERP
+# Banij ERP
 
 > Everything below is project-specific and sits outside the Boost block on purpose, so
 > `boost:update` cannot overwrite it.

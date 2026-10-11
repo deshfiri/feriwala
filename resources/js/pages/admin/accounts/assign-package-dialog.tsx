@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type AssignablePackage = { slug: string; name: string };
 
@@ -123,7 +124,8 @@ export default function AssignPackageDialog({
                                     {t('package.assign.reason')}
                                 </Label>
 
-                                <textarea
+                                <ReasonTextarea
+                                    context="account"
                                     id="assign-reason"
                                     name="reason"
                                     rows={3}

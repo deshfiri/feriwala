@@ -22,7 +22,7 @@ export default function AppLogoIcon({
     return (
         <img
             src={branding?.logo_url ?? '/logo.png'}
-            alt={alt ?? name ?? 'Feriwala'}
+            alt={alt ?? name ?? 'Banij'}
             decoding="async"
             className={cn('object-contain', className)}
             {...props}

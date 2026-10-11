@@ -2,7 +2,7 @@
 
 return [
     'title' => 'Billing rules',
-    'description' => 'What Feriwala charges, and when each price applied.',
+    'description' => 'What Banij charges, and when each price applied.',
     'nav' => 'Billing rules',
 
     'forbidden_title' => 'You cannot manage billing rules',

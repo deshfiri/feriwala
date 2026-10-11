@@ -13,6 +13,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type AccountTypeOption = { value: string; label: string };
 
@@ -78,7 +79,8 @@ export default function AccountTypeDialog({
                                 <Label htmlFor="account-type-reason">
                                     {t('account.account_type.reason')}
                                 </Label>
-                                <textarea
+                                <ReasonTextarea
+                                    context="account"
                                     id="account-type-reason"
                                     name="reason"
                                     rows={3}

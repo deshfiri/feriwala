@@ -36,6 +36,7 @@ import ShipmentsPanel, {
     type OrderShipment,
 } from '@/pages/admin/orders/shipments-panel';
 import { index } from '@/routes/admin/orders';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 export type SupplierPayableSummary = {
     id: string;
@@ -851,7 +852,8 @@ export default function AdminOrder({ order, can }: Props) {
                                         <Label htmlFor="cancel-reason">
                                             {t('orders.admin.reason')}
                                         </Label>
-                                        <textarea
+                                        <ReasonTextarea
+                                            context="order"
                                             id="cancel-reason"
                                             name="reason"
                                             rows={3}

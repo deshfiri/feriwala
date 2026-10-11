@@ -16,6 +16,7 @@ import type { Money } from '@/lib/money';
 import { index } from '@/routes/admin/payments';
 import { confirm as confirmPassword } from '@/routes/password';
 import type { PaymentRow } from './index';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type LogEntry = {
     id: string;
@@ -242,7 +243,9 @@ export default function AdminPaymentShow({ payment, logs, manual }: Props) {
                                             }
                                         />
                                         <p className="text-muted-foreground text-xs">
-                                            {t('payments.manual.reference_hint')}
+                                            {t(
+                                                'payments.manual.reference_hint',
+                                            )}
                                         </p>
                                         <InputError
                                             message={errors.gateway_reference}
@@ -253,7 +256,8 @@ export default function AdminPaymentShow({ payment, logs, manual }: Props) {
                                         <Label htmlFor="manual-reason">
                                             {t('payments.manual.reason')}
                                         </Label>
-                                        <Input
+                                        <ReasonTextarea
+                                            context="generic"
                                             id="manual-reason"
                                             name="reason"
                                             minLength={10}

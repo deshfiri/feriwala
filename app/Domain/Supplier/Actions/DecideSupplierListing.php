@@ -10,12 +10,9 @@ use App\Domain\Catalog\Actions\ManageVariants;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Sourcing\Actions\ManageSourcingGroups;
-use App\Domain\Sourcing\Exceptions\SourcingGroupRefused;
-use App\Domain\Sourcing\Models\ProductSourcingGroup;
-use App\Domain\Sourcing\Models\ProductSourcingGroupProduct;
 use App\Domain\Supplier\Enums\ListingItemStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
+use App\Domain\Supplier\Enums\OfferOrigin;
 use App\Domain\Supplier\Enums\OfferStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Enums\SupplyMode;
@@ -55,14 +52,13 @@ class DecideSupplierListing
     public function __construct(
         protected ManageProducts $products,
         protected ManageVariants $variants,
-        protected ManageSourcingGroups $sourcingGroups,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
 
     /**
-     * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string, sourcing_group_id?: string}
-     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, canonical_variant_id?: string, platform_rate?: Money, approved_quantity?: int|null, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string, logistics?: array<string, mixed>}
+     * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string}
+     * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate?: Money, approved_quantity?: int|null, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string, logistics?: array<string, mixed>}
      */
     public function handle(
         SupplierProductListing $listing,
@@ -88,11 +84,6 @@ class DecideSupplierListing
 
             $product = $hasApproval ? $this->resolveProduct($locked, $reviewer, $productDecision) : null;
 
-            // Every approved item becomes an allocation source, so the product
-            // it is connected to must sit in a sourcing group first -- chosen
-            // here by staff, never by the Supplier.
-            $group = $product === null ? null : $this->resolveSourcingGroup($product, $productDecision, $reviewer, $reason);
-
             foreach ($itemDecisions as $itemDecision) {
                 /** @var SupplierProductListingItem|null $item */
                 $item = $items->get($itemDecision['item_id']);
@@ -106,7 +97,7 @@ class DecideSupplierListing
                 }
 
                 match ($itemDecision['decision']) {
-                    'approve' => $this->approveItem($item, $product, $group, $itemDecision, $reviewer, $reason),
+                    'approve' => $this->approveItem($item, $product, $itemDecision, $reviewer, $reason),
                     'reject' => $item->forceFill(['status' => ListingItemStatus::Rejected, 'decision_note' => $itemDecision['note'] ?? null])->save(),
                     'correction' => $item->forceFill(['status' => ListingItemStatus::CorrectionRequired, 'decision_note' => $itemDecision['note'] ?? null])->save(),
                     default => throw new InvalidArgumentException("Unknown item decision [{$itemDecision['decision']}]."),
@@ -209,112 +200,11 @@ class DecideSupplierListing
     }
 
     /**
-     * The sourcing group the connected product fulfils orders through.
-     *
-     * A product already in an active group keeps it (a different choice is
-     * refused rather than silently moving it). Otherwise staff must pick one,
-     * and may do so only if they are allowed to shape groups -- the Supplier
-     * never sees or chooses a platform group.
-     *
-     * @param  array<string, mixed>  $productDecision
-     */
-    protected function resolveSourcingGroup(Product $product, array $productDecision, User $reviewer, string $reason): ProductSourcingGroup
-    {
-        $requested = $productDecision['sourcing_group_id'] ?? null;
-
-        $membership = ProductSourcingGroupProduct::query()
-            ->active()
-            ->where('product_id', $product->id)
-            ->with('group')
-            ->first();
-
-        if ($membership !== null) {
-            if (filled($requested) && $membership->group->public_id !== $requested) {
-                throw new InvalidArgumentException("{$product->name} is already in the sourcing group \"{$membership->group->name_en}\".");
-            }
-
-            if (! $membership->group->is_active) {
-                throw new InvalidArgumentException("The sourcing group \"{$membership->group->name_en}\" is inactive.");
-            }
-
-            return $membership->group;
-        }
-
-        if (blank($requested)) {
-            throw new InvalidArgumentException('Select a sourcing group before approving: it decides which orders this offer can fulfil.');
-        }
-
-        $group = ProductSourcingGroup::query()->where('public_id', $requested)->first()
-            ?? throw new InvalidArgumentException('That sourcing group does not exist.');
-
-        if (! $reviewer->can('update', $group)) {
-            throw new InvalidArgumentException('You may not add products to sourcing groups.');
-        }
-
-        try {
-            $this->sourcingGroups->addProduct($reviewer, $group, $product, $reason);
-        } catch (SourcingGroupRefused $exception) {
-            throw new InvalidArgumentException($exception->getMessage(), previous: $exception);
-        }
-
-        return $group;
-    }
-
-    /**
-     * Make sure the approved variation has an explicit mapping to a canonical
-     * variation of the group. Group membership alone never means two
-     * variations are interchangeable.
-     *
-     * The canonical product needs none (it defines the requirement). A product
-     * with neither variations here nor on the canonical side maps at product
-     * level automatically; anything else needs the reviewer to say which
-     * canonical variation this one fulfils.
-     *
      * @param  array<string, mixed>  $itemDecision
      */
-    protected function ensureCompatibility(ProductSourcingGroup $group, Product $product, ?ProductVariant $variant, array $itemDecision, User $reviewer, string $reason): void
+    protected function approveItem(SupplierProductListingItem $item, ?Product $product, array $itemDecision, User $reviewer, string $reason): void
     {
-        $membership = $group->products()->active()->where('product_id', $product->id)->firstOrFail();
-
-        if ($membership->is_canonical) {
-            return;
-        }
-
-        $mapped = $group->variantMappings()->active()
-            ->where('product_id', $product->id)
-            ->where('product_variant_id', $variant?->id)
-            ->exists();
-
-        if ($mapped) {
-            return;
-        }
-
-        $canonicalProduct = $group->products()->active()->where('is_canonical', true)->with('product')->firstOrFail()->product;
-        $canonicalVariant = null;
-
-        if (filled($itemDecision['canonical_variant_id'] ?? null)) {
-            $canonicalVariant = ProductVariant::query()
-                ->where('public_id', $itemDecision['canonical_variant_id'])
-                ->where('product_id', $canonicalProduct->id)
-                ->first()
-                ?? throw new InvalidArgumentException('That canonical variation does not belong to the group\'s canonical product.');
-        } elseif ($variant !== null || $canonicalProduct->variants()->exists()) {
-            throw new InvalidArgumentException('Choose which canonical variation this one fulfils: variations are never matched by their labels.');
-        }
-
-        try {
-            $this->sourcingGroups->mapVariant($reviewer, $group, $product, $variant, $canonicalVariant, $reason);
-        } catch (SourcingGroupRefused $exception) {
-            throw new InvalidArgumentException($exception->getMessage(), previous: $exception);
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $itemDecision
-     */
-    protected function approveItem(SupplierProductListingItem $item, ?Product $product, ?ProductSourcingGroup $group, array $itemDecision, User $reviewer, string $reason): void
-    {
-        if ($product === null || $group === null) {
+        if ($product === null) {
             throw new InvalidArgumentException('No product was resolved to connect this item to.');
         }
 
@@ -322,20 +212,44 @@ class DecideSupplierListing
             ? ProductVariant::query()->where('public_id', $itemDecision['variant_id'])->where('product_id', $product->id)->firstOrFail()
             : null;
 
-        $this->ensureCompatibility($group, $product, $variant, $itemDecision, $reviewer, $reason);
-
         if (! isset($itemDecision['platform_rate'])) {
             throw new InvalidArgumentException('A Platform Rate is required to approve a listing item.');
         }
 
         $currency = Currency::from($item->currency_code);
-        $supplierRate = $item->supplier_rate;
+        // The Supplier's proposed price is the Supplier Base Price unless the
+        // reviewer confirms a different one before approving.
+        $proposedRate = $item->supplier_rate;
+        $supplierRate = $proposedRate;
+
+        if (filled($itemDecision['supplier_rate'] ?? null)) {
+            $supplierRate = $itemDecision['supplier_rate'] instanceof Money
+                ? $itemDecision['supplier_rate']
+                : Money::fromDecimal((string) $itemDecision['supplier_rate'], $currency);
+        }
+
+        if (! $supplierRate->isPositive()) {
+            throw new InvalidArgumentException('The Supplier Base Price must be greater than zero.');
+        }
+
         $platformRate = $itemDecision['platform_rate'] instanceof Money
             ? $itemDecision['platform_rate']
             : Money::fromDecimal((string) $itemDecision['platform_rate'], $currency);
 
-        if ($platformRate->lessThan($supplierRate)) {
-            throw new InvalidArgumentException('The Platform Rate cannot be lower than the Supplier Rate.');
+        // The same Supplier may already hold an offer on this Product and
+        // variation (for instance one staff assigned). Approval maintains that
+        // one offer; it never makes a second.
+        $existing = SupplierOffer::query()
+            ->where('supplier_id', $item->listing->supplier_id)
+            ->where('product_id', $product->id)
+            ->where('product_variant_id', $variant?->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null) {
+            $this->updateExistingOffer($existing, $item, $supplierRate, $platformRate, $currency, $reviewer);
+
+            return;
         }
 
         $offer = SupplierOffer::create([
@@ -344,6 +258,7 @@ class DecideSupplierListing
             'product_variant_id' => $variant?->id,
             'originating_listing_item_id' => $item->id,
             'status' => OfferStatus::Active,
+            'origin' => OfferOrigin::SupplierListing,
             'wholesale_enabled' => (bool) ($itemDecision['wholesale_enabled'] ?? false),
             'dropshipping_enabled' => (bool) ($itemDecision['dropshipping_enabled'] ?? false),
             'supplier_rate' => $supplierRate,
@@ -365,7 +280,9 @@ class DecideSupplierListing
             'currency_code' => $currency->value,
             'effective_from' => now(),
             'changed_by' => $reviewer->id,
-            'reason' => 'Initial pricing set at listing approval.',
+            'reason' => $supplierRate->equals($proposedRate)
+                ? 'Initial pricing set at listing approval.'
+                : "Initial pricing set at listing approval; Supplier Base Price confirmed at {$supplierRate->toDecimal()} against the {$proposedRate->toDecimal()} proposed.",
             'created_at' => now(),
         ]);
 
@@ -388,6 +305,55 @@ class DecideSupplierListing
         ])->save();
 
         $this->confirmLogistics($product, $variant, $itemDecision, $reviewer);
+    }
+
+    /**
+     * Approval against a Supplier/Product/variation that already has an offer:
+     * the one offer takes the accepted Supplier Base Price (as a new price
+     * version when it differs), the listing's supply terms, and is active. Its
+     * origin stays as it was; the listing item points at it.
+     */
+    protected function updateExistingOffer(
+        SupplierOffer $offer,
+        SupplierProductListingItem $item,
+        Money $supplierRate,
+        Money $platformRate,
+        Currency $currency,
+        User $reviewer,
+    ): void {
+        $keepPlatformRate = $platformRate;
+
+        $priceChanged = ! $offer->supplier_rate->equals($supplierRate) || ! $offer->platform_rate->equals($keepPlatformRate);
+
+        $offer->forceFill([
+            'status' => OfferStatus::Active,
+            'supply_mode' => $item->supply_mode,
+            'lead_time_days' => $item->lead_time_days,
+            'fulfilment_capacity' => $item->fulfilment_capacity,
+            'expected_availability_at' => $item->expected_availability_at,
+            'supplier_rate' => $supplierRate,
+            'platform_rate' => $keepPlatformRate,
+            'currency_code' => $currency->value,
+            'activated_by' => $reviewer->id,
+            'activated_at' => now(),
+        ])->save();
+
+        if ($priceChanged) {
+            $offer->priceHistory()->create([
+                'supplier_rate' => $supplierRate,
+                'platform_rate' => $keepPlatformRate,
+                'currency_code' => $currency->value,
+                'effective_from' => now(),
+                'changed_by' => $reviewer->id,
+                'reason' => 'Supplier Base Price set at listing approval of an existing offer.',
+                'created_at' => now(),
+            ]);
+        }
+
+        $item->forceFill([
+            'status' => ListingItemStatus::Approved,
+            'supplier_offer_id' => $offer->id,
+        ])->save();
     }
 
     /**

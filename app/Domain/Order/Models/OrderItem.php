@@ -9,7 +9,6 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Enums\AllocationStatus;
-use App\Domain\Sourcing\Queries\ResolveSourcingRequirement;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Supplier\Models\SupplierPayable;
@@ -33,7 +32,9 @@ use LogicException;
  * @property string $public_id
  * @property int $order_id
  * @property int $line_number
- * @property int $product_id
+ * @property int|null $product_id
+ * @property array<string, mixed>|null $product_id_snapshot
+ * @property array<string, mixed>|null $product_variant_id_snapshot
  * @property int|null $product_variant_id
  * @property string $sku
  * @property string $product_name
@@ -60,12 +61,12 @@ use LogicException;
  * @property string|null $supplier_currency_code
  * @property int|null $supplier_allocated_quantity
  * @property CarbonImmutable|null $supplier_allocated_at
- * @property int|null $sourcing_group_id frozen when the line was written; null = unmatched, manual review
- * @property int|null $sourcing_canonical_product_id
- * @property int|null $sourcing_canonical_variant_id
+ * @property int|null $sourcing_group_id legacy: set only on lines written while sourcing groups drove allocation; never written now
+ * @property int|null $sourcing_canonical_product_id legacy, see above
+ * @property int|null $sourcing_canonical_variant_id legacy, see above
  * @property CarbonImmutable|null $created_at
  * @property-read Order $order
- * @property-read Product $product
+ * @property-read Product|null $product
  * @property-read ProductVariant|null $variant
  * @property-read StockReservation|null $stockReservation
  * @property-read Supplier|null $supplier
@@ -94,6 +95,8 @@ class OrderItem extends Model
         return [
             'quantity' => 'integer',
             'line_number' => 'integer',
+            'product_id_snapshot' => 'array',
+            'product_variant_id_snapshot' => 'array',
             'unit_price' => MoneyCast::class,
             'line_subtotal' => MoneyCast::class,
             'discount' => MoneyCast::class,
@@ -186,24 +189,6 @@ class OrderItem extends Model
 
     protected static function booted(): void
     {
-        // Freeze what this line requires of its fulfilment at the moment it is
-        // written (Product Sourcing Groups). Later mapping changes never
-        // reach an existing line; a line with no explicit mapping is left
-        // unmatched for manual review, never guessed.
-        static::creating(function (self $line) {
-            if ($line->sourcing_group_id !== null) {
-                return;
-            }
-
-            $requirement = app(ResolveSourcingRequirement::class)->forLine($line->product_id, $line->product_variant_id);
-
-            if ($requirement !== null) {
-                $line->sourcing_group_id = $requirement->groupId;
-                $line->sourcing_canonical_product_id = $requirement->canonicalProductId;
-                $line->sourcing_canonical_variant_id = $requirement->canonicalVariantId;
-            }
-        });
-
         static::updating(fn () => throw new LogicException('An order line is a snapshot of what was bought and cannot be changed.'));
         static::deleting(fn () => throw new LogicException('An order line is a snapshot of what was bought and cannot be removed.'));
     }
@@ -221,7 +206,7 @@ class OrderItem extends Model
      */
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class)->withTrashed();
     }
 
     /**

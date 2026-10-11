@@ -54,7 +54,7 @@ return [
 
     'index' => [
         'empty_title' => 'No websites yet',
-        'empty_body' => 'A dedicated website is a public shop of your own, stocked from the Feriwala catalogue and managed from here.',
+        'empty_body' => 'A dedicated website is a public shop of your own, stocked from the Banij catalogue and managed from here.',
         'request' => 'Request a website',
         'not_entitled' => 'Your package does not include a dedicated website. Change your package to add one.',
         'limit_reached' => 'Your package allows :limit website(s), and you are using all of them.',
@@ -122,7 +122,7 @@ return [
         'charges' => 'Charges',
         'charges_empty' => 'Nothing is owed on this website.',
         'domains' => 'Domain',
-        'domains_empty' => 'No domain is registered yet. Feriwala registers it once the charges are paid.',
+        'domains_empty' => 'No domain is registered yet. Banij registers it once the charges are paid.',
         'hostings' => 'Hosting',
         'hostings_empty' => 'No hosting term has started yet.',
         'history' => 'History',
@@ -171,7 +171,7 @@ return [
         'choose' => 'Choose products',
         'categories' => 'Categories',
         'empty' => 'This website sells nothing yet',
-        'empty_help' => 'Choose products from the Feriwala dropshipping catalogue. Products are never created here.',
+        'empty_help' => 'Choose products from the Banij Partner Selling products. Products are never created here.',
         'all_statuses' => 'Every status',
         'published_of' => ':used of :limit published',
         'published_unlimited' => ':used published',
@@ -213,7 +213,7 @@ return [
         'remove' => 'Remove',
         'removal_note' => 'Removing a category leaves its products in the shop, without a category.',
         'empty' => 'No categories yet',
-        'empty_help' => 'Categories are how your shop groups what it sells. The Feriwala catalogue’s own categories are separate.',
+        'empty_help' => 'Categories are how your shop groups what it sells. The Banij catalogue’s own categories are separate.',
     ],
 
     'pricing' => [
@@ -323,7 +323,7 @@ return [
         ],
         /*
          * Returns on a website order, as the shop's owner sees them (P6-12).
-         * What Feriwala does with returned goods is never said here.
+         * What Banij does with returned goods is never said here.
          */
         'returns' => [
             'title' => 'Returns',
@@ -336,7 +336,7 @@ return [
             ],
             'quantities' => 'asked :asked · approved :approved · received :received',
             'refund_amount' => 'Refund',
-            'decision_note' => 'Feriwala\'s reason',
+            'decision_note' => 'Banij\'s reason',
             'withdraw' => 'Withdraw this return',
             'ask' => 'Ask for a return',
             'reason' => 'Why is it coming back?',
@@ -449,7 +449,7 @@ return [
         'upload' => 'Upload',
         'remove' => 'Remove',
         'products_title' => 'Products',
-        'products_body' => 'Products come from the Feriwala catalogue. Choose the ones your shop sells from the dropshipping catalogue — new products are not created here.',
+        'products_body' => 'Products come from the Banij catalogue. Choose the ones your shop sells from the Partner Selling products — new products are not created here.',
     ],
 
     'admin' => [
@@ -526,12 +526,12 @@ return [
         'image_type' => 'That file is not a JPEG, PNG or WebP image.',
         'image_too_large' => 'That image is too large.',
         'not_editable' => 'This website is closed and cannot be changed.',
-        'product_not_eligible' => 'This product is not available to your account for dropshipping.',
+        'product_not_eligible' => 'This product is not available to your account for Partner Selling.',
         'already_selected' => 'This website already sells that product.',
         'price_required' => 'Set a selling price before putting it on sale.',
         'publish_limit' => 'Your package allows :limit published product(s). Unpublish one to publish another.',
         'promotion_not_a_reduction' => 'A promotional price has to be lower than the selling price.',
-        'field_locked' => ':field is set by Feriwala for this product.',
+        'field_locked' => ':field is set by Banij for this product.',
         'category_not_found' => 'That category does not belong to this website.',
         'category_name_taken' => 'This website already has a category with that name.',
         'rule_scope_not_found' => 'No product or package has that identifier.',
@@ -540,7 +540,7 @@ return [
         'nothing_to_retry' => 'That delivery is not waiting to be retried.',
         'sync_too_soon' => 'A synchronisation was started less than a minute ago. Give it a moment.',
         'price' => [
-            'pricing_not_allowed' => 'Feriwala sets the price for this product.',
+            'pricing_not_allowed' => 'Banij sets the price for this product.',
             'price_not_positive' => 'The price has to be more than zero.',
             'below_minimum' => 'The lowest price allowed is :minimum.',
             'above_maximum' => 'The highest price allowed is :maximum.',

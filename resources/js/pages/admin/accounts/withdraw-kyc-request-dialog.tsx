@@ -14,6 +14,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
     /** The round being withdrawn; null keeps the dialog closed. */
@@ -66,7 +67,8 @@ export default function WithdrawKycRequestDialog({
                                     <Label htmlFor="withdraw-reason">
                                         {t('account.kyc_withdraw.reason')}
                                     </Label>
-                                    <textarea
+                                    <ReasonTextarea
+                                        context="account"
                                         id="withdraw-reason"
                                         name="reason"
                                         rows={3}

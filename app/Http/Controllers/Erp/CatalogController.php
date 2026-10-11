@@ -16,6 +16,8 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\WholesalePriceResolver;
+use App\Domain\ContentLibrary\ContentBlocks;
+use App\Domain\ContentLibrary\Models\ContentLibraryItem;
 use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Storage\ManagedStorage;
@@ -76,6 +78,169 @@ class CatalogController extends Controller
     public function dropshipping(Request $request): Response
     {
         return $this->browse($request, SalesChannel::Dropshipping);
+    }
+
+    /**
+     * One Products workspace for the account: every product it may use, once,
+     * with the ways it may use it (wholesale purchase, Partner Selling).
+     *
+     * A read model over the same eligibility rules the two channel screens use
+     * ({@see ProductEligibility::query()}); a product on both channels is a
+     * single card that says so. Prices are the server's own figures.
+     */
+    public function products(Request $request): Response
+    {
+        $account = $this->businessAccountFor($request);
+
+        $channels = array_values(array_filter(
+            [SalesChannel::Wholesale, SalesChannel::Dropshipping],
+            fn (SalesChannel $channel) => $this->eligibility->allowsChannel($account, $channel),
+        ));
+        $wholesaleAllowed = in_array(SalesChannel::Wholesale, $channels, true);
+
+        $search = trim($request->string('search')->toString());
+        $pattern = '%'.addcslashes($search, '%_\\').'%';
+
+        $category = $request->filled('category')
+            ? Category::query()->with('children')->where('public_id', $request->string('category')->toString())->first()
+            : null;
+        $brand = $request->filled('brand')
+            ? Brand::query()->where('public_id', $request->string('brand')->toString())->first()
+            : null;
+
+        $stock = $wholesaleAllowed && in_array($request->string('stock')->toString(), self::STOCK_FILTERS, true)
+            ? $request->string('stock')->toString()
+            : null;
+        $priceMin = $wholesaleAllowed ? $this->priceFilter($request, 'price_min') : null;
+        $priceMax = $wholesaleAllowed ? $this->priceFilter($request, 'price_max') : null;
+
+        $query = $this->eligibility->query($account)
+            ->where(function (Builder $inner) use ($channels) {
+                foreach ($channels as $channel) {
+                    $inner->orWhere($channel->column(), $channel->enabled());
+                }
+            });
+
+        if ($channels === []) {
+            $query->whereRaw('1 = 0');
+        }
+
+        if ($stock !== null) {
+            $query = $this->stock->whereProductStock($query, $account, $stock === 'in_stock');
+        }
+
+        $products = $query
+            ->with([
+                'category:id,name',
+                'brand:id,name',
+                'media' => fn ($query) => $query->where('type', ProductMedia::TYPE_IMAGE),
+            ])
+            ->withExists('priceTiers')
+            ->withCount('variants')
+            ->when($search !== '', fn (Builder $query) => $query->where(
+                fn (Builder $inner) => $inner->where('name', 'ilike', $pattern)->orWhere('sku', 'ilike', $pattern),
+            ))
+            ->when($category !== null, fn (Builder $query) => $query->whereIn('category_id', $category?->descendantIds() ?? []))
+            ->when($brand !== null, fn (Builder $query) => $query->where('brand_id', $brand?->id))
+            ->when($priceMin !== null, fn (Builder $query) => $query->where('wholesale_price', '>=', $priceMin))
+            ->when($priceMax !== null, fn (Builder $query) => $query->where('wholesale_price', '<=', $priceMax))
+            ->orderByDesc('is_featured')
+            ->orderByDesc('featured_at')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
+        $stockStates = $wholesaleAllowed ? $this->stockStates($products->getCollection(), $account) : [];
+
+        $products->through(fn (Product $product) => $this->unifiedCard(
+            $product,
+            $channels,
+            $stockStates[$product->id] ?? null,
+        ));
+
+        return Inertia::render('catalog/products', [
+            'facility_allowed' => $channels !== [],
+            'products' => $products,
+            'filters' => [
+                'search' => $search,
+                'category' => $category?->public_id,
+                'brand' => $brand?->public_id,
+                'stock' => $stock,
+                'price_min' => $priceMin,
+                'price_max' => $priceMax,
+            ],
+            'can' => [
+                'wholesale' => $wholesaleAllowed,
+                'filter_wholesale' => $wholesaleAllowed,
+            ],
+            'options' => [
+                'categories' => Category::query()
+                    ->with('parent')
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->get()
+                    ->filter(fn (Category $option) => $option->isAvailable())
+                    ->map(fn (Category $option) => [
+                        'value' => $option->public_id,
+                        'label' => $option->parent === null ? $option->name : $option->parent->name.' › '.$option->name,
+                    ])
+                    ->values()
+                    ->all(),
+                'brands' => Brand::query()
+                    ->where('is_active', true)
+                    ->orderBy('name')
+                    ->get(['public_id', 'name'])
+                    ->map(fn (Brand $option) => ['value' => $option->public_id, 'label' => $option->name])
+                    ->all(),
+            ],
+        ]);
+    }
+
+    /**
+     * @param  array<int, SalesChannel>  $channels  the channels this account may use
+     * @return array<string, mixed>
+     */
+    protected function unifiedCard(Product $product, array $channels, ?bool $inStock): array
+    {
+        $image = $product->media->first();
+
+        $wholesale = in_array(SalesChannel::Wholesale, $channels, true) && $product->sellsThrough(SalesChannel::Wholesale);
+        $partnerSelling = in_array(SalesChannel::Dropshipping, $channels, true) && $product->sellsThrough(SalesChannel::Dropshipping);
+
+        return [
+            'slug' => $product->slug,
+            'name' => $product->name,
+            'bpc' => $product->sku,
+            'sku' => $product->sku,
+            'category' => $product->category->name,
+            'brand' => $product->brand?->name,
+            'is_featured' => $product->is_featured,
+            'variant_count' => (int) $product->variants_count,
+            'package_scope' => $product->package_scope->value,
+            'image' => $image === null ? null : [
+                'url' => $this->media->url($image->path),
+                'alt' => $image->alt_text,
+            ],
+            'modes' => ['wholesale' => $wholesale, 'partner_selling' => $partnerSelling],
+            'wholesale' => $wholesale ? [
+                'price' => $product->wholesale_price->jsonSerialize(),
+                'min_order_quantity' => $product->min_order_quantity,
+                'max_order_quantity' => $product->max_order_quantity,
+                'in_stock' => $inStock ?? false,
+                'tiers' => $this->quantityPricing($product, null),
+            ] : null,
+            'partner_selling' => $partnerSelling ? $this->sellingGuidance($product) : null,
+        ];
+    }
+
+    /**
+     * One product with everything this account may know about it, across both
+     * ways of using it: the same detail the two channel screens show, merged.
+     */
+    public function product(Request $request, string $product): Response
+    {
+        return $this->show($request, null, $product);
     }
 
     public function showWholesale(Request $request, string $product): Response
@@ -182,23 +347,70 @@ class CatalogController extends Controller
         ]);
     }
 
-    protected function show(Request $request, SalesChannel $channel, string $slug): Response
+    /**
+     * The channels this account's package lets it use.
+     *
+     * @return array<int, SalesChannel>
+     */
+    protected function usableChannels(BusinessAccount $account): array
+    {
+        return array_values(array_filter(
+            [SalesChannel::Wholesale, SalesChannel::Dropshipping],
+            fn (SalesChannel $channel) => $this->eligibility->allowsChannel($account, $channel),
+        ));
+    }
+
+    /**
+     * What the account may see: one channel's products, or — with no channel —
+     * every product on any channel its package includes.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Product>
+     */
+    protected function visibleQuery(BusinessAccount $account, ?SalesChannel $channel): \Illuminate\Database\Eloquent\Builder
+    {
+        if ($channel !== null) {
+            return $this->eligibility->query($account, $channel);
+        }
+
+        $channels = $this->usableChannels($account);
+
+        return $this->eligibility->query($account)
+            ->where(function (Builder $inner) use ($channels) {
+                foreach ($channels as $usable) {
+                    $inner->orWhere($usable->column(), $usable->enabled());
+                }
+            })
+            ->when($channels === [], fn (Builder $query) => $query->whereRaw('1 = 0'));
+    }
+
+    protected function show(Request $request, ?SalesChannel $channel, string $slug): Response
     {
         $account = $this->businessAccountFor($request);
+        $channels = $this->usableChannels($account);
 
         /** @var Product|null $product */
-        $product = $this->eligibility->query($account, $channel)
+        $product = $this->visibleQuery($account, $channel)
             ->where('slug', $slug)
             ->with(['category.parent', 'brand', 'media', 'variants.values.attribute', 'variants.product'])
             ->with(['contents' => fn ($query) => $query->with('attachment')])
+            ->with('libraryContent')
             ->first();
 
         abort_if($product === null, 404);
 
-        $wholesale = $channel === SalesChannel::Wholesale;
+        // The ways this product can be used by this account: a single channel
+        // screen is that channel only; the unified page is each that applies.
+        $wholesale = $channel === null
+            ? in_array(SalesChannel::Wholesale, $channels, true) && $product->sellsThrough(SalesChannel::Wholesale)
+            : $channel === SalesChannel::Wholesale;
+        $partnerSelling = $channel === null
+            ? in_array(SalesChannel::Dropshipping, $channels, true) && $product->sellsThrough(SalesChannel::Dropshipping)
+            : $channel === SalesChannel::Dropshipping;
         $available = $wholesale ? $this->orderableUnits($product, $account) : [];
 
         $detail = [
+            'bpc' => $product->sku,
+            'package_scope' => $product->package_scope->value,
             'slug' => $product->slug,
             'name' => $product->name,
             'sku' => $product->sku,
@@ -258,7 +470,9 @@ class CatalogController extends Controller
             // A Non-Conditional account declares a resale/COD amount per line
             // (D-new), bounded by the same guidance a dropshipping partner
             // already sees — so it is surfaced here too, not computed from it.
-            $detail += $this->sellingGuidance($product);
+            if ($channel !== null || $partnerSelling) {
+                $detail += $this->sellingGuidance($product);
+            }
         } else {
             $detail += $this->sellingGuidance($product);
         }
@@ -274,7 +488,7 @@ class CatalogController extends Controller
         /** @var Collection<int, Product> $relatedProducts */
         $relatedProducts = $relatedIds === []
             ? collect()
-            : $this->eligibility->query($account, $channel)
+            : $this->visibleQuery($account, $channel)
                 ->whereIn('id', $relatedIds)
                 ->with(['category:id,name', 'brand:id,name', 'media' => fn ($query) => $query->where('type', ProductMedia::TYPE_IMAGE)])
                 ->withExists('priceTiers')
@@ -282,14 +496,15 @@ class CatalogController extends Controller
                 ->sortBy(fn (Product $related) => $positions[$related->id] ?? PHP_INT_MAX)
                 ->values();
 
-        $relatedStock = $wholesale ? $this->stockStates($relatedProducts, $account) : [];
+        $relatedStock = in_array(SalesChannel::Wholesale, $channels, true) ? $this->stockStates($relatedProducts, $account) : [];
 
         $related = $relatedProducts
-            ->map(fn (Product $related) => $this->card($related, $channel, $relatedStock[$related->id] ?? null))
+            ->map(fn (Product $related) => $this->unifiedCard($related->loadCount('variants'), $channels, $relatedStock[$related->id] ?? null))
             ->all();
 
         return Inertia::render('catalog/show', [
-            'channel' => $channel->value,
+            'channel' => $channel === null ? 'all' : $channel->value,
+            'modes' => ['wholesale' => $wholesale, 'partner_selling' => $partnerSelling],
             'account_type' => $account->account_type->value,
             'product' => $detail,
             'related' => $related,
@@ -304,7 +519,7 @@ class CatalogController extends Controller
              * is what makes the door reachable from where a partner is already
              * standing.
              */
-            'websites' => $channel === SalesChannel::Dropshipping
+            'websites' => $partnerSelling
                 ? $this->websitesFor($account, $product)
                 : [],
 
@@ -326,6 +541,18 @@ class CatalogController extends Controller
                         'mime_type' => $content->attachment->mime_type,
                         'is_image' => str_starts_with($content->attachment->mime_type, 'image/'),
                     ],
+                ])
+                ->all(),
+
+            // Content Library items released to this product, newest first.
+            // Structured blocks the page renders itself, never HTML; removed
+            // items are soft-deleted and so never reach here.
+            'library_content' => $product->libraryContent
+                ->map(fn (ContentLibraryItem $item) => [
+                    'id' => $item->public_id,
+                    'title' => $item->title,
+                    'published_at' => $item->published_at->toIso8601String(),
+                    'blocks' => app(ContentBlocks::class)->present($item->blocks),
                 ])
                 ->all(),
         ]);

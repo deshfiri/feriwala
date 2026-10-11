@@ -3,9 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
-import SourcingGroupPicker, {
-    type SourcingGroupOption,
-} from '@/components/sourcing-group-picker';
+import ProductConnectField from '@/components/product-links/product-connect-field';
 import TextArea from '@/components/forms/text-area';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -18,8 +16,10 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import { index } from '@/routes/admin/supplier-listings';
+import type { ProductLinkSummary } from '@/types';
 import { store as correction } from '@/routes/admin/supplier-listings/correction';
 import { store as decision } from '@/routes/admin/supplier-listings/decision';
+import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Item = {
     id: string;
@@ -54,17 +54,12 @@ type Props = {
         can_decide: boolean;
         may_view_pricing: boolean;
         connected_product: string | null;
+        /** The connected Product in full, once there is one. */
+        connected_product_summary: ProductLinkSummary | null;
         items: Item[];
     };
     supplier: { id: string; business_name: string; status_label: string };
     options: { categories: { value: string; label: string }[] };
-    /** Staff-only: the groups an approved offer can fulfil orders through. */
-    sourcing: {
-        groups: SourcingGroupOption[];
-        can_select: boolean;
-        can_create: boolean;
-        connected_group: string | null;
-    };
     history: {
         new_status: string;
         changed_by: string | null;
@@ -78,10 +73,13 @@ type ItemDecision = {
     item_id: string;
     decision: 'skip' | 'approve' | 'reject' | 'correction';
     variant_id: string;
-    /** The canonical variation this one fulfils; never matched by label. */
-    canonical_variant_id: string;
     /** Flat-Taka decimal typed by the reviewer, submitted exactly as typed. */
     platform_rate: string;
+    /**
+     * The Supplier Base Price a reviewer confirms; blank keeps the Supplier's
+     * own proposed price.
+     */
+    supplier_rate: string;
     /**
      * Left blank to open the offer at the quantity the Supplier asked to
      * supply. Filled in only to approve a different figure.
@@ -104,7 +102,6 @@ export default function AdminSupplierListingShow({
     listing,
     supplier,
     options,
-    sourcing,
     history,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -114,9 +111,9 @@ export default function AdminSupplierListingShow({
     const form = useForm({
         mode: 'connect' as 'connect' | 'create',
         connect_product_id: '',
+        connected: null as ProductLinkSummary | null,
         sku: '',
         category_id: '',
-        sourcing_group_id: sourcing.connected_group ?? '',
         reason: '',
         items: listing.items
             .filter((item) => item.status === 'pending')
@@ -124,8 +121,8 @@ export default function AdminSupplierListingShow({
                 item_id: item.id,
                 decision: 'skip',
                 variant_id: '',
-                canonical_variant_id: '',
                 platform_rate: '',
+                supplier_rate: '',
                 approved_quantity: '',
                 wholesale_enabled: true,
                 dropshipping_enabled: false,
@@ -154,18 +151,22 @@ export default function AdminSupplierListingShow({
             sku: data.mode === 'create' ? data.sku : null,
             category_id:
                 data.mode === 'create' ? data.category_id || null : null,
-            sourcing_group_id: data.sourcing_group_id || null,
+            // Only what the reviewer picked; empty keeps the Product unique.
             items: data.items
                 .filter((item) => item.decision !== 'skip')
                 .map((item) => ({
                     item_id: item.item_id,
                     decision: item.decision,
                     variant_id: item.variant_id || null,
-                    canonical_variant_id: item.canonical_variant_id || null,
                     // The Taka string exactly as typed; the server is the
                     // only place that parses it (§36.1).
                     platform_rate:
                         item.decision === 'approve' ? item.platform_rate : null,
+                    supplier_rate:
+                        item.decision === 'approve' &&
+                        item.supplier_rate.trim() !== ''
+                            ? item.supplier_rate
+                            : null,
                     // Null means "open at what the Supplier asked for"; the
                     // server decides, so a blank box sends nothing at all.
                     approved_quantity:
@@ -184,10 +185,6 @@ export default function AdminSupplierListingShow({
 
     const errorFor = (key: string) =>
         (form.errors as Record<string, string | undefined>)[key];
-
-    const selectedGroup = sourcing.groups.find(
-        (group) => group.id === form.data.sourcing_group_id,
-    );
 
     return (
         <>
@@ -406,141 +403,151 @@ export default function AdminSupplierListingShow({
                             </p>
                         ) : (
                             <form onSubmit={submit} className="space-y-6">
-                                <fieldset className="grid gap-3 sm:grid-cols-2">
-                                    <legend className="sr-only">
-                                        {t('supplier.admin.listings.connect')}
-                                    </legend>
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="radio"
-                                            name="mode"
-                                            checked={
-                                                form.data.mode === 'connect'
-                                            }
-                                            onChange={() =>
-                                                form.setData('mode', 'connect')
-                                            }
-                                        />
-                                        {t(
-                                            'supplier.admin.listings.connect_existing',
-                                        )}
-                                    </label>
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="radio"
-                                            name="mode"
-                                            checked={
-                                                form.data.mode === 'create'
-                                            }
-                                            onChange={() =>
-                                                form.setData('mode', 'create')
-                                            }
-                                        />
-                                        {t(
-                                            'supplier.admin.listings.create_new',
-                                        )}
-                                    </label>
-                                </fieldset>
-
-                                {form.data.mode === 'connect' ? (
-                                    <FormField
-                                        label={t(
-                                            'supplier.admin.listings.product_id',
-                                        )}
-                                        error={errorFor('connect_product_id')}
-                                    >
-                                        {(field) => (
-                                            <Input
-                                                {...field}
-                                                value={
-                                                    form.data.connect_product_id
-                                                }
-                                                onChange={(e) =>
-                                                    form.setData(
-                                                        'connect_product_id',
-                                                        e.target.value,
-                                                    )
-                                                }
-                                            />
-                                        )}
-                                    </FormField>
+                                {listing.connected_product_summary ? (
+                                    <ProductConnectField
+                                        value={null}
+                                        onChange={() => undefined}
+                                        locked={
+                                            listing.connected_product_summary
+                                        }
+                                    />
                                 ) : (
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <FormField
-                                            label={t(
-                                                'supplier.admin.listings.sku',
-                                            )}
-                                            error={errorFor('sku')}
-                                            required
-                                        >
-                                            {(field) => (
-                                                <Input
-                                                    {...field}
-                                                    value={form.data.sku}
-                                                    onChange={(e) =>
+                                    <>
+                                        <fieldset className="grid gap-3 sm:grid-cols-2">
+                                            <legend className="sr-only">
+                                                {t(
+                                                    'supplier.admin.listings.connect',
+                                                )}
+                                            </legend>
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="radio"
+                                                    name="mode"
+                                                    checked={
+                                                        form.data.mode ===
+                                                        'connect'
+                                                    }
+                                                    onChange={() =>
                                                         form.setData(
-                                                            'sku',
-                                                            e.target.value,
+                                                            'mode',
+                                                            'connect',
                                                         )
                                                     }
                                                 />
-                                            )}
-                                        </FormField>
-                                        <FormField
-                                            label={t(
-                                                'supplier.admin.listings.category',
-                                            )}
-                                            error={errorFor('category_id')}
-                                        >
-                                            {(field) => (
-                                                <select
-                                                    {...field}
-                                                    value={
-                                                        form.data.category_id
+                                                {t(
+                                                    'supplier.admin.listings.connect_existing',
+                                                )}
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="radio"
+                                                    name="mode"
+                                                    checked={
+                                                        form.data.mode ===
+                                                        'create'
                                                     }
-                                                    onChange={(e) =>
+                                                    onChange={() =>
                                                         form.setData(
-                                                            'category_id',
-                                                            e.target.value,
+                                                            'mode',
+                                                            'create',
                                                         )
                                                     }
-                                                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                                >
-                                                    <option value="">—</option>
-                                                    {options.categories.map(
-                                                        (option) => (
-                                                            <option
-                                                                key={
-                                                                    option.value
-                                                                }
-                                                                value={
-                                                                    option.value
-                                                                }
-                                                            >
-                                                                {option.label}
-                                                            </option>
-                                                        ),
-                                                    )}
-                                                </select>
-                                            )}
-                                        </FormField>
-                                    </div>
-                                )}
+                                                />
+                                                {t(
+                                                    'supplier.admin.listings.create_new',
+                                                )}
+                                            </label>
+                                        </fieldset>
 
-                                {sourcing.can_select && (
-                                    <SourcingGroupPicker
-                                        groups={sourcing.groups}
-                                        value={form.data.sourcing_group_id}
-                                        onChange={(id) =>
-                                            form.setData(
-                                                'sourcing_group_id',
-                                                id,
-                                            )
-                                        }
-                                        canCreate={sourcing.can_create}
-                                        lockedTo={sourcing.connected_group}
-                                        error={errorFor('sourcing_group_id')}
-                                    />
+                                        {form.data.mode === 'connect' ? (
+                                            <ProductConnectField
+                                                value={form.data.connected}
+                                                onChange={(next) => {
+                                                    form.setData({
+                                                        ...form.data,
+                                                        connected: next,
+                                                        connect_product_id:
+                                                            next?.id ?? '',
+                                                    });
+                                                }}
+                                                error={errorFor(
+                                                    'connect_product_id',
+                                                )}
+                                            />
+                                        ) : (
+                                            <div className="grid gap-4 sm:grid-cols-2">
+                                                <FormField
+                                                    label={t(
+                                                        'supplier.admin.listings.sku',
+                                                    )}
+                                                    error={errorFor('sku')}
+                                                    required
+                                                >
+                                                    {(field) => (
+                                                        <Input
+                                                            {...field}
+                                                            value={
+                                                                form.data.sku
+                                                            }
+                                                            onChange={(e) =>
+                                                                form.setData(
+                                                                    'sku',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    )}
+                                                </FormField>
+                                                <FormField
+                                                    label={t(
+                                                        'supplier.admin.listings.category',
+                                                    )}
+                                                    error={errorFor(
+                                                        'category_id',
+                                                    )}
+                                                >
+                                                    {(field) => (
+                                                        <select
+                                                            {...field}
+                                                            value={
+                                                                form.data
+                                                                    .category_id
+                                                            }
+                                                            onChange={(e) =>
+                                                                form.setData(
+                                                                    'category_id',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                                                        >
+                                                            <option value="">
+                                                                —
+                                                            </option>
+                                                            {options.categories.map(
+                                                                (option) => (
+                                                                    <option
+                                                                        key={
+                                                                            option.value
+                                                                        }
+                                                                        value={
+                                                                            option.value
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            option.label
+                                                                        }
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                        </select>
+                                                    )}
+                                                </FormField>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
 
                                 {form.data.items.map((decisionItem, index) => {
@@ -643,6 +650,41 @@ export default function AdminSupplierListingShow({
                                                     </FormField>
                                                     <FormField
                                                         label={t(
+                                                            'supplier.admin.listings.supplier_base_price',
+                                                        )}
+                                                        error={errorFor(
+                                                            `items.${index}.supplier_rate`,
+                                                        )}
+                                                    >
+                                                        {(field) => (
+                                                            <Input
+                                                                {...field}
+                                                                inputMode="decimal"
+                                                                value={
+                                                                    decisionItem.supplier_rate
+                                                                }
+                                                                placeholder={
+                                                                    source
+                                                                        ?.supplier_rate
+                                                                        ?.amount ??
+                                                                    ''
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setItem(
+                                                                        index,
+                                                                        {
+                                                                            supplier_rate:
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        )}
+                                                    </FormField>
+                                                    <FormField
+                                                        label={t(
                                                             'supplier.admin.listings.variant_id',
                                                         )}
                                                     >
@@ -666,70 +708,6 @@ export default function AdminSupplierListingShow({
                                                             />
                                                         )}
                                                     </FormField>
-                                                    {selectedGroup !==
-                                                        undefined &&
-                                                        selectedGroup
-                                                            .canonical_variants
-                                                            .length > 0 && (
-                                                            <FormField
-                                                                label={t(
-                                                                    'sourcing.picker.canonical_variant',
-                                                                )}
-                                                                description={t(
-                                                                    'sourcing.picker.canonical_variant_help',
-                                                                )}
-                                                                error={errorFor(
-                                                                    `items.${index}.canonical_variant_id`,
-                                                                )}
-                                                            >
-                                                                {(field) => (
-                                                                    <select
-                                                                        {...field}
-                                                                        value={
-                                                                            decisionItem.canonical_variant_id
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            setItem(
-                                                                                index,
-                                                                                {
-                                                                                    canonical_variant_id:
-                                                                                        e
-                                                                                            .target
-                                                                                            .value,
-                                                                                },
-                                                                            )
-                                                                        }
-                                                                        className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-                                                                    >
-                                                                        <option value="">
-                                                                            {t(
-                                                                                'sourcing.picker.canonical_variant_none',
-                                                                            )}
-                                                                        </option>
-                                                                        {selectedGroup.canonical_variants.map(
-                                                                            (
-                                                                                variant,
-                                                                            ) => (
-                                                                                <option
-                                                                                    key={
-                                                                                        variant.id
-                                                                                    }
-                                                                                    value={
-                                                                                        variant.id
-                                                                                    }
-                                                                                >
-                                                                                    {
-                                                                                        variant.label
-                                                                                    }
-                                                                                </option>
-                                                                            ),
-                                                                        )}
-                                                                    </select>
-                                                                )}
-                                                            </FormField>
-                                                        )}
                                                     <FormField
                                                         label={t(
                                                             'supplier.admin.listings.approved_quantity',
@@ -850,7 +828,8 @@ export default function AdminSupplierListingShow({
                                     required
                                 >
                                     {(field) => (
-                                        <Input
+                                        <ReasonTextarea
+                                            context="supplier"
                                             {...field}
                                             value={form.data.reason}
                                             onChange={(e) =>

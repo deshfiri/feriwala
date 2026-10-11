@@ -170,7 +170,7 @@ test('full approval creates a Central Product through the catalogue action and o
 
     $this->actingAs($staff)->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Looks right.',
-        'create_product' => true, 'sourcing_group_id' => supplierTestSourcingGroup()->public_id,
+        'create_product' => true,
         'sku' => 'pj-001',
         'category_id' => $category,
         'items' => [[
@@ -338,7 +338,7 @@ test('creating a product needs the catalogue create permission on top of listing
     $before = Product::query()->count();
 
     $this->actingAs($staff)->post(route('admin.supplier-listings.decision.store', $listing), [
-        'reason' => 'Try.', 'create_product' => true, 'sourcing_group_id' => supplierTestSourcingGroup()->public_id, 'sku' => 'X-1',
+        'reason' => 'Try.', 'create_product' => true, 'sku' => 'X-1',
         'category_id' => $category,
         'items' => [['item_id' => $item->public_id, 'decision' => 'approve', 'platform_rate' => '1300.00']],
     ])->assertForbidden();
@@ -403,17 +403,19 @@ test('rejecting every item creates no product and no offer', function () {
         ->and(SupplierOffer::query()->count())->toBe(0);
 });
 
-test('a platform rate below the supplier rate is refused and nothing is written', function () {
+test('a platform rate below the supplier rate is accepted: the two figures are independent', function () {
     $listing = supplierTestListing(Supplier::factory()->create());
     $product = websiteTestProduct();
 
     $this->actingAs(supplierListingTestReviewer())->post(route('admin.supplier-listings.decision.store', $listing), [
         'reason' => 'Try.', ...supplierTestConnect($product),
         'items' => [['item_id' => $listing->items()->first()->public_id, 'decision' => 'approve', 'platform_rate' => '999.99']],
-    ])->assertSessionHasErrors('reason');
+    ])->assertSessionHasNoErrors();
 
-    expect(SupplierOffer::query()->count())->toBe(0)
-        ->and($listing->refresh()->status)->toBe(ListingStatus::UnderReview);
+    $offer = SupplierOffer::query()->sole();
+
+    expect($offer->platform_rate->toDecimal())->toBe('999.99')
+        ->and($offer->supplier_rate->greaterThan($offer->platform_rate))->toBeTrue();
 });
 
 test('connecting to an existing product changes none of its catalogue data', function () {
