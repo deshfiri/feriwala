@@ -403,9 +403,7 @@ export function PriceDialog({
                     />
                 </div>
 
-                <FormField
-                    label={t('product_suppliers.fields.reason_required')}
-                >
+                <FormField label={t('product_suppliers.fields.reason')}>
                     {(field) => (
                         <ReasonTextarea
                             context="supplier"
@@ -431,7 +429,7 @@ export function PriceDialog({
                     <Button
                         type="button"
                         onClick={submit}
-                        disabled={processing || price === '' || reason === ''}
+                        disabled={processing || price === ''}
                     >
                         {t('product_suppliers.price_dialog.confirm')}
                     </Button>

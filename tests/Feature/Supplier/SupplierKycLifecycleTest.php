@@ -191,12 +191,11 @@ test('an authenticated supplier page renders with the supplier identity shared a
             ->where('account', null));
 });
 
-test('rejection, suspension and reactivation each require a reason', function () {
+test('suspension and reactivation require a reason, rejection does not', function () {
     $staff = testPlatformStaff(PlatformRole::SupplierManager);
 
     $applicant = supplierKycTestSubmitted();
-    $this->actingAs($staff)->post(route('admin.suppliers.rejection.store', $applicant), ['reason' => ''])->assertSessionHasErrors('reason');
-    expect($applicant->refresh()->status)->toBe(SupplierStatus::UnderReview);
+    $this->actingAs($staff);
 
     $this->post(route('admin.suppliers.rejection.store', $applicant), ['reason' => 'Licence is expired.', 'note' => 'Please reapply.']);
     expect($applicant->refresh()->status)->toBe(SupplierStatus::Rejected);

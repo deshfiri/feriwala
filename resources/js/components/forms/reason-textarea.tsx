@@ -14,6 +14,13 @@ const controlClass =
 const OTHER = '__other';
 
 /**
+ * A reason is only demanded where it is a security matter: who can do what,
+ * suspending an account, and moving money by hand. Everywhere else it is
+ * optional, and the server fills in "No reason given." when it is left out.
+ */
+const SECURITY_CONTEXTS: ReasonContext[] = ['access', 'account', 'wallet'];
+
+/**
  * A reason, chosen rather than typed: a list of ready-made reasons for the part
  * of the system it is asked in, and "Other" to write one by hand.
  *
@@ -26,7 +33,7 @@ const OTHER = '__other';
 export default function ReasonTextarea({
     context = 'generic',
     name,
-    required,
+    required: requiredProp,
     id,
     value,
     defaultValue,
@@ -35,6 +42,7 @@ export default function ReasonTextarea({
     ...rest
 }: Props) {
     const { t } = useTranslation();
+    const required = requiredProp && SECURITY_CONTEXTS.includes(context);
 
     const keys = REASON_PRESETS[context] ?? REASON_PRESETS.generic;
     const textOf = (key: string) => t(`reasons.items.${key}`);
@@ -86,6 +94,7 @@ export default function ReasonTextarea({
             {choice === OTHER && (
                 <textarea
                     {...rest}
+                    minLength={required ? rest.minLength : undefined}
                     name={name}
                     required={required}
                     rows={rest.rows ?? 3}

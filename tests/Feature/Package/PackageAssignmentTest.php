@@ -324,7 +324,7 @@ describe('who may do it', function () {
         expect(UserPackage::query()->where('source', SubscriptionSource::Manual)->count())->toBe(1);
     });
 
-    it('turns a blank reason into a form error', function () {
+    it('does not need a reason', function () {
         $package = assignTestPackage();
 
         $this->actingAs($this->admin)
@@ -333,7 +333,7 @@ describe('who may do it', function () {
                 'reason' => '',
                 'starts_at' => now()->toDateString(),
             ])
-            ->assertSessionHasErrors('reason');
+            ->assertSessionDoesntHaveErrors('reason');
     });
 
     it('offers the control on the account dossier', function () {

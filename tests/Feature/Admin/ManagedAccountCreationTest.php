@@ -176,8 +176,6 @@ describe('a Client/Partner account', function () {
             ->assertSessionHasErrors('mobile');
         $this->post(route('admin.accounts.store'), managedPartnerPayload(['referral_code' => 'NOSUCHCODE']))
             ->assertSessionHasErrors('referral_code');
-        $this->post(route('admin.accounts.store'), managedPartnerPayload(['reason' => '']))
-            ->assertSessionHasErrors('reason');
 
         expect(User::query()->where('email', 'rahim@example.com')->exists())->toBeFalse();
     });
@@ -279,8 +277,6 @@ describe('a Supplier account', function () {
             ->assertSessionHasErrors('email');
         $this->post(route('admin.suppliers.store'), managedSupplierPayload(['mobile' => '+8801777777777']))
             ->assertSessionHasErrors('mobile');
-        $this->post(route('admin.suppliers.store'), managedSupplierPayload(['reason' => '']))
-            ->assertSessionHasErrors('reason');
 
         expect(Supplier::query()->where('email', 'acme@example.com')->exists())->toBeFalse();
     });

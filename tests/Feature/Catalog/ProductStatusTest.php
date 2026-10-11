@@ -145,11 +145,8 @@ describe('moving a product', function () {
             ->toThrow(CatalogRefused::class);
     });
 
-    it('asks why a product is being retired', function () {
+    it('retires a product without insisting on a reason, and keeps one when given', function () {
         app(TransitionProduct::class)->handle($this->manager, $this->product, ProductStatus::PendingReview);
-
-        [$url, $payload] = catalogStatusMove($this->product, 'archived');
-        $this->actingAs($this->manager)->patch($url, $payload)->assertSessionHasErrors('status');
 
         [$url, $payload] = catalogStatusMove($this->product, 'archived', 'Supplier stopped making it.');
         $this->actingAs($this->manager)->patch($url, $payload)->assertSessionHasNoErrors();

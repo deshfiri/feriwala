@@ -114,7 +114,7 @@ export default function TrashReasonDialog({
                     <Button
                         type="button"
                         variant="destructive"
-                        disabled={processing || reason.trim() === ''}
+                        disabled={processing}
                         onClick={submit}
                     >
                         {t('catalog.products.delete')}
