@@ -272,7 +272,7 @@ class CatalogPolicy
      */
     public static function isBusinessIdentity(User $user): bool
     {
-        return $user->accountMembership()->exists();
+        return $user->hasAccountMembership();
     }
 
     /**
