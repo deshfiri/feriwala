@@ -42,6 +42,12 @@ export default function RequestWebsite({
         isPositive(amount),
     );
 
+    // The same answer the server enforces; the button only mirrors it.
+    const mayRequest =
+        entitlement.allowed &&
+        !entitlement.expired &&
+        (entitlement.remaining === null || entitlement.remaining > 0);
+
     return (
         <>
             <Head title={t('website.create.title')} />
@@ -59,6 +65,15 @@ export default function RequestWebsite({
                         </Button>
                     }
                 />
+
+                {entitlement.allowed && entitlement.expired && (
+                    <div
+                        className="border-warning bg-warning-subtle rounded-xl border p-4 text-sm"
+                        role="status"
+                    >
+                        {t('website.index.entitlement_expired')}
+                    </div>
+                )}
 
                 <SectionCard title={t('website.create.title')}>
                     <Form
@@ -110,9 +125,7 @@ export default function RequestWebsite({
 
                                 <Button
                                     type="submit"
-                                    disabled={
-                                        processing || !entitlement.allowed
-                                    }
+                                    disabled={processing || !mayRequest}
                                 >
                                     {processing && <Spinner />}
                                     {t('website.create.submit')}

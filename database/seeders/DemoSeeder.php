@@ -77,6 +77,9 @@ class DemoSeeder extends Seeder
             PackageFeature::StaffLimit->value => '5',
             PackageFeature::ProductPublishLimit->value => '250',
             PackageFeature::DedicatedWebsite->value => '1',
+            // A package that includes a website has to allow one, or the
+            // partner is shown a website they can never set up (§8.1).
+            PackageFeature::WebsiteLimit->value => '1',
             PackageFeature::CourierEnabled->value => '1',
         ]);
 
@@ -85,6 +88,7 @@ class DemoSeeder extends Seeder
         $this->package('enterprise', 'Enterprise', '15000.00', [
             PackageFeature::ProductPublishLimit->value => '5000',
             PackageFeature::DedicatedWebsite->value => '1',
+            PackageFeature::WebsiteLimit->value => '1',
             PackageFeature::CourierEnabled->value => '1',
             PackageFeature::ApiAccess->value => '1',
             PackageFeature::FulfillmentEnabled->value => '1',

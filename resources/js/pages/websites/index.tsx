@@ -47,16 +47,20 @@ export default function Websites({
 
     const atLimit =
         entitlement.remaining !== null && entitlement.remaining <= 0;
-    const mayRequest = can.create && entitlement.allowed && !atLimit;
+    const mayRequest =
+        can.create && entitlement.allowed && !entitlement.expired && !atLimit;
+
+    // Counts in the reader's own digits, as the dates are.
+    const count = (value: number) => value.toLocaleString(locale);
 
     const allowance =
         entitlement.limit === null
             ? t('website.index.allowance_unlimited', {
-                  used: String(entitlement.used),
+                  used: count(entitlement.used),
               })
             : t('website.index.allowance', {
-                  used: String(entitlement.used),
-                  limit: String(entitlement.limit),
+                  used: count(entitlement.used),
+                  limit: count(entitlement.limit),
               });
 
     // Websites already shown on an allocation card are not listed twice.
@@ -100,13 +104,22 @@ export default function Websites({
                     </div>
                 )}
 
-                {entitlement.allowed && atLimit && (
+                {entitlement.allowed && entitlement.expired && (
+                    <div
+                        className="border-warning bg-warning-subtle rounded-xl border p-4 text-sm"
+                        role="status"
+                    >
+                        {t('website.index.entitlement_expired')}
+                    </div>
+                )}
+
+                {entitlement.allowed && !entitlement.expired && atLimit && (
                     <div
                         className="border-warning bg-warning-subtle rounded-xl border p-4 text-sm"
                         role="status"
                     >
                         {t('website.index.limit_reached', {
-                            limit: String(entitlement.limit ?? 0),
+                            limit: count(entitlement.limit ?? 0),
                         })}
                     </div>
                 )}

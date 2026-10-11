@@ -85,6 +85,7 @@ describe('the websites a package allocates', () => {
                 websites={[]}
                 entitlement={{
                     allowed: true,
+                    expired: false,
                     limit: 1,
                     used: 0,
                     remaining: 1,
@@ -146,6 +147,7 @@ describe('the websites a package allocates', () => {
                 websites={[summary()]}
                 entitlement={{
                     allowed: true,
+                    expired: false,
                     limit: 1,
                     used: 1,
                     remaining: 0,
@@ -199,6 +201,7 @@ describe('the websites a package allocates', () => {
                 websites={[]}
                 entitlement={{
                     allowed: true,
+                    expired: false,
                     limit: 1,
                     used: 0,
                     remaining: 1,
@@ -232,6 +235,7 @@ describe('the websites a package allocates', () => {
                     websites={[]}
                     entitlement={{
                         allowed: true,
+                        expired: false,
                         limit: 1,
                         used: 0,
                         remaining: 1,
@@ -255,6 +259,7 @@ describe('the account’s websites', () => {
                 websites={[]}
                 entitlement={{
                     allowed: false,
+                    expired: false,
                     limit: 0,
                     used: 0,
                     remaining: 0,
@@ -278,6 +283,7 @@ describe('the account’s websites', () => {
                 websites={[]}
                 entitlement={{
                     allowed: true,
+                    expired: false,
                     limit: 1,
                     used: 0,
                     remaining: 1,
@@ -299,6 +305,7 @@ describe('the account’s websites', () => {
                 websites={[summary()]}
                 entitlement={{
                     allowed: true,
+                    expired: false,
                     limit: 1,
                     used: 1,
                     remaining: 0,
@@ -315,6 +322,99 @@ describe('the account’s websites', () => {
         ).not.toBeInTheDocument();
     });
 
+    it('offers no request on an expired website entitlement, and says why', () => {
+        render(
+            <Websites
+                allocations={[
+                    allocationCard({
+                        status: 'expired',
+                        status_label: 'Expired',
+                        status_tone: 'danger',
+                    }),
+                ]}
+                websites={[]}
+                entitlement={{
+                    allowed: true,
+                    expired: true,
+                    limit: 1,
+                    used: 0,
+                    remaining: 0,
+                }}
+                can={{ create: true }}
+            />,
+        );
+
+        expect(
+            screen.getByText('website.index.entitlement_expired'),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText('website.index.limit_reached'),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('link', { name: 'website.index.request' }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('link', { name: 'website.allocation.set_up' }),
+        ).not.toBeInTheDocument();
+    });
+
+    it('writes the allowance in the reader’s own digits', () => {
+        const entitlement = {
+            allowed: true,
+            expired: false,
+            limit: 1,
+            used: 1,
+            remaining: 0,
+        };
+        const translations = {
+            website: {
+                index: { limit_reached: ':limit টি ওয়েবসাইট অনুমোদিত' },
+            },
+        };
+
+        websitesPage.props = {
+            locale: { current: 'bn', direction: 'ltr', available: [] },
+            translations,
+        };
+
+        try {
+            const { unmount } = render(
+                <Websites
+                    allocations={[]}
+                    websites={[summary()]}
+                    entitlement={entitlement}
+                    can={{ create: true }}
+                />,
+            );
+
+            expect(
+                screen.getByText('১ টি ওয়েবসাইট অনুমোদিত'),
+            ).toBeInTheDocument();
+
+            unmount();
+
+            websitesPage.props = {
+                locale: { current: 'en', direction: 'ltr', available: [] },
+                translations,
+            };
+
+            render(
+                <Websites
+                    allocations={[]}
+                    websites={[summary()]}
+                    entitlement={entitlement}
+                    can={{ create: true }}
+                />,
+            );
+
+            expect(
+                screen.getByText('1 টি ওয়েবসাইট অনুমোদিত'),
+            ).toBeInTheDocument();
+        } finally {
+            websitesPage.props = { translations: {} };
+        }
+    });
+
     it('says which websites have something to pay', () => {
         render(
             <Websites
@@ -328,6 +428,7 @@ describe('the account’s websites', () => {
                 ]}
                 entitlement={{
                     allowed: true,
+                    expired: false,
                     limit: null,
                     used: 1,
                     remaining: null,

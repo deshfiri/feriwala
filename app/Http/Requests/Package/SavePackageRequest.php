@@ -100,6 +100,25 @@ class SavePackageRequest extends FormRequest
             }
 
             /*
+             * A package that includes a dedicated website but allows none
+             * shows the partner a website they can never set up. Blank stores
+             * nothing, which reads as the default of none.
+             */
+            $features = is_array($data['features'] ?? null) ? $data['features'] : [];
+            $includesWebsite = filter_var(
+                $features[PackageFeature::DedicatedWebsite->value] ?? false,
+                FILTER_VALIDATE_BOOL,
+            );
+            $websiteLimit = $features[PackageFeature::WebsiteLimit->value] ?? null;
+
+            if ($includesWebsite && (blank($websiteLimit) || (int) $websiteLimit < 1)) {
+                $validator->errors()->add(
+                    'features.'.PackageFeature::WebsiteLimit->value,
+                    __('A package that includes a dedicated website must allow at least one website.'),
+                );
+            }
+
+            /*
              * A renewal fee with no frequency renews on no schedule, and a
              * frequency with no fee renews for free. Either is a package that
              * behaves differently from how it reads. Skipped when the amount

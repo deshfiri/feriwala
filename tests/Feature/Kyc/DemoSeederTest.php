@@ -2,6 +2,7 @@
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Models\KycDocumentType;
+use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Models\Package;
 use App\Models\User;
 use Database\Seeders\DemoSeeder;
@@ -35,6 +36,17 @@ it('seeds packages for the package-scoped rule to point at', function () {
     // seeder cannot create one without the catalogue behind it.
     expect(Package::query()->count())->toBe(3)
         ->and(Package::query()->where('slug', 'enterprise')->exists())->toBeTrue();
+});
+
+it('lets every seeded package that includes a website allow one', function () {
+    $websitePackages = Package::query()->with('features')->get()
+        ->filter(fn (Package $package) => $package->feature(PackageFeature::DedicatedWebsite) === true);
+
+    expect($websitePackages->pluck('slug')->sort()->values()->all())->toBe(['enterprise', 'growth']);
+
+    foreach ($websitePackages as $package) {
+        expect($package->feature(PackageFeature::WebsiteLimit))->toBe(1);
+    }
 });
 
 it('opens the requirement catalogue for the KYC manager', function () {

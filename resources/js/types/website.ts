@@ -161,6 +161,8 @@ export type WebsiteDetail = WebsiteSummary & {
  */
 export type WebsiteEntitlement = {
     allowed: boolean;
+    /** The package website's domain or hosting period has run out. */
+    expired: boolean;
     limit: number | null;
     used: number;
     remaining: number | null;

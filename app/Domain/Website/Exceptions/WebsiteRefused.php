@@ -24,6 +24,15 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.not_entitled'), 'package');
     }
 
+    /**
+     * The domain and hosting period of the package's website has run out, so
+     * it entitles nothing new until a renewal opens the next one (§16.2).
+     */
+    public static function entitlementExpired(): self
+    {
+        return new self(__('website.refused.entitlement_expired'), 'package');
+    }
+
     /** The package's website limit is already used up (§8.1). */
     public static function limitReached(int $limit): self
     {

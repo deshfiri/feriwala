@@ -345,6 +345,35 @@ describe('the admin screen', function () {
             ->toBe(3);
     });
 
+    it('refuses a package that includes a dedicated website but allows none', function (?string $limit) {
+        $this->actingAs($this->admin)
+            ->from(route('admin.packages.index'))
+            ->post(route('admin.packages.store'), packageTestFormPayload([
+                'features' => array_filter([
+                    PackageFeature::DedicatedWebsite->value => '1',
+                    PackageFeature::WebsiteLimit->value => $limit,
+                ], fn ($value) => $value !== null),
+            ]))
+            ->assertSessionHasErrors(['features.'.PackageFeature::WebsiteLimit->value]);
+
+        expect(Package::query()->where('slug', 'growth')->exists())->toBeFalse();
+    })->with(['no limit' => [null], 'blank limit' => [''], 'zero' => ['0']]);
+
+    it('keeps the website limit configurable per package', function () {
+        $this->actingAs($this->admin)
+            ->from(route('admin.packages.index'))
+            ->post(route('admin.packages.store'), packageTestFormPayload([
+                'features' => [
+                    PackageFeature::DedicatedWebsite->value => '1',
+                    PackageFeature::WebsiteLimit->value => '3',
+                ],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        expect(Package::query()->where('slug', 'growth')->first()->feature(PackageFeature::WebsiteLimit))
+            ->toBe(3);
+    });
+
     it('stores Taka form input as exact flat-Taka amounts, including a charge row', function () {
         // §36.1 / D26: the administrator types Taka; the server parses it once
         // and stores exactly what was typed (500.50 stays 500.50).

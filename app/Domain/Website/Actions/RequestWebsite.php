@@ -189,20 +189,67 @@ class RequestWebsite
     }
 
     /**
+     * What the account may still ask for (§8.1, §16.2).
+     *
+     * The one answer the screens show and {@see handle()} enforces, so a
+     * button that is hidden and a request that is refused can never disagree.
+     *
+     * - The package's `WebsiteLimit` is the cap. Closed websites do not count:
+     *   a partner who closed one and asked for another has not used two of
+     *   anything.
+     * - A website allocation still waiting for its website can always be set
+     *   up, even under a subscription snapshotted with no limit — it is the
+     *   website the package was bought for, and it is only ever one.
+     * - An allocation whose domain or hosting period has run out entitles
+     *   nothing new until a renewal opens the next period.
+     *
+     * @return array{allowed: bool, expired: bool, limit: int|null, used: int, remaining: int|null}
+     */
+    public function allowance(BusinessAccount $account): array
+    {
+        $allowed = $account->canTransact()
+            && $this->entitlements->allows($account, PackageFeature::DedicatedWebsite);
+
+        $used = Website::query()->forAccount($account)->open()->count();
+        $limit = $this->entitlements->limit($account, PackageFeature::WebsiteLimit);
+        $remaining = $this->entitlements->remaining($account, PackageFeature::WebsiteLimit, $used);
+
+        $allocation = $allowed ? $this->allocations->forAccount($account) : null;
+        $expired = $allocation !== null && $allocation->hasLapsed();
+
+        if ($expired) {
+            $remaining = 0;
+        } elseif ($allocation !== null && $allocation->website_id === null && $remaining !== null && $remaining < 1) {
+            $limit = $used + 1;
+            $remaining = 1;
+        }
+
+        return [
+            'allowed' => $allowed,
+            'expired' => $expired,
+            'limit' => $limit,
+            'used' => $used,
+            'remaining' => $remaining,
+        ];
+    }
+
+    /**
      * @throws WebsiteRefused
      */
     protected function assertEntitled(BusinessAccount $account): void
     {
-        if (! $account->canTransact() || ! $this->entitlements->allows($account, PackageFeature::DedicatedWebsite)) {
+        $allowance = $this->allowance($account);
+
+        if (! $allowance['allowed']) {
             throw WebsiteRefused::notEntitled();
         }
 
-        // Closed websites do not count. A partner who closed one and asked for
-        // another has not used two of anything.
-        $open = Website::query()->forAccount($account)->open()->count();
+        if ($allowance['expired']) {
+            throw WebsiteRefused::entitlementExpired();
+        }
 
-        if (! $this->entitlements->hasCapacityFor($account, PackageFeature::WebsiteLimit, $open)) {
-            throw WebsiteRefused::limitReached($this->entitlements->limit($account, PackageFeature::WebsiteLimit) ?? 0);
+        if ($allowance['remaining'] !== null && $allowance['remaining'] < 1) {
+            throw WebsiteRefused::limitReached($allowance['limit'] ?? 0);
         }
     }
 

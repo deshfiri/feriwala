@@ -58,6 +58,7 @@ return [
         'request' => 'Request a website',
         'not_entitled' => 'Your package does not include a dedicated website. Change your package to add one.',
         'limit_reached' => 'Your package allows :limit website(s), and you are using all of them.',
+        'entitlement_expired' => 'Your package website’s domain and hosting period has ended. Renew your package to set up or add a website.',
         'allowance' => ':used of :limit used',
         'allowance_unlimited' => ':used open',
         'outstanding' => ':count charge(s) to pay',
@@ -512,6 +513,7 @@ return [
 
     'refused' => [
         'not_entitled' => 'Your package does not include a dedicated website.',
+        'entitlement_expired' => 'Your package website’s domain and hosting period has ended. Renew your package to add a website.',
         'limit_reached' => 'Your package allows :limit website(s). Close one or change your package to add another.',
         'subdomain_taken' => 'That address is already taken. Try another.',
         'domain_taken' => 'That domain is already registered to a website.',

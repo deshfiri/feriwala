@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Models\BusinessAccount;
-use App\Domain\Package\Entitlements;
-use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Wallet\DepositGuard;
 use App\Domain\Website\Actions\AllocatePackageWebsite;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
@@ -52,11 +50,10 @@ class WebsiteController extends Controller
 
     public function __construct(
         protected WebsiteOverview $overview,
-        protected Entitlements $entitlements,
         protected DepositGuard $guard,
     ) {}
 
-    public function index(Request $request, AllocatePackageWebsite $allocator): Response
+    public function index(Request $request, AllocatePackageWebsite $allocator, RequestWebsite $requestWebsite): Response
     {
         $account = $this->businessAccountFor($request);
 
@@ -68,7 +65,7 @@ class WebsiteController extends Controller
         return Inertia::render('websites/index', [
             'allocations' => $this->overview->allocationsForAccount($account),
             'websites' => $this->overview->forAccount($account),
-            'entitlement' => $this->entitlement($account),
+            'entitlement' => $requestWebsite->allowance($account),
             'can' => [
                 'create' => $request->user()?->can('create', Website::class) ?? false,
             ],
@@ -82,7 +79,7 @@ class WebsiteController extends Controller
         Gate::authorize('create', Website::class);
 
         return Inertia::render('websites/create', [
-            'entitlement' => $this->entitlement($account),
+            'entitlement' => $quote->allowance($account),
             'storefront_domain' => config('website.storefront_domain'),
             'wallet' => $this->walletFigures($account),
 
@@ -291,24 +288,6 @@ class WebsiteController extends Controller
         } catch (LockTimeout) {
             throw ValidationException::withMessages(['website' => __('website.refused.busy')]);
         }
-    }
-
-    /**
-     * What the account's package allows, and how much of it is left (§8.1).
-     *
-     * @return array{allowed: bool, limit: int|null, used: int, remaining: int|null}
-     */
-    protected function entitlement(BusinessAccount $account): array
-    {
-        $used = Website::query()->forAccount($account)->open()->count();
-
-        return [
-            'allowed' => $account->canTransact()
-                && $this->entitlements->allows($account, PackageFeature::DedicatedWebsite),
-            'limit' => $this->entitlements->limit($account, PackageFeature::WebsiteLimit),
-            'used' => $used,
-            'remaining' => $this->entitlements->remaining($account, PackageFeature::WebsiteLimit, $used),
-        ];
     }
 
     /**

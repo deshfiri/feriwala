@@ -5,6 +5,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Actions\ActivatePackageChange;
 use App\Domain\Package\Actions\ActivateRenewal;
+use App\Domain\Package\Actions\AssignPackage;
 use App\Domain\Package\Actions\OpenPackageChange;
 use App\Domain\Package\Actions\OpenRenewal;
 use App\Domain\Package\Data\SubscriptionTerms;
@@ -19,6 +20,7 @@ use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteTheme;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteAllocation;
+use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -536,5 +538,107 @@ describe('who can see an allocation', function () {
         $this->actingAs($account->owner)
             ->get(route('websites.index'))
             ->assertRedirect();
+    });
+});
+
+describe('what the package allows', function () {
+    it('lets the partner set up the allocated website, and no more than the package allows', function () {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage()));
+
+        $this->actingAs($account->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('entitlement.limit', 1)
+                ->where('entitlement.remaining', 1)
+                ->where('entitlement.expired', false));
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Traders', 'subdomain' => 'karim-traders'])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Two', 'subdomain' => 'karim-two'])
+            ->assertSessionHasErrors(['package']);
+
+        expect(Website::query()->count())->toBe(1);
+    });
+
+    it('lets a subscription taken without a website limit still set up the one website it was allocated', function () {
+        // Snapshotted before the package said how many websites it allows.
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationPackage([
+            PackageFeature::DedicatedWebsite->value => '1',
+            PackageFeature::DomainIncluded->value => '1',
+            PackageFeature::HostingIncluded->value => '1',
+        ])));
+
+        $this->actingAs($account->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('entitlement.remaining', 1)
+                ->where('allocations.0.status', 'pending_setup'));
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Traders', 'subdomain' => 'karim-traders'])
+            ->assertSessionHasNoErrors();
+
+        expect(WebsiteAllocation::query()->sole()->website_id)->toBe(Website::query()->sole()->id);
+
+        // The allocation now has its website; nothing else was allowed.
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Two', 'subdomain' => 'karim-two'])
+            ->assertSessionHasErrors(['package']);
+
+        expect(Website::query()->count())->toBe(1);
+    });
+
+    it('refuses a website on an entitlement whose period has run out, on the page and at the server', function () {
+        $this->travelTo(CarbonImmutable::parse('2026-10-10 09:30:00'));
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::DomainValidityMonths->value => '1',
+            PackageFeature::HostingValidityMonths->value => '1',
+        ])));
+
+        $this->travelTo(CarbonImmutable::parse('2026-12-01 09:30:00'));
+
+        $this->actingAs($account->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('entitlement.allowed', true)
+                ->where('entitlement.expired', true)
+                ->where('entitlement.remaining', 0));
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Traders', 'subdomain' => 'karim-traders'])
+            ->assertSessionHasErrors(['package' => __('website.refused.entitlement_expired')]);
+
+        expect(Website::query()->count())->toBe(0);
+    });
+
+    it('allows setup again once a new term opens the next period', function () {
+        $this->travelTo(CarbonImmutable::parse('2026-10-10 09:30:00'));
+        $package = websiteAllocationWebsitePackage([
+            PackageFeature::DomainValidityMonths->value => '1',
+            PackageFeature::HostingValidityMonths->value => '1',
+        ]);
+        $account = websiteAllocationConfirm(websiteAllocationPurchase($package));
+
+        $this->travelTo(CarbonImmutable::parse('2026-12-01 09:30:00'));
+
+        app(AssignPackage::class)->handle(
+            $account, $package, User::factory()->create(), 'Renewed by arrangement', CarbonImmutable::now(),
+        );
+
+        $this->actingAs($account->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('entitlement.expired', false)
+                ->where('entitlement.remaining', 1)
+                ->where('allocations.0.status', 'pending_setup'));
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Traders', 'subdomain' => 'karim-traders'])
+            ->assertSessionHasNoErrors();
+
+        expect(Website::query()->count())->toBe(1);
     });
 });
