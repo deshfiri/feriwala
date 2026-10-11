@@ -37,8 +37,8 @@ class IdentityLocked extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject(__('Your Feriwala sign-in has been locked'))
-            ->line(__('Your sign-in has been locked and you will not be able to access Feriwala until it is restored.'))
+            ->subject(__('Your Banij sign-in has been locked'))
+            ->line(__('Your sign-in has been locked and you will not be able to access Banij until it is restored.'))
             ->line(__('Any sessions you had open have been ended.'))
             ->line(__('Contact support to find out what is needed to restore access.'));
     }

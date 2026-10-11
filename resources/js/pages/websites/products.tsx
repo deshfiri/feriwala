@@ -16,7 +16,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
-import { index as dropshippingCatalogue } from '@/routes/catalog/dropshipping';
+import { index as dropshippingCatalogue } from '@/routes/catalog';
 import { index as websiteCategories } from '@/routes/websites/categories';
 import { index as websitesIndex, show as websiteShow } from '@/routes/websites';
 import type { Column, Paginator } from '@/types';
@@ -82,12 +82,12 @@ export default function WebsiteProducts({
     const allowance =
         publishing.limit === null
             ? t('website.products.published_unlimited', {
-                used: String(publishing.used),
-            })
+                  used: String(publishing.used),
+              })
             : t('website.products.published_of', {
-                used: String(publishing.used),
-                limit: String(publishing.limit),
-            });
+                  used: String(publishing.used),
+                  limit: String(publishing.limit),
+              });
 
     const priceCell = (row: WebsiteSelection) => (
         <div className="space-y-1">

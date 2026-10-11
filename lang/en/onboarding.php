@@ -13,7 +13,7 @@ return [
         'title' => 'Activation status',
         'complete_heading' => 'Your account is active',
         'incomplete_heading' => 'Setting up your account',
-        'complete_description' => 'Everything is ready. You can start using Feriwala.',
+        'complete_description' => 'Everything is ready. You can start using Banij.',
         'incomplete_description' => 'A few steps remain before you can start trading.',
         'current_status' => 'Current status',
         'complete' => 'Complete',

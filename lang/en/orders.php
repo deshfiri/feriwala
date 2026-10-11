@@ -134,7 +134,7 @@ return [
         'cancelled_payment_cancelled' => 'Cancelled because the payment was cancelled. The stock held for it was released.',
         'cancelled_payment_expired' => 'Cancelled because the time to pay ran out. The stock held for it was released.',
         'cancelled_by_account' => 'Cancelled before payment. The stock held for it was released.',
-        'cancelled_by_staff' => 'Cancelled by Feriwala before payment. The stock held for it was released.',
+        'cancelled_by_staff' => 'Cancelled by Banij before payment. The stock held for it was released.',
         'cancelled_by_storefront' => 'Cancelled on the website before payment. The stock held for it was released.',
         'cancelled_confirmation_expired' => 'Cancelled because the order was not confirmed in time. The stock held for it was released.',
         'cod_placed' => 'Order placed on the website. Waiting for you to confirm it with the code we sent.',
@@ -224,7 +224,7 @@ return [
          * word of the code, which is held hashed and readable by nobody.
          */
         'confirmation' => [
-            'hint' => 'Paid on delivery, so the customer confirms with a code sent to their own number. Nobody can read that code — not the shop, not Feriwala.',
+            'hint' => 'Paid on delivery, so the customer confirms with a code sent to their own number. Nobody can read that code — not the shop, not Banij.',
             'state' => 'Confirmation',
             'states' => [
                 'pending' => 'Waiting for the customer',
@@ -279,7 +279,7 @@ return [
         'resolution_pending' => 'Securing stock again or refunding a held order is not done from this screen yet.',
         'cancel' => 'Cancel order',
         'cancel_title' => 'Cancel order :reference',
-        'cancel_description' => 'The payment is closed and the stock held for this order is released. The buyer sees that Feriwala cancelled it.',
+        'cancel_description' => 'The payment is closed and the stock held for this order is released. The buyer sees that Banij cancelled it.',
         'reason' => 'Reason',
         'reason_help' => 'At least 10 characters. Kept on the order for staff and in the audit log.',
         'cancelled' => 'Order :reference cancelled. Its stock was released.',

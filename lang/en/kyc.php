@@ -60,14 +60,14 @@ return [
         ],
 
         'audience' => [
-            'account' => 'Clients & Partners',
+            'account' => 'Partners',
             'supplier' => 'Suppliers',
-            'both' => 'Clients, Partners & Suppliers',
+            'both' => 'Partners & Suppliers',
         ],
 
         'form' => [
             'audience' => 'Asked of',
-            'audience_help' => 'Package and country rules below apply to Clients and Partners only. A Supplier is asked for every active requirement marked for them.',
+            'audience_help' => 'Package and country rules below apply to Partners only. A Supplier is asked for every active requirement marked for them.',
             'create_title' => 'New requirement',
             'edit_title' => 'Edit requirement',
             'description' => 'Applicants see the name and instructions exactly as written here.',
@@ -98,7 +98,7 @@ return [
         'start' => 'Start verification',
         'continue' => 'Continue this round',
         'round' => 'Round :number',
-        'requested' => 'requested by Feriwala',
+        'requested' => 'requested by Banij',
         'opened' => 'Opened :date',
         'submitted' => 'Submitted :date',
         'reviewed' => 'Reviewed :date',

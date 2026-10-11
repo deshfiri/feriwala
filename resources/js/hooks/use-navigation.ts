@@ -13,14 +13,15 @@ import {
     MonitorSmartphone,
     Network,
     PackageCheck,
+    Palette,
     Settings,
+    Receipt,
+    ReceiptText,
     Share2,
     ShieldCheck,
     ShoppingBag,
-    ShoppingBasket,
-    ShoppingCart,
-    Store,
     Truck,
+    UserRound,
     Users,
     Wallet as WalletIcon,
     Weight,
@@ -86,8 +87,10 @@ import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawal
 import { index as accountWallets } from '@/routes/admin/wallets';
 import { index as adminWebsites } from '@/routes/admin/websites';
 import { index as websitePricing } from '@/routes/admin/website-pricing';
-import { index as dropshippingCatalogue } from '@/routes/catalog/dropshipping';
-import { index as wholesaleCatalogue } from '@/routes/catalog/wholesale';
+import { index as productsIndex } from '@/routes/catalog';
+import { edit as appearanceSettings } from '@/routes/appearance';
+import { index as invoices } from '@/routes/subscription/invoices';
+import { index as receipts } from '@/routes/subscription/receipts';
 import { history as kycHistory } from '@/routes/kyc';
 import { index as payoutMethods } from '@/routes/payout-methods';
 import { edit as profileSettings } from '@/routes/profile';
@@ -97,7 +100,6 @@ import { index as staffDirectory } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
 import { show as wallet } from '@/routes/wallet';
 import { index as websites } from '@/routes/websites';
-import { show as wholesaleCart } from '@/routes/wholesale/cart';
 import { index as wholesaleOrders } from '@/routes/wholesale/orders';
 import { index as clientWithdrawals } from '@/routes/withdrawals';
 import type { NavGroup, NavItem } from '@/types';
@@ -130,6 +132,165 @@ export function useNavigation(): {
     const permissions = page.props.permissions ?? {};
     const account = page.props.account;
 
+    const active = account?.status === 'active';
+    const buys = Boolean(
+        account?.allowsWholesale || account?.allowsDropshipping,
+    );
+
+    /*
+     * The Partner sidebar: one entry per real, authorised destination, grouped
+     * by what the person is doing. The cart is not here — it sits in the top
+     * bar beside the wallet quick view.
+     */
+    const partnerGroups: NavGroup[] =
+        account === null || account === undefined
+            ? []
+            : [
+                  {
+                      label: t('nav.groups.products'),
+                      items: [
+                          ...(buys
+                              ? [
+                                    {
+                                        title: t('nav.products'),
+                                        href: productsIndex(),
+                                        icon: ShoppingBag,
+                                    },
+                                ]
+                              : []),
+                          ...(account.holdsAllocatedStock
+                              ? [
+                                    {
+                                        title: t('nav.allocated_stock'),
+                                        href: allocatedStock(),
+                                        icon: PackageCheck,
+                                    },
+                                ]
+                              : []),
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.sales'),
+                      items: [
+                          ...(account.allowsWholesale ||
+                          account.hasWholesaleOrders
+                              ? [
+                                    {
+                                        title: t('nav.orders'),
+                                        href: wholesaleOrders(),
+                                        icon: ClipboardList,
+                                    },
+                                ]
+                              : []),
+                          ...(account.allowsWebsites || account.hasWebsites
+                              ? [
+                                    {
+                                        title: t('nav.websites'),
+                                        href: websites(),
+                                        icon: Globe,
+                                    },
+                                ]
+                              : []),
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.finance'),
+                      items: [
+                          ...(active
+                              ? [
+                                    {
+                                        title: t('nav.wallet'),
+                                        href: wallet(),
+                                        icon: WalletIcon,
+                                    },
+                                    {
+                                        title: t('withdrawal.erp.title'),
+                                        href: clientWithdrawals(),
+                                        icon: Banknote,
+                                    },
+                                    {
+                                        title: t('payout.nav.payout_methods'),
+                                        href: payoutMethods(),
+                                        icon: CreditCard,
+                                    },
+                                ]
+                              : []),
+                          {
+                              title: t('common.settings.nav.invoices'),
+                              href: invoices(),
+                              icon: Receipt,
+                          },
+                          {
+                              title: t('common.settings.nav.receipts'),
+                              href: receipts(),
+                              icon: ReceiptText,
+                          },
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.business'),
+                      items: [
+                          {
+                              title: t('nav.verification'),
+                              href: kycHistory(),
+                              icon: ShieldCheck,
+                          },
+                          {
+                              title: t('nav.subscription'),
+                              href: subscription(),
+                              icon: CreditCard,
+                          },
+                          ...(account.viewsReferrals
+                              ? [
+                                    {
+                                        title: t('nav.referrals'),
+                                        href: referrals(),
+                                        icon: Share2,
+                                    },
+                                ]
+                              : []),
+                          ...(account.managesStaff
+                              ? [
+                                    {
+                                        title: t('nav.staff'),
+                                        href: staffDirectory(),
+                                        icon: Users,
+                                    },
+                                ]
+                              : []),
+                          ...(active
+                              ? [
+                                    {
+                                        title: t('nav.addresses'),
+                                        href: addresses(),
+                                        icon: MapPin,
+                                    },
+                                ]
+                              : []),
+                      ],
+                  },
+                  {
+                      label: t('nav.groups.account'),
+                      items: [
+                          {
+                              title: t('nav.profile'),
+                              href: profileSettings(),
+                              icon: UserRound,
+                          },
+                          {
+                              title: t('nav.security'),
+                              href: securitySettings(),
+                              icon: ShieldCheck,
+                          },
+                          {
+                              title: t('nav.appearance'),
+                              href: appearanceSettings(),
+                              icon: Palette,
+                          },
+                      ],
+                  },
+              ];
+
     const sidebarGroups: NavGroup[] = [
         {
             label: t('nav.groups.overview'),
@@ -141,121 +302,7 @@ export function useNavigation(): {
                 },
             ],
         },
-        {
-            label: t('nav.groups.business'),
-            items:
-                account === null || account === undefined
-                    ? []
-                    : [
-                          {
-                              title: t('nav.verification'),
-                              href: kycHistory(),
-                              icon: ShieldCheck,
-                          },
-                          {
-                              title: t('nav.subscription'),
-                              href: subscription(),
-                              icon: CreditCard,
-                          },
-                          ...(account?.status === 'active'
-                              ? [
-                                    {
-                                        title: t('nav.wallet'),
-                                        href: wallet(),
-                                        icon: WalletIcon,
-                                    },
-                                    {
-                                        title: t('nav.addresses'),
-                                        href: addresses(),
-                                        icon: MapPin,
-                                    },
-                                    {
-                                        title: t('payout.nav.payout_methods'),
-                                        href: payoutMethods(),
-                                        icon: CreditCard,
-                                    },
-                                    {
-                                        title: t('withdrawal.erp.title'),
-                                        href: clientWithdrawals(),
-                                        icon: Banknote,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsWholesale
-                              ? [
-                                    {
-                                        title: t('nav.wholesale_catalogue'),
-                                        href: wholesaleCatalogue(),
-                                        icon: ShoppingCart,
-                                    },
-                                    {
-                                        title:
-                                            (account?.wholesaleCartLines ?? 0) >
-                                            0
-                                                ? `${t('nav.wholesale_cart')} (${account?.wholesaleCartLines})`
-                                                : t('nav.wholesale_cart'),
-                                        href: wholesaleCart(),
-                                        icon: ShoppingBasket,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsWholesale ||
-                          account?.hasWholesaleOrders
-                              ? [
-                                    {
-                                        title: t('nav.wholesale_orders'),
-                                        href: wholesaleOrders(),
-                                        icon: ClipboardList,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsDropshipping
-                              ? [
-                                    {
-                                        title: t('nav.dropshipping_catalogue'),
-                                        href: dropshippingCatalogue(),
-                                        icon: Store,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.allowsWebsites || account?.hasWebsites
-                              ? [
-                                    {
-                                        title: t('nav.websites'),
-                                        href: websites(),
-                                        icon: Globe,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.viewsReferrals
-                              ? [
-                                    {
-                                        title: t('nav.referrals'),
-                                        href: referrals(),
-                                        icon: Share2,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.holdsAllocatedStock
-                              ? [
-                                    {
-                                        title: t('nav.allocated_stock'),
-                                        href: allocatedStock(),
-                                        icon: PackageCheck,
-                                    },
-                                ]
-                              : []),
-                          ...(account?.managesStaff
-                              ? [
-                                    {
-                                        title: t('nav.staff'),
-                                        href: staffDirectory(),
-                                        icon: Users,
-                                    },
-                                ]
-                              : []),
-                      ],
-        },
+        ...partnerGroups,
         {
             label: t('nav.groups.administration'),
             items: [
@@ -824,18 +871,20 @@ export function useNavigation(): {
         },
         {
             label: t('nav.groups.settings'),
-            items: [
-                {
-                    title: t('nav.profile'),
-                    href: profileSettings(),
-                    icon: Settings,
-                },
-                {
-                    title: t('nav.security'),
-                    href: securitySettings(),
-                    icon: ShieldCheck,
-                },
-            ],
+            items: account
+                ? []
+                : [
+                      {
+                          title: t('nav.profile'),
+                          href: profileSettings(),
+                          icon: Settings,
+                      },
+                      {
+                          title: t('nav.security'),
+                          href: securitySettings(),
+                          icon: ShieldCheck,
+                      },
+                  ],
         },
     ];
 

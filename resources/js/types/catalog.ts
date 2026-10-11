@@ -384,6 +384,36 @@ export type BrowseCard = {
     maximum_selling_price?: Money | null;
 };
 
+/**
+ * One product on the Partner's unified Products page: once, with the terms of
+ * each way the account may use it. A mode the account cannot use is `null`.
+ */
+export type PartnerProductCard = {
+    slug: string;
+    name: string;
+    bpc: string;
+    sku: string;
+    category: string;
+    brand: string | null;
+    is_featured: boolean;
+    variant_count: number;
+    package_scope: 'all' | 'selected';
+    image: { url: string; alt: string | null } | null;
+    modes: { wholesale: boolean; partner_selling: boolean };
+    wholesale: {
+        price: Money;
+        min_order_quantity: number;
+        max_order_quantity: number | null;
+        in_stock: boolean;
+        tiers: { min_quantity: number; unit_price: Money }[];
+    } | null;
+    partner_selling: {
+        suggested_selling_price: Money | null;
+        minimum_selling_price: Money | null;
+        maximum_selling_price: Money | null;
+    } | null;
+};
+
 export type BrowseDetail = {
     slug: string;
     name: string;

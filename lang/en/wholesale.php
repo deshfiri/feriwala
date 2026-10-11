@@ -55,7 +55,7 @@ return [
 
     'checkout' => [
         'title' => 'Wholesale checkout',
-        'description' => 'Review your order. Every figure is worked out again by Feriwala each time this page opens.',
+        'description' => 'Review your order. Every figure is worked out again by Banij each time this page opens.',
         'back_to_cart' => 'Back to cart',
         'cart_not_ready' => 'Your cart needs attention before checkout.',
         'items' => 'Order items',
@@ -87,7 +87,7 @@ return [
 
         'confirmation' => [
             'title' => 'Confirm your order',
-            'help' => 'Check the items, addresses and total, then confirm. Feriwala works every figure out again before anything is charged.',
+            'help' => 'Check the items, addresses and total, then confirm. Banij works every figure out again before anything is charged.',
             'confirm' => 'Confirm order summary',
             'confirmed' => 'Confirmed',
             'confirmed_detail' => 'Confirmed on :at to pay :amount by :method.',

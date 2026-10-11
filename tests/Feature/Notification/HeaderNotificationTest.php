@@ -58,7 +58,7 @@ it('reads a stored event as a sentence, not as an event name', function () {
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('notifications.0.title', 'Your account is now active')
-            ->where('notifications.0.description', 'You now have full access to your Feriwala account.')
+            ->where('notifications.0.description', 'You now have full access to your Banij account.')
             ->where('unreadNotificationCount', 1),
         );
 });

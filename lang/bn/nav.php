@@ -3,7 +3,11 @@
 return [
     'groups' => [
         'overview' => 'সংক্ষিপ্ত চিত্র',
-        'business' => 'আমার ব্যবসা',
+        'products' => 'পণ্য',
+        'sales' => 'বিক্রি ও অর্ডার',
+        'finance' => 'অর্থ',
+        'business' => 'ব্যবসা',
+        'account' => 'অ্যাকাউন্ট',
         'administration' => 'প্রশাসন',
         'platform_settings' => 'প্ল্যাটফর্ম সেটিংস',
         'settings' => 'সেটিংস',
@@ -17,11 +21,12 @@ return [
     'wholesale_catalogue' => 'পাইকারি ক্যাটালগ',
     'wholesale_cart' => 'পাইকারি কার্ট',
     'wholesale_orders' => 'পাইকারি অর্ডার',
-    'dropshipping_catalogue' => 'ড্রপশিপিং ক্যাটালগ',
+    'dropshipping_catalogue' => 'পার্টনার সেলিং পণ্য',
     'websites' => 'আমার ওয়েবসাইট',
     'staff' => 'স্টাফ',
     'profile' => 'প্রোফাইল',
     'security' => 'নিরাপত্তা',
+    'appearance' => 'অ্যাপিয়ারেন্স',
 
     'kyc_review' => 'কেওয়াইসি পর্যালোচনা',
     'kyc_requirements' => 'যাচাইকরণের শর্তাবলি',
@@ -45,7 +50,7 @@ return [
     'payments' => 'পেমেন্ট',
     'wallets' => 'অ্যাকাউন্ট ওয়ালেট',
     'deposit_rules' => 'জমার নিয়ম',
-    'account_withdrawals' => 'ক্লায়েন্ট/পার্টনার উত্তোলন',
+    'account_withdrawals' => 'পার্টনার উত্তোলন',
     'withdrawal_limits' => 'উত্তোলন সীমা',
     'settings_hub' => 'সেটিংস',
     'roles' => 'ভূমিকা ও অনুমতি',
@@ -75,7 +80,7 @@ return [
     'shipments' => 'শিপমেন্ট',
     'delivery_settings' => 'ডেলিভারি সেটিংস',
     'sourcing_groups' => 'সোর্সিং গ্রুপ',
-    'add_account' => 'ক্লায়েন্ট/পার্টনার যোগ করুন',
+    'add_account' => 'পার্টনার যোগ করুন',
     'add_supplier' => 'সরবরাহকারী যোগ করুন',
 
     'search' => [

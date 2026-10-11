@@ -16,8 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import { index as dropshippingIndex } from '@/routes/catalog/dropshipping';
-import { index as wholesaleIndex } from '@/routes/catalog/wholesale';
+import { index as productsIndex } from '@/routes/catalog';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { index as websiteProducts } from '@/routes/websites/products';
 import type {
@@ -85,15 +84,11 @@ export default function CatalogueProduct({
 
             <PageContainer>
                 <Link
-                    href={
-                        channel === 'wholesale'
-                            ? wholesaleIndex()
-                            : dropshippingIndex()
-                    }
+                    href={productsIndex()}
                     className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm"
                 >
                     <ArrowLeft className="size-4" aria-hidden="true" />
-                    {t(`catalog.browse.back_${channel}`)}
+                    {t('partner_products.title')}
                 </Link>
 
                 <PageHeader

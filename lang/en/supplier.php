@@ -50,7 +50,7 @@ return [
 
     'auth' => [
         'register_title' => 'Apply as a Supplier',
-        'register_description' => 'A Supplier account is separate from a Client or Partner account. It gives access only to the Supplier portal.',
+        'register_description' => 'A Supplier account is separate from a Partner account. It gives access only to the Supplier portal.',
         'register_submit' => 'Create Supplier account',
         'login_title' => 'Supplier sign in',
         'login_description' => 'Sign in to the Supplier portal.',
@@ -63,14 +63,14 @@ return [
         'forgot_submit' => 'Send reset link',
         'reset_title' => 'Choose a new password',
         'reset_submit' => 'Reset password',
-        'client_notice' => 'Looking for the Client or Partner sign in?',
+        'client_notice' => 'Looking for the Partner sign in?',
 
         'login_heading' => 'Welcome back',
         'login_intro' => 'Sign in to manage your listings, stock and orders.',
         'email_placeholder' => 'email@example.com',
         'password_placeholder' => 'Enter your password',
         'signing_in' => 'Signing in...',
-        'client_prompt' => 'Looking for the Client or Partner sign in?',
+        'client_prompt' => 'Looking for the Partner sign in?',
 
         'register_eyebrow' => 'Supplier Registration',
         'register_heading' => 'Become a supplier',
@@ -354,7 +354,7 @@ return [
 
     'payables' => [
         'title' => 'Payables',
-        'description' => 'What Feriwala owes you for delivered, allocated order lines.',
+        'description' => 'What Banij owes you for delivered, allocated order lines.',
         'empty_title' => 'No payables yet',
         'empty_description' => 'A payable appears once an order line is allocated to you.',
         'product' => 'Product',
@@ -593,7 +593,7 @@ return [
             'approved_quantity_hint' => 'Leave blank to open at the :quantity the Supplier offered.',
             'variant_id' => 'Existing variant ID (optional)',
             'wholesale' => 'Wholesale',
-            'dropshipping' => 'Dropshipping',
+            'dropshipping' => 'Partner Selling',
             'reason' => 'Reason (recorded)',
             'record_decision' => 'Record decision',
             'request_correction' => 'Request correction of the whole listing',
@@ -677,7 +677,7 @@ return [
         ],
         'payables' => [
             'title' => 'Supplier payables',
-            'description' => 'What Feriwala owes each Supplier for allocated order lines.',
+            'description' => 'What Banij owes each Supplier for allocated order lines.',
             'empty_title' => 'No payables',
             'empty_description' => 'A payable appears once an order line is allocated to a Supplier.',
             'columns' => [

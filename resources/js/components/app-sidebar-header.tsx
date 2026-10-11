@@ -4,6 +4,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import GlobalSearch from '@/components/global-search';
 import LanguageSwitcher from '@/components/language-switcher';
 import NotificationMenu from '@/components/notification-menu';
+import PartnerHeaderTools from '@/components/partner-header-tools';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -19,7 +20,8 @@ import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
  *
  * Everything §33.2 asks a header to carry, in one row: the rail toggle,
  * breadcrumbs saying where you are, global search, language, appearance,
- * notifications, and the account menu.
+ * notifications, and the account menu. A Partner also gets the cart and a
+ * wallet quick view beside search.
  *
  * It stays put while the page scrolls. In a data-dense ERP the alternative is
  * losing your place in a long table and having to scroll back up to reach
@@ -49,6 +51,8 @@ export function AppSidebarHeader({
 
             <div className="flex shrink-0 items-center gap-1">
                 <GlobalSearch />
+
+                <PartnerHeaderTools />
 
                 <span
                     aria-hidden="true"

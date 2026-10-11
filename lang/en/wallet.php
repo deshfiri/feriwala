@@ -45,7 +45,7 @@ return [
         'subject' => 'Your wallet balance needs attention',
         'body' => 'Your wallet is :shortfall below the :required your account is required to hold.',
         'grace' => 'Services continue until :date. After that some may be restricted.',
-        'sms' => 'Feriwala: your wallet is :shortfall below the required balance. Top up to keep your services running.',
+        'sms' => 'Banij: your wallet is :shortfall below the required balance. Top up to keep your services running.',
         'action' => 'Top up your wallet',
         'status_note' => 'Your wallet is below the balance your account is required to hold.',
         'restored_note' => 'Your balance is back above the required amount and your services have been restored.',

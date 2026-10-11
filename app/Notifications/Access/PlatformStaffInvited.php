@@ -33,8 +33,8 @@ class PlatformStaffInvited extends BaseResetPassword
         ], false));
 
         return (new MailMessage)
-            ->subject(__('You have been added to Feriwala'))
-            ->line(__('An administrator has added you as platform staff on Feriwala.'))
+            ->subject(__('You have been added to Banij'))
+            ->line(__('An administrator has added you as platform staff on Banij.'))
             ->line(__('Set your password to sign in for the first time.'))
             ->action(__('Set Password'), $url)
             ->line(__('This link will expire in :count minutes.', ['count' => config('auth.passwords.users.expire')]))

@@ -2,7 +2,7 @@
 
 return [
     /*
-     * A Client/Partner `BusinessAccount`'s own withdrawal requests (§27).
+     * A Partner `BusinessAccount`'s own withdrawal requests (§27).
      */
     'erp' => [
         'title' => 'Withdrawals',
@@ -38,7 +38,7 @@ return [
      * The staff withdrawal queue and its decisions.
      */
     'admin' => [
-        'title' => 'Client/Partner withdrawals',
+        'title' => 'Partner withdrawals',
         'description' => 'Requests to withdraw from a business account\'s wallet, and their decisions.',
         'empty_title' => 'No withdrawals',
         'empty_description' => 'A withdrawal appears once a business account requests one.',
@@ -78,7 +78,7 @@ return [
         'limits' => [
             'title' => 'Withdrawal limits',
             'description' => 'The platform default withdrawal minimum and maximum, and any account or Supplier that needs its own.',
-            'account_section' => 'Client/Partner defaults',
+            'account_section' => 'Partner defaults',
             'supplier_section' => 'Supplier defaults',
             'override_section' => 'Set an override',
             'minimum' => 'Minimum',

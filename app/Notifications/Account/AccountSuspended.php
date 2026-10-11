@@ -40,7 +40,7 @@ class AccountSuspended extends Notification implements ShouldQueue
     {
         $message = (new MailMessage)
             ->subject(__('Your account has been suspended'))
-            ->line(__('Your Feriwala account has been suspended and cannot be used for now.'));
+            ->line(__('Your Banij account has been suspended and cannot be used for now.'));
 
         if ($this->note !== null && trim($this->note) !== '') {
             $message->line($this->note);

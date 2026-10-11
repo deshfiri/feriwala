@@ -100,8 +100,8 @@ it('texts a code that verifies the number, in the user\'s language', function (s
         ->and($match)->not->toBeEmpty()
         ->and(app(VerifyMobile::class)->handle($user, $match[0]))->toBeTrue();
 })->with([
-    'English' => ['en', 'Your Feriwala verification code is'],
-    'Bangla' => ['bn', 'আপনার ফেরিওয়ালা কোড'],
+    'English' => ['en', 'Your Banij verification code is'],
+    'Bangla' => ['bn', 'আপনার Banij কোড'],
 ]);
 
 it('rejects a wrong code and leaves the number unverified', function () {

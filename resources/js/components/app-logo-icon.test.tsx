@@ -46,19 +46,19 @@ describe('the platform logo', () => {
     });
 
     it('renders the uploaded logo as an image', () => {
-        page.props = { name: 'Feriwala', branding: uploaded };
+        page.props = { name: 'Banij', branding: uploaded };
         act(() => root.render(<AppLogoIcon className="h-10" />));
 
         const image = container.querySelector('img');
 
         expect(image?.getAttribute('src')).toBe(uploaded.logo_url);
-        expect(image?.getAttribute('alt')).toBe('Feriwala');
+        expect(image?.getAttribute('alt')).toBe('Banij');
         expect(image?.className).toContain('h-10');
         expect(container.querySelector('svg')).toBeNull();
     });
 
     it('falls back to the shipped logo when the contract is absent', () => {
-        page.props = { name: 'Feriwala' };
+        page.props = { name: 'Banij' };
         act(() => root.render(<AppLogoIcon />));
 
         expect(container.querySelector('img')?.getAttribute('src')).toBe(
@@ -67,7 +67,7 @@ describe('the platform logo', () => {
     });
 
     it('uses the same image in both sidebar states, keeping the name for screen readers', () => {
-        page.props = { name: 'Feriwala', branding: uploaded };
+        page.props = { name: 'Banij', branding: uploaded };
         act(() => root.render(<AppLogo />));
 
         const image = container.querySelector('img');
@@ -77,8 +77,6 @@ describe('the platform logo', () => {
         expect(image?.className).toContain(
             'group-data-[collapsible=icon]:size-8',
         );
-        expect(container.querySelector('.sr-only')?.textContent).toBe(
-            'Feriwala',
-        );
+        expect(container.querySelector('.sr-only')?.textContent).toBe('Banij');
     });
 });

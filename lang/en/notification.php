@@ -42,7 +42,7 @@ return [
 
         'account.activated' => [
             'title' => 'Your account is now active',
-            'description' => 'You now have full access to your Feriwala account.',
+            'description' => 'You now have full access to your Banij account.',
         ],
 
         'account.suspended' => [
@@ -102,7 +102,7 @@ return [
 
         /*
          * The Supplier account domain (D25). A wholly separate set of events
-         * from the Client/Partner ones above — a Supplier never receives the
+         * from the Partner ones above — a Supplier never receives the
          * `account.*` notifications, and vice versa.
          */
         'supplier.kyc_submitted' => [

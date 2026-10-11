@@ -104,7 +104,7 @@ return [
         'description' => 'Whether these people can sign in at all. Separate from whether the business can trade.',
         'lock' => 'Lock sign-in',
         'unlock' => 'Restore sign-in',
-        'lock_title' => 'Lock :name out of Feriwala?',
+        'lock_title' => 'Lock :name out of Banij?',
         'lock_description' => 'They lose every screen immediately, including administration, and any session they have open ends. The business account is not changed.',
         'unlock_title' => 'Restore sign-in for :name?',
         'unlock_description' => 'They will be able to sign in again straight away.',

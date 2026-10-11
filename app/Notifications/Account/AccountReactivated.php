@@ -38,7 +38,7 @@ class AccountReactivated extends Notification implements ShouldQueue
     {
         $message = (new MailMessage)
             ->subject(__('Your account is active again'))
-            ->line(__('The suspension on your Feriwala account has been lifted and you can trade again.'));
+            ->line(__('The suspension on your Banij account has been lifted and you can trade again.'));
 
         if ($this->note !== null && trim($this->note) !== '') {
             $message->line($this->note);

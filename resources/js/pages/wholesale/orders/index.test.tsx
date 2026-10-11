@@ -68,10 +68,7 @@ describe('wholesale orders list', () => {
         expect(screen.getByText('orders.empty')).toBeInTheDocument();
         expect(
             screen.getByRole('link', { name: 'orders.browse' }),
-        ).toHaveAttribute(
-            'href',
-            expect.stringContaining('/catalog/wholesale'),
-        );
+        ).toHaveAttribute('href', expect.stringMatching(/\/catalog$/));
     });
 
     it('lists each order with its status in words and a way into it', () => {

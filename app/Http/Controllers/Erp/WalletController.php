@@ -10,6 +10,7 @@ use App\Domain\Wallet\Models\WalletRestriction;
 use App\Domain\Wallet\Models\WalletTransaction;
 use App\Domain\Wallet\Queries\WalletStatement;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -73,6 +74,20 @@ class WalletController extends Controller
                 ])
                 ->all(),
         ]);
+    }
+
+    /**
+     * The one figure the header shows when its eye is pressed: what the account
+     * can use now, the same `usable` bucket the wallet page leads with. Nothing
+     * else about the wallet leaves here, and only this account's own is read.
+     */
+    public function quickView(Request $request): JsonResponse
+    {
+        $account = $this->businessAccountFor($request);
+
+        return response()
+            ->json(['usable' => $this->walletFor($account)->usableBalance()->jsonSerialize()])
+            ->header('Cache-Control', 'no-store, private');
     }
 
     /**

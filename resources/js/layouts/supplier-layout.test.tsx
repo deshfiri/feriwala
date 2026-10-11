@@ -83,7 +83,7 @@ const page = {
         translations: english as unknown,
         supplierAccount: null as unknown,
         sidebarOpen: true,
-        name: 'Feriwala',
+        name: 'Banij',
     },
 };
 

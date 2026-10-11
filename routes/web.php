@@ -242,6 +242,11 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          */
         Route::get('wallet', [WalletController::class, 'show'])->name('wallet.show');
 
+        // The header's quick look: one figure, fetched only when asked for and
+        // never part of the page source. Scoped to the signed-in account.
+        Route::get('wallet/quick-view', [WalletController::class, 'quickView'])
+            ->name('wallet.quick-view');
+
         /*
          * Putting money in (§24, §26.3, P2-19).
          *
@@ -322,6 +327,11 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          * query — a product switched on only for wholesale cannot be opened on
          * the dropshipping route by typing its address. Nothing here writes.
          */
+        // The one Products workspace: every product the account may use, once,
+        // with its wholesale and Partner Selling terms. The two channel screens
+        // below stay as the product detail routes and for direct links.
+        Route::get('catalog', [BusinessCatalogController::class, 'products'])
+            ->name('catalog.index');
         Route::get('catalog/wholesale', [BusinessCatalogController::class, 'wholesale'])
             ->name('catalog.wholesale.index');
         Route::get('catalog/wholesale/{product}', [BusinessCatalogController::class, 'showWholesale'])

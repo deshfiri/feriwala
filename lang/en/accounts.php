@@ -1,15 +1,15 @@
 <?php
 
 /**
- * The staff directory of Client/Partner business accounts.
+ * The staff directory of Partner business accounts.
  *
  * "Partner" is not a second kind of account — it is a trading business using
- * wholesale, dropshipping or both — so the wording stays with "business"
+ * wholesale, Partner Selling or both — so the wording stays with "business"
  * throughout rather than inventing a parallel noun.
  */
 return [
     'title' => 'Accounts',
-    'description' => 'Every Client and Partner business registered on the platform.',
+    'description' => 'Every Partner business registered on the platform.',
     'search_placeholder' => 'Account ID, business, owner, email or mobile',
     'open' => 'Open',
     'verified' => 'verified',
@@ -54,8 +54,8 @@ return [
 
     'facilities' => [
         'wholesale' => 'Wholesale',
-        'dropshipping' => 'Dropshipping',
-        'both' => 'Wholesale and dropshipping',
+        'dropshipping' => 'Partner Selling',
+        'both' => 'Wholesale and Partner Selling',
     ],
 
     'reverification' => [

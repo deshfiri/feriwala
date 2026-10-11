@@ -2,7 +2,7 @@
 
 return [
     'forbidden_title' => 'Central stock is not yours to change',
-    'forbidden_description' => 'Stock is held and counted by Feriwala. Partners see what is available; they never change it.',
+    'forbidden_description' => 'Stock is held and counted by Banij. Partners see what is available; they never change it.',
     'forbidden_viewer_title' => 'Your role can view stock, not change it',
     'forbidden_viewer_description' => 'Holding and changing stock needs inventory permission. An administrator can grant it if you need it.',
     'forbidden_staff_title' => 'Inventory is not part of your role',
@@ -123,7 +123,7 @@ return [
 
     'allocated_stock' => [
         'title' => 'Allocated stock',
-        'description' => 'Stock Feriwala has set aside for your business. Your orders draw on it before shared stock, and no other business can order it. Only Feriwala can change it.',
+        'description' => 'Stock Banij has set aside for your business. Your orders draw on it before shared stock, and no other business can order it. Only Banij can change it.',
         'caption' => 'Stock allocated to your business, per BPC',
         'columns' => [
             'product' => 'Product',
@@ -134,7 +134,7 @@ return [
         'total' => ':count units allocated in total',
         'cannot_trade' => 'Your account cannot trade right now, so orders cannot draw on this stock until it can.',
         'empty' => 'No stock is allocated to your business',
-        'empty_help' => 'When Feriwala sets stock aside for you, it appears here.',
+        'empty_help' => 'When Banij sets stock aside for you, it appears here.',
     ],
 
     'item' => [
