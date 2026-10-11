@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { Truck } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
 import PageContainer from '@/components/page-container';
@@ -17,7 +17,7 @@ import {
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
-import { index, show } from '@/routes/admin/suppliers';
+import { create, index, show } from '@/routes/admin/suppliers';
 import type { Column, Paginator } from '@/types';
 
 const ALL = 'all';
@@ -43,6 +43,7 @@ export default function AdminSuppliersIndex({
     statuses: { value: string; label: string }[];
 }) {
     const { t, locale } = useTranslation();
+    const permissions = usePage().props.permissions ?? {};
     const { getFilter, setFilter } = useTableQuery({ only: RELOAD_PROPS });
 
     const columns: Column<Row>[] = [
@@ -112,6 +113,15 @@ export default function AdminSuppliersIndex({
                 <PageHeader
                     title={t('supplier.admin.suppliers.title')}
                     description={t('supplier.admin.suppliers.description')}
+                    actions={
+                        permissions['supplier.create'] ? (
+                            <Button asChild>
+                                <Link href={create()}>
+                                    {t('nav.add_supplier')}
+                                </Link>
+                            </Button>
+                        ) : undefined
+                    }
                 />
 
                 <DataTable

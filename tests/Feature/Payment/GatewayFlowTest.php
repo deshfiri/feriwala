@@ -207,6 +207,23 @@ describe('coming back from the gateway', function () {
         expect($payment->refresh()->status)->toBe(PaymentStatus::Failed);
     });
 
+    it('never marks a payment paid on a forged success return the gateway does not confirm', function () {
+        $payment = ($this->start)();
+
+        $this->validation = ['status' => 'INVALID_TRANSACTION'];
+
+        $this->actingAs($this->applicant)
+            ->get(route('checkout.return', [
+                'tran_id' => $payment->reference,
+                'val_id' => 'forged-val',
+                'status' => 'VALID',
+                'amount' => $payment->amount->toDecimal(),
+            ]));
+
+        expect($payment->refresh()->status)->not->toBe(PaymentStatus::Paid)
+            ->and($payment->paid_at)->toBeNull();
+    });
+
     it('refuses a transaction that belongs to a different payment', function () {
         /*
          * The callback says which payment to look at; the gateway says which

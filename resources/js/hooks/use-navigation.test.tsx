@@ -20,10 +20,16 @@ declare global {
 }
 
 let titles: string[] = [];
+let sidebarTitles: string[] = [];
 
 function Harness() {
-    titles = useNavigation()
-        .searchGroups.flatMap((group) => group.items)
+    const navigation = useNavigation();
+
+    sidebarTitles = navigation.sidebarGroups
+        .flatMap((group) => group.items)
+        .map((item) => item.title);
+    titles = navigation.searchGroups
+        .flatMap((group) => group.items)
         .map((item) => item.title);
 
     return null;
@@ -406,6 +412,33 @@ describe('settings hub navigation', () => {
         expect(titles).toContain('nav.settings_hub');
     });
 
+    it('lists Packages once in the sidebar for staff who can view them', () => {
+        renderFor({
+            permissions: { 'package.view': true },
+            account: null,
+        });
+
+        expect(sidebarTitles).toContain('nav.packages');
+        expect(titles.filter((title) => title === 'nav.packages')).toHaveLength(
+            1,
+        );
+    });
+
+    it('keeps Sourcing groups out of navigation, even for staff who can view them', () => {
+        renderFor({
+            permissions: { 'catalog.view': true, 'sourcing_group.view': true },
+            account: null,
+        });
+
+        expect(titles).not.toContain('nav.sourcing_groups');
+    });
+
+    it('hides Packages from staff without package.view', () => {
+        renderFor({ permissions: { 'sms.view': true }, account: null });
+
+        expect(sidebarTitles).not.toContain('nav.packages');
+    });
+
     it('offers it neither to staff without any of them nor to a partner', () => {
         renderFor({
             permissions: {},
@@ -564,6 +597,13 @@ describe('supplier administration navigation', () => {
         });
 
         SUPPLIER_DOORS.forEach((title) => expect(titles).toContain(title));
+        expect(sidebarTitles).toEqual(
+            expect.arrayContaining([
+                'Supplier Management',
+                'Supplier Operations',
+                'Supplier Finance',
+            ]),
+        );
     });
 
     it('gates each door on its own permission', () => {

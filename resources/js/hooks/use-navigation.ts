@@ -77,10 +77,7 @@ import { index as supplierListings } from '@/routes/admin/supplier-listings';
 import { index as supplierOffers } from '@/routes/admin/supplier-offers';
 import { index as supplierPayables } from '@/routes/admin/supplier-payables';
 import { index as supplierStock } from '@/routes/admin/supplier-stock';
-import {
-    create as createSupplier,
-    index as supplierApplications,
-} from '@/routes/admin/suppliers';
+import { index as supplierApplications } from '@/routes/admin/suppliers';
 import { index as supplierWallets } from '@/routes/admin/supplier-wallets';
 import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawals';
 import { index as accountWallets } from '@/routes/admin/wallets';
@@ -600,24 +597,13 @@ export function useNavigation(): {
                     : []),
 
                 ...(permissions['supplier.view'] ||
-                permissions['supplier_listing.view'] ||
-                permissions['supplier_pricing.view'] ||
-                permissions['supplier_stock.view'] ||
-                permissions['supplier_payable.view']
+                permissions['supplier_listing.view']
                     ? [
                           {
-                              title: 'Suppliers',
+                              title: 'Supplier Management',
                               href: permissions['supplier.view']
                                   ? supplierApplications()
-                                  : permissions['supplier_listing.view']
-                                    ? supplierListings()
-                                    : permissions['supplier_pricing.view']
-                                      ? supplierOffers()
-                                      : permissions['supplier_stock.view']
-                                        ? supplierStock()
-                                        : permissions['supplier_payable.view']
-                                          ? supplierPayables()
-                                          : supplierPayables(),
+                                  : supplierListings(),
                               icon: Truck,
                               items: [
                                   ...(permissions['supplier.view']
@@ -644,8 +630,29 @@ export function useNavigation(): {
                                             },
                                         ]
                                       : []),
+                              ],
+                          },
+                      ]
+                    : []),
+
+                ...(permissions['supplier_pricing.view'] ||
+                permissions['supplier_stock.view']
+                    ? [
+                          {
+                              title: 'Supplier Operations',
+                              href: permissions['supplier_pricing.view']
+                                  ? supplierAllocations()
+                                  : supplierStock(),
+                              icon: Truck,
+                              items: [
                                   ...(permissions['supplier_pricing.view']
                                       ? [
+                                            {
+                                                title: t(
+                                                    'nav.supplier_allocations',
+                                                ),
+                                                href: supplierAllocations(),
+                                            },
                                             {
                                                 title: t('nav.supplier_offers'),
                                                 href: supplierOffers(),
@@ -660,6 +667,21 @@ export function useNavigation(): {
                                             },
                                         ]
                                       : []),
+                              ],
+                          },
+                      ]
+                    : []),
+
+                ...(permissions['supplier_payable.view'] ||
+                permissions['withdrawal.view']
+                    ? [
+                          {
+                              title: 'Supplier Finance',
+                              href: permissions['supplier_payable.view']
+                                  ? supplierPayables()
+                                  : supplierWithdrawals(),
+                              icon: Truck,
+                              items: [
                                   ...(permissions['supplier_payable.view']
                                       ? [
                                             {
@@ -667,6 +689,22 @@ export function useNavigation(): {
                                                     'nav.supplier_payables',
                                                 ),
                                                 href: supplierPayables(),
+                                            },
+                                            {
+                                                title: t(
+                                                    'nav.supplier_wallets',
+                                                ),
+                                                href: supplierWallets(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['withdrawal.view']
+                                      ? [
+                                            {
+                                                title: t(
+                                                    'nav.supplier_withdrawals',
+                                                ),
+                                                href: supplierWithdrawals(),
                                             },
                                         ]
                                       : []),
@@ -721,49 +759,6 @@ export function useNavigation(): {
             ...group,
             items: flattenNavItems(group.items),
         })),
-        {
-            // The rest of the Supplier area: kept out of the sidebar so one
-            // Suppliers entry stays short, and found here by name.
-            label: t('nav.suppliers'),
-            items: [
-                ...(permissions['supplier.create']
-                    ? [
-                          {
-                              title: t('nav.add_supplier'),
-                              href: createSupplier(),
-                              icon: Truck,
-                          },
-                      ]
-                    : []),
-                ...(permissions['supplier_pricing.view']
-                    ? [
-                          {
-                              title: t('nav.supplier_allocations'),
-                              href: supplierAllocations(),
-                              icon: Truck,
-                          },
-                      ]
-                    : []),
-                ...(permissions['supplier_payable.view']
-                    ? [
-                          {
-                              title: t('nav.supplier_wallets'),
-                              href: supplierWallets(),
-                              icon: Truck,
-                          },
-                      ]
-                    : []),
-                ...(permissions['withdrawal.view']
-                    ? [
-                          {
-                              title: t('nav.supplier_withdrawals'),
-                              href: supplierWithdrawals(),
-                              icon: Truck,
-                          },
-                      ]
-                    : []),
-            ],
-        },
         {
             // The configuration screens: reached from the sidebar through the
             // Settings hub, and found here by name.
