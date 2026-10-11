@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { WebsiteSummary } from '@/types/website';
+import type { WebsiteAllocationCard, WebsiteSummary } from '@/types/website';
+
+const websitesPage = vi.hoisted(() => ({
+    props: { translations: {} } as Record<string, unknown>,
+}));
 
 vi.mock('@inertiajs/react', async () => {
     const { createElement } = await import('react');
@@ -22,7 +26,7 @@ vi.mock('@inertiajs/react', async () => {
                 { href: typeof href === 'string' ? href : href.url, ...rest },
                 children as never,
             ),
-        usePage: () => ({ props: { translations: {} } }),
+        usePage: () => websitesPage,
     };
 });
 
@@ -45,10 +49,209 @@ function summary(overrides: Partial<WebsiteSummary> = {}): WebsiteSummary {
     };
 }
 
+function allocationCard(
+    overrides: Partial<WebsiteAllocationCard> = {},
+): WebsiteAllocationCard {
+    const term = {
+        included: true,
+        starts_at: '2026-10-10T09:30:00+06:00',
+        expires_at: '2027-10-10T09:30:00+06:00',
+        days_remaining: 365,
+        package_based: true,
+        provider: null,
+    };
+
+    return {
+        id: '01ALLOCATION',
+        name: 'Karim Traders',
+        website: null,
+        domain_name: null,
+        partner_name: 'Karim Traders',
+        package_name: 'Growth',
+        status: 'pending_setup',
+        status_label: 'Pending setup',
+        status_tone: 'info',
+        domain: term,
+        hosting: term,
+        ...overrides,
+    };
+}
+
+describe('the websites a package allocates', () => {
+    it('shows a pending allocation with its package-based dates and a way to set it up', () => {
+        render(
+            <Websites
+                allocations={[allocationCard()]}
+                websites={[]}
+                entitlement={{
+                    allowed: true,
+                    limit: 1,
+                    used: 0,
+                    remaining: 1,
+                }}
+                can={{ create: true }}
+            />,
+        );
+
+        const card = screen.getByRole('article');
+
+        expect(
+            within(card).getByText('Karim Traders', { selector: 'h3' }),
+        ).toBeInTheDocument();
+        expect(within(card).getByText('Pending setup')).toBeInTheDocument();
+        expect(
+            within(card).getByText('website.allocation.not_set_up'),
+        ).toBeInTheDocument();
+        expect(
+            within(card).getAllByText('website.allocation.package_based'),
+        ).toHaveLength(2);
+        expect(
+            within(card).getAllByText('website.allocation.days_left'),
+        ).toHaveLength(2);
+        expect(
+            within(card).getByRole('link', {
+                name: 'website.allocation.set_up',
+            }),
+        ).toBeInTheDocument();
+    });
+
+    it('shows a set-up website once, on its card, with its address and domain', () => {
+        render(
+            <Websites
+                allocations={[
+                    allocationCard({
+                        name: 'Nasrin Fashion',
+                        website: {
+                            id: '01WEBSITE',
+                            host: 'nasrin.example.com',
+                            url: 'https://nasrin.example.com',
+                        },
+                        domain_name: 'nasrin.example.com',
+                        status: 'active',
+                        status_label: 'Active',
+                        status_tone: 'success',
+                        domain: {
+                            included: true,
+                            starts_at: '2026-10-10T09:30:00+06:00',
+                            expires_at: '2027-10-10T09:30:00+06:00',
+                            days_remaining: 365,
+                            package_based: false,
+                            provider: {
+                                started_at: '2027-01-05T12:00:00+06:00',
+                                expires_at: '2028-01-05T12:00:00+06:00',
+                            },
+                        },
+                    }),
+                ]}
+                websites={[summary()]}
+                entitlement={{
+                    allowed: true,
+                    limit: 1,
+                    used: 1,
+                    remaining: 0,
+                }}
+                can={{ create: true }}
+            />,
+        );
+
+        expect(
+            screen.getByRole('link', { name: 'nasrin.example.com' }),
+        ).toHaveAttribute('href', 'https://nasrin.example.com');
+        expect(
+            screen.getByRole('link', { name: 'website.allocation.open' }),
+        ).toBeInTheDocument();
+        // The website is on its card, not repeated in the plain list below.
+        expect(
+            screen.queryByText('website.index.other_websites'),
+        ).not.toBeInTheDocument();
+        // Hosting is still package-based; the registered domain is not.
+        expect(
+            screen.getAllByText('website.allocation.package_based'),
+        ).toHaveLength(1);
+        // The registrar's own record is shown as its own block, beside — not
+        // instead of — the package period.
+        expect(
+            document.querySelectorAll('[data-test="provider-record"]'),
+        ).toHaveLength(1);
+        expect(
+            screen.getAllByText('website.allocation.package_period'),
+        ).toHaveLength(2);
+    });
+
+    it('says when a term has ended', () => {
+        render(
+            <Websites
+                allocations={[
+                    allocationCard({
+                        status: 'expired',
+                        status_label: 'Expired',
+                        status_tone: 'danger',
+                        hosting: {
+                            included: true,
+                            starts_at: '2025-10-01T09:30:00+06:00',
+                            expires_at: '2026-10-01T09:30:00+06:00',
+                            days_remaining: -9,
+                            package_based: true,
+                            provider: null,
+                        },
+                    }),
+                ]}
+                websites={[]}
+                entitlement={{
+                    allowed: true,
+                    limit: 1,
+                    used: 0,
+                    remaining: 1,
+                }}
+                can={{ create: true }}
+            />,
+        );
+
+        expect(screen.getByText('Expired')).toBeInTheDocument();
+        expect(
+            screen.getByText('website.allocation.expired_days_ago'),
+        ).toBeInTheDocument();
+        // A lapsed term is renewed, not set up.
+        expect(
+            screen.queryByRole('link', { name: 'website.allocation.set_up' }),
+        ).not.toBeInTheDocument();
+    });
+
+    it('writes the days left in the reader’s own digits', () => {
+        websitesPage.props = {
+            locale: { current: 'bn', direction: 'ltr', available: [] },
+            translations: {
+                website: { allocation: { days_left: ':days দিন বাকি' } },
+            },
+        };
+
+        try {
+            render(
+                <Websites
+                    allocations={[allocationCard()]}
+                    websites={[]}
+                    entitlement={{
+                        allowed: true,
+                        limit: 1,
+                        used: 0,
+                        remaining: 1,
+                    }}
+                    can={{ create: true }}
+                />,
+            );
+
+            expect(screen.getAllByText('৩৬৫ দিন বাকি')).toHaveLength(2);
+        } finally {
+            websitesPage.props = { translations: {} };
+        }
+    });
+});
+
 describe('the account’s websites', () => {
     it('says what the package allows rather than hiding the door', () => {
         render(
             <Websites
+                allocations={[]}
                 websites={[]}
                 entitlement={{
                     allowed: false,
@@ -71,6 +274,7 @@ describe('the account’s websites', () => {
     it('offers the request only while the package has room left', () => {
         const { unmount } = render(
             <Websites
+                allocations={[]}
                 websites={[]}
                 entitlement={{
                     allowed: true,
@@ -91,6 +295,7 @@ describe('the account’s websites', () => {
 
         render(
             <Websites
+                allocations={[]}
                 websites={[summary()]}
                 entitlement={{
                     allowed: true,
@@ -113,6 +318,7 @@ describe('the account’s websites', () => {
     it('says which websites have something to pay', () => {
         render(
             <Websites
+                allocations={[]}
                 websites={[
                     summary({
                         status: 'deposit_pending',

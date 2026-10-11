@@ -8,6 +8,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Website\Actions\AllocatePackageWebsite;
 use App\Notifications\Package\SubscriptionRenewed;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
@@ -33,6 +34,7 @@ class ActivateRenewal
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected AllocatePackageWebsite $websites,
     ) {}
 
     public function handle(UserPackage $renewal): UserPackage
@@ -75,6 +77,10 @@ class ActivateRenewal
 
             $this->closePrevious($previous);
             $this->repoint($locked);
+
+            // A new domain and hosting period from the renewed term's start,
+            // for the same website (§16.2).
+            $this->websites->handle($locked);
 
             return $locked;
         });

@@ -51,6 +51,7 @@ class RequestWebsite
         protected ResolveDepositRule $deposits,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected AllocatePackageWebsite $allocations,
     ) {}
 
     /**
@@ -105,6 +106,12 @@ class RequestWebsite
                     new StatusChange(actorId: $requestedBy->id),
                     ['source' => WebsiteStatusChangeSource::Account->value],
                 );
+
+                // The package's website allocation now has a website. Its
+                // domain and hosting period was dated from the confirmed
+                // purchase and stays exactly as it was (§16.2).
+                $this->allocations->forAccount($account);
+                $this->allocations->attachWebsite($website);
 
                 foreach ($charges as $type => $amount) {
                     if (! $amount->isPositive()) {

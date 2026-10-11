@@ -10,6 +10,7 @@ use App\Domain\Package\Enums\SubscriptionSource;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Website\Actions\AllocatePackageWebsite;
 use App\Models\User;
 use App\Notifications\Package\PackageAssigned;
 use App\Support\Money\Currency;
@@ -49,6 +50,7 @@ class AssignPackage
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected AllocatePackageWebsite $websites,
     ) {}
 
     public function handle(
@@ -109,6 +111,10 @@ class AssignPackage
             $this->closeCurrentTerm($locked, $granted, $startsAt);
 
             $locked->forceFill(['current_user_package_id' => $granted->id])->save();
+
+            // The website a granted package includes, on the same terms as a
+            // bought one (§16.2).
+            $this->websites->handle($granted);
 
             $account->setRawAttributes($locked->getAttributes(), sync: true);
 

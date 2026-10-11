@@ -21,6 +21,14 @@ enum PackageFeature: string
     case DomainIncluded = 'domain_included';
     case HostingIncluded = 'hosting_included';
 
+    /*
+     * How long the package's domain and hosting run, in whole months, counted
+     * from the moment the purchase is confirmed (§16.2). Null means the term
+     * does not end. See {@see \App\Domain\Website\Actions\AllocatePackageWebsite}.
+     */
+    case DomainValidityMonths = 'domain_validity_months';
+    case HostingValidityMonths = 'hosting_validity_months';
+
     // Limits (§8.1)
     case ProductPublishLimit = 'product_publish_limit';
     case OrderLimit = 'order_limit';
@@ -55,7 +63,9 @@ enum PackageFeature: string
             self::OrderLimit,
             self::StaffLimit,
             self::WebsiteLimit,
-            self::SmsQuota => PackageFeatureType::Limit,
+            self::SmsQuota,
+            self::DomainValidityMonths,
+            self::HostingValidityMonths => PackageFeatureType::Limit,
 
             self::SupportLevel,
             self::ReportAccess => PackageFeatureType::Text,
@@ -68,6 +78,8 @@ enum PackageFeature: string
             self::DedicatedWebsite => 'Dedicated website',
             self::DomainIncluded => 'Domain included',
             self::HostingIncluded => 'Hosting included',
+            self::DomainValidityMonths => 'Domain validity (months)',
+            self::HostingValidityMonths => 'Hosting validity (months)',
             self::ProductPublishLimit => 'Products that can be published',
             self::OrderLimit => 'Orders per month',
             self::StaffLimit => 'Staff members',
@@ -112,6 +124,11 @@ enum PackageFeature: string
             self::StaffLimit,
             self::WebsiteLimit,
             self::SmsQuota => 0,
+
+            // A year, the length a domain registration and a hosting plan are
+            // normally sold for. Only read when the package includes a website.
+            self::DomainValidityMonths,
+            self::HostingValidityMonths => 12,
 
             self::SupportLevel => 'standard',
             self::ReportAccess => 'basic',

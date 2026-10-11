@@ -7,6 +7,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Wallet\DepositGuard;
+use App\Domain\Website\Actions\AllocatePackageWebsite;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
 use App\Domain\Website\Actions\RenewWebsiteService;
 use App\Domain\Website\Actions\RequestWebsite;
@@ -55,11 +56,17 @@ class WebsiteController extends Controller
         protected DepositGuard $guard,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, AllocatePackageWebsite $allocator): Response
     {
         $account = $this->businessAccountFor($request);
 
+        // An account whose package became active before allocations existed
+        // is recognised here. Idempotent: an allocation already written is
+        // returned, not written again.
+        $allocator->forAccount($account);
+
         return Inertia::render('websites/index', [
+            'allocations' => $this->overview->allocationsForAccount($account),
             'websites' => $this->overview->forAccount($account),
             'entitlement' => $this->entitlement($account),
             'can' => [

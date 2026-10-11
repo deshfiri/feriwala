@@ -8,6 +8,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Package\Enums\SubscriptionSource;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\UserPackage;
+use App\Domain\Website\Actions\AllocatePackageWebsite;
 use App\Notifications\Package\PackageChanged;
 use Illuminate\Database\DatabaseManager;
 
@@ -37,6 +38,7 @@ class ActivatePackageChange
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected AllocatePackageWebsite $websites,
     ) {}
 
     public function handle(UserPackage $change): UserPackage
@@ -60,6 +62,10 @@ class ActivatePackageChange
             }
 
             $this->repoint($locked);
+
+            // The same website and the domain and hosting period already
+            // running: a change of package buys no new domain (§16.2).
+            $this->websites->handle($locked);
 
             return $locked;
         });

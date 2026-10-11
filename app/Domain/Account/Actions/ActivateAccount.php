@@ -14,6 +14,7 @@ use App\Domain\Package\Models\UserPackage;
 use App\Domain\Referral\Actions\CalculateReferralCommissions;
 use App\Domain\Wallet\Actions\CaptureDepositObligation;
 use App\Domain\Wallet\Actions\OpenWallet;
+use App\Domain\Website\Actions\AllocatePackageWebsite;
 use App\Notifications\Account\AccountActivated;
 use App\Support\Concurrency\DistributedLock;
 use Illuminate\Database\DatabaseManager;
@@ -43,6 +44,7 @@ class ActivateAccount
         protected DatabaseManager $database,
         protected DistributedLock $lock,
         protected CalculateReferralCommissions $referralCommissions,
+        protected AllocatePackageWebsite $websites,
     ) {}
 
     /**
@@ -227,5 +229,9 @@ class ActivateAccount
         ])->save();
 
         $account->forceFill(['current_user_package_id' => $subscription->id])->save();
+
+        // The website the package includes, dated from this moment — the
+        // confirmed purchase — in the same transaction (§16.1, §16.2).
+        $this->websites->handle($subscription);
     }
 }

@@ -3,10 +3,12 @@
 namespace App\Domain\Website\Queries;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Website\Enums\PackageWebsiteStatus;
 use App\Domain\Website\Enums\WebsiteChargeStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
 use App\Domain\Website\Enums\WebsiteStatusReason;
 use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteAllocation;
 use App\Domain\Website\Models\WebsiteCharge;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteHosting;
@@ -55,6 +57,114 @@ class WebsiteOverview
             ->get()
             ->map(fn (Website $website) => $this->summary($website))
             ->all();
+    }
+
+    /**
+     * The websites an account's package purchases entitle it to, one card each
+     * (§16.1, §16.2).
+     *
+     * One card per website — its most recent allocation, since a renewal or a
+     * package change writes a new one for the same website — plus the newest
+     * allocation still waiting for a website to be set up. Earlier terms are
+     * history, not separate websites.
+     *
+     * The dates are the allocation's: the package-based period from the
+     * confirmed purchase. They are labelled package-based until the domain or
+     * hosting has actually been registered or stood up.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function allocationsForAccount(BusinessAccount $account): array
+    {
+        $now = CarbonImmutable::now();
+
+        $allocations = WebsiteAllocation::query()
+            ->where('business_account_id', $account->id)
+            ->with(['website.domains', 'website.hostings', 'userPackage', 'businessAccount'])
+            ->orderByDesc('id')
+            ->get();
+
+        $seen = [];
+        $cards = [];
+
+        foreach ($allocations as $allocation) {
+            $key = $allocation->website_id === null ? 'unlinked' : 'website:'.$allocation->website_id;
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $cards[] = $this->allocationCard($allocation, $now);
+        }
+
+        return $cards;
+    }
+
+    /**
+     * One allocated website as the partner reads it.
+     *
+     * @return array<string, mixed>
+     */
+    public function allocationCard(WebsiteAllocation $allocation, ?CarbonImmutable $now = null): array
+    {
+        $now ??= CarbonImmutable::now();
+        $website = $allocation->website;
+        $status = PackageWebsiteStatus::for($website, $allocation, $now);
+
+        $registeredDomain = $website?->domains
+            ->first(fn (WebsiteDomain $domain) => $domain->status->isRunning());
+        $runningHosting = $website?->hostings
+            ->first(fn (WebsiteHosting $hosting) => $hosting->status->isRunning());
+
+        return [
+            'id' => $allocation->public_id,
+
+            // The website's own name once it has one, otherwise the business
+            // the package was bought for.
+            'name' => $website->name ?? $allocation->businessAccount->name,
+            'website' => $website === null ? null : [
+                'id' => $website->public_id,
+                'host' => $website->host(),
+                'url' => 'https://'.$website->host(),
+            ],
+            'domain_name' => $registeredDomain->domain ?? $website?->domain,
+            'partner_name' => $allocation->businessAccount->name,
+            'package_name' => $allocation->userPackage->terms()?->name,
+
+            'status' => $status->value,
+            'status_label' => $status->label(),
+            'status_tone' => $status->tone(),
+
+            /*
+             * The package's period and the provider's record are kept apart.
+             * `starts_at`/`expires_at` are what the package entitles; `provider`
+             * is what was actually registered or stood up, if anything yet —
+             * never one presented as the other.
+             */
+            'domain' => [
+                'included' => $allocation->domain_included,
+                'starts_at' => $allocation->domain_starts_at->toIso8601String(),
+                'expires_at' => $allocation->domain_expires_at?->toIso8601String(),
+                'days_remaining' => $allocation->domainDaysRemaining($now),
+                'package_based' => $registeredDomain === null,
+                'provider' => $registeredDomain === null ? null : [
+                    'started_at' => $registeredDomain->registered_at?->toIso8601String(),
+                    'expires_at' => $registeredDomain->expires_at?->toIso8601String(),
+                ],
+            ],
+            'hosting' => [
+                'included' => $allocation->hosting_included,
+                'starts_at' => $allocation->hosting_starts_at->toIso8601String(),
+                'expires_at' => $allocation->hosting_expires_at?->toIso8601String(),
+                'days_remaining' => $allocation->hostingDaysRemaining($now),
+                'package_based' => $runningHosting === null,
+                'provider' => $runningHosting === null ? null : [
+                    'started_at' => $runningHosting->started_at?->toIso8601String(),
+                    'expires_at' => $runningHosting->expires_at?->toIso8601String(),
+                ],
+            ],
+        ];
     }
 
     /**

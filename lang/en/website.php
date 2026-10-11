@@ -61,6 +61,46 @@ return [
         'allowance' => ':used of :limit used',
         'allowance_unlimited' => ':used open',
         'outstanding' => ':count charge(s) to pay',
+        'other_websites' => 'Other websites',
+        'other_websites_hint' => 'Websites on this account that are not tied to a package purchase.',
+    ],
+
+    /*
+     * A website a package purchase entitles the account to (§16.1, §16.2). The
+     * domain and hosting dates count from the confirmed purchase.
+     */
+    'allocation' => [
+        'section_title' => 'Your package websites',
+        'section_hint' => 'Every package that includes a website gives you one here. Domain and hosting time counts from the day your package purchase was confirmed.',
+        'website_address' => 'Website address',
+        'domain_name' => 'Domain name',
+        'partner_name' => 'Partner',
+        'package' => 'Package',
+        'not_set_up' => 'Not set up yet',
+        'not_registered' => 'Not registered yet',
+        'domain' => 'Domain',
+        'hosting' => 'Hosting',
+        'purchased' => 'Starts',
+        'expires' => 'Expires',
+        'no_expiry' => 'Does not expire',
+        'days_left' => ':days days left',
+        'expires_today' => 'Expires today',
+        'expired_days_ago' => 'Expired :days days ago',
+        'package_based' => 'Package-based period',
+        'package_period' => 'Package period',
+        'provider_record' => 'Registered with provider',
+        'provider_started' => 'Registered on',
+        'provider_expires' => 'Provider expiry',
+        'package_based_hint' => 'Counted from your package purchase. The domain or hosting has not been registered with a provider yet.',
+        'not_included' => 'Not included in your package',
+        'set_up' => 'Set up website',
+        'open' => 'Manage website',
+        'statuses' => [
+            'pending_setup' => 'Pending setup',
+            'active' => 'Active',
+            'suspended' => 'Suspended',
+            'expired' => 'Expired',
+        ],
     ],
 
     'create' => [

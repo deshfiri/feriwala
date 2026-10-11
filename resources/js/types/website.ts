@@ -17,6 +17,44 @@ export type WebsiteSummary = {
     created_at: string;
 };
 
+/**
+ * One side of a package-allocated website's term: its domain or its hosting.
+ * Dates are the package-based period, counted from the confirmed purchase.
+ */
+export type WebsiteAllocationTerm = {
+    included: boolean;
+    starts_at: string;
+    /** Null when the term does not end. */
+    expires_at: string | null;
+    /** Negative once the term has ended; null when it does not end. */
+    days_remaining: number | null;
+    /** True until the domain or hosting has actually been arranged. */
+    package_based: boolean;
+    /**
+     * What the registrar or hosting provider actually holds, once arranged.
+     * Separate from the package's period above and never shown as it.
+     */
+    provider: { started_at: string | null; expires_at: string | null } | null;
+};
+
+/**
+ * A website an account's package purchase entitles it to (§16.1, §16.2).
+ */
+export type WebsiteAllocationCard = {
+    id: string;
+    name: string;
+    /** Null until the partner has set the website up. */
+    website: { id: string; host: string; url: string } | null;
+    domain_name: string | null;
+    partner_name: string;
+    package_name: string | null;
+    status: 'pending_setup' | 'active' | 'suspended' | 'expired';
+    status_label: string;
+    status_tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+    domain: WebsiteAllocationTerm;
+    hosting: WebsiteAllocationTerm;
+};
+
 export type WebsiteCharge = {
     id: string;
     type: string;
