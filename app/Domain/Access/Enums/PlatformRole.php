@@ -206,8 +206,6 @@ enum PlatformRole: string
                 Module::SupplierListing->value => [Action::View],
                 Module::SourcingGroup->value => [Action::View],
 
-                // Linking Products as the same Product is an administrator's call too.
-                Module::ProductLink->value => [Action::View, Action::Create, Action::Edit],
                 Module::ProductSupplier->value => [Action::View, Action::Create, Action::Edit],
                 Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
             ],
@@ -249,7 +247,6 @@ enum PlatformRole: string
                  */
                 Module::SupplierListing->value => [Action::View],
                 Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit, Action::Archive],
-                Module::ProductLink->value => [Action::View, Action::Create, Action::Edit],
                 Module::ProductSupplier->value => [Action::View, Action::Create, Action::Edit],
                 Module::ContentLibrary->value => [Action::View, Action::Create, Action::Edit, Action::Delete],
             ],
@@ -387,7 +384,6 @@ enum PlatformRole: string
                 // Deciding which Supplier listings fulfil which product is
                 // part of reviewing them.
                 Module::SourcingGroup->value => [Action::View, Action::Create, Action::Edit],
-                Module::ProductLink->value => [Action::View, Action::Create, Action::Edit],
                 Module::ProductSupplier->value => [Action::View, Action::Create, Action::Edit],
 
                 /*

@@ -2,7 +2,6 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
-use App\Domain\Sourcing\Actions\ManageProductLinks;
 use App\Domain\Sourcing\Actions\ManageProductSuppliers;
 use App\Domain\Sourcing\Enums\SourcingMappingStatus;
 use App\Domain\Sourcing\Models\ProductSupplierAssignment;
@@ -115,26 +114,32 @@ it('lists approved Suppliers for the picker, searchable, never an unapproved one
     expect(collect($found)->pluck('name')->all())->toBe(['Beta Garments']);
 });
 
-it('shows the Suppliers of linked Products for reference, not as the Products own', function () {
+it('shows the Suppliers of a Product and the Products of a Supplier', function () {
     $assign = app(ManageProductSuppliers::class);
     $assign->assign($this->staff, $this->product, $this->first);
-    $assign->assign($this->staff, $this->other, $this->second);
     $assign->assign($this->staff, $this->other, $this->first);
-
-    app(ManageProductLinks::class)->link(testPlatformStaff(PlatformRole::SuperAdmin), $this->product, $this->other);
 
     $this->actingAs(testPlatformStaff(PlatformRole::SuperAdmin))->get(route('admin.catalog.products.edit', $this->product->public_id))
         ->assertInertia(fn (Assert $page) => $page
             ->has('product_suppliers.assigned', 1)
-            ->where('product_suppliers.assigned.0.supplier.name', 'Alpha Textiles')
-            ->has('product_suppliers.via_group', 1)
-            ->where('product_suppliers.via_group.0.supplier.name', 'Beta Garments')
-            ->where('product_suppliers.via_group.0.products.0.name', 'Cotton Trousers'));
+            ->where('product_suppliers.assigned.0.supplier.name', 'Alpha Textiles'));
 
     $this->get(route('admin.suppliers.show', $this->first))
         ->assertInertia(fn (Assert $page) => $page->has('assigned_products.assigned', 2));
 });
 
+it('records the Supplier on a Product when its listing is approved, once and without the assign permission', function () {
+    $reviewer = testPlatformStaff(PlatformRole::SmsManager);
+    $record = app(ManageProductSuppliers::class);
+
+    $record->recordFromApproval($reviewer, $this->product, $this->first, 'Approved');
+    $record->recordFromApproval($reviewer, $this->product, $this->first, 'Approved again');
+
+    $rows = ProductSupplierAssignment::query()->active()->where('product_id', $this->product->id)->get();
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->assign_reason)->toBe('Listing approved. Approved');
+});
 it('gives nothing to staff who may not view assignments', function () {
     $sms = testPlatformStaff(PlatformRole::SmsManager);
 

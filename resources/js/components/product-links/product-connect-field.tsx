@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react';
 import { useState } from 'react';
-import ProductLinkController from '@/actions/App/Http/Controllers/Admin/ProductLinkController';
+import ProductBrowseController from '@/actions/App/Http/Controllers/Admin/ProductBrowseController';
 import ProductPickerSheet from '@/components/content-library/product-picker-sheet';
 import ProductSummary from '@/components/product-links/product-summary';
 import { Button } from '@/components/ui/button';
@@ -98,7 +98,7 @@ export default function ProductConnectField({
                 single
                 selected={value === null ? [] : [value]}
                 onChange={(next) => onChange(next[0] ?? null)}
-                searchUrl={ProductLinkController.browse.url()}
+                searchUrl={ProductBrowseController.index.url()}
                 title={t('product_links.connect.panel_title')}
                 description={t('product_links.connect.panel_description')}
             />

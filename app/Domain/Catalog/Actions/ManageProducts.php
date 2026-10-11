@@ -19,9 +19,9 @@ use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\ProductSourceLink;
-use App\Domain\Sourcing\Models\ProductLink;
 use App\Domain\Sourcing\Models\ProductSourcingGroupProduct;
 use App\Domain\Sourcing\Models\ProductSourcingVariantMapping;
+use App\Domain\Sourcing\Models\ProductSupplierAssignment;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Domain\Wholesale\Models\CartItem;
@@ -332,10 +332,10 @@ class ManageProducts
             throw CatalogRefused::productHasBusinessHistory('it belongs to a product sourcing group');
         }
 
-        // A link row, even an unlinked one, is the record of a staff decision
-        // and is never deleted.
-        if (ProductLink::query()->touching($locked->id)->exists()) {
-            throw CatalogRefused::productHasBusinessHistory('it has been linked as the same Product as another');
+        // A Supplier assignment, even a removed one, is the record of a staff
+        // decision and is never deleted.
+        if (ProductSupplierAssignment::query()->where('product_id', $locked->id)->exists()) {
+            throw CatalogRefused::productHasBusinessHistory('Suppliers have been assigned to it');
         }
 
         if (

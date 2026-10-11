@@ -12,17 +12,13 @@ use App\Models\User;
  * What the "Suppliers" section of the Admin Product workspace and the
  * "Assigned products" section of the Supplier page show.
  *
- * The Product side lists the Suppliers assigned to the Product itself, then —
- * as a reference — the Suppliers assigned to Products in its Same Product group,
- * each labelled with the Product it was assigned to. The two are never merged:
- * only a direct assignment can be removed here.
+ * Together the two sides answer "which Suppliers actually have this item":
+ * a Product lists its Suppliers, a Supplier lists its Products.
  *
  * Staff-only, and null for anyone who may not view assignments.
  */
 class ProductSuppliersSection
 {
-    public function __construct(protected ResolveProductNetwork $network) {}
-
     /**
      * @return array<string, mixed>|null
      */
@@ -38,17 +34,6 @@ class ProductSuppliersSection
             ->orderBy('assigned_at')
             ->get();
 
-        $assignedSupplierIds = $direct->pluck('supplier_id')->all();
-
-        $networkIds = array_keys($this->network->network($product->id));
-
-        $viaGroup = $networkIds === [] ? collect() : ProductSupplierAssignment::query()->active()
-            ->with(['supplier', 'product:id,public_id,name,sku'])
-            ->whereIn('product_id', $networkIds)
-            ->whereNotIn('supplier_id', $assignedSupplierIds)
-            ->orderBy('assigned_at')
-            ->get();
-
         return [
             'assigned' => $direct->map(fn (ProductSupplierAssignment $assignment) => [
                 'id' => $assignment->public_id,
@@ -57,15 +42,6 @@ class ProductSuppliersSection
                 'assigned_by' => $assignment->assigner->name,
                 'assigned_at' => $assignment->assigned_at->toIso8601String(),
                 'reason' => $assignment->assign_reason,
-            ])->values()->all(),
-            // One row per Supplier, however many group Products it holds.
-            'via_group' => $viaGroup->groupBy('supplier_id')->map(fn ($rows) => [
-                'supplier' => $this->supplier($rows->first()->supplier),
-                'products' => $rows->map(fn (ProductSupplierAssignment $assignment) => [
-                    'id' => $assignment->product->public_id,
-                    'name' => $assignment->product->name,
-                    'bpc' => $assignment->product->sku,
-                ])->values()->all(),
             ])->values()->all(),
             'can' => [
                 'assign' => ProductSupplierPolicy::canAssign($viewer),

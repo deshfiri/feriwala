@@ -161,43 +161,6 @@ export default function SuppliersSection({ product, suppliers }: Props) {
                         ))}
                     </ul>
                 )}
-
-                {suppliers.via_group.length > 0 && (
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-medium">
-                            {t('product_suppliers.section.group_title')}
-                        </h3>
-                        <p className="text-muted-foreground text-xs">
-                            {t('product_suppliers.section.group_help')}
-                        </p>
-                        <ul className="divide-border divide-y rounded-md border">
-                            {suppliers.via_group.map((entry) => (
-                                <li
-                                    key={entry.supplier.id}
-                                    className="space-y-0.5 p-3"
-                                >
-                                    <p className="text-sm font-medium">
-                                        {entry.supplier.name}
-                                    </p>
-                                    <p className="text-muted-foreground text-xs">
-                                        {entry.supplier.reference} ·{' '}
-                                        {t(
-                                            'product_suppliers.section.group_via',
-                                            {
-                                                products: entry.products
-                                                    .map(
-                                                        (other) =>
-                                                            `${other.name} (${other.bpc})`,
-                                                    )
-                                                    .join(', '),
-                                            },
-                                        )}
-                                    </p>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
             </div>
 
             <SupplierPickerSheet

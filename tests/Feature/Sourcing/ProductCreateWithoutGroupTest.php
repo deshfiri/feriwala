@@ -36,15 +36,14 @@ it('no longer offers sourcing groups on the add page', function () {
             ->missing('sourcing'));
 });
 
-it('creates the product on its own, linked to nothing', function () {
+it('creates the product on its own, with no Same Product section', function () {
     $this->actingAs($this->manager)->post(route('admin.catalog.products.store'), productCreatePayload())->assertSessionHasNoErrors();
 
     $product = Product::query()->where('sku', 'CP100ABCD')->firstOrFail();
 
     $this->actingAs($this->manager)->get(route('admin.catalog.products.edit', $product->public_id))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('linked_products.direct', [])
-            ->where('linked_products.indirect', []));
+            ->missing('linked_products'));
 });
 
 it('ignores a sourcing group field rather than storing it on the product', function () {

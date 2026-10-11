@@ -6,7 +6,6 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
-use App\Domain\Sourcing\Policies\ProductLinkPolicy;
 use App\Domain\Sourcing\Queries\ProductLinkSummaries;
 use App\Domain\Supplier\Actions\DecideSupplierListing;
 use App\Domain\Supplier\Actions\RequestSupplierListingCorrection;
@@ -80,8 +79,10 @@ class SupplierListingController extends Controller
     {
         Gate::authorize('view', $listing);
 
-        if ($listing->lot_id !== null) {
-            return to_route('admin.supplier-listing-lots.show', $listing->lot->public_id);
+        $lot = $listing->lot;
+
+        if ($lot !== null) {
+            return to_route('admin.supplier-listing-lots.show', $lot->public_id);
         }
 
         /** @var User $reviewer */
@@ -141,9 +142,6 @@ class SupplierListingController extends Controller
                 'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(['public_id', 'name'])
                     ->map(fn (Category $c) => ['value' => $c->public_id, 'label' => $c->name])->all(),
             ],
-            // Staff-only: whether this reviewer may link the approved Product
-            // as the same as existing ones (Same Product links).
-            'can_link_products' => ProductLinkPolicy::canLink($reviewer),
             'history' => $listing->statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),
@@ -196,10 +194,6 @@ class SupplierListingController extends Controller
             'category_id' => ['nullable', 'string'],
             'brand_id' => ['nullable', 'string'],
 
-            // Existing Products staff confirmed are the same physical Product
-            // as this one. Optional: left empty, the Product stays unique.
-            'link_product_ids' => ['nullable', 'array', 'max:20'],
-            'link_product_ids.*' => ['string', 'max:40'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'string'],
             'items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
@@ -252,7 +246,6 @@ class SupplierListingController extends Controller
                     'sku' => $validated['sku'] ?? null,
                     'category_id' => $validated['category_id'] ?? null,
                     'brand_id' => $validated['brand_id'] ?? null,
-                    'link_product_ids' => $validated['link_product_ids'] ?? [],
                 ],
                 $validated['items'],
                 $validated['reason'],

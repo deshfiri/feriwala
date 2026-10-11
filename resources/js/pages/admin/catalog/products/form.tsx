@@ -5,7 +5,6 @@ import {
     Image as ImageIcon,
     Info,
     Layers,
-    Link2,
     Megaphone,
     Search,
     Tag,
@@ -31,7 +30,6 @@ import type {
     ContentRow,
     MediaLimits,
     MediaRow,
-    LinkedProductsState,
     ProductSuppliersState,
     MerchandisingState,
     PriceTierScope,
@@ -44,7 +42,6 @@ import type {
     VariantRow,
 } from '@/types';
 import SeoFields from './seo-fields';
-import LinkedProductsSection from './linked-products-section';
 import SuppliersSection from './suppliers-section';
 import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
@@ -62,8 +59,6 @@ type Props = {
     product: ProductDetail | null;
     options: { categories: CatalogOption[]; brands: CatalogOption[] };
     can: CatalogAbilities;
-    /** Staff-only: Same Product links; null without `product_link.view`. */
-    linked_products?: LinkedProductsState | null;
     /** Staff-only: which Suppliers have it; null without product_supplier.view. */
     product_suppliers?: ProductSuppliersState | null;
     variants: VariantRow[];
@@ -169,7 +164,6 @@ export default function ProductForm({
     product,
     options,
     can,
-    linked_products,
     product_suppliers,
     variants,
     attributes,
@@ -228,15 +222,6 @@ export default function ProductForm({
                       key: 'content',
                       label: t('catalog.products.tabs.content'),
                       icon: Megaphone,
-                  },
-              ]
-            : []),
-        ...(editing && linked_products
-            ? [
-                  {
-                      key: 'links',
-                      label: t('catalog.products.tabs.links'),
-                      icon: Link2,
                   },
               ]
             : []),
@@ -1000,15 +985,6 @@ export default function ProductForm({
                         <SuppliersSection
                             product={product}
                             suppliers={product_suppliers}
-                        />
-                    </SectionTabPanel>
-                )}
-
-                {editing && linked_products && (
-                    <SectionTabPanel tab="links" active={activeTab}>
-                        <LinkedProductsSection
-                            product={product}
-                            linked={linked_products}
                         />
                     </SectionTabPanel>
                 )}

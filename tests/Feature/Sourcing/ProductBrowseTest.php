@@ -19,22 +19,22 @@ beforeEach(function () {
 });
 
 it('lists Products before any search, narrows by a term and pages on', function () {
-    $all = collect($this->actingAs($this->reviewer)->getJson(route('admin.catalog.product-links.browse'))->assertOk()->json('data'))->pluck('id')->all();
+    $all = collect($this->actingAs($this->reviewer)->getJson(route('admin.catalog.product-browse'))->assertOk()->json('data'))->pluck('id')->all();
 
     expect($all)->toContain($this->a->public_id, $this->b->public_id);
 
-    $found = $this->getJson(route('admin.catalog.product-links.browse', ['q' => 'denim']))->json('data');
+    $found = $this->getJson(route('admin.catalog.product-browse', ['q' => 'denim']))->json('data');
 
     expect(collect($found)->pluck('id')->all())->toBe([$this->b->public_id])
-        ->and($this->getJson(route('admin.catalog.product-links.browse', ['page' => 2]))->json())->toMatchArray(['has_more' => false]);
+        ->and($this->getJson(route('admin.catalog.product-browse', ['page' => 2]))->json())->toMatchArray(['has_more' => false]);
 });
 
 it('is closed to staff without a reason to choose Products, and to business accounts', function () {
     $this->actingAs(testPlatformStaff(PlatformRole::SmsManager))
-        ->getJson(route('admin.catalog.product-links.browse'))->assertForbidden();
+        ->getJson(route('admin.catalog.product-browse'))->assertForbidden();
 
     $this->actingAs(testBusinessAccount(AccountStatus::Active)->owner)
-        ->getJson(route('admin.catalog.product-links.browse'))->assertForbidden();
+        ->getJson(route('admin.catalog.product-browse'))->assertForbidden();
 });
 
 it('says the connected Product back on the review page so it is never asked again', function () {

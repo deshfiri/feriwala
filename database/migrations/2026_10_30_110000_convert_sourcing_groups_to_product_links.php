@@ -1,23 +1,21 @@
 <?php
 
-use App\Domain\Sourcing\Actions\ConvertSourcingGroupsToProductLinks;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * Carries what Product Sourcing Groups already declared over into direct Same
- * Product links, once, so allocation can stop reading groups without losing a
- * single existing match. Idempotent, and it never touches the groups
- * themselves: they are protected history.
+ * Once carried Product Sourcing Groups over into Same Product links. Those links
+ * are retired (see the migration that drops them), so there is nothing left to
+ * convert; kept as an empty step so migration history stays intact.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        app(ConvertSourcingGroupsToProductLinks::class)->handle();
+        // Retired: Same Product links no longer exist.
     }
 
     public function down(): void
     {
-        // Links are history once made; nothing to undo.
+        // Nothing to undo.
     }
 };

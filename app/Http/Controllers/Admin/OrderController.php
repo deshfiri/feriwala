@@ -471,7 +471,6 @@ class OrderController extends Controller
             ),
             'already_allocated_quantity' => $line->quantity - $this->candidates->remainingQuantity($line, $excluding),
             'remaining_quantity' => $this->candidates->remainingQuantity($line, $excluding),
-            'sourcing' => ['linked_product_count' => $this->candidates->linkedProductCount($line)],
         ]);
     }
 
@@ -756,24 +755,6 @@ class OrderController extends Controller
 
         $type = isset($validated['source_type']) ? AllocationSourceType::from($validated['source_type']) : null;
         $page = (int) ($validated['page'] ?? 1);
-
-        // A line whose Product is linked to others only ever sees the sources
-        // of that network -- the catalogue-wide search would show unrelated
-        // Products, so it is answered from the same network-scoped list.
-        if ($this->candidates->linkedProductCount($line) > 0) {
-            $scoped = $this->filterCandidates($this->candidates->forLine($line), [
-                'search' => $validated['query'] ?? '',
-                'source_type' => $validated['source_type'] ?? null,
-            ]);
-
-            return response()->json([
-                'candidates' => array_map(fn (AllocationCandidate $candidate) => $candidate->toArray(), $scoped),
-                'page' => 1,
-                'per_page' => count($scoped),
-                'total' => count($scoped),
-                'has_more' => false,
-            ]);
-        }
 
         $results = $this->search->search($line, $type, (string) ($validated['query'] ?? ''), $page);
 

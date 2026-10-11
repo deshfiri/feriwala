@@ -63,9 +63,6 @@ enum PermissionModule: string
     /** Which catalogue products can fulfil one another's orders (Product Sourcing Groups). */
     case SourcingGroup = 'sourcing_group';
 
-    /** Which Product records are confirmed as the same physical Product (Same Product links). */
-    case ProductLink = 'product_link';
-
     /** Content written once and released to chosen Products (Content Library). */
     case ContentLibrary = 'content_library';
 
@@ -111,7 +108,6 @@ enum PermissionModule: string
             self::SupplierPayable => 'Supplier payables',
             self::DeliverySettings => 'Delivery charge settings',
             self::SourcingGroup => 'Product sourcing groups',
-            self::ProductLink => 'Product links',
             self::ContentLibrary => 'Content library',
             self::ProductSupplier => 'Product suppliers',
         };

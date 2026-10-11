@@ -1,7 +1,7 @@
 import { Link, router } from '@inertiajs/react';
 import { ExternalLink, PackagePlus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import ProductLinkController from '@/actions/App/Http/Controllers/Admin/ProductLinkController';
+import ProductBrowseController from '@/actions/App/Http/Controllers/Admin/ProductBrowseController';
 import ProductSupplierController from '@/actions/App/Http/Controllers/Admin/ProductSupplierController';
 import ProductPickerSheet from '@/components/content-library/product-picker-sheet';
 import SectionCard from '@/components/section-card';
@@ -97,7 +97,9 @@ export default function AssignedProductsSection({
                                             className="size-4"
                                             aria-hidden="true"
                                         />
-                                        {t('product_links.section.view')}
+                                        {t(
+                                            'product_suppliers.section.view_product',
+                                        )}
                                     </Link>
                                 </Button>
                                 {assigned.can.remove && (
@@ -132,7 +134,7 @@ export default function AssignedProductsSection({
                 onOpenChange={confirm}
                 selected={selected}
                 onChange={assign}
-                searchUrl={ProductLinkController.browse.url()}
+                searchUrl={ProductBrowseController.index.url()}
                 excludeIds={assigned.assigned.map((row) => row.product.id)}
                 title={t('product_suppliers.supplier_section.assign_title')}
                 description={t(

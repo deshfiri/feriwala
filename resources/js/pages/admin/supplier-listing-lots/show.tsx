@@ -4,7 +4,6 @@ import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import ProductConnectField from '@/components/product-links/product-connect-field';
-import ProductLinkPicker from '@/components/product-links/product-link-picker';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -69,8 +68,6 @@ type Props = {
     };
     supplier: { id: string; business_name: string };
     options: { categories: { value: string; label: string }[] };
-    /** Staff-only: whether this reviewer may link a Product as the same as others. */
-    can_link_products: boolean;
 };
 
 type ItemDecision = {
@@ -90,7 +87,6 @@ type EntryDecision = {
     connected: ProductLinkSummary | null;
     sku: string;
     category_id: string;
-    linked_products: ProductLinkSummary[];
     items: ItemDecision[];
 };
 
@@ -107,7 +103,6 @@ export default function AdminSupplierListingLotShow({
     lot,
     supplier,
     options,
-    can_link_products,
 }: Props) {
     const { t, locale } = useTranslation();
 
@@ -124,7 +119,6 @@ export default function AdminSupplierListingLotShow({
             connected: null,
             sku: '',
             category_id: '',
-            linked_products: [] as ProductLinkSummary[],
             items: entry.items
                 .filter((item) => item.status === 'pending')
                 .map<ItemDecision>((item) => ({
@@ -186,10 +180,6 @@ export default function AdminSupplierListingLotShow({
                         entry.mode === 'create'
                             ? entry.category_id || null
                             : null,
-                    // Only what the reviewer picked; empty keeps it unique.
-                    link_product_ids: entry.linked_products.map(
-                        (linked) => linked.id,
-                    ),
                     items: entry.items
                         .filter((item) => item.decision !== 'skip')
                         .map((item) => ({
@@ -522,38 +512,6 @@ export default function AdminSupplierListingLotShow({
                                                         </FormField>
                                                     )}
                                                 </>
-                                            )}
-                                            {can_link_products && (
-                                                <div className="sm:col-span-2">
-                                                    <ProductLinkPicker
-                                                        value={
-                                                            entryDecision.linked_products
-                                                        }
-                                                        onChange={(next) =>
-                                                            setEntry(
-                                                                entryIndex,
-                                                                {
-                                                                    linked_products:
-                                                                        next,
-                                                                },
-                                                            )
-                                                        }
-                                                        excludeProductId={
-                                                            entry.connected_product
-                                                        }
-                                                        alsoExclude={
-                                                            entryDecision.mode ===
-                                                            'connect'
-                                                                ? entryDecision
-                                                                      .connected
-                                                                      ?.id
-                                                                : null
-                                                        }
-                                                        error={errorFor(
-                                                            `entries.${entryIndex}.link_product_ids`,
-                                                        )}
-                                                    />
-                                                </div>
                                             )}
                                             <FormField
                                                 label={t(

@@ -31,13 +31,13 @@ use App\Http\Controllers\Admin\PaymentRefundController;
 use App\Http\Controllers\Admin\PermissionsController;
 use App\Http\Controllers\Admin\PlatformStaffController;
 use App\Http\Controllers\Admin\ProductAttributeController;
+use App\Http\Controllers\Admin\ProductBrowseController;
 use App\Http\Controllers\Admin\ProductBulkController;
 use App\Http\Controllers\Admin\ProductChannelController;
 use App\Http\Controllers\Admin\ProductContentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductDeletionSettingsController;
 use App\Http\Controllers\Admin\ProductEligibilityController;
-use App\Http\Controllers\Admin\ProductLinkController;
 use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
@@ -1151,24 +1151,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::delete('content-library/{item}', [ContentLibraryController::class, 'destroy'])
             ->name('content-library.destroy');
 
-        /*
-         * Same Product links: staff-confirmed, bidirectional connections
-         * between independent Product records. Seen with
-         * `product_link.view`, made with `product_link.create`, removed or
-         * variation-matched with `product_link.edit`.
-         */
-        Route::get('catalog/product-links/search', [ProductLinkController::class, 'search'])
-            ->name('catalog.product-links.search');
-        Route::get('catalog/product-links/browse', [ProductLinkController::class, 'browse'])
-            ->name('catalog.product-links.browse');
-        Route::post('catalog/products/{product}/links', [ProductLinkController::class, 'store'])
-            ->name('catalog.products.links.store');
-        Route::delete('catalog/products/{product}/links/{link}', [ProductLinkController::class, 'destroy'])
-            ->name('catalog.products.links.destroy');
-        Route::post('catalog/products/{product}/links/{link}/variants', [ProductLinkController::class, 'mapVariants'])
-            ->name('catalog.products.links.variants.store');
-        Route::delete('catalog/products/{product}/links/{link}/variants/{mapping}', [ProductLinkController::class, 'unmapVariants'])
-            ->name('catalog.products.links.variants.destroy');
+        // Every Product, page by page, for the right-hand Product pickers.
+        Route::get('catalog/product-browse', [ProductBrowseController::class, 'index'])
+            ->name('catalog.product-browse');
 
         /*
          * Product suppliers: which Suppliers actually have which Product. Seen

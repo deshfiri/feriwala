@@ -32,7 +32,6 @@ use App\Domain\ContentLibrary\Models\ContentLibraryItem;
 use App\Domain\ContentLibrary\Policies\ContentLibraryPolicy;
 use App\Domain\Inventory\Actions\SyncProductStockStatus;
 use App\Domain\Package\Models\Package;
-use App\Domain\Sourcing\Queries\LinkedProductsSection;
 use App\Domain\Sourcing\Queries\ProductSuppliersSection;
 use App\Domain\Storage\ManagedStorage;
 use App\Http\Controllers\Controller;
@@ -252,9 +251,6 @@ class ProductController extends Controller
             'product' => $this->detail($record),
             'options' => $this->options(),
             'can' => $this->abilities($actor),
-
-            // Same Product links: staff-only, null without `product_link.view`.
-            'linked_products' => app(LinkedProductsSection::class)->for($record, $actor),
 
             // Which Suppliers actually have it: null without `product_supplier.view`.
             'product_suppliers' => app(ProductSuppliersSection::class)->forProduct($record, $actor),

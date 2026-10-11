@@ -21,33 +21,6 @@ export type ProductLinkSummary = {
     warehouse_sources: number;
 };
 
-export type LinkedVariantOption = { id: string; label: string };
-
-/** One direct connection, unlinkable on its own. */
-export type DirectProductLink = {
-    id: string;
-    product: ProductLinkSummary;
-    linked_by: string | null;
-    linked_at: string;
-    reason: string | null;
-    my_variants: LinkedVariantOption[];
-    their_variants: LinkedVariantOption[];
-    variant_matches: {
-        id: string;
-        mine: LinkedVariantOption | null;
-        theirs: LinkedVariantOption | null;
-    }[];
-};
-
-/** The "Linked Products" section of the Admin Product workspace. */
-export type LinkedProductsState = {
-    current: ProductLinkSummary;
-    direct: DirectProductLink[];
-    /** Reachable only through other linked Products; never unlinked from here. */
-    indirect: { product: ProductLinkSummary; distance: number }[];
-    can: { link: boolean; unlink: boolean };
-};
-
 /** A Supplier as the assignment screens show it. */
 export type AssignableSupplier = {
     id: string;
@@ -67,11 +40,6 @@ export type ProductSuppliersState = {
         assigned_by: string;
         assigned_at: string;
         reason: string | null;
-    }[];
-    /** Suppliers of other Products in the Same Product group, for reference. */
-    via_group: {
-        supplier: AssignableSupplier;
-        products: { id: string; name: string; bpc: string }[];
     }[];
     can: { assign: boolean; remove: boolean };
 };

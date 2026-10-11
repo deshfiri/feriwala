@@ -263,13 +263,6 @@ class PermissionCatalogue
                 Action::View, Action::Create, Action::Edit, Action::Archive,
             ],
 
-            // Same Product links: which Product records are the same physical
-            // Product. `view` reads links, `create` confirms one, `edit`
-            // unlinks one or matches its variations. Nothing is deletable.
-            Module::ProductLink->value => [
-                Action::View, Action::Create, Action::Edit,
-            ],
-
             // The Content Library: `create` releases content to Products,
             // `edit` changes what was released, `delete` takes it down.
             Module::ContentLibrary->value => [

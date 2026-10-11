@@ -64,19 +64,9 @@ type Candidate = {
     expected_payable: Money | null;
     /**
      * How this source came to be offered: the ordered Product itself
-     * (`exact`), a Product linked as the same Product (`linked_product`), or a
-     * source staff confirmed one by one (`linked`).
+     * (`exact`), or a source staff confirmed one by one (`linked`).
      */
-    match_kind: 'exact' | 'linked_product' | 'linked';
-};
-
-/**
- * Which Products the line's sources come from: the ordered Product and the
- * other Products linked to it as the same Product. Zero means the Product is
- * unique and only its own sources are offered.
- */
-type Sourcing = {
-    linked_product_count: number;
+    match_kind: 'exact' | 'linked';
 };
 
 type SortKey =
@@ -132,7 +122,6 @@ export default function AllocationPanel({
 }) {
     const { t } = useTranslation();
     const [tab, setTab] = useState<Tab>('recommended');
-    const [sourcing, setSourcing] = useState<Sourcing | null>(null);
     const [typeFilter, setTypeFilter] = useState<
         'all' | 'supplier_offer' | 'warehouse'
     >('all');
@@ -156,7 +145,6 @@ export default function AllocationPanel({
             setLinking(null);
             setTab('recommended');
             setRemainingQuantity(null);
-            setSourcing(null);
             setTypeFilter('all');
             setModeFilter('all');
 
@@ -186,11 +174,9 @@ export default function AllocationPanel({
                 (body: {
                     candidates: Candidate[];
                     remaining_quantity: number;
-                    sourcing: Sourcing;
                 }) => {
                     if (cancelled) return;
                     setRecommended(body.candidates);
-                    setSourcing(body.sourcing);
                     setRemainingQuantity(body.remaining_quantity);
                 },
             )
@@ -294,27 +280,21 @@ export default function AllocationPanel({
                     </SheetHeader>
 
                     <div className="flex flex-wrap gap-1 px-4">
-                        {((sourcing?.linked_product_count ?? 0) > 0
-                            ? ([
-                                  [
-                                      'recommended',
-                                      'orders.admin.allocation.tabs.recommended',
-                                  ],
-                              ] as const)
-                            : ([
-                                  [
-                                      'recommended',
-                                      'orders.admin.allocation.tabs.recommended',
-                                  ],
-                                  [
-                                      'suppliers',
-                                      'orders.admin.allocation.tabs.suppliers',
-                                  ],
-                                  [
-                                      'warehouses',
-                                      'orders.admin.allocation.tabs.warehouses',
-                                  ],
-                              ] as const)
+                        {(
+                            [
+                                [
+                                    'recommended',
+                                    'orders.admin.allocation.tabs.recommended',
+                                ],
+                                [
+                                    'suppliers',
+                                    'orders.admin.allocation.tabs.suppliers',
+                                ],
+                                [
+                                    'warehouses',
+                                    'orders.admin.allocation.tabs.warehouses',
+                                ],
+                            ] as const
                         ).map(([key, label]) => (
                             <Button
                                 key={key}
@@ -331,8 +311,6 @@ export default function AllocationPanel({
                     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4">
                         {tab === 'recommended' && (
                             <>
-                                <SourcingBanner sourcing={sourcing} />
-
                                 <div className="flex flex-wrap gap-2">
                                     <Input
                                         placeholder={t(
@@ -639,12 +617,6 @@ function CandidateCard({
                                 : 'orders.admin.allocation.not_related',
                         )}
                     />
-                    {candidate.match_kind === 'linked_product' && (
-                        <StatusPill
-                            tone="info"
-                            label={t('orders.admin.allocation.same_product')}
-                        />
-                    )}
                     {candidate.requires_confirmation && (
                         <StatusPill
                             tone="warning"
@@ -1160,44 +1132,5 @@ function ConfirmAllocationDialog({
                 </Form>
             </DialogContent>
         </Dialog>
-    );
-}
-
-/**
- * Why these sources are listed: the ordered Product plus the Products staff
- * linked to it as the same Product — or a note that it is unique, so only its
- * own sources appear.
- */
-function SourcingBanner({ sourcing }: { sourcing: Sourcing | null }) {
-    const { t } = useTranslation();
-
-    if (sourcing === null) {
-        return null;
-    }
-
-    if (sourcing.linked_product_count === 0) {
-        return (
-            <div role="status" className="bg-muted rounded-lg p-3 text-sm">
-                <p className="font-medium">
-                    {t('orders.admin.allocation.unique_title')}
-                </p>
-                <p className="text-muted-foreground text-xs">
-                    {t('orders.admin.allocation.unique_help')}
-                </p>
-            </div>
-        );
-    }
-
-    return (
-        <div role="status" className="bg-muted rounded-lg p-3 text-sm">
-            <p className="font-medium">
-                {t('orders.admin.allocation.linked_title', {
-                    count: sourcing.linked_product_count,
-                })}
-            </p>
-            <p className="text-muted-foreground text-xs">
-                {t('orders.admin.allocation.linked_help')}
-            </p>
-        </div>
     );
 }

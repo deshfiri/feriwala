@@ -255,7 +255,7 @@ class ForceDeleteProduct
     }
 
     /**
-     * Links, sourcing memberships and variant mappings stay as rows — their
+     * Supplier assignments, sourcing memberships and variant mappings stay as rows — their
      * guards forbid deleting them — but stop being active.
      *
      * @param  Collection<int, mixed>  $variantIds
@@ -265,20 +265,10 @@ class ForceDeleteProduct
         $now = now();
         $removed = ['status' => 'removed', 'removed_by' => $actor->id, 'removed_at' => $now, 'removal_reason' => $note];
 
-        $linkIds = $this->database->table('product_same_links')
+        $this->database->table('product_supplier_assignments')
             ->where('status', 'active')
-            ->where(fn ($query) => $query->where('product_a_id', $product->id)->orWhere('product_b_id', $product->id))
-            ->pluck('id');
-
-        $this->database->table('product_link_variant_mappings')
-            ->where('status', 'active')
-            ->where(fn ($query) => $query->whereIn('product_link_id', $linkIds)
-                ->orWhereIn('variant_a_id', $variantIds)->orWhereIn('variant_b_id', $variantIds))
+            ->where('product_id', $product->id)
             ->update($removed);
-
-        $this->database->table('product_same_links')->whereIn('id', $linkIds)->update([
-            'status' => 'unlinked', 'unlinked_by' => $actor->id, 'unlinked_at' => $now, 'unlink_reason' => $note,
-        ]);
 
         $this->database->table('product_sourcing_variant_mappings')
             ->where('status', 'active')

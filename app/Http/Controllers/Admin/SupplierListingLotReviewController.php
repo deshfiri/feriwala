@@ -6,7 +6,6 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Catalog\Models\Category;
-use App\Domain\Sourcing\Policies\ProductLinkPolicy;
 use App\Domain\Sourcing\Queries\ProductLinkSummaries;
 use App\Domain\Supplier\Actions\DecideSupplierListingLot;
 use App\Domain\Supplier\Actions\MatchSupplierListingItemToVariant;
@@ -143,9 +142,6 @@ class SupplierListingLotReviewController extends Controller
                 'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(['public_id', 'name'])
                     ->map(fn (Category $c) => ['value' => $c->public_id, 'label' => $c->name])->all(),
             ],
-            // Staff-only: whether this reviewer may link an approved Product
-            // as the same as existing ones (Same Product links).
-            'can_link_products' => ProductLinkPolicy::canLink($reviewer),
         ]);
     }
 
@@ -166,10 +162,6 @@ class SupplierListingLotReviewController extends Controller
             'entries.*.category_id' => ['nullable', 'string'],
             'entries.*.brand_id' => ['nullable', 'string'],
 
-            // Existing Products staff confirmed are the same physical Product
-            // as this entry's. Optional: left empty, the Product stays unique.
-            'entries.*.link_product_ids' => ['nullable', 'array', 'max:20'],
-            'entries.*.link_product_ids.*' => ['string', 'max:40'],
             'entries.*.items' => ['required', 'array', 'min:1'],
             'entries.*.items.*.item_id' => ['required', 'string'],
             'entries.*.items.*.decision' => ['required', Rule::in(['approve', 'reject', 'correction'])],
@@ -213,7 +205,6 @@ class SupplierListingLotReviewController extends Controller
                     'sku' => $entry['sku'] ?? null,
                     'category_id' => $entry['category_id'] ?? null,
                     'brand_id' => $entry['brand_id'] ?? null,
-                    'link_product_ids' => $entry['link_product_ids'] ?? [],
                 ],
                 'items' => $items,
             ];

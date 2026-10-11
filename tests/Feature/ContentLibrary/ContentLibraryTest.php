@@ -277,9 +277,6 @@ describe('who may use it', function () {
 
         expect($first['data'])->toHaveCount(40)->and($first['has_more'])->toBeTrue()
             ->and($second['data'])->toHaveCount(5)->and($second['has_more'])->toBeFalse();
-
-        // The Product links search is unchanged: nothing without a real term.
-        $this->getJson(route('admin.catalog.product-links.search', ['q' => '']))->assertForbidden();
     });
 
     it('searches Products for the picker by BPC and title', function () {

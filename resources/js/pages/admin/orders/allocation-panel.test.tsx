@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const translations = {
@@ -128,7 +128,7 @@ const candidate = (overrides: Record<string, unknown>) => ({
     source_product_sku: 'CP-1',
     source_product_bpc: 'AB12CD34E',
     source_variant_label: 'Black / XL',
-    match_kind: 'linked_product',
+    match_kind: 'exact',
     ...overrides,
 });
 
@@ -154,10 +154,9 @@ const renderPanel = () =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the allocation panel', () => {
-    it('shows each linked-Product source with its BPC, variation and payable, hiding catalogue-wide tabs', async () => {
+    it('shows each source with its BPC, variation and payable', async () => {
         mockSources({
             remaining_quantity: 2,
-            sourcing: { linked_product_count: 2 },
             candidates: [
                 candidate({}),
                 candidate({
@@ -172,26 +171,17 @@ describe('the allocation panel', () => {
 
         renderPanel();
 
-        await waitFor(() =>
-            expect(
-                screen.getByText('2 linked Product(s) included'),
-            ).toBeInTheDocument(),
-        );
-        expect(screen.getAllByText('Linked Product')).toHaveLength(2);
+        await screen.findByText('Dhaka Central');
         expect(screen.getAllByText(/BPC AB12CD34E · Black \/ XL/)).toHaveLength(
             2,
         );
         // Only a Supplier source carries a payable.
         expect(screen.getAllByText('Payable')).toHaveLength(1);
-        expect(
-            screen.queryByRole('button', { name: 'All suppliers' }),
-        ).not.toBeInTheDocument();
     });
 
     it('filters between Supplier and Warehouse sources, and by supply mode', async () => {
         mockSources({
             remaining_quantity: 2,
-            sourcing: { linked_product_count: 1 },
             candidates: [
                 candidate({}),
                 candidate({
@@ -233,16 +223,15 @@ describe('the allocation panel', () => {
         expect(screen.queryByText('Dhaka Central')).not.toBeInTheDocument();
     });
 
-    it('says a Product with no links is unique and keeps the catalogue tabs', async () => {
+    it('keeps the catalogue tabs', async () => {
         mockSources({
             remaining_quantity: 1,
-            sourcing: { linked_product_count: 0 },
             candidates: [candidate({ match_kind: 'exact' })],
         });
 
         renderPanel();
 
-        expect(await screen.findByText('Unique Product')).toBeInTheDocument();
+        await screen.findByText('Alpha Textiles');
         expect(
             screen.getByRole('button', { name: 'All suppliers' }),
         ).toBeInTheDocument();

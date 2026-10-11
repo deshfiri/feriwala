@@ -4,7 +4,6 @@ import type { FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import ProductConnectField from '@/components/product-links/product-connect-field';
-import ProductLinkPicker from '@/components/product-links/product-link-picker';
 import TextArea from '@/components/forms/text-area';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -61,8 +60,6 @@ type Props = {
     };
     supplier: { id: string; business_name: string; status_label: string };
     options: { categories: { value: string; label: string }[] };
-    /** Staff-only: whether this reviewer may link the Product as the same as others. */
-    can_link_products: boolean;
     history: {
         new_status: string;
         changed_by: string | null;
@@ -100,7 +97,6 @@ export default function AdminSupplierListingShow({
     listing,
     supplier,
     options,
-    can_link_products,
     history,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -113,7 +109,6 @@ export default function AdminSupplierListingShow({
         connected: null as ProductLinkSummary | null,
         sku: '',
         category_id: '',
-        linked_products: [] as ProductLinkSummary[],
         reason: '',
         items: listing.items
             .filter((item) => item.status === 'pending')
@@ -151,7 +146,6 @@ export default function AdminSupplierListingShow({
             category_id:
                 data.mode === 'create' ? data.category_id || null : null,
             // Only what the reviewer picked; empty keeps the Product unique.
-            link_product_ids: data.linked_products.map((linked) => linked.id),
             items: data.items
                 .filter((item) => item.decision !== 'skip')
                 .map((item) => ({
@@ -543,27 +537,6 @@ export default function AdminSupplierListingShow({
                                             </div>
                                         )}
                                     </>
-                                )}
-
-                                {can_link_products && (
-                                    <ProductLinkPicker
-                                        value={form.data.linked_products}
-                                        onChange={(next) =>
-                                            form.setData(
-                                                'linked_products',
-                                                next,
-                                            )
-                                        }
-                                        excludeProductId={
-                                            listing.connected_product
-                                        }
-                                        alsoExclude={
-                                            form.data.mode === 'connect'
-                                                ? form.data.connected?.id
-                                                : null
-                                        }
-                                        error={errorFor('link_product_ids')}
-                                    />
                                 )}
 
                                 {form.data.items.map((decisionItem, index) => {

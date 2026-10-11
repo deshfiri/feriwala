@@ -71,6 +71,43 @@ class ManageProductSuppliers
     }
 
     /**
+     * Records that a Supplier has a Product because staff approved the
+     * Supplier's listing against it. The approval is the authority, so no
+     * separate assign permission is asked; a Supplier already assigned is left
+     * as it is.
+     */
+    public function recordFromApproval(User $reviewer, Product $product, Supplier $supplier, ?string $reason = null): void
+    {
+        $this->database->transaction(function () use ($reviewer, $product, $supplier, $reason) {
+            Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+
+            $exists = ProductSupplierAssignment::query()->active()
+                ->where('product_id', $product->id)
+                ->where('supplier_id', $supplier->id)
+                ->exists();
+
+            if ($exists) {
+                return;
+            }
+
+            $assignment = ProductSupplierAssignment::create([
+                'product_id' => $product->id,
+                'supplier_id' => $supplier->id,
+                'status' => SourcingMappingStatus::Active,
+                'assigned_by' => $reviewer->id,
+                'assigned_at' => now(),
+                'assign_reason' => trim('Listing approved. '.($this->clean($reason) ?? '')),
+            ]);
+
+            $this->record('product_supplier.assigned', $assignment, $reviewer, after: [
+                'product' => $product->public_id,
+                'supplier' => $supplier->public_id,
+                'via' => 'listing_approval',
+            ], reason: $reason);
+        });
+    }
+
+    /**
      * @throws AuthorizationException
      * @throws InvalidArgumentException when it was already removed
      */

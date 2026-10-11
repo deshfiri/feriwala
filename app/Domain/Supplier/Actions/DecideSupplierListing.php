@@ -10,9 +10,7 @@ use App\Domain\Catalog\Actions\ManageVariants;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Sourcing\Actions\ManageProductLinks;
-use App\Domain\Sourcing\Exceptions\ProductLinkRefused;
-use App\Domain\Sourcing\Models\ProductLink;
+use App\Domain\Sourcing\Actions\ManageProductSuppliers;
 use App\Domain\Supplier\Enums\ListingItemStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\OfferStatus;
@@ -29,7 +27,6 @@ use App\Notifications\Supplier\SupplierListingRejected;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use App\Support\StatusHistory\StatusChange;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
 
@@ -55,13 +52,13 @@ class DecideSupplierListing
     public function __construct(
         protected ManageProducts $products,
         protected ManageVariants $variants,
-        protected ManageProductLinks $links,
+        protected ManageProductSuppliers $assignments,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
 
     /**
-     * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string, link_product_ids?: list<string>}
+     * @param  array<string, mixed>  $productDecision  {connect_product_id?: string, create_product?: bool, category_id?: string, brand_id?: string, sku?: string, description?: string}
      * @param  list<array<string, mixed>>  $itemDecisions  {item_id: string, decision: 'approve'|'reject'|'correction', variant_id?: string, platform_rate?: Money, approved_quantity?: int|null, wholesale_enabled?: bool, dropshipping_enabled?: bool, note?: string, logistics?: array<string, mixed>}
      */
     public function handle(
@@ -88,10 +85,10 @@ class DecideSupplierListing
 
             $product = $hasApproval ? $this->resolveProduct($locked, $reviewer, $productDecision) : null;
 
-            // Optional, and only what staff picked: the Product may equally
-            // stay unique. Never a Supplier's choice, never guessed.
+            // Approving a listing is the reviewer's confirmation that this
+            // Supplier has the Product, so that is recorded as well.
             if ($product !== null) {
-                $this->linkSameProducts($product, $productDecision['link_product_ids'] ?? [], $reviewer, $reason);
+                $this->assignments->recordFromApproval($reviewer, $product, $locked->supplier, $reason);
             }
 
             foreach ($itemDecisions as $itemDecision) {
@@ -207,51 +204,6 @@ class DecideSupplierListing
         }
 
         throw new InvalidArgumentException('Approving an item requires connecting to an existing product or creating a new one.');
-    }
-
-    /**
-     * Confirm, one by one, the existing Products staff said are the same
-     * physical Product as the one this listing is connected to.
-     *
-     * Optional: a listing may be approved while the Product stays unique, and
-     * nothing is ever linked on a guess — only what the reviewer picked. A pair
-     * already linked is left as it is. Variations are not matched here: a
-     * linked Product's variations stay unmatched (and so are never offered as
-     * substitutes) until staff match them from the Product's Linked Products
-     * section.
-     *
-     * @param  list<string>  $linkProductIds  public ids of the Products confirmed as the same
-     */
-    protected function linkSameProducts(Product $product, array $linkProductIds, User $reviewer, string $reason): void
-    {
-        foreach (array_values(array_unique($linkProductIds)) as $publicId) {
-            $other = Product::query()->where('public_id', $publicId)->first()
-                ?? throw new InvalidArgumentException('One of the Products chosen to link with does not exist.');
-
-            if ($other->is($product)) {
-                throw new InvalidArgumentException('A Product cannot be linked to itself.');
-            }
-
-            if ($this->alreadyDirectlyLinked($product, $other)) {
-                continue;
-            }
-
-            try {
-                $this->links->link($reviewer, $product, $other, $reason);
-            } catch (AuthorizationException $exception) {
-                throw new InvalidArgumentException('You may not link Products.', previous: $exception);
-            } catch (ProductLinkRefused $exception) {
-                throw new InvalidArgumentException($exception->getMessage(), previous: $exception);
-            }
-        }
-    }
-
-    protected function alreadyDirectlyLinked(Product $product, Product $other): bool
-    {
-        return ProductLink::query()->active()
-            ->where('product_a_id', min($product->id, $other->id))
-            ->where('product_b_id', max($product->id, $other->id))
-            ->exists();
     }
 
     /**

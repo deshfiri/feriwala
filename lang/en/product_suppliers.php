@@ -19,9 +19,7 @@ return [
         'assigned_by' => 'Assigned by :name on :date',
         'remove' => 'Remove',
         'view' => 'View supplier',
-        'group_title' => 'Suppliers of the same Product',
-        'group_help' => 'These Suppliers are assigned to other Products in this Same Product group. Shown for reference; assign them here to make them this Product\'s own.',
-        'group_via' => 'Assigned to: :products',
+        'view_product' => 'View product',
     ],
 
     'picker' => [

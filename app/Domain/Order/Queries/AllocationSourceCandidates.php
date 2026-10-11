@@ -10,7 +10,6 @@ use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\ProductSourceLink;
-use App\Domain\Sourcing\Queries\ResolveProductNetwork;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
@@ -34,24 +33,19 @@ use Illuminate\Support\Collection;
  * for a bug; one that shows "no stock" or "Supplier suspended" answers the
  * question on the spot.
  *
- * Sources come from the ordered Product itself and from every Product linked to
- * it as the same Product ({@see ResolveProductNetwork}), directly or through
- * other links, on the variations staff matched. The network is read **now**,
- * when the panel is opened and again when staff confirm, never from anything
- * frozen on the order line: what was linked when the order was placed is not
- * what decides where it can be fulfilled today. A source reachable by several
- * paths is listed once.
+ * Sources come from the ordered Product itself: its warehouses and every
+ * Supplier offer on it. Which Suppliers actually have the Product is recorded
+ * separately (Product supplier assignments); a Supplier becomes an allocation
+ * source once it also holds an offer for the line.
  *
  * **Staff-only output.** Every candidate carries the Supplier's identity, the
- * Supplier Rate and the margin — the three things D25 keeps out of Client and
+ * Supplier Rate and the margin -- the three things D25 keeps out of Client and
  * Partner responses, the Storefront API and partner-facing order views. The
  * caller is responsible for being an authorised staff endpoint; nothing here
  * may be spliced into a customer payload.
  */
 class AllocationSourceCandidates
 {
-    public function __construct(protected ResolveProductNetwork $network) {}
-
     /**
      * @param  OrderItemAllocation|null  $excluding  a specific active allocation
      *                                               to leave out of "already
@@ -75,7 +69,6 @@ class AllocationSourceCandidates
         $candidates = [
             ...$this->warehouseCandidates($line, $remaining, $platformRate, $currency, $active),
             ...$this->supplierCandidates($line, $remaining, $platformRate, $currency, $active),
-            ...$this->linkedProductCandidates($line, $remaining, $platformRate, $currency, $active),
 
             // Sources staff confirmed one by one, before Products could be
             // linked; still honoured, and still shown as what they are.
@@ -83,15 +76,6 @@ class AllocationSourceCandidates
         ];
 
         return $this->withoutDuplicates($candidates);
-    }
-
-    /**
-     * How many other Products this line's Product is linked to, directly or
-     * not, whose sources are offered for it. Zero means a unique Product.
-     */
-    public function linkedProductCount(OrderItem $line): int
-    {
-        return count($this->network->network($line->product_id));
     }
 
     /**
@@ -119,79 +103,6 @@ class AllocationSourceCandidates
         }
 
         return $unique;
-    }
-
-    /**
-     * Sources on *other* Products linked to the ordered one as the same
-     * Product, on a variation staff matched to the ordered variation — Supplier
-     * offers and Central Warehouse stock together.
-     *
-     * Judged by the links and matches that hold now: one removed since the
-     * order was placed makes its sources unavailable again, which is the safe
-     * direction. Exact-Product sources are not repeated here (the two methods
-     * above already list them); inactive warehouses, suspended offers and
-     * non-operational Suppliers are left out rather than shown as options.
-     *
-     * @param  Collection<int, OrderItemAllocation>  $active
-     * @return list<AllocationCandidate>
-     */
-    protected function linkedProductCandidates(
-        OrderItem $line,
-        int $quantity,
-        Money $platformRate,
-        Currency $currency,
-        Collection $active,
-    ): array {
-        $pairs = array_values(array_filter(
-            $this->network->compatiblePairs($line->product_id, $line->product_variant_id),
-            fn (array $pair) => ! $this->isExactPair($line, $pair[0], $pair[1]),
-        ));
-
-        if ($pairs === []) {
-            return [];
-        }
-
-        $matchesPair = function ($query) use ($pairs) {
-            $query->where(function ($inner) use ($pairs) {
-                foreach ($pairs as [$productId, $variantId]) {
-                    $inner->orWhere(function ($pair) use ($productId, $variantId) {
-                        $pair->where('product_id', $productId);
-                        $variantId === null
-                            ? $pair->whereNull('product_variant_id')
-                            : $pair->where('product_variant_id', $variantId);
-                    });
-                }
-            });
-        };
-
-        $items = StockItem::query()
-            ->with(['warehouse', 'product', 'variant'])
-            ->whereHas('warehouse', fn ($query) => $query->where('is_active', true))
-            ->tap($matchesPair)
-            ->get();
-
-        $offers = SupplierOffer::query()
-            ->with(['supplier', 'stock', 'product', 'variant', 'originatingListingItem'])
-            ->where('status', 'active')
-            ->tap($matchesPair)
-            ->get();
-
-        $candidates = [];
-
-        foreach ($items as $item) {
-            $candidates[] = $this->warehouseCandidateFromStock($item, $quantity, $platformRate, $currency, $active, 'linked_product');
-        }
-
-        foreach ($offers as $offer) {
-            $candidates[] = $this->supplierCandidateFromOffer($offer, $quantity, $platformRate, $currency, $active, 'linked_product');
-        }
-
-        return array_values(array_filter($candidates));
-    }
-
-    protected function isExactPair(OrderItem $line, int $productId, ?int $variantId): bool
-    {
-        return $productId === $line->product_id && $variantId === $line->product_variant_id;
     }
 
     /**

@@ -372,11 +372,6 @@ return [
                 'on_demand' => 'On demand',
                 'pre_order' => 'Pre-order',
             ],
-            'same_product' => 'Linked Product',
-            'unique_title' => 'Unique Product',
-            'unique_help' => 'This Product is not linked to any other, so only its own sources and confirmed links are shown. Nothing is guessed from names.',
-            'linked_title' => 'Sources from :count linked Product(s) are included',
-            'linked_help' => 'Only sources on Products linked as the same Product, and on variations staff matched, are listed. Nothing is chosen for you.',
             'columns' => [
                 'source' => 'Source',
                 'available' => 'Available',
