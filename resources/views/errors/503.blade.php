@@ -54,46 +54,10 @@
             display: grid;
             place-items: center;
             padding: 2rem 1.25rem;
-            background: var(--background);
             color: var(--text);
             font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             line-height: 1.55;
             -webkit-font-smoothing: antialiased;
-        }
-
-        /* Two soft washes of colour, so the page has depth without a box. */
-        .bg {
-            position: fixed;
-            inset: 0;
-            overflow: hidden;
-            pointer-events: none;
-        }
-
-        .bg::before,
-        .bg::after {
-            content: "";
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(70px);
-            pointer-events: none;
-        }
-
-        .bg::before {
-            top: -12rem;
-            left: 50%;
-            width: 34rem;
-            height: 34rem;
-            margin-left: -22rem;
-            background: var(--glow-1);
-        }
-
-        .bg::after {
-            bottom: -14rem;
-            left: 50%;
-            width: 30rem;
-            height: 30rem;
-            margin-left: -4rem;
-            background: var(--glow-2);
         }
 
         main {
@@ -106,7 +70,7 @@
 
         .brand {
             margin: 0 0 2.25rem;
-            font-size: 1.625rem;
+            font-size: 2rem;
             font-weight: 800;
             letter-spacing: -0.04em;
             color: var(--brand);
@@ -232,13 +196,13 @@
             </g>
         </svg>
 
-        <h1 id="maintenance-title">We'll be right back</h1>
+        <h2 id="maintenance-title">We'll be right back soon</h2>
         <p class="lead">{{ config('app.name', 'Banij') }} is getting a little better. We're making scheduled
-            improvements — your data is safe and everything will be back shortly.</p>
+            improvements and your data is safe and everything will be back shortly.</p>
 
         <div class="bn" lang="bn">
             <h2>আমরা শিগগিরই ফিরে আসছি</h2>
-            <p>নির্ধারিত উন্নয়নের কাজ চলছে। আপনার তথ্য নিরাপদ, কিছুক্ষণের মধ্যেই সব আবার চালু হবে।</p>
+            <p>প্লাটফর্ম এর মান উন্নয়নের কাজ চলছে। আপনার তথ্য নিরাপদ, কিছুক্ষণের মধ্যেই সব আবার চালু হবে।</p>
         </div>
 
         <div class="progress" role="presentation"><span></span></div>
