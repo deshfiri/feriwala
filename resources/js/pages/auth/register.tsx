@@ -106,7 +106,7 @@ export default function Register({
                             {/* `items-start`, or a column with a helper line
                                 under it stretches its neighbour and the two
                                 inputs stop lining up. */}
-                            <div className="grid items-start gap-4 sm:grid-cols-2">
+                            <div className="grid gap-5">
                                 <div className="grid gap-2">
                                     <Label htmlFor="email">
                                         {t('auth.register.email')}
@@ -147,7 +147,7 @@ export default function Register({
                             {/* `items-start`, or a column with a helper line
                                 under it stretches its neighbour and the two
                                 inputs stop lining up. */}
-                            <div className="grid items-start gap-4 sm:grid-cols-2">
+                            <div className="grid gap-5">
                                 <div className="grid gap-2">
                                     <Label htmlFor="password">
                                         {t('auth.register.password')}
@@ -193,7 +193,7 @@ export default function Register({
                              * entry costs registrations for data that is just
                              * as useful filled in later.
                              */}
-                            <fieldset className="grid items-start gap-4 sm:grid-cols-2">
+                            <fieldset className="grid gap-5">
                                 <legend className="text-muted-foreground mb-2 w-full text-xs">
                                     {t('auth.register.optional_legend')}
                                 </legend>
@@ -352,11 +352,11 @@ export default function Register({
                                 href={
                                     staffInvitation
                                         ? login.url({
-                                            query: {
-                                                invitation:
-                                                    staffInvitation.token,
-                                            },
-                                        })
+                                              query: {
+                                                  invitation:
+                                                      staffInvitation.token,
+                                              },
+                                          })
                                         : login()
                                 }
                                 data-test="staff-invitation-login-link"
