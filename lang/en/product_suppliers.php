@@ -1,29 +1,77 @@
 <?php
 
 return [
-    'assigned' => '{1} Supplier assigned.|[2,*] :count assignments made.',
-    'removed' => 'Supplier removed from this Product.',
+    'assigned' => ':name now holds this Product.',
+    'price_changed' => 'The Supplier Base Price was updated.',
+    'assigned_by' => 'Assigned by :name on :date',
+    'listed' => 'From the Supplier\'s approved listing',
+    'updated' => 'Updated :date',
 
     'errors' => [
-        'product_not_found' => 'One of the chosen Products could not be found.',
-        'supplier_not_found' => 'One of the chosen Suppliers could not be found.',
-        'supplier_not_approved' => 'Only approved Suppliers can be assigned to a Product.',
-        'already_assigned' => 'Every chosen Supplier already has this Product.',
+        'product_not_found' => 'That Product could not be found.',
+        'supplier_not_found' => 'That Supplier could not be found.',
+        'variant_not_found' => 'That variation could not be found.',
+    ],
+
+    'fields' => [
+        'supplier' => 'Supplier',
+        'variant' => 'Variation',
+        'base_price' => 'Supplier Base Price',
+        'supply_mode' => 'Supply mode',
+        'quantity' => 'Available quantity',
+        'capacity_label' => 'Fulfilment capacity (optional)',
+        'capacity' => 'Capacity :count',
+        'availability' => 'Stock / capacity',
+        'lead_time' => 'Lead time (days)',
+        'days' => ':count day(s)',
+        'reason' => 'Reason (optional)',
+        'reason_required' => 'Reason (required)',
+    ],
+
+    'modes' => [
+        'ready_stock' => 'Ready stock',
+        'on_demand' => 'On demand',
+        'pre_order' => 'Pre-order',
     ],
 
     'section' => [
         'title' => 'Suppliers',
-        'description' => 'The Suppliers that actually have this Product. This records who holds the item; prices, stock and approval stay in the Supplier listings.',
-        'assign' => 'Assign suppliers',
-        'none' => 'No Supplier is assigned to this Product yet.',
-        'assigned_by' => 'Assigned by :name on :date',
-        'remove' => 'Remove',
+        'description' => 'The Suppliers that hold this Product and what each is paid per unit. Prices, stock and approval are the Supplier offer\'s own; the Product\'s platform prices are not changed here.',
+        'assign' => 'Assign to Supplier',
+        'none' => 'No Supplier holds this Product yet.',
         'view' => 'View supplier',
         'view_product' => 'View product',
+        'edit_price' => 'Edit price',
+        'suspend' => 'Suspend',
+        'reactivate' => 'Reactivate',
+    ],
+
+    'assign_dialog' => [
+        'title' => 'Assign to Supplier',
+        'description' => 'Choose an approved Supplier and the price payable to them for one unit. This becomes the Supplier\'s offer on this Product.',
+        'none' => 'No Supplier chosen',
+        'choose' => 'Choose supplier',
+        'use_supplier' => 'Use this supplier',
+        'pick_variant' => 'Choose a variation',
+        'price_help' => 'Payable to the Supplier per unit, in Taka. Must be above zero and not above the Product\'s wholesale price.',
+        'confirm' => 'Assign',
+    ],
+
+    'price_dialog' => [
+        'title' => 'Change Supplier Base Price',
+        'description' => 'A new price version is recorded. Allocations and payables already made keep the price they were made at.',
+        'confirm' => 'Save price',
+    ],
+
+    'status_dialog' => [
+        'suspend_title' => 'Suspend this offer',
+        'suspend_description' => 'The Supplier cannot be chosen for new allocations until it is reactivated.',
+        'reactivate_title' => 'Reactivate this offer',
+        'reactivate_description' => 'The Supplier can be chosen for allocations again.',
     ],
 
     'picker' => [
-        'title' => 'Choose suppliers',
+        'title' => 'Choose a supplier',
         'description' => 'Approved Suppliers. Search by name, reference, email or mobile.',
         'search' => 'Search suppliers',
         'none' => 'No Supplier matches.',
@@ -35,26 +83,9 @@ return [
         'count' => '{0} None selected|{1} 1 selected|[2,*] :count selected',
     ],
 
-    'confirm_assign' => [
-        'title' => 'Assign suppliers',
-        'description' => 'These Suppliers will be recorded as having this Product.',
-        'reference_label' => 'Supplier\'s own name or code for it (optional)',
-        'reason_label' => 'Reason (optional)',
-        'confirm' => 'Assign',
-    ],
-
-    'confirm_remove' => [
-        'title' => 'Remove supplier',
-        'description' => 'The Supplier will no longer be listed as having this Product. The record is kept as history.',
-        'confirm' => 'Remove',
-    ],
-
     'supplier_section' => [
-        'title' => 'Assigned products',
-        'description' => 'The Products this Supplier actually has.',
-        'assign' => 'Assign products',
-        'none' => 'No Product is assigned to this Supplier yet.',
-        'assign_title' => 'Choose products',
-        'assign_description' => 'Pick the Products this Supplier has.',
+        'title' => 'Products',
+        'description' => 'The Products this Supplier holds, from approved listings and from assignment.',
+        'none' => 'This Supplier holds no Product yet.',
     ],
 ];

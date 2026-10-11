@@ -75,6 +75,8 @@ type ItemDecision = {
     decision: 'skip' | 'approve' | 'reject' | 'correction';
     variant_id: string;
     platform_rate: string;
+    /** Blank keeps the Supplier's own proposed Supplier Base Price. */
+    supplier_rate: string;
     approved_quantity: string;
     note: string;
 };
@@ -126,6 +128,7 @@ export default function AdminSupplierListingLotShow({
                     decision: 'skip',
                     variant_id: '',
                     platform_rate: '',
+                    supplier_rate: '',
                     approved_quantity: '',
                     note: '',
                 })),
@@ -189,6 +192,11 @@ export default function AdminSupplierListingLotShow({
                             platform_rate:
                                 item.decision === 'approve'
                                     ? item.platform_rate
+                                    : null,
+                            supplier_rate:
+                                item.decision === 'approve' &&
+                                item.supplier_rate.trim() !== ''
+                                    ? item.supplier_rate
                                     : null,
                             approved_quantity:
                                 item.decision === 'approve' &&
@@ -635,6 +643,24 @@ function ItemDecisionFields({
                                     })
                                 }
                                 required
+                            />
+                        )}
+                    </FormField>
+                    <FormField
+                        label={t('supplier.admin.listings.supplier_base_price')}
+                        error={errorFor('supplier_rate')}
+                    >
+                        {(field) => (
+                            <Input
+                                {...field}
+                                inputMode="decimal"
+                                value={decision.supplier_rate}
+                                placeholder={item.supplier_rate?.amount ?? ''}
+                                onChange={(e) =>
+                                    onChange({
+                                        supplier_rate: e.target.value,
+                                    })
+                                }
                             />
                         )}
                     </FormField>

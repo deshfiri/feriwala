@@ -1,126 +1,80 @@
-import { Link, router } from '@inertiajs/react';
-import { ExternalLink, PackagePlus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
-import ProductBrowseController from '@/actions/App/Http/Controllers/Admin/ProductBrowseController';
-import ProductSupplierController from '@/actions/App/Http/Controllers/Admin/ProductSupplierController';
-import ProductPickerSheet from '@/components/content-library/product-picker-sheet';
+import { Link } from '@inertiajs/react';
+import { ExternalLink } from 'lucide-react';
+import MoneyAmount from '@/components/money-amount';
 import SectionCard from '@/components/section-card';
+import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { edit } from '@/routes/admin/catalog/products';
-import type { ProductLinkSummary, SupplierProductsState } from '@/types';
+import type { SupplierProductsState } from '@/types';
 
 type Props = {
-    supplierId: string;
     assigned: SupplierProductsState;
 };
 
 /**
- * The Products this Supplier actually has (Admin Supplier page). Assigning
- * here is the same record as assigning from a Product's Suppliers tab.
+ * The Products this Supplier holds (Admin Supplier page): every Supplier Offer,
+ * whether the Supplier listed it or staff assigned it. Assigning is done from
+ * the Product, where the Supplier Base Price is set against what it resells at.
  */
-export default function AssignedProductsSection({
-    supplierId,
-    assigned,
-}: Props) {
+export default function AssignedProductsSection({ assigned }: Props) {
     const { t, locale } = useTranslation();
-    const [picking, setPicking] = useState(false);
-    const [selected, setSelected] = useState<ProductLinkSummary[]>([]);
-
-    const assign = (products: ProductLinkSummary[]) => {
-        setSelected(products);
-    };
-
-    const confirm = (open: boolean) => {
-        setPicking(open);
-
-        if (open || selected.length === 0) {
-            return;
-        }
-
-        router.post(
-            ProductSupplierController.store.url(),
-            {
-                product_ids: selected.map((product) => product.id),
-                supplier_ids: [supplierId],
-            },
-            {
-                preserveScroll: true,
-                onFinish: () => setSelected([]),
-            },
-        );
-    };
 
     return (
         <SectionCard
             title={t('product_suppliers.supplier_section.title')}
             description={t('product_suppliers.supplier_section.description')}
-            actions={
-                assigned.can.assign && (
-                    <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => setPicking(true)}
-                    >
-                        <PackagePlus className="size-4" aria-hidden="true" />
-                        {t('product_suppliers.supplier_section.assign')}
-                    </Button>
-                )
-            }
         >
-            {assigned.assigned.length === 0 ? (
+            {assigned.offers.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                     {t('product_suppliers.supplier_section.none')}
                 </p>
             ) : (
                 <ul className="divide-border divide-y rounded-md border">
-                    {assigned.assigned.map((row) => (
+                    {assigned.offers.map((offer) => (
                         <li
-                            key={row.id}
+                            key={offer.id}
                             className="flex flex-wrap items-center justify-between gap-3 p-3"
                         >
                             <div className="min-w-0">
                                 <p className="text-sm font-medium">
-                                    {row.product.name}
+                                    {offer.product?.name}
                                 </p>
                                 <p className="text-muted-foreground text-xs">
-                                    {row.product.bpc} ·{' '}
+                                    {offer.product?.bpc}
+                                    {offer.variant
+                                        ? ` · ${offer.variant.label} (${offer.variant.sku})`
+                                        : ''}
+                                    {' · '}
+                                    {offer.origin_label}
+                                    {' · '}
                                     {new Date(
-                                        row.assigned_at,
+                                        offer.updated_at ?? '',
                                     ).toLocaleDateString(locale)}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" asChild>
-                                    <Link href={edit.url(row.product.id)}>
-                                        <ExternalLink
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        {t(
-                                            'product_suppliers.section.view_product',
-                                        )}
-                                    </Link>
-                                </Button>
-                                {assigned.can.remove && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                            router.delete(
-                                                ProductSupplierController.destroy.url(
-                                                    row.id,
-                                                ),
-                                                { preserveScroll: true },
-                                            )
-                                        }
-                                    >
-                                        <Trash2
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        {t('product_suppliers.section.remove')}
+                            <div className="flex items-center gap-2">
+                                {offer.supplier_base_price && (
+                                    <MoneyAmount
+                                        amount={offer.supplier_base_price}
+                                        className="font-semibold"
+                                    />
+                                )}
+                                <StatusPill
+                                    tone={offer.status_tone}
+                                    label={offer.status_label}
+                                />
+                                {offer.product && (
+                                    <Button variant="ghost" size="sm" asChild>
+                                        <Link href={edit.url(offer.product.id)}>
+                                            <ExternalLink
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            {t(
+                                                'product_suppliers.section.view_product',
+                                            )}
+                                        </Link>
                                     </Button>
                                 )}
                             </div>
@@ -128,19 +82,6 @@ export default function AssignedProductsSection({
                     ))}
                 </ul>
             )}
-
-            <ProductPickerSheet
-                open={picking}
-                onOpenChange={confirm}
-                selected={selected}
-                onChange={assign}
-                searchUrl={ProductBrowseController.index.url()}
-                excludeIds={assigned.assigned.map((row) => row.product.id)}
-                title={t('product_suppliers.supplier_section.assign_title')}
-                description={t(
-                    'product_suppliers.supplier_section.assign_description',
-                )}
-            />
         </SectionCard>
     );
 }

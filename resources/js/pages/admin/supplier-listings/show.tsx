@@ -76,6 +76,11 @@ type ItemDecision = {
     /** Flat-Taka decimal typed by the reviewer, submitted exactly as typed. */
     platform_rate: string;
     /**
+     * The Supplier Base Price a reviewer confirms; blank keeps the Supplier's
+     * own proposed price.
+     */
+    supplier_rate: string;
+    /**
      * Left blank to open the offer at the quantity the Supplier asked to
      * supply. Filled in only to approve a different figure.
      */
@@ -117,6 +122,7 @@ export default function AdminSupplierListingShow({
                 decision: 'skip',
                 variant_id: '',
                 platform_rate: '',
+                supplier_rate: '',
                 approved_quantity: '',
                 wholesale_enabled: true,
                 dropshipping_enabled: false,
@@ -156,6 +162,11 @@ export default function AdminSupplierListingShow({
                     // only place that parses it (§36.1).
                     platform_rate:
                         item.decision === 'approve' ? item.platform_rate : null,
+                    supplier_rate:
+                        item.decision === 'approve' &&
+                        item.supplier_rate.trim() !== ''
+                            ? item.supplier_rate
+                            : null,
                     // Null means "open at what the Supplier asked for"; the
                     // server decides, so a blank box sends nothing at all.
                     approved_quantity:
@@ -634,6 +645,41 @@ export default function AdminSupplierListingShow({
                                                                     )
                                                                 }
                                                                 required
+                                                            />
+                                                        )}
+                                                    </FormField>
+                                                    <FormField
+                                                        label={t(
+                                                            'supplier.admin.listings.supplier_base_price',
+                                                        )}
+                                                        error={errorFor(
+                                                            `items.${index}.supplier_rate`,
+                                                        )}
+                                                    >
+                                                        {(field) => (
+                                                            <Input
+                                                                {...field}
+                                                                inputMode="decimal"
+                                                                value={
+                                                                    decisionItem.supplier_rate
+                                                                }
+                                                                placeholder={
+                                                                    source
+                                                                        ?.supplier_rate
+                                                                        ?.amount ??
+                                                                    ''
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setItem(
+                                                                        index,
+                                                                        {
+                                                                            supplier_rate:
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
                                                             />
                                                         )}
                                                     </FormField>

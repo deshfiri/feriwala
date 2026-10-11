@@ -31,28 +31,70 @@ export type AssignableSupplier = {
     status_tone: StatusTone;
 };
 
-/** The "Suppliers" section of the Admin Product workspace. */
-export type ProductSuppliersState = {
-    assigned: {
-        id: string;
-        supplier: AssignableSupplier;
-        reference: string | null;
-        assigned_by: string;
-        assigned_at: string;
-        reason: string | null;
-    }[];
-    can: { assign: boolean; remove: boolean };
+/**
+ * One Supplier Offer: a Supplier holding a Product (or one variation), however
+ * it got there. The base price is `null` for staff who may not see Supplier
+ * pricing, and the platform's own rate is never part of it.
+ */
+export type SupplierOfferRow = {
+    id: string;
+    reference: string;
+    supplier: AssignableSupplier | null;
+    product: { id: string; name: string; bpc: string } | null;
+    variant: { id: string; label: string; sku: string } | null;
+    supplier_base_price: Money | null;
+    supply_mode: 'ready_stock' | 'on_demand' | 'pre_order';
+    supply_mode_label: string;
+    available_quantity: number | null;
+    fulfilment_capacity: number | null;
+    lead_time_days: number | null;
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+    origin: 'supplier_listing' | 'admin_assignment';
+    origin_label: string;
+    assigned_by: string | null;
+    assigned_at: string | null;
+    updated_at: string | null;
 };
 
-/** The "Assigned products" section of the Admin Supplier page. */
+/** The "Suppliers" section of the Admin Product workspace. */
+export type ProductSuppliersState = {
+    offers: SupplierOfferRow[];
+    variants: { id: string; label: string }[];
+    can: { assign: boolean; edit: boolean; view_prices: boolean };
+};
+
+/**
+ * A Supplier's own view of one of its offers ("My Products"). Carries the
+ * Supplier Base Price and nothing of the platform's own pricing.
+ */
+export type SupplierOwnOffer = {
+    id: string;
+    reference: string;
+    product_name: string;
+    product_slug: string;
+    bpc: string;
+    image: { url: string; alt: string | null } | null;
+    variant: { label: string; sku: string } | null;
+    status: string;
+    status_label: string;
+    is_preferred: boolean;
+    supplier_rate: Money;
+    supply_mode: 'ready_stock' | 'on_demand' | 'pre_order';
+    supply_mode_label: string;
+    available_quantity: number | null;
+    fulfilment_capacity: number | null;
+    lead_time_days: number | null;
+    origin: 'supplier_listing' | 'admin_assignment';
+    origin_label: string;
+    updated_at: string | null;
+};
+
+/** The "Products" section of the Admin Supplier page. */
 export type SupplierProductsState = {
-    assigned: {
-        id: string;
-        product: { id: string; name: string; bpc: string; sku: string };
-        reference: string | null;
-        assigned_at: string;
-    }[];
-    can: { assign: boolean; remove: boolean };
+    offers: SupplierOfferRow[];
+    can: { view_prices: boolean };
 };
 
 /** A lifecycle move this person may make from the product's current status. */

@@ -342,7 +342,6 @@ export default function AdminSupplierShow({
 
                         {assigned_products && (
                             <AssignedProductsSection
-                                supplierId={supplier.id}
                                 assigned={assigned_products}
                             />
                         )}
