@@ -376,7 +376,7 @@ return [
                 'source' => 'Source',
                 'available' => 'Available',
                 'payable' => 'Expected Supplier payable',
-                'unit_cost' => 'Cost',
+                'unit_cost' => 'Cost (Supplier Base Price)',
                 'platform_rate' => 'Selling price',
                 'margin' => 'Expected margin',
             ],
