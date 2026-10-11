@@ -35,6 +35,11 @@ class ChangeSupplierBasePrice
             throw new InvalidArgumentException('The Supplier Base Price must be greater than zero.');
         }
 
-        return $this->rates->handle($offer, $actor->id, $baseRate, $offer->platform_rate, $reason);
+        // The platform rate carries over; it only rises when the new base
+        // price would otherwise sit above it, because an offer's platform rate
+        // is never below its Supplier's. Staff see a margin warning for that.
+        $platformRate = $offer->platform_rate->lessThan($baseRate) ? $baseRate : $offer->platform_rate;
+
+        return $this->rates->handle($offer, $actor->id, $baseRate, $platformRate, $reason);
     }
 }

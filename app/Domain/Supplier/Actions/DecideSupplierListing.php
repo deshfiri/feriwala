@@ -240,6 +240,22 @@ class DecideSupplierListing
             throw new InvalidArgumentException('The Platform Rate cannot be lower than the Supplier Rate.');
         }
 
+        // The same Supplier may already hold an offer on this Product and
+        // variation (for instance one staff assigned). Approval maintains that
+        // one offer; it never makes a second.
+        $existing = SupplierOffer::query()
+            ->where('supplier_id', $item->listing->supplier_id)
+            ->where('product_id', $product->id)
+            ->where('product_variant_id', $variant?->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null) {
+            $this->updateExistingOffer($existing, $item, $supplierRate, $platformRate, $currency, $reviewer);
+
+            return;
+        }
+
         $offer = SupplierOffer::create([
             'supplier_id' => $item->listing->supplier_id,
             'product_id' => $product->id,
@@ -293,6 +309,57 @@ class DecideSupplierListing
         ])->save();
 
         $this->confirmLogistics($product, $variant, $itemDecision, $reviewer);
+    }
+
+    /**
+     * Approval against a Supplier/Product/variation that already has an offer:
+     * the one offer takes the accepted Supplier Base Price (as a new price
+     * version when it differs), the listing's supply terms, and is active. Its
+     * origin stays as it was; the listing item points at it.
+     */
+    protected function updateExistingOffer(
+        SupplierOffer $offer,
+        SupplierProductListingItem $item,
+        Money $supplierRate,
+        Money $platformRate,
+        Currency $currency,
+        User $reviewer,
+    ): void {
+        // Never lower an offer's platform rate below the base price it now
+        // carries, and never raise it past what staff just set.
+        $keepPlatformRate = $offer->platform_rate->greaterThan($platformRate) ? $offer->platform_rate : $platformRate;
+
+        $priceChanged = ! $offer->supplier_rate->equals($supplierRate) || ! $offer->platform_rate->equals($keepPlatformRate);
+
+        $offer->forceFill([
+            'status' => OfferStatus::Active,
+            'supply_mode' => $item->supply_mode,
+            'lead_time_days' => $item->lead_time_days,
+            'fulfilment_capacity' => $item->fulfilment_capacity,
+            'expected_availability_at' => $item->expected_availability_at,
+            'supplier_rate' => $supplierRate,
+            'platform_rate' => $keepPlatformRate,
+            'currency_code' => $currency->value,
+            'activated_by' => $reviewer->id,
+            'activated_at' => now(),
+        ])->save();
+
+        if ($priceChanged) {
+            $offer->priceHistory()->create([
+                'supplier_rate' => $supplierRate,
+                'platform_rate' => $keepPlatformRate,
+                'currency_code' => $currency->value,
+                'effective_from' => now(),
+                'changed_by' => $reviewer->id,
+                'reason' => 'Supplier Base Price set at listing approval of an existing offer.',
+                'created_at' => now(),
+            ]);
+        }
+
+        $item->forceFill([
+            'status' => ListingItemStatus::Approved,
+            'supplier_offer_id' => $offer->id,
+        ])->save();
     }
 
     /**

@@ -112,13 +112,15 @@ class ProductSupplierController extends Controller
             : (ProductVariant::query()->where('public_id', $validated['variant_id'])->where('product_id', $product->id)->first()
                 ?? throw ValidationException::withMessages(['variant_id' => __('product_suppliers.errors.variant_not_found')]));
 
+        $basePrice = DecimalAmount::parse($validated['base_price'], Currency::BDT);
+
         try {
             $this->assign->handle(
                 $actor,
                 $product,
                 $variant,
                 $supplier,
-                DecimalAmount::parse($validated['base_price'], Currency::BDT),
+                $basePrice,
                 [
                     'supply_mode' => isset($validated['supply_mode']) ? SupplyMode::from($validated['supply_mode']) : null,
                     'quantity' => $validated['quantity'] ?? null,
@@ -131,7 +133,13 @@ class ProductSupplierController extends Controller
             throw ValidationException::withMessages(['assignment' => $refused->getMessage()]);
         }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('product_suppliers.assigned', ['name' => $supplier->business_name])]);
+        $message = __('product_suppliers.assigned', ['name' => $supplier->business_name]);
+
+        if ($this->assign->hasNoMargin($product, $variant, $basePrice)) {
+            $message .= ' '.__('product_suppliers.no_margin_warning');
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
 
         return back();
     }
@@ -150,20 +158,22 @@ class ProductSupplierController extends Controller
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
-        $record = SupplierOffer::query()->where('public_id', $offer)->firstOrFail();
+        $record = SupplierOffer::query()->where('public_id', $offer)->with(['product', 'variant'])->firstOrFail();
+        $basePrice = DecimalAmount::parse($validated['base_price'], Currency::BDT);
 
         try {
-            $this->changePrice->handle(
-                $actor,
-                $record,
-                DecimalAmount::parse($validated['base_price'], Currency::BDT),
-                $validated['reason'],
-            );
+            $this->changePrice->handle($actor, $record, $basePrice, $validated['reason']);
         } catch (InvalidArgumentException $refused) {
             throw ValidationException::withMessages(['base_price' => $refused->getMessage()]);
         }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('product_suppliers.price_changed')]);
+        $message = __('product_suppliers.price_changed');
+
+        if ($this->assign->hasNoMargin($record->product, $record->variant, $basePrice)) {
+            $message .= ' '.__('product_suppliers.no_margin_warning');
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => $message]);
 
         return back();
     }

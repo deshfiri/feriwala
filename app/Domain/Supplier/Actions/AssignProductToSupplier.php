@@ -87,13 +87,16 @@ class AssignProductToSupplier
             throw new InvalidArgumentException('The Supplier Base Price must use the Product\'s currency.');
         }
 
-        if ($platformRate->lessThan($baseRate)) {
-            throw new InvalidArgumentException('The Supplier Base Price cannot be higher than the Product\'s wholesale price.');
-        }
+        // A base price above the wholesale price is not refused: staff are
+        // warned of the missing margin (see {@see hasNoMargin()}). The offer
+        // table's own rule — the platform rate never below the Supplier's —
+        // still holds, so the offer's platform rate is floored at the base
+        // price; the Product's own wholesale price is untouched either way.
+        $offerPlatformRate = $platformRate->lessThan($baseRate) ? $baseRate : $platformRate;
 
         $reason = $this->clean($terms['reason'] ?? null) ?? 'Assigned to the Supplier by staff.';
 
-        return $this->database->transaction(function () use ($actor, $product, $variant, $supplier, $baseRate, $platformRate, $mode, $quantity, $terms, $reason) {
+        return $this->database->transaction(function () use ($actor, $product, $variant, $supplier, $baseRate, $offerPlatformRate, $mode, $quantity, $terms, $reason) {
             // Everyone assigning on this Product queues here, so the duplicate
             // check below cannot be passed twice at once.
             Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
@@ -123,7 +126,7 @@ class AssignProductToSupplier
                 'wholesale_enabled' => (bool) ($terms['wholesale_enabled'] ?? false),
                 'dropshipping_enabled' => (bool) ($terms['dropshipping_enabled'] ?? false),
                 'supplier_rate' => $baseRate,
-                'platform_rate' => $platformRate,
+                'platform_rate' => $offerPlatformRate,
                 'currency_code' => $baseRate->currency->value,
                 'supply_mode' => $mode,
                 'lead_time_days' => $terms['lead_time_days'] ?? null,
@@ -134,7 +137,7 @@ class AssignProductToSupplier
 
             $offer->priceHistory()->create([
                 'supplier_rate' => $baseRate,
-                'platform_rate' => $platformRate,
+                'platform_rate' => $offerPlatformRate,
                 'currency_code' => $baseRate->currency->value,
                 'effective_from' => now(),
                 'changed_by' => $actor->id,
@@ -165,6 +168,15 @@ class AssignProductToSupplier
 
             return $offer;
         });
+    }
+
+    /**
+     * Whether the base price leaves no margin against the Product's wholesale
+     * price: a warning for staff, never a refusal.
+     */
+    public function hasNoMargin(Product $product, ?ProductVariant $variant, Money $baseRate): bool
+    {
+        return ($variant?->effectiveWholesalePrice() ?? $product->wholesale_price)->lessThan($baseRate);
     }
 
     protected function openStock(SupplierOffer $offer, int $quantity, User $actor): void

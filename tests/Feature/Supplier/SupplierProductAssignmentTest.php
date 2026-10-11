@@ -99,11 +99,6 @@ describe('manual assignment', function () {
         expect(SupplierOffer::query()->count())->toBe(0);
     })->with(['zero' => ['0.00']]);
 
-    it('refuses a base price above the wholesale price it would be resold at', function () {
-        expect(fn () => app(AssignProductToSupplier::class)->handle($this->staff, $this->product, null, $this->supplier, supplierAssignmentPrice('2500.00')))
-            ->toThrow(InvalidArgumentException::class, 'wholesale price');
-    });
-
     it('rejects a second active assignment of the same Supplier and Product', function () {
         $assign = app(AssignProductToSupplier::class);
         $assign->handle($this->staff, $this->product, null, $this->supplier, supplierAssignmentPrice('1400.00'));
@@ -210,6 +205,18 @@ describe('listing approval', function () {
 
         expect($offer->supplier_rate->toDecimal())->toBe('1420.00')
             ->and($offer->priceHistory->first()->reason)->toContain('1420.00')->toContain('1500.00');
+    });
+
+    it('maintains the one offer when a Supplier\'s listing is approved for a Product already assigned to it', function () {
+        $assigned = app(AssignProductToSupplier::class)->handle($this->staff, $this->product, null, $this->supplier, supplierAssignmentPrice('1450.00'));
+
+        $offer = supplierAssignmentApprove($this->supplier, $this->product, $this->staff, '1380.00');
+
+        expect($offer->id)->toBe($assigned->id)
+            ->and(SupplierOffer::query()->where('supplier_id', $this->supplier->id)->count())->toBe(1)
+            ->and($offer->refresh()->supplier_rate->toDecimal())->toBe('1380.00')
+            ->and($offer->origin)->toBe(OfferOrigin::AdminAssignment)
+            ->and($offer->priceHistory)->toHaveCount(2);
     });
 
     it('lands in the same table as a manual assignment, so a Supplier sees both together', function () {

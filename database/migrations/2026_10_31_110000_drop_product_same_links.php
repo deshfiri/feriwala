@@ -1,33 +1,25 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
- * Same Product links are retired: which Suppliers actually have a Product is
- * now recorded by Supplier assignments, and order sources come from the ordered
- * Product's own offers and stock.
+ * Same Product links are retired from active behaviour: no screen, route,
+ * permission or allocation step uses them any more. One Central Product has one
+ * BPC and many Supplier Offers.
  *
- * Drops the link and variation-match tables and their guard functions. Nothing
- * else referenced them by foreign key, and orders keep the source Product they
- * were allocated from as a snapshot on the allocation itself.
+ * The tables they filled (`product_same_links`, `product_link_variant_mappings`)
+ * are deliberately left in place as inactive legacy history. Nothing is dropped,
+ * so any rows already written, and anything that referenced them, stay intact.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::dropIfExists('product_link_variant_mappings');
-        Schema::dropIfExists('product_same_links');
-
-        DB::unprepared(<<<'SQL'
-            DROP FUNCTION IF EXISTS feriwala_product_links_never_deleted() CASCADE;
-        SQL);
+        // Intentionally empty: legacy history is kept, not destroyed.
     }
 
     public function down(): void
     {
-        // Retired for good: the earlier migration that created these tables
-        // still describes their shape if one ever has to be rebuilt.
+        // Nothing to undo.
     }
 };

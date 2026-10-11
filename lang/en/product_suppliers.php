@@ -2,6 +2,7 @@
 
 return [
     'assigned' => ':name now holds this Product.',
+    'no_margin_warning' => 'Note: the base price is above the Product\'s wholesale price, so it leaves no margin.',
     'price_changed' => 'The Supplier Base Price was updated.',
     'assigned_by' => 'Assigned by :name on :date',
     'listed' => 'From the Supplier\'s approved listing',
@@ -53,7 +54,7 @@ return [
         'choose' => 'Choose supplier',
         'use_supplier' => 'Use this supplier',
         'pick_variant' => 'Choose a variation',
-        'price_help' => 'Payable to the Supplier per unit, in Taka. Must be above zero and not above the Product\'s wholesale price.',
+        'price_help' => 'Payable to the Supplier per unit, in Taka. A price above the Product\'s wholesale price is allowed, with a margin warning.',
         'confirm' => 'Assign',
     ],
 

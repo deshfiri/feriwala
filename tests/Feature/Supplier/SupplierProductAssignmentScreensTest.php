@@ -63,13 +63,12 @@ describe('staff assignment over HTTP', function () {
                 ->where('product_suppliers.can.assign', true));
     });
 
-    it('refuses a missing, zero or over-high price, and a repeat, with an error on the form', function () {
+    it('refuses a missing or zero price, and a repeat, with an error on the form', function () {
         $this->actingAs($this->staff);
         $payload = ['product_id' => $this->product->public_id, 'supplier_id' => $this->supplier->public_id];
 
         $this->post(route('admin.product-suppliers.store'), $payload)->assertSessionHasErrors('base_price');
         $this->post(route('admin.product-suppliers.store'), [...$payload, 'base_price' => '0'])->assertSessionHasErrors('assignment');
-        $this->post(route('admin.product-suppliers.store'), [...$payload, 'base_price' => '2600.00'])->assertSessionHasErrors('assignment');
 
         $this->post(route('admin.product-suppliers.store'), [...$payload, 'base_price' => '1400.00'])->assertSessionHasNoErrors();
         $this->post(route('admin.product-suppliers.store'), [...$payload, 'base_price' => '1300.00'])->assertSessionHasErrors('assignment');
