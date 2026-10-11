@@ -10,9 +10,9 @@ use App\Domain\Catalog\Actions\ManageVariants;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Sourcing\Actions\ManageProductSuppliers;
 use App\Domain\Supplier\Enums\ListingItemStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
+use App\Domain\Supplier\Enums\OfferOrigin;
 use App\Domain\Supplier\Enums\OfferStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Enums\SupplyMode;
@@ -52,7 +52,6 @@ class DecideSupplierListing
     public function __construct(
         protected ManageProducts $products,
         protected ManageVariants $variants,
-        protected ManageProductSuppliers $assignments,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
@@ -84,12 +83,6 @@ class DecideSupplierListing
             $items = $locked->items()->get()->keyBy('public_id');
 
             $product = $hasApproval ? $this->resolveProduct($locked, $reviewer, $productDecision) : null;
-
-            // Approving a listing is the reviewer's confirmation that this
-            // Supplier has the Product, so that is recorded as well.
-            if ($product !== null) {
-                $this->assignments->recordFromApproval($reviewer, $product, $locked->supplier, $reason);
-            }
 
             foreach ($itemDecisions as $itemDecision) {
                 /** @var SupplierProductListingItem|null $item */
@@ -224,7 +217,21 @@ class DecideSupplierListing
         }
 
         $currency = Currency::from($item->currency_code);
-        $supplierRate = $item->supplier_rate;
+        // The Supplier's proposed price is the Supplier Base Price unless the
+        // reviewer confirms a different one before approving.
+        $proposedRate = $item->supplier_rate;
+        $supplierRate = $proposedRate;
+
+        if (filled($itemDecision['supplier_rate'] ?? null)) {
+            $supplierRate = $itemDecision['supplier_rate'] instanceof Money
+                ? $itemDecision['supplier_rate']
+                : Money::fromDecimal((string) $itemDecision['supplier_rate'], $currency);
+        }
+
+        if (! $supplierRate->isPositive()) {
+            throw new InvalidArgumentException('The Supplier Base Price must be greater than zero.');
+        }
+
         $platformRate = $itemDecision['platform_rate'] instanceof Money
             ? $itemDecision['platform_rate']
             : Money::fromDecimal((string) $itemDecision['platform_rate'], $currency);
@@ -239,6 +246,7 @@ class DecideSupplierListing
             'product_variant_id' => $variant?->id,
             'originating_listing_item_id' => $item->id,
             'status' => OfferStatus::Active,
+            'origin' => OfferOrigin::SupplierListing,
             'wholesale_enabled' => (bool) ($itemDecision['wholesale_enabled'] ?? false),
             'dropshipping_enabled' => (bool) ($itemDecision['dropshipping_enabled'] ?? false),
             'supplier_rate' => $supplierRate,
@@ -260,7 +268,9 @@ class DecideSupplierListing
             'currency_code' => $currency->value,
             'effective_from' => now(),
             'changed_by' => $reviewer->id,
-            'reason' => 'Initial pricing set at listing approval.',
+            'reason' => $supplierRate->equals($proposedRate)
+                ? 'Initial pricing set at listing approval.'
+                : "Initial pricing set at listing approval; Supplier Base Price confirmed at {$supplierRate->toDecimal()} against the {$proposedRate->toDecimal()} proposed.",
             'created_at' => now(),
         ]);
 

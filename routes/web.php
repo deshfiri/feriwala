@@ -1177,8 +1177,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('product-suppliers.suppliers');
         Route::post('product-suppliers', [ProductSupplierController::class, 'store'])
             ->name('product-suppliers.store');
-        Route::delete('product-suppliers/{assignment}', [ProductSupplierController::class, 'destroy'])
-            ->name('product-suppliers.destroy');
+        Route::patch('product-suppliers/{offer}/price', [ProductSupplierController::class, 'updatePrice'])
+            ->name('product-suppliers.price.update');
 
         /*
          * Variations, always addressed through their product (§11.1, §12), and

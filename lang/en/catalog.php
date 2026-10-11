@@ -254,7 +254,6 @@ return [
                     'supplier_offers' => 'Active supplier offers suspended: :count',
                     'supplier_listings' => 'Supplier listings archived: :count',
                     'storefront_selections' => 'Storefront selections unpublished: :count',
-                    'supplier_assignments' => 'Supplier assignments removed: :count',
                     'sourcing_memberships' => 'Sourcing group memberships removed: :count',
                     'source_links' => 'Confirmed source links revoked: :count',
                 ],

@@ -3,32 +3,43 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Catalog\Models\Product;
-use App\Domain\Sourcing\Actions\ManageProductSuppliers;
-use App\Domain\Sourcing\Models\ProductSupplierAssignment;
+use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Sourcing\Policies\ProductSupplierPolicy;
 use App\Domain\Sourcing\Queries\ProductSuppliersSection;
+use App\Domain\Supplier\Actions\AssignProductToSupplier;
+use App\Domain\Supplier\Actions\ChangeSupplierBasePrice;
 use App\Domain\Supplier\Enums\SupplierStatus;
+use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierOffer;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use InvalidArgumentException;
 
 /**
- * Assigning Suppliers to Products, from the Admin Product workspace and the
- * Supplier page. Thin: identifies the actor, validates, and hands the decision
- * to {@see ManageProductSuppliers}. Browser requests carry public ids only.
+ * Assigning Products to Suppliers from the Admin Product workspace.
+ *
+ * Thin: identifies the actor, validates, and hands the decision to
+ * {@see AssignProductToSupplier} / {@see ChangeSupplierBasePrice}. Browser
+ * requests carry public ids only, and the Supplier Base Price arrives as the
+ * decimal Taka the person typed.
  */
 class ProductSupplierController extends Controller
 {
     protected const PAGE_SIZE = 25;
 
     public function __construct(
-        protected ManageProductSuppliers $suppliers,
+        protected AssignProductToSupplier $assign,
+        protected ChangeSupplierBasePrice $changePrice,
         protected ProductSuppliersSection $section,
     ) {}
 
@@ -69,9 +80,8 @@ class ProductSupplierController extends Controller
     }
 
     /**
-     * Assign one Supplier to one or more Products — the Product workspace sends
-     * one Product and many Suppliers, the Supplier page one Supplier and many
-     * Products.
+     * Assign one Product (or one variation) to one Supplier at a Supplier Base
+     * Price. Everything else about the offer is optional.
      */
     public function store(Request $request): RedirectResponse
     {
@@ -80,68 +90,80 @@ class ProductSupplierController extends Controller
         abort_unless(ProductSupplierPolicy::canAssign($actor), 403);
 
         $validated = $request->validate([
-            'product_ids' => ['required', 'array', 'min:1', 'max:100'],
-            'product_ids.*' => ['string', 'distinct'],
-            'supplier_ids' => ['required', 'array', 'min:1', 'max:100'],
-            'supplier_ids.*' => ['string', 'distinct'],
-            'reference' => ['nullable', 'string', 'max:255'],
+            'product_id' => ['required', 'string'],
+            'supplier_id' => ['required', 'string'],
+            'variant_id' => ['nullable', 'string'],
+            'base_price' => ['required', new DecimalAmountRule],
+            'supply_mode' => ['nullable', Rule::enum(SupplyMode::class)],
+            'quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+            'fulfilment_capacity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+            'lead_time_days' => ['nullable', 'integer', 'min:0', 'max:365'],
             'reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $products = Product::query()->whereIn('public_id', $validated['product_ids'])->get();
-        $suppliers = Supplier::query()->whereIn('public_id', $validated['supplier_ids'])->get();
+        $product = Product::query()->where('public_id', $validated['product_id'])->first()
+            ?? throw ValidationException::withMessages(['product_id' => __('product_suppliers.errors.product_not_found')]);
 
-        if ($products->count() !== count($validated['product_ids'])) {
-            throw ValidationException::withMessages(['product_ids' => __('product_suppliers.errors.product_not_found')]);
-        }
+        $supplier = Supplier::query()->where('public_id', $validated['supplier_id'])->first()
+            ?? throw ValidationException::withMessages(['supplier_id' => __('product_suppliers.errors.supplier_not_found')]);
 
-        if ($suppliers->count() !== count($validated['supplier_ids'])) {
-            throw ValidationException::withMessages(['supplier_ids' => __('product_suppliers.errors.supplier_not_found')]);
-        }
-
-        if ($suppliers->contains(fn (Supplier $supplier) => $supplier->status !== SupplierStatus::Approved)) {
-            throw ValidationException::withMessages(['supplier_ids' => __('product_suppliers.errors.supplier_not_approved')]);
-        }
-
-        $assigned = 0;
-
-        foreach ($products as $product) {
-            foreach ($suppliers as $supplier) {
-                try {
-                    $this->suppliers->assign($actor, $product, $supplier, $validated['reference'] ?? null, $validated['reason'] ?? null);
-                    $assigned++;
-                } catch (InvalidArgumentException) {
-                    // Already assigned: nothing to do for that pair.
-                }
-            }
-        }
-
-        if ($assigned === 0) {
-            throw ValidationException::withMessages(['supplier_ids' => __('product_suppliers.errors.already_assigned')]);
-        }
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => trans_choice('product_suppliers.assigned', $assigned, ['count' => $assigned])]);
-
-        return back();
-    }
-
-    public function destroy(Request $request, string $assignment): RedirectResponse
-    {
-        $actor = $this->actor($request);
-
-        abort_unless(ProductSupplierPolicy::canRemove($actor), 403);
-
-        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:1000']]);
-
-        $record = ProductSupplierAssignment::query()->active()->where('public_id', $assignment)->firstOrFail();
+        $variant = blank($validated['variant_id'] ?? null)
+            ? null
+            : (ProductVariant::query()->where('public_id', $validated['variant_id'])->where('product_id', $product->id)->first()
+                ?? throw ValidationException::withMessages(['variant_id' => __('product_suppliers.errors.variant_not_found')]));
 
         try {
-            $this->suppliers->remove($actor, $record, $validated['reason'] ?? null);
+            $this->assign->handle(
+                $actor,
+                $product,
+                $variant,
+                $supplier,
+                DecimalAmount::parse($validated['base_price'], Currency::BDT),
+                [
+                    'supply_mode' => isset($validated['supply_mode']) ? SupplyMode::from($validated['supply_mode']) : null,
+                    'quantity' => $validated['quantity'] ?? null,
+                    'fulfilment_capacity' => $validated['fulfilment_capacity'] ?? null,
+                    'lead_time_days' => $validated['lead_time_days'] ?? null,
+                    'reason' => $validated['reason'] ?? null,
+                ],
+            );
         } catch (InvalidArgumentException $refused) {
             throw ValidationException::withMessages(['assignment' => $refused->getMessage()]);
         }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('product_suppliers.removed')]);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('product_suppliers.assigned', ['name' => $supplier->business_name])]);
+
+        return back();
+    }
+
+    /**
+     * Change only the Supplier Base Price of an offer; always with a reason.
+     */
+    public function updatePrice(Request $request, string $offer): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(ProductSupplierPolicy::canEditOffer($actor), 403);
+
+        $validated = $request->validate([
+            'base_price' => ['required', new DecimalAmountRule],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $record = SupplierOffer::query()->where('public_id', $offer)->firstOrFail();
+
+        try {
+            $this->changePrice->handle(
+                $actor,
+                $record,
+                DecimalAmount::parse($validated['base_price'], Currency::BDT),
+                $validated['reason'],
+            );
+        } catch (InvalidArgumentException $refused) {
+            throw ValidationException::withMessages(['base_price' => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('product_suppliers.price_changed')]);
 
         return back();
     }

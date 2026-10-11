@@ -92,7 +92,6 @@ class ProductForceDeletion
                 'supplier_offers' => $this->database->table('supplier_offers')->where('product_id', $product->id)->where('status', 'active')->count(),
                 'supplier_listings' => $this->database->table('supplier_product_listings')->where('connected_product_id', $product->id)->where('status', '!=', 'archived')->count(),
                 'storefront_selections' => $this->database->table('website_products')->where('product_id', $product->id)->count(),
-                'supplier_assignments' => $this->database->table('product_supplier_assignments')->where('product_id', $product->id)->where('status', 'active')->count(),
                 'sourcing_memberships' => $this->database->table('product_sourcing_group_products')->where('product_id', $product->id)->where('status', 'active')->count(),
                 'source_links' => $this->database->table('product_source_links')->where('ordered_product_id', $product->id)->where('status', 'active')->count(),
             ],

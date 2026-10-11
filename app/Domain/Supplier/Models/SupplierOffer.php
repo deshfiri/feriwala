@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasReference;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Supplier\Enums\OfferOrigin;
 use App\Domain\Supplier\Enums\OfferStatus;
 use App\Domain\Supplier\Enums\SupplyMode;
 use App\Models\User;
@@ -42,6 +43,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int|null $product_variant_id
  * @property int|null $originating_listing_item_id
  * @property OfferStatus $status
+ * @property OfferOrigin $origin
+ * @property int|null $assigned_by
+ * @property CarbonImmutable|null $assigned_at
  * @property bool $is_preferred
  * @property bool $wholesale_enabled
  * @property bool $dropshipping_enabled
@@ -70,6 +74,7 @@ class SupplierOffer extends Model
 
     protected $attributes = [
         'status' => OfferStatus::Active->value,
+        'origin' => OfferOrigin::SupplierListing->value,
         'is_preferred' => false,
         'wholesale_enabled' => false,
         'dropshipping_enabled' => false,
@@ -84,6 +89,8 @@ class SupplierOffer extends Model
     {
         return [
             'status' => OfferStatus::class,
+            'origin' => OfferOrigin::class,
+            'assigned_at' => 'immutable_datetime',
             'is_preferred' => 'boolean',
             'wholesale_enabled' => 'boolean',
             'dropshipping_enabled' => 'boolean',
@@ -135,6 +142,17 @@ class SupplierOffer extends Model
     public function originatingListingItem(): BelongsTo
     {
         return $this->belongsTo(SupplierProductListingItem::class, 'originating_listing_item_id');
+    }
+
+    /**
+     * The staff member who assigned this Product to the Supplier, when it was
+     * assigned rather than listed.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function assigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
     }
 
     /**

@@ -255,7 +255,7 @@ class ForceDeleteProduct
     }
 
     /**
-     * Supplier assignments, sourcing memberships and variant mappings stay as rows — their
+     * Sourcing memberships and variant mappings stay as rows — their
      * guards forbid deleting them — but stop being active.
      *
      * @param  Collection<int, mixed>  $variantIds
@@ -264,11 +264,6 @@ class ForceDeleteProduct
     {
         $now = now();
         $removed = ['status' => 'removed', 'removed_by' => $actor->id, 'removed_at' => $now, 'removal_reason' => $note];
-
-        $this->database->table('product_supplier_assignments')
-            ->where('status', 'active')
-            ->where('product_id', $product->id)
-            ->update($removed);
 
         $this->database->table('product_sourcing_variant_mappings')
             ->where('status', 'active')

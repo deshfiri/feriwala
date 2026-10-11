@@ -203,6 +203,10 @@ class SupplierListingController extends Controller
             // HTTP boundary (§36.1).
             'items.*.platform_rate' => ['nullable', new DecimalAmountRule],
 
+            // The Supplier Base Price a reviewer confirms or overrides at
+            // approval; left out, the Supplier's own proposed price stands.
+            'items.*.supplier_rate' => ['nullable', new DecimalAmountRule],
+
             // Left out to open the offer at the quantity the Supplier said
             // they could supply; sent only when a reviewer approves a
             // different figure, which the opening movement then records.
@@ -220,6 +224,10 @@ class SupplierListingController extends Controller
         $validated['items'] = array_values(array_map(function (array $item) {
             if (isset($item['platform_rate'])) {
                 $item['platform_rate'] = DecimalAmount::parse($item['platform_rate']);
+            }
+
+            if (isset($item['supplier_rate'])) {
+                $item['supplier_rate'] = DecimalAmount::parse($item['supplier_rate']);
             }
 
             return $item;

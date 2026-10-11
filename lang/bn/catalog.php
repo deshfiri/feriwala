@@ -253,7 +253,6 @@ return [
                     'supplier_offers' => 'স্থগিত করা সক্রিয় সরবরাহকারী অফার: :count',
                     'supplier_listings' => 'আর্কাইভ করা সরবরাহকারী তালিকা: :count',
                     'storefront_selections' => 'প্রকাশ বন্ধ করা স্টোরফ্রন্ট নির্বাচন: :count',
-                    'supplier_assignments' => 'সরানো সরবরাহকারী নির্ধারণ: :count',
                     'sourcing_memberships' => 'সরানো সোর্সিং গ্রুপের সদস্যপদ: :count',
                     'source_links' => 'বাতিল করা নিশ্চিত উৎস লিংক: :count',
                 ],

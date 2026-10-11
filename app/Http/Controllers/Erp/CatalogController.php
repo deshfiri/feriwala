@@ -364,9 +364,9 @@ class CatalogController extends Controller
      * What the account may see: one channel's products, or — with no channel —
      * every product on any channel its package includes.
      *
-     * @return Builder<Product>
+     * @return \Illuminate\Database\Eloquent\Builder<Product>
      */
-    protected function visibleQuery(BusinessAccount $account, ?SalesChannel $channel): Builder
+    protected function visibleQuery(BusinessAccount $account, ?SalesChannel $channel): \Illuminate\Database\Eloquent\Builder
     {
         if ($channel !== null) {
             return $this->eligibility->query($account, $channel);
@@ -503,7 +503,7 @@ class CatalogController extends Controller
             ->all();
 
         return Inertia::render('catalog/show', [
-            'channel' => $channel?->value ?? 'all',
+            'channel' => $channel === null ? 'all' : $channel->value,
             'modes' => ['wholesale' => $wholesale, 'partner_selling' => $partnerSelling],
             'account_type' => $account->account_type->value,
             'product' => $detail,

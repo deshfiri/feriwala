@@ -170,6 +170,7 @@ class SupplierListingLotReviewController extends Controller
             // Entered in Taka; parsed into a Money instance below, at this
             // HTTP boundary (§36.1).
             'entries.*.items.*.platform_rate' => ['nullable', new DecimalAmountRule],
+            'entries.*.items.*.supplier_rate' => ['nullable', new DecimalAmountRule],
             'entries.*.items.*.approved_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'entries.*.items.*.wholesale_enabled' => ['nullable', 'boolean'],
             'entries.*.items.*.dropshipping_enabled' => ['nullable', 'boolean'],
@@ -187,6 +188,10 @@ class SupplierListingLotReviewController extends Controller
             $items = array_values(array_map(function (array $item) use (&$approvesAny) {
                 if (isset($item['platform_rate'])) {
                     $item['platform_rate'] = DecimalAmount::parse($item['platform_rate']);
+                }
+
+                if (isset($item['supplier_rate'])) {
+                    $item['supplier_rate'] = DecimalAmount::parse($item['supplier_rate']);
                 }
 
                 if ($item['decision'] === 'approve') {

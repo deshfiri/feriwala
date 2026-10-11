@@ -3,19 +3,22 @@
 namespace App\Domain\Sourcing\Queries;
 
 use App\Domain\Catalog\Models\Product;
-use App\Domain\Sourcing\Models\ProductSupplierAssignment;
+use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Sourcing\Policies\ProductSupplierPolicy;
 use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Supplier\Models\SupplierOffer;
 use App\Models\User;
 
 /**
  * What the "Suppliers" section of the Admin Product workspace and the
- * "Assigned products" section of the Supplier page show.
+ * "Products" section of the Supplier page show: the Supplier Offers, which are
+ * the one record of a Supplier holding a Product, whichever way it got there.
  *
- * Together the two sides answer "which Suppliers actually have this item":
- * a Product lists its Suppliers, a Supplier lists its Products.
+ * A Supplier Base Price is confidential pricing (D25): it is present only for
+ * staff who may view Supplier pricing, and `null` for everyone else. The
+ * platform's own rate never appears here.
  *
- * Staff-only, and null for anyone who may not view assignments.
+ * Staff-only, and null for anyone who may not view the Suppliers of a Product.
  */
 class ProductSuppliersSection
 {
@@ -28,24 +31,24 @@ class ProductSuppliersSection
             return null;
         }
 
-        $direct = ProductSupplierAssignment::query()->active()
-            ->with(['supplier', 'assigner:id,name'])
+        $showPrices = ProductSupplierPolicy::canViewPrices($viewer);
+
+        $offers = SupplierOffer::query()
+            ->with(['supplier', 'variant.values', 'stock', 'assigner:id,name'])
             ->where('product_id', $product->id)
-            ->orderBy('assigned_at')
+            ->orderByRaw("case status when 'active' then 0 else 1 end")
+            ->orderBy('id')
             ->get();
 
+        $variants = $product->variants()->with('values')->where('is_active', true)->orderBy('id')->get();
+
         return [
-            'assigned' => $direct->map(fn (ProductSupplierAssignment $assignment) => [
-                'id' => $assignment->public_id,
-                'supplier' => $this->supplier($assignment->supplier),
-                'reference' => $assignment->supplier_reference,
-                'assigned_by' => $assignment->assigner->name,
-                'assigned_at' => $assignment->assigned_at->toIso8601String(),
-                'reason' => $assignment->assign_reason,
-            ])->values()->all(),
+            'offers' => $offers->map(fn (SupplierOffer $offer) => $this->row($offer, $showPrices, withProduct: false))->values()->all(),
+            'variants' => $variants->map(fn (ProductVariant $variant) => ['id' => $variant->public_id, 'label' => $variant->label()])->values()->all(),
             'can' => [
                 'assign' => ProductSupplierPolicy::canAssign($viewer),
-                'remove' => ProductSupplierPolicy::canRemove($viewer),
+                'edit' => ProductSupplierPolicy::canEditOffer($viewer),
+                'view_prices' => $showPrices,
             ],
         ];
     }
@@ -59,28 +62,53 @@ class ProductSuppliersSection
             return null;
         }
 
-        $assignments = ProductSupplierAssignment::query()->active()
-            ->with('product:id,public_id,name,sku,status')
+        $showPrices = ProductSupplierPolicy::canViewPrices($viewer);
+
+        $offers = SupplierOffer::query()
+            ->with(['product:id,public_id,name,sku', 'variant.values', 'stock', 'assigner:id,name'])
             ->where('supplier_id', $supplier->id)
-            ->orderByDesc('assigned_at')
+            ->orderByDesc('id')
             ->get();
 
         return [
-            'assigned' => $assignments->map(fn (ProductSupplierAssignment $assignment) => [
-                'id' => $assignment->public_id,
-                'product' => [
-                    'id' => $assignment->product->public_id,
-                    'name' => $assignment->product->name,
-                    'bpc' => $assignment->product->sku,
-                    'sku' => $assignment->product->sku,
-                ],
-                'reference' => $assignment->supplier_reference,
-                'assigned_at' => $assignment->assigned_at->toIso8601String(),
-            ])->values()->all(),
-            'can' => [
-                'assign' => ProductSupplierPolicy::canAssign($viewer),
-                'remove' => ProductSupplierPolicy::canRemove($viewer),
+            'offers' => $offers->map(fn (SupplierOffer $offer) => $this->row($offer, $showPrices, withProduct: true))->values()->all(),
+            'can' => ['view_prices' => $showPrices],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function row(SupplierOffer $offer, bool $showPrices, bool $withProduct): array
+    {
+        return [
+            'id' => $offer->public_id,
+            'reference' => $offer->reference,
+            'supplier' => $withProduct ? null : $this->supplier($offer->supplier),
+            'product' => $withProduct ? [
+                'id' => $offer->product->public_id,
+                'name' => $offer->product->name,
+                'bpc' => $offer->product->sku,
+            ] : null,
+            'variant' => $offer->variant === null ? null : [
+                'id' => $offer->variant->public_id,
+                'label' => $offer->variant->label(),
+                'sku' => $offer->variant->sku,
             ],
+            'supplier_base_price' => $showPrices ? $offer->supplier_rate->jsonSerialize() : null,
+            'supply_mode' => $offer->supply_mode->value,
+            'supply_mode_label' => $offer->supply_mode->label(),
+            'available_quantity' => $offer->stock?->quantity,
+            'fulfilment_capacity' => $offer->fulfilment_capacity,
+            'lead_time_days' => $offer->lead_time_days,
+            'status' => $offer->status->value,
+            'status_label' => $offer->status->label(),
+            'status_tone' => $offer->status->tone(),
+            'origin' => $offer->origin->value,
+            'origin_label' => $offer->origin->label(),
+            'assigned_by' => $offer->assigner?->name,
+            'assigned_at' => $offer->assigned_at?->toIso8601String(),
+            'updated_at' => $offer->updated_at?->toIso8601String(),
         ];
     }
 
