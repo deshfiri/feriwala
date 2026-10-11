@@ -4,16 +4,19 @@ import {
     Boxes,
     Building2,
     ClipboardList,
+    Contact,
     CreditCard,
     Globe,
     HardDrive,
     LayoutGrid,
     Library,
+    ListOrdered,
     MapPin,
     MonitorSmartphone,
     Network,
     PackageCheck,
     Palette,
+    Plug,
     Settings,
     Receipt,
     ReceiptText,
@@ -94,7 +97,10 @@ import { index as receipts } from '@/routes/subscription/receipts';
 import { history as kycHistory } from '@/routes/kyc';
 import { index as payoutMethods } from '@/routes/payout-methods';
 import { edit as profileSettings } from '@/routes/profile';
+import { index as businessCustomers } from '@/routes/customers';
+import { index as businessOrders } from '@/routes/orders';
 import { index as referrals } from '@/routes/referrals';
+import { index as externalStores } from '@/routes/stores';
 import { edit as securitySettings } from '@/routes/security';
 import { index as staffDirectory } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
@@ -172,6 +178,22 @@ export function useNavigation(): {
                   {
                       label: t('nav.groups.sales'),
                       items: [
+                          // Every order from every source, and the people who
+                          // placed them (D29).
+                          ...(account.viewsOrders
+                              ? [
+                                    {
+                                        title: t('nav.all_orders'),
+                                        href: businessOrders(),
+                                        icon: ListOrdered,
+                                    },
+                                    {
+                                        title: t('nav.customers'),
+                                        href: businessCustomers(),
+                                        icon: Contact,
+                                    },
+                                ]
+                              : []),
                           ...(account.allowsWholesale ||
                           account.hasWholesaleOrders
                               ? [
@@ -188,6 +210,16 @@ export function useNavigation(): {
                                         title: t('nav.websites'),
                                         href: websites(),
                                         icon: Globe,
+                                    },
+                                ]
+                              : []),
+                          // The partner's own stores on other platforms (D29).
+                          ...(account.managesStores
+                              ? [
+                                    {
+                                        title: t('nav.stores'),
+                                        href: externalStores(),
+                                        icon: Plug,
                                     },
                                 ]
                               : []),

@@ -374,6 +374,28 @@ describe('the admin screen', function () {
             ->toBe(3);
     });
 
+    it('offers and saves the external store features in the package form (D29)', function () {
+        $this->actingAs($this->admin)
+            ->get(route('admin.packages.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('features', fn ($features) => collect($features)->whereIn('key', ['external_store_access', 'external_store_limit'])->count() === 2));
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.packages.index'))
+            ->post(route('admin.packages.store'), packageTestFormPayload([
+                'features' => [
+                    PackageFeature::ExternalStoreAccess->value => '1',
+                    PackageFeature::ExternalStoreLimit->value => '3',
+                ],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $package = Package::query()->where('slug', 'growth')->firstOrFail();
+
+        expect($package->feature(PackageFeature::ExternalStoreAccess))->toBeTrue()
+            ->and($package->feature(PackageFeature::ExternalStoreLimit))->toBe(3);
+    });
+
     it('stores Taka form input as exact flat-Taka amounts, including a charge row', function () {
         // §36.1 / D26: the administrator types Taka; the server parses it once
         // and stores exactly what was typed (500.50 stays 500.50).

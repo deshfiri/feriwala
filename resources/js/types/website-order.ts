@@ -130,4 +130,18 @@ export type WebsiteOrderDetail = WebsiteOrderRow & {
         at: string;
         note: string;
     }[];
+    /** The fulfilment, delivery and courier tracks as they stand (D29). */
+    tracks?: Record<
+        'fulfillment' | 'delivery' | 'courier',
+        { label: string; tone: StatusTone }
+    >;
+    /** Each parcel and what its courier reported (D29). */
+    shipments?: {
+        reference: string;
+        courier: string;
+        tracking_number: string | null;
+        status_label: string;
+        status_tone: StatusTone;
+        events: { code: string; description: string | null; at: string }[];
+    }[];
 };

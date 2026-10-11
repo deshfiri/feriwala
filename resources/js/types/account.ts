@@ -36,6 +36,10 @@ export interface AccountContext {
     hasWebsites: boolean;
     /** The business's own referrals and earnings (D24). */
     viewsReferrals: boolean;
+    /** May run the business's external store connections (D29). */
+    managesStores: boolean;
+    /** May read the business's orders and customers from every source (D29). */
+    viewsOrders: boolean;
 }
 
 export interface StaffMember {

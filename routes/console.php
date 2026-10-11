@@ -3,6 +3,7 @@
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Billing\Actions\SettleRefund;
+use App\Domain\ExternalStore\Actions\DispatchExternalStoreSyncs;
 use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
@@ -374,3 +375,15 @@ Schedule::call(fn () => app(ReleaseDueReferralCommissions::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Pay due Partner Network commissions and retry owed reversals (D24)');
+
+/*
+ * External store orders (D29). Every ten minutes each live connection is
+ * queued for a sync — the safety net under its webhooks. The syncs run on the
+ * queue and lock per store; nothing here calls a store itself.
+ */
+Schedule::call(fn () => app(DispatchExternalStoreSyncs::class)->handle())
+    ->name('external-store-sync')
+    ->everyTenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Queue order syncs for connected external stores (D29)');

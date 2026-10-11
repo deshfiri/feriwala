@@ -23,6 +23,11 @@ use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\ExternalStore\Actions\RecordExternalOrder;
+use App\Domain\ExternalStore\Enums\ExternalStoreStatus;
+use App\Domain\ExternalStore\Enums\StorePlatform;
+use App\Domain\ExternalStore\Models\ExternalOrder;
+use App\Domain\ExternalStore\Models\ExternalStore;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Location\Enums\BdLocationType;
@@ -58,11 +63,16 @@ use App\Domain\Website\Api\RequestSignature;
 use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCredential;
+use App\Integrations\Store\Contracts\HostResolver;
+use App\Integrations\Store\Drivers\DfcommerceDriver;
+use App\Integrations\Store\Support\ExactJson;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -115,6 +125,7 @@ pest()->group('wholesale')->in('Feature/Wholesale');
 pest()->group('dropshipping')->in('Feature/Dropshipping');
 pest()->group('website')->in('Feature/Website');
 pest()->group('website-api')->in('Feature/WebsiteApi');
+pest()->group('external-store')->in('Feature/ExternalStore');
 pest()->group('orders')->in('Feature/Orders');
 pest()->group('fulfillment')->in('Feature/Fulfillment');
 pest()->group('courier')->in('Feature/Courier');
@@ -888,4 +899,134 @@ function supplierTestOfferPriceVersion(SupplierOffer $offer): SupplierOfferPrice
         'reason' => 'Fixture rate.',
         'created_at' => now(),
     ]);
+}
+
+/**
+ * An active account whose package includes external stores (D29).
+ */
+function externalStoreAccount(?int $limit = 1, bool $entitled = true): BusinessAccount
+{
+    return testAccountWithPackageFeatures([
+        PackageFeature::ExternalStoreAccess->value => $entitled ? '1' : '0',
+        PackageFeature::ExternalStoreLimit->value => $limit === null ? null : (string) $limit,
+    ], AccountStatus::Active);
+}
+
+/**
+ * Point every store host at one public address, without the network.
+ */
+function externalStoreFakeDns(string $address = '93.184.216.34'): void
+{
+    app()->instance(HostResolver::class, new class($address) implements HostResolver
+    {
+        public function __construct(private readonly string $address) {}
+
+        public function resolve(string $host): array
+        {
+            return [$this->address];
+        }
+    });
+}
+
+/**
+ * One DFCOMMERCE order row, as its API returns it (OMS STOREFRONT_REQUIREMENTS §2).
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function externalStoreOrderRow(array $overrides = []): array
+{
+    return array_replace_recursive([
+        'id' => 12345,
+        'order_number' => 'DF-2026-001234',
+        'status' => 'confirmed',
+        'payment_status' => 'unpaid',
+        'payment_method' => 'cod',
+        'currency' => 'BDT',
+        'totals' => [
+            'subtotal' => 1000,
+            'discount' => 100,
+            'coupon_code' => 'SAVE10',
+            'shipping' => 60,
+            'tax' => 0,
+            'grand' => 960,
+            'paid' => 0,
+        ],
+        'customer' => ['name' => 'Khalid Hasan', 'phone' => '01700000000', 'email' => 'khalid@example.test'],
+        'customer_id' => 77,
+        'shipping' => [
+            'name' => 'Khalid Hasan', 'phone' => '01700000000', 'address' => '21 Road',
+            'area' => 'Banani', 'city' => 'Dhaka', 'district' => 'Dhaka', 'postcode' => '1213', 'zone' => 'inside_dhaka',
+        ],
+        'items' => [
+            ['id' => 1, 'product_id' => 5, 'sku' => 'DF-A1B2C3', 'name' => 'Cotton saree', 'variant' => 'Red', 'qty' => 2, 'unit_price' => 500, 'line_total' => 1000],
+        ],
+        'note' => 'Call before delivery',
+        'placed_at' => '2026-10-01T10:00:00+06:00',
+        'updated_at' => '2026-10-01T10:05:00+06:00',
+    ], $overrides);
+}
+
+/**
+ * A connected DFCOMMERCE store on `$account`, made directly so a test can start
+ * from "already connected". Its webhook secret is `webhook-secret`.
+ */
+function externalStoreConnected(BusinessAccount $account, string $host = 'shop.example.com', ?ExternalStoreStatus $status = null): ExternalStore
+{
+    $status ??= ExternalStoreStatus::Connected;
+    $disconnected = $status === ExternalStoreStatus::Disconnected;
+
+    // A disconnected store has forgotten its credentials, as disconnecting does.
+    return ExternalStore::create([
+        'business_account_id' => $account->id,
+        'platform' => StorePlatform::Dfcommerce,
+        'name' => 'Khalid Fashion',
+        'base_url' => 'https://'.$host,
+        'normalized_host' => $host,
+        'api_key' => $disconnected ? null : 'key-1234',
+        'api_secret' => $disconnected ? null : 'secret-5678',
+        'api_key_hint' => '1234',
+        'webhook_secret' => $disconnected ? null : 'webhook-secret',
+        'status' => $status,
+        'connected_at' => now(),
+        'disconnected_at' => $disconnected ? now() : null,
+    ]);
+}
+
+/**
+ * A DFCOMMERCE orders page, wrapped the way its API answers.
+ *
+ * @param  list<array<string, mixed>>  $rows
+ */
+function externalStoreOrdersPage(array $rows, ?int $next = null): PromiseInterface
+{
+    return Http::response(['ok' => true, 'data' => $rows, 'paging' => ['next_since_id' => $next]]);
+}
+
+/**
+ * Record one DFCOMMERCE order on `$store` through the real idempotent path,
+ * read the way the driver reads it (numbers kept exact).
+ *
+ * @param  array<string, mixed>  $overrides
+ */
+function externalStoreRecordOrder(ExternalStore $store, array $overrides = []): ExternalOrder
+{
+    $row = externalStoreOrderRow($overrides);
+    $payload = ExactJson::decode((string) json_encode(['event' => 'order.placed', 'data' => $row]));
+    $webhook = app(DfcommerceDriver::class)->readWebhook($payload);
+
+    app(RecordExternalOrder::class)->handle($store, $webhook->order);
+
+    return ExternalOrder::query()
+        ->where('external_store_id', $store->id)
+        ->where('external_id', (string) $row['id'])
+        ->firstOrFail();
+}
+
+/**
+ * The `X-Webhook-Signature` value DFCOMMERCE sends for `$body`.
+ */
+function externalStoreSignature(string $body, string $secret = 'webhook-secret'): string
+{
+    return 'sha256='.hash_hmac('sha256', $body, $secret);
 }

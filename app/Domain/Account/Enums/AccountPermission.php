@@ -32,4 +32,16 @@ enum AccountPermission: string
      * referred is the owner's relationship.
      */
     case ViewReferrals = 'referral:view';
+
+    /**
+     * Connect, change and disconnect the business's own external stores (D29).
+     *
+     * The owner's by default: a connection holds the keys to somebody's shop.
+     */
+    case ManageStores = 'store:manage';
+
+    /**
+     * Read the business's orders and customers, from every source (D29).
+     */
+    case ViewOrders = 'order:view';
 }

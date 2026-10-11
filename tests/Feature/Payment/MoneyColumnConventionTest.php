@@ -33,6 +33,10 @@ const MONEY_COLUMN_INVENTORY = [
     'coupon_redemptions' => ['amount'],
     'coupons' => ['minimum_spend', 'maximum_discount'],
     'deposit_rules' => ['required_initial_deposit', 'minimum_balance', 'required_top_up', 'low_balance_threshold', 'critical_balance_threshold'],
+    // External store orders, as the store reported them (D29): display only,
+    // never a Feriwala payment, wallet or ledger amount.
+    'external_order_items' => ['unit_price', 'line_total'],
+    'external_orders' => ['subtotal', 'discount', 'shipping_total', 'tax', 'total', 'paid_total'],
     'fee_rules' => ['amount'],
     'invoice_lines' => ['amount'],
     'invoices' => ['subtotal', 'total'],

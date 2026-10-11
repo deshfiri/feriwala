@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Courier\Models\Shipment;
+use App\Domain\Courier\Models\ShipmentTrackingEvent;
 use App\Domain\Order\Actions\CancelOrderReturn;
 use App\Domain\Order\Actions\CancelUnpaidOrder;
 use App\Domain\Order\Actions\RequestOrderReturn;
@@ -20,6 +22,7 @@ use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderStatusChange;
 use App\Domain\Order\Queries\CodConfirmationState;
+use App\Domain\Order\Queries\OrderTimeline;
 use App\Domain\Order\Queries\ReturnEligibility;
 use App\Domain\Order\Queries\ReturnPayload;
 use App\Domain\Website\Models\Website;
@@ -63,6 +66,7 @@ class WebsiteOrderController extends Controller
         protected ReturnPayload $returns,
         protected RequestOrderReturn $returnRequests,
         protected CancelOrderReturn $returnCancellations,
+        protected OrderTimeline $timeline,
     ) {}
 
     public function index(Request $request, string $website): Response
@@ -96,7 +100,7 @@ class WebsiteOrderController extends Controller
     {
         $record = $this->websiteFor($request, $website);
         $found = $this->find($record, $order);
-        $found->load(['items.stockReservation', 'payment', 'statusHistory']);
+        $found->load(['items.stockReservation', 'payment', 'statusHistory', 'shipments.courierProvider', 'shipments.trackingEvents']);
 
         $manages = (bool) $request->user()?->can('manage', $record);
         $returnable = $this->eligibility->for($found);
@@ -104,6 +108,12 @@ class WebsiteOrderController extends Controller
         return Inertia::render('websites/order', [
             'website' => ['id' => $record->public_id, 'name' => $record->name],
             'order' => $this->detail($found),
+            /*
+             * Everything recorded about the order, oldest first, from every
+             * history it has — with who moved it named only when it was the
+             * partner's own people, and no note meant for the platform (D29).
+             */
+            'history' => $this->timeline->forOrder($found),
             /*
              * What may still come back, and every return asked for (P6-12) —
              * in the reader's own language, and nothing of where Feriwala keeps
@@ -269,6 +279,30 @@ class WebsiteOrderController extends Controller
             'customer_note' => $order->customer_note,
             'paid_at' => $order->paid_at?->toIso8601String(),
             'cancelled_at' => $order->cancelled_at?->toIso8601String(),
+            // The fulfilment, delivery and courier tracks, as they stand (D29).
+            'tracks' => [
+                'fulfillment' => ['label' => $order->fulfillment_status->label(), 'tone' => $order->fulfillment_status->tone()],
+                'delivery' => ['label' => $order->delivery_status->label(), 'tone' => $order->delivery_status->tone()],
+                'courier' => ['label' => $order->courier_status->label(), 'tone' => $order->courier_status->tone()],
+            ],
+            // Each parcel: who carries it, its tracking number and what the
+            // courier has reported. No label file, no charge rule, no cost.
+            'shipments' => $order->shipments->map(fn (Shipment $shipment) => [
+                'reference' => $shipment->reference,
+                'courier' => $shipment->courierProvider->name,
+                'tracking_number' => $shipment->tracking_number,
+                'status_label' => $shipment->status->label(),
+                'status_tone' => $shipment->status->tone(),
+                'events' => $shipment->trackingEvents
+                    ->sortBy('occurred_at')
+                    ->map(fn (ShipmentTrackingEvent $event) => [
+                        'code' => $event->event_code,
+                        'description' => $event->description,
+                        'at' => $event->occurred_at->toIso8601String(),
+                    ])
+                    ->values()
+                    ->all(),
+            ])->all(),
             'totals' => [
                 'subtotal' => $order->subtotal->jsonSerialize(),
                 'discount' => $order->discount->jsonSerialize(),

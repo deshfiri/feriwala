@@ -81,10 +81,13 @@ use App\Http\Controllers\Erp\AddressController;
 use App\Http\Controllers\Erp\AllocatedStockController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
+use App\Http\Controllers\Erp\CustomerController as BusinessCustomerController;
+use App\Http\Controllers\Erp\ExternalStoreController;
 use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
 use App\Http\Controllers\Erp\MobileVerificationController;
 use App\Http\Controllers\Erp\OnboardingController;
+use App\Http\Controllers\Erp\OrderController as BusinessOrderController;
 use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
 use App\Http\Controllers\Erp\PayoutMethodController as ErpPayoutMethodController;
@@ -104,6 +107,7 @@ use App\Http\Controllers\Erp\WholesaleOrderController;
 use App\Http\Controllers\Erp\WholesaleOrderPaymentReturnController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationLookupController;
+use App\Http\Controllers\Webhook\ExternalStoreWebhookController;
 use App\Http\Controllers\Webhook\GatewayReturnController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -521,6 +525,53 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('websites.categories.update');
         Route::delete('websites/{website}/categories/{category}', [WebsiteCategoryController::class, 'destroy'])
             ->name('websites.categories.destroy');
+
+        /*
+         * The partner's own stores on other platforms (D29).
+         *
+         * Self-scoped through the account; another partner's store is a 404.
+         * Everything that calls the store is rate-limited per person, and a
+         * sync is always queued.
+         */
+        Route::get('stores', [ExternalStoreController::class, 'index'])->name('stores.index');
+        Route::get('stores/create', [ExternalStoreController::class, 'create'])->name('stores.create');
+        Route::post('stores/check', [ExternalStoreController::class, 'check'])
+            ->middleware('throttle:store-actions')
+            ->name('stores.check');
+        Route::post('stores', [ExternalStoreController::class, 'store'])
+            ->middleware('throttle:store-actions')
+            ->name('stores.store');
+        Route::get('stores/{store}', [ExternalStoreController::class, 'show'])->name('stores.show');
+        Route::get('stores/{store}/edit', [ExternalStoreController::class, 'edit'])->name('stores.edit');
+        Route::put('stores/{store}', [ExternalStoreController::class, 'update'])
+            ->middleware('throttle:store-actions')
+            ->name('stores.update');
+        Route::post('stores/{store}/test', [ExternalStoreController::class, 'test'])
+            ->middleware('throttle:store-actions')
+            ->name('stores.test');
+        Route::post('stores/{store}/sync', [ExternalStoreController::class, 'sync'])
+            ->middleware('throttle:store-actions')
+            ->name('stores.sync');
+        Route::post('stores/{store}/webhook-secret', [ExternalStoreController::class, 'rotateWebhookSecret'])
+            ->name('stores.webhook-secret.rotate');
+        Route::delete('stores/{store}', [ExternalStoreController::class, 'destroy'])->name('stores.destroy');
+
+        /*
+         * Every order the business has, from every source, in one list (D29) —
+         * its websites, its connected stores, its wholesale purchases. Each
+         * opens on the detail screen of its own kind.
+         */
+        Route::get('orders', [BusinessOrderController::class, 'index'])->name('orders.index');
+        Route::get('orders/export', [BusinessOrderController::class, 'export'])
+            ->middleware('throttle:store-actions')
+            ->name('orders.export');
+        Route::get('orders/external/{order}', [BusinessOrderController::class, 'showExternal'])->name('orders.external.show');
+
+        // The people who bought, store by store; never merged across stores (D29).
+        Route::get('customers', [BusinessCustomerController::class, 'index'])->name('customers.index');
+        Route::get('customers/{source}/{customer}', [BusinessCustomerController::class, 'show'])
+            ->whereIn('source', ['website', 'external'])
+            ->name('customers.show');
 
         // Where the gateway sends the person back to, naming the order (§26.4).
         // None of them settles anything on the browser's word. GET only; a
@@ -1562,6 +1613,16 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
 Route::post('webhooks/payment/{gateway}', PaymentWebhookController::class)
     ->middleware('throttle:payment-webhooks')
     ->name('webhooks.payment');
+
+/*
+ * A partner's external store telling us about its orders (D29). The signature
+ * over the raw body, under that store's own secret, is the only thing that
+ * authenticates it; CSRF is exempted in bootstrap/app.php for the same reason
+ * the payment notifications are.
+ */
+Route::post('webhooks/stores/{store}', ExternalStoreWebhookController::class)
+    ->middleware('throttle:store-webhooks')
+    ->name('webhooks.stores');
 
 /*
  * A gateway posting the payer's browser back (§26.4, §36).

@@ -15,6 +15,8 @@ use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Courier\Policies\ShipmentPolicy;
+use App\Domain\ExternalStore\Models\ExternalStore;
+use App\Domain\ExternalStore\Policies\ExternalStorePolicy;
 use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
@@ -105,6 +107,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // A dedicated website is run by the account that owns it and
         // administered by staff who may administer websites (§16.3).
         Gate::policy(Website::class, WebsitePolicy::class);
+
+        // A partner's own store on another platform: its account's, and only
+        // for someone holding `store:manage` there (D29).
+        Gate::policy(ExternalStore::class, ExternalStorePolicy::class);
 
         // The courier-neutral shipment domain (Advanced Order Management
         // batch, Commit 5; §21). Staff-only -- a shipment is seen and run

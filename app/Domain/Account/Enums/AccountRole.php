@@ -67,6 +67,9 @@ enum AccountRole: string
                 AccountPermission::UpdateStaff,
                 AccountPermission::RemoveStaff,
                 AccountPermission::RevokeInvitation,
+                // A manager follows the orders; connecting a store stays the
+                // owner's (D29).
+                AccountPermission::ViewOrders,
             ],
             self::Staff => [],
         };

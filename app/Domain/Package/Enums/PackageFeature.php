@@ -29,6 +29,13 @@ enum PackageFeature: string
     case DomainValidityMonths = 'domain_validity_months';
     case HostingValidityMonths = 'hosting_validity_months';
 
+    /*
+     * Connecting the partner's own stores on other platforms (D29), and how
+     * many may be connected at once.
+     */
+    case ExternalStoreAccess = 'external_store_access';
+    case ExternalStoreLimit = 'external_store_limit';
+
     // Limits (§8.1)
     case ProductPublishLimit = 'product_publish_limit';
     case OrderLimit = 'order_limit';
@@ -53,6 +60,7 @@ enum PackageFeature: string
             self::DedicatedWebsite,
             self::DomainIncluded,
             self::HostingIncluded,
+            self::ExternalStoreAccess,
             self::ApiAccess,
             self::FulfillmentEnabled,
             self::CourierEnabled,
@@ -64,6 +72,7 @@ enum PackageFeature: string
             self::StaffLimit,
             self::WebsiteLimit,
             self::SmsQuota,
+            self::ExternalStoreLimit,
             self::DomainValidityMonths,
             self::HostingValidityMonths => PackageFeatureType::Limit,
 
@@ -84,6 +93,8 @@ enum PackageFeature: string
             self::OrderLimit => 'Orders per month',
             self::StaffLimit => 'Staff members',
             self::WebsiteLimit => 'Websites',
+            self::ExternalStoreAccess => 'Connect external stores',
+            self::ExternalStoreLimit => 'External stores',
             self::SmsQuota => 'SMS per month',
             self::ApiAccess => 'API access',
             self::FulfillmentEnabled => 'Fulfillment service',
@@ -115,6 +126,7 @@ enum PackageFeature: string
             self::DedicatedWebsite,
             self::DomainIncluded,
             self::HostingIncluded,
+            self::ExternalStoreAccess,
             self::ApiAccess,
             self::FulfillmentEnabled,
             self::CourierEnabled => false,
@@ -123,6 +135,7 @@ enum PackageFeature: string
             self::OrderLimit,
             self::StaffLimit,
             self::WebsiteLimit,
+            self::ExternalStoreLimit,
             self::SmsQuota => 0,
 
             // A year, the length a domain registration and a hosting plan are

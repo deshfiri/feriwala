@@ -147,6 +147,8 @@ return Application::configure(basePath: dirname(__DIR__))
          */
         $middleware->validateCsrfTokens(except: [
             'webhooks/payment/*',
+            // External stores sign their notifications instead (D29).
+            'webhooks/stores/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

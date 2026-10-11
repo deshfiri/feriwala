@@ -2,6 +2,7 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import OrderTimeline from '@/components/order-timeline';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -20,6 +21,7 @@ import type {
     WebsiteOrderReturn,
     WebsiteOrderReturnable,
 } from '@/types/website-order';
+import type { TimelineEntry } from '@/types/stores';
 
 type Props = {
     website: { id: string; name: string };
@@ -28,6 +30,8 @@ type Props = {
     returns: WebsiteOrderReturn[];
     reasons: string[];
     can: { cancel: boolean; request_return: boolean };
+    /** Everything recorded about the order, oldest first (D29). */
+    history?: TimelineEntry[];
 };
 
 /**
@@ -45,6 +49,7 @@ export default function WebsiteOrder({
     returns,
     reasons,
     can,
+    history,
 }: Props) {
     const { t, locale } = useTranslation();
     const [confirming, setConfirming] = useState(false);
@@ -289,6 +294,115 @@ export default function WebsiteOrder({
                         ))}
                     </ol>
                 </SectionCard>
+
+                <SectionCard title={t('orders.delivery.title')}>
+                    {order.tracks && (
+                        <div className="mb-4 flex flex-wrap gap-2">
+                            {(
+                                ['fulfillment', 'delivery', 'courier'] as const
+                            ).map((track) => (
+                                <span
+                                    key={track}
+                                    className="flex items-center gap-1 text-sm"
+                                >
+                                    <span className="text-muted-foreground">
+                                        {t(`orders.delivery.tracks.${track}`)}:
+                                    </span>
+                                    <StatusPill
+                                        tone={order.tracks![track].tone}
+                                        label={order.tracks![track].label}
+                                    />
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {(order.shipments ?? []).length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                            {t('orders.delivery.none')}
+                        </p>
+                    ) : (
+                        <div className="space-y-4">
+                            {(order.shipments ?? []).map((shipment) => (
+                                <div
+                                    key={shipment.reference}
+                                    className="space-y-2 rounded-lg border p-3 text-sm"
+                                >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="font-medium">
+                                            {t('orders.delivery.consignment', {
+                                                reference: shipment.reference,
+                                            })}
+                                        </span>
+                                        <StatusPill
+                                            tone={shipment.status_tone}
+                                            label={shipment.status_label}
+                                        />
+                                    </div>
+                                    <dl className="grid gap-2 sm:grid-cols-2">
+                                        <div>
+                                            <dt className="text-muted-foreground text-xs">
+                                                {t('orders.delivery.courier')}
+                                            </dt>
+                                            <dd>{shipment.courier}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-muted-foreground text-xs">
+                                                {t(
+                                                    'orders.delivery.tracking_number',
+                                                )}
+                                            </dt>
+                                            <dd className="font-mono">
+                                                {shipment.tracking_number ??
+                                                    '—'}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                    <div>
+                                        <p className="text-muted-foreground text-xs">
+                                            {t('orders.delivery.events')}
+                                        </p>
+                                        {shipment.events.length === 0 ? (
+                                            <p className="text-muted-foreground text-xs">
+                                                {t('orders.delivery.no_events')}
+                                            </p>
+                                        ) : (
+                                            <ol className="mt-1 space-y-1">
+                                                {shipment.events.map(
+                                                    (event, index) => (
+                                                        <li
+                                                            key={`${event.code}-${index}`}
+                                                            className="text-xs"
+                                                        >
+                                                            <span className="font-medium">
+                                                                {event.code}
+                                                            </span>
+                                                            {event.description &&
+                                                                ` · ${event.description}`}
+                                                            <span className="text-muted-foreground">
+                                                                {' '}
+                                                                ·{' '}
+                                                                {when(event.at)}
+                                                            </span>
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ol>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </SectionCard>
+
+                {history && (
+                    <SectionCard
+                        title={t('orders.timeline.title')}
+                        description={t('orders.timeline.description')}
+                    >
+                        <OrderTimeline entries={history} />
+                    </SectionCard>
+                )}
 
                 <WebsiteOrderReturns
                     websiteId={website.id}

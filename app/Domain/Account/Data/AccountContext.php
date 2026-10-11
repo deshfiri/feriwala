@@ -5,6 +5,7 @@ namespace App\Domain\Account\Data;
 use App\Domain\Account\Enums\AccountPermission;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\StaffAllowance;
+use App\Domain\ExternalStore\Models\ExternalStore;
 use App\Domain\Inventory\Models\StockAllocation;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
@@ -85,6 +86,20 @@ readonly class AccountContext
          * direct referrals and earnings (D24).
          */
         public bool $viewsReferrals = false,
+
+        /*
+         * Whether this person may run the business's external store
+         * connections, and whether the package includes them or a connection
+         * already exists (D29). Either opens the Stores door for someone who
+         * manages stores.
+         */
+        public bool $managesStores = false,
+
+        /*
+         * Whether this person may read the business's orders and customers
+         * from every source (D29).
+         */
+        public bool $viewsOrders = false,
     ) {}
 
     public static function forUser(User $user, StaffAllowance $allowance, ?Entitlements $entitlements = null): ?self
@@ -139,6 +154,13 @@ readonly class AccountContext
                 ->where('status', '!=', WebsiteStatus::Closed->value)
                 ->exists(),
             viewsReferrals: $account->status->isActivated() && $role->hasPermission(AccountPermission::ViewReferrals),
+            managesStores: $role->hasPermission(AccountPermission::ManageStores)
+                && (
+                    ($entitlements !== null && $account->canTransact()
+                        && $entitlements->allows($account, PackageFeature::ExternalStoreAccess))
+                    || ExternalStore::query()->where('business_account_id', $account->id)->exists()
+                ),
+            viewsOrders: $account->status->isActivated() && $role->hasPermission(AccountPermission::ViewOrders),
         );
     }
 }

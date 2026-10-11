@@ -788,3 +788,47 @@ recorded in [TODO.md](TODO.md)'s revision log under that date. Every layer in th
 form input, database, API payload, calculation, display — was confirmed against the shipped code by
 static analysis, the full Pest and Vitest suites, and a bounded live-browser pass, with no
 regression to the D4/D24-frozen boundaries this decision does not touch.
+
+## D29 — External store connections: partner-merchant orders, mirrored read-only (2026-10-11) 🔒
+
+**Approved by the Project Owner on 2026-10-11.** Extends D11 and D12 for one new order source; it
+changes nothing about any existing one.
+
+### What was approved
+
+Partners may connect stores they run on other platforms (first: DFCOMMERCE) and follow those
+stores' orders in the Owner Panel beside their Feriwala orders. Four decisions settle it:
+
+1. **A separate, read-only mirror.** External orders live in their own tables (`external_orders`,
+   `external_order_items`, `external_order_events`, `external_customers`), not in `orders`.
+   `order_items` is bound to Feriwala's catalogue and `orders` to its status machine, stock, payment
+   and earnings workflows; none of that may see an order Feriwala did not sell.
+2. **The store is the source of truth.** Feriwala records what the store reports — by sync and by
+   signed webhook — and changes nothing at the store. No status, refund, payment or shipment is
+   pushed back. Feriwala's own status vocabulary is never applied to these orders.
+3. **Partner-merchant, with no Feriwala money path.** The partner collects payment and fulfils.
+   Amounts are stored for display only: no payment, wallet, ledger, commission, settlement, refund
+   or fulfilment row is ever written for an external order.
+4. **A package feature with a per-package limit.** `external_store_access` and
+   `external_store_limit`, off and zero by default. Only someone holding the account permission
+   `store:manage` (the owner by default) connects a store; `order:view` reads orders and customers.
+
+### What it does not change
+
+- **D11 still holds for Feriwala-hosted storefronts.** They remain the only storefronts that consume
+  the ERP API; an external store is never given ERP credentials — Feriwala calls it.
+- **D12 still holds for every existing order source.** Website and wholesale orders keep Feriwala as
+  merchant of record exactly as before.
+
+### Invariants the code enforces
+
+- One live connection per store address across all accounts (partial unique index); which account
+  holds it is never disclosed.
+- Credentials and the webhook secret are encrypted at rest, hidden from serialisation, never in a
+  page prop, log or error; disconnecting forgets them and keeps the orders.
+- Calls to a store go only to HTTPS addresses whose every resolved IP is public, pinned to the
+  checked address, with redirects off and short timeouts.
+- Webhooks are verified by HMAC over the raw body, require the store's event id, and are recorded
+  once per store and event id.
+- An external order is never deleted; its history is append-only; an older copy never overwrites a
+  newer one; money is parsed from the store's text without passing through a float (D26).
