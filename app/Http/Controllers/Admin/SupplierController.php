@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Account\Queries\ContactVerificationState;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Sourcing\Queries\ProductSuppliersSection;
 use App\Domain\Supplier\Actions\ApproveSupplierKyc;
 use App\Domain\Supplier\Actions\ReactivateSupplier;
 use App\Domain\Supplier\Actions\RejectSupplierKyc;
@@ -146,6 +147,7 @@ class SupplierController extends Controller
                     ->all(),
             ],
             'contact' => app(ContactVerificationState::class)->for($supplier),
+            'assigned_products' => app(ProductSuppliersSection::class)->forSupplier($supplier, $reviewer),
             'status_history' => $statusHistory->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),

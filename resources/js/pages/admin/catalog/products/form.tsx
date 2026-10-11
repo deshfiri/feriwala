@@ -9,6 +9,7 @@ import {
     Megaphone,
     Search,
     Tag,
+    Truck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ProductController from '@/actions/App/Http/Controllers/Admin/ProductController';
@@ -31,6 +32,7 @@ import type {
     MediaLimits,
     MediaRow,
     LinkedProductsState,
+    ProductSuppliersState,
     MerchandisingState,
     PriceTierScope,
     ProductDetail,
@@ -43,6 +45,7 @@ import type {
 } from '@/types';
 import SeoFields from './seo-fields';
 import LinkedProductsSection from './linked-products-section';
+import SuppliersSection from './suppliers-section';
 import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
@@ -61,6 +64,8 @@ type Props = {
     can: CatalogAbilities;
     /** Staff-only: Same Product links; null without `product_link.view`. */
     linked_products?: LinkedProductsState | null;
+    /** Staff-only: which Suppliers have it; null without product_supplier.view. */
+    product_suppliers?: ProductSuppliersState | null;
     variants: VariantRow[];
     attributes: AttributeOption[];
     media: MediaRow[];
@@ -165,6 +170,7 @@ export default function ProductForm({
     options,
     can,
     linked_products,
+    product_suppliers,
     variants,
     attributes,
     media,
@@ -231,6 +237,15 @@ export default function ProductForm({
                       key: 'links',
                       label: t('catalog.products.tabs.links'),
                       icon: Link2,
+                  },
+              ]
+            : []),
+        ...(editing && product_suppliers
+            ? [
+                  {
+                      key: 'suppliers',
+                      label: t('catalog.products.tabs.suppliers'),
+                      icon: Truck,
                   },
               ]
             : []),
@@ -976,6 +991,15 @@ export default function ProductForm({
                             limits={media_limits}
                             variants={variants}
                             canEdit={can.edit}
+                        />
+                    </SectionTabPanel>
+                )}
+
+                {editing && product_suppliers && (
+                    <SectionTabPanel tab="suppliers" active={activeTab}>
+                        <SuppliersSection
+                            product={product}
+                            suppliers={product_suppliers}
                         />
                     </SectionTabPanel>
                 )}

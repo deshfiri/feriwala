@@ -42,6 +42,7 @@ use App\Http\Controllers\Admin\ProductMediaController;
 use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
+use App\Http\Controllers\Admin\ProductSupplierController;
 use App\Http\Controllers\Admin\ProductTrashController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\ReferralChainController;
@@ -1168,6 +1169,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('catalog.products.links.variants.store');
         Route::delete('catalog/products/{product}/links/{link}/variants/{mapping}', [ProductLinkController::class, 'unmapVariants'])
             ->name('catalog.products.links.variants.destroy');
+
+        /*
+         * Product suppliers: which Suppliers actually have which Product. Seen
+         * with `product_supplier.view`, assigned with `.create`, removed with
+         * `.edit`. Carries no price.
+         */
+        Route::get('product-suppliers/suppliers', [ProductSupplierController::class, 'browse'])
+            ->name('product-suppliers.suppliers');
+        Route::post('product-suppliers', [ProductSupplierController::class, 'store'])
+            ->name('product-suppliers.store');
+        Route::delete('product-suppliers/{assignment}', [ProductSupplierController::class, 'destroy'])
+            ->name('product-suppliers.destroy');
 
         /*
          * Variations, always addressed through their product (§11.1, §12), and

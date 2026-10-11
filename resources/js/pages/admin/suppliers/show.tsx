@@ -16,6 +16,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import ManagedSupplierController from '@/actions/App/Http/Controllers/Admin/ManagedSupplierController';
 import { index } from '@/routes/admin/suppliers';
+import type { SupplierProductsState } from '@/types';
+import AssignedProductsSection from './assigned-products-section';
 import { show as documentShow } from '@/routes/admin/suppliers/kyc/documents';
 import { store as correction } from '@/routes/admin/suppliers/kyc/correction';
 import { store as approval } from '@/routes/admin/suppliers/approval';
@@ -62,6 +64,8 @@ type Props = {
     } | null;
     /** Email/mobile standing, including what staff confirmed by hand. */
     contact: ContactState;
+    /** Staff-only: Products this Supplier has; null without product_supplier.view. */
+    assigned_products: SupplierProductsState | null;
     status_history: {
         previous_status: string | null;
         new_status: string;
@@ -84,6 +88,7 @@ export default function AdminSupplierShow({
     supplier,
     round,
     contact,
+    assigned_products,
     status_history,
 }: Props) {
     const { t, locale } = useTranslation();
@@ -334,6 +339,13 @@ export default function AdminSupplierShow({
                                 </ul>
                             )}
                         </SectionCard>
+
+                        {assigned_products && (
+                            <AssignedProductsSection
+                                supplierId={supplier.id}
+                                assigned={assigned_products}
+                            />
+                        )}
 
                         <SectionCard
                             title={t('supplier.admin.suppliers.history')}

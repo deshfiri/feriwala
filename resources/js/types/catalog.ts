@@ -48,6 +48,45 @@ export type LinkedProductsState = {
     can: { link: boolean; unlink: boolean };
 };
 
+/** A Supplier as the assignment screens show it. */
+export type AssignableSupplier = {
+    id: string;
+    reference: string;
+    name: string;
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+};
+
+/** The "Suppliers" section of the Admin Product workspace. */
+export type ProductSuppliersState = {
+    assigned: {
+        id: string;
+        supplier: AssignableSupplier;
+        reference: string | null;
+        assigned_by: string;
+        assigned_at: string;
+        reason: string | null;
+    }[];
+    /** Suppliers of other Products in the Same Product group, for reference. */
+    via_group: {
+        supplier: AssignableSupplier;
+        products: { id: string; name: string; bpc: string }[];
+    }[];
+    can: { assign: boolean; remove: boolean };
+};
+
+/** The "Assigned products" section of the Admin Supplier page. */
+export type SupplierProductsState = {
+    assigned: {
+        id: string;
+        product: { id: string; name: string; bpc: string; sku: string };
+        reference: string | null;
+        assigned_at: string;
+    }[];
+    can: { assign: boolean; remove: boolean };
+};
+
 /** A lifecycle move this person may make from the product's current status. */
 export type ProductTransition = {
     value: string;

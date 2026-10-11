@@ -69,6 +69,9 @@ enum PermissionModule: string
     /** Content written once and released to chosen Products (Content Library). */
     case ContentLibrary = 'content_library';
 
+    /** Which Suppliers actually have which Product (Product supplier assignments). */
+    case ProductSupplier = 'product_supplier';
+
     public function label(): string
     {
         return match ($this) {
@@ -110,6 +113,7 @@ enum PermissionModule: string
             self::SourcingGroup => 'Product sourcing groups',
             self::ProductLink => 'Product links',
             self::ContentLibrary => 'Content library',
+            self::ProductSupplier => 'Product suppliers',
         };
     }
 }

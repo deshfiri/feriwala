@@ -119,6 +119,7 @@ return [
             'logistics' => 'লজিস্টিক',
             'content' => 'কনটেন্ট ও আপডেট',
             'links' => 'যুক্ত পণ্য',
+            'suppliers' => 'সরবরাহকারী',
             'seo' => 'SEO',
         ],
 

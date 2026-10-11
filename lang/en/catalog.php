@@ -119,6 +119,7 @@ return [
             'logistics' => 'Logistics',
             'content' => 'Content & Updates',
             'links' => 'Linked Products',
+            'suppliers' => 'Suppliers',
             'seo' => 'SEO',
         ],
 

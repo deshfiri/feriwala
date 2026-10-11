@@ -275,6 +275,12 @@ class PermissionCatalogue
             Module::ContentLibrary->value => [
                 Action::View, Action::Create, Action::Edit, Action::Delete,
             ],
+
+            // Product suppliers: which Suppliers actually have a Product.
+            // `create` assigns a Supplier, `edit` removes one. No price here.
+            Module::ProductSupplier->value => [
+                Action::View, Action::Create, Action::Edit,
+            ],
         ];
     }
 

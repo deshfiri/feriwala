@@ -13,6 +13,7 @@ use App\Domain\Sourcing\Exceptions\ProductLinkRefused;
 use App\Domain\Sourcing\Models\ProductLink;
 use App\Domain\Sourcing\Models\ProductLinkVariantMapping;
 use App\Domain\Sourcing\Policies\ProductLinkPolicy;
+use App\Domain\Sourcing\Policies\ProductSupplierPolicy;
 use App\Domain\Sourcing\Queries\ProductLinkSummaries;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -70,6 +71,7 @@ class ProductLinkController extends Controller
 
         abort_unless(
             ProductLinkPolicy::canView($actor)
+            || ProductSupplierPolicy::canAssign($actor)
             || CatalogPolicy::canViewAny($actor)
             || $actor->can(PermissionCatalogue::name(PermissionModule::SupplierListing, PermissionAction::Approve)),
             403,
