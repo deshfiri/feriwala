@@ -5,7 +5,6 @@ import {
     Image as ImageIcon,
     Info,
     Layers,
-    Megaphone,
     Search,
     Tag,
     Truck,
@@ -26,8 +25,6 @@ import type {
     AttributeOption,
     CatalogAbilities,
     CatalogOption,
-    ContentLimits,
-    ContentRow,
     MediaLimits,
     MediaRow,
     ProductSuppliersState,
@@ -47,8 +44,6 @@ import LogisticsFields from './logistics-fields';
 import MerchandisingSection from './merchandising-section';
 import EligibilitySection from './eligibility-section';
 import StatusPanel from './status-panel';
-import type { ProductLibraryContent } from '@/types/content-library';
-import ContentSection from './content-section';
 import MediaSection from './media-section';
 import PriceTiersSection from './price-tiers-section';
 import ProductHeader from './product-header';
@@ -75,10 +70,6 @@ type Props = {
     merchandising: MerchandisingState | null;
     related_matches?: RelatedProductRow[];
     seo_preview: SeoPreview | null;
-    content: ContentRow[];
-    /** Content Library items released to this product; null without library access. */
-    library_content?: ProductLibraryContent | null;
-    content_limits: ContentLimits;
 };
 
 const selectClass =
@@ -132,9 +123,6 @@ const FIELD_TAB: Record<string, string> = {
     box_width_cm: 'logistics',
     box_height_cm: 'logistics',
     is_fragile: 'logistics',
-    title: 'content',
-    body: 'content',
-    image: 'content',
     file: 'media',
     meta_title: 'seo',
     meta_description: 'seo',
@@ -179,9 +167,6 @@ export default function ProductForm({
     merchandising,
     related_matches,
     seo_preview,
-    content,
-    library_content,
-    content_limits,
 }: Props) {
     const { t } = useTranslation();
     const page = usePage<{ errors: Record<string, string> }>();
@@ -216,15 +201,6 @@ export default function ProductForm({
             label: t('catalog.products.tabs.logistics'),
             icon: Boxes,
         },
-        ...(editing
-            ? [
-                  {
-                      key: 'content',
-                      label: t('catalog.products.tabs.content'),
-                      icon: Megaphone,
-                  },
-              ]
-            : []),
         ...(editing && product_suppliers
             ? [
                   {
@@ -985,18 +961,6 @@ export default function ProductForm({
                         <SuppliersSection
                             product={product}
                             suppliers={product_suppliers}
-                        />
-                    </SectionTabPanel>
-                )}
-
-                {editing && (
-                    <SectionTabPanel tab="content" active={activeTab}>
-                        <ContentSection
-                            product={product}
-                            content={content}
-                            library={library_content ?? null}
-                            limits={content_limits}
-                            canEdit={can.edit}
                         />
                     </SectionTabPanel>
                 )}
