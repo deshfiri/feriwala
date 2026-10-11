@@ -51,6 +51,9 @@ class SupplierListingController extends Controller
             ->when($request->filled('submitted_from'), fn ($q) => $q->where('submitted_at', '>=', $request->date('submitted_from')))
             ->when($request->filled('submitted_to'), fn ($q) => $q->where('submitted_at', '<=', $request->date('submitted_to')))
             ->where('status', '!=', ListingStatus::Draft->value)
+            // A batch's entries are reviewed together, as one batch, on the lot
+            // screen -- never as scattered single rows beside it.
+            ->whereNull('lot_id')
             ->orderBy('submitted_at')
             ->paginate(25)
             ->withQueryString()
@@ -73,9 +76,13 @@ class SupplierListingController extends Controller
         ]);
     }
 
-    public function show(Request $request, SupplierProductListing $listing): Response
+    public function show(Request $request, SupplierProductListing $listing): Response|RedirectResponse
     {
         Gate::authorize('view', $listing);
+
+        if ($listing->lot_id !== null) {
+            return to_route('admin.supplier-listing-lots.show', $listing->lot->public_id);
+        }
 
         /** @var User $reviewer */
         $reviewer = $request->user();
@@ -172,6 +179,11 @@ class SupplierListingController extends Controller
     public function decide(Request $request, SupplierProductListing $listing, DecideSupplierListing $action): RedirectResponse
     {
         Gate::authorize('decide', $listing);
+
+        // Deciding a batch entry alone would leave the batch's own status stale.
+        if ($listing->lot_id !== null) {
+            throw ValidationException::withMessages(['listing' => __('supplier.admin.listing_lots.decide_in_batch')]);
+        }
 
         /** @var User $reviewer */
         $reviewer = $request->user();

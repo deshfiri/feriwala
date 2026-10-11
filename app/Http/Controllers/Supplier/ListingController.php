@@ -129,6 +129,11 @@ class ListingController extends Controller
         $supplier = $request->user('supplier');
         $model = $this->ownListing($request, $listing);
 
+        // A batch is submitted whole, from its own screen.
+        if ($model->lot_id !== null) {
+            throw ValidationException::withMessages(['listing' => __('supplier.listing_lots.submit_whole_batch')]);
+        }
+
         try {
             $submit->handle($supplier, $model);
         } catch (InvalidArgumentException $e) {

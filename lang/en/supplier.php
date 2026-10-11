@@ -248,6 +248,7 @@ return [
     ],
 
     'listing_lots' => [
+        'submit_whole_batch' => 'This product is part of a batch. Submit the whole batch instead.',
         'title' => 'Listing batches',
         'description' => 'Draft several products together and submit them for review in one go.',
         'new' => 'New batch',
@@ -616,6 +617,7 @@ return [
             'no_primary_image' => 'No primary image submitted.',
             'supply_mode' => 'Availability',
             'record_decisions' => 'Record decisions',
+            'decide_in_batch' => 'This product belongs to a batch. Open the batch to decide it.',
             'succeeded' => 'Decisions recorded for :count product entries.',
             'refused' => 'Could not decide :reference: :reason',
         ],
