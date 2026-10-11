@@ -138,13 +138,25 @@ it('keeps a historical payable at the snapshotted price when the base price chan
         ->and(SupplierPayable::query()->sole()->supplier_rate->toDecimal())->toBe('400.00');
 });
 
-it('does not refuse a base price above the wholesale price, and leaves the Product\'s own prices alone', function () {
-    $before = $this->product->wholesale_price->toDecimal();
+it('accepts a base price above the platform rate, leaves every platform price alone, and still allocates it', function () {
+    $before = $this->product->only(['wholesale_price', 'minimum_selling_price', 'maximum_selling_price', 'suggested_selling_price']);
 
     $offer = offersPerProductAssign($this, $this->product, null, '1500.00');
 
     expect($offer->supplier_rate->toDecimal())->toBe('1500.00')
-        ->and($offer->platform_rate->toDecimal())->toBe('1500.00')
-        ->and($this->product->refresh()->wholesale_price->toDecimal())->toBe($before)
+        // The platform rate is the wholesale price as it stands, not raised to fit.
+        ->and($offer->platform_rate->toDecimal())->toBe('1200.00')
         ->and(app(AssignProductToSupplier::class)->hasNoMargin($this->product, null, $offer->supplier_rate))->toBeTrue();
+
+    $line = offersPerProductLine($this, $this->product);
+    app(AllocateOrderLineSource::class)->handle($line->refresh(), AllocationSourceType::SupplierOffer, $offer->public_id, $this->staff, 'Chosen despite the lost margin.');
+
+    expect(SupplierPayable::query()->sole()->gross_amount->toDecimal())->toBe('4500.00');
+
+    // A later price change never moves the platform rate or the Product's prices.
+    app(ChangeSupplierBasePrice::class)->handle($this->staff, $offer->refresh(), Money::fromDecimal('1600.00', Currency::BDT), 'Costs rose.');
+
+    expect($offer->refresh()->platform_rate->toDecimal())->toBe('1200.00')
+        ->and($this->product->refresh()->only(['wholesale_price', 'minimum_selling_price', 'maximum_selling_price', 'suggested_selling_price']))->toEqual($before)
+        ->and(SupplierPayable::query()->sole()->gross_amount->toDecimal())->toBe('4500.00');
 });

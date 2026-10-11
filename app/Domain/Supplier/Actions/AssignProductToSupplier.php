@@ -87,12 +87,11 @@ class AssignProductToSupplier
             throw new InvalidArgumentException('The Supplier Base Price must use the Product\'s currency.');
         }
 
-        // A base price above the wholesale price is not refused: staff are
-        // warned of the missing margin (see {@see hasNoMargin()}). The offer
-        // table's own rule — the platform rate never below the Supplier's —
-        // still holds, so the offer's platform rate is floored at the base
-        // price; the Product's own wholesale price is untouched either way.
-        $offerPlatformRate = $platformRate->lessThan($baseRate) ? $baseRate : $platformRate;
+        // A base price above the wholesale price is not refused and nothing is
+        // adjusted to fit it: the offer's platform rate is the wholesale price
+        // as it stands, and staff are warned of the lost margin (see
+        // {@see hasNoMargin()}).
+        $offerPlatformRate = $platformRate;
 
         $reason = $this->clean($terms['reason'] ?? null) ?? 'Assigned to the Supplier by staff.';
 

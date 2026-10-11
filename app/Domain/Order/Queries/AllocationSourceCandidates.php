@@ -9,7 +9,6 @@ use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
-use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
@@ -69,10 +68,6 @@ class AllocationSourceCandidates
         $candidates = [
             ...$this->warehouseCandidates($line, $remaining, $platformRate, $currency, $active),
             ...$this->supplierCandidates($line, $remaining, $platformRate, $currency, $active),
-
-            // Sources staff confirmed one by one, before Products could be
-            // linked; still honoured, and still shown as what they are.
-            ...$this->linkedCandidates($line, $remaining, $platformRate, $currency, $active),
         ];
 
         return $this->withoutDuplicates($candidates);
@@ -128,38 +123,6 @@ class AllocationSourceCandidates
             ->sum('quantity');
 
         return max(0, (int) $line->quantity - $allocated);
-    }
-
-    /**
-     * Sources confirmed, through {@see ProductSourceLink}, to fulfil this
-     * product/variation despite being catalogued under a different one —
-     * "Recommended / Already Related" beyond the trivial exact-match case
-     * the two methods above already cover.
-     *
-     * @param  Collection<int, OrderItemAllocation>  $active
-     * @return list<AllocationCandidate>
-     */
-    protected function linkedCandidates(
-        OrderItem $line,
-        int $quantity,
-        Money $platformRate,
-        Currency $currency,
-        Collection $active,
-    ): array {
-        $links = ProductSourceLink::query()
-            ->forOrderedProduct($line->product_id, $line->product_variant_id)
-            ->with(['stockItem.warehouse', 'stockItem.product', 'stockItem.variant', 'supplierOffer.supplier', 'supplierOffer.stock', 'supplierOffer.product', 'supplierOffer.variant'])
-            ->get();
-
-        $candidates = [];
-
-        foreach ($links as $link) {
-            $candidates[] = $link->source_type === AllocationSourceType::Warehouse
-                ? ($link->stockItem === null ? null : $this->warehouseCandidateFromStock($link->stockItem, $quantity, $platformRate, $currency, $active, 'linked'))
-                : ($link->supplierOffer === null ? null : $this->supplierCandidateFromOffer($link->supplierOffer, $quantity, $platformRate, $currency, $active, 'linked'));
-        }
-
-        return array_values(array_filter($candidates));
     }
 
     /**

@@ -137,11 +137,11 @@ test('one entry failing its own decision is reported and skipped, the other stil
 
     $results = app(DecideSupplierListingLot::class)->handle($lot, decideSupplierListingLotTestReviewer(), [
         [
-            // Platform rate below the supplier rate -- DecideSupplierListing refuses this.
+            // No platform rate at all -- DecideSupplierListing refuses to approve without one.
             'listing_id' => $bad->public_id,
             'reason' => 'Try.',
             'product' => [...supplierTestConnect($product)],
-            'items' => [['item_id' => $bad->items()->firstOrFail()->public_id, 'decision' => 'approve', 'platform_rate' => '1.00']],
+            'items' => [['item_id' => $bad->items()->firstOrFail()->public_id, 'decision' => 'approve']],
         ],
         [
             'listing_id' => $good->public_id,

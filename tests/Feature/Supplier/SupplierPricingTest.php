@@ -205,13 +205,14 @@ test('view without edit can read rates but not change them', function () {
     expect($this->offer->refresh()->platform_rate->toDecimal())->toBe(SUPPLIER_LEAK_PLATFORM_RATE);
 });
 
-test('a platform rate below the supplier rate is rejected', function () {
+test('a platform rate below the supplier rate is accepted and recorded as its own version', function () {
     $this->actingAs($this->manager)->post(route('admin.supplier-offers.rates.store', $this->offer), [
-        'supplier_rate' => '1000.00', 'platform_rate' => '999.99', 'reason' => 'Try.',
-    ])->assertSessionHasErrors('platform_rate');
+        'supplier_rate' => '1000.00', 'platform_rate' => '999.99', 'reason' => 'Accepting the lost margin.',
+    ])->assertSessionHasNoErrors();
 
-    expect($this->offer->refresh()->platform_rate->toDecimal())->toBe(SUPPLIER_LEAK_PLATFORM_RATE)
-        ->and($this->offer->priceHistory()->count())->toBe(0);
+    expect($this->offer->refresh()->platform_rate->toDecimal())->toBe('999.99')
+        ->and($this->offer->supplier_rate->toDecimal())->toBe('1000.00')
+        ->and($this->offer->priceHistory()->count())->toBe(1);
 });
 
 test('mismatched currencies, negative rates and a missing reason are rejected', function (array $payload, string $error) {
@@ -257,9 +258,13 @@ test('every rate change is a new effective-dated version and past versions are n
         ->toThrow(QueryException::class);
 });
 
-test('the database itself refuses a platform rate below the supplier rate', function () {
-    expect(fn () => SupplierOffer::query()->whereKey($this->offer->id)->update(['platform_rate' => '0.01']))
-        ->toThrow(QueryException::class);
+test('the database keeps the platform and supplier rates independent but never negative', function () {
+    // A platform rate below the supplier rate is allowed ...
+    SupplierOffer::query()->whereKey($this->offer->id)->update(['platform_rate' => '0.01']);
+
+    expect($this->offer->refresh()->platform_rate->toDecimal())->toBe('0.01');
+
+    // ... a negative figure is still refused.
     expect(fn () => SupplierOffer::query()->whereKey($this->offer->id)->update(['supplier_rate' => '-0.01']))
         ->toThrow(QueryException::class);
 });

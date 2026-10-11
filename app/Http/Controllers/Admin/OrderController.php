@@ -12,7 +12,6 @@ use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Actions\AdvanceOrderFulfilmentStatus;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
-use App\Domain\Order\Actions\ConfirmProductSourceLink;
 use App\Domain\Order\Actions\EvaluateOrderProceedsEligibility;
 use App\Domain\Order\Actions\RecordCodCollection;
 use App\Domain\Order\Data\AllocationCandidate;
@@ -31,7 +30,6 @@ use App\Domain\Order\Models\OrderFulfillmentStatusChange;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\OrderStatusChange;
-use App\Domain\Order\Models\ProductSourceLink;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\SearchAllocationSources;
@@ -91,7 +89,6 @@ class OrderController extends Controller
         protected AllocationSourceCandidates $candidates,
         protected AllocateOrderLineSource $allocate,
         protected SearchAllocationSources $search,
-        protected ConfirmProductSourceLink $confirmLink,
         protected AdvanceSupplierFulfilmentCommitment $advanceCommitment,
         protected AdvanceOrderFulfilmentStatus $advanceFulfilment,
         protected AdvanceOrderDeliveryStatus $advanceDelivery,
@@ -729,13 +726,9 @@ class OrderController extends Controller
     }
 
     /**
-     * The full eligible catalogue for one line — every approved, active
-     * Supplier offer and every active warehouse stock item, regardless of
-     * which product they are catalogued under — paginated and searchable by
-     * product, SKU, variant, Supplier or warehouse. Gated the same as
-     * {@see allocationCandidates()}: this exposes the same Supplier
-     * identity/rate and warehouse cost/margin figures, just across the
-     * whole catalogue instead of one product.
+     * The same candidates as {@see allocationCandidates()}, narrowed by a
+     * search term or source type: only sources for exactly this line's Product
+     * and variation, never another Product or BPC.
      */
     public function searchAllocationSources(Request $request, string $order, string $item): JsonResponse
     {
@@ -753,62 +746,18 @@ class OrderController extends Controller
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
 
-        $type = isset($validated['source_type']) ? AllocationSourceType::from($validated['source_type']) : null;
-        $page = (int) ($validated['page'] ?? 1);
-
-        $results = $this->search->search($line, $type, (string) ($validated['query'] ?? ''), $page);
+        $scoped = $this->filterCandidates($this->candidates->forLine($line), [
+            'search' => $validated['query'] ?? '',
+            'source_type' => $validated['source_type'] ?? null,
+        ]);
 
         return response()->json([
-            'candidates' => array_map(
-                fn (AllocationCandidate $candidate) => $candidate->toArray(),
-                $results->items(),
-            ),
-            'page' => $results->currentPage(),
-            'per_page' => $results->perPage(),
-            'total' => $results->total(),
-            'has_more' => $results->hasMorePages(),
+            'candidates' => array_map(fn (AllocationCandidate $candidate) => $candidate->toArray(), $scoped),
+            'page' => 1,
+            'per_page' => count($scoped),
+            'total' => count($scoped),
+            'has_more' => false,
         ]);
-    }
-
-    /**
-     * Confirm that a Supplier offer or warehouse stock item catalogued under
-     * a different product fulfils this line's own product — a durable,
-     * audited {@see ProductSourceLink}, reused (not
-     * duplicated) by every future order for the same product. Never
-     * allocates by itself; a materially different product is refused by the
-     * Action, and staff choosing not to confirm simply never allocates from
-     * that source.
-     */
-    public function confirmSourceLink(Request $request, string $order, string $item): JsonResponse
-    {
-        $actor = $this->actor($request);
-        $record = $this->order($order);
-        $line = $this->line($record, $item);
-
-        $validated = $request->validate([
-            'source_type' => ['required', Rule::enum(AllocationSourceType::class)],
-            'source_id' => ['required', 'string'],
-            'reason' => ['required', 'string', 'min:10', 'max:1000'],
-        ]);
-
-        $sourceType = AllocationSourceType::from($validated['source_type']);
-
-        Gate::forUser($actor)->authorize('confirmSourceLink', [$record, $sourceType]);
-
-        try {
-            $link = $this->confirmLink->handle(
-                $line->product ?? abort(422, __('catalog.products.force_delete.line_product_deleted')),
-                $line->product_variant_id === null ? null : $line->variant,
-                $sourceType,
-                $validated['source_id'],
-                $actor,
-                $validated['reason'],
-            );
-        } catch (AllocationRefused $refused) {
-            throw ValidationException::withMessages(['source_id' => $refused->getMessage()]);
-        }
-
-        return response()->json(['link' => ['id' => $link->public_id]]);
     }
 
     /**

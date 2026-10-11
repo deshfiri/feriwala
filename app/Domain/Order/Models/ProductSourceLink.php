@@ -17,6 +17,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
+ * **Legacy — no longer used by allocation.** Allocation offers only sources for
+ * the exact ordered Product and variation; confirmed source links are kept as
+ * inactive history and never produce a candidate. Do not build on this.
+ *
  * A staff-confirmed assertion that a Supplier offer or warehouse stock item
  * catalogued under a *different* product/variation fulfils orders for this
  * one (see the migration's own docblock).

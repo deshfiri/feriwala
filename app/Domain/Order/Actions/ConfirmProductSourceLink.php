@@ -19,6 +19,10 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
+ * **Legacy — no longer used by allocation.** Allocation offers only sources for
+ * the exact ordered Product and variation; confirmed source links are kept as
+ * inactive history and never produce a candidate. Do not build on this.
+ *
  * Staff confirm that a Supplier offer or warehouse stock item, catalogued
  * under a different product/variation, is the same real-world fulfilment
  * item as an ordered one — see `product_source_links`' own migration

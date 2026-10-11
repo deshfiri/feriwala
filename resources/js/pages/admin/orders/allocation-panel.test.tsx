@@ -223,7 +223,7 @@ describe('the allocation panel', () => {
         expect(screen.queryByText('Dhaka Central')).not.toBeInTheDocument();
     });
 
-    it('keeps the catalogue tabs', async () => {
+    it("offers only this line's own sources: no catalogue-wide tabs", async () => {
         mockSources({
             remaining_quantity: 1,
             candidates: [candidate({ match_kind: 'exact' })],
@@ -233,7 +233,10 @@ describe('the allocation panel', () => {
 
         await screen.findByText('Alpha Textiles');
         expect(
-            screen.getByRole('button', { name: 'All suppliers' }),
-        ).toBeInTheDocument();
+            screen.queryByRole('button', { name: 'All suppliers' }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('button', { name: 'All warehouses' }),
+        ).not.toBeInTheDocument();
     });
 });

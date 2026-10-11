@@ -236,10 +236,6 @@ class DecideSupplierListing
             ? $itemDecision['platform_rate']
             : Money::fromDecimal((string) $itemDecision['platform_rate'], $currency);
 
-        if ($platformRate->lessThan($supplierRate)) {
-            throw new InvalidArgumentException('The Platform Rate cannot be lower than the Supplier Rate.');
-        }
-
         // The same Supplier may already hold an offer on this Product and
         // variation (for instance one staff assigned). Approval maintains that
         // one offer; it never makes a second.
@@ -325,9 +321,7 @@ class DecideSupplierListing
         Currency $currency,
         User $reviewer,
     ): void {
-        // Never lower an offer's platform rate below the base price it now
-        // carries, and never raise it past what staff just set.
-        $keepPlatformRate = $offer->platform_rate->greaterThan($platformRate) ? $offer->platform_rate : $platformRate;
+        $keepPlatformRate = $platformRate;
 
         $priceChanged = ! $offer->supplier_rate->equals($supplierRate) || ! $offer->platform_rate->equals($keepPlatformRate);
 

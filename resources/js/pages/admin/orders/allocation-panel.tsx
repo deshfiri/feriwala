@@ -99,11 +99,9 @@ const controlClass =
 /**
  * The staff source allocation panel.
  *
- * **Recommended / Already Related** is the historical exact-match candidate
- * list plus every source a confirmed {@see ConfirmRelationshipDialog} link
- * already covers. **All Suppliers** / **All Warehouses** search the whole
- * catalogue, server-paginated — a source found there that is not yet related
- * needs a confirmed relationship before it can be allocated at all.
+ * Every candidate is a source for exactly the ordered Product and variation:
+ * its active Supplier Offers and its warehouse stock. Nothing catalogued under
+ * another Product or BPC is offered, and no relationship has to be confirmed.
  *
  * **The platform never picks.** Nothing here is pre-selected or defaulted to
  * the cheapest row — a member of staff reads the candidates and explicitly
@@ -121,7 +119,7 @@ export default function AllocationPanel({
     line: AllocationLine | null;
 }) {
     const { t } = useTranslation();
-    const [tab, setTab] = useState<Tab>('recommended');
+    const tab: Tab = 'recommended';
     const [typeFilter, setTypeFilter] = useState<
         'all' | 'supplier_offer' | 'warehouse'
     >('all');
@@ -133,7 +131,6 @@ export default function AllocationPanel({
     const [sort, setSort] = useState<SortKey>('margin_desc');
     const [eligibleOnly, setEligibleOnly] = useState(true);
     const [chosen, setChosen] = useState<Candidate | null>(null);
-    const [linking, setLinking] = useState<Candidate | null>(null);
     const [remainingQuantity, setRemainingQuantity] = useState<number | null>(
         null,
     );
@@ -142,8 +139,6 @@ export default function AllocationPanel({
         if (!open || line === null) {
             setRecommended(null);
             setChosen(null);
-            setLinking(null);
-            setTab('recommended');
             setRemainingQuantity(null);
             setTypeFilter('all');
             setModeFilter('all');
@@ -253,11 +248,7 @@ export default function AllocationPanel({
     }, [recommended, search, sort, eligibleOnly, typeFilter, modeFilter]);
 
     function selectCandidate(candidate: Candidate) {
-        if (candidate.is_related) {
-            setChosen(candidate);
-        } else {
-            setLinking(candidate);
-        }
+        setChosen(candidate);
     }
 
     if (line === null) {
@@ -278,35 +269,6 @@ export default function AllocationPanel({
                             {t('orders.admin.allocation.panel_description')}
                         </SheetDescription>
                     </SheetHeader>
-
-                    <div className="flex flex-wrap gap-1 px-4">
-                        {(
-                            [
-                                [
-                                    'recommended',
-                                    'orders.admin.allocation.tabs.recommended',
-                                ],
-                                [
-                                    'suppliers',
-                                    'orders.admin.allocation.tabs.suppliers',
-                                ],
-                                [
-                                    'warehouses',
-                                    'orders.admin.allocation.tabs.warehouses',
-                                ],
-                            ] as const
-                        ).map(([key, label]) => (
-                            <Button
-                                key={key}
-                                type="button"
-                                size="sm"
-                                variant={tab === key ? 'default' : 'outline'}
-                                onClick={() => setTab(key)}
-                            >
-                                {t(label)}
-                            </Button>
-                        ))}
-                    </div>
 
                     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4">
                         {tab === 'recommended' && (
@@ -480,19 +442,6 @@ export default function AllocationPanel({
                                 </ul>
                             </>
                         )}
-
-                        {tab !== 'recommended' && (
-                            <CatalogueSearchList
-                                orderId={orderId}
-                                lineId={line.id}
-                                sourceType={
-                                    tab === 'suppliers'
-                                        ? 'supplier_offer'
-                                        : 'warehouse'
-                                }
-                                onSelect={selectCandidate}
-                            />
-                        )}
                     </div>
 
                     <SheetFooter>
@@ -506,19 +455,6 @@ export default function AllocationPanel({
                     </SheetFooter>
                 </SheetContent>
             </Sheet>
-
-            <ConfirmRelationshipDialog
-                orderId={orderId}
-                line={line}
-                candidate={linking}
-                onOpenChange={(next) => {
-                    if (!next) setLinking(null);
-                }}
-                onConfirmed={(candidate) => {
-                    setLinking(null);
-                    setChosen({ ...candidate, is_related: true });
-                }}
-            />
 
             <ConfirmAllocationDialog
                 orderId={orderId}
@@ -675,270 +611,10 @@ function CandidateCard({
                 >
                     {candidate.is_currently_allocated
                         ? t('orders.admin.allocation.change_action')
-                        : candidate.is_related
-                          ? t('orders.admin.allocation.confirm')
-                          : t('orders.admin.allocation.relationship_action')}
+                        : t('orders.admin.allocation.confirm')}
                 </Button>
             </div>
         </li>
-    );
-}
-
-/**
- * A server-paginated, searchable catalogue-wide list for one source type —
- * every approved active Supplier offer or every active warehouse stock
- * item, never just the ones already catalogued under this order's product.
- */
-function CatalogueSearchList({
-    orderId,
-    lineId,
-    sourceType,
-    onSelect,
-}: {
-    orderId: string;
-    lineId: string;
-    sourceType: 'supplier_offer' | 'warehouse';
-    onSelect: (candidate: Candidate) => void;
-}) {
-    const { t } = useTranslation();
-    const [query, setQuery] = useState('');
-    const [page, setPage] = useState(1);
-    const [results, setResults] = useState<Candidate[]>([]);
-    const [hasMore, setHasMore] = useState(false);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        setPage(1);
-    }, [query, sourceType]);
-
-    useEffect(() => {
-        let cancelled = false;
-        setLoading(true);
-
-        const url = new URL(
-            OrderController.searchAllocationSources.url({
-                order: orderId,
-                item: lineId,
-            }),
-            window.location.origin,
-        );
-        url.searchParams.set('source_type', sourceType);
-        url.searchParams.set('page', String(page));
-        if (query.trim() !== '') {
-            url.searchParams.set('query', query.trim());
-        }
-
-        fetch(url.toString(), {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((response) => response.json())
-            .then((body: { candidates: Candidate[]; has_more: boolean }) => {
-                if (cancelled) return;
-                setResults((previous) =>
-                    page === 1
-                        ? body.candidates
-                        : [...previous, ...body.candidates],
-                );
-                setHasMore(body.has_more);
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setResults([]);
-                    setHasMore(false);
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [orderId, lineId, sourceType, page, query]);
-
-    return (
-        <>
-            <Input
-                placeholder={t('orders.admin.allocation.catalogue_search')}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-            />
-
-            {loading && page === 1 && (
-                <div className="flex justify-center py-8">
-                    <Spinner />
-                </div>
-            )}
-
-            {!loading && results.length === 0 && (
-                <p className="text-muted-foreground text-sm">
-                    {t('orders.admin.allocation.no_matches')}
-                </p>
-            )}
-
-            <ul className="space-y-2 pb-4">
-                {results.map((candidate) => (
-                    <CandidateCard
-                        key={`${candidate.source_type}:${candidate.source_id}`}
-                        candidate={candidate}
-                        onSelect={() => onSelect(candidate)}
-                    />
-                ))}
-            </ul>
-
-            {hasMore && (
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={loading}
-                    onClick={() => setPage((current) => current + 1)}
-                >
-                    {loading && <Spinner />}
-                    {t('orders.admin.allocation.load_more')}
-                </Button>
-            )}
-        </>
-    );
-}
-
-/**
- * The explicit relationship-confirmation step for a catalogue-search result
- * that is not yet linked to this order's product — compares the ordered
- * item against the selected source item and requires a reason before
- * {@see ConfirmProductSourceLink} creates the durable link. Never allocates
- * by itself: confirming here only unlocks the normal allocate-confirm step.
- */
-function ConfirmRelationshipDialog({
-    orderId,
-    line,
-    candidate,
-    onOpenChange,
-    onConfirmed,
-}: {
-    orderId: string;
-    line: AllocationLine;
-    candidate: Candidate | null;
-    onOpenChange: (open: boolean) => void;
-    onConfirmed: (candidate: Candidate) => void;
-}) {
-    const { t } = useTranslation();
-
-    if (candidate === null) {
-        return null;
-    }
-
-    return (
-        <Dialog open onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>
-                        {t('orders.admin.allocation.relationship_title', {
-                            source: candidate.source_label,
-                            product: line.name,
-                        })}
-                    </DialogTitle>
-                    <DialogDescription>
-                        {t('orders.admin.allocation.relationship_description')}
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="border-border rounded-lg border p-2">
-                        <p className="text-muted-foreground text-xs">
-                            {t(
-                                'orders.admin.allocation.relationship_ordered_heading',
-                            )}
-                        </p>
-                        <p className="font-medium">{line.name}</p>
-                        <p className="text-muted-foreground text-xs">
-                            {line.sku}
-                        </p>
-                    </div>
-                    <div className="border-border rounded-lg border p-2">
-                        <p className="text-muted-foreground text-xs">
-                            {t(
-                                'orders.admin.allocation.relationship_source_heading',
-                            )}
-                        </p>
-                        <p className="font-medium">
-                            {candidate.source_product_name ??
-                                candidate.source_label}
-                        </p>
-                        <p className="text-muted-foreground text-xs">
-                            {candidate.source_product_sku}
-                        </p>
-                    </div>
-                </div>
-
-                <Form
-                    {...OrderController.confirmSourceLink.form({
-                        order: orderId,
-                        item: line.id,
-                    })}
-                    options={{ preserveScroll: true }}
-                    onSuccess={() => onConfirmed(candidate)}
-                    className="space-y-4"
-                >
-                    {({ errors, processing }) => (
-                        <>
-                            <input
-                                type="hidden"
-                                name="source_type"
-                                value={candidate.source_type}
-                            />
-                            <input
-                                type="hidden"
-                                name="source_id"
-                                value={candidate.source_id}
-                            />
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="relationship-reason">
-                                    {t(
-                                        'orders.admin.allocation.relationship_reason',
-                                    )}
-                                </Label>
-                                <ReasonTextarea
-                                    context="order"
-                                    id="relationship-reason"
-                                    name="reason"
-                                    rows={3}
-                                    minLength={10}
-                                    maxLength={1000}
-                                    required
-                                    className={`${controlClass} w-full`}
-                                />
-                                <p className="text-muted-foreground text-xs">
-                                    {t(
-                                        'orders.admin.allocation.relationship_reason_help',
-                                    )}
-                                </p>
-                                <InputError
-                                    message={errors.source_id ?? errors.reason}
-                                />
-                            </div>
-
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => onOpenChange(false)}
-                                >
-                                    {t('common.actions.cancel')}
-                                </Button>
-                                <Button type="submit" disabled={processing}>
-                                    {processing && <Spinner />}
-                                    {t(
-                                        'orders.admin.allocation.relationship_confirm',
-                                    )}
-                                </Button>
-                            </DialogFooter>
-                        </>
-                    )}
-                </Form>
-            </DialogContent>
-        </Dialog>
     );
 }
 
