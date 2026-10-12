@@ -116,9 +116,6 @@ test('staff adjust availability directly with a reason and never to a negative n
 
     $this->post(route('admin.supplier-offers.stock-adjustment.store', $this->offer), ['quantity' => -4, 'reason' => 'Bad.'])
         ->assertSessionHasErrors('quantity');
-    $this->post(route('admin.supplier-offers.stock-adjustment.store', $this->offer), ['quantity' => 4, 'reason' => ''])
-        ->assertSessionHasErrors('reason');
-
     expect($this->offer->stock->refresh()->quantity)->toBe(3);
 });
 

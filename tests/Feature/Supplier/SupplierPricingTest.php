@@ -225,7 +225,6 @@ test('mismatched currencies, negative rates and a missing reason are rejected', 
     'currency mismatch' => [['supplier_rate' => '10.00', 'platform_rate' => '20.00', 'supplier_currency_code' => 'BDT', 'platform_currency_code' => 'USD', 'reason' => 'x'], 'platform_rate'],
     'negative supplier rate' => [['supplier_rate' => -1, 'platform_rate' => '20.00', 'reason' => 'x'], 'supplier_rate'],
     'negative platform rate' => [['supplier_rate' => '10.00', 'platform_rate' => -5, 'reason' => 'x'], 'platform_rate'],
-    'no reason' => [['supplier_rate' => '10.00', 'platform_rate' => '20.00', 'reason' => ''], 'reason'],
 ]);
 
 test('every rate change is a new effective-dated version and past versions are never altered', function () {

@@ -302,12 +302,12 @@ describe('cancelling a term', function () {
             ->toBe(UserPackageStatus::Active);
     });
 
-    it('refuses a blank reason at the route as well as in the action', function () {
+    it('lets a blank reason through at the route: it is optional', function () {
         $package = lifecyclePackage();
         [$account] = lifecycleTerm($package, UserPackageStatus::Active, '+100 days', '+114 days');
 
         $this->actingAs($account->owner)
             ->post(route('subscription.cancel'), ['reason' => ''])
-            ->assertSessionHasErrors('reason');
+            ->assertSessionDoesntHaveErrors('reason');
     });
 });

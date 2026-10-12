@@ -54,7 +54,7 @@ class ProductSupplierPolicy
 
     protected static function allows(User $user, PermissionModule $module, PermissionAction $action): bool
     {
-        return ! $user->accountMembership()->exists()
+        return ! $user->hasAccountMembership()
             && $user->can(PermissionCatalogue::name($module, $action));
     }
 }

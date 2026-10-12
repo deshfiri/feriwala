@@ -320,14 +320,14 @@ describe('trash (urgent product-management fix)', function () {
             ->and(Product::withTrashed()->count())->toBe(1);
     });
 
-    it('requires a reason', function () {
+    it('does not need a reason', function () {
         $product = catalogProduct();
 
         $this->actingAs($this->manager)
             ->delete(route('admin.catalog.products.destroy', $product->public_id))
-            ->assertSessionHasErrors('reason');
+            ->assertSessionDoesntHaveErrors('reason');
 
-        expect($product->refresh()->trashed())->toBeFalse();
+        expect($product->refresh()->trashed())->toBeTrue();
     });
 
     it('disappears from the active list and search immediately', function () {

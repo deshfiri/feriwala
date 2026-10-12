@@ -54,7 +54,6 @@ import { index as productBrands } from '@/routes/admin/catalog/brands';
 import { index as productCategories } from '@/routes/admin/catalog/categories';
 import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as deliverySettings } from '@/routes/admin/delivery-settings';
-import { index as sourcingGroups } from '@/routes/admin/sourcing-groups';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
 import { index as stockAllocations } from '@/routes/admin/inventory/allocations';
@@ -81,10 +80,7 @@ import { index as supplierListings } from '@/routes/admin/supplier-listings';
 import { index as supplierOffers } from '@/routes/admin/supplier-offers';
 import { index as supplierPayables } from '@/routes/admin/supplier-payables';
 import { index as supplierStock } from '@/routes/admin/supplier-stock';
-import {
-    create as createSupplier,
-    index as supplierApplications,
-} from '@/routes/admin/suppliers';
+import { index as supplierApplications } from '@/routes/admin/suppliers';
 import { index as supplierWallets } from '@/routes/admin/supplier-wallets';
 import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawals';
 import { index as accountWallets } from '@/routes/admin/wallets';
@@ -386,46 +382,41 @@ export function useNavigation(): {
                       ]
                     : []),
 
-                ...(permissions['catalog.view'] ||
-                permissions['sourcing_group.view']
+                // Subscription packages are sold and assigned day to day, so
+                // they keep a door of their own beside the Settings hub.
+                ...(permissions['package.view']
+                    ? [
+                          {
+                              title: t('nav.packages'),
+                              href: packageCatalogue(),
+                              icon: Boxes,
+                          },
+                      ]
+                    : []),
+
+                ...(permissions['catalog.view']
                     ? [
                           {
                               title: 'Catalogue',
-                              href: permissions['catalog.view']
-                                  ? productCatalogue()
-                                  : sourcingGroups(),
+                              href: productCatalogue(),
                               icon: ShoppingBag,
                               items: [
-                                  ...(permissions['catalog.view']
-                                      ? [
-                                            {
-                                                title: t('nav.products'),
-                                                href: productCatalogue(),
-                                            },
-                                            {
-                                                title: t(
-                                                    'nav.product_categories',
-                                                ),
-                                                href: productCategories(),
-                                            },
-                                            {
-                                                title: t('nav.brands'),
-                                                href: productBrands(),
-                                            },
-                                            {
-                                                title: t('nav.attributes'),
-                                                href: productAttributes(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['sourcing_group.view']
-                                      ? [
-                                            {
-                                                title: t('nav.sourcing_groups'),
-                                                href: sourcingGroups(),
-                                            },
-                                        ]
-                                      : []),
+                                  {
+                                      title: t('nav.products'),
+                                      href: productCatalogue(),
+                                  },
+                                  {
+                                      title: t('nav.product_categories'),
+                                      href: productCategories(),
+                                  },
+                                  {
+                                      title: t('nav.brands'),
+                                      href: productBrands(),
+                                  },
+                                  {
+                                      title: t('nav.attributes'),
+                                      href: productAttributes(),
+                                  },
                               ],
                           },
                       ]
@@ -638,25 +629,13 @@ export function useNavigation(): {
                     : []),
 
                 ...(permissions['supplier.view'] ||
-                permissions['supplier_listing.view'] ||
-                permissions['supplier_pricing.view'] ||
-                permissions['supplier_stock.view'] ||
-                permissions['supplier_payable.view'] ||
-                permissions['withdrawal.view']
+                permissions['supplier_listing.view']
                     ? [
                           {
-                              title: 'Suppliers',
+                              title: 'Supplier Management',
                               href: permissions['supplier.view']
                                   ? supplierApplications()
-                                  : permissions['supplier_listing.view']
-                                    ? supplierListings()
-                                    : permissions['supplier_pricing.view']
-                                      ? supplierOffers()
-                                      : permissions['supplier_stock.view']
-                                        ? supplierStock()
-                                        : permissions['supplier_payable.view']
-                                          ? supplierPayables()
-                                          : supplierWithdrawals(),
+                                  : supplierListings(),
                               icon: Truck,
                               items: [
                                   ...(permissions['supplier.view']
@@ -664,14 +643,6 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.suppliers'),
                                                 href: supplierApplications(),
-                                            },
-                                        ]
-                                      : []),
-                                  ...(permissions['supplier.create']
-                                      ? [
-                                            {
-                                                title: t('nav.add_supplier'),
-                                                href: createSupplier(),
                                             },
                                         ]
                                       : []),
@@ -691,17 +662,32 @@ export function useNavigation(): {
                                             },
                                         ]
                                       : []),
+                              ],
+                          },
+                      ]
+                    : []),
+
+                ...(permissions['supplier_pricing.view'] ||
+                permissions['supplier_stock.view']
+                    ? [
+                          {
+                              title: 'Supplier Operations',
+                              href: permissions['supplier_pricing.view']
+                                  ? supplierAllocations()
+                                  : supplierStock(),
+                              icon: Truck,
+                              items: [
                                   ...(permissions['supplier_pricing.view']
                                       ? [
-                                            {
-                                                title: t('nav.supplier_offers'),
-                                                href: supplierOffers(),
-                                            },
                                             {
                                                 title: t(
                                                     'nav.supplier_allocations',
                                                 ),
                                                 href: supplierAllocations(),
+                                            },
+                                            {
+                                                title: t('nav.supplier_offers'),
+                                                href: supplierOffers(),
                                             },
                                         ]
                                       : []),
@@ -713,6 +699,21 @@ export function useNavigation(): {
                                             },
                                         ]
                                       : []),
+                              ],
+                          },
+                      ]
+                    : []),
+
+                ...(permissions['supplier_payable.view'] ||
+                permissions['withdrawal.view']
+                    ? [
+                          {
+                              title: 'Supplier Finance',
+                              href: permissions['supplier_payable.view']
+                                  ? supplierPayables()
+                                  : supplierWithdrawals(),
+                              icon: Truck,
+                              items: [
                                   ...(permissions['supplier_payable.view']
                                       ? [
                                             {
@@ -833,15 +834,6 @@ export function useNavigation(): {
                               title: t('nav.referral_settings'),
                               href: referralSettings(),
                               icon: Network,
-                          },
-                      ]
-                    : []),
-                ...(permissions['package.view']
-                    ? [
-                          {
-                              title: t('nav.packages'),
-                              href: packageCatalogue(),
-                              icon: Boxes,
                           },
                       ]
                     : []),

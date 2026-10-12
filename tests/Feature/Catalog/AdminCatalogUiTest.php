@@ -269,9 +269,9 @@ describe('bulk actions', function () {
                 'action' => 'transition',
                 'status' => 'archived',
             ])
-            ->assertSessionHasErrors('reason');
+            ->assertSessionDoesntHaveErrors('reason');
 
-        expect($draft->refresh()->status)->toBe(ProductStatus::Draft);
+        expect($draft->refresh()->status)->toBe(ProductStatus::Archived);
     });
 
     it('switches a channel in bulk, only for someone who may publish', function () {

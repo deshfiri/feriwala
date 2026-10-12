@@ -6,6 +6,9 @@
  * else is written under "Other". Listed by key in resources/js/lib/reasons.ts.
  */
 return [
+    // Stands in when a reason that is optional is left out.
+    'not_given' => 'No reason given.',
+
     'choose' => 'Choose a reason…',
     'other' => 'Other (write your own)',
     'write' => 'Write the reason',

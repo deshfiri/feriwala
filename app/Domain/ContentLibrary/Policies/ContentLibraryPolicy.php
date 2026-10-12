@@ -49,7 +49,7 @@ class ContentLibraryPolicy
 
     protected static function allows(User $user, PermissionAction $action): bool
     {
-        return ! $user->accountMembership()->exists()
+        return ! $user->hasAccountMembership()
             && $user->can(PermissionCatalogue::name(PermissionModule::ContentLibrary, $action));
     }
 }

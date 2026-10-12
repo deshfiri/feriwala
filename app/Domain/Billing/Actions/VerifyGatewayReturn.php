@@ -80,7 +80,8 @@ class VerifyGatewayReturn
             return false;
         }
 
-        SettleGatewayNotification::dispatch($payment->id, $gatewayReference, 'return');
+        // Settled while the payer is still here, not whenever a worker gets to it.
+        SettleGatewayNotification::now($payment->id, $gatewayReference, 'return');
 
         return true;
     }

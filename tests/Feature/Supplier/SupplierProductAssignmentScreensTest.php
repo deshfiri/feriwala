@@ -76,7 +76,7 @@ describe('staff assignment over HTTP', function () {
         expect(SupplierOffer::query()->count())->toBe(1);
     });
 
-    it('changes only the base price, with a reason, and keeps the platform prices', function () {
+    it('changes only the base price, the reason being optional, and keeps the platform prices', function () {
         $offer = supplierScreensAssign($this->supplier, $this->product, '1400.00', $this->staff);
 
         $this->actingAs($this->staff)
@@ -84,9 +84,9 @@ describe('staff assignment over HTTP', function () {
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $this->patch(route('admin.product-suppliers.price.update', $offer->public_id), ['base_price' => '1300.00'])
-            ->assertSessionHasErrors('reason');
+            ->assertSessionDoesntHaveErrors('reason');
 
-        expect($offer->refresh()->supplier_rate->toDecimal())->toBe('1350.00')
+        expect($offer->refresh()->supplier_rate->toDecimal())->toBe('1300.00')
             ->and($offer->platform_rate->toDecimal())->toBe('2000.00')
             ->and($this->product->refresh()->wholesale_price->toDecimal())->toBe('2000.00');
     });

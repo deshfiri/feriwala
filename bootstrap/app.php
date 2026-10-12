@@ -3,6 +3,7 @@
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Inventory\Policies\InventoryPolicy;
 use App\Http\Middleware\ApplyConfiguredSessionLifetime;
+use App\Http\Middleware\DefaultReasonUnlessSecurity;
 use App\Http\Middleware\EnsureAccountIsEntitled;
 use App\Http\Middleware\EnsureBusinessAccountIsActivated;
 use App\Http\Middleware\EnsureIdentityHasPlatformAccess;
@@ -73,6 +74,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             HandleAppearance::class,
+            // A reason is only demanded where it is a security matter.
+            DefaultReasonUnlessSecurity::class,
             /*
              * The identity gate is global, not per-route (D23). A suspended
              * login must lose every panel, and a gate that has to be remembered

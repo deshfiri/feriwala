@@ -42,15 +42,15 @@ it('lets staff change an account to Non-Conditional, persists it and audits it',
         ->and($audit->reason)->toContain('delivery-only upfront');
 });
 
-it('requires a reason', function () {
+it('does not need a reason', function () {
     $account = testBusinessAccount();
 
     $this->actingAs($this->staff)->post(route('admin.accounts.account-type.update', $account), [
         'account_type' => AccountType::NonConditional->value,
         'reason' => '',
-    ])->assertSessionHasErrors('reason');
+    ])->assertSessionDoesntHaveErrors('reason');
 
-    expect($account->fresh()->account_type)->toBe(AccountType::Conditional);
+    expect($account->fresh()->account_type)->toBe(AccountType::NonConditional);
 });
 
 it('rejects an unknown account type', function () {

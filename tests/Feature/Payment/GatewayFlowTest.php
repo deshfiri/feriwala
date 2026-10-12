@@ -207,6 +207,23 @@ describe('coming back from the gateway', function () {
         expect($payment->refresh()->status)->toBe(PaymentStatus::Failed);
     });
 
+    it('never marks a payment paid on a forged success return the gateway does not confirm', function () {
+        $payment = ($this->start)();
+
+        $this->validation = ['status' => 'INVALID_TRANSACTION'];
+
+        $this->actingAs($this->applicant)
+            ->get(route('checkout.return', [
+                'tran_id' => $payment->reference,
+                'val_id' => 'forged-val',
+                'status' => 'VALID',
+                'amount' => $payment->amount->toDecimal(),
+            ]));
+
+        expect($payment->refresh()->status)->not->toBe(PaymentStatus::Paid)
+            ->and($payment->paid_at)->toBeNull();
+    });
+
     it('refuses a transaction that belongs to a different payment', function () {
         /*
          * The callback says which payment to look at; the gateway says which
@@ -415,6 +432,24 @@ describe('the IPN', function () {
         );
 
         expect($payment->refresh()->status)->toBe(PaymentStatus::Initiated);
+    });
+
+    it('settles in the request itself, without waiting for a queue worker', function () {
+        /*
+         * Money paid should be seen as paid at once. The null queue driver
+         * discards anything pushed to it — standing in for a worker that is
+         * not running — so only inline settlement can mark this paid.
+         */
+        config(['queue.default' => 'null']);
+
+        $payment = ($this->start)();
+
+        $this->post(
+            route('webhooks.payment', 'sslcommerz'),
+            gatewayFlowSignedIpn($payment->reference),
+        )->assertOk();
+
+        expect($payment->refresh()->status)->toBe(PaymentStatus::Paid);
     });
 
     it('refuses an unsigned notification before looking anything up', function () {

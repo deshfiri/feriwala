@@ -77,6 +77,8 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasPublicId, HasRoles, HasStateMachine, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
+    private ?bool $accountMembershipKnown = null;
+
     /**
      * Mirrors the column default, so a model that has not been read back from
      * the database still has an identity status.
@@ -203,6 +205,21 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     /**
      * Whether this person may work inside the given account (D1).
      */
+    /**
+     * Whether this person works inside a business account at all, as opposed
+     * to being platform staff.
+     *
+     * Asked once per instance: every permission check on a request wants the
+     * answer, and a navigation that checks seventy abilities was running the
+     * same query seventy times.
+     */
+    public function hasAccountMembership(): bool
+    {
+        return $this->accountMembershipKnown ??= $this->relationLoaded('accountMembership')
+            ? $this->accountMembership !== null
+            : $this->accountMembership()->exists();
+    }
+
     public function belongsToAccount(BusinessAccount $account): bool
     {
         return $this->accountMembership()

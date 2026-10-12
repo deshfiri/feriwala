@@ -396,13 +396,14 @@ describe('the endpoint', function () {
             ->assertSessionHasErrors('reason');
     });
 
-    it('requires both the reason and the instructions', function () {
+    it('requires the instructions, and not the reason', function () {
         $account = kycUpdateTestAccount();
 
         $this->actingAs($this->officer)
             ->from(route('admin.kyc.index'))
             ->post(route('admin.kyc.request-update', $account), [])
-            ->assertSessionHasErrors(['reason', 'instructions']);
+            ->assertSessionHasErrors('instructions')
+            ->assertSessionDoesntHaveErrors('reason');
     });
 
     it('refuses a deadline that is not in the future', function () {

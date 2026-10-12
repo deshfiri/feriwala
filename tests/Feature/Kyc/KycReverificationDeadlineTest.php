@@ -175,15 +175,15 @@ describe('the withdraw endpoint', function () {
             ->and(app(KycRestrictions::class)->blocksNewOrders($this->account))->toBeFalse();
     });
 
-    it('requires a reason', function () {
+    it('does not need a reason', function () {
         $round = kycDeadlineTestRound([KycConsequence::BlockNewOrders]);
 
         $this->actingAs($this->officer)
             ->from(route('admin.kyc.index'))
             ->post(route('admin.kyc.withdraw', $round), [])
-            ->assertSessionHasErrors('reason');
+            ->assertSessionDoesntHaveErrors('reason');
 
-        expect($round->fresh()->cancelled_at)->toBeNull();
+        expect($round->fresh()->cancelled_at)->not->toBeNull();
     });
 
     it('turns an already-withdrawn round into a form error, not a 500', function () {

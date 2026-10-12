@@ -178,7 +178,7 @@ class PaymentWebhookController extends Controller
             request: $request,
         );
 
-        SettleGatewayNotification::dispatch($payment->id, $result->gatewayReference, 'ipn');
+        SettleGatewayNotification::now($payment->id, $result->gatewayReference, 'ipn');
 
         return response()->json(self::ACKNOWLEDGED);
     }

@@ -136,14 +136,10 @@ test('every legal transition is reachable through the advance route, not just co
         ->and($this->commitment->status->isTerminal())->toBeTrue();
 });
 
-test('failing or cancelling through the route is refused without a reason', function () {
+test('failing or cancelling through the route needs no reason', function () {
     $this->actingAs($this->staff)->post(route('admin.orders.lines.fulfilment-commitments.advance', [
         $this->order, $this->line, $this->commitment,
-    ]), ['action' => 'fail'])->assertSessionHasErrors('reason');
-
-    $this->actingAs($this->staff)->post(route('admin.orders.lines.fulfilment-commitments.advance', [
-        $this->order, $this->line, $this->commitment,
-    ]), ['action' => 'cancel'])->assertSessionHasErrors('reason');
+    ]), ['action' => 'fail'])->assertSessionDoesntHaveErrors('reason');
 
     expect($this->commitment->refresh()->status)->toBe(FulfilmentCommitmentStatus::AwaitingConfirmation);
 });

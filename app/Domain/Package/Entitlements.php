@@ -130,9 +130,27 @@ class Entitlements
      */
     public function activePackage(BusinessAccount $account): ?UserPackage
     {
-        $pointed = $account->relationLoaded('currentPackage')
-            ? $account->currentPackage
-            : $account->currentPackage()->with('package.features')->first();
+        /*
+         * Remembered on the account instance, because one request asks this
+         * question for every feature it checks. `refresh()` drops relations,
+         * so a subscription that has just changed is read afresh.
+         */
+        if ($account->relationLoaded('resolvedActivePackage')) {
+            return $account->getRelation('resolvedActivePackage');
+        }
+
+        $account->setRelation('resolvedActivePackage', $this->resolveActivePackage($account));
+
+        return $account->getRelation('resolvedActivePackage');
+    }
+
+    private function resolveActivePackage(BusinessAccount $account): ?UserPackage
+    {
+        $pointed = match (true) {
+            $account->relationLoaded('currentPackage') => $account->currentPackage,
+            $account->current_user_package_id === null => null,
+            default => $account->currentPackage()->with('package.features')->first(),
+        };
 
         if ($pointed !== null && $pointed->entitlesNow()) {
             return $pointed;

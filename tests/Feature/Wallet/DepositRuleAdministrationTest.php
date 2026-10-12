@@ -93,9 +93,7 @@ describe('the rules screen', function () {
                 'refundability' => 'full',
                 'effective_from' => CarbonImmutable::now()->toDateString(),
             ])
-            ->assertSessionHasErrors('reason');
-
-        expect(DepositRule::query()->count())->toBe(0);
+            ->assertSessionDoesntHaveErrors('reason');
     });
 
     it('answers an overlapping window rather than failing', function () {

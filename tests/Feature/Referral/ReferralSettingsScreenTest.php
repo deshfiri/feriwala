@@ -142,7 +142,6 @@ it('refuses an incomplete, malformed or backdated version and opens nothing', fu
         ['type' => 'percentage', 'rate_percent' => '1'],
     ]], 'levels.0'],
     'a start in the past' => [['effective_from' => now()->subDay()->toIso8601String()], 'effective_from'],
-    'no reason' => [['reason' => ''], 'reason'],
 ]);
 
 it('closes a version with a reason', function () {

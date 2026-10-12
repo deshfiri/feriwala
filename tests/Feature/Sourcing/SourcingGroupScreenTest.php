@@ -83,21 +83,14 @@ it('shows members, mappings, sources and history, and finds ungrouped products t
             ->missing('offers.0.supplier_rate'));
 });
 
-it('adds and removes a product through the screen with a mandatory reason', function () {
+it('adds and removes a product through the screen, the reason being optional', function () {
     $group = sourcingScreenGroup();
     $product = websiteTestProduct();
 
-    $this->actingAs($this->staff)
-        ->post(route('admin.sourcing-groups.products.store', $group), ['product_id' => $product->public_id])
-        ->assertSessionHasErrors('reason');
-
-    $this->post(route('admin.sourcing-groups.products.store', $group), ['product_id' => $product->public_id, 'reason' => 'Reference product.'])
+    $this->actingAs($this->staff)->post(route('admin.sourcing-groups.products.store', $group), ['product_id' => $product->public_id, 'reason' => 'Reference product.'])
         ->assertSessionHasNoErrors();
 
     expect($group->products()->active()->count())->toBe(1);
-
-    $this->delete(route('admin.sourcing-groups.products.destroy', [$group, $product]), ['reason' => ''])
-        ->assertSessionHasErrors('reason');
 
     $this->delete(route('admin.sourcing-groups.products.destroy', [$group, $product]), ['reason' => 'Not equivalent.'])
         ->assertSessionHasNoErrors();
@@ -148,13 +141,10 @@ it('maps and unmaps a variation through the screen', function () {
     expect($group->variantMappings()->active()->count())->toBe(0);
 });
 
-it('deactivates a group only with a reason', function () {
+it('deactivates a group, the reason being optional', function () {
     $group = sourcingScreenGroup();
 
-    $this->actingAs($this->staff)->post(route('admin.sourcing-groups.toggle', $group), ['is_active' => 0])
-        ->assertSessionHasErrors('reason');
-
-    $this->post(route('admin.sourcing-groups.toggle', $group), ['is_active' => 0, 'reason' => 'Retired.'])
+    $this->actingAs($this->staff)->post(route('admin.sourcing-groups.toggle', $group), ['is_active' => 0, 'reason' => 'Retired.'])
         ->assertSessionHasNoErrors();
 
     expect($group->fresh()->is_active)->toBeFalse();
