@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Kyc\Actions\ManageKycDocumentTypes;
+use App\Domain\Kyc\Models\KycBatch;
+use App\Domain\Kyc\Models\KycBatchScope;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycDocumentTypeScope;
 use App\Domain\Package\Models\Package;
@@ -37,7 +39,7 @@ class KycDocumentTypeController extends Controller
         Gate::authorize('viewAny', KycDocumentType::class);
 
         $types = KycDocumentType::query()
-            ->with('scopes')
+            ->with(['scopes', 'batch'])
             ->withCount('submissionRequirements')
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -62,6 +64,7 @@ class KycDocumentTypeController extends Controller
                 'accepted_mime_types' => $type->accepted_mime_types,
                 'max_size_kb' => $type->max_size_kb,
                 'sort_order' => $type->sort_order,
+                'batch' => $type->batch?->public_id,
 
                 // How many rounds have been opened against it — the figure that
                 // explains why deletion is unavailable.
@@ -101,6 +104,34 @@ class KycDocumentTypeController extends Controller
              * routing decision and may be edited; a rule keyed on one is
              * orphaned the day somebody renames a URL.
              */
+            'batches' => KycBatch::query()
+                ->with('scopes')
+                ->withCount('types')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (KycBatch $batch) => [
+                    'id' => $batch->public_id,
+                    'key' => $batch->key,
+                    'audience' => $batch->audience->value,
+                    'name' => $batch->name,
+                    'description' => $batch->description,
+                    'is_active' => $batch->is_active,
+                    'is_archived' => $batch->isArchived(),
+                    'sort_order' => $batch->sort_order,
+                    'criteria_count' => $batch->types_count,
+
+                    // Who it applies to; empty means everyone.
+                    'rules' => $batch->scopes->map(fn (KycBatchScope $scope) => [
+                        'package' => $scope->package_public_id,
+                        'country' => $scope->country_code,
+                    ])->values(),
+
+                    'can' => [
+                        'update' => ! $batch->isArchived() && $actor->can('create', KycDocumentType::class),
+                        'delete' => ! $batch->isReferenced() && $actor->can('create', KycDocumentType::class),
+                    ],
+                ]),
             'packages' => Package::query()
                 ->orderBy('name')
                 ->get(['public_id', 'name'])

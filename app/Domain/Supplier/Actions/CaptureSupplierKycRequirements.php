@@ -3,6 +3,7 @@
 namespace App\Domain\Supplier\Actions;
 
 use App\Domain\Kyc\Models\KycDocumentType;
+use App\Domain\Kyc\Models\KycSubmissionRequirement;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
 use App\Domain\Supplier\SupplierKycDocumentStore;
 
@@ -33,7 +34,17 @@ class CaptureSupplierKycRequirements
             return $submission->requirements()->count();
         }
 
-        $types = KycDocumentType::query()->forSuppliers()->active()->get();
+        // A Supplier has no package or country rules to match, so a batch counts
+        // when it is switched on; the batch's order then the criterion's decides
+        // how the form reads.
+        $types = KycDocumentType::query()
+            ->forSuppliers()
+            ->active()
+            ->with('batch')
+            ->get()
+            ->filter(fn (KycDocumentType $type) => $type->batch === null || ($type->batch->is_active && ! $type->batch->isArchived()))
+            ->sortBy(fn (KycDocumentType $type) => [$type->batch?->sort_order ?? 0, $type->sort_order, $type->id])
+            ->values();
 
         if ($types->isEmpty()) {
             return $this->captureBuiltIn($submission);
@@ -52,6 +63,7 @@ class CaptureSupplierKycRequirements
                 'accepted_mime_types' => $type->accepted_mime_types,
                 'max_size_kb' => $type->max_size_kb,
                 'sort_order' => $type->sort_order,
+                ...KycSubmissionRequirement::batchSnapshot($type),
             ]);
         }
 

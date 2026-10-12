@@ -59,7 +59,7 @@ function RoundCard({ round }: { round: KycHistoryRound }) {
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h2 className="font-medium">
-                        {t('kyc.history.round', { number: round.round })}
+                        {t('kyc.history.entry')}
                         {round.was_requested && (
                             <span className="text-muted-foreground font-normal">
                                 {' — '}

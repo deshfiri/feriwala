@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type {
+    KycBatchRow,
     KycDocumentTypeRow,
     KycDocumentTypeScopeRow,
     SelectOption,
@@ -31,6 +32,10 @@ type Props = {
     onOpenChange: (open: boolean) => void;
     /** Null creates; a row edits it. */
     type: KycDocumentTypeRow | null;
+    /** The batches a criterion may be put in — active ones only. */
+    batches: KycBatchRow[];
+    /** The batch to preselect when creating from inside one. */
+    defaultBatch: string | null;
     /** Packages a rule may name. Empty until P1-32 builds Package CRUD. */
     packages: SelectOption[];
     /** The countries Feriwala serves (config/countries.php). */
@@ -52,6 +57,8 @@ export default function RequirementDialog({
     open,
     onOpenChange,
     type,
+    batches,
+    defaultBatch,
     packages,
     countries,
 }: Props) {
@@ -126,31 +133,34 @@ export default function RequirementDialog({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="audience">
-                                    {t('kyc.document_types.form.audience')}
+                                <Label htmlFor="batch">
+                                    {t('kyc.document_types.form.batch')}
                                 </Label>
                                 <select
-                                    id="audience"
-                                    name="audience"
-                                    defaultValue={type?.audience ?? 'account'}
+                                    id="batch"
+                                    name="batch"
+                                    required
+                                    defaultValue={
+                                        type?.batch ?? defaultBatch ?? ''
+                                    }
                                     className="border-input bg-background h-9 rounded-md border px-2 text-sm"
                                 >
-                                    {(
-                                        ['account', 'supplier', 'both'] as const
-                                    ).map((audience) => (
-                                        <option key={audience} value={audience}>
-                                            {t(
-                                                `kyc.document_types.audience.${audience}`,
-                                            )}
+                                    <option value="" disabled>
+                                        {t(
+                                            'kyc.document_types.form.batch_placeholder',
+                                        )}
+                                    </option>
+                                    {batches.map((batch) => (
+                                        <option key={batch.id} value={batch.id}>
+                                            {batch.name}
                                         </option>
                                     ))}
                                 </select>
                                 <p className="text-muted-foreground text-xs">
-                                    {t('kyc.document_types.form.audience_help')}
+                                    {t('kyc.document_types.form.batch_help')}
                                 </p>
-                                <InputError message={errors.audience} />
+                                <InputError message={errors.batch} />
                             </div>
-
                             <div className="grid gap-2">
                                 <Label htmlFor="name">
                                     {t('kyc.document_types.form.name')}

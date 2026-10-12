@@ -928,6 +928,7 @@ function StockState({ row }: { row: ProductRow }) {
  * the list no longer carries a shortcut or a count for either.
  */
 function RowLinks({ row, can }: { row: ProductRow; can: CatalogAbilities }) {
+    const { t } = useTranslation();
     const [trashOpen, setTrashOpen] = useState(false);
 
     return (

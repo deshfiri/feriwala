@@ -1,19 +1,58 @@
 <?php
 
 return [
+    'batches' => [
+        'add' => 'New batch',
+        'empty_title' => 'No batches yet',
+        'empty_description' => 'Create a batch such as Identity or Business, then add the criteria it holds — NID, passport, selfie, trade licence. Applicants are asked for nothing until you do.',
+        'ungrouped_heading' => 'Not in a batch',
+        'ungrouped_description' => 'Criteria created before batches existed. They still apply; move each into a batch when you are ready.',
+        'criteria_count' => ':count criteria',
+        'no_criteria' => 'This batch holds nothing yet. Add a criterion to it.',
+
+        'actions' => [
+            'add_criterion' => 'Add criterion',
+            'move_up' => 'Move batch up',
+            'move_down' => 'Move batch down',
+        ],
+
+        'form' => [
+            'create_title' => 'New batch',
+            'edit_title' => 'Edit batch',
+            'description' => 'A batch is a group of criteria an applicant completes together, such as Identity.',
+            'name' => 'Batch name',
+            'name_placeholder' => 'Identity verification',
+            'key' => 'Key',
+            'key_help' => 'Lower-case letters, numbers and underscores. Fixed once created.',
+            'description_label' => 'What applicants are told',
+            'description_help' => 'Shown to the applicant above the batch.',
+            'audience' => 'Asked of',
+            'audience_help' => 'Every criterion in the batch is asked of the same people.',
+            'is_active' => 'Active — applicants are asked for it',
+            'save' => 'Save batch',
+        ],
+
+        'rules' => [
+            'heading' => 'Who is asked',
+            'help' => 'Leave empty to ask everyone. Otherwise the batch applies to anyone who matches any one rule. Rules apply to Partners; a Supplier is asked for every active batch marked for them.',
+            'everyone' => 'Asked of everyone.',
+            'any_package' => 'Any package',
+            'any_country' => 'Any country',
+            'add' => 'Add a rule',
+        ],
+    ],
     'document_types' => [
-        'title' => 'Verification requirements',
-        'description' => 'What applicants are asked for, and who is asked for it.',
+        'title' => 'Verification batches',
+        'description' => 'Group the criteria applicants are asked for into batches, and decide who is asked for each batch. Applicants complete every batch that applies to them in one submission.',
         'nav' => 'Requirements',
 
         'empty_title' => 'No requirements configured',
         'empty_description' => 'Applicants are asked for nothing until you add one.',
         'forbidden_title' => 'You cannot configure verification',
         'forbidden_description' => 'Configuring requirements needs the KYC settings permission. Ask an administrator if you need it.',
-
-        'add' => 'Add requirement',
+        'add' => 'Add criterion',
         'archived_heading' => 'Archived',
-        'archived_description' => 'Retired requirements, kept because past rounds were judged against them.',
+        'archived_description' => 'Retired requirements, kept because past submissions were judged against them.',
 
         'state' => [
             'active' => 'Active',
@@ -36,7 +75,7 @@ return [
         'meta' => [
             'formats' => 'Accepted: :formats',
             'max_size' => 'up to :size KB',
-            'used' => 'Used by :count round(s)',
+            'used' => 'Used by :count submission(s)',
             'cannot_delete' => 'In use — archive instead',
             'archived_locked' => 'Archived requirements cannot be edited.',
         ],
@@ -66,6 +105,9 @@ return [
         ],
 
         'form' => [
+            'batch' => 'Batch',
+            'batch_placeholder' => 'Choose a batch',
+            'batch_help' => 'The batch this criterion belongs to. It is asked of whoever the batch is asked of.',
             'audience' => 'Asked of',
             'audience_help' => 'Package and country rules below apply to Partners only. A Supplier is asked for every active requirement marked for them.',
             'create_title' => 'New requirement',
@@ -91,13 +133,13 @@ return [
 
     'history' => [
         'title' => 'Verification history',
-        'description' => 'Every round of verification on this account, and what came of it.',
+        'description' => 'Every verification this account has been through, and what came of it.',
         'nav' => 'History',
         'empty_title' => 'Nothing to show yet',
         'empty_description' => 'Your verification history will appear here once you start.',
         'start' => 'Start verification',
-        'continue' => 'Continue this round',
-        'round' => 'Round :number',
+        'continue' => 'Continue this verification',
+        'entry' => 'Verification',
         'requested' => 'requested by Banij',
         'opened' => 'Opened :date',
         'submitted' => 'Submitted :date',
@@ -129,7 +171,6 @@ return [
     'columns' => [
         'applicant' => 'Applicant',
         'country' => 'Country',
-        'round' => 'Round',
         'submitted' => 'Submitted',
         'waiting' => 'Waiting',
         'status' => 'Status',
@@ -144,12 +185,12 @@ return [
     ],
 
     'detail' => [
-        'title' => 'Submission :round',
+        'title' => 'Submission',
         'applicant' => 'Applicant',
         'documents' => 'Documents',
         'fields' => 'Details provided',
         'history' => 'Review history',
-        'no_documents' => 'No documents were attached to this round.',
+        'no_documents' => 'No documents were attached to this submission.',
         'no_fields' => 'No typed details were provided.',
         'no_history' => 'No decision has been recorded yet.',
         'documents_hidden' => 'Your role does not include opening KYC documents.',
@@ -164,7 +205,7 @@ return [
     'submission' => [
         'page_title' => 'KYC verification',
         'title' => 'Identity verification',
-        'attempt' => 'This is attempt :round.',
+        'batch_progress' => ':provided of :total provided',
         'help' => 'We need these before your account can be activated.',
         'privacy' => 'Your documents are encrypted and stored privately. Only authorised reviewers can open them, and every access is recorded.',
         'view_history' => 'View my history',
@@ -196,7 +237,7 @@ return [
         'feedback_help' => 'Tell them what to fix — without it they will send the same thing again.',
         'internal_note' => 'Internal note (optional)',
         'submit' => 'Record decision',
-        'already_decided' => 'This round has already been decided.',
+        'already_decided' => 'This submission has already been decided.',
         'not_permitted' => 'Your role does not include deciding KYC applications.',
     ],
 
@@ -215,7 +256,7 @@ return [
     /* Staff-facing, on the §7.2 request and withdrawal actions. */
     'request' => [
         'never_submitted' => 'This account has never submitted verification, so there is nothing to update.',
-        'already_in_progress' => 'A verification round is already in progress.',
+        'already_in_progress' => 'A verification is already in progress.',
         'requested' => 'Verification update requested.',
         'withdrawn' => 'Verification request withdrawn.',
     ],

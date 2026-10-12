@@ -13,6 +13,11 @@ import type { StatusTone } from '@/lib/status';
 import { history as kycHistory } from '@/routes/kyc';
 
 type Requirement = {
+    /**
+     * The batch it sits in — the group the form draws a heading for. Null for a
+     * requirement with none, which is simply listed without one.
+     */
+    batch: { key: string; name: string; description: string | null } | null;
     // No id: §34.2 keeps database ids out of the payload, and the form
     // addresses a requirement by its key — which is what it posts back.
     key: string;
@@ -30,7 +35,6 @@ type Requirement = {
 
 type Submission = {
     id: string;
-    round: number;
     status: string;
     status_label: string;
     status_tone: StatusTone;
@@ -80,8 +84,6 @@ export default function KycForm({
                     </div>
                     <p className="text-muted-foreground text-sm">
                         {t('kyc.submission.help')}
-                        {submission.round > 1 &&
-                            ` ${t('kyc.submission.attempt', { round: submission.round })}`}
                     </p>
 
                     {/*
@@ -139,12 +141,11 @@ export default function KycForm({
                     </section>
                 ) : (
                     <>
-                        <div className="space-y-3">
-                            {requirements.map((requirement) => (
-                                <RequirementCard
-                                    key={requirement.key}
-                                    requirement={requirement}
-                                />
+                        {/* Every batch that applies, on one form: the applicant
+                            completes them all and submits once. */}
+                        <div className="space-y-6">
+                            {groupByBatch(requirements).map((group) => (
+                                <BatchSection key={group.key} group={group} />
                             ))}
                         </div>
 
@@ -201,7 +202,90 @@ export default function KycForm({
     );
 }
 
-function RequirementCard({ requirement }: { requirement: Requirement }) {
+type BatchGroup = {
+    key: string;
+    name: string | null;
+    description: string | null;
+    requirements: Requirement[];
+};
+
+/** Requirements grouped by batch, keeping the order they arrive in. */
+function groupByBatch(requirements: Requirement[]): BatchGroup[] {
+    const groups = new Map<string, BatchGroup>();
+
+    for (const requirement of requirements) {
+        const key = requirement.batch?.key ?? '__none';
+        const group = groups.get(key) ?? {
+            key,
+            name: requirement.batch?.name ?? null,
+            description: requirement.batch?.description ?? null,
+            requirements: [],
+        };
+
+        group.requirements.push(requirement);
+        groups.set(key, group);
+    }
+
+    return [...groups.values()];
+}
+
+/**
+ * One batch: its heading, how far through it the applicant is, and its
+ * requirements. A requirement with no batch has no heading to sit under, so it
+ * is listed bare.
+ */
+function BatchSection({ group }: { group: BatchGroup }) {
+    const { t } = useTranslation();
+
+    const provided = group.requirements.filter(
+        (requirement) =>
+            requirement.uploaded !== null || requirement.value_preview !== null,
+    ).length;
+
+    return (
+        <section className="space-y-3" aria-label={group.name ?? undefined}>
+            {group.name !== null && (
+                <header className="space-y-0.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <h2 className="text-base font-semibold">
+                            {group.name}
+                        </h2>
+                        <span className="text-muted-foreground text-xs tabular-nums">
+                            {t('kyc.submission.batch_progress', {
+                                provided,
+                                total: group.requirements.length,
+                            })}
+                        </span>
+                    </div>
+                    {group.description && (
+                        <p className="text-muted-foreground text-sm">
+                            {group.description}
+                        </p>
+                    )}
+                </header>
+            )}
+
+            <div className="space-y-3">
+                {group.requirements.map((requirement) => (
+                    <RequirementCard
+                        key={requirement.key}
+                        requirement={requirement}
+                        grouped={group.name !== null}
+                    />
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function RequirementCard({
+    requirement,
+    grouped,
+}: {
+    requirement: Requirement;
+    /** Under a batch heading, so one level lower. */
+    grouped: boolean;
+}) {
     const { t } = useTranslation();
     const [progress, setProgress] = useState<number | null>(null);
     const isSupplied =
@@ -232,14 +316,17 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
         <section className="bg-card border-border space-y-3 rounded-xl border p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-0.5">
-                    <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+                    <Heading
+                        level={grouped ? 3 : 2}
+                        className="flex items-center gap-1.5 text-sm font-semibold"
+                    >
                         {requirement.name}
                         {!requirement.is_required && (
                             <span className="text-muted-foreground text-xs font-normal">
                                 {t('kyc.submission.optional')}
                             </span>
                         )}
-                    </h2>
+                    </Heading>
                     {requirement.instructions && (
                         <p className="text-muted-foreground flex items-start gap-1.5 text-xs">
                             <Info
@@ -320,5 +407,21 @@ function RequirementCard({ requirement }: { requirement: Requirement }) {
                 </Form>
             )}
         </section>
+    );
+}
+
+function Heading({
+    level,
+    className,
+    children,
+}: {
+    level: 2 | 3;
+    className?: string;
+    children: React.ReactNode;
+}) {
+    return level === 3 ? (
+        <h3 className={className}>{children}</h3>
+    ) : (
+        <h2 className={className}>{children}</h2>
     );
 }

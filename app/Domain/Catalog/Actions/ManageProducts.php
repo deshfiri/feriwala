@@ -5,7 +5,9 @@ namespace App\Domain\Catalog\Actions;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Enums\ItemCondition;
+use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
@@ -64,9 +66,28 @@ class ManageProducts
                 ...$this->fields($attributes),
                 'currency_code' => Currency::base()->value,
                 'status' => ProductStatus::Draft,
+
+                // Offered to every package from the start. The model's own default
+                // stays the cautious one — this is what a person adding a product
+                // by hand wants, and they can narrow it afterwards.
+                'package_scope' => PackageScope::AllPackages,
             ]);
 
             $this->record($actor, 'catalog.product_created', $product, after: $this->snapshot($product));
+
+            // Switched on for every channel, but only by someone who may publish:
+            // putting a product in front of partners is that permission, and
+            // adding one is not enough to hold it. Each goes through the same
+            // action as switching it on later, so the history and audit trail
+            // read the same. The product is still a draft either way, so nothing
+            // reaches a partner until it is activated.
+            if (CatalogPolicy::canSetChannel($actor, true)) {
+                foreach (SalesChannel::cases() as $channel) {
+                    app(SetSalesChannel::class)->handle($actor, $product, $channel, true);
+                }
+
+                $product->refresh();
+            }
 
             return $product;
         });

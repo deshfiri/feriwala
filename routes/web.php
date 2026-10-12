@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
+use App\Http\Controllers\Admin\KycBatchController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReverificationCancellationController;
 use App\Http\Controllers\Admin\KycReviewController;
@@ -663,6 +664,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('kyc.document-types.archive');
         Route::delete('kyc/document-types/{documentType}', [KycDocumentTypeController::class, 'destroy'])
             ->name('kyc.document-types.destroy');
+
+        /*
+         * Verification batches: the groups of criteria an applicant completes in
+         * one submission, and the package and country rules saying who is asked
+         * for each. They live on the criteria screen; these are only its actions.
+         */
+        Route::post('kyc/batches', [KycBatchController::class, 'store'])->name('kyc.batches.store');
+        Route::post('kyc/batches/reorder', [KycBatchController::class, 'reorder'])->name('kyc.batches.reorder');
+        Route::patch('kyc/batches/{batch}', [KycBatchController::class, 'update'])->name('kyc.batches.update');
+        Route::patch('kyc/batches/{batch}/active', [KycBatchController::class, 'setActive'])->name('kyc.batches.active');
+        Route::post('kyc/batches/{batch}/archive', [KycBatchController::class, 'archive'])->name('kyc.batches.archive');
+        Route::delete('kyc/batches/{batch}', [KycBatchController::class, 'destroy'])->name('kyc.batches.destroy');
 
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');

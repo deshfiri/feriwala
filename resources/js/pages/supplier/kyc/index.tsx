@@ -1,4 +1,4 @@
-﻿import { Form, Head } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import { FileText, Lock } from 'lucide-react';
 import FileField from '@/components/forms/file-field';
 import FormField from '@/components/forms/form-field';
@@ -15,7 +15,6 @@ import { store } from '@/routes/supplier/kyc/documents';
 
 type Round = {
     id: string;
-    round: number;
     status: string;
     status_label: string;
     is_editable: boolean;
@@ -32,6 +31,8 @@ type Round = {
 };
 
 type Requirement = {
+    /** The batch it sits in, or null for a requirement with none. */
+    batch: { key: string; name: string; description: string | null } | null;
     key: string;
     name: string;
     instructions: string | null;
@@ -44,6 +45,33 @@ type Requirement = {
     uploaded: boolean;
     value_preview: string | null;
 };
+
+type BatchGroup = {
+    key: string;
+    name: string | null;
+    description: string | null;
+    requirements: Requirement[];
+};
+
+/** Requirements grouped by batch, keeping the order they arrive in. */
+function groupByBatch(requirements: Requirement[]): BatchGroup[] {
+    const groups = new Map<string, BatchGroup>();
+
+    for (const requirement of requirements) {
+        const key = requirement.batch?.key ?? '__none';
+        const group = groups.get(key) ?? {
+            key,
+            name: requirement.batch?.name ?? null,
+            description: requirement.batch?.description ?? null,
+            requirements: [],
+        };
+
+        group.requirements.push(requirement);
+        groups.set(key, group);
+    }
+
+    return [...groups.values()];
+}
 
 const TONES: Record<string, StatusTone> = {
     approved: 'success',
@@ -62,7 +90,8 @@ export default function SupplierKyc({
     supplier_status: string;
     round: Round;
     history: {
-        round: number;
+        id: string;
+        submitted_at: string | null;
         status: string;
         status_label: string;
         reviewed_at: string | null;
@@ -87,11 +116,6 @@ export default function SupplierKyc({
                     description={t('supplier.kyc.description')}
                     actions={
                         <>
-                            <span className="text-muted-foreground text-sm">
-                                {t('supplier.kyc.round', {
-                                    round: round.round,
-                                })}
-                            </span>
                             <StatusPill
                                 tone={TONES[round.status] ?? 'neutral'}
                                 label={round.status_label}
@@ -143,18 +167,45 @@ export default function SupplierKyc({
                             title={t('supplier.kyc.upload')}
                             description={t('supplier.kyc.accepted')}
                         >
-                            <ul className="divide-border divide-y">
-                                {requirements.map((requirement) => (
-                                    <li
-                                        key={requirement.key}
-                                        className="py-4 first:pt-0 last:pb-0"
+                            {/* Every batch that applies, on one form: the Supplier
+                                completes them all and submits once. */}
+                            <div className="space-y-6">
+                                {groupByBatch(requirements).map((group) => (
+                                    <section
+                                        key={group.key}
+                                        aria-label={group.name ?? undefined}
                                     >
-                                        <RequirementForm
-                                            requirement={requirement}
-                                        />
-                                    </li>
+                                        {group.name !== null && (
+                                            <header className="mb-2 space-y-0.5">
+                                                <h3 className="text-sm font-semibold">
+                                                    {group.name}
+                                                </h3>
+                                                {group.description && (
+                                                    <p className="text-muted-foreground text-xs">
+                                                        {group.description}
+                                                    </p>
+                                                )}
+                                            </header>
+                                        )}
+                                        <ul className="divide-border divide-y">
+                                            {group.requirements.map(
+                                                (requirement) => (
+                                                    <li
+                                                        key={requirement.key}
+                                                        className="py-4 first:pt-0 last:pb-0"
+                                                    >
+                                                        <RequirementForm
+                                                            requirement={
+                                                                requirement
+                                                            }
+                                                        />
+                                                    </li>
+                                                ),
+                                            )}
+                                        </ul>
+                                    </section>
                                 ))}
-                            </ul>
+                            </div>
                         </SectionCard>
 
                         <SectionCard
@@ -200,16 +251,18 @@ export default function SupplierKyc({
                     <SectionCard title={t('supplier.kyc.history')}>
                         <ul className="divide-border divide-y text-sm">
                             {history
-                                .filter((item) => item.round !== round.round)
+                                .filter((item) => item.id !== round.id)
                                 .map((item) => (
                                     <li
-                                        key={item.round}
+                                        key={item.id}
                                         className="flex flex-wrap justify-between gap-2 py-2"
                                     >
                                         <span>
-                                            {t('supplier.kyc.round', {
-                                                round: item.round,
-                                            })}
+                                            {item.submitted_at
+                                                ? new Date(
+                                                      item.submitted_at,
+                                                  ).toLocaleDateString(locale)
+                                                : t('supplier.kyc.entry')}
                                         </span>
                                         <span className="text-muted-foreground">
                                             {item.status_label}

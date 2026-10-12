@@ -24,11 +24,10 @@ return [
             'submit' => 'Save',
             'changed' => 'Account type updated.',
         ],
-
-        'verification' => 'Verification rounds',
-        'verification_help' => 'Every round this account has been through, newest first. Rounds an administrator asked for show the reason and the instructions that were sent.',
+        'verification' => 'Verification history',
+        'verification_help' => 'Every verification this account has been through, newest first. Ones an administrator asked for show the reason and the instructions that were sent.',
         'no_verification' => 'This account has never submitted verification.',
-        'round' => 'Round :number',
+        'entry' => 'Verification',
         'documents_count' => ':count uploaded',
         'asked_for' => 'Asked for',
         'submitted' => 'Submitted :date',
@@ -69,7 +68,7 @@ return [
     'kyc_update' => [
         'action' => 'Request verification update',
         'title' => 'Request a verification update',
-        'description' => 'Opens a new round and notifies the account owner. The account keeps trading while it is open.',
+        'description' => 'Opens a new verification and notifies the account owner. The account keeps trading while it is open.',
 
         'reason' => 'Internal reason',
         'reason_help' => 'Why we are asking. Recorded in the audit trail and never shown to the account holder.',
@@ -103,7 +102,7 @@ return [
     'kyc_withdraw' => [
         'action' => 'Withdraw request',
         'title' => 'Withdraw this verification request',
-        'description' => 'Round :number. The request stays in the account history, marked withdrawn.',
+        'description' => 'The request stays in the account history, marked withdrawn.',
         'reason' => 'Why it is being withdrawn',
         'reason_help' => 'Kept in the account history beside the request it cancels.',
         'confirm' => 'Any restrictions this request imposed are lifted immediately, and the owner is notified.',

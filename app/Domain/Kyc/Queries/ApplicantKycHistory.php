@@ -57,7 +57,6 @@ class ApplicantKycHistory
 
         return [
             'id' => $submission->public_id,
-            'round' => $submission->round,
 
             'status' => $submission->status->value,
             'status_label' => $submission->status->label(),

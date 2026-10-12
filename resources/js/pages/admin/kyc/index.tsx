@@ -84,15 +84,6 @@ export default function AdminKycIndex({
             cell: (row) => row.applicant.country ?? '—',
         },
         {
-            key: 'round',
-            header: t('kyc.columns.round'),
-            sortable: true,
-            align: 'end',
-            width: '5rem',
-            priority: 'secondary',
-            cell: (row) => row.round,
-        },
-        {
             key: 'submitted_at',
             header: t('kyc.columns.submitted'),
             sortable: true,

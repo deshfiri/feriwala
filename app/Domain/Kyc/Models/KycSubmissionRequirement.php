@@ -95,6 +95,27 @@ class KycSubmissionRequirement extends Model
             'accepted_mime_types' => $type->accepted_mime_types,
             'max_size_kb' => $type->max_size_kb,
             'sort_order' => $type->sort_order,
+            ...static::batchSnapshot($type),
+        ];
+    }
+
+    /**
+     * The batch the criterion sat in, copied so a later rename or regrouping
+     * changes nothing about a submission already made. All empty for a criterion
+     * with no batch.
+     *
+     * @return array<string, mixed>
+     */
+    public static function batchSnapshot(KycDocumentType $type): array
+    {
+        $batch = $type->batch;
+
+        return [
+            'kyc_batch_id' => $batch?->id,
+            'batch_key' => $batch?->key,
+            'batch_name' => $batch?->name,
+            'batch_description' => $batch?->description,
+            'batch_sort_order' => $batch?->sort_order ?? 0,
         ];
     }
 }

@@ -174,7 +174,7 @@ return [
     'kyc' => [
         'title' => 'Application & KYC',
         'description' => 'Upload the documents we need to verify your business.',
-        'round' => 'Round :round',
+        'entry' => 'Verification',
         'documents' => 'Documents',
         'no_documents' => 'No documents uploaded yet.',
         'document_type' => 'Document type',
@@ -184,7 +184,7 @@ return [
         'submit_help' => 'Once submitted, your documents cannot be changed unless a reviewer asks for a correction.',
         'locked' => 'This submission is being reviewed and is read-only.',
         'feedback' => 'Reviewer feedback',
-        'history' => 'Earlier rounds',
+        'history' => 'Earlier submissions',
         'types' => [
             'trade_licence' => 'Trade licence',
             'tin_certificate' => 'TIN certificate',

@@ -10,6 +10,7 @@ use Database\Factories\KycDocumentTypeFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 
@@ -61,6 +62,28 @@ class KycDocumentType extends Model
     protected static function newFactory(): KycDocumentTypeFactory
     {
         return KycDocumentTypeFactory::new();
+    }
+
+    /**
+     * The batch this criterion belongs to. Null for one made outside the admin
+     * screen (a seeder, a test), which is simply not grouped.
+     *
+     * @return BelongsTo<KycBatch, $this>
+     */
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(KycBatch::class, 'kyc_batch_id');
+    }
+
+    /**
+     * Whether this criterion's batch is asking $package / $country at all.
+     *
+     * A criterion with no batch is not held back by one. Its own country and
+     * package rules ({@see appliesTo()}) are a separate, narrower test.
+     */
+    public function batchAppliesTo(?string $package, ?string $country): bool
+    {
+        return $this->batch === null || $this->batch->appliesTo($package, $country);
     }
 
     /**

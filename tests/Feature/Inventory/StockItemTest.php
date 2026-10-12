@@ -160,6 +160,15 @@ describe('the stock list', function () {
         StockItem::create(['warehouse_id' => $chattogram->id, 'product_id' => $this->shirt->id, 'product_variant_id' => $this->medium->id]);
     });
 
+    it('lists the newest stock first', function () {
+        $this->actingAs($this->manager)
+            ->get(route('admin.inventory.stock.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('items.data.0.sku', 'FW-PJ-M')
+                ->where('items.data.1.sku', 'FW-KT'));
+    });
+
     it('lists each SKU per warehouse with its six figures and no price', function () {
         $this->actingAs($this->manager)
             ->get(route('admin.inventory.stock.index'))
@@ -167,10 +176,10 @@ describe('the stock list', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/inventory/stock')
                 ->has('items.data', 2)
-                ->where('items.data.0.sku', 'FW-KT')
-                ->where('items.data.0.warehouse.code', 'DHK')
-                ->where('items.data.0.buckets.available', 12)
-                ->where('items.data.1.sku', 'FW-PJ-M')
+                ->where('items.data.1.sku', 'FW-KT')
+                ->where('items.data.1.warehouse.code', 'DHK')
+                ->where('items.data.1.buckets.available', 12)
+                ->where('items.data.0.sku', 'FW-PJ-M')
                 ->missing('items.data.0.wholesale_price')
                 ->missing('items.data.0.base_cost')
                 ->has('warehouses', 2)

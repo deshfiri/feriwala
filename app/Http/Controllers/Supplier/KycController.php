@@ -43,7 +43,6 @@ class KycController extends Controller
             'supplier_status' => $supplier->status->value,
             'round' => [
                 'id' => $round->public_id,
-                'round' => $round->round,
                 'status' => $round->status->value,
                 'status_label' => $round->status->label(),
                 'is_editable' => $round->status->isEditable(),
@@ -60,13 +59,21 @@ class KycController extends Controller
                 ])->all(),
             ],
             'history' => $history->map(fn ($item) => [
-                'round' => $item->round,
+                'id' => $item->public_id,
+                'submitted_at' => $item->submitted_at?->toIso8601String(),
                 'status' => $item->status->value,
                 'status_label' => $item->status->label(),
                 'reviewed_at' => $item->reviewed_at?->toIso8601String(),
                 'decision_note' => $item->decision_note,
             ])->all(),
-            'requirements' => $requirements->map(fn (SupplierKycRequirement $requirement) => [
+            'requirements' => $requirements->sortBy(fn (SupplierKycRequirement $requirement) => [$requirement->batch_sort_order, $requirement->sort_order, $requirement->id])->values()->map(fn (SupplierKycRequirement $requirement) => [
+                // The batch it was asked under, copied when the round opened;
+                // null for a requirement with none, which gets no heading.
+                'batch' => $requirement->batch_key === null ? null : [
+                    'key' => $requirement->batch_key,
+                    'name' => $requirement->batch_name,
+                    'description' => $requirement->batch_description,
+                ],
                 'key' => $requirement->key,
                 'name' => $requirement->name,
                 'instructions' => $requirement->instructions,

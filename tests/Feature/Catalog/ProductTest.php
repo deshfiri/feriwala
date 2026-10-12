@@ -2,10 +2,13 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Catalog\Actions\SetSalesChannel;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\ProductBarcode;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
@@ -603,5 +606,59 @@ describe('downloading a barcode', function () {
         $this->actingAs($viewer)
             ->get(route('admin.catalog.products.barcode', $product->public_id))
             ->assertOk();
+    });
+});
+
+describe('a product added by hand', function () {
+    it('starts on every channel and for every package when the person may publish', function () {
+        $this->actingAs($this->manager)
+            ->post(route('admin.catalog.products.store'), catalogProductPayload())
+            ->assertRedirect();
+
+        $product = Product::query()->sole();
+
+        expect($product->dropshipping_status->value)->toBe('dropshipping_enabled')
+            ->and($product->wholesale_status->value)->toBe('wholesale_enabled')
+            ->and($product->package_scope->value)->toBe('all')
+            // Still a draft: nothing reaches a partner until it is activated.
+            ->and($product->status)->toBe(ProductStatus::Draft);
+
+        // Switching them on is recorded like any other channel change.
+        expect(ProductStatusChange::query()
+            ->where('product_id', $product->id)
+            ->whereIn('axis', ['dropshipping', 'wholesale'])
+            ->count())->toBe(2);
+    });
+
+    it('can be narrowed again afterwards', function () {
+        $this->actingAs($this->manager)->post(route('admin.catalog.products.store'), catalogProductPayload());
+        $product = Product::query()->sole();
+
+        app(SetSalesChannel::class)->handle($this->manager, $product, SalesChannel::Wholesale, false);
+
+        expect($product->refresh()->wholesale_status->value)->toBe('wholesale_disabled')
+            ->and($product->dropshipping_status->value)->toBe('dropshipping_enabled');
+    });
+
+    it('is offered to every package but left off the channels when the person may not publish', function () {
+        // Admin can add products but holds no publish permission, and adding one
+        // is not enough to put it in front of partners.
+        $this->actingAs(testPlatformStaff(PlatformRole::Admin))
+            ->post(route('admin.catalog.products.store'), catalogProductPayload())
+            ->assertRedirect();
+
+        $product = Product::query()->sole();
+
+        expect($product->package_scope->value)->toBe('all')
+            ->and($product->dropshipping_status->value)->toBe('dropshipping_disabled')
+            ->and($product->wholesale_status->value)->toBe('wholesale_disabled');
+    });
+
+    it('does not change the cautious defaults of a product created any other way', function () {
+        $product = catalogProduct();
+
+        expect($product->refresh()->package_scope->value)->toBe('selected')
+            ->and($product->dropshipping_status->value)->toBe('dropshipping_disabled')
+            ->and($product->wholesale_status->value)->toBe('wholesale_disabled');
     });
 });

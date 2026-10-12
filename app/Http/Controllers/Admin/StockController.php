@@ -293,7 +293,8 @@ class StockController extends Controller
                 $filters['sort'] !== null,
                 fn (Builder $query) => $query->orderBy((string) $filters['sort'], $filters['direction'] === 'desc' ? 'desc' : 'asc'),
             )
-            ->orderBy('id');
+            // Newest first by default, and the tie-break after any chosen sort.
+            ->orderByDesc('id');
     }
 
     /**

@@ -92,9 +92,13 @@ class CaptureRoundRequirements
         return KycDocumentType::query()
             ->forAccounts()
             ->active()
-            ->with('scopes')
+            ->with(['scopes', 'batch.scopes'])
             ->get()
-            ->filter(fn (KycDocumentType $type) => $type->appliesTo($packageId, $country))
+            // The batch decides first whether anyone in this position is asked at
+            // all; the criterion's own rules then narrow it further.
+            ->filter(fn (KycDocumentType $type) => $type->batchAppliesTo($packageId, $country)
+                && $type->appliesTo($packageId, $country))
+            ->sortBy(fn (KycDocumentType $type) => [$type->batch?->sort_order ?? 0, $type->sort_order, $type->id])
             ->values();
     }
 
