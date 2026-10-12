@@ -106,9 +106,10 @@ class ReceiveExternalStoreWebhook
             'last_duplicate_at' => now(),
         ])->save();
 
-        // Only a failed first attempt is worth another go; a processed or
-        // ignored event has already had its effect, or has none.
-        if ($record->state === ExternalWebhookState::Failed) {
+        // Only a failed or deferred first attempt is worth another go — by now
+        // a sync may have brought the order a deferred event was about. A
+        // processed or ignored event has already had its effect, or has none.
+        if (in_array($record->state, [ExternalWebhookState::Failed, ExternalWebhookState::Deferred], true)) {
             ProcessExternalStoreWebhook::dispatch($record->id);
         }
 

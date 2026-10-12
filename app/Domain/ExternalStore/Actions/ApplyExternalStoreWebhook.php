@@ -5,8 +5,11 @@ namespace App\Domain\ExternalStore\Actions;
 use App\Domain\ExternalStore\Enums\ExternalOrderEventSource;
 use App\Domain\ExternalStore\Enums\ExternalOrderEventType;
 use App\Domain\ExternalStore\Enums\ExternalWebhookState;
+use App\Domain\ExternalStore\Exceptions\ExternalOrderNotRecorded;
+use App\Domain\ExternalStore\Jobs\SyncExternalStore;
 use App\Domain\ExternalStore\Models\ExternalOrder;
 use App\Domain\ExternalStore\Models\ExternalOrderEvent;
+use App\Domain\ExternalStore\Models\ExternalStore;
 use App\Domain\ExternalStore\Models\ExternalStoreWebhookEvent;
 use App\Integrations\Store\Exceptions\UnreadableStoreOrder;
 use App\Integrations\Store\StorePlatformManager;
@@ -27,6 +30,11 @@ use Throwable;
  *
  * Once applied, the stored payload is cleared: it held a customer's details and
  * is not needed again. A failed one keeps it, so a retry has something to apply.
+ *
+ * A **deferred** one — too thin to create its order — waits for the pull API.
+ * Once its order has arrived it is closed as processed without being applied
+ * ({@see settleDeferred()}, and on a redelivery), because the pulled copy is
+ * newer than anything the old event could say.
  */
 class ApplyExternalStoreWebhook
 {
@@ -56,7 +64,24 @@ class ApplyExternalStoreWebhook
             $webhook = $this->platforms->driver($store->platform)->readWebhook($record->payload);
 
             if ($webhook->order !== null) {
-                $this->recorder->handle($store, $webhook->order, $record->event_id);
+                // A deferred notification is never applied late. Its order
+                // came in through the pull API after it — the store's current
+                // copy — so the old event has nothing newer to say.
+                if ($record->state === ExternalWebhookState::Deferred
+                    && $this->orderExists($record->external_store_id, $webhook->order->orderNumber)) {
+                    $this->finish($record, ExternalWebhookState::Processed);
+
+                    return;
+                }
+
+                try {
+                    $this->recorder->handle($store, $webhook->order, $record->event_id);
+                } catch (ExternalOrderNotRecorded $notRecorded) {
+                    $this->notRecorded($record, $notRecorded);
+
+                    return;
+                }
+
                 $this->finish($record, ExternalWebhookState::Processed);
 
                 return;
@@ -131,6 +156,53 @@ class ApplyExternalStoreWebhook
         });
     }
 
+    /**
+     * Close the store's deferred notifications whose orders a sync has now
+     * brought in (D29).
+     *
+     * Called after a successful pull. The pulled copy is the store's current
+     * one and supersedes each of them, so they are marked processed — not
+     * applied — and the customer details they held are cleared. One whose
+     * order is still missing stays deferred and says why.
+     *
+     * @return int how many were closed
+     */
+    public function settleDeferred(ExternalStore $store): int
+    {
+        $driver = $this->platforms->driver($store->platform);
+        $settled = 0;
+
+        ExternalStoreWebhookEvent::query()
+            ->where('external_store_id', $store->id)
+            ->where('state', ExternalWebhookState::Deferred->value)
+            ->orderBy('id')
+            ->chunkById(100, function ($records) use ($driver, &$settled) {
+                foreach ($records as $record) {
+                    /** @var ExternalStoreWebhookEvent $record */
+                    try {
+                        $number = $driver->readWebhook($record->payload)->order?->orderNumber;
+                    } catch (UnreadableStoreOrder) {
+                        continue;
+                    }
+
+                    if ($number !== null && $this->orderExists($record->external_store_id, $number)) {
+                        $this->finish($record, ExternalWebhookState::Processed);
+                        $settled++;
+                    }
+                }
+            });
+
+        return $settled;
+    }
+
+    protected function orderExists(int $storeId, string $orderNumber): bool
+    {
+        return ExternalOrder::query()
+            ->where('external_store_id', $storeId)
+            ->where('order_number', $orderNumber)
+            ->exists();
+    }
+
     protected function finish(ExternalStoreWebhookEvent $record, ExternalWebhookState $state): void
     {
         $record->forceFill([
@@ -139,6 +211,30 @@ class ApplyExternalStoreWebhook
             'error' => null,
             'payload' => ['cleared' => true],
         ])->save();
+    }
+
+    /**
+     * A notification that cannot become an order as it stands.
+     *
+     * Too little to create a new order (no store id, an amount or the items
+     * missing): kept as deferred — payload and all — and a sync is queued, so
+     * the order arrives complete from the pull API. An id and an order number
+     * that belong to two different orders: failed, and nothing merged.
+     */
+    protected function notRecorded(ExternalStoreWebhookEvent $record, ExternalOrderNotRecorded $notRecorded): void
+    {
+        if (! $notRecorded->incomplete) {
+            $this->fail($record, __('stores.errors.webhook_identity_conflict'));
+
+            return;
+        }
+
+        $record->forceFill([
+            'state' => ExternalWebhookState::Deferred,
+            'error' => mb_substr(__('stores.errors.webhook_deferred', ['reason' => $notRecorded->getMessage()]), 0, 255),
+        ])->save();
+
+        SyncExternalStore::dispatch($record->external_store_id);
     }
 
     protected function fail(ExternalStoreWebhookEvent $record, string $error): void

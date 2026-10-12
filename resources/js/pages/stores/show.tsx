@@ -1,13 +1,16 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import DetailList, { DetailItem } from '@/components/detail-list';
 import ConfirmDialog from '@/components/forms/confirm-dialog';
+import FormField from '@/components/forms/form-field';
 import Notice from '@/components/notice';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import ExternalStoreController from '@/actions/App/Http/Controllers/Erp/ExternalStoreController';
 import { index as ordersIndex } from '@/routes/orders';
@@ -22,6 +25,7 @@ const webhookTones: Record<string, StatusTone> = {
     processed: 'success',
     ignored: 'neutral',
     failed: 'danger',
+    deferred: 'warning',
 };
 
 /**
@@ -30,7 +34,9 @@ const webhookTones: Record<string, StatusTone> = {
  *
  * The signing secret is shown once — read from the flash on the response that
  * made it, kept only in this component's state — and never comes back with a
- * reload. Nothing else secret is ever on this page.
+ * reload. A secret the store generated can be entered instead; it goes one
+ * way, and the field is cleared once it is saved. Nothing else secret is ever
+ * on this page.
  */
 export default function ShowStore({ store }: Props) {
     const { t, locale } = useTranslation();
@@ -41,6 +47,7 @@ export default function ShowStore({ store }: Props) {
         typeof initial === 'string' ? initial : null,
     );
     const [disconnecting, setDisconnecting] = useState(false);
+    const ownSecret = useForm({ webhook_secret: '' });
 
     useEffect(
         () =>
@@ -59,6 +66,13 @@ export default function ShowStore({ store }: Props) {
         value ? new Date(value).toLocaleString(locale) : t('stores.never');
     const post = (url: string) =>
         router.post(url, {}, { preserveScroll: true });
+    const saveOwnSecret = (event: FormEvent) => {
+        event.preventDefault();
+        ownSecret.put(
+            ExternalStoreController.provideWebhookSecret.url(store.id),
+            { preserveScroll: true, onFinish: () => ownSecret.reset() },
+        );
+    };
 
     return (
         <>
@@ -276,6 +290,56 @@ export default function ShowStore({ store }: Props) {
                                         event_id: store.webhook.event_id_header,
                                     })}
                                 </p>
+                                <form
+                                    onSubmit={saveOwnSecret}
+                                    className="mt-6 space-y-3 border-t pt-4"
+                                >
+                                    <div>
+                                        <h3 className="text-sm font-medium">
+                                            {t('stores.show.own_secret_title')}
+                                        </h3>
+                                        <p className="text-muted-foreground text-xs">
+                                            {t(
+                                                'stores.show.own_secret_description',
+                                            )}
+                                        </p>
+                                    </div>
+                                    <FormField
+                                        label={t('stores.show.webhook_secret')}
+                                        error={ownSecret.errors.webhook_secret}
+                                        required
+                                    >
+                                        {(field) => (
+                                            <Input
+                                                {...field}
+                                                type="password"
+                                                value={
+                                                    ownSecret.data
+                                                        .webhook_secret
+                                                }
+                                                onChange={(event) =>
+                                                    ownSecret.setData(
+                                                        'webhook_secret',
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                autoComplete="new-password"
+                                                spellCheck={false}
+                                            />
+                                        )}
+                                    </FormField>
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={
+                                            ownSecret.processing ||
+                                            ownSecret.data.webhook_secret === ''
+                                        }
+                                    >
+                                        {t('stores.show.own_secret_save')}
+                                    </Button>
+                                </form>
                             </SectionCard>
                         )}
 

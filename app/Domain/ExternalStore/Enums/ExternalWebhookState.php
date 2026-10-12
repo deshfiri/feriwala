@@ -14,4 +14,11 @@ enum ExternalWebhookState: string
     case Ignored = 'ignored';
 
     case Failed = 'failed';
+
+    /**
+     * Too little to create the order it is about (no store id, an amount or
+     * the items missing). Kept with its payload; the order arrives complete
+     * through the pull API, which a deferred event queues.
+     */
+    case Deferred = 'deferred';
 }

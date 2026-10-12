@@ -41,6 +41,13 @@ class ExternalStoreController extends Controller
 {
     use ResolvesBusinessAccount;
 
+    /**
+     * A webhook signing secret the store generated: long enough not to be
+     * guessed, and no whitespace — a stray space from a paste would make every
+     * signature fail with no clue why.
+     */
+    protected const array WEBHOOK_SECRET_RULES = ['string', 'min:16', 'max:255', 'regex:/^\S+$/'];
+
     public function __construct(
         protected ExternalStoreOverview $overview,
         protected ExternalStoreAllowance $allowance,
@@ -97,7 +104,7 @@ class ExternalStoreController extends Controller
 
         $validated = $this->validateConnection($request);
 
-        /** @var array{store: ExternalStore, webhook_secret: string} $result */
+        /** @var array{store: ExternalStore, webhook_secret: string|null} $result */
         $result = $this->attempt(fn () => $connect->handle(
             $this->businessAccountFor($request),
             $this->person($request),
@@ -106,9 +113,14 @@ class ExternalStoreController extends Controller
             $validated['base_url'],
             $validated['api_key'],
             $validated['api_secret'],
+            $validated['webhook_secret'] ?? null,
         ));
 
-        Inertia::flash('webhook_secret', $result['webhook_secret']);
+        // Only a secret Feriwala made is shown; one the partner gave stays put.
+        if ($result['webhook_secret'] !== null) {
+            Inertia::flash('webhook_secret', $result['webhook_secret']);
+        }
+
         Inertia::flash('toast', ['type' => 'success', 'message' => __('stores.flash.connected')]);
 
         return to_route('stores.show', $result['store']->public_id);
@@ -209,6 +221,24 @@ class ExternalStoreController extends Controller
         return back();
     }
 
+    /**
+     * Save the signing secret the store generated itself. Never echoed back.
+     */
+    public function provideWebhookSecret(Request $request, string $store, RotateExternalStoreWebhookSecret $rotate): RedirectResponse
+    {
+        $record = $this->storeFor($request, $store);
+        Gate::authorize('manage', $record);
+
+        /** @var array{webhook_secret: string} $validated */
+        $validated = $request->validate(['webhook_secret' => ['required', ...self::WEBHOOK_SECRET_RULES]]);
+
+        $this->attempt(fn () => $rotate->provide($record, $this->person($request), $validated['webhook_secret']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('stores.flash.webhook_secret_saved')]);
+
+        return back();
+    }
+
     public function destroy(Request $request, string $store, DisconnectExternalStore $disconnect): RedirectResponse
     {
         $record = $this->storeFor($request, $store);
@@ -224,17 +254,18 @@ class ExternalStoreController extends Controller
     }
 
     /**
-     * @return array{platform: string, name: string, base_url: string, api_key: string, api_secret: string}
+     * @return array{platform: string, name: string, base_url: string, api_key: string, api_secret: string, webhook_secret?: string|null}
      */
     protected function validateConnection(Request $request): array
     {
-        /** @var array{platform: string, name: string, base_url: string, api_key: string, api_secret: string} $validated */
+        /** @var array{platform: string, name: string, base_url: string, api_key: string, api_secret: string, webhook_secret?: string|null} $validated */
         $validated = $request->validate([
             'platform' => ['required', Rule::enum(StorePlatform::class)],
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'base_url' => ['required', 'string', 'max:255', 'url:https'],
             'api_key' => ['required', 'string', 'max:255'],
             'api_secret' => ['required', 'string', 'max:255'],
+            'webhook_secret' => ['nullable', ...self::WEBHOOK_SECRET_RULES],
         ], [
             // Plain HTTP and malformed addresses get the same plain answer.
             'base_url.url' => __('stores.refused.address_invalid'),

@@ -34,13 +34,16 @@ use SensitiveParameter;
  *   3. The store must answer the credentials: one order is read, which proves
  *      the address, the key and the `orders.read` scope in one call.
  *   4. The connection is saved under the partner's own account, credentials
- *      encrypted, with a webhook secret Feriwala generates. The capacity check
+ *      encrypted, with the webhook secret the store already signs with — if
+ *      the partner gave one — or one Feriwala generates. The capacity check
  *      is repeated under a lock on the account, and the database's one-live-
  *      owner index settles a race for the same store.
  *   5. The first import is queued — never run inside this request.
  *
- * Returns the webhook secret in plain text **once**, for the setup screen. It is
- * not readable again; it can only be replaced.
+ * Returns a generated webhook secret in plain text **once**, for the setup
+ * screen. It is not readable again; it can only be replaced. A secret the
+ * partner provided is never handed back — they already have it — so the
+ * result carries null instead.
  */
 class ConnectExternalStore
 {
@@ -52,7 +55,7 @@ class ConnectExternalStore
     ) {}
 
     /**
-     * @return array{store: ExternalStore, webhook_secret: string}
+     * @return array{store: ExternalStore, webhook_secret: string|null}
      *
      * @throws ExternalStoreRefused
      */
@@ -64,12 +67,13 @@ class ConnectExternalStore
         string $baseUrl,
         #[SensitiveParameter] string $apiKey,
         #[SensitiveParameter] string $apiSecret,
+        #[SensitiveParameter] ?string $providedWebhookSecret = null,
     ): array {
         $address = $this->checkPreconditions($account, $platform, $baseUrl);
 
         $this->verify($platform, new StoreEndpoint($address->baseUrl, $apiKey, $apiSecret));
 
-        $webhookSecret = Str::random(48);
+        $webhookSecret = $providedWebhookSecret ?? Str::random(48);
 
         try {
             $store = $this->database->transaction(function () use (
@@ -118,6 +122,7 @@ class ConnectExternalStore
                 'name' => $store->name,
                 'platform' => $platform->value,
                 'host' => $store->normalized_host,
+                'webhook_signing_origin' => $providedWebhookSecret === null ? 'feriwala' : 'store',
             ],
             accountId: $account->id,
             module: 'external_store',
@@ -125,7 +130,7 @@ class ConnectExternalStore
 
         SyncExternalStore::dispatch($store->id)->afterCommit();
 
-        return ['store' => $store, 'webhook_secret' => $webhookSecret];
+        return ['store' => $store, 'webhook_secret' => $providedWebhookSecret === null ? $webhookSecret : null];
     }
 
     /**

@@ -243,12 +243,32 @@ class DfcommerceDriver implements StorePlatformDriver
      *
      * @throws UnreadableStoreOrder
      */
+    /**
+     * Read one order, from the pull API or a webhook.
+     *
+     * The two do not name money the same way: the pull API nests it under
+     * `totals`, while DFCOMMERCE's `order.updated` webhook sends it flat — with
+     * the discount as `discount_total` (the Deshfiri OMS, which runs against
+     * DFCOMMERCE, reads exactly this; see its MirrorUpserter). Both are read.
+     *
+     * Only the order number is required: it identifies the order within its
+     * store. Everything else the store did not send stays null rather than
+     * becoming a zero or a default — see {@see StoreOrder}.
+     *
+     * @param  array<array-key, mixed>  $row
+     *
+     * @throws UnreadableStoreOrder
+     */
     protected function order(array $row): StoreOrder
     {
-        $externalId = $this->digits($row['id'] ?? null) ?? throw new UnreadableStoreOrder('missing id');
         $number = $this->text($row['order_number'] ?? null, 64) ?? throw new UnreadableStoreOrder('missing order number');
-        $status = $this->text($row['status'] ?? null, 40) ?? throw new UnreadableStoreOrder('missing status');
-        $placedAt = $this->time($row['placed_at'] ?? null) ?? throw new UnreadableStoreOrder('missing placed_at');
+
+        // A present but malformed id is refused, not treated as absent: it
+        // would otherwise be matched by number and could hide a mix-up.
+        $rawId = $row['id'] ?? null;
+        $externalId = $rawId === null ? null : ($this->digits($rawId) ?? throw new UnreadableStoreOrder('id is not a store order id'));
+
+        $status = $this->text($row['status'] ?? null, 40);
 
         $currency = Currency::tryFrom(strtoupper((string) ($row['currency'] ?? 'BDT')));
 
@@ -256,35 +276,39 @@ class DfcommerceDriver implements StorePlatformDriver
             throw new UnreadableStoreOrder('unsupported currency');
         }
 
-        // Nested `totals`, or the older flat fields — both are in use.
+        // Nested `totals` (pull API) first, then the flat names a webhook uses —
+        // the same pairs the OMS reads. The flat names differ where the nested
+        // one would collide: a top-level `shipping` is the address, so the flat
+        // shipping amount is only ever `shipping_total`. Absent means unknown
+        // (null), never zero.
         $totals = is_array($row['totals'] ?? null) ? $row['totals'] : [];
-        $pick = fn (string ...$keys) => $this->first($totals, $row, $keys);
+        $pick = fn (array $nested, array $flat) => $this->first($totals, $nested, $row, $flat);
+        $money = fn (string $field, array $nested, array $flat) => ($value = $pick($nested, $flat)) === null ? null : $this->amount($value, $field);
 
         $customer = is_array($row['customer'] ?? null) ? $row['customer'] : [];
         $shipping = is_array($row['shipping'] ?? null) ? $row['shipping'] : null;
         $billing = is_array($row['billing'] ?? null) ? $row['billing'] : null;
-        $items = $row['items'] ?? [];
 
-        if (! is_array($items) || ! array_is_list($items)) {
+        $items = $row['items'] ?? null;
+
+        if ($items !== null && (! is_array($items) || ! array_is_list($items))) {
             throw new UnreadableStoreOrder('items are not a list');
         }
-
-        $paid = $pick('paid', 'paid_total');
 
         return new StoreOrder(
             externalId: $externalId,
             orderNumber: $number,
-            status: strtolower($status),
+            status: $status === null ? null : strtolower($status),
             paymentStatus: $this->lower($this->text($row['payment_status'] ?? null, 40)),
             paymentMethod: $this->lower($this->text($row['payment_method'] ?? null, 40)),
             currencyCode: $currency->value,
-            subtotal: $this->amount($pick('subtotal') ?? '0', 'subtotal'),
-            discount: $this->amount($pick('discount') ?? '0', 'discount'),
-            couponCode: $this->text($pick('coupon_code'), 64),
-            shippingTotal: $this->amount($pick('shipping', 'shipping_total') ?? '0', 'shipping'),
-            tax: $this->amount($pick('tax') ?? '0', 'tax'),
-            total: $this->amount($pick('grand', 'grand_total', 'total') ?? throw new UnreadableStoreOrder('missing total'), 'total'),
-            paidTotal: $paid === null ? null : $this->amount($paid, 'paid'),
+            subtotal: $money('subtotal', ['subtotal'], ['subtotal']),
+            discount: $money('discount', ['discount'], ['discount', 'discount_total']),
+            couponCode: $this->text($pick(['coupon_code'], ['coupon_code']), 64),
+            shippingTotal: $money('shipping', ['shipping'], ['shipping_total']),
+            tax: $money('tax', ['tax'], ['tax', 'tax_total']),
+            total: $money('total', ['grand'], ['grand_total']),
+            paidTotal: $money('paid', ['paid'], ['paid_total']),
             customer: [
                 'external_id' => $this->digits($row['customer_id'] ?? $customer['id'] ?? null),
                 'name' => $this->text($customer['name'] ?? $row['customer_name'] ?? null, 160),
@@ -295,9 +319,9 @@ class DfcommerceDriver implements StorePlatformDriver
             billingAddress: $billing === null ? null : $this->address($billing),
             note: $this->text($row['note'] ?? null, 2000),
             cancelReason: $this->text($row['cancel_reason'] ?? null, 255),
-            placedAt: $placedAt,
+            placedAt: $this->time($row['placed_at'] ?? null),
             updatedAt: $this->time($row['updated_at'] ?? null),
-            lines: array_map(fn (mixed $item) => $this->line($item), $items),
+            lines: $items === null ? null : array_map(fn (mixed $item) => $this->line($item), $items),
         );
     }
 
@@ -376,21 +400,21 @@ class DfcommerceDriver implements StorePlatformDriver
     }
 
     /**
+     * The first non-null value under `$nestedKeys` in `$nested`, else under
+     * `$flatKeys` in `$flat`.
+     *
      * @param  array<array-key, mixed>  $nested
+     * @param  array<array-key, string>  $nestedKeys
      * @param  array<array-key, mixed>  $flat
-     * @param  array<array-key, string>  $keys
+     * @param  array<array-key, string>  $flatKeys
      */
-    protected function first(array $nested, array $flat, array $keys): mixed
+    protected function first(array $nested, array $nestedKeys, array $flat, array $flatKeys): mixed
     {
-        foreach ($keys as $key) {
-            if (array_key_exists($key, $nested) && $nested[$key] !== null) {
-                return $nested[$key];
-            }
-        }
-
-        foreach ($keys as $key) {
-            if (array_key_exists($key, $flat) && $flat[$key] !== null) {
-                return $flat[$key];
+        foreach ([[$nested, $nestedKeys], [$flat, $flatKeys]] as [$source, $keys]) {
+            foreach ($keys as $key) {
+                if (array_key_exists($key, $source) && $source[$key] !== null) {
+                    return $source[$key];
+                }
             }
         }
 

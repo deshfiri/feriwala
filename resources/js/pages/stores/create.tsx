@@ -40,6 +40,7 @@ export default function ConnectStore({ allowance, platforms }: Props) {
         base_url: '',
         api_key: '',
         api_secret: '',
+        webhook_secret: '',
     });
 
     // The server also reports on the connection and the package, beside the fields.
@@ -192,6 +193,28 @@ export default function ConnectStore({ allowance, platforms }: Props) {
                                         )
                                     }
                                     autoComplete="new-password"
+                                />
+                            )}
+                        </FormField>
+
+                        <FormField
+                            label={t('stores.form.webhook_secret')}
+                            description={t('stores.form.webhook_secret_hint')}
+                            error={form.errors.webhook_secret}
+                        >
+                            {(field) => (
+                                <Input
+                                    {...field}
+                                    type="password"
+                                    value={form.data.webhook_secret}
+                                    onChange={(event) =>
+                                        form.setData(
+                                            'webhook_secret',
+                                            event.target.value,
+                                        )
+                                    }
+                                    autoComplete="new-password"
+                                    spellCheck={false}
                                 />
                             )}
                         </FormField>

@@ -4,6 +4,7 @@ namespace App\Domain\ExternalStore\Actions;
 
 use App\Domain\ExternalStore\Enums\ExternalStoreStatus;
 use App\Domain\ExternalStore\Enums\ExternalStoreStatusChangeSource;
+use App\Domain\ExternalStore\Exceptions\ExternalOrderNotRecorded;
 use App\Domain\ExternalStore\Models\ExternalStore;
 use App\Domain\ExternalStore\Queries\ExternalStoreAllowance;
 use App\Integrations\Store\Contracts\StorePlatformDriver;
@@ -35,6 +36,9 @@ use Carbon\CarbonImmutable;
  *
  * Not entitled any more? Then it does nothing: the connection and its orders
  * stay, and syncing resumes if the package includes stores again.
+ *
+ * A successful run also closes the deferred notifications whose orders it has
+ * now brought in — this pull is the reconciliation they were waiting for.
  */
 class ImportExternalOrders
 {
@@ -43,6 +47,7 @@ class ImportExternalOrders
         protected RecordExternalOrder $recorder,
         protected ExternalStoreAllowance $allowance,
         protected DistributedLock $locks,
+        protected ApplyExternalStoreWebhook $webhooks,
     ) {}
 
     /**
@@ -83,6 +88,10 @@ class ImportExternalOrders
         }
 
         $this->succeeded($store, $tally, $source);
+
+        // Notifications that were waiting for this pull, and whose orders it
+        // brought in, are closed rather than left saying "waiting".
+        $this->webhooks->settleDeferred($store);
 
         return $tally;
     }
@@ -148,7 +157,15 @@ class ImportExternalOrders
     protected function record(ExternalStore $store, array $orders, array &$tally): void
     {
         foreach ($orders as $order) {
-            $outcome = $this->recorder->handle($store, $order);
+            try {
+                $outcome = $this->recorder->handle($store, $order);
+            } catch (ExternalOrderNotRecorded) {
+                // Short of what an order needs, or an id/number mix-up at the
+                // store: reported with the unreadable ones, never guessed at.
+                $tally['unreadable']++;
+
+                continue;
+            }
 
             if ($outcome !== 'unchanged') {
                 $tally[$outcome]++;

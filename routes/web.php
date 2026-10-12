@@ -554,6 +554,9 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('stores.sync');
         Route::post('stores/{store}/webhook-secret', [ExternalStoreController::class, 'rotateWebhookSecret'])
             ->name('stores.webhook-secret.rotate');
+        Route::put('stores/{store}/webhook-secret', [ExternalStoreController::class, 'provideWebhookSecret'])
+            ->middleware('throttle:store-actions')
+            ->name('stores.webhook-secret.provide');
         Route::delete('stores/{store}', [ExternalStoreController::class, 'destroy'])->name('stores.destroy');
 
         /*

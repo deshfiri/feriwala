@@ -324,3 +324,141 @@ describe('managing a connection', function () {
         expect($store->refresh()->webhook_secret)->not->toBe('webhook-secret');
     });
 });
+
+/**
+ * Whether `$store` accepts a notification signed with `$secret`.
+ */
+function externalStoreAcceptsSecret(ExternalStore $store, string $secret, string $eventId): bool
+{
+    $body = (string) json_encode(['event' => 'inventory.low_stock', 'data' => []]);
+
+    return test()->call('POST', route('webhooks.stores', $store->public_id), server: [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_X_WEBHOOK_SIGNATURE' => externalStoreSignature($body, $secret),
+        'HTTP_X_WEBHOOK_EVENT_ID' => $eventId,
+    ], content: $body)->isOk();
+}
+
+describe('a signing secret the store generated', function () {
+    it('connects with the store\'s own secret, keeps it encrypted and never shows it back', function () {
+        Queue::fake([SyncExternalStore::class]);
+        Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
+
+        $response = $this->actingAs($this->owner)
+            ->post(route('stores.store'), externalStoreConnectForm(['webhook_secret' => 'store-made-secret-0123456789']));
+
+        $store = ExternalStore::query()->sole();
+
+        $response->assertSessionHasNoErrors()
+            ->assertRedirect(route('stores.show', $store->public_id))
+            ->assertInertiaFlashMissing('webhook_secret');
+
+        expect($store->webhook_secret)->toBe('store-made-secret-0123456789')
+            ->and(DB::table('external_stores')->value('webhook_secret'))->not->toContain('store-made-secret')
+            ->and(DB::table('audit_logs')->get()->toJson())->not->toContain('store-made-secret')
+            ->and(externalStoreAcceptsSecret($store, 'store-made-secret-0123456789', 'evt-1'))->toBeTrue();
+
+        expect($this->actingAs($this->owner)->get(route('stores.show', $store->public_id))->getContent())
+            ->not->toContain('store-made-secret');
+    });
+
+    it('still makes a secret when none is given', function () {
+        Queue::fake([SyncExternalStore::class]);
+        Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
+
+        $this->actingAs($this->owner)
+            ->post(route('stores.store'), externalStoreConnectForm(['webhook_secret' => '']))
+            ->assertInertiaFlash('webhook_secret');
+
+        expect(ExternalStore::query()->sole()->webhook_secret)->toHaveLength(48);
+    });
+
+    it('replaces the secret on a connected store: the new one signs, the old one no longer does', function () {
+        $store = externalStoreConnected($this->account);
+
+        $this->actingAs($this->owner)
+            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
+            ->assertSessionHasNoErrors()
+            ->assertInertiaFlash('toast.message', __('stores.flash.webhook_secret_saved'))
+            ->assertInertiaFlashMissing('webhook_secret');
+
+        expect(DB::table('external_stores')->value('webhook_secret'))->not->toContain('store-made-secret')
+            ->and(externalStoreAcceptsSecret($store, 'webhook-secret', 'evt-old'))->toBeFalse()
+            ->and(externalStoreAcceptsSecret($store, 'store-made-secret-0123456789', 'evt-new'))->toBeTrue()
+            ->and(json_decode((string) DB::table('audit_logs')->where('action', 'external_store.webhook_secret_rotated')->value('after'), true))
+            ->toBe(['webhook_signing_origin' => 'store'])
+            ->and(DB::table('audit_logs')->get()->toJson())->not->toContain('store-made-secret');
+
+        expect($this->actingAs($this->owner)->get(route('stores.show', $store->public_id))->getContent())
+            ->not->toContain('store-made-secret');
+    });
+
+    it('lets a generated secret replace a provided one', function () {
+        $store = externalStoreConnected($this->account);
+        $this->actingAs($this->owner)
+            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789']);
+
+        $this->actingAs($this->owner)->post(route('stores.webhook-secret.rotate', $store->public_id));
+
+        expect(externalStoreAcceptsSecret($store->refresh(), 'store-made-secret-0123456789', 'evt-old'))->toBeFalse()
+            ->and(externalStoreAcceptsSecret($store, (string) $store->webhook_secret, 'evt-new'))->toBeTrue();
+    });
+
+    it('refuses a secret too short to be safe or broken by whitespace', function (string $route, string $secret) {
+        Http::fake();
+        $store = externalStoreConnected($this->account);
+
+        $request = $route === 'connect'
+            ? $this->actingAs($this->owner)->post(route('stores.store'), externalStoreConnectForm(['base_url' => 'https://new.example.com', 'webhook_secret' => $secret]))
+            : $this->actingAs($this->owner)->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => $secret]);
+
+        $request->assertSessionHasErrors('webhook_secret');
+
+        expect($store->refresh()->webhook_secret)->toBe('webhook-secret')
+            ->and(ExternalStore::query()->count())->toBe(1);
+        Http::assertNothingSent();
+    })->with(['connect', 'store page'])->with([
+        'too short' => ['short-secret'],
+        'inner space' => ['store made secret 0123456789'],
+        'too long' => [str_repeat('a', 256)],
+    ]);
+
+    it('requires a secret on the store page', function () {
+        $store = externalStoreConnected($this->account);
+
+        $this->actingAs($this->owner)
+            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => ''])
+            ->assertSessionHasErrors('webhook_secret');
+    });
+
+    it('does not let another account replace a store\'s secret', function () {
+        $theirs = externalStoreConnected(externalStoreAccount(), 'other.example.com');
+
+        $this->actingAs($this->owner)
+            ->put(route('stores.webhook-secret.provide', $theirs->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
+            ->assertNotFound();
+
+        expect($theirs->refresh()->webhook_secret)->toBe('webhook-secret');
+    });
+
+    it('lets only someone who manages stores replace the secret', function (AccountRole $role) {
+        $store = externalStoreConnected($this->account);
+        $member = User::factory()->staffOf($this->account, $role)->create();
+
+        $this->actingAs($member)
+            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
+            ->assertForbidden();
+
+        expect($store->refresh()->webhook_secret)->toBe('webhook-secret');
+    })->with([AccountRole::Manager, AccountRole::Staff]);
+
+    it('refuses a secret for a disconnected store', function () {
+        $store = externalStoreConnected($this->account, status: ExternalStoreStatus::Disconnected);
+
+        $this->actingAs($this->owner)
+            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
+            ->assertSessionHasErrors();
+
+        expect($store->refresh()->webhook_secret)->toBeNull();
+    });
+});

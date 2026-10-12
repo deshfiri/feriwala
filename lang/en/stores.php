@@ -51,6 +51,8 @@ return [
         'api_key' => 'API key',
         'api_secret' => 'API secret',
         'credentials_hint' => 'Create them in your store\'s admin under API Clients, with permission to read orders. They are stored encrypted and never shown again.',
+        'webhook_secret' => 'Webhook signing secret (optional)',
+        'webhook_secret_hint' => 'Only if your store already created one. Leave empty and Feriwala makes a secret for you to paste into your store.',
         'check' => 'Check connection',
         'submit' => 'Connect store',
         'edit_title' => 'Edit connection',
@@ -94,7 +96,11 @@ return [
             'processed' => 'Processed',
             'ignored' => 'Not used',
             'failed' => 'Failed',
+            'deferred' => 'Waiting for sync',
         ],
+        'own_secret_title' => 'Use your store\'s signing secret',
+        'own_secret_description' => 'If your store created its own webhook signing secret, enter it here instead of making one in Feriwala. It is stored encrypted and never shown again.',
+        'own_secret_save' => 'Save signing secret',
     ],
 
     'flash' => [
@@ -106,6 +112,7 @@ return [
         'test_failed' => 'The store did not answer: :reason',
         'sync_queued' => 'Sync started. New orders appear in a moment.',
         'webhook_rotated' => 'New webhook secret made. Paste it into your store.',
+        'webhook_secret_saved' => 'Your store\'s signing secret was saved.',
         'disconnected' => 'Store disconnected. Its orders are kept.',
     ],
 
@@ -130,6 +137,8 @@ return [
         'some_unreadable' => ':count order(s) from the store could not be read and were skipped.',
         'webhook_unreadable' => 'The notification could not be read: :reason',
         'webhook_failed' => 'The notification could not be applied. It will be retried.',
+        'webhook_deferred' => 'Not enough to record a new order (:reason). It will be imported complete by the next sync.',
+        'webhook_identity_conflict' => 'The store\'s order id and order number belong to different orders. Nothing was changed.',
     ],
 
     'order_statuses' => [

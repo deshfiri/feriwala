@@ -4,6 +4,7 @@ namespace App\Domain\ExternalStore\Actions;
 
 use App\Domain\ExternalStore\Enums\ExternalOrderEventSource;
 use App\Domain\ExternalStore\Enums\ExternalOrderEventType;
+use App\Domain\ExternalStore\Exceptions\ExternalOrderNotRecorded;
 use App\Domain\ExternalStore\Models\ExternalCustomer;
 use App\Domain\ExternalStore\Models\ExternalOrder;
 use App\Domain\ExternalStore\Models\ExternalOrderEvent;
@@ -31,6 +32,12 @@ use Illuminate\Database\UniqueConstraintViolationException;
  *   - **Known order, same or older copy.** Left exactly as it is: an older
  *     notification arriving late never rolls an order back.
  *
+ *   - **No such order, and too little to create one** — a webhook short of the
+ *     store's id, an amount or the items. Refused as incomplete, so the caller
+ *     can let the pull API bring it in whole. Nothing is filled in.
+ *   - **An id and an order number for two different orders** — refused, never
+ *     merged.
+ *
  * The lines are the store's snapshot at import and are not rewritten.
  * Nothing here touches Feriwala's own orders, payments, stock or wallet.
  */
@@ -42,6 +49,8 @@ class RecordExternalOrder
 
     /**
      * @return 'created'|'updated'|'unchanged'
+     *
+     * @throws ExternalOrderNotRecorded when the copy cannot be recorded safely
      */
     public function handle(ExternalStore $store, StoreOrder $incoming, ?string $eventId = null): string
     {
@@ -55,19 +64,21 @@ class RecordExternalOrder
 
     /**
      * @return 'created'|'updated'|'unchanged'
+     *
+     * @throws ExternalOrderNotRecorded
      */
     protected function apply(ExternalStore $store, StoreOrder $incoming, ?string $eventId): string
     {
-        /** @var ExternalOrder|null $existing */
-        $existing = ExternalOrder::query()
-            ->where('external_store_id', $store->id)
-            ->where('external_id', $incoming->externalId)
-            ->lockForUpdate()
-            ->first();
-
+        $existing = $this->find($store, $incoming);
         $now = CarbonImmutable::now();
 
         if ($existing === null) {
+            $missing = $incoming->missingForCreation();
+
+            if ($missing !== null) {
+                throw ExternalOrderNotRecorded::incomplete($missing);
+            }
+
             $this->create($store, $incoming, $eventId, $now);
 
             return 'created';
@@ -81,11 +92,11 @@ class RecordExternalOrder
 
         $changes = [];
 
-        if ($existing->source_status !== $incoming->status) {
+        if ($incoming->status !== null && $existing->source_status !== $incoming->status) {
             $changes[] = [ExternalOrderEventType::StatusChanged, $existing->source_status, $incoming->status];
         }
 
-        if ($existing->payment_status !== $incoming->paymentStatus) {
+        if ($incoming->paymentStatus !== null && $existing->payment_status !== $incoming->paymentStatus) {
             $changes[] = [ExternalOrderEventType::PaymentStatusChanged, $existing->payment_status, $incoming->paymentStatus];
         }
 
@@ -104,9 +115,42 @@ class RecordExternalOrder
         return 'updated';
     }
 
+    /**
+     * The order this copy is about, within this store only, locked.
+     *
+     * By the store's own id when the copy has one. Otherwise by order number,
+     * which the store keeps unique (as the OMS that integrates with it relies
+     * on) and which this table holds unique per store. When both are given
+     * they must agree: an id and a number that point at different orders, or a
+     * number already taken by a different id, are refused rather than merged.
+     *
+     * @throws ExternalOrderNotRecorded
+     */
+    protected function find(ExternalStore $store, StoreOrder $incoming): ?ExternalOrder
+    {
+        $scoped = fn () => ExternalOrder::query()->where('external_store_id', $store->id)->lockForUpdate();
+
+        /** @var ExternalOrder|null $byNumber */
+        $byNumber = $scoped()->where('order_number', $incoming->orderNumber)->first();
+
+        if ($incoming->externalId === null) {
+            return $byNumber;
+        }
+
+        /** @var ExternalOrder|null $byId */
+        $byId = $scoped()->where('external_id', $incoming->externalId)->first();
+
+        if ($byNumber !== null && ($byId === null || $byId->id !== $byNumber->id)) {
+            throw ExternalOrderNotRecorded::identityConflict();
+        }
+
+        return $byId;
+    }
+
     protected function create(ExternalStore $store, StoreOrder $incoming, ?string $eventId, CarbonImmutable $now): void
     {
-        $customer = $this->customer($store, $incoming);
+        // A complete copy always has its placed time (missingForCreation).
+        $customer = $this->customer($store, $incoming, $incoming->placedAt ?? $now);
 
         $order = ExternalOrder::create([
             'business_account_id' => $store->business_account_id,
@@ -118,7 +162,7 @@ class RecordExternalOrder
             'last_synced_at' => $now,
         ]);
 
-        foreach ($incoming->lines as $index => $line) {
+        foreach ($incoming->lines ?? [] as $index => $line) {
             /** @var StoreOrderLine $line */
             $order->items()->create([
                 'line_number' => $index + 1,
@@ -172,16 +216,20 @@ class RecordExternalOrder
      * A partial copy leaves alone what it does not mention.
      *
      * A store's "order updated" notification often carries only what changed.
-     * A detail it did not send — an address, a note, the customer's email — is
-     * not a detail it cleared, so the value already recorded stays. Status,
-     * payment status and the amounts always come from the newer copy.
+     * Anything it did not send — a status, an amount, an address, a note — is
+     * not something it cleared, so the value already recorded stays. No amount
+     * is ever replaced by a zero because the store left it out.
      *
      * @param  array<string, mixed>  $incoming
      * @return array<string, mixed>
      */
     protected function keepingWhatWasNotSent(ExternalOrder $existing, array $incoming): array
     {
-        foreach (['payment_method', 'shipping_address', 'billing_address', 'coupon_code', 'paid_total', 'note', 'cancel_reason', 'source_updated_at'] as $key) {
+        foreach ([
+            'source_status', 'payment_status', 'payment_method', 'shipping_address', 'billing_address',
+            'subtotal', 'discount', 'coupon_code', 'shipping_total', 'tax', 'total', 'paid_total',
+            'note', 'cancel_reason', 'placed_at', 'source_updated_at',
+        ] as $key) {
             if ($incoming[$key] === null) {
                 unset($incoming[$key]);
             }
@@ -201,7 +249,7 @@ class RecordExternalOrder
      * then the phone number, then the email. Never matched across stores, and
      * never on a name alone.
      */
-    protected function customer(ExternalStore $store, StoreOrder $incoming): ?ExternalCustomer
+    protected function customer(ExternalStore $store, StoreOrder $incoming, CarbonImmutable $placedAt): ?ExternalCustomer
     {
         $details = $incoming->customer;
         $phone = $details['phone'] === null ? null : preg_replace('/\D+/', '', $details['phone']);
@@ -224,7 +272,7 @@ class RecordExternalOrder
             [
                 'business_account_id' => $store->business_account_id,
                 'external_id' => $details['external_id'],
-                'first_order_at' => $incoming->placedAt,
+                'first_order_at' => $placedAt,
             ],
         );
 
@@ -232,11 +280,11 @@ class RecordExternalOrder
             'name' => $details['name'] ?? $customer->name,
             'phone' => $details['phone'] ?? $customer->phone,
             'email' => $details['email'] ?? $customer->email,
-            'first_order_at' => $customer->first_order_at === null || $incoming->placedAt->lessThan($customer->first_order_at)
-                ? $incoming->placedAt
+            'first_order_at' => $customer->first_order_at === null || $placedAt->lessThan($customer->first_order_at)
+                ? $placedAt
                 : $customer->first_order_at,
-            'last_order_at' => $customer->last_order_at === null || $incoming->placedAt->greaterThan($customer->last_order_at)
-                ? $incoming->placedAt
+            'last_order_at' => $customer->last_order_at === null || $placedAt->greaterThan($customer->last_order_at)
+                ? $placedAt
                 : $customer->last_order_at,
         ])->save();
 
