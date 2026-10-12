@@ -32,8 +32,14 @@ return [
             'wholesale_price' => 'পাইকারি দাম',
             'status' => 'অবস্থা',
             'channels' => 'চ্যানেল',
+            'stock' => 'মজুদ',
             'updated' => 'হালনাগাদ',
             'sku' => 'BPC',
+        ],
+
+        'stock' => [
+            'in_stock' => 'মজুদ আছে',
+            'out_of_stock' => 'মজুদ নেই',
         ],
 
         'no_image' => 'তালিকার ছবি নেই',

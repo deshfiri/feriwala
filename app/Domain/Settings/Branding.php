@@ -46,6 +46,24 @@ class Branding
      */
     public const ACCENT_SETTING = 'branding.accent_color';
 
+    /**
+     * The setting that holds the button colour as `#rrggbb`. Null means buttons
+     * follow the accent.
+     */
+    public const BUTTON_SETTING = 'branding.button_color';
+
+    /**
+     * The setting that holds the light-mode page background as `#rrggbb`. Null
+     * means the shipped white.
+     */
+    public const BACKGROUND_SETTING = 'branding.background_color';
+
+    /**
+     * The setting that holds the current navigation link colour as `#rrggbb`.
+     * Null means the link follows the accent.
+     */
+    public const NAV_SETTING = 'branding.nav_color';
+
     public function __construct(
         protected SettingsRepository $settings,
         protected ManagedStorage $storage,
@@ -56,7 +74,7 @@ class Branding
      * null while the shipped accent is in use, so the stylesheet's own value
      * stands and nothing is written into the page.
      *
-     * @return array{logo_url: string, favicon_url: string, favicon_type: string, accent: array{color: string, on: string, lifted_on: string}|null}
+     * @return array{logo_url: string, favicon_url: string, favicon_type: string, accent: array{color: string, on: string, lifted_on: string}|null, button: array{color: string, on: string, lifted_on: string}|null, nav: array{color: string, on: string, lifted_on: string}|null, background: string|null}
      */
     public function toArray(): array
     {
@@ -67,7 +85,87 @@ class Branding
             'favicon_url' => $this->url(BrandingAsset::Favicon),
             'favicon_type' => $this->faviconType(),
             'accent' => $accent?->toArray(),
+            'button' => $this->customButton()?->toArray(),
+            'nav' => $this->customNav()?->toArray(),
+            'background' => $this->customBackground()?->hex(),
         ];
+    }
+
+    /**
+     * The colour of the current navigation link: the chosen one, or the accent.
+     */
+    public function nav(): AccentColor
+    {
+        return $this->customNav() ?? $this->accent();
+    }
+
+    /**
+     * The chosen navigation colour, when one is stored and well formed.
+     */
+    public function customNav(): ?AccentColor
+    {
+        try {
+            $value = $this->settings->get(self::NAV_SETTING);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! is_string($value) || ! AccentColor::isValidHex($value)) {
+            return null;
+        }
+
+        return AccentColor::fromHex($value);
+    }
+
+    /**
+     * The chosen light-mode page background, when one is stored, well formed
+     * and still readable under the theme's dark text. Anything else falls back
+     * to the shipped white, so a bad stored value can never make text vanish.
+     */
+    public function customBackground(): ?AccentColor
+    {
+        try {
+            $value = $this->settings->get(self::BACKGROUND_SETTING);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! is_string($value) || ! AccentColor::isValidHex($value)) {
+            return null;
+        }
+
+        $background = AccentColor::fromHex($value);
+
+        return $background->isReadableUnderDarkText() && ! $background->isWhite() ? $background : null;
+    }
+
+    /**
+     * The colour buttons and other primary controls use: the chosen one, or
+     * the accent when none has been set.
+     */
+    public function button(): AccentColor
+    {
+        return $this->customButton() ?? $this->accent();
+    }
+
+    /**
+     * The chosen button colour, when one is stored and well formed. Unlike the
+     * accent, a value equal to the shipped accent is still a choice: it keeps
+     * buttons put if the accent later changes.
+     */
+    public function customButton(): ?AccentColor
+    {
+        try {
+            $value = $this->settings->get(self::BUTTON_SETTING);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! is_string($value) || ! AccentColor::isValidHex($value)) {
+            return null;
+        }
+
+        return AccentColor::fromHex($value);
     }
 
     /**

@@ -50,7 +50,110 @@ class BrandingController extends Controller
                 'is_custom' => $this->branding->customAccent() !== null,
                 'readable' => $this->branding->accent()->isReadableAsText(),
             ],
+            'button' => [
+                'color' => $this->branding->button()->hex(),
+                'is_custom' => $this->branding->customButton() !== null,
+            ],
+            'nav' => [
+                'color' => $this->branding->nav()->hex(),
+                'is_custom' => $this->branding->customNav() !== null,
+            ],
+            'background' => [
+                'color' => $this->branding->customBackground()?->hex() ?? '#ffffff',
+                'default' => '#ffffff',
+                'is_custom' => $this->branding->customBackground() !== null,
+            ],
         ]);
+    }
+
+    public function updateNav(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $validated = $request->validate([
+            'nav_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}\z/'],
+        ], [
+            'nav_color.regex' => __('branding.accent.invalid'),
+        ]);
+
+        $this->manage->setNav($actor, AccentColor::fromHex($validated['nav_color']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.nav.saved')]);
+
+        return back();
+    }
+
+    public function destroyNav(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $this->manage->setNav($actor, null);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.nav.restored')]);
+
+        return back();
+    }
+
+    public function updateBackground(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $validated = $request->validate([
+            'background_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}\z/'],
+        ], [
+            'background_color.regex' => __('branding.accent.invalid'),
+        ]);
+
+        $background = AccentColor::fromHex($validated['background_color']);
+
+        if (! $background->isReadableUnderDarkText()) {
+            throw ValidationException::withMessages(['background_color' => __('branding.background.too_dark')]);
+        }
+
+        $this->manage->setBackground($actor, $background);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.background.saved')]);
+
+        return back();
+    }
+
+    public function destroyBackground(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $this->manage->setBackground($actor, null);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.background.restored')]);
+
+        return back();
+    }
+
+    public function updateButton(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $validated = $request->validate([
+            'button_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}\z/'],
+        ], [
+            'button_color.regex' => __('branding.accent.invalid'),
+        ]);
+
+        $this->manage->setButton($actor, AccentColor::fromHex($validated['button_color']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.button.saved')]);
+
+        return back();
+    }
+
+    public function destroyButton(Request $request): RedirectResponse
+    {
+        $actor = $this->authorizeManager($request);
+
+        $this->manage->setButton($actor, null);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('branding.button.restored')]);
+
+        return back();
     }
 
     public function updateAccent(Request $request): RedirectResponse

@@ -120,6 +120,9 @@ describe('the accent colour', () => {
             favicon_url: '/favicon.svg',
             favicon_type: 'image/svg+xml',
             accent,
+            button: null,
+            nav: null,
+            background: null,
         },
     });
 

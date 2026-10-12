@@ -4,6 +4,12 @@ import BrandingController from '@/actions/App/Http/Controllers/Admin/BrandingCon
 import AccentColorPicker, {
     type AccentState,
 } from '@/components/accent-color-picker';
+import BackgroundColorPicker, {
+    type BackgroundColorState,
+} from '@/components/background-color-picker';
+import ButtonColorPicker, {
+    type ButtonColorState,
+} from '@/components/button-color-picker';
 import FormField from '@/components/forms/form-field';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -25,6 +31,9 @@ type AssetState = {
 type Props = {
     assets: AssetState[];
     accent: AccentState;
+    button: ButtonColorState;
+    nav: ButtonColorState;
+    background: BackgroundColorState;
 };
 
 /**
@@ -34,7 +43,13 @@ type Props = {
  * exactly what every screen is showing right now — the uploaded file or the
  * shipped default — on both a light and a dark ground, since both themes use it.
  */
-export default function AdminBranding({ assets, accent }: Props) {
+export default function AdminBranding({
+    assets,
+    accent,
+    button,
+    nav,
+    background,
+}: Props) {
     const { t } = useTranslation();
 
     const restore = (asset: AssetState) => {
@@ -58,6 +73,12 @@ export default function AdminBranding({ assets, accent }: Props) {
                 />
 
                 <AccentColorPicker accent={accent} />
+
+                <ButtonColorPicker kind="button" state={button} />
+
+                <ButtonColorPicker kind="nav" state={nav} />
+
+                <BackgroundColorPicker background={background} />
 
                 {assets.map((asset) => (
                     <SectionCard

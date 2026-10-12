@@ -108,6 +108,20 @@ final class AccentColor
     }
 
     /**
+     * Whether the theme's dark text stays readable when this colour is the
+     * page background. Used to refuse backgrounds that are too dark.
+     */
+    public function isReadableUnderDarkText(): bool
+    {
+        return self::contrast($this->channels(), self::hexChannels(self::DARK_TEXT)) >= self::MINIMUM_TEXT_CONTRAST;
+    }
+
+    public function isWhite(): bool
+    {
+        return $this->hex === '#ffffff';
+    }
+
+    /**
      * The shared contract the shell writes into `--brand-*` custom properties.
      *
      * @return array{color: string, on: string, lifted_on: string}

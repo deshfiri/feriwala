@@ -96,7 +96,7 @@ export default function SectionTabs({
                         className={cn(
                             'relative flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-none',
                             isActive
-                                ? 'border-primary text-foreground'
+                                ? 'border-brand text-foreground'
                                 : 'text-muted-foreground hover:text-foreground border-transparent',
                         )}
                     >

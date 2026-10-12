@@ -147,6 +147,9 @@ describe('the shipped defaults', function () {
             'favicon_url' => '/favicon.svg',
             'favicon_type' => 'image/svg+xml',
             'accent' => null,
+            'button' => null,
+            'nav' => null,
+            'background' => null,
         ]);
     });
 });
@@ -408,13 +411,230 @@ describe('the accent colour', function () {
     ]);
 });
 
+describe('the button colour', function () {
+    it('follows the accent and writes nothing into the page until one is chosen', function () {
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.button', null)
+            ->where('button.color', AccentColor::DEFAULT_HEX)
+            ->where('button.is_custom', false),
+        );
+
+        expect(brandingRootTag((string) $response->getContent()))->not->toContain('--button-base');
+    });
+
+    it('saves a chosen colour, shares it and paints it before first load', function () {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.button.update'), ['button_color' => '#1D4ED8'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        expect(app(SettingsRepository::class)->get(Branding::BUTTON_SETTING))->toBe('#1d4ed8');
+
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.button.color', '#1d4ed8')
+            ->where('branding.button.on', AccentColor::LIGHT_TEXT)
+            ->where('button.is_custom', true),
+        );
+
+        expect(brandingRootTag((string) $response->getContent()))->toContain('--button-base: #1d4ed8;');
+    });
+
+    it('refuses anything that is not a six-digit hex', function (string $value) {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.button.update'), ['button_color' => $value])
+            ->assertSessionHasErrors('button_color');
+
+        expect(app(SettingsRepository::class)->get(Branding::BUTTON_SETTING))->toBeNull();
+    })->with([
+        'three digits' => '#fff',
+        'a declaration' => '#e11d48; background: url(x)',
+        'a closing tag' => '"><script>alert(1)</script>',
+    ]);
+
+    it('goes back to following the accent and records both changes in the audit log', function () {
+        $this->actingAs($this->admin)->put(route('admin.branding.button.update'), ['button_color' => '#059669']);
+
+        $this->actingAs($this->admin)->delete(route('admin.branding.button.destroy'))->assertRedirect();
+
+        expect(app(SettingsRepository::class)->get(Branding::BUTTON_SETTING))->toBeNull()
+            ->and(app(Branding::class)->toArray()['button'])->toBeNull();
+
+        expect(AuditLog::query()->where('action', 'system.branding_button_changed')->count())->toBe(1)
+            ->and(AuditLog::query()->where('action', 'system.branding_button_restored')->count())->toBe(1);
+    });
+
+    it('refuses the button colour to anyone who may not manage the branding', function (Closure $identity) {
+        $user = $identity();
+
+        $this->actingAs($user)->put(route('admin.branding.button.update'), ['button_color' => '#059669'])->assertForbidden();
+        $this->actingAs($user)->delete(route('admin.branding.button.destroy'))->assertForbidden();
+
+        expect(app(SettingsRepository::class)->get(Branding::BUTTON_SETTING))->toBeNull()
+            ->and(fn () => app(ManageBranding::class)->setButton($user, AccentColor::fromHex('#059669')))
+            ->toThrow(AuthorizationException::class);
+    })->with([
+        'sms manager' => fn () => testPlatformStaff(PlatformRole::SmsManager),
+        'business owner' => fn () => testBusinessAccount(AccountStatus::Active)->owner,
+    ]);
+});
+
+describe('the navigation colour', function () {
+    it('follows the accent and writes nothing into the page until one is chosen', function () {
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.nav', null)
+            ->where('nav.color', AccentColor::DEFAULT_HEX)
+            ->where('nav.is_custom', false),
+        );
+
+        expect(brandingRootTag((string) $response->getContent()))->not->toContain('--nav-base');
+    });
+
+    it('saves a chosen colour, shares it and paints it before first load', function () {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.nav.update'), ['nav_color' => '#1D4ED8'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        expect(app(SettingsRepository::class)->get(Branding::NAV_SETTING))->toBe('#1d4ed8');
+
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.nav.color', '#1d4ed8')
+            ->where('nav.is_custom', true),
+        );
+
+        expect(brandingRootTag((string) $response->getContent()))->toContain('--nav-base: #1d4ed8;');
+    });
+
+    it('refuses anything that is not a six-digit hex', function (string $value) {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.nav.update'), ['nav_color' => $value])
+            ->assertSessionHasErrors('nav_color');
+
+        expect(app(SettingsRepository::class)->get(Branding::NAV_SETTING))->toBeNull();
+    })->with([
+        'three digits' => '#fff',
+        'a declaration' => '#e11d48; background: url(x)',
+    ]);
+
+    it('goes back to following the accent and records both changes in the audit log', function () {
+        $this->actingAs($this->admin)->put(route('admin.branding.nav.update'), ['nav_color' => '#059669']);
+
+        $this->actingAs($this->admin)->delete(route('admin.branding.nav.destroy'))->assertRedirect();
+
+        expect(app(SettingsRepository::class)->get(Branding::NAV_SETTING))->toBeNull()
+            ->and(AuditLog::query()->where('action', 'system.branding_nav_changed')->count())->toBe(1)
+            ->and(AuditLog::query()->where('action', 'system.branding_nav_restored')->count())->toBe(1);
+    });
+
+    it('refuses the navigation colour to anyone who may not manage the branding', function (Closure $identity) {
+        $user = $identity();
+
+        $this->actingAs($user)->put(route('admin.branding.nav.update'), ['nav_color' => '#059669'])->assertForbidden();
+
+        expect(app(SettingsRepository::class)->get(Branding::NAV_SETTING))->toBeNull()
+            ->and(fn () => app(ManageBranding::class)->setNav($user, AccentColor::fromHex('#059669')))
+            ->toThrow(AuthorizationException::class);
+    })->with([
+        'sms manager' => fn () => testPlatformStaff(PlatformRole::SmsManager),
+        'business owner' => fn () => testBusinessAccount(AccountStatus::Active)->owner,
+    ]);
+});
+
+describe('the background colour', function () {
+    it('stays white and writes nothing into the page until one is chosen', function () {
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.background', null)
+            ->where('background.color', '#ffffff')
+            ->where('background.is_custom', false),
+        );
+
+        expect(brandingRootTag((string) $response->getContent()))->not->toContain('--canvas-custom');
+    });
+
+    it('saves a chosen colour, shares it and paints it before first load', function () {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.background.update'), ['background_color' => '#F3F7FC'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        expect(app(SettingsRepository::class)->get(Branding::BACKGROUND_SETTING))->toBe('#f3f7fc');
+
+        $response = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('branding.background', '#f3f7fc')
+            ->where('background.is_custom', true),
+        );
+
+        expect(brandingRootTag((string) $response->getContent()))->toContain('--canvas-custom: #f3f7fc;');
+    });
+
+    it('refuses a malformed value and a background too dark for the text', function (string $value) {
+        $this->actingAs($this->admin)
+            ->put(route('admin.branding.background.update'), ['background_color' => $value])
+            ->assertSessionHasErrors('background_color');
+
+        expect(app(SettingsRepository::class)->get(Branding::BACKGROUND_SETTING))->toBeNull();
+    })->with([
+        'three digits' => '#fff',
+        'a declaration' => '#ffffff; background: url(x)',
+        'near black' => '#111111',
+        'dark blue' => '#1d4ed8',
+    ]);
+
+    it('ignores a stored value that is too dark rather than painting unreadable pages', function () {
+        app(SettingsRepository::class)->define(Branding::BACKGROUND_SETTING, 'branding', SettingType::String);
+        app(SettingsRepository::class)->set(Branding::BACKGROUND_SETTING, '#000000');
+
+        $response = $this->get(route('login'))->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page->where('branding.background', null));
+        expect(brandingRootTag((string) $response->getContent()))->not->toContain('--canvas-custom');
+    });
+
+    it('goes back to white and records both changes in the audit log', function () {
+        $this->actingAs($this->admin)->put(route('admin.branding.background.update'), ['background_color' => '#faf8f5']);
+
+        $this->actingAs($this->admin)->delete(route('admin.branding.background.destroy'))->assertRedirect();
+
+        expect(app(SettingsRepository::class)->get(Branding::BACKGROUND_SETTING))->toBeNull()
+            ->and(app(Branding::class)->toArray()['background'])->toBeNull()
+            ->and(AuditLog::query()->where('action', 'system.branding_background_changed')->count())->toBe(1)
+            ->and(AuditLog::query()->where('action', 'system.branding_background_restored')->count())->toBe(1);
+    });
+
+    it('refuses the background to anyone who may not manage the branding', function (Closure $identity) {
+        $user = $identity();
+
+        $this->actingAs($user)->put(route('admin.branding.background.update'), ['background_color' => '#faf8f5'])->assertForbidden();
+        $this->actingAs($user)->delete(route('admin.branding.background.destroy'))->assertForbidden();
+
+        expect(app(SettingsRepository::class)->get(Branding::BACKGROUND_SETTING))->toBeNull()
+            ->and(fn () => app(ManageBranding::class)->setBackground($user, AccentColor::fromHex('#faf8f5')))
+            ->toThrow(AuthorizationException::class);
+    })->with([
+        'sms manager' => fn () => testPlatformStaff(PlatformRole::SmsManager),
+        'business owner' => fn () => testBusinessAccount(AccountStatus::Active)->owner,
+    ]);
+});
+
 describe('the shared contract', function () {
     it('gives the browser addresses only, never a storage path', function () {
         $this->actingAs($this->admin)->post(route('admin.branding.update', 'logo'), ['file' => brandingImage()]);
 
         $props = $this->actingAs($this->admin)->get(route('admin.branding.edit'))->viewData('page')['props'];
 
-        expect(array_keys($props['branding']))->toBe(['logo_url', 'favicon_url', 'favicon_type', 'accent'])
+        expect(array_keys($props['branding']))->toBe(['logo_url', 'favicon_url', 'favicon_type', 'accent', 'button', 'nav', 'background'])
             ->and(Branding::isManagedPath($props['branding']['logo_url']))->toBeFalse()
             ->and($props['branding']['logo_url'])->toStartWith(rtrim(Storage::disk(Branding::DISK)->url(''), '/'))
             ->and(collect($props['assets'])->pluck('url')->filter(fn (string $url) => Branding::isManagedPath($url)))->toBeEmpty();

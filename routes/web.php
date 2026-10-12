@@ -915,6 +915,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('branding.accent.update');
         Route::delete('settings/branding/accent', [BrandingController::class, 'destroyAccent'])
             ->name('branding.accent.destroy');
+        Route::put('settings/branding/button', [BrandingController::class, 'updateButton'])
+            ->name('branding.button.update');
+        Route::delete('settings/branding/button', [BrandingController::class, 'destroyButton'])
+            ->name('branding.button.destroy');
+        Route::put('settings/branding/nav', [BrandingController::class, 'updateNav'])
+            ->name('branding.nav.update');
+        Route::delete('settings/branding/nav', [BrandingController::class, 'destroyNav'])
+            ->name('branding.nav.destroy');
+        Route::put('settings/branding/background',[BrandingController::class, 'updateBackground'])
+            ->name('branding.background.update');
+        Route::delete('settings/branding/background', [BrandingController::class, 'destroyBackground'])
+            ->name('branding.background.destroy');
         Route::post('settings/branding/{asset}', [BrandingController::class, 'update'])
             ->whereIn('asset', ['logo', 'favicon'])
             ->name('branding.update');

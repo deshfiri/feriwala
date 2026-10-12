@@ -32,8 +32,14 @@ return [
             'wholesale_price' => 'Wholesale price',
             'status' => 'Status',
             'channels' => 'Channels',
+            'stock' => 'Stock',
             'updated' => 'Updated',
             'sku' => 'BPC',
+        ],
+
+        'stock' => [
+            'in_stock' => 'In stock',
+            'out_of_stock' => 'Out of stock',
         ],
 
         'no_image' => 'No listing image',

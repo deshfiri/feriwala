@@ -117,7 +117,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                                     className={cn(
                                         'w-full justify-start font-normal',
                                         current &&
-                                            'bg-sidebar-accent text-sidebar-accent-foreground font-medium',
+                                            'bg-nav-active text-nav-active-foreground hover:bg-nav-active hover:text-nav-active-foreground font-medium',
                                     )}
                                 >
                                     <Link

@@ -147,10 +147,9 @@ export default function AdminProducts({
             cell: (row) => row.brand ?? '—',
         },
         {
-            key: 'channels',
-            header: t('catalog.products.columns.channels'),
-            priority: 'secondary',
-            cell: (row) => <ChannelPills row={row} />,
+            key: 'stock',
+            header: t('catalog.products.columns.stock'),
+            cell: (row) => <StockState row={row} />,
         },
         {
             key: 'wholesale_price',
@@ -488,7 +487,7 @@ export default function AdminProducts({
                                     )}
                                 </div>
                             </div>
-                            <ChannelPills row={row} />
+                            <StockState row={row} />
                             <div className="flex items-center justify-between gap-2">
                                 {offersBulk && (
                                     <label className="flex items-center gap-2 text-sm">
@@ -895,48 +894,44 @@ function ListingImage({ row }: { row: ProductRow }) {
     );
 }
 
-function ChannelPills({ row }: { row: ProductRow }) {
+/**
+ * Whether the product can be ordered from central stock right now.
+ *
+ * The word carries the meaning, never the colour alone (§33.9): "In stock" or
+ * "Out of stock", with the quantity beside it when there is some. The figure is
+ * the server's own — the same one a website is told.
+ */
+function StockState({ row }: { row: ProductRow }) {
     const { t } = useTranslation();
 
     return (
-        <div className="flex flex-wrap gap-1">
-            {row.channels.map((channel) => (
-                <StatusPill
-                    key={channel.channel}
-                    tone={channel.tone}
-                    label={t(`catalog.products.status.${channel.status}`)}
-                />
-            ))}
+        <div className="flex items-center gap-2">
+            <StatusPill
+                tone={row.in_stock ? 'success' : 'danger'}
+                label={t(
+                    row.in_stock
+                        ? 'catalog.products.stock.in_stock'
+                        : 'catalog.products.stock.out_of_stock',
+                )}
+            />
+            {row.in_stock && (
+                <span className="text-muted-foreground text-xs tabular-nums">
+                    {row.stock_quantity}
+                </span>
+            )}
         </div>
     );
 }
 
 /**
- * Straight to the editor's media manager and variation builder, with how much
- * each already holds, plus Trash for any status.
+ * Trash for any status. Media and variations are managed inside the editor, so
+ * the list no longer carries a shortcut or a count for either.
  */
 function RowLinks({ row, can }: { row: ProductRow; can: CatalogAbilities }) {
-    const { t } = useTranslation();
     const [trashOpen, setTrashOpen] = useState(false);
 
     return (
         <div className="flex flex-wrap items-center justify-end gap-1">
-            <Button variant="ghost" size="sm" asChild>
-                <Link href={`${edit.url(row.id)}#media`}>
-                    {t('catalog.products.manage_media')}
-                    <span className="text-muted-foreground tabular-nums">
-                        {row.media_count}
-                    </span>
-                </Link>
-            </Button>
-            <Button variant="ghost" size="sm" asChild>
-                <Link href={`${edit.url(row.id)}#variants`}>
-                    {t('catalog.products.manage_variants')}
-                    <span className="text-muted-foreground tabular-nums">
-                        {row.variants_count}
-                    </span>
-                </Link>
-            </Button>
             {can.delete && row.is_deletable && (
                 <>
                     <Button
