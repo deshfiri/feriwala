@@ -2,7 +2,10 @@
 
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { WebsiteAllocationCard, WebsiteSummary } from '@/types/website';
+import type {
+    WebsiteAllocationCard,
+    WebsiteOwnerSummary,
+} from '@/types/website';
 
 const websitesPage = vi.hoisted(() => ({
     props: { translations: {} } as Record<string, unknown>,
@@ -32,8 +35,12 @@ vi.mock('@inertiajs/react', async () => {
 
 const { default: Websites } = await import('./index');
 
-function summary(overrides: Partial<WebsiteSummary> = {}): WebsiteSummary {
+function summary(
+    overrides: Partial<WebsiteOwnerSummary> = {},
+): WebsiteOwnerSummary {
     return {
+        domain_record: null,
+        hosting_record: null,
         id: '01WEBSITE',
         name: 'Nasrin Fashion',
         host: 'nasrin.feriwala.shop',
@@ -440,6 +447,135 @@ describe('the account’s websites', () => {
         expect(screen.getByText('Deposit pending')).toBeInTheDocument();
         expect(
             screen.getByText('website.index.outstanding'),
+        ).toBeInTheDocument();
+    });
+});
+
+describe('the domain and hosting staff recorded', () => {
+    const entitlement = {
+        allowed: true,
+        expired: false,
+        limit: 1,
+        used: 1,
+        remaining: 0,
+    };
+    const day = (value: string) =>
+        new Date(value).toLocaleDateString('en', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+        });
+
+    it('shows what was recorded, with when it started and when it runs out', () => {
+        websitesPage.props = {
+            locale: { current: 'en', direction: 'ltr', available: [] },
+            translations: {
+                website: {
+                    index: {
+                        domain_line:
+                            'Domain :domain · registered :registered · expires :expires',
+                        hosting_line:
+                            'Hosting :plan · started :started · expires :expires',
+                    },
+                },
+            },
+        };
+
+        try {
+            render(
+                <Websites
+                    allocations={[]}
+                    websites={[
+                        summary({
+                            host: 'karim.com',
+                            domain_record: {
+                                domain: 'karim.com',
+                                status: 'active',
+                                status_label: 'Active',
+                                registered_at: '2026-10-12T10:00:00+06:00',
+                                expires_at: '2027-10-12T10:00:00+06:00',
+                                days_remaining: 365,
+                            },
+                            hosting_record: {
+                                plan: 'Standard',
+                                status: 'active',
+                                status_label: 'Active',
+                                started_at: '2026-10-12T10:00:00+06:00',
+                                expires_at: '2027-04-12T10:00:00+06:00',
+                                days_remaining: 182,
+                            },
+                        }),
+                    ]}
+                    entitlement={entitlement}
+                    can={{ create: true }}
+                />,
+            );
+
+            expect(
+                screen.getByText(
+                    `Domain karim.com · registered ${day('2026-10-12T10:00:00+06:00')} · expires ${day('2027-10-12T10:00:00+06:00')}`,
+                ),
+            ).toBeInTheDocument();
+            expect(
+                screen.getByText(
+                    `Hosting Standard · started ${day('2026-10-12T10:00:00+06:00')} · expires ${day('2027-04-12T10:00:00+06:00')}`,
+                ),
+            ).toBeInTheDocument();
+        } finally {
+            websitesPage.props = { translations: {} };
+        }
+    });
+
+    it('says a request has neither yet, rather than leaving a blank', () => {
+        render(
+            <Websites
+                allocations={[]}
+                websites={[
+                    summary({
+                        status: 'setup_pending',
+                        status_label: 'Setup pending',
+                    }),
+                ]}
+                entitlement={entitlement}
+                can={{ create: true }}
+            />,
+        );
+
+        expect(
+            screen.getByText('website.index.domain_pending'),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText('website.index.hosting_pending'),
+        ).toBeInTheDocument();
+    });
+
+    it('names the hosting plan on a package website card', () => {
+        const card = allocationCard();
+
+        render(
+            <Websites
+                allocations={[
+                    allocationCard({
+                        hosting: {
+                            ...card.hosting,
+                            package_based: false,
+                            provider: {
+                                plan: 'Standard',
+                                started_at: '2026-10-12T10:00:00+06:00',
+                                expires_at: '2027-10-12T10:00:00+06:00',
+                            },
+                        },
+                    }),
+                ]}
+                websites={[]}
+                entitlement={entitlement}
+                can={{ create: true }}
+            />,
+        );
+
+        expect(screen.getByText('Standard')).toBeInTheDocument();
+        expect(
+            screen.getByText('website.allocation.provider_plan'),
         ).toBeInTheDocument();
     });
 });

@@ -45,18 +45,83 @@ class WebsiteOverview
     /**
      * One account's own websites, newest first.
      *
+     * Each row carries the domain and hosting staff have recorded against it
+     * (§16.2, P5-11) — null until they have — so the partner sees what was
+     * registered and when it runs out without opening every website. The
+     * registrar and the provider stay off this list, as they stay off the
+     * partner's website page.
+     *
      * @return array<int, array<string, mixed>>
      */
     public function forAccount(BusinessAccount $account): array
     {
+        $now = CarbonImmutable::now();
+
         return Website::query()
             ->forAccount($account)
+            ->with(['domains', 'hostings'])
             ->withCount(['charges as outstanding_charges_count' => fn (Builder $query) => $query
                 ->where('status', WebsiteChargeStatus::Due->value)])
             ->orderByDesc('id')
             ->get()
-            ->map(fn (Website $website) => $this->summary($website))
+            ->map(fn (Website $website) => [
+                ...$this->summary($website),
+                'domain_record' => $this->domainRecord($this->currentDomain($website), $now),
+                'hosting_record' => $this->hostingRecord($this->currentHosting($website), $now),
+            ])
             ->all();
+    }
+
+    /**
+     * The domain a website answers on now: the newest one still running,
+     * otherwise the newest of any — an expired domain is still worth showing
+     * as expired rather than as nothing.
+     */
+    protected function currentDomain(Website $website): ?WebsiteDomain
+    {
+        $domains = $website->domains->sortByDesc('id');
+
+        return $domains->first(fn (WebsiteDomain $domain) => $domain->status->isRunning()) ?? $domains->first();
+    }
+
+    /**
+     * The hosting a website runs on now, chosen the same way as its domain.
+     */
+    protected function currentHosting(Website $website): ?WebsiteHosting
+    {
+        $hostings = $website->hostings->sortByDesc('id');
+
+        return $hostings->first(fn (WebsiteHosting $hosting) => $hosting->status->isRunning()) ?? $hostings->first();
+    }
+
+    /**
+     * @return array{domain: string, status: string, status_label: string, registered_at: string|null, expires_at: string|null, days_remaining: int|null}|null
+     */
+    protected function domainRecord(?WebsiteDomain $domain, CarbonImmutable $now): ?array
+    {
+        return $domain === null ? null : [
+            'domain' => $domain->domain,
+            'status' => $domain->status->value,
+            'status_label' => __('website.service_statuses.'.$domain->status->value),
+            'registered_at' => $domain->registered_at?->toIso8601String(),
+            'expires_at' => $domain->expires_at?->toIso8601String(),
+            'days_remaining' => $domain->daysRemaining($now),
+        ];
+    }
+
+    /**
+     * @return array{plan: string, status: string, status_label: string, started_at: string|null, expires_at: string|null, days_remaining: int|null}|null
+     */
+    protected function hostingRecord(?WebsiteHosting $hosting, CarbonImmutable $now): ?array
+    {
+        return $hosting === null ? null : [
+            'plan' => $hosting->plan,
+            'status' => $hosting->status->value,
+            'status_label' => __('website.service_statuses.'.$hosting->status->value),
+            'started_at' => $hosting->started_at?->toIso8601String(),
+            'expires_at' => $hosting->expires_at?->toIso8601String(),
+            'days_remaining' => $hosting->daysRemaining($now),
+        ];
     }
 
     /**
@@ -160,6 +225,7 @@ class WebsiteOverview
                 'days_remaining' => $allocation->hostingDaysRemaining($now),
                 'package_based' => $runningHosting === null,
                 'provider' => $runningHosting === null ? null : [
+                    'plan' => $runningHosting->plan,
                     'started_at' => $runningHosting->started_at?->toIso8601String(),
                     'expires_at' => $runningHosting->expires_at?->toIso8601String(),
                 ],

@@ -70,6 +70,16 @@ export default function WebsiteShow({ website, wallet, can }: Props) {
 
     const term = (service: WebsiteDomainRow | WebsiteHostingRow) => (
         <div className="text-muted-foreground space-y-1 text-xs">
+            {/* When it was registered or stood up, then when it runs out. */}
+            <div>
+                {'registered_at' in service
+                    ? t('website.show.registered_on', {
+                          date: date(service.registered_at),
+                      })
+                    : t('website.show.started_on', {
+                          date: date(service.started_at),
+                      })}
+            </div>
             <div>
                 {t('website.show.expires', {
                     date: date(service.expires_at),

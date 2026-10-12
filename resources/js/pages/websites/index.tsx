@@ -15,12 +15,12 @@ import type {
     WebsiteAllocationCard,
     WebsiteAllocationTerm,
     WebsiteEntitlement,
-    WebsiteSummary,
+    WebsiteOwnerSummary,
 } from '@/types/website';
 
 type Props = {
     allocations: WebsiteAllocationCard[];
-    websites: WebsiteSummary[];
+    websites: WebsiteOwnerSummary[];
     entitlement: WebsiteEntitlement;
     can: { create: boolean };
 };
@@ -52,6 +52,17 @@ export default function Websites({
 
     // Counts in the reader's own digits, as the dates are.
     const count = (value: number) => value.toLocaleString(locale);
+
+    const date = (value: string | null, fallback = '—') =>
+        value
+            ? new Date(value).toLocaleDateString(locale, {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+              })
+            : fallback;
+    const expiry = (value: string | null) =>
+        date(value, t('website.allocation.no_expiry'));
 
     const allowance =
         entitlement.limit === null
@@ -199,6 +210,61 @@ export default function Websites({
                                         </Link>
                                         <div className="text-muted-foreground truncate font-mono text-xs">
                                             {website.host}
+                                        </div>
+                                        {/* What staff recorded, or that they have not yet. */}
+                                        <div
+                                            className="text-muted-foreground tabular text-xs"
+                                            data-test="domain-record"
+                                        >
+                                            {website.domain_record
+                                                ? t(
+                                                      'website.index.domain_line',
+                                                      {
+                                                          domain: website
+                                                              .domain_record
+                                                              .domain,
+                                                          registered: date(
+                                                              website
+                                                                  .domain_record
+                                                                  .registered_at,
+                                                          ),
+                                                          expires: expiry(
+                                                              website
+                                                                  .domain_record
+                                                                  .expires_at,
+                                                          ),
+                                                      },
+                                                  )
+                                                : t(
+                                                      'website.index.domain_pending',
+                                                  )}
+                                        </div>
+                                        <div
+                                            className="text-muted-foreground tabular text-xs"
+                                            data-test="hosting-record"
+                                        >
+                                            {website.hosting_record
+                                                ? t(
+                                                      'website.index.hosting_line',
+                                                      {
+                                                          plan: website
+                                                              .hosting_record
+                                                              .plan,
+                                                          started: date(
+                                                              website
+                                                                  .hosting_record
+                                                                  .started_at,
+                                                          ),
+                                                          expires: expiry(
+                                                              website
+                                                                  .hosting_record
+                                                                  .expires_at,
+                                                          ),
+                                                      },
+                                                  )
+                                                : t(
+                                                      'website.index.hosting_pending',
+                                                  )}
                                         </div>
                                         {website.outstanding_charges > 0 && (
                                             <div className="text-warning-foreground text-xs font-medium">
@@ -452,6 +518,16 @@ function TermPanel({
                         {t('website.allocation.provider_record')}
                     </p>
                     <dl className="grid grid-cols-2 gap-2 text-xs">
+                        {term.provider.plan && (
+                            <div className="col-span-2">
+                                <dt className="text-muted-foreground">
+                                    {t('website.allocation.provider_plan')}
+                                </dt>
+                                <dd className="font-medium">
+                                    {term.provider.plan}
+                                </dd>
+                            </div>
+                        )}
                         <div>
                             <dt className="text-muted-foreground">
                                 {t('website.allocation.provider_started')}

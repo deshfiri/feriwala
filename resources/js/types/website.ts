@@ -17,6 +17,35 @@ export type WebsiteSummary = {
     created_at: string;
 };
 
+/** The domain staff recorded against a website, as its owner reads it. */
+export type WebsiteDomainRecord = {
+    domain: string;
+    status: string;
+    status_label: string;
+    registered_at: string | null;
+    expires_at: string | null;
+    days_remaining: number | null;
+};
+
+/** The hosting staff recorded against a website, as its owner reads it. */
+export type WebsiteHostingRecord = {
+    plan: string;
+    status: string;
+    status_label: string;
+    started_at: string | null;
+    expires_at: string | null;
+    days_remaining: number | null;
+};
+
+/**
+ * A row on the owner's own list: the website, and the domain and hosting
+ * recorded for it — null until staff have recorded them.
+ */
+export type WebsiteOwnerSummary = WebsiteSummary & {
+    domain_record: WebsiteDomainRecord | null;
+    hosting_record: WebsiteHostingRecord | null;
+};
+
 /**
  * One side of a package-allocated website's term: its domain or its hosting.
  * Dates are the package-based period, counted from the confirmed purchase.
@@ -34,7 +63,12 @@ export type WebsiteAllocationTerm = {
      * What the registrar or hosting provider actually holds, once arranged.
      * Separate from the package's period above and never shown as it.
      */
-    provider: { started_at: string | null; expires_at: string | null } | null;
+    provider: {
+        /** The hosting plan; absent on the domain side. */
+        plan?: string;
+        started_at: string | null;
+        expires_at: string | null;
+    } | null;
 };
 
 /**

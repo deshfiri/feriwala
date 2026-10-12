@@ -279,6 +279,11 @@ describe('a partner’s own website', () => {
 
         expect(screen.getByText('nasrin-fashion.com.bd')).toBeInTheDocument();
         expect(screen.getByText('Storefront standard')).toBeInTheDocument();
+        // When each began, beside when it runs out.
+        expect(
+            screen.getByText('website.show.registered_on'),
+        ).toBeInTheDocument();
+        expect(screen.getByText('website.show.started_on')).toBeInTheDocument();
         expect(
             screen.getAllByRole('button', { name: 'website.show.renew' }),
         ).toHaveLength(2);
