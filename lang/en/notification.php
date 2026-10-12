@@ -169,5 +169,81 @@ return [
             'title' => 'One of your offers has been suspended',
             'description' => 'It is no longer available for purchase until reactivated.',
         ],
+
+        /*
+         * Work that has arrived in a staff queue (StaffQueue). The bell appends
+         * the submission's own reference to each description.
+         */
+        'queue.kyc' => [
+            'title' => 'New KYC application to review',
+            'description' => 'A business has submitted its KYC documents.',
+        ],
+        'queue.supplier_kyc' => [
+            'title' => 'New Supplier application to review',
+            'description' => 'A Supplier has submitted its application.',
+        ],
+        'queue.supplier_listing' => [
+            'title' => 'New Supplier listing to review',
+            'description' => 'A Supplier has submitted a product listing.',
+        ],
+        'queue.supplier_listing_lot' => [
+            'title' => 'New Supplier listing lot to review',
+            'description' => 'A Supplier has submitted a batch of listings.',
+        ],
+        'queue.supplier_stock_update' => [
+            'title' => 'New availability update to review',
+            'description' => 'A Supplier has asked to change the stock it offers.',
+        ],
+        'queue.account_withdrawal' => [
+            'title' => 'New withdrawal request',
+            'description' => 'A partner has requested a withdrawal.',
+        ],
+        'queue.supplier_withdrawal' => [
+            'title' => 'New Supplier withdrawal request',
+            'description' => 'A Supplier has requested a withdrawal.',
+        ],
+        'queue.order_return' => [
+            'title' => 'New return request',
+            'description' => 'A return is waiting for a decision.',
+        ],
+        'queue.refund_request' => [
+            'title' => 'New refund request',
+            'description' => 'A refund is waiting for a decision.',
+        ],
+        'queue.website_request' => [
+            'title' => 'New website request',
+            'description' => 'A partner has asked for a website to be set up.',
+        ],
+
+        /*
+         * Staff answered something the recipient asked for. Only the outcome is
+         * shown; a reviewer's own note stays in the audit trail.
+         */
+        'decision.refund.approved' => [
+            'title' => 'Your refund request was approved',
+            'description' => 'Open your receipt to follow the refund.',
+        ],
+        'decision.refund.rejected' => [
+            'title' => 'Your refund request was not approved',
+            'description' => 'Open your receipt for the details.',
+        ],
+        'decision.return.approved' => [
+            'title' => 'A return was approved',
+            'description' => 'Open the order to see what happens next.',
+        ],
+        'decision.return.rejected' => [
+            'title' => 'A return was not approved',
+            'description' => 'Open the order to see the outcome.',
+        ],
+        'decision.stock_update.approved' => [
+            'title' => 'Your availability update was approved',
+            'description' => 'The new quantity is now live.',
+        ],
+        'decision.stock_update.rejected' => [
+            'title' => 'Your availability update was not approved',
+            'description' => 'The previous quantity stays in place.',
+        ],
     ],
+
+    'reference' => 'Reference :reference',
 ];

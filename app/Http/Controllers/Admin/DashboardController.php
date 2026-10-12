@@ -8,6 +8,8 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Queries\PendingActivationQuery;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Notification\Enums\StaffQueue;
+use App\Domain\Notification\Queries\SubmissionVolume;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\DailyOrderVolume;
@@ -46,8 +48,28 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, PendingActivationQuery $pendingActivations, DailyOrderVolume $orderVolume): Response
-    {
+    /**
+     * Queues that get their card from {@see StaffQueue} rather than a bespoke
+     * method. KYC, Supplier KYC and Supplier listings keep their own cards above.
+     *
+     * @var array<int, StaffQueue>
+     */
+    protected const QUEUE_CARDS = [
+        StaffQueue::SupplierListingLot,
+        StaffQueue::SupplierStockUpdate,
+        StaffQueue::AccountWithdrawal,
+        StaffQueue::SupplierWithdrawal,
+        StaffQueue::OrderReturn,
+        StaffQueue::RefundRequest,
+        StaffQueue::WebsiteRequest,
+    ];
+
+    public function __invoke(
+        Request $request,
+        PendingActivationQuery $pendingActivations,
+        DailyOrderVolume $orderVolume,
+        SubmissionVolume $submissionVolume,
+    ): Response {
         $user = $this->actor($request);
 
         $cards = array_values(array_filter([
@@ -56,17 +78,44 @@ class DashboardController extends Controller
             $this->ordersCard($user),
             $this->supplierKycCard($user),
             $this->supplierListingsCard($user),
+            ...array_map(fn (StaffQueue $queue) => $this->queueCard($user, $queue), self::QUEUE_CARDS),
+        ]));
+
+        $trend = array_values(array_filter([
+            $user->can(PermissionCatalogue::name(PermissionModule::Order, PermissionAction::View))
+                ? $orderVolume->series()
+                : null,
+            $submissionVolume->series($user),
         ]));
 
         return Inertia::render('admin/dashboard', [
             'greeting' => $this->greeting($user),
             'attention' => array_sum(array_column($cards, 'value')),
             'cards' => $cards,
-            'trend' => $user->can(PermissionCatalogue::name(PermissionModule::Order, PermissionAction::View))
-                ? [$orderVolume->series()]
-                : null,
+            'trend' => $trend === [] ? null : $trend,
             'breakdown' => $this->breakdown($cards),
         ]);
+    }
+
+    /**
+     * One pending-count card for a staff queue, or null when the viewer could
+     * not open that queue's screen — the card never shows a figure for work its
+     * viewer is not allowed to see.
+     *
+     * @return array{key: string, label: string, value: int, href: string}|null
+     */
+    protected function queueCard(User $user, StaffQueue $queue): ?array
+    {
+        if (! $queue->mayBeSeenBy($user)) {
+            return null;
+        }
+
+        return [
+            'key' => $queue->cardKey(),
+            'label' => __('dashboard.admin.cards.'.$queue->cardKey()),
+            'value' => $queue->waiting()->count(),
+            'href' => $queue->route(),
+        ];
     }
 
     protected function actor(Request $request): User

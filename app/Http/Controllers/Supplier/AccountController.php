@@ -33,7 +33,17 @@ class AccountController extends Controller
         $notifications = $supplier->notifications()->latest()->limit(50)->get()->map(fn ($notification) => [
             'id' => $notification->id,
             'title' => SupplierLifecycleNotification::line((string) ($notification->data['event'] ?? 'unknown'), 'title'),
-            'description' => SupplierLifecycleNotification::line((string) ($notification->data['event'] ?? 'unknown'), 'description'),
+            'description' => trim(
+                SupplierLifecycleNotification::line((string) ($notification->data['event'] ?? 'unknown'), 'description')
+                .(filled($notification->data['reference'] ?? null)
+                    ? ' '.__('notification.reference', ['reference' => $notification->data['reference']])
+                    : '')
+            ),
+            // Where this Supplier acts on it: their own stock screen for an
+            // availability decision, nowhere for the rest.
+            'href' => str_starts_with((string) ($notification->data['event'] ?? ''), 'decision.stock_update.')
+                ? route('supplier.stock.index')
+                : null,
             'note' => $notification->data['note'] ?? null,
             'read' => $notification->read_at !== null,
             'created_at' => $notification->created_at?->toIso8601String(),

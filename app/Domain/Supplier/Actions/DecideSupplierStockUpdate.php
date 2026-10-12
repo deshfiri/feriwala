@@ -5,10 +5,13 @@ namespace App\Domain\Supplier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Notification\Actions\NotifyRequesterOfDecision;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Supplier\Enums\StockUpdateStatus;
 use App\Domain\Supplier\Models\SupplierOfferStock;
 use App\Domain\Supplier\Models\SupplierStockMovement;
 use App\Domain\Supplier\Models\SupplierStockUpdate;
+use App\Notifications\Requests\RequestDecided;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
 
@@ -32,7 +35,7 @@ class DecideSupplierStockUpdate
 
     public function approve(SupplierStockUpdate $update, int $decidedBy, ?string $note = null): SupplierStockUpdate
     {
-        return $this->database->transaction(function () use ($update, $decidedBy, $note) {
+        $decided = $this->database->transaction(function () use ($update, $decidedBy, $note) {
             /** @var SupplierStockUpdate $locked */
             $locked = SupplierStockUpdate::query()->lockForUpdate()->findOrFail($update->id);
 
@@ -83,6 +86,10 @@ class DecideSupplierStockUpdate
 
             return $locked->refresh();
         });
+
+        $this->tellSupplier($decided);
+
+        return $decided;
     }
 
     public function reject(SupplierStockUpdate $update, int $decidedBy, ?string $note = null): SupplierStockUpdate
@@ -110,6 +117,26 @@ class DecideSupplierStockUpdate
             module: PermissionModule::SupplierStock->value,
         ));
 
-        return $locked->refresh();
+        $decided = $locked->refresh();
+
+        $this->tellSupplier($decided);
+
+        return $decided;
+    }
+
+    /**
+     * Tells the Supplier that asked. Its own stock screen is the destination, so
+     * the notification carries no link data, and the reviewer's note — written
+     * for the audit trail — is left out.
+     */
+    protected function tellSupplier(SupplierStockUpdate $decided): void
+    {
+        app(NotifyRequesterOfDecision::class)->handle(
+            $decided->offer->supplier,
+            RequestDecided::STOCK_UPDATE,
+            $decided->status === StockUpdateStatus::Approved,
+            $decided->public_id,
+            StaffQueue::SupplierStockUpdate->referenceFor($decided),
+        );
     }
 }

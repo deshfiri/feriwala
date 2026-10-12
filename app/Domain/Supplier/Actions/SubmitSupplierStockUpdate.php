@@ -2,6 +2,7 @@
 
 namespace App\Domain\Supplier\Actions;
 
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Supplier\Enums\StockUpdateStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierOffer;
@@ -28,10 +29,14 @@ class SubmitSupplierStockUpdate
             throw new InvalidArgumentException('Quantity cannot be negative.');
         }
 
-        return $offer->stockUpdates()->create([
+        $update = $offer->stockUpdates()->create([
             'requested_quantity' => $requestedQuantity,
             'status' => StockUpdateStatus::Pending,
             'note' => $note,
         ]);
+
+        StaffQueue::SupplierStockUpdate->announce($update);
+
+        return $update;
     }
 }

@@ -9,6 +9,7 @@ use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Billing\RefundabilityPolicy;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -50,7 +51,7 @@ class RequestRefund
             throw new InvalidArgumentException('A refund request needs a reason.');
         }
 
-        return $this->database->transaction(function () use ($payment, $type, $requestedBy, $reason) {
+        $created = $this->database->transaction(function () use ($payment, $type, $requestedBy, $reason) {
             /** @var Payment $locked */
             $locked = Payment::query()->lockForUpdate()->findOrFail($payment->id);
             $locked->load('allocations');
@@ -101,5 +102,9 @@ class RequestRefund
 
             return $request;
         });
+
+        StaffQueue::RefundRequest->announce($created);
+
+        return $created;
     }
 }

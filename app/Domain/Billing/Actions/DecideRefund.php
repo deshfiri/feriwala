@@ -7,7 +7,11 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Billing\RefundabilityPolicy;
+use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Notification\Actions\NotifyRequesterOfDecision;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Models\User;
+use App\Notifications\Requests\RequestDecided;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
 
@@ -38,7 +42,7 @@ class DecideRefund
      */
     public function approve(RefundRequest $request, User $by, ?string $note = null): RefundRequest
     {
-        return $this->database->transaction(function () use ($request, $by, $note) {
+        $decided = $this->database->transaction(function () use ($request, $by, $note) {
             $locked = $this->lock($request);
 
             // Re-checked here, inside the lock, against the state as it is now.
@@ -55,6 +59,10 @@ class DecideRefund
 
             return $this->settle($locked, RefundStatus::Approved, $by, $note, 'billing.refund_approved');
         });
+
+        $this->tellRequester($decided);
+
+        return $decided;
     }
 
     /**
@@ -68,7 +76,7 @@ class DecideRefund
             throw new InvalidArgumentException('A rejection needs a reason.');
         }
 
-        return $this->database->transaction(
+        $decided = $this->database->transaction(
             fn () => $this->settle(
                 $this->lock($request),
                 RefundStatus::Rejected,
@@ -76,6 +84,40 @@ class DecideRefund
                 $note,
                 'billing.refund_rejected',
             )
+        );
+
+        $this->tellRequester($decided);
+
+        return $decided;
+    }
+
+    /**
+     * Tells whoever asked for the refund that it was decided.
+     *
+     * A staff member who raised it on an account's behalf is sent to the
+     * platform's payments screen; an account's own user to their receipt. The
+     * reviewer's note stays in the audit trail — it is not copied into the bell.
+     */
+    protected function tellRequester(RefundRequest $decided): void
+    {
+        $requester = $decided->requestedBy;
+
+        if ($requester === null) {
+            return;
+        }
+
+        $isStaff = $requester->hasPlatformAccess() && ! CatalogPolicy::isBusinessIdentity($requester);
+
+        app(NotifyRequesterOfDecision::class)->handle(
+            $requester,
+            RequestDecided::REFUND,
+            $decided->status === RefundStatus::Approved,
+            $decided->public_id,
+            StaffQueue::RefundRequest->referenceFor($decided),
+            [
+                'audience' => $isStaff ? 'staff' : 'account',
+                'payment' => $decided->payment->public_id,
+            ],
         );
     }
 

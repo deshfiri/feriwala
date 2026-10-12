@@ -109,6 +109,7 @@ return [
         'none' => 'Notifications, none unread',
         'new' => 'You have a new notification',
         'mark_read' => 'Mark as read',
+        'view' => 'View',
         'mark_all_read' => 'Mark all as read',
         'empty_title' => 'You are up to date',
         'empty_description' => 'Alerts about your verification, account, and subscription appear here.',

@@ -9,6 +9,7 @@ use App\Http\Controllers\Erp\SubscriptionController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
+use Illuminate\Routing\RedirectController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,7 +19,15 @@ use Illuminate\Support\Facades\Route;
  * staff limit governs it.
  */
 Route::middleware(['auth', 'business.activated'])->group(function () {
-    Route::redirect('settings', '/settings/profile');
+    /*
+     * `Route::redirect()` answers every HTTP verb, which now includes QUERY, and
+     * Wayfinder's generated TypeScript has no such method — so `tsc` failed on
+     * the generated RedirectController. A settings index only ever needs to be
+     * opened, so this is the same framework redirect on GET and HEAD alone.
+     */
+    Route::match(['GET', 'HEAD'], 'settings', RedirectController::class)
+        ->defaults('destination', '/settings/profile')
+        ->defaults('status', 302);
 
     /*
      * The account's own subscription (§8.2).

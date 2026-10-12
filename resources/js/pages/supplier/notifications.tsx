@@ -1,4 +1,4 @@
-import { Form, Head, router } from '@inertiajs/react';
+import { Form, Head, Link, router } from '@inertiajs/react';
 import { Bell, Check } from 'lucide-react';
 import SubmitButton from '@/components/forms/submit-button';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ type Item = {
     title: string;
     description: string;
     note: string | null;
+    /** The Supplier's own screen to act on it, or null for plain news. */
+    href: string | null;
     read: boolean;
     created_at: string;
 };
@@ -92,6 +94,14 @@ export default function SupplierNotifications({
                                     <p className="text-muted-foreground text-sm">
                                         {item.note ?? item.description}
                                     </p>
+                                    {item.href && (
+                                        <Link
+                                            href={item.href}
+                                            className="text-brand block text-xs font-medium hover:underline"
+                                        >
+                                            {t('nav.notifications.view')}
+                                        </Link>
+                                    )}
                                     {!item.read && (
                                         <Button
                                             variant="ghost"
