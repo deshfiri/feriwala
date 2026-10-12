@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Supplier;
 
+use App\Domain\Notification\Actions\MarkNotificationsRead;
 use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\SetLocale;
@@ -41,12 +42,22 @@ class AccountController extends Controller
         return Inertia::render('supplier/notifications', ['notifications' => $notifications]);
     }
 
-    public function markNotificationsRead(Request $request): RedirectResponse
+    public function markNotificationsRead(Request $request, MarkNotificationsRead $markRead): RedirectResponse
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
 
-        $supplier->unreadNotifications()->update(['read_at' => now()]);
+        $markRead->all($supplier);
+
+        return back();
+    }
+
+    public function markNotificationRead(Request $request, string $notification, MarkNotificationsRead $markRead): RedirectResponse
+    {
+        /** @var Supplier $supplier */
+        $supplier = $request->user('supplier');
+
+        abort_unless($markRead->one($supplier, $notification), 404);
 
         return back();
     }

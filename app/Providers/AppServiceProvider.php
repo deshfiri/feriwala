@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Domain\Billing\Models\RefundRequest;
+use App\Domain\Notification\Listeners\BroadcastStoredNotification;
 use App\Domain\Order\Actions\SyncReturnRefund;
 use App\Domain\Settings\SettingsRepository;
 use App\Listeners\RecordEmailVerification;
@@ -11,6 +12,7 @@ use App\Support\Security\PasswordPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -56,6 +58,9 @@ class AppServiceProvider extends ServiceProvider
          * reset is usually being done about (§6, P1-19).
          */
         Event::listen(PasswordReset::class, SecureAccountAfterPasswordReset::class);
+
+        // Every stored notification reaches its recipient's open tabs live.
+        Event::listen(NotificationSent::class, BroadcastStoredNotification::class);
 
         /*
          * A refund for returned goods tells its return what happened to the

@@ -84,6 +84,7 @@ use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
 use App\Http\Controllers\Erp\MobileVerificationController;
+use App\Http\Controllers\Erp\NotificationController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\PackageSelectionController;
 use App\Http\Controllers\Erp\PaymentReturnController;
@@ -149,6 +150,13 @@ Route::middleware(['auth', 'verified', 'business.activated'])
  * signing in is the one the invitation was addressed to.
  */
 Route::middleware(['auth', 'noindex'])->group(function () {
+    // The header bell's read state. Open to every signed-in person, activated
+    // or not — an unactivated account is exactly who is being sent KYC notices.
+    Route::post('notifications/read', [NotificationController::class, 'readAll'])
+        ->name('notifications.read-all');
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
+        ->name('notifications.read');
+
     Route::get('staff/invitation/{token}', [StaffInvitationController::class, 'show'])
         ->name('staff.invitation.show');
     Route::post('staff/invitation/{token}', [StaffInvitationController::class, 'accept'])

@@ -22,6 +22,7 @@ import { AppShell } from '@/components/app-shell';
 import BrandingHead from '@/components/branding-head';
 import { SupplierHeader } from '@/components/supplier/supplier-header';
 import { SupplierSidebar } from '@/components/supplier/supplier-sidebar';
+import { useRealtimeUpdates } from '@/hooks/use-realtime-updates';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes/supplier';
 import { index as addresses } from '@/routes/supplier/addresses';
@@ -73,6 +74,9 @@ export default function SupplierLayout({
     breadcrumbs?: BreadcrumbItemType[];
 }) {
     const { t } = useTranslation();
+
+    useRealtimeUpdates();
+
     const page = usePage<{ supplierAccount?: SupplierAccount | null }>();
     const account = page.props.supplierAccount ?? null;
 

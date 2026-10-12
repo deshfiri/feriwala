@@ -1,12 +1,13 @@
-import { Form, Head } from '@inertiajs/react';
-import { Bell } from 'lucide-react';
+import { Form, Head, router } from '@inertiajs/react';
+import { Bell, Check } from 'lucide-react';
 import SubmitButton from '@/components/forms/submit-button';
+import { Button } from '@/components/ui/button';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import EmptyState from '@/components/states/empty-state';
 import { useTranslation } from '@/hooks/use-translation';
-import { read } from '@/routes/supplier/notifications';
+import { read, readOne } from '@/routes/supplier/notifications';
 
 type Item = {
     id: string;
@@ -91,6 +92,26 @@ export default function SupplierNotifications({
                                     <p className="text-muted-foreground text-sm">
                                         {item.note ?? item.description}
                                     </p>
+                                    {!item.read && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-muted-foreground -ml-2 h-7 gap-1 px-2 text-xs"
+                                            onClick={() =>
+                                                router.post(
+                                                    readOne.url(item.id),
+                                                    {},
+                                                    { preserveScroll: true },
+                                                )
+                                            }
+                                        >
+                                            <Check
+                                                aria-hidden="true"
+                                                className="size-3.5"
+                                            />
+                                            {t('nav.notifications.mark_read')}
+                                        </Button>
+                                    )}
                                 </li>
                             ))}
                         </ul>

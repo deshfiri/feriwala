@@ -90,6 +90,7 @@ Route::prefix('supplier')
             // The Supplier's own notifications, profile and password.
             Route::get('notifications', [AccountController::class, 'notifications'])->name('notifications.index');
             Route::post('notifications/read', [AccountController::class, 'markNotificationsRead'])->name('notifications.read');
+            Route::post('notifications/{notification}/read', [AccountController::class, 'markNotificationRead'])->name('notifications.read-one');
             Route::get('profile', [AccountController::class, 'profile'])->name('profile.edit');
             Route::patch('profile', [AccountController::class, 'updateProfile'])->name('profile.update');
             Route::get('security', [AccountController::class, 'security'])->name('security.edit');

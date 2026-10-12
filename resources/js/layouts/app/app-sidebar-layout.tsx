@@ -3,6 +3,7 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import BrandingHead from '@/components/branding-head';
+import { useRealtimeUpdates } from '@/hooks/use-realtime-updates';
 import { useTranslation } from '@/hooks/use-translation';
 import type { AppLayoutProps } from '@/types';
 
@@ -11,6 +12,8 @@ export default function AppSidebarLayout({
     breadcrumbs = [],
 }: AppLayoutProps) {
     const { t } = useTranslation();
+
+    useRealtimeUpdates();
 
     return (
         <AppShell variant="sidebar">

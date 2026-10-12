@@ -87,8 +87,10 @@ export function SupplierHeader({
                         {unread > 0 && (
                             <span
                                 aria-hidden="true"
-                                className="bg-brand ring-background absolute top-1.5 right-1.5 size-2 rounded-full ring-2"
-                            />
+                                className="bg-brand text-brand-foreground ring-background absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2"
+                            >
+                                {unread > 99 ? '99+' : unread}
+                            </span>
                         )}
                     </Link>
                 </Button>
