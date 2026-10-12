@@ -18,6 +18,7 @@ use App\Http\Middleware\Storefront\LimitStorefrontRate;
 use App\Http\Middleware\Storefront\LogStorefrontRequest;
 use App\Http\Middleware\Storefront\ReplayStorefrontWrite;
 use App\Http\Middleware\Storefront\RequireStorefrontScope;
+use App\Http\Middleware\Storefront\VerifyStorefrontHost;
 use App\Http\Middleware\TrackAuthenticatedSession;
 use App\Models\User;
 use Illuminate\Foundation\Application;
@@ -138,6 +139,7 @@ return Application::configure(basePath: dirname(__DIR__))
              */
             'storefront.log' => LogStorefrontRequest::class,
             'storefront.auth' => AuthenticateStorefrontRequest::class,
+            'storefront.host' => VerifyStorefrontHost::class,
             'storefront.rate' => LimitStorefrontRate::class,
             'storefront.scope' => RequireStorefrontScope::class,
             'storefront.idempotent' => ReplayStorefrontWrite::class,

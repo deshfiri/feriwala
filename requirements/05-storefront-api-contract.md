@@ -138,6 +138,13 @@ credential, server-side, before any user-supplied filter is applied. A `website_
 never accepted from the client. Cross-website access is impossible by construction, and the test
 group at P5-29 asserts it.
 
+**Stated host (additive, D30).** A storefront serving several websites from one deployment may send
+`X-Feriwala-Storefront-Host: shop.example.com` with any request. When it is present, the ERP
+resolves that host itself — the website's own subdomain, or one of its verified and active custom
+domains — and answers `403 host_mismatch` unless the host belongs to the website that owns the
+credential. Without the header, nothing changes. The header can only narrow a request; it never
+selects a website on its own.
+
 ---
 
 ## 4. Conventions
@@ -266,6 +273,10 @@ Per credential, enforced in Redis. Defaults, tunable per website:
 
 Responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
 
+**Per website as well (additive, D30).** The same budgets also apply to each website across all of
+its credentials together, so issuing a second credential never doubles a website's allowance. A
+request must fit both budgets; the headers report whichever has less left.
+
 ### 4.7 Idempotency
 
 **Required** on every `POST` and `PATCH`:
@@ -381,6 +392,19 @@ GET  /orders/{id}
 
 Scoped to the calling website. Returns order status, fulfillment status, courier status, tracking
 number, and the customer-facing timeline — the data an order-tracking page needs, and nothing more.
+
+### 5.4 Website configuration (additive, D30)
+
+```
+GET  /site                         scope: catalog:read
+```
+
+What the storefront needs to present the calling website: its name and public addresses, whether
+it is open, under maintenance or unavailable, whether it is accepting orders, its branding
+(theme, colours, logo, banner, tagline, about), its public contact details, its default and
+available locales, its currency, and its checkout settings (payment methods and the
+cash-on-delivery limit). The website is the credential's; nothing about the owner's account,
+package, wallet, suppliers or other websites is ever included, and no secret is.
 
 ---
 

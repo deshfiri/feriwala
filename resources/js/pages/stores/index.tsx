@@ -1,5 +1,5 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Store } from 'lucide-react';
+import { Head, Link } from '@inertiajs/react';
+import { Store } from 'lucide-react';
 import DataTable from '@/components/data-table/data-table';
 import Notice from '@/components/notice';
 import PageContainer from '@/components/page-container';
@@ -8,27 +8,25 @@ import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
-import ExternalStoreController from '@/actions/App/Http/Controllers/Erp/ExternalStoreController';
-import { create, edit, index, show } from '@/routes/stores';
+import { index, show } from '@/routes/stores';
 import type { Column, Paginator } from '@/types';
-import type { ExternalStoreRow, StoreAllowance } from '@/types/stores';
+import type { ExternalStoreRow } from '@/types/stores';
 
 type Props = {
     stores: ExternalStoreRow[];
-    allowance: StoreAllowance;
 };
 
 /**
- * The business's own stores on other platforms (D29).
+ * The business's previously connected stores on other platforms, read-only
+ * (D29, as amended by D30).
  *
- * The account's own connections only, each with how its syncs are going.
- * Testing and syncing call the store from the server and never block the page.
+ * Owners no longer connect stores themselves: their websites are served by
+ * Feriwala's own storefront. What was connected before stays visible here,
+ * with the orders it brought in, and nothing on this page changes it.
  */
-export default function StoresIndex({ stores, allowance }: Props) {
+export default function StoresIndex({ stores }: Props) {
     const { t, locale } = useTranslation();
 
-    const atLimit = allowance.remaining !== null && allowance.remaining <= 0;
-    const mayConnect = allowance.allowed && !atLimit;
     const when = (value: string | null) =>
         value ? new Date(value).toLocaleString(locale) : t('stores.never');
     const count = (value: number) => value.toLocaleString(locale);
@@ -42,13 +40,6 @@ export default function StoresIndex({ stores, allowance }: Props) {
         to: stores.length > 0 ? stores.length : null,
         total: stores.length,
     };
-
-    const post = (url: string) =>
-        router.post(
-            url,
-            {},
-            { preserveScroll: true, only: ['stores', 'flash'] },
-        );
 
     const columns: Column<ExternalStoreRow>[] = [
         {
@@ -94,18 +85,6 @@ export default function StoresIndex({ stores, allowance }: Props) {
             ),
         },
         {
-            key: 'last_error',
-            header: t('stores.columns.last_error'),
-            cell: (row) =>
-                row.last_error ? (
-                    <span className="text-danger text-sm">
-                        {row.last_error}
-                    </span>
-                ) : (
-                    <span className="text-muted-foreground text-sm">—</span>
-                ),
-        },
-        {
             key: 'orders',
             header: t('stores.columns.orders'),
             align: 'end',
@@ -121,54 +100,9 @@ export default function StoresIndex({ stores, allowance }: Props) {
             alwaysVisible: true,
             align: 'end',
             cell: (row) => (
-                <div className="flex flex-wrap justify-end gap-1">
-                    <Button variant="ghost" size="sm" asChild>
-                        <Link href={show(row.id)}>
-                            {t('stores.actions.view')}
-                        </Link>
-                    </Button>
-                    {row.status === 'disconnected' ? (
-                        <Button variant="ghost" size="sm" asChild>
-                            <Link href={edit(row.id)}>
-                                {t('stores.actions.reconnect')}
-                            </Link>
-                        </Button>
-                    ) : (
-                        <>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                    post(
-                                        ExternalStoreController.test.url(
-                                            row.id,
-                                        ),
-                                    )
-                                }
-                            >
-                                {t('stores.actions.test')}
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                    post(
-                                        ExternalStoreController.sync.url(
-                                            row.id,
-                                        ),
-                                    )
-                                }
-                            >
-                                {t('stores.actions.sync')}
-                            </Button>
-                            <Button variant="ghost" size="sm" asChild>
-                                <Link href={edit(row.id)}>
-                                    {t('stores.actions.edit')}
-                                </Link>
-                            </Button>
-                        </>
-                    )}
-                </div>
+                <Button variant="ghost" size="sm" asChild>
+                    <Link href={show(row.id)}>{t('stores.actions.view')}</Link>
+                </Button>
             ),
         },
     ];
@@ -181,43 +115,9 @@ export default function StoresIndex({ stores, allowance }: Props) {
                 <PageHeader
                     title={t('stores.title')}
                     description={t('stores.description')}
-                    meta={
-                        allowance.allowed && (
-                            <span className="text-muted-foreground text-sm">
-                                {allowance.limit === null
-                                    ? t('stores.allowance_unlimited', {
-                                          used: count(allowance.used),
-                                      })
-                                    : t('stores.allowance', {
-                                          used: count(allowance.used),
-                                          limit: count(allowance.limit),
-                                      })}
-                            </span>
-                        )
-                    }
-                    actions={
-                        mayConnect ? (
-                            <Button asChild size="sm">
-                                <Link href={create()}>
-                                    <Plus aria-hidden="true" />
-                                    {t('stores.connect')}
-                                </Link>
-                            </Button>
-                        ) : undefined
-                    }
                 />
 
-                {!allowance.allowed && (
-                    <Notice tone="warning">{t('stores.not_entitled')}</Notice>
-                )}
-
-                {allowance.allowed && atLimit && (
-                    <Notice tone="warning">
-                        {t('stores.limit_reached', {
-                            limit: count(allowance.limit ?? 0),
-                        })}
-                    </Notice>
-                )}
+                <Notice tone="neutral">{t('stores.retired_notice')}</Notice>
 
                 <DataTable
                     columns={columns}
@@ -250,27 +150,13 @@ export default function StoresIndex({ stores, allowance }: Props) {
                                 {t('stores.columns.orders')}:{' '}
                                 {count(row.orders_count)}
                             </div>
-                            {row.last_error && (
-                                <div className="text-danger text-xs">
-                                    {row.last_error}
-                                </div>
-                            )}
                         </div>
                     )}
                     emptyState={
                         <EmptyState
                             icon={Store}
                             title={t('stores.empty')}
-                            description={t('stores.empty_help')}
-                            action={
-                                mayConnect ? (
-                                    <Button asChild>
-                                        <Link href={create()}>
-                                            {t('stores.connect')}
-                                        </Link>
-                                    </Button>
-                                ) : undefined
-                            }
+                            description={t('stores.retired_notice')}
                         />
                     }
                 />

@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Website\Actions\ManageWebsiteDomainRouting;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
 use App\Domain\Website\Actions\ProvisionWebsiteService;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Queries\WebsiteOverview;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -196,6 +198,95 @@ class WebsiteController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.hosting_recorded')]);
 
         return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Issue (or reissue) the DNS token that proves control of a domain (D30 §3).
+     */
+    public function issueDomainVerification(Request $request, Website $website, int $domain, ManageWebsiteDomainRouting $routing): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $this->attemptRouting(fn () => $routing->issueVerification($this->domainOf($website, $domain), $this->person($request)));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.domain_verification_issued')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Look for the token in the domain's DNS now. Verified only on evidence.
+     */
+    public function checkDomainVerification(Request $request, Website $website, int $domain, ManageWebsiteDomainRouting $routing): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $verified = $this->attemptRouting(fn () => $routing->verify($this->domainOf($website, $domain), $this->person($request)));
+
+        Inertia::flash('toast', $verified
+            ? ['type' => 'success', 'message' => __('website.flash.domain_verified')]
+            : ['type' => 'error', 'message' => __('website.flash.domain_not_verified')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Put a verified domain on the storefront.
+     */
+    public function activateDomain(Request $request, Website $website, int $domain, ManageWebsiteDomainRouting $routing): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $this->attemptRouting(fn () => $routing->activate($this->domainOf($website, $domain), $this->person($request)));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.domain_activated')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Take an active domain off the storefront, with a reason.
+     */
+    public function suspendDomain(Request $request, Website $website, int $domain, ManageWebsiteDomainRouting $routing): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:'.self::MINIMUM_REASON, 'max:500'],
+        ]);
+
+        $this->attemptRouting(fn () => $routing->suspend($this->domainOf($website, $domain), $this->person($request), $validated['reason']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.domain_suspended')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * A domain of this website, and only this website: another website's domain
+     * is a 404, never a refusal.
+     */
+    protected function domainOf(Website $website, int $domain): WebsiteDomain
+    {
+        /** @var WebsiteDomain $record */
+        $record = $website->domains()->whereKey($domain)->firstOrFail();
+
+        return $record;
+    }
+
+    /**
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $step
+     * @return TReturn
+     */
+    protected function attemptRouting(callable $step): mixed
+    {
+        try {
+            return $step();
+        } catch (WebsiteRefused $refused) {
+            throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+        }
     }
 
     protected function person(Request $request): User

@@ -3,6 +3,7 @@
 use App\Domain\Account\Actions\ActivateAccount;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Package\Actions\ActivatePackageChange;
 use App\Domain\Package\Actions\ActivateRenewal;
 use App\Domain\Package\Actions\AssignPackage;
@@ -25,6 +26,7 @@ use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -564,12 +566,26 @@ describe('what the package allows', function () {
     });
 
     it('lets a subscription taken without a website limit still set up the one website it was allocated', function () {
-        // Snapshotted before the package said how many websites it allows.
+        // Snapshotted before the package said how many websites it allows —
+        // and allocated its website then, by the code of the day (D30 §9).
         $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationPackage([
             PackageFeature::DedicatedWebsite->value => '1',
             PackageFeature::DomainIncluded->value => '1',
             PackageFeature::HostingIncluded->value => '1',
         ])));
+        $subscription = UserPackage::query()->findOrFail($account->current_user_package_id);
+
+        expect(WebsiteAllocation::query()->count())->toBe(0);
+
+        WebsiteAllocation::create([
+            'business_account_id' => $account->id,
+            'user_package_id' => $subscription->id,
+            'starts_at' => $subscription->started_at,
+            'domain_starts_at' => $subscription->started_at,
+            'hosting_starts_at' => $subscription->started_at,
+            'domain_included' => true,
+            'hosting_included' => true,
+        ]);
 
         $this->actingAs($account->owner)
             ->get(route('websites.index'))
@@ -640,5 +656,264 @@ describe('what the package allows', function () {
             ->assertSessionHasNoErrors();
 
         expect(Website::query()->count())->toBe(1);
+    });
+});
+
+/**
+ * Ask for websites one after another as the owner, and return how many were
+ * taken.
+ */
+function websiteAllocationRequestMany(BusinessAccount $account, int $count): int
+{
+    for ($n = 1; $n <= $count; $n++) {
+        test()->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Shop '.$n, 'subdomain' => 'karim-shop-'.$n]);
+    }
+
+    return Website::query()->where('business_account_id', $account->id)->count();
+}
+
+describe('one allocation slot per permitted website (D30 §9)', function () {
+    it('allows as many websites as the package says, each in its own slot', function (int $limit) {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => (string) $limit,
+        ])));
+
+        expect(WebsiteAllocation::query()->where('business_account_id', $account->id)->orderBy('slot')->pluck('slot')->all())
+            ->toBe(range(1, $limit));
+
+        $this->actingAs($account->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('entitlement.limit', $limit)
+                ->where('entitlement.remaining', $limit)
+                ->has('allocations', $limit));
+
+        // One more than allowed is asked for; only the allowed number is taken.
+        expect(websiteAllocationRequestMany($account, $limit + 1))->toBe($limit);
+
+        $slots = WebsiteAllocation::query()->where('business_account_id', $account->id)->get();
+
+        expect($slots->pluck('website_id')->filter()->unique()->count())->toBe($limit)
+            ->and(Website::query()->where('business_account_id', $account->id)->whereNotIn('id', $slots->pluck('website_id'))->count())->toBe(0);
+    })->with([
+        'one website' => [1],
+        'two websites' => [2],
+        'three websites' => [3],
+    ]);
+
+    it('allows no website when the package says none, even with the website feature', function () {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '0',
+        ])));
+
+        expect(WebsiteAllocation::query()->count())->toBe(0);
+
+        $this->actingAs($account->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('entitlement.allowed', false)
+                ->where('entitlement.limit', 0)
+                ->has('allocations', 0));
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Traders', 'subdomain' => 'karim-traders'])
+            ->assertSessionHasErrors(['package']);
+
+        expect(Website::query()->count())->toBe(0);
+    });
+
+    it('opens each slot once however many times the confirmation arrives', function () {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '2',
+        ])));
+        $subscription = UserPackage::query()->findOrFail($account->current_user_package_id);
+        $allocator = app(AllocatePackageWebsite::class);
+
+        $first = $allocator->handle($subscription);
+        $allocator->handle($subscription);
+
+        expect($first?->slot)->toBe(1)
+            ->and(WebsiteAllocation::query()->count())->toBe(2);
+
+        expect(fn () => WebsiteAllocation::create([
+            'business_account_id' => $account->id,
+            'user_package_id' => $subscription->id,
+            'slot' => 2,
+            'starts_at' => now(),
+            'domain_starts_at' => now(),
+            'hosting_starts_at' => now(),
+        ]))->toThrow(UniqueConstraintViolationException::class);
+    });
+
+    it('frees a closed website\'s slot for the next website, and records it', function () {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage()));
+        websiteAllocationRequestMany($account, 1);
+
+        $closed = Website::query()->sole();
+        $closed->transitionTo(WebsiteStatus::Closed)->save();
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Again', 'subdomain' => 'karim-again'])
+            ->assertSessionHasNoErrors();
+
+        $replacement = Website::query()->where('subdomain', 'karim-again')->sole();
+
+        expect(WebsiteAllocation::query()->sole()->website_id)->toBe($replacement->id)
+            ->and(AuditLog::query()->where('action', 'website.allocation_reused')->count())->toBe(1);
+    });
+
+    it('continues each slot with its own website through a renewal', function () {
+        $this->travelTo(CarbonImmutable::parse('2026-10-10 09:30:00'));
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '2',
+        ])));
+        websiteAllocationRequestMany($account, 2);
+
+        $before = WebsiteAllocation::query()->orderBy('slot')->pluck('website_id', 'slot')->all();
+        $current = UserPackage::query()->findOrFail($account->current_user_package_id);
+
+        $this->travelTo(CarbonImmutable::parse('2027-10-01 09:30:00'));
+        $renewal = app(ActivateRenewal::class)->handle(app(OpenRenewal::class)->handle($account, $current));
+
+        $renewed = WebsiteAllocation::query()->where('user_package_id', $renewal->id)->orderBy('slot')->get();
+
+        expect($renewed->pluck('website_id', 'slot')->all())->toBe($before)
+            ->and($renewed->every(fn (WebsiteAllocation $slot) => $slot->domain_starts_at->toDateTimeString() === '2027-10-10 09:30:00'))->toBeTrue();
+
+        $this->actingAs($account->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('allocations', 2)
+                ->where('allocations.0.slot', 1)
+                ->where('allocations.1.slot', 2));
+    });
+
+    it('gives a replacement website the current subscription\'s slot, never an older subscription\'s empty one', function () {
+        $this->travelTo(CarbonImmutable::parse('2026-10-10 09:30:00'));
+        // Two-year domain and hosting terms, so the period a downgrade carries
+        // over is still running after the downgrade takes effect.
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '2',
+            PackageFeature::DomainValidityMonths->value => '24',
+            PackageFeature::HostingValidityMonths->value => '24',
+        ], fee: '9000.00')));
+        $old = UserPackage::query()->findOrFail($account->current_user_package_id);
+
+        // One website on the two-website package; its slot 2 stays empty.
+        websiteAllocationRequestMany($account, 1);
+        $first = Website::query()->sole();
+
+        // Downgraded to one website. A downgrade takes effect when the current
+        // term ends, so the one-website subscription governs from then on.
+        $this->travelTo(CarbonImmutable::parse('2027-02-01 09:30:00'));
+        $change = app(OpenPackageChange::class)->handle($account, $old, websiteAllocationWebsitePackage(fee: '5000.00'));
+        $current = app(ActivatePackageChange::class)->handle($change);
+        $this->travelTo(CarbonImmutable::parse('2027-10-20 09:30:00'));
+
+        $history = WebsiteAllocation::query()->where('user_package_id', $old->id)->orderBy('slot')->get()
+            ->map(fn (WebsiteAllocation $slot) => $slot->only(['id', 'slot', 'website_id', 'domain_starts_at', 'domain_expires_at', 'hosting_expires_at']))
+            ->all();
+        $currentSlot = WebsiteAllocation::query()->where('user_package_id', $current->id)->sole();
+        $currentDates = $currentSlot->only(['domain_starts_at', 'domain_expires_at', 'hosting_starts_at', 'hosting_expires_at']);
+
+        expect($history[1]['website_id'])->toBeNull()
+            ->and($currentSlot->website_id)->toBe($first->id);
+
+        $first->transitionTo(WebsiteStatus::Closed)->save();
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Again', 'subdomain' => 'karim-again'])
+            ->assertSessionHasNoErrors();
+
+        $replacement = Website::query()->where('subdomain', 'karim-again')->sole();
+        $currentSlot->refresh();
+
+        // The current subscription's freed slot, with its own dates, untouched.
+        expect($replacement->user_package_id)->toBe($current->id)
+            ->and($currentSlot->website_id)->toBe($replacement->id)
+            ->and($currentSlot->only(['domain_starts_at', 'domain_expires_at', 'hosting_starts_at', 'hosting_expires_at']))
+            ->toEqual($currentDates);
+
+        // The older subscription's rows are exactly as they were.
+        expect(WebsiteAllocation::query()->where('user_package_id', $old->id)->orderBy('slot')->get()
+            ->map(fn (WebsiteAllocation $slot) => $slot->only(['id', 'slot', 'website_id', 'domain_starts_at', 'domain_expires_at', 'hosting_expires_at']))
+            ->all())->toEqual($history);
+    });
+
+    it('records every website against the subscription whose slot it holds', function () {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '2',
+        ])));
+
+        // At capacity, a third request is refused.
+        expect(websiteAllocationRequestMany($account, 3))->toBe(2);
+
+        foreach (Website::query()->get() as $website) {
+            $slot = WebsiteAllocation::query()->where('website_id', $website->id)->sole();
+
+            expect($website->user_package_id)->toBe($slot->user_package_id)
+                ->and($slot->user_package_id)->toBe($account->refresh()->current_user_package_id);
+        }
+    });
+
+    it('takes the account lock and decides capacity under it', function () {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage()));
+        $locks = [];
+
+        DB::listen(function ($query) use (&$locks) {
+            if (str_contains($query->sql, 'for update') && str_contains($query->sql, '"business_accounts"')) {
+                $locks[] = $query->sql;
+            }
+        });
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim One', 'subdomain' => 'karim-one'])
+            ->assertSessionHasNoErrors();
+
+        // A competing request arriving after the first has committed sees
+        // the slot taken, under the same lock.
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Two', 'subdomain' => 'karim-two'])
+            ->assertSessionHasErrors(['package' => __('website.refused.limit_reached', ['limit' => 1])]);
+
+        expect($locks)->not->toBeEmpty()
+            ->and(Website::query()->count())->toBe(1);
+    });
+
+    it('never keeps a website it could not give a slot', function () {
+        $account = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '2',
+        ])));
+        $subscription = UserPackage::query()->findOrFail($account->current_user_package_id);
+
+        // Slot 2 is held by a website outside this account: capacity says one
+        // more is allowed, but no slot can be given to it.
+        $elsewhere = Website::factory()->forAccount(websiteTestAccount())->create();
+        WebsiteAllocation::query()->where('user_package_id', $subscription->id)->where('slot', 2)
+            ->update(['website_id' => $elsewhere->id]);
+
+        websiteAllocationRequestMany($account, 1);
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.store'), ['name' => 'Karim Orphan', 'subdomain' => 'karim-orphan'])
+            ->assertSessionHasErrors(['package']);
+
+        expect(Website::query()->where('business_account_id', $account->id)->count())->toBe(1)
+            ->and(Website::query()->where('subdomain', 'karim-orphan')->exists())->toBeFalse()
+            ->and(DB::table('website_charges')->whereNotIn('website_id', Website::query()->select('id'))->count())->toBe(0);
+    });
+
+    it('never shows another account\'s slots', function () {
+        $mine = websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '2',
+        ])));
+        websiteAllocationConfirm(websiteAllocationPurchase(websiteAllocationWebsitePackage([
+            PackageFeature::WebsiteLimit->value => '3',
+        ])));
+
+        $this->actingAs($mine->owner)
+            ->get(route('websites.index'))
+            ->assertInertia(fn (Assert $page) => $page->has('allocations', 2));
     });
 });

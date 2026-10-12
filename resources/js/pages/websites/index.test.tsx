@@ -70,6 +70,7 @@ function allocationCard(
 
     return {
         id: '01ALLOCATION',
+        slot: 1,
         name: 'Karim Traders',
         website: null,
         domain_name: null,

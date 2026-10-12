@@ -2,9 +2,13 @@
 
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\ExternalStore\Actions\ConnectExternalStore;
 use App\Domain\ExternalStore\Actions\DispatchExternalStoreSyncs;
 use App\Domain\ExternalStore\Actions\ImportExternalOrders;
+use App\Domain\ExternalStore\Actions\UpdateExternalStoreConnection;
 use App\Domain\ExternalStore\Enums\ExternalStoreStatus;
+use App\Domain\ExternalStore\Enums\StorePlatform;
+use App\Domain\ExternalStore\Exceptions\ExternalStoreRefused;
 use App\Domain\ExternalStore\Jobs\SyncExternalStore;
 use App\Domain\ExternalStore\Models\ExternalStore;
 use App\Domain\Package\Actions\AssignPackage;
@@ -63,17 +67,13 @@ function externalStoreEntitlementExpire(BusinessAccount $account): void
 }
 
 /**
- * @return array<string, string>
+ * Try to connect another store to `$account` through the connection action.
  */
-function externalStoreEntitlementForm(string $host = 'new.example.com'): array
+function externalStoreEntitlementConnect(BusinessAccount $account, string $host = 'new.example.com'): void
 {
-    return [
-        'platform' => 'dfcommerce',
-        'name' => 'Another shop',
-        'base_url' => 'https://'.$host,
-        'api_key' => 'key',
-        'api_secret' => 'secret',
-    ];
+    app(ConnectExternalStore::class)->handle(
+        $account, $account->owner, StorePlatform::Dfcommerce, 'Another shop', 'https://'.$host, 'key', 'secret',
+    );
 }
 
 describe('an expired package', function () {
@@ -82,9 +82,8 @@ describe('an expired package', function () {
         $account = externalStoreAccount(limit: 3);
         externalStoreEntitlementExpire($account);
 
-        $this->actingAs($account->owner)
-            ->post(route('stores.store'), externalStoreEntitlementForm())
-            ->assertSessionHasErrors(['store' => __('stores.refused.not_entitled')]);
+        expect(fn () => externalStoreEntitlementConnect($account))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.not_entitled'));
 
         Http::assertNothingSent();
     });
@@ -113,7 +112,6 @@ describe('an expired package', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('account.managesStores', true)
-                ->where('allowance.allowed', false)
                 ->has('stores', 1));
     });
 
@@ -144,9 +142,8 @@ describe('a downgraded package', function () {
             PackageFeature::ExternalStoreLimit->value => '1',
         ]), $this->admin, 'Downgraded', CarbonImmutable::now());
 
-        $this->actingAs($account->owner)
-            ->post(route('stores.store'), externalStoreEntitlementForm())
-            ->assertSessionHasErrors(['store' => __('stores.refused.limit_reached', ['limit' => 1])]);
+        expect(fn () => externalStoreEntitlementConnect($account))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.limit_reached', ['limit' => 1]));
 
         Http::assertNothingSent();
 
@@ -175,9 +172,8 @@ describe('the store limit', function () {
         externalStoreConnected($account, 'one.example.com');
         $old = externalStoreConnected($account, 'two.example.com', ExternalStoreStatus::Disconnected);
 
-        $this->actingAs($account->owner)
-            ->put(route('stores.update', $old->public_id), ['name' => 'Two', 'api_key' => 'k', 'api_secret' => 's'])
-            ->assertSessionHasErrors(['store' => __('stores.refused.limit_reached', ['limit' => 1])]);
+        expect(fn () => app(UpdateExternalStoreConnection::class)->handle($old, $account->owner, 'Two', 'k', 's'))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.limit_reached', ['limit' => 1]));
 
         expect($old->refresh()->status)->toBe(ExternalStoreStatus::Disconnected);
         Http::assertNothingSent();
@@ -187,9 +183,8 @@ describe('the store limit', function () {
         Http::fake();
         $account = testAccountWithPackageFeatures([PackageFeature::ExternalStoreAccess->value => '1'], AccountStatus::Active);
 
-        $this->actingAs($account->owner)
-            ->post(route('stores.store'), externalStoreEntitlementForm())
-            ->assertSessionHasErrors(['store' => __('stores.refused.limit_reached', ['limit' => 0])]);
+        expect(fn () => externalStoreEntitlementConnect($account))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.limit_reached', ['limit' => 0]));
     });
 });
 

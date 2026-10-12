@@ -16,7 +16,6 @@ import {
     Network,
     PackageCheck,
     Palette,
-    Plug,
     Settings,
     Receipt,
     ReceiptText,
@@ -96,7 +95,6 @@ import { edit as profileSettings } from '@/routes/profile';
 import { index as businessCustomers } from '@/routes/customers';
 import { index as businessOrders } from '@/routes/orders';
 import { index as referrals } from '@/routes/referrals';
-import { index as externalStores } from '@/routes/stores';
 import { edit as securitySettings } from '@/routes/security';
 import { index as staffDirectory } from '@/routes/staff';
 import { show as subscription } from '@/routes/subscription';
@@ -209,16 +207,9 @@ export function useNavigation(): {
                                     },
                                 ]
                               : []),
-                          // The partner's own stores on other platforms (D29).
-                          ...(account.managesStores
-                              ? [
-                                    {
-                                        title: t('nav.stores'),
-                                        href: externalStores(),
-                                        icon: Plug,
-                                    },
-                                ]
-                              : []),
+                          // No Connected stores entry: owners no longer connect
+                          // stores themselves (D30). My Websites is the one
+                          // place they manage websites.
                       ],
                   },
                   {

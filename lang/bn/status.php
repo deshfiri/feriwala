@@ -299,4 +299,11 @@ return [
         'processed' => 'অর্থ ফেরত দেওয়া হয়েছে',
         'failed' => 'অর্থ ফেরত ব্যর্থ',
     ],
+
+    'domain_routing' => [
+        'unverified' => 'যাচাই হয়নি',
+        'verified' => 'যাচাইকৃত',
+        'active' => 'স্টোরফ্রন্টে চালু',
+        'suspended' => 'স্থগিত',
+    ],
 ];

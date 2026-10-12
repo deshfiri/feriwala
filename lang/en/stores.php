@@ -12,6 +12,7 @@ return [
     'allowance' => ':used of :limit stores connected',
     'allowance_unlimited' => ':used stores connected',
     'never' => 'Never',
+    'retired_notice' => 'Stores are no longer connected here. Your websites are managed under My websites; orders these stores brought in stay in All orders and Customers.',
 
     'columns' => [
         'name' => 'Store',

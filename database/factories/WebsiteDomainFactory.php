@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Domain\Website\Enums\DomainRoutingStatus;
 use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteDomain;
@@ -40,5 +41,28 @@ class WebsiteDomainFactory extends Factory
     public function expiringIn(int $days): self
     {
         return $this->state(fn () => ['expires_at' => now()->addDays($days)]);
+    }
+
+    /**
+     * Proven by its DNS, not yet on the storefront (D30 §3).
+     */
+    public function verified(): self
+    {
+        return $this->state(fn () => [
+            'routing_status' => DomainRoutingStatus::Verified,
+            'verification_token' => 'banij-verify-'.Str::lower(Str::random(40)),
+            'verified_at' => now(),
+        ]);
+    }
+
+    /**
+     * Proven and serving the storefront (D30 §3).
+     */
+    public function serving(): self
+    {
+        return $this->verified()->state(fn () => [
+            'routing_status' => DomainRoutingStatus::Active,
+            'activated_at' => now(),
+        ]);
     }
 }

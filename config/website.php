@@ -118,4 +118,30 @@ return [
         'backoff' => [10, 30, 120, 600, 1800, 7200, 21600, 43200],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Certificate authorisation for the shared storefront (D30 §4)
+    |--------------------------------------------------------------------------
+    |
+    | Caddy issues certificates on demand and asks the ERP first:
+    | GET /api/internal/tls/authorize?token=…&domain=…  — yes only for a
+    | website's subdomain or an active, verified custom domain of a website that
+    | is not closed. With no token configured the endpoint answers nothing, so it
+    | is off until production sets one. `ask_allowed_ips` optionally restricts it
+    | further to Caddy's addresses (IPs or CIDR ranges, comma-separated).
+    |
+    | A custom domain proves control with a DNS TXT record:
+    | `_banij-verify.{domain}` holding the token the ERP issued for it.
+    |
+    */
+
+    'tls' => [
+        'ask_token' => env('STOREFRONT_TLS_ASK_TOKEN'),
+        'ask_allowed_ips' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('STOREFRONT_TLS_ASK_ALLOWED_IPS', '')),
+        ))),
+        'ask_rate_limit' => 120,
+    ],
+
 ];

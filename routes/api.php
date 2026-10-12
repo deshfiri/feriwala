@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Internal\AuthorizeCertificateController;
 use App\Http\Controllers\Api\Storefront\V1\CategoryController;
 use App\Http\Controllers\Api\Storefront\V1\ConnectionController;
 use App\Http\Controllers\Api\Storefront\V1\CustomerController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Api\Storefront\V1\InventoryController;
 use App\Http\Controllers\Api\Storefront\V1\OrderController;
 use App\Http\Controllers\Api\Storefront\V1\ProductController;
 use App\Http\Controllers\Api\Storefront\V1\ReturnController;
+use App\Http\Controllers\Api\Storefront\V1\SiteController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,7 +22,8 @@ use Illuminate\Support\Facades\Route;
  *
  *   storefront.log    — every call written to api_logs, refused ones included
  *   storefront.auth   — HTTPS, credential, timestamp, signature, nonce
- *   storefront.rate   — the credential's budget for this class of call
+ *   storefront.host   — a stated storefront host must be this website's (D30)
+ *   storefront.rate   — the credential's and the website's budget for this class
  *   storefront.scope  — the scope this endpoint needs
  *
  * **There is no route here that names a website.** The website is the one the
@@ -41,12 +44,14 @@ Route::prefix('storefront/v1')
             ->middleware('storefront.log')
             ->name('health');
 
-        Route::middleware(['storefront.log', 'storefront.auth'])->group(function () {
+        Route::middleware(['storefront.log', 'storefront.auth', 'storefront.host'])->group(function () {
             Route::get('connection', ConnectionController::class)
                 ->middleware('storefront.rate:other')
                 ->name('connection');
 
             Route::middleware(['storefront.rate:read', 'storefront.scope:catalog:read'])->group(function () {
+                // How to present this website (D30, contract §5.4).
+                Route::get('site', SiteController::class)->name('site');
                 Route::get('products', [ProductController::class, 'index'])->name('products.index');
                 Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
                 Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
@@ -102,3 +107,12 @@ Route::prefix('storefront/v1')
             });
         });
     });
+
+/*
+ * Caddy's certificate pre-issue check for the shared storefront (D30 §4).
+ * Not part of the storefront contract: authenticated by the shared ask token,
+ * optionally restricted to Caddy's addresses, and off until a token is set.
+ */
+Route::get('internal/tls/authorize', AuthorizeCertificateController::class)
+    ->middleware('throttle:tls-ask')
+    ->name('internal.tls.authorize');

@@ -1,21 +1,31 @@
 <?php
 
-use App\Domain\Account\Enums\AccountRole;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\ExternalStore\Actions\ConnectExternalStore;
+use App\Domain\ExternalStore\Actions\DisconnectExternalStore;
+use App\Domain\ExternalStore\Actions\RotateExternalStoreWebhookSecret;
+use App\Domain\ExternalStore\Actions\TestExternalStoreConnection;
+use App\Domain\ExternalStore\Actions\UpdateExternalStoreConnection;
 use App\Domain\ExternalStore\Enums\ExternalStoreStatus;
+use App\Domain\ExternalStore\Enums\StorePlatform;
+use App\Domain\ExternalStore\Exceptions\ExternalStoreRefused;
 use App\Domain\ExternalStore\Jobs\SyncExternalStore;
 use App\Domain\ExternalStore\Models\ExternalOrder;
 use App\Domain\ExternalStore\Models\ExternalStore;
-use App\Models\User;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
- * Connecting a partner's own DFCOMMERCE store (D29): the package, the address,
- * the credentials, the one-live-owner rule, and that nothing secret ever comes
- * back out.
+ * External store connections (D29, as amended by D30).
+ *
+ * Owners no longer connect stores themselves, so the connection is exercised
+ * through the actions that remain — the package, the address, the credentials,
+ * the one-live-owner rule, and that nothing secret ever comes back out — and
+ * the Owner Panel keeps only read-only pages over what was connected before.
  */
 
 beforeEach(function () {
@@ -27,33 +37,85 @@ beforeEach(function () {
 });
 
 /**
- * @return array<string, string>
+ * Connect a DFCOMMERCE store through the action, as the connection workflow
+ * would.
+ *
+ * @return array{store: ExternalStore, webhook_secret: string|null}
  */
-function externalStoreConnectForm(array $overrides = []): array
+function externalStoreConnect(BusinessAccount $account, array $overrides = []): array
 {
-    return [
-        'platform' => 'dfcommerce',
+    $form = [
         'name' => 'Khalid Fashion',
         'base_url' => 'https://shop.example.com/api/v1/',
         'api_key' => 'live-key-9876',
         'api_secret' => 'live-secret-very-private',
+        'webhook_secret' => null,
         ...$overrides,
     ];
+
+    return app(ConnectExternalStore::class)->handle(
+        $account,
+        $account->owner,
+        StorePlatform::Dfcommerce,
+        $form['name'],
+        $form['base_url'],
+        $form['api_key'],
+        $form['api_secret'],
+        $form['webhook_secret'],
+    );
 }
+
+/**
+ * Whether `$store` accepts a notification signed with `$secret`.
+ */
+function externalStoreAcceptsSecret(ExternalStore $store, string $secret, string $eventId): bool
+{
+    $body = (string) json_encode(['event' => 'inventory.low_stock', 'data' => []]);
+
+    return test()->call('POST', route('webhooks.stores', $store->public_id), server: [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_X_WEBHOOK_SIGNATURE' => externalStoreSignature($body, $secret),
+        'HTTP_X_WEBHOOK_EVENT_ID' => $eventId,
+    ], content: $body)->isOk();
+}
+
+describe('owner self-service is retired (D30)', function () {
+    it('no longer offers the owner a way to connect, change or disconnect a store', function (string $name) {
+        expect(Route::has($name))->toBeFalse();
+    })->with([
+        'stores.create', 'stores.check', 'stores.store', 'stores.edit', 'stores.update', 'stores.test',
+        'stores.sync', 'stores.webhook-secret.rotate', 'stores.webhook-secret.provide', 'stores.destroy',
+    ]);
+
+    it('answers a write to the old addresses with nothing', function () {
+        $store = externalStoreConnected($this->account);
+
+        $this->actingAs($this->owner)->post('/stores', ['name' => 'X'])->assertMethodNotAllowed();
+        $this->actingAs($this->owner)->post('/stores/'.$store->public_id.'/sync')->assertNotFound();
+        $this->actingAs($this->owner)->delete('/stores/'.$store->public_id)->assertMethodNotAllowed();
+
+        expect($store->refresh()->status)->toBe(ExternalStoreStatus::Connected);
+    });
+
+    it('keeps what was connected before, its orders and its webhook endpoint', function () {
+        $store = externalStoreConnected($this->account);
+        externalStoreRecordOrder($store);
+
+        expect(ExternalOrder::query()->where('external_store_id', $store->id)->count())->toBe(1)
+            ->and(externalStoreAcceptsSecret($store, 'webhook-secret', 'evt-kept'))->toBeTrue();
+    });
+});
 
 describe('connecting a store', function () {
     it('verifies the credentials, saves the connection under the account and queues the first import', function () {
         Queue::fake([SyncExternalStore::class]);
         Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
 
-        $response = $this->actingAs($this->owner)->post(route('stores.store'), externalStoreConnectForm());
-
+        $result = externalStoreConnect($this->account);
         $store = ExternalStore::query()->sole();
 
-        $response->assertRedirect(route('stores.show', $store->public_id))
-            ->assertInertiaFlash('webhook_secret');
-
-        expect($store->business_account_id)->toBe($this->account->id)
+        expect($result['webhook_secret'])->toHaveLength(48)
+            ->and($store->business_account_id)->toBe($this->account->id)
             ->and($store->status)->toBe(ExternalStoreStatus::Pending)
             ->and($store->base_url)->toBe('https://shop.example.com')
             ->and($store->normalized_host)->toBe('shop.example.com')
@@ -72,26 +134,27 @@ describe('connecting a store', function () {
         Queue::assertPushed(SyncExternalStore::class, fn (SyncExternalStore $job) => $job->storeId === $store->id);
     });
 
-    it('says why the store refused the credentials, without saving anything', function () {
+    it('says why the store refused the credentials, without saving anything or repeating them', function () {
         Http::fake(['https://shop.example.com/api/v1/orders*' => Http::response(['ok' => false, 'error' => ['message' => 'bad key live-secret-very-private']], 401)]);
 
-        $this->actingAs($this->owner)
-            ->from(route('stores.create'))
-            ->post(route('stores.store'), externalStoreConnectForm())
-            ->assertSessionHasErrors(['connection' => __('stores.refused.verification_failed', ['reason' => __('stores.errors.credentials_refused')])]);
+        try {
+            externalStoreConnect($this->account);
+            $this->fail('The connection was not refused.');
+        } catch (ExternalStoreRefused $refused) {
+            expect($refused->getMessage())
+                ->toBe(__('stores.refused.verification_failed', ['reason' => __('stores.errors.credentials_refused')]))
+                ->not->toContain('live-secret-very-private');
+        }
 
         expect(ExternalStore::query()->count())->toBe(0);
-        // The store's own words — which echo the secret here — are never repeated.
-        expect(session('errors')->first('connection'))->not->toContain('live-secret-very-private');
     });
 
     it('checks a connection without saving it', function () {
         Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
 
-        $this->actingAs($this->owner)
-            ->from(route('stores.create'))
-            ->post(route('stores.check'), externalStoreConnectForm())
-            ->assertSessionHasNoErrors();
+        app(ConnectExternalStore::class)->check(
+            $this->account, StorePlatform::Dfcommerce, 'https://shop.example.com', 'live-key-9876', 'live-secret-very-private',
+        );
 
         expect(ExternalStore::query()->count())->toBe(0);
     });
@@ -99,9 +162,8 @@ describe('connecting a store', function () {
     it('refuses a plain HTTP address before calling anything', function () {
         Http::fake();
 
-        $this->actingAs($this->owner)
-            ->post(route('stores.store'), externalStoreConnectForm(['base_url' => 'http://shop.example.com']))
-            ->assertSessionHasErrors(['base_url' => __('stores.refused.address_invalid')]);
+        expect(fn () => externalStoreConnect($this->account, ['base_url' => 'http://shop.example.com']))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.address_invalid'));
 
         Http::assertNothingSent();
     });
@@ -110,9 +172,8 @@ describe('connecting a store', function () {
         externalStoreFakeDns($address);
         Http::fake();
 
-        $this->actingAs($this->owner)
-            ->post(route('stores.store'), externalStoreConnectForm())
-            ->assertSessionHasErrors(['connection' => __('stores.refused.verification_failed', ['reason' => __('stores.errors.address_refused')])]);
+        expect(fn () => externalStoreConnect($this->account))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.verification_failed', ['reason' => __('stores.errors.address_refused')]));
 
         Http::assertNothingSent();
         expect(ExternalStore::query()->count())->toBe(0);
@@ -127,60 +188,39 @@ describe('connecting a store', function () {
 
     it('refuses a package that does not include external stores', function () {
         Http::fake();
-        $account = externalStoreAccount(entitled: false);
 
-        $this->actingAs($account->owner)
-            ->post(route('stores.store'), externalStoreConnectForm())
-            ->assertSessionHasErrors(['store' => __('stores.refused.not_entitled')]);
+        expect(fn () => externalStoreConnect(externalStoreAccount(entitled: false)))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.not_entitled'));
 
         Http::assertNothingSent();
     });
 
-    it('refuses a connection beyond the package limit', function () {
-        Http::fake();
-        externalStoreConnected($this->account, 'one.example.com');
-        externalStoreConnected($this->account, 'two.example.com');
-
-        $this->actingAs($this->owner)
-            ->post(route('stores.store'), externalStoreConnectForm())
-            ->assertSessionHasErrors(['store' => __('stores.refused.limit_reached', ['limit' => 2])]);
-    });
-
-    it('does not count a disconnected store against the limit', function () {
+    it('refuses a connection beyond the package limit, not counting disconnected stores', function () {
         Queue::fake([SyncExternalStore::class]);
         Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
         externalStoreConnected($this->account, 'one.example.com');
         externalStoreConnected($this->account, 'two.example.com', ExternalStoreStatus::Disconnected);
 
-        $this->actingAs($this->owner)
-            ->post(route('stores.store'), externalStoreConnectForm())
-            ->assertSessionHasNoErrors();
-
+        externalStoreConnect($this->account);
         expect(ExternalStore::query()->live()->count())->toBe(2);
+
+        expect(fn () => externalStoreConnect($this->account, ['base_url' => 'https://three.example.com']))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.limit_reached', ['limit' => 2]));
     });
 
     it('lets only one live account hold a store, without saying whose it is', function () {
         Http::fake();
         externalStoreConnected(externalStoreAccount(), 'shop.example.com');
 
-        $this->actingAs($this->owner)
-            ->post(route('stores.store'), externalStoreConnectForm())
-            ->assertSessionHasErrors(['base_url' => __('stores.refused.already_connected')]);
+        expect(fn () => externalStoreConnect($this->account))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.already_connected'));
 
         expect(ExternalStore::query()->where('business_account_id', $this->account->id)->count())->toBe(0);
         Http::assertNothingSent();
     });
-
-    it('lets only someone who manages stores connect one', function (AccountRole $role) {
-        $member = User::factory()->staffOf($this->account, $role)->create();
-
-        $this->actingAs($member)
-            ->post(route('stores.store'), externalStoreConnectForm())
-            ->assertForbidden();
-    })->with([AccountRole::Manager, AccountRole::Staff]);
 });
 
-describe('the store pages', function () {
+describe('the read-only store pages', function () {
     it('lists the account\'s own stores with their state, and no secret', function () {
         $store = externalStoreConnected($this->account);
         externalStoreConnected(externalStoreAccount(), 'other.example.com');
@@ -194,8 +234,7 @@ describe('the store pages', function () {
                 ->where('stores.0.id', $store->public_id)
                 ->where('stores.0.status', 'connected')
                 ->where('stores.0.orders_count', 0)
-                ->where('allowance.limit', 2)
-                ->where('allowance.used', 1));
+                ->missing('allowance'));
     });
 
     it('never puts a credential in the store page', function () {
@@ -205,7 +244,7 @@ describe('the store pages', function () {
 
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('store.api_key_hint', '1234')
+                ->component('stores/show')
                 ->where('store.webhook.url', route('webhooks.stores', $store->public_id)));
 
         expect($response->getContent())
@@ -214,19 +253,10 @@ describe('the store pages', function () {
             ->not->toContain('key-1234');
     });
 
-    it('does not show another account\'s store', function (string $route) {
+    it('does not show another account\'s store', function () {
         $theirs = externalStoreConnected(externalStoreAccount(), 'other.example.com');
 
-        $this->actingAs($this->owner)->get(route($route, $theirs->public_id))->assertNotFound();
-    })->with(['stores.show', 'stores.edit']);
-
-    it('does not let another account act on a store', function () {
-        $theirs = externalStoreConnected(externalStoreAccount(), 'other.example.com');
-
-        $this->actingAs($this->owner)->post(route('stores.sync', $theirs->public_id))->assertNotFound();
-        $this->actingAs($this->owner)->delete(route('stores.destroy', $theirs->public_id))->assertNotFound();
-
-        expect($theirs->refresh()->status)->toBe(ExternalStoreStatus::Connected);
+        $this->actingAs($this->owner)->get(route('stores.show', $theirs->public_id))->assertNotFound();
     });
 
     it('keeps guests out', function () {
@@ -235,33 +265,23 @@ describe('the store pages', function () {
 });
 
 describe('managing a connection', function () {
-    it('queues a sync, never running it in the request', function () {
-        Queue::fake([SyncExternalStore::class]);
-        $store = externalStoreConnected($this->account);
-
-        $this->actingAs($this->owner)->post(route('stores.sync', $store->public_id))->assertSessionHasNoErrors();
-
-        Queue::assertPushed(SyncExternalStore::class, 1);
-    });
-
     it('reports a failed connection test in words, and changes nothing', function () {
         Http::fake(['https://shop.example.com/api/v1/orders*' => Http::response([], 500)]);
         $store = externalStoreConnected($this->account);
 
-        $this->actingAs($this->owner)
-            ->post(route('stores.test', $store->public_id))
-            ->assertInertiaFlash('toast.type', 'error');
+        $result = app(TestExternalStoreConnection::class)->handle($store);
 
-        expect($store->refresh()->status)->toBe(ExternalStoreStatus::Connected);
+        expect($result['ok'])->toBeFalse()
+            ->and($result['message'])->not->toBeNull()
+            ->and($store->refresh()->status)->toBe(ExternalStoreStatus::Connected);
     });
 
     it('replaces credentials only after the new ones work', function () {
         Http::fake(['https://shop.example.com/api/v1/orders*' => Http::response([], 403)]);
         $store = externalStoreConnected($this->account);
 
-        $this->actingAs($this->owner)
-            ->put(route('stores.update', $store->public_id), ['name' => 'Renamed', 'api_key' => 'new-key', 'api_secret' => 'new-secret'])
-            ->assertSessionHasErrors('connection');
+        expect(fn () => app(UpdateExternalStoreConnection::class)->handle($store, $this->owner, 'Renamed', 'new-key', 'new-secret'))
+            ->toThrow(ExternalStoreRefused::class);
 
         expect($store->refresh()->api_key)->toBe('key-1234')
             ->and($store->name)->toBe('Khalid Fashion');
@@ -271,10 +291,7 @@ describe('managing a connection', function () {
         $store = externalStoreConnected($this->account);
         externalStoreRecordOrder($store);
 
-        $this->actingAs($this->owner)
-            ->delete(route('stores.destroy', $store->public_id))
-            ->assertRedirect(route('stores.show', $store->public_id));
-
+        app(DisconnectExternalStore::class)->handle($store, $this->owner, null);
         $store->refresh();
 
         expect($store->status)->toBe(ExternalStoreStatus::Disconnected)
@@ -289,16 +306,13 @@ describe('managing a connection', function () {
         Queue::fake([SyncExternalStore::class]);
         Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
         $store = externalStoreConnected($this->account);
-        $this->actingAs($this->owner)->delete(route('stores.destroy', $store->public_id));
+        app(DisconnectExternalStore::class)->handle($store, $this->owner, null);
 
-        $this->actingAs($this->owner)
-            ->put(route('stores.update', $store->public_id), ['name' => 'Khalid Fashion', 'api_key' => 'again-key', 'api_secret' => 'again-secret'])
-            ->assertSessionHasNoErrors()
-            ->assertInertiaFlash('webhook_secret');
-
+        $result = app(UpdateExternalStoreConnection::class)->handle($store->refresh(), $this->owner, 'Khalid Fashion', 'again-key', 'again-secret');
         $store->refresh();
 
-        expect($store->status)->toBe(ExternalStoreStatus::Pending)
+        expect($result['webhook_secret'])->not->toBeNull()
+            ->and($store->status)->toBe(ExternalStoreStatus::Pending)
             ->and($store->api_secret)->toBe('again-secret')
             ->and($store->webhook_secret)->not->toBe('webhook-secret');
 
@@ -307,80 +321,40 @@ describe('managing a connection', function () {
 
     it('refuses to reconnect without credentials', function () {
         $store = externalStoreConnected($this->account);
-        $this->actingAs($this->owner)->delete(route('stores.destroy', $store->public_id));
+        app(DisconnectExternalStore::class)->handle($store, $this->owner, null);
 
-        $this->actingAs($this->owner)
-            ->put(route('stores.update', $store->public_id), ['name' => 'Khalid Fashion'])
-            ->assertSessionHasErrors(['api_key' => __('stores.refused.credentials_required')]);
+        expect(fn () => app(UpdateExternalStoreConnection::class)->handle($store->refresh(), $this->owner, 'Khalid Fashion', null, null))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.credentials_required'));
     });
 
     it('makes a new webhook secret that the old one no longer matches', function () {
         $store = externalStoreConnected($this->account);
 
-        $this->actingAs($this->owner)
-            ->post(route('stores.webhook-secret.rotate', $store->public_id))
-            ->assertInertiaFlash('webhook_secret');
+        $secret = app(RotateExternalStoreWebhookSecret::class)->handle($store, $this->owner);
 
-        expect($store->refresh()->webhook_secret)->not->toBe('webhook-secret');
+        expect($store->refresh()->webhook_secret)->toBe($secret)->not->toBe('webhook-secret');
     });
 });
 
-/**
- * Whether `$store` accepts a notification signed with `$secret`.
- */
-function externalStoreAcceptsSecret(ExternalStore $store, string $secret, string $eventId): bool
-{
-    $body = (string) json_encode(['event' => 'inventory.low_stock', 'data' => []]);
-
-    return test()->call('POST', route('webhooks.stores', $store->public_id), server: [
-        'CONTENT_TYPE' => 'application/json',
-        'HTTP_X_WEBHOOK_SIGNATURE' => externalStoreSignature($body, $secret),
-        'HTTP_X_WEBHOOK_EVENT_ID' => $eventId,
-    ], content: $body)->isOk();
-}
-
 describe('a signing secret the store generated', function () {
-    it('connects with the store\'s own secret, keeps it encrypted and never shows it back', function () {
+    it('connects with the store\'s own secret, keeps it encrypted and never hands it back', function () {
         Queue::fake([SyncExternalStore::class]);
         Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
 
-        $response = $this->actingAs($this->owner)
-            ->post(route('stores.store'), externalStoreConnectForm(['webhook_secret' => 'store-made-secret-0123456789']));
+        $result = externalStoreConnect($this->account, ['webhook_secret' => 'store-made-secret-0123456789']);
+        $store = $result['store']->refresh();
 
-        $store = ExternalStore::query()->sole();
-
-        $response->assertSessionHasNoErrors()
-            ->assertRedirect(route('stores.show', $store->public_id))
-            ->assertInertiaFlashMissing('webhook_secret');
-
-        expect($store->webhook_secret)->toBe('store-made-secret-0123456789')
+        expect($result['webhook_secret'])->toBeNull()
+            ->and($store->webhook_secret)->toBe('store-made-secret-0123456789')
             ->and(DB::table('external_stores')->value('webhook_secret'))->not->toContain('store-made-secret')
             ->and(DB::table('audit_logs')->get()->toJson())->not->toContain('store-made-secret')
             ->and(externalStoreAcceptsSecret($store, 'store-made-secret-0123456789', 'evt-1'))->toBeTrue();
-
-        expect($this->actingAs($this->owner)->get(route('stores.show', $store->public_id))->getContent())
-            ->not->toContain('store-made-secret');
-    });
-
-    it('still makes a secret when none is given', function () {
-        Queue::fake([SyncExternalStore::class]);
-        Http::fake(['https://shop.example.com/api/v1/orders*' => externalStoreOrdersPage([])]);
-
-        $this->actingAs($this->owner)
-            ->post(route('stores.store'), externalStoreConnectForm(['webhook_secret' => '']))
-            ->assertInertiaFlash('webhook_secret');
-
-        expect(ExternalStore::query()->sole()->webhook_secret)->toHaveLength(48);
     });
 
     it('replaces the secret on a connected store: the new one signs, the old one no longer does', function () {
         $store = externalStoreConnected($this->account);
 
-        $this->actingAs($this->owner)
-            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
-            ->assertSessionHasNoErrors()
-            ->assertInertiaFlash('toast.message', __('stores.flash.webhook_secret_saved'))
-            ->assertInertiaFlashMissing('webhook_secret');
+        app(RotateExternalStoreWebhookSecret::class)->provide($store, $this->owner, 'store-made-secret-0123456789');
 
         expect(DB::table('external_stores')->value('webhook_secret'))->not->toContain('store-made-secret')
             ->and(externalStoreAcceptsSecret($store, 'webhook-secret', 'evt-old'))->toBeFalse()
@@ -388,76 +362,24 @@ describe('a signing secret the store generated', function () {
             ->and(json_decode((string) DB::table('audit_logs')->where('action', 'external_store.webhook_secret_rotated')->value('after'), true))
             ->toBe(['webhook_signing_origin' => 'store'])
             ->and(DB::table('audit_logs')->get()->toJson())->not->toContain('store-made-secret');
-
-        expect($this->actingAs($this->owner)->get(route('stores.show', $store->public_id))->getContent())
-            ->not->toContain('store-made-secret');
     });
 
     it('lets a generated secret replace a provided one', function () {
         $store = externalStoreConnected($this->account);
-        $this->actingAs($this->owner)
-            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789']);
+        $rotate = app(RotateExternalStoreWebhookSecret::class);
 
-        $this->actingAs($this->owner)->post(route('stores.webhook-secret.rotate', $store->public_id));
+        $rotate->provide($store, $this->owner, 'store-made-secret-0123456789');
+        $generated = $rotate->handle($store->refresh(), $this->owner);
 
         expect(externalStoreAcceptsSecret($store->refresh(), 'store-made-secret-0123456789', 'evt-old'))->toBeFalse()
-            ->and(externalStoreAcceptsSecret($store, (string) $store->webhook_secret, 'evt-new'))->toBeTrue();
+            ->and(externalStoreAcceptsSecret($store, $generated, 'evt-new'))->toBeTrue();
     });
-
-    it('refuses a secret too short to be safe or broken by whitespace', function (string $route, string $secret) {
-        Http::fake();
-        $store = externalStoreConnected($this->account);
-
-        $request = $route === 'connect'
-            ? $this->actingAs($this->owner)->post(route('stores.store'), externalStoreConnectForm(['base_url' => 'https://new.example.com', 'webhook_secret' => $secret]))
-            : $this->actingAs($this->owner)->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => $secret]);
-
-        $request->assertSessionHasErrors('webhook_secret');
-
-        expect($store->refresh()->webhook_secret)->toBe('webhook-secret')
-            ->and(ExternalStore::query()->count())->toBe(1);
-        Http::assertNothingSent();
-    })->with(['connect', 'store page'])->with([
-        'too short' => ['short-secret'],
-        'inner space' => ['store made secret 0123456789'],
-        'too long' => [str_repeat('a', 256)],
-    ]);
-
-    it('requires a secret on the store page', function () {
-        $store = externalStoreConnected($this->account);
-
-        $this->actingAs($this->owner)
-            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => ''])
-            ->assertSessionHasErrors('webhook_secret');
-    });
-
-    it('does not let another account replace a store\'s secret', function () {
-        $theirs = externalStoreConnected(externalStoreAccount(), 'other.example.com');
-
-        $this->actingAs($this->owner)
-            ->put(route('stores.webhook-secret.provide', $theirs->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
-            ->assertNotFound();
-
-        expect($theirs->refresh()->webhook_secret)->toBe('webhook-secret');
-    });
-
-    it('lets only someone who manages stores replace the secret', function (AccountRole $role) {
-        $store = externalStoreConnected($this->account);
-        $member = User::factory()->staffOf($this->account, $role)->create();
-
-        $this->actingAs($member)
-            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
-            ->assertForbidden();
-
-        expect($store->refresh()->webhook_secret)->toBe('webhook-secret');
-    })->with([AccountRole::Manager, AccountRole::Staff]);
 
     it('refuses a secret for a disconnected store', function () {
         $store = externalStoreConnected($this->account, status: ExternalStoreStatus::Disconnected);
 
-        $this->actingAs($this->owner)
-            ->put(route('stores.webhook-secret.provide', $store->public_id), ['webhook_secret' => 'store-made-secret-0123456789'])
-            ->assertSessionHasErrors();
+        expect(fn () => app(RotateExternalStoreWebhookSecret::class)->provide($store, $this->owner, 'store-made-secret-0123456789'))
+            ->toThrow(ExternalStoreRefused::class, __('stores.refused.not_live'));
 
         expect($store->refresh()->webhook_secret)->toBeNull();
     });

@@ -3,6 +3,8 @@
 namespace App\Domain\Website\Models;
 
 use App\Casts\MoneyCast;
+use App\Concerns\HasStateMachine;
+use App\Domain\Website\Enums\DomainRoutingStatus;
 use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Models\User;
 use App\Support\Money\Money;
@@ -17,9 +19,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * A domain registered for a website, and when it runs out (§16.2, §41, P5-11).
  *
  * Registered by hand (D9), so a row sits in `Pending` from the moment the
- * partner pays until somebody at Feriwala has actually registered it. Only
- * `Active` means a customer can reach the shop at this address.
+ * partner pays until somebody at Feriwala has actually registered it.
  *
+ * Whether the shared storefront may answer on it is a second, separate state
+ * (D30 §3): `routing_status`, moved only through transitionTo(). A domain
+ * serves when its registration is running **and** it is verified and active.
+ *
+ * @property DomainRoutingStatus $routing_status
+ * @property string|null $verification_token published in DNS; shown to staff only
+ * @property CarbonImmutable|null $verification_issued_at
+ * @property CarbonImmutable|null $verification_checked_at
+ * @property string|null $verification_error
+ * @property CarbonImmutable|null $verified_at
+ * @property CarbonImmutable|null $activated_at
+ * @property CarbonImmutable|null $suspended_at
+ * @property CarbonImmutable|null $tls_authorized_at
  * @property int $id
  * @property int $website_id
  * @property string $domain
@@ -43,7 +57,44 @@ class WebsiteDomain extends Model
     /** @use HasFactory<WebsiteDomainFactory> */
     use HasFactory;
 
+    use HasStateMachine;
+
     protected $guarded = [];
+
+    /**
+     * The database's default, so a domain just created reads as unverified
+     * before it is ever reloaded.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'routing_status' => 'unverified',
+    ];
+
+    /**
+     * The state transitionTo() guards. The registration status is kept by
+     * staff as a record of D9 provisioning and has no transition map.
+     */
+    public function stateAttribute(): string
+    {
+        return 'routing_status';
+    }
+
+    /**
+     * The name in the DNS record that proves control of this domain.
+     */
+    public function verificationRecordName(): string
+    {
+        return '_banij-verify.'.$this->domain;
+    }
+
+    /**
+     * Whether the storefront may answer on this domain right now.
+     */
+    public function serves(): bool
+    {
+        return $this->routing_status === DomainRoutingStatus::Active && $this->status->isRunning();
+    }
 
     /**
      * @return array<string, string>
@@ -51,6 +102,13 @@ class WebsiteDomain extends Model
     protected function casts(): array
     {
         return [
+            'routing_status' => DomainRoutingStatus::class,
+            'verification_issued_at' => 'immutable_datetime',
+            'verification_checked_at' => 'immutable_datetime',
+            'verified_at' => 'immutable_datetime',
+            'activated_at' => 'immutable_datetime',
+            'suspended_at' => 'immutable_datetime',
+            'tls_authorized_at' => 'immutable_datetime',
             'status' => WebsiteServiceStatus::class,
             'fee' => MoneyCast::class,
             'registered_at' => 'immutable_datetime',

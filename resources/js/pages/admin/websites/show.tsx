@@ -20,7 +20,8 @@ import {
     websiteStatusTone,
 } from '@/lib/website';
 import { index } from '@/routes/admin/websites';
-import type { WebsiteDetail } from '@/types/website';
+import type { StatusTone } from '@/lib/status';
+import type { WebsiteDetail, WebsiteDomainRow } from '@/types/website';
 import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
@@ -249,6 +250,13 @@ export default function AdminWebsiteShow({ website, can, transitions }: Props) {
                                         ? ` · ${domain.registrar}`
                                         : ''}
                                 </div>
+                                {domain.routing_status && (
+                                    <DomainRouting
+                                        websiteId={website.id}
+                                        domain={domain}
+                                        canAdminister={can.administer}
+                                    />
+                                )}
                             </li>
                         ))}
                     </ul>
@@ -461,6 +469,184 @@ export default function AdminWebsiteShow({ website, can, transitions }: Props) {
                 </SectionCard>
             </PageContainer>
         </>
+    );
+}
+
+const routingTones: Record<string, StatusTone> = {
+    unverified: 'neutral',
+    verified: 'info',
+    active: 'success',
+    suspended: 'warning',
+};
+
+/**
+ * Whether the shared storefront may answer on a domain, and the controls that
+ * move it (D30 §3): the DNS record to publish, a check that looks for it, and
+ * activation or suspension. Only the moves legal from where it stands are
+ * offered; the server refuses the rest regardless.
+ */
+function DomainRouting({
+    websiteId,
+    domain,
+    canAdminister,
+}: {
+    websiteId: string;
+    domain: WebsiteDomainRow;
+    canAdminister: boolean;
+}) {
+    const { t, locale } = useTranslation();
+    const status = domain.routing_status ?? 'unverified';
+    const params = { website: websiteId, domain: domain.id };
+    const when = (value: string | null | undefined) =>
+        value ? new Date(value).toLocaleString(locale) : '—';
+
+    return (
+        <div
+            className="bg-surface-subtle mt-2 space-y-2 rounded-lg border p-3 text-xs"
+            data-test={`domain-routing-${domain.id}`}
+        >
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">
+                    {t('website.admin.routing_title')}
+                </span>
+                <StatusPill
+                    tone={routingTones[status] ?? 'neutral'}
+                    label={domain.routing_status_label ?? status}
+                />
+            </div>
+
+            {domain.verification && status === 'unverified' && (
+                <div className="space-y-1">
+                    <p className="text-muted-foreground">
+                        {t('website.admin.routing_record_hint')}
+                    </p>
+                    <div className="font-mono break-all">
+                        TXT {domain.verification.record_name}
+                    </div>
+                    <div className="font-mono break-all">
+                        {domain.verification.record_value}
+                    </div>
+                    {domain.verification.checked_at && (
+                        <p className="text-muted-foreground">
+                            {t('website.admin.routing_checked', {
+                                date: when(domain.verification.checked_at),
+                            })}
+                            {domain.verification.error
+                                ? ` · ${domain.verification.error}`
+                                : ''}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {domain.verified_at && (
+                <p className="text-muted-foreground">
+                    {t('website.admin.routing_verified', {
+                        date: when(domain.verified_at),
+                    })}
+                </p>
+            )}
+
+            {canAdminister && (
+                <div className="flex flex-wrap items-start gap-2">
+                    <Form
+                        {...WebsiteController.issueDomainVerification.form(
+                            params,
+                        )}
+                        options={{ preserveScroll: true }}
+                    >
+                        {({ processing }) => (
+                            <Button
+                                type="submit"
+                                size="sm"
+                                variant="outline"
+                                disabled={processing}
+                            >
+                                {domain.verification
+                                    ? t('website.admin.routing_reissue')
+                                    : t('website.admin.routing_issue')}
+                            </Button>
+                        )}
+                    </Form>
+
+                    {status === 'unverified' && domain.verification && (
+                        <Form
+                            {...WebsiteController.checkDomainVerification.form(
+                                params,
+                            )}
+                            options={{ preserveScroll: true }}
+                        >
+                            {({ processing }) => (
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={processing}
+                                >
+                                    {t('website.admin.routing_check')}
+                                </Button>
+                            )}
+                        </Form>
+                    )}
+
+                    {(status === 'verified' || status === 'suspended') && (
+                        <Form
+                            {...WebsiteController.activateDomain.form(params)}
+                            options={{ preserveScroll: true }}
+                        >
+                            {({ processing, errors }) => (
+                                <>
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        disabled={processing}
+                                    >
+                                        {t('website.admin.routing_activate')}
+                                    </Button>
+                                    <InputError message={errors.domain} />
+                                </>
+                            )}
+                        </Form>
+                    )}
+
+                    {status === 'active' && (
+                        <Form
+                            {...WebsiteController.suspendDomain.form(params)}
+                            options={{ preserveScroll: true }}
+                            className="flex w-full flex-col gap-2"
+                        >
+                            {({ processing, errors }) => (
+                                <>
+                                    <textarea
+                                        name="reason"
+                                        required
+                                        minLength={10}
+                                        maxLength={500}
+                                        rows={2}
+                                        className={controlClass}
+                                        aria-label={t(
+                                            'website.admin.routing_suspend_reason',
+                                        )}
+                                        placeholder={t(
+                                            'website.admin.routing_suspend_reason',
+                                        )}
+                                    />
+                                    <InputError message={errors.reason} />
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        variant="destructive"
+                                        disabled={processing}
+                                        className="self-start"
+                                    >
+                                        {t('website.admin.routing_suspend')}
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 

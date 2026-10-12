@@ -50,6 +50,36 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.domain_taken'), 'domain');
     }
 
+    /** No verification token has been issued for this domain yet (D30 §3). */
+    public static function domainVerificationNotIssued(): self
+    {
+        return new self(__('website.refused.domain_verification_not_issued'), 'domain');
+    }
+
+    /** Another website has already proven this name (D30 §3). */
+    public static function domainHeldElsewhere(): self
+    {
+        return new self(__('website.refused.domain_held_elsewhere'), 'domain');
+    }
+
+    /** Only a verified or suspended domain can be put on the storefront. */
+    public static function domainNotVerified(): self
+    {
+        return new self(__('website.refused.domain_not_verified'), 'domain');
+    }
+
+    /** The domain's registration is not running, so it cannot serve. */
+    public static function domainNotRegistered(): self
+    {
+        return new self(__('website.refused.domain_not_registered'), 'domain');
+    }
+
+    /** Only an active domain can be suspended. */
+    public static function domainNotActive(): self
+    {
+        return new self(__('website.refused.domain_not_active'), 'domain');
+    }
+
     /** The wallet does not hold enough to pay this charge (§24). */
     public static function insufficientBalance(): self
     {

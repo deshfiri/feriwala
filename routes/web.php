@@ -527,37 +527,13 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('websites.categories.destroy');
 
         /*
-         * The partner's own stores on other platforms (D29).
-         *
+         * The partner's previously connected stores, read-only (D29, as
+         * amended by D30). Owners no longer connect, test, sync, re-key or
+         * disconnect stores; the integration and its webhook endpoint stay.
          * Self-scoped through the account; another partner's store is a 404.
-         * Everything that calls the store is rate-limited per person, and a
-         * sync is always queued.
          */
         Route::get('stores', [ExternalStoreController::class, 'index'])->name('stores.index');
-        Route::get('stores/create', [ExternalStoreController::class, 'create'])->name('stores.create');
-        Route::post('stores/check', [ExternalStoreController::class, 'check'])
-            ->middleware('throttle:store-actions')
-            ->name('stores.check');
-        Route::post('stores', [ExternalStoreController::class, 'store'])
-            ->middleware('throttle:store-actions')
-            ->name('stores.store');
         Route::get('stores/{store}', [ExternalStoreController::class, 'show'])->name('stores.show');
-        Route::get('stores/{store}/edit', [ExternalStoreController::class, 'edit'])->name('stores.edit');
-        Route::put('stores/{store}', [ExternalStoreController::class, 'update'])
-            ->middleware('throttle:store-actions')
-            ->name('stores.update');
-        Route::post('stores/{store}/test', [ExternalStoreController::class, 'test'])
-            ->middleware('throttle:store-actions')
-            ->name('stores.test');
-        Route::post('stores/{store}/sync', [ExternalStoreController::class, 'sync'])
-            ->middleware('throttle:store-actions')
-            ->name('stores.sync');
-        Route::post('stores/{store}/webhook-secret', [ExternalStoreController::class, 'rotateWebhookSecret'])
-            ->name('stores.webhook-secret.rotate');
-        Route::put('stores/{store}/webhook-secret', [ExternalStoreController::class, 'provideWebhookSecret'])
-            ->middleware('throttle:store-actions')
-            ->name('stores.webhook-secret.provide');
-        Route::delete('stores/{store}', [ExternalStoreController::class, 'destroy'])->name('stores.destroy');
 
         /*
          * Every order the business has, from every source, in one list (D29) —
@@ -1520,6 +1496,21 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('websites.domains.store');
         Route::post('websites/{website}/hostings', [AdminWebsiteController::class, 'storeHosting'])
             ->name('websites.hostings.store');
+
+        // Proving and activating a custom domain for the shared storefront (D30 §3).
+        Route::post('websites/{website}/domains/{domain}/verification', [AdminWebsiteController::class, 'issueDomainVerification'])
+            ->whereNumber('domain')
+            ->name('websites.domains.verification.store');
+        Route::post('websites/{website}/domains/{domain}/verification/check', [AdminWebsiteController::class, 'checkDomainVerification'])
+            ->whereNumber('domain')
+            ->middleware('throttle:6,1')
+            ->name('websites.domains.verification.check');
+        Route::post('websites/{website}/domains/{domain}/activation', [AdminWebsiteController::class, 'activateDomain'])
+            ->whereNumber('domain')
+            ->name('websites.domains.activation.store');
+        Route::post('websites/{website}/domains/{domain}/suspension', [AdminWebsiteController::class, 'suspendDomain'])
+            ->whereNumber('domain')
+            ->name('websites.domains.suspension.store');
 
         /*
          * What partners may charge for what they sell (§15.1, P5-5). Behind

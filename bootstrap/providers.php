@@ -6,6 +6,7 @@ use App\Providers\FortifyServiceProvider;
 use App\Providers\PaymentServiceProvider;
 use App\Providers\SmsServiceProvider;
 use App\Providers\StoreServiceProvider;
+use App\Providers\WebsiteServiceProvider;
 
 return [
     AppServiceProvider::class,
@@ -14,4 +15,5 @@ return [
     PaymentServiceProvider::class,
     SmsServiceProvider::class,
     StoreServiceProvider::class,
+    WebsiteServiceProvider::class,
 ];

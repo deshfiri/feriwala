@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $public_id
  * @property int $business_account_id
  * @property int $user_package_id
+ * @property int $slot which of the purchase's permitted websites this is, from 1 (D30 §9)
  * @property int|null $website_id
  * @property int|null $previous_allocation_id
  * @property CarbonImmutable $starts_at
@@ -60,6 +61,7 @@ class WebsiteAllocation extends Model
     protected function casts(): array
     {
         return [
+            'slot' => 'integer',
             'starts_at' => 'immutable_datetime',
             'domain_starts_at' => 'immutable_datetime',
             'hosting_starts_at' => 'immutable_datetime',

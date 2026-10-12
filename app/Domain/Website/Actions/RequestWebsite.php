@@ -8,6 +8,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Billing\FeeRuleResolver;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
+use App\Domain\Package\Models\UserPackage;
 use App\Domain\Wallet\Queries\ResolveDepositRule;
 use App\Domain\Website\Enums\WebsiteChargeStatus;
 use App\Domain\Website\Enums\WebsiteChargeType;
@@ -15,6 +16,7 @@ use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteAllocation;
 use App\Domain\Website\Models\WebsiteCharge;
 use App\Models\User;
 use App\Support\Money\Currency;
@@ -42,6 +44,11 @@ use Illuminate\Support\Str;
  * Nothing is provisioned here. The website opens in **setup pending** with its
  * charges due; paying them is what moves it on (D9 — a person registers the
  * domain and stands the hosting up).
+ *
+ * The capacity check that counts runs **inside** the transaction, under a lock
+ * on the account, and the website is created and given its allocation slot in
+ * that same transaction — so two requests at once cannot both take the last
+ * free website, and a website never exists without a slot (D30 §9).
  */
 class RequestWebsite
 {
@@ -65,22 +72,34 @@ class RequestWebsite
     ): Website {
         $subdomain = Str::lower(trim($subdomain));
 
+        // A quick answer before any lock is taken; the one that counts is
+        // given again under the account lock below.
         $this->assertEntitled($account);
 
-        $subscription = $this->entitlements->activePackage($account);
         $currency = Currency::base();
         $now = CarbonImmutable::now();
 
-        $charges = $this->quote($account, $now);
-        $rule = $this->deposits->for($account, $now);
-
         try {
             $website = $this->database->transaction(function () use (
-                $account, $requestedBy, $name, $subdomain, $subscription, $currency, $charges, $rule, $now
+                $account, $requestedBy, $name, $subdomain, $currency, $now
             ) {
+                /*
+                 * Two requests for the last free website must not both get
+                 * it. The account row is locked first, and everything that
+                 * decides — the subscription, the capacity, the free slot — is
+                 * read again after the lock, from a fresh instance, so nothing
+                 * read before another request committed is trusted (D30 §9).
+                 */
+                /** @var BusinessAccount $locked */
+                $locked = BusinessAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
+
+                $subscription = $this->assertEntitled($locked);
+                $charges = $this->quote($locked, $now);
+                $rule = $this->deposits->for($locked, $now);
+
                 $website = Website::create([
-                    'business_account_id' => $account->id,
-                    'user_package_id' => $subscription?->id,
+                    'business_account_id' => $locked->id,
+                    'user_package_id' => $subscription->id,
                     'name' => $name,
                     'slug' => $this->slugFor($name),
                     'subdomain' => $subdomain,
@@ -107,11 +126,13 @@ class RequestWebsite
                     ['source' => WebsiteStatusChangeSource::Account->value],
                 );
 
-                // The package's website allocation now has a website. Its
-                // domain and hosting period was dated from the confirmed
-                // purchase and stays exactly as it was (§16.2).
-                $this->allocations->forAccount($account);
-                $this->allocations->attachWebsite($website);
+                // The website takes a slot of the same subscription it was
+                // recorded against. Its domain and hosting period was dated
+                // from the confirmed purchase and stays exactly as it was
+                // (§16.2). No slot, no website: the whole request rolls back.
+                if ($this->allocations->attachWebsite($website, $subscription) === null) {
+                    throw WebsiteRefused::limitReached($this->allocations->capacity($subscription) ?? 0);
+                }
 
                 foreach ($charges as $type => $amount) {
                     if (! $amount->isPositive()) {
@@ -120,7 +141,7 @@ class RequestWebsite
 
                     WebsiteCharge::create([
                         'website_id' => $website->id,
-                        'business_account_id' => $account->id,
+                        'business_account_id' => $locked->id,
                         'type' => WebsiteChargeType::from($type),
                         'status' => WebsiteChargeStatus::Due,
                         'currency_code' => $currency->value,
@@ -189,39 +210,57 @@ class RequestWebsite
     }
 
     /**
-     * What the account may still ask for (§8.1, §16.2).
+     * What the account may still ask for (§8.1, §16.2, D30 §9).
      *
      * The one answer the screens show and {@see handle()} enforces, so a
      * button that is hidden and a request that is refused can never disagree.
      *
-     * - The package's `WebsiteLimit` is the cap. Closed websites do not count:
-     *   a partner who closed one and asked for another has not used two of
-     *   anything.
-     * - A website allocation still waiting for its website can always be set
-     *   up, even under a subscription snapshotted with no limit — it is the
-     *   website the package was bought for, and it is only ever one.
-     * - An allocation whose domain or hosting period has run out entitles
-     *   nothing new until a renewal opens the next period.
+     * - The cap is the package's Websites limit as the subscription bought it
+     *   — the same number of allocation slots {@see AllocatePackageWebsite}
+     *   opens. 0 allows none. A slot already written for the purchase still
+     *   counts, so an older subscription keeps the website it was given.
+     * - Closed websites do not count: a partner who closed one and asked for
+     *   another has not used two of anything.
+     * - Once every slot's domain or hosting period has run out, nothing new is
+     *   allowed until a renewal opens the next period.
      *
      * @return array{allowed: bool, expired: bool, limit: int|null, used: int, remaining: int|null}
      */
     public function allowance(BusinessAccount $account): array
     {
-        $allowed = $account->canTransact()
-            && $this->entitlements->allows($account, PackageFeature::DedicatedWebsite);
+        $evaluated = $this->evaluate($account);
+        unset($evaluated['subscription']);
+
+        return $evaluated;
+    }
+
+    /**
+     * {@see allowance()}, with the subscription it was worked out from — the
+     * one a new website is recorded against and takes its slot from, so the
+     * two can never disagree.
+     *
+     * @return array{allowed: bool, expired: bool, limit: int|null, used: int, remaining: int|null, subscription: UserPackage|null}
+     */
+    protected function evaluate(BusinessAccount $account): array
+    {
+        $subscription = $this->entitlements->activePackage($account);
+        $limit = $subscription === null ? 0 : $this->allocations->capacity($subscription);
+
+        $allowed = $subscription !== null
+            && $account->canTransact()
+            && $this->entitlements->allows($account, PackageFeature::DedicatedWebsite)
+            && $limit !== 0;
 
         $used = Website::query()->forAccount($account)->open()->count();
-        $limit = $this->entitlements->limit($account, PackageFeature::WebsiteLimit);
-        $remaining = $this->entitlements->remaining($account, PackageFeature::WebsiteLimit, $used);
+        $remaining = $limit === null ? null : max(0, $limit - $used);
 
-        $allocation = $allowed ? $this->allocations->forAccount($account) : null;
-        $expired = $allocation !== null && $allocation->hasLapsed();
+        // Make sure this subscription's slots exist, then ask about them.
+        $expired = $allowed
+            && $this->allocations->handle($subscription) !== null
+            && $this->everySlotHasLapsed($subscription->id);
 
         if ($expired) {
             $remaining = 0;
-        } elseif ($allocation !== null && $allocation->website_id === null && $remaining !== null && $remaining < 1) {
-            $limit = $used + 1;
-            $remaining = 1;
         }
 
         return [
@@ -230,17 +269,32 @@ class RequestWebsite
             'limit' => $limit,
             'used' => $used,
             'remaining' => $remaining,
+            'subscription' => $subscription,
         ];
     }
 
     /**
+     * Whether every slot of a purchase has run out of domain or hosting time.
+     */
+    protected function everySlotHasLapsed(int $subscriptionId): bool
+    {
+        $slots = WebsiteAllocation::query()->where('user_package_id', $subscriptionId)->get();
+
+        return $slots->isNotEmpty()
+            && $slots->every(fn (WebsiteAllocation $slot) => $slot->hasLapsed());
+    }
+
+    /**
+     * Refuse unless the account may have one more website, and say which
+     * subscription it would be.
+     *
      * @throws WebsiteRefused
      */
-    protected function assertEntitled(BusinessAccount $account): void
+    protected function assertEntitled(BusinessAccount $account): UserPackage
     {
-        $allowance = $this->allowance($account);
+        $allowance = $this->evaluate($account);
 
-        if (! $allowance['allowed']) {
+        if (! $allowance['allowed'] || $allowance['subscription'] === null) {
             throw WebsiteRefused::notEntitled();
         }
 
@@ -251,6 +305,8 @@ class RequestWebsite
         if ($allowance['remaining'] !== null && $allowance['remaining'] < 1) {
             throw WebsiteRefused::limitReached($allowance['limit'] ?? 0);
         }
+
+        return $allowance['subscription'];
     }
 
     /**

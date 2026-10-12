@@ -315,4 +315,11 @@ return [
         'processed' => 'Refunded',
         'failed' => 'Refund failed',
     ],
+
+    'domain_routing' => [
+        'unverified' => 'Not verified',
+        'verified' => 'Verified',
+        'active' => 'On the storefront',
+        'suspended' => 'Suspended',
+    ],
 ];

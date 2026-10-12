@@ -128,10 +128,10 @@ class WebsiteOverview
      * The websites an account's package purchases entitle it to, one card each
      * (§16.1, §16.2).
      *
-     * One card per website — its most recent allocation, since a renewal or a
-     * package change writes a new one for the same website — plus the newest
-     * allocation still waiting for a website to be set up. Earlier terms are
-     * history, not separate websites.
+     * One card per allocation slot — its most recent allocation, since a
+     * renewal or a package change writes a new one for the same slot — so a
+     * package that allows two websites shows two cards, set up or still
+     * waiting (D30 §9). Earlier terms are history, not separate websites.
      *
      * The dates are the allocation's: the package-based period from the
      * confirmed purchase. They are labelled package-based until the domain or
@@ -153,15 +153,26 @@ class WebsiteOverview
         $cards = [];
 
         foreach ($allocations as $allocation) {
-            $key = $allocation->website_id === null ? 'unlinked' : 'website:'.$allocation->website_id;
+            $slot = 'slot:'.$allocation->slot;
+            $website = $allocation->website_id === null ? null : 'website:'.$allocation->website_id;
 
-            if (isset($seen[$key])) {
+            // A website already on a newer card is not shown again, and nor is
+            // an older term of a slot already shown.
+            if (isset($seen[$slot]) || ($website !== null && isset($seen[$website]))) {
                 continue;
             }
 
-            $seen[$key] = true;
+            $seen[$slot] = true;
+
+            if ($website !== null) {
+                $seen[$website] = true;
+            }
+
             $cards[] = $this->allocationCard($allocation, $now);
         }
+
+        // Slot order reads as "website 1, website 2" on the page.
+        usort($cards, fn (array $a, array $b) => $a['slot'] <=> $b['slot']);
 
         return $cards;
     }
@@ -184,6 +195,7 @@ class WebsiteOverview
 
         return [
             'id' => $allocation->public_id,
+            'slot' => $allocation->slot,
 
             // The website's own name once it has one, otherwise the business
             // the package was bought for.
@@ -373,6 +385,21 @@ class WebsiteOverview
 
                     // Feriwala's supplier, not the partner's business.
                     'registrar' => $forStaff ? $domain->registrar : null,
+
+                    // Whether the shared storefront may answer on it (D30 §3).
+                    'routing_status' => $domain->routing_status->value,
+                    'routing_status_label' => $domain->routing_status->label(),
+                    'serves' => $domain->serves(),
+                    'verified_at' => $domain->verified_at?->toIso8601String(),
+
+                    // How to prove it, and what the last check found — for staff.
+                    'verification' => $forStaff && $domain->verification_token !== null ? [
+                        'record_name' => $domain->verificationRecordName(),
+                        'record_value' => $domain->verification_token,
+                        'checked_at' => $domain->verification_checked_at?->toIso8601String(),
+                        'error' => $domain->verification_error,
+                    ] : null,
+                    'tls_authorized_at' => $forStaff ? $domain->tls_authorized_at?->toIso8601String() : null,
                 ])
                 ->values()
                 ->all(),

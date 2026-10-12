@@ -484,6 +484,16 @@ return [
         'hosting_submit' => 'Record the term',
         'term_months' => 'Term (months)',
         'no_moves' => 'This website is closed. Nothing moves it now.',
+        'routing_title' => 'Storefront',
+        'routing_record_hint' => 'Ask the domain owner to publish this TXT record, then check it.',
+        'routing_checked' => 'Last checked :date',
+        'routing_verified' => 'Verified :date',
+        'routing_issue' => 'Issue verification token',
+        'routing_reissue' => 'Reissue token',
+        'routing_check' => 'Check DNS now',
+        'routing_activate' => 'Put on the storefront',
+        'routing_suspend' => 'Take off the storefront',
+        'routing_suspend_reason' => 'Why it is being taken off',
     ],
 
     'flash' => [
@@ -495,6 +505,11 @@ return [
         'status_changed' => 'The website has been moved.',
         'domain_recorded' => 'The domain registration has been recorded.',
         'hosting_recorded' => 'The hosting term has been recorded.',
+        'domain_verification_issued' => 'A new verification token has been issued. The domain is unverified until its DNS publishes it.',
+        'domain_verified' => 'The domain is verified.',
+        'domain_not_verified' => 'The token was not found in the domain’s DNS yet. Nothing was changed.',
+        'domain_activated' => 'The domain is now on the storefront.',
+        'domain_suspended' => 'The domain has been taken off the storefront.',
         'settings_saved' => 'Your website settings have been saved.',
         'product_selected' => 'The product has been added to your website.',
         'product_updated' => 'The product has been saved.',
@@ -516,6 +531,12 @@ return [
         'sync_queued' => 'Your storefront is being told about every published product.',
         'image_saved' => 'The image has been uploaded.',
         'image_removed' => 'The image has been removed.',
+    ],
+
+    'domain_verification' => [
+        'no_record' => 'No TXT record was found at :name.',
+        'wrong_value' => 'The TXT record at :name does not hold the issued token.',
+        'lookup_failed' => 'The DNS lookup could not be made. Try again shortly.',
     ],
 
     'refused' => [
@@ -544,6 +565,11 @@ return [
         'rule_scope_not_found' => 'No product or package has that identifier.',
         'credential_revoked' => 'That credential has been revoked. Issue a new one.',
         'webhook_address' => 'The webhook address must be a public HTTPS address.',
+        'domain_verification_not_issued' => 'Issue a verification token for this domain first.',
+        'domain_held_elsewhere' => 'Another website has already proven this domain.',
+        'domain_not_verified' => 'Only a verified domain can be put on the storefront.',
+        'domain_not_registered' => 'The domain’s registration is not active, so it cannot serve the storefront.',
+        'domain_not_active' => 'Only a domain on the storefront can be taken off it.',
         'nothing_to_retry' => 'That delivery is not waiting to be retried.',
         'sync_too_soon' => 'A synchronisation was started less than a minute ago. Give it a moment.',
         'price' => [

@@ -154,7 +154,7 @@ charges, stores purchase and renewal dates, sends expiry reminders, records rene
 suspends or restores websites per configured rules. An admin performs the actual registration and
 records the result. Registrar/host APIs must be addable later without redesigning the schema.
 
-## D10 — Deployment (was Q10)
+## D10 — Deployment (was Q10) — **AMENDED 2026-10-12 by D30**
 
 Initial target is a **single well-configured VPS**, built horizontally scalable and
 load-balancer-ready from day one: stateless app servers · Redis sessions, cache, queues ·
@@ -162,7 +162,16 @@ shared or **S3-compatible object storage** · environment-based configuration ·
 workers · health-check endpoints · reverse-proxy and load-balancer readiness · no local-only
 persistent files.
 
-## D11 — Storefront architecture (was Q11) 🔒
+**D30 adds** the shared storefront to the same deployment model: one Next.js container serving
+every partner domain, behind **Caddy** with on-demand TLS that asks the ERP before issuing any
+certificate. Docker and Caddy are production concerns only; D5 still holds for local development.
+
+## D11 — Storefront architecture (was Q11) 🔒 — **AMENDED 2026-10-12 by D30**
+
+> **D30 settles how the last bullet is built:** one shared Next.js application and one deployment
+> serve every partner website. Each website keeps **its own** credentials (§3.1 of the contract) —
+> there is no shared platform credential — and the storefront picks a website's credential only
+> from a domain the ERP has verified and activated. Everything below still holds as written.
 
 **Separate deployable storefront application consuming the ERP API.**
 
@@ -180,7 +189,14 @@ persistent files.
 
 # Specification ambiguities — resolved
 
-## D12 — Dropshipping money flow (was A1) 🔒 **the most load-bearing decision in the project**
+## D12 — Dropshipping money flow (was A1) 🔒 **the most load-bearing decision in the project** — **AMENDED 2026-10-12 by D30**
+
+> **D30 amends step 4 only.** Feriwala stays merchant of record, and payment verification, COD
+> reconciliation, refunds' approval and execution, the ledger, and supplier payables stay with
+> Feriwala. What changes is who runs the **operational** steps of a website order: the owner of the
+> website may now operate every order that came from their own websites (confirmation, processing,
+> fulfilment, courier, delivery, returns, and asking for a refund), subject to supplier fulfilment
+> ownership. Platform staff keep every capability across all websites. See D30 §7. Not yet built.
 
 **Feriwala is the merchant of record for dropshipping orders.**
 
@@ -789,7 +805,14 @@ form input, database, API payload, calculation, display — was confirmed agains
 static analysis, the full Pest and Vitest suites, and a bounded live-browser pass, with no
 regression to the D4/D24-frozen boundaries this decision does not touch.
 
-## D29 — External store connections: partner-merchant orders, mirrored read-only (2026-10-11) 🔒
+## D29 — External store connections: partner-merchant orders, mirrored read-only (2026-10-11) 🔒 — **AMENDED 2026-10-12 by D30**
+
+> **D30 retires the owner's self-service connection** (decision 4 below, and the `store:manage`
+> permission's use in the Owner Panel). Partner websites are now served by Feriwala's own shared
+> storefront and take orders through the native Storefront API, so they are never connected through
+> this mirror. The tables, the records, the imported orders, the webhook endpoint and the code all
+> stay; nothing is deleted, and existing orders remain in All orders and Customers. Whether the
+> mirror is later reopened, and by whom, is a separate decision.
 
 **Approved by the Project Owner on 2026-10-11.** Extends D11 and D12 for one new order source; it
 changes nothing about any existing one.
@@ -832,3 +855,140 @@ stores' orders in the Owner Panel beside their Feriwala orders. Four decisions s
   once per store and event id.
 - An external order is never deleted; its history is append-only; an older copy never overwrites a
   newer one; money is parsed from the store's text without passing through a float (D26).
+
+## D30 — Shared multi-tenant storefront; per-website credentials; owner operations (2026-10-12) 🔒
+
+**Approved by the Project Owner on 2026-10-12.** Amends D10, D11, D12 (step 4 only) and D29, and
+adds to the frozen Storefront API contract without breaking it. The DFCOMMERCE Laravel project is a
+read-only design and feature reference; none of its backend, database, payment engine or OMS is
+reused.
+
+### 1. One storefront, many websites
+
+- **One** Next.js (App Router, TypeScript) codebase and **one** deployment serve every partner
+  website. Each website has its own domain, branding, published products, customers, orders and
+  configuration. The ERP is the only operational backend.
+- The storefront repository is a separate project, built after the ERP foundations below (phase
+  P3 onward). Nothing in it may become a requirement for running the ERP.
+
+### 2. Credentials: per website, never shared
+
+- **Each website keeps its own Storefront API credentials** (contract §3.1): independently
+  issued, rotated and revoked. There is **no** shared platform credential and no host-bound
+  platform signing scheme.
+- Credentials live only on servers. No secret, gateway credential or internal key ever reaches a
+  browser or a client bundle.
+- The storefront chooses which credential to sign with **only** from a domain-to-website mapping
+  the ERP has verified and activated (§3). It never takes a `website_id`, an `account_id` or a
+  credential identifier from a request, a cookie or a query string.
+- **The ERP checks the pairing independently.** A storefront request may state the host it is
+  serving in `X-Feriwala-Storefront-Host`; when present, the ERP resolves that host itself and
+  refuses the request unless it belongs to the website that owns the credential. Forged `Host` and
+  `X-Forwarded-Host` headers therefore cannot move a request to another website: the credential is
+  still the tenancy boundary (§3.5 of the contract) and the host can only narrow it.
+- **Provisioning** (phase P3, not yet built): credentials are issued in the ERP by staff and
+  delivered to the storefront's server-side registry over an authenticated, encrypted channel,
+  keyed by website. Adding a website or rotating a secret updates the registry; it never needs a
+  new deployment. Until that channel exists, credentials are not handed to the shared deployment.
+
+### 3. Domains: verified before they serve
+
+- A website always answers on its subdomain, `{subdomain}.{storefront domain}`, which the ERP
+  allocates and guarantees unique.
+- A custom domain serves only when it is **verified and active**. Verification is real evidence: a
+  DNS TXT record at `_banij-verify.{domain}` holding the token the ERP generated for that
+  domain, checked by the ERP. The ERP never marks a domain verified on anybody's say-so.
+  **Clarified 2026-10-12 (D7):** the record name is `_banij-verify`, not the earlier draft's
+  `_feriwala-verify`. No domain had been verified under the old name — the routing columns had
+  never reached production — so nothing needed migrating.
+- Routing state is separate from the registration record staff already keep (D9): **unverified →
+  verified → active ⇄ suspended**, and back to unverified when the token is reissued. Activation
+  needs a verified domain whose registration is running and a website that is not closed. Every
+  transition is audited.
+- A domain is held by at most one website while it is verified, active or suspended, enforced by a
+  partial unique index, so nobody else can claim it — including after the first owner's
+  registration lapses, until that row leaves those states.
+- One domain is the website's primary address; any other active domain is an alias. Aliases are
+  expected to redirect to the primary.
+
+### 4. Hosting and TLS
+
+- Production runs on a **self-hosted VPS with Docker and Caddy**. Caddy issues certificates on
+  demand, and **asks the ERP first**. The ERP's answer is yes only for a website's subdomain or an
+  active custom domain of a website that is not closed; every other name is refused, so an
+  attacker cannot make Caddy fetch certificates for domains they point at the server.
+- The ask endpoint is authenticated by a token in its address, may additionally be restricted to
+  Caddy's network addresses, and is rate-limited. The first authorisation of each custom domain is
+  audited.
+- Dangling DNS: a domain whose registration lapses or whose website closes stops resolving to a
+  website at once, so a certificate cannot be renewed for it and the storefront serves nothing.
+- **Clarified 2026-10-12 (D6): a suspended website keeps HTTPS.** Its subdomain and its active
+  custom domains still receive certificate authorisation, so the storefront can show its
+  "unavailable" page over HTTPS. It accepts **no** orders and no checkout: order submission
+  requires a live website, and a suspended website's credentials are refused by the Storefront API
+  altogether. This is about a suspended *website*. A suspended, unverified or lapsed *domain*
+  receives no new authorisation, and a closed website receives none at all. Nothing else about
+  website or domain suspension changes.
+
+### 5. Caching and sessions
+
+- Every cache key and tag in the storefront carries the resolved website. Pages and API calls that
+  depend on a customer — cart, checkout, account, order, payment — are never cached.
+- Customer sessions use host-only cookies (no `Domain` attribute), so a session from one website's
+  domain is never sent to another.
+- Customers are **website-bound**: the same phone number on two websites is two customers, as the
+  `(website_id, mobile)` uniqueness already makes it.
+
+### 6. Orders, payments and publishing
+
+- **One order path.** Every storefront order becomes exactly one native website order through the
+  existing `POST /orders` (contract §6.1), with the website and owner taken from the credential,
+  idempotency keys, and the `(website_id, storefront_order_reference)` uniqueness. The read-only
+  external-store mirror (D29) is never used for these websites.
+- **Payments go through Feriwala's gateway** from launch, using its payment sessions; the
+  storefront can never declare an order paid (contract §6.1). Stock reservation, ledger and
+  settlement rules are unchanged. Feriwala stays merchant of record (D12).
+- **Publishing** reuses the existing website product selection: a product the owner is eligible for
+  appears in My Products; *Connect to Website* adds it to one or more of the owner's own websites,
+  subject to package limits, website status, pricing rules and stock. The storefront shows only that
+  website's published products.
+
+### 7. Who operates a website order
+
+- The website's owner may operate **every order that came from their own websites** —
+  confirmation, processing, fulfilment, courier, delivery, returns — and may **request** a refund.
+  Lines a supplier fulfils keep the supplier's own controls.
+- Platform staff keep every capability across all websites.
+- Owners may never verify payments, reconcile COD, approve or execute refunds, post ledger entries,
+  or change supplier payables. Every operational action is authorised and audited.
+- Built in a later phase through account-level permissions and a website-order policy. The
+  platform `order.*` permissions stay platform-only.
+
+### 8. Customer accounts and launch catalogue
+
+- Guest checkout, and full customer accounts signed in by a **phone OTP the ERP issues**: profile,
+  addresses, order history and tracking, all bound to one website.
+- At launch: categories, search, sorting and filtering, best sellers, flash deals. Reviews, coupons
+  and landing pages wait.
+
+### 9. Website capacity
+
+- The package's **Websites** limit is the number of websites an owner may have, read from the
+  subscription's own terms: 0 means none, 1 means one, 2 means two, and so on; no limit is
+  hard-coded. Each permitted website has its **own allocation slot**, with its own domain and
+  hosting entitlement. A slot already written for a confirmed purchase is kept and still
+  counts, so an older subscription never loses a website it was given.
+- A closed website frees its slot. Renewals and package changes continue each slot's own period,
+  so no term is shortened or restarted.
+
+### 10. Rollout, migration and rollback
+
+- All schema changes are additive. Existing allocations become slot 1; existing domain records
+  start unverified, so nothing begins serving without verification. No record is rewritten.
+- Order: ERP foundations (P1) → ERP commerce APIs: search, delivery areas and quote, customer OTP
+  (P2) → storefront skeleton and credential registry (P3) → checkout (P4) → customer accounts (P5)
+  → Connect to Website (P6) → owner order operations (P7) → go-live hardening (P8).
+- Each phase is reversible on its own: the new columns and tables can be dropped by their
+  migrations without touching what existed before them.
+- Security review gates go-live: tenant isolation across hosts, certificate refusal for
+  unverified names, credentials absent from client bundles, and DNS takeover cases.

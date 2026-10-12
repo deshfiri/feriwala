@@ -76,6 +76,8 @@ export type WebsiteAllocationTerm = {
  */
 export type WebsiteAllocationCard = {
     id: string;
+    /** Which of the package's permitted websites this is, from 1. */
+    slot: number;
     name: string;
     /** Null until the partner has set the website up. */
     website: { id: string; host: string; url: string } | null;
@@ -114,6 +116,19 @@ export type WebsiteDomainRow = {
     fee: Money;
     /** Feriwala's own supplier — null for the partner (§16.3). */
     registrar: string | null;
+    /** Whether the shared storefront may answer on it (D30 §3). */
+    routing_status?: 'unverified' | 'verified' | 'active' | 'suspended';
+    routing_status_label?: string;
+    serves?: boolean;
+    verified_at?: string | null;
+    /** How to prove control, and the last check — staff only. */
+    verification?: {
+        record_name: string;
+        record_value: string;
+        checked_at: string | null;
+        error: string | null;
+    } | null;
+    tls_authorized_at?: string | null;
 };
 
 export type WebsiteHostingRow = {
