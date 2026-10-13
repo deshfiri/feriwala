@@ -27,6 +27,9 @@ use Illuminate\Support\Str;
  *     running, on a website that is not closed.
  *   - **Suspend** an active one, with a reason.
  *
+ * A step that changes which hosts serve the storefront tells it with
+ * `website.updated` (P2 D2), inside the same transaction.
+ *
  * Every step locks the row, moves through transitionTo(), and is audited. A
  * name already proven by another website cannot be proven again here — the
  * database's partial unique index settles a race, and the refusal says so.
@@ -37,6 +40,7 @@ class ManageWebsiteDomainRouting
         protected TxtRecordResolver $dns,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected AnnounceWebsiteUpdated $announce,
     ) {}
 
     /**
@@ -63,6 +67,11 @@ class ManageWebsiteDomainRouting
             ])->save();
 
             $this->record($locked, $actor, 'website.domain_verification_issued', $before);
+
+            // A domain that was serving no longer is (D2).
+            if ($before === DomainRoutingStatus::Active) {
+                $this->announce->handle($locked->website);
+            }
 
             return $locked;
         });
@@ -159,6 +168,7 @@ class ManageWebsiteDomainRouting
             $locked->forceFill(['activated_at' => CarbonImmutable::now(), 'suspended_at' => null])->save();
 
             $this->record($locked, $actor, 'website.domain_activated', $before);
+            $this->announce->handle($locked->website);
 
             return $locked;
         });
@@ -180,6 +190,7 @@ class ManageWebsiteDomainRouting
             $locked->forceFill(['suspended_at' => CarbonImmutable::now()])->save();
 
             $this->record($locked, $actor, 'website.domain_suspended', DomainRoutingStatus::Active, $reason);
+            $this->announce->handle($locked->website);
 
             return $locked;
         });

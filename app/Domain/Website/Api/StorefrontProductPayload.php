@@ -11,6 +11,7 @@ use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Support\Money\Money;
+use Carbon\CarbonImmutable;
 
 /**
  * One published product, as a storefront receives it (contract §5.1, P5-22).
@@ -49,8 +50,11 @@ class StorefrontProductPayload
     public function for(WebsiteProduct $selection, Website $website): array
     {
         $product = $selection->product;
-        $price = $selection->sellingPrice();
-        $compareAt = $selection->promotional_price !== null ? $selection->price : null;
+        // One instant for both figures, so a window closing mid-build cannot
+        // pair the promotion with no compare-at price (C4).
+        $at = CarbonImmutable::now();
+        $price = $selection->sellingPrice($at);
+        $compareAt = $selection->promotionApplies($at) ? $selection->price : null;
 
         $availability = collect($this->stock->forProduct($product, $website->businessAccount))->keyBy('sku');
 
@@ -64,6 +68,12 @@ class StorefrontProductPayload
             'short_description' => $product->short_description,
             'description' => $selection->marketing_description ?? $product->description,
             'promo_title' => $selection->promo_title,
+            // Additive (C4): the window of the promotion in force, so a
+            // storefront can show a flash deal's end. Null when none applies.
+            'promotion' => $compareAt === null ? null : [
+                'starts_at' => $selection->promotion_starts_at?->toIso8601String(),
+                'ends_at' => $selection->promotion_ends_at?->toIso8601String(),
+            ],
             'brand' => $product->brand === null ? null : [
                 'id' => $product->brand->public_id,
                 'name' => $product->brand->name,

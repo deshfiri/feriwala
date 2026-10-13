@@ -33,6 +33,7 @@ class ManageWebsiteBranding
     public function __construct(
         protected WebsiteImageStore $images,
         protected RecordAuditLog $audit,
+        protected AnnounceWebsiteUpdated $announce,
     ) {}
 
     /**
@@ -44,9 +45,16 @@ class ManageWebsiteBranding
     {
         $this->assertEditable($website);
 
-        $website->fill($attributes)->save();
+        $website->fill($attributes);
+        $changed = $website->isDirty();
+        $website->save();
 
         $this->record($website, $actor, 'website.branding_updated', $website->getChanges());
+
+        // A save that changed nothing tells the storefront nothing (D2).
+        if ($changed) {
+            $this->announce->handle($website);
+        }
 
         return $website;
     }
@@ -74,6 +82,7 @@ class ManageWebsiteBranding
         $this->images->delete($previous);
 
         $this->record($website, $actor, 'website.image_updated', ['asset' => $asset]);
+        $this->announce->handle($website);
 
         return $website;
     }
@@ -93,6 +102,7 @@ class ManageWebsiteBranding
         $this->images->delete($previous);
 
         $this->record($website, $actor, 'website.image_removed', ['asset' => $asset]);
+        $this->announce->handle($website);
 
         return $website;
     }

@@ -8,6 +8,8 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteWebhookEndpoint;
+use App\Integrations\Store\Exceptions\StorePlatformException;
+use App\Integrations\Store\Support\OutboundAddressGuard;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 
@@ -16,10 +18,11 @@ use Carbon\CarbonImmutable;
  * (contract §7.2, P5-20).
  *
  * **One endpoint per website**, replaced in place when the address changes.
- * The address must be HTTPS and must not point inside the platform's own
- * network: the ERP is about to POST signed data to whatever this says, and an
- * address of `localhost` or a private range is a way to make the ERP call
- * itself.
+ * The address must be HTTPS on the standard port and must not point inside
+ * the platform's own network: the ERP is about to POST signed data to whatever
+ * this says, and an address of `localhost` or a private range is a way to make
+ * the ERP call itself. The name is resolved here and every address it gives
+ * must be public ({@see OutboundAddressGuard}); delivery resolves it again.
  *
  * The signing secret is shown once, like a credential secret, and rotation
  * keeps the previous one valid for verification for a window so the storefront
@@ -29,6 +32,7 @@ class ManageWebhookEndpoint
 {
     public function __construct(
         protected RecordAuditLog $audit,
+        protected OutboundAddressGuard $guard,
     ) {}
 
     /**
@@ -108,7 +112,9 @@ class ManageWebhookEndpoint
         $parts = parse_url($url);
         $host = is_array($parts) ? strtolower((string) ($parts['host'] ?? '')) : '';
 
-        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || $host === '') {
+        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || $host === ''
+            || isset($parts['user']) || isset($parts['pass'])
+            || (isset($parts['port']) && $parts['port'] !== 443)) {
             throw WebsiteRefused::webhookAddressRefused();
         }
 
@@ -120,6 +126,14 @@ class ManageWebhookEndpoint
 
         if (filter_var($literal, FILTER_VALIDATE_IP) !== false
             && filter_var($literal, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            throw WebsiteRefused::webhookAddressRefused();
+        }
+
+        // What the name resolves to, not what it looks like: every address
+        // must be public (P2 D3). Delivery checks again, every attempt.
+        try {
+            $this->guard->addressFor($literal);
+        } catch (StorePlatformException) {
             throw WebsiteRefused::webhookAddressRefused();
         }
     }

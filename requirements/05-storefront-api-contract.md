@@ -301,7 +301,8 @@ This is what makes a storefront retry after a timeout safe (§17.3, §26.4, §36
 ### 5.1 Catalog
 
 ```
-GET  /products                     ?updated_since= &cursor= &limit= &category= &status=
+GET  /products                     ?updated_since= &cursor= &limit= &category= &status=   (+ §5.1.2)
+GET  /products/facets              (additive, §5.1.2)
 GET  /products/{id}
 GET  /categories                   ?updated_since= &cursor=
 GET  /categories/{id}
@@ -360,6 +361,60 @@ Product payload (abbreviated):
 price within admin bounds (§15.1). Wholesale price, base cost, and margin are **never** in this
 payload. The storefront cannot see what Feriwala paid, and cannot compute the partner's earning.
 
+#### 5.1.1 What is listed (v1 compatibility correction, D31)
+
+A product appears on every catalogue endpoint — list, detail, facets, inventory — only while it is
+**published on the calling website and eligible for that website's owner to sell by
+dropshipping**, the same eligibility order pricing applies. A trashed, inactive, channel-disabled or
+package-excluded product, or one in a switched-off category, is never listed, so nothing listed is
+refused at checkout for being ineligible. Before D31 an ineligible product could still be listed and
+was only refused at `POST /orders`; that was a defect, and the correction narrows no field.
+
+#### 5.1.2 Search, filters and sorting (additive, D31)
+
+```
+GET  /products   ?q= &sort= &price_min= &price_max= &category= &brand= &attributes[<slug>]=
+                 &in_stock= &featured= &flash_deal= &status= &updated_since= &cursor= &limit=
+GET  /products/facets                same filters, no cursor
+```
+
+| Parameter                    | Meaning                                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `q`                          | up to 100 characters; matches name, BPC or an active variation's BPC, case-insensitively, literally |
+| `sort`                       | `featured`, `newest`, `price_asc`, `price_desc`, `name`, `best_selling`; omitted means id order     |
+| `price_min` / `price_max`    | flat Taka (`"2500"` or `"2500.00"`), on the price a customer is charged now, promotion included     |
+| `category`                   | the shop's own category, else a catalogue category and its subcategories (slug or id)               |
+| `brand`                      | brand slug or id                                                                                    |
+| `attributes[<slug>]=<value>` | up to five; a product matches when an active variation carries each value                           |
+| `in_stock`                   | `true`/`false` — the same figure the product's own availability shows                               |
+| `featured`                   | `true`/`false` — the website's featured flag                                                        |
+| `flash_deal`                 | `true`/`false` — a promotion in force now that has an end time                                      |
+| `status`                     | `published` only; it is the only status this surface ever shows                                     |
+
+Every sort ends on a stable tie-breaker, so cursor pages never repeat or skip a product. An unknown
+sort or status, a malformed amount, or `price_min` above `price_max` is `422 validation_failed`.
+
+`best_selling` ranks by the last 30 days of sales on the calling website: paid online orders and
+cash-on-delivery orders the customer confirmed, placed in the window and not since cancelled,
+refund pending, partially refunded or refunded, counted in units net of returned goods received.
+Ties go to the product with more orders, then to the earlier selection; a product with no sales
+in the window follows every one that sold. **Freshness:** the figures are rebuilt every fifteen
+minutes, so a sale can take up to that long to move a product. No sales figure is exposed.
+
+`/products/facets` returns `brands` (id, slug, name, product count), `attributes` (slug, name, and
+values with product counts) and `price_range` (`minimum`, `maximum`, or `null`), over exactly the
+products the same filters list. It is bounded: at most 200 brands, 50 attributes and 100 values per
+attribute.
+
+#### 5.1.3 Promotions and flash deals (additive, D31)
+
+A partner may give a promotional price a window (`starts_at` inclusive, `ends_at` exclusive, either
+optional, stored in UTC). While it applies, `price` is the promotional price and
+`compare_at_price` the regular one; outside it, `price` is the regular price and
+`compare_at_price` is `null`. The product payload adds `promotion: { starts_at, ends_at }` while a
+promotion applies, `null` otherwise. Each opening and closing sends one `product.price_changed`.
+Order pricing uses the same rule at the moment the order is priced.
+
 ### 5.2 Inventory
 
 ```
@@ -406,9 +461,53 @@ available locales, its currency, and its checkout settings (payment methods and 
 cash-on-delivery limit). The website is the credential's; nothing about the owner's account,
 package, wallet, suppliers or other websites is ever included, and no secret is.
 
+### 5.5 Delivery areas (additive, D31)
+
+```
+GET  /delivery/areas               ?parent=     scope: catalog:read
+```
+
+The Bangladesh administrative directory: divisions when `parent` is omitted, otherwise the active
+children of `parent`. Each area is `{ id, type, name: { en, bn }, has_children }`; `type` is
+`division`, `district`, `upazila` or `union`, and `id` is a stable identifier such as
+`district:3:26`, never a database id. At most 1,000 areas per response; an unknown `parent` is
+`404`. The same for every website, so it may be cached for an hour. Delivery is still charged at the
+flat per-package fee whatever area is chosen.
+
 ---
 
 ## 6. Endpoints — storefront writes to ERP
+
+### 6.0 Quote a cart (additive, D31)
+
+```
+POST /checkout/quote               scope: orders:write   no Idempotency-Key
+```
+
+```json
+{
+    "items": [{ "sku": "FW-1043-NVY-M", "quantity": 2 }],
+    "payment_method": "online",
+    "delivery": { "area_id": "district:3:26" },
+    "coupon_code": null
+}
+```
+
+What the cart would cost now, from the same pricing and checkout rules `POST /orders` uses: each
+line's unit price and total with its advisory availability (`in_stock`, `quantity`, `reservable`),
+the subtotal, discount, shipping, tax, `tax_included`, grand total, the delivery basis (`flat`),
+the payment methods, cash-on-delivery eligibility and limit, `quoted_at` and an advisory
+`valid_until`.
+
+**A quote is advisory and writes nothing** — no order, payment, reservation, charge or ledger entry
+— and is sent `Cache-Control: no-store`. `reservable` applies the reservation rules read-only
+(one warehouse, existing reservations, the preferred supplier offer, the owner's allocation); stock
+is held only by `POST /orders`. `POST /orders` prices the cart again and refuses any difference
+with `price_mismatch` (§6.1.1), so a price change, a flash deal closing or stock running out between
+quote and order is caught there. It refuses what `POST /orders` refuses, with the same codes:
+`coupon_not_applicable`, `website_not_accepting_orders`, `product_unavailable`,
+`quantity_not_allowed`, `payment_method_unavailable`; a repeated BPC or an unknown `area_id` is
+`422 validation_failed`. It spends the read rate-limit budget.
 
 ### 6.1 Submit an order
 
@@ -484,6 +583,18 @@ Responses:
 
 `storefront_order_reference` is unique per website and is a **second** duplicate guard beneath the
 idempotency key — protecting against a storefront that retries with a fresh key (§17.3, §43).
+
+`shipping_address.area_id` (additive, D31) is optional: an id from `GET /delivery/areas`, stored
+with the address. An unknown one is `422 validation_failed`.
+
+**`payment.return_url`** is where the customer is sent after paying (v1 compatibility correction,
+D31). It must be `https://` on the standard port, with no username or password, no fragment,
+nothing outside printable ASCII and at most 2,048 characters, and its host must belong to the
+calling website **now**: its storefront subdomain, or a custom domain that is verified and active.
+Anything else is `422 return_url_not_allowed`. It is checked again when the customer returns; if it
+no longer holds — the domain lapsed, was suspended or moved — the customer goes to the website's
+home page instead. Before D31 a domain recorded on the website was accepted whether or not it was
+verified.
 
 ### 6.1.1 Price mismatch — zero tolerance
 
@@ -703,22 +814,36 @@ verify it in constant time and reject anything older than 300 seconds.
 
 ### 7.1 Events
 
-| Event                                                           | Fires when                                               |
-| --------------------------------------------------------------- | -------------------------------------------------------- |
-| `product.published` / `product.updated` / `product.unpublished` | selection or content changes                             |
-| `product.price_changed`                                         | website selling price changes                            |
-| `inventory.updated`                                             | available quantity changes                               |
-| `inventory.out_of_stock`                                        | availability reaches zero                                |
-| `category.updated`                                              | category tree or content changes                         |
-| `order.status_changed`                                          | any order status transition                              |
-| `order.cancelled`                                               | order cancelled in the ERP                               |
-| `cod.confirmation_required`                                     | COD order awaiting the customer's code (§6.2)            |
-| `cod.confirmed`                                                 | customer confirmed a COD order with their code           |
-| `cod.expired`                                                   | COD confirmation window closed unconfirmed               |
-| `shipment.updated`                                              | courier status or tracking number changes                |
-| `return.status_changed`                                         | return progresses                                        |
-| `refund.completed`                                              | refund settled                                           |
-| `website.suspended` / `website.restored`                        | package expiry, low balance, grace period (§16.4, §24.3) |
+| Event                                                           | Fires when                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `product.published` / `product.updated` / `product.unpublished` | selection or content changes                                       |
+| `product.price_changed`                                         | website selling price changes                                      |
+| `inventory.updated`                                             | available quantity changes                                         |
+| `inventory.out_of_stock`                                        | availability reaches zero                                          |
+| `category.updated`                                              | category tree or content changes                                   |
+| `order.status_changed`                                          | any order status transition                                        |
+| `order.cancelled`                                               | order cancelled in the ERP                                         |
+| `cod.confirmation_required`                                     | COD order awaiting the customer's code (§6.2)                      |
+| `cod.confirmed`                                                 | customer confirmed a COD order with their code                     |
+| `cod.expired`                                                   | COD confirmation window closed unconfirmed                         |
+| `shipment.updated`                                              | courier status or tracking number changes                          |
+| `return.status_changed`                                         | return progresses                                                  |
+| `refund.completed`                                              | refund settled                                                     |
+| `website.suspended` / `website.restored`                        | the website stops or starts being served (see below)               |
+| `website.updated` (additive, D31)                               | branding, contact, images, serving hosts or payment methods change |
+
+`website.suspended` fires when the website moves from a served status (active, low wallet balance,
+grace period, a renewal pending, or maintenance) to one that is not — suspended, temporarily
+disabled, package expired, closed or another unserved status — and `website.restored` on the way
+back; the payload carries the new `status`. **Low wallet balance and the grace period are not
+suspension**: the website is still served and still takes orders, so neither sends this event
+(corrected by D31; the earlier row said otherwise).
+
+`website.updated` carries only `{ id, updated_at }`: re-read `GET /site` (§5.4). It is not sent to
+a website that is not being served. Payment methods are platform-wide: when a gateway change turns
+online payment on or off in a currency, every served website selling in that currency is told; a
+change that leaves the methods as they were tells nobody. At most one such event is pending per
+website at a time, however many changes arrive before it is sent.
 
 ### 7.2 One endpoint per website
 
@@ -734,6 +859,13 @@ verify it in constant time and reject anything older than 300 seconds.
 
 Multiple endpoints and per-event subscriptions are deliberately out of scope for `v1`; they can
 arrive in a later version without breaking this one.
+
+**The endpoint must be reachable from the internet and nowhere else** (D31). It must be `https://`
+on the standard port with no credentials, and its name is resolved when it is registered and again
+before every attempt, retries included: every address it resolves to must be public, so a name
+pointing at a private, loopback, link-local, metadata or carrier-grade NAT address is refused. Each
+attempt connects to exactly the address checked, so a DNS answer that changes in between cannot
+redirect it, and a `3xx` is recorded as a non-`2xx` answer — a redirect is never followed.
 
 ### 7.3 Delivery guarantees
 

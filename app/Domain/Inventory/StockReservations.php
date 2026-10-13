@@ -156,26 +156,7 @@ class StockReservations
                 return $this->sameReservation($existing, $product, $variant, $quantity, $kind, $account);
             }
 
-            $items = StockItem::query()
-                ->with('warehouse')
-                ->where('product_id', $product->id)
-                ->where('product_variant_id', $variant?->id)
-                ->whereHas('warehouse', fn ($query) => $query->where('is_active', true))
-                ->get()
-                ->sortBy(fn (StockItem $item) => [
-                    $item->warehouse->is_default ? 0 : 1,
-                    $item->warehouse->priority,
-                    $item->warehouse->id,
-                ]);
-
-            // What the ordering account has set aside, per item. Nobody else's.
-            $allocations = $account === null
-                ? collect()
-                : StockAllocation::query()
-                    ->where('business_account_id', $account->id)
-                    ->whereIn('stock_item_id', $items->pluck('id'))
-                    ->get()
-                    ->keyBy('stock_item_id');
+            [$candidates, $held] = $this->candidates($product, $variant, $quantity, $account);
 
             $attempt = function (StockItem $item, ?StockAllocation $allocation) use ($product, $variant, $quantity, $kind, $reference, $account): ?StockReservation {
                 try {
@@ -195,20 +176,9 @@ class StockReservations
                 }
             };
 
-            // The account's own allocation first, in warehouse order…
-            foreach ($items as $item) {
-                /** @var StockAllocation|null $allocation */
-                $allocation = $allocations->get($item->id);
-
-                if ($allocation !== null && $allocation->quantity >= $quantity
-                    && ($reservation = $attempt($item, $allocation)) !== null) {
-                    return $reservation;
-                }
-            }
-
-            // …then stock anyone may buy.
-            foreach ($items as $item) {
-                if ($item->available >= $quantity && ($reservation = $attempt($item, null)) !== null) {
+            // In order: the account's own allocation, then stock anyone may buy.
+            foreach ($candidates as [$item, $allocation]) {
+                if (($reservation = $attempt($item, $allocation)) !== null) {
                     return $reservation;
                 }
             }
@@ -216,9 +186,81 @@ class StockReservations
             throw InventoryRefused::outOfStock(
                 $variant !== null ? $variant->sku : $product->sku,
                 $quantity,
-                (int) $items->sum('available') + (int) $allocations->sum('quantity'),
+                $held,
             );
         });
+    }
+
+    /**
+     * Whether {@see reserve()} would find a place to hold `$quantity` right now
+     * — read-only, no lock, nothing held (P2 H2).
+     *
+     * The same candidates in the same order reserve() tries: the account's own
+     * allocation, then a single active warehouse holding the whole quantity.
+     * Advisory: stock can be taken between this answer and an order, and the
+     * reservation at order placement remains the binding check.
+     */
+    public function canReserve(Product $product, ?ProductVariant $variant, int $quantity, ?BusinessAccount $account = null): bool
+    {
+        if ($quantity < 1 || ($variant !== null && $variant->product_id !== $product->id)) {
+            return false;
+        }
+
+        return $this->candidates($product, $variant, $quantity, $account)[0] !== [];
+    }
+
+    /**
+     * Where `$quantity` could be held, in the order reserve() tries them, and
+     * what is held in total (for the out-of-stock answer).
+     *
+     * One place states the rule, so the advisory check and the reservation can
+     * never disagree about it: the ordering account's own allocation first, in
+     * warehouse order, then any single active warehouse whose free stock covers
+     * the whole quantity — never a split across warehouses.
+     *
+     * @return array{0: list<array{0: StockItem, 1: StockAllocation|null}>, 1: int}
+     */
+    protected function candidates(Product $product, ?ProductVariant $variant, int $quantity, ?BusinessAccount $account): array
+    {
+        $items = StockItem::query()
+            ->with('warehouse')
+            ->where('product_id', $product->id)
+            ->where('product_variant_id', $variant?->id)
+            ->whereHas('warehouse', fn ($query) => $query->where('is_active', true))
+            ->get()
+            ->sortBy(fn (StockItem $item) => [
+                $item->warehouse->is_default ? 0 : 1,
+                $item->warehouse->priority,
+                $item->warehouse->id,
+            ]);
+
+        // What the ordering account has set aside, per item. Nobody else's.
+        $allocations = $account === null
+            ? collect()
+            : StockAllocation::query()
+                ->where('business_account_id', $account->id)
+                ->whereIn('stock_item_id', $items->pluck('id'))
+                ->get()
+                ->keyBy('stock_item_id');
+
+        $candidates = [];
+
+        foreach ($items as $item) {
+            /** @var StockAllocation|null $allocation */
+            $allocation = $allocations->get($item->id);
+
+            if ($allocation !== null && $allocation->quantity >= $quantity) {
+                $candidates[] = [$item, $allocation];
+            }
+        }
+
+        foreach ($items as $item) {
+            if ($item->available >= $quantity) {
+                $candidates[] = [$item, null];
+            }
+        }
+
+        return [$candidates, (int) $items->sum('available') + (int) $allocations->sum('quantity')];
     }
 
     /**

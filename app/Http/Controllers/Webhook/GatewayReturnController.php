@@ -104,8 +104,10 @@ class GatewayReturnController extends Controller
      * Feriwala owns the gateway, so the customer returns here — and is sent on
      * to the storefront they came from, to the address that shop asked for when
      * it submitted the order, or its home page. **Only ever to that shop**: the
-     * address was checked against the website's own domains when the order was
-     * taken, so this cannot be turned into a redirect to anywhere else.
+     * address was checked when the order was taken and is checked again here,
+     * against the domains the website holds *now*, so a domain that has since
+     * lapsed or moved — or an address stored before the rule tightened (H8) —
+     * sends the customer to the shop's home page instead.
      *
      * Nothing is settled here either; the order's own status is what the
      * storefront reads back afterwards.
@@ -156,6 +158,11 @@ class GatewayReturnController extends Controller
 
         if ($landing === null || ! $this->addresses->allows($website, $landing)) {
             $landing = $this->addresses->home($website);
+        }
+
+        // A closed website has nowhere to send its customer but here.
+        if ($landing === null) {
+            return url('/');
         }
 
         $separator = str_contains($landing, '?') ? '&' : '?';

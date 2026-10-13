@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\Internal\AuthorizeCertificateController;
 use App\Http\Controllers\Api\Storefront\V1\CategoryController;
+use App\Http\Controllers\Api\Storefront\V1\CheckoutController;
 use App\Http\Controllers\Api\Storefront\V1\ConnectionController;
 use App\Http\Controllers\Api\Storefront\V1\CustomerController;
+use App\Http\Controllers\Api\Storefront\V1\DeliveryAreaController;
 use App\Http\Controllers\Api\Storefront\V1\InventoryController;
 use App\Http\Controllers\Api\Storefront\V1\OrderController;
 use App\Http\Controllers\Api\Storefront\V1\ProductController;
@@ -53,10 +55,26 @@ Route::prefix('storefront/v1')
                 // How to present this website (D30, contract §5.4).
                 Route::get('site', SiteController::class)->name('site');
                 Route::get('products', [ProductController::class, 'index'])->name('products.index');
+                // Before `products/{product}`, which would otherwise take it (P2 C2).
+                Route::get('products/facets', [ProductController::class, 'facets'])->name('products.facets');
                 Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
                 Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
                 Route::get('categories/{category}', [CategoryController::class, 'show'])->name('categories.show');
             });
+
+            // Where a customer can have an order delivered (P2 H4, contract §5.5).
+            Route::get('delivery/areas', [DeliveryAreaController::class, 'index'])
+                ->middleware(['storefront.rate:read', 'storefront.scope:catalog:read'])
+                ->name('delivery.areas');
+
+            /*
+             * What a cart would cost (P2 H1–H3, contract §6.0). Advisory and
+             * read-only: it writes nothing, so it carries no Idempotency-Key and
+             * spends the read budget, under the checkout scope.
+             */
+            Route::post('checkout/quote', [CheckoutController::class, 'quote'])
+                ->middleware(['storefront.rate:read', 'storefront.scope:orders:write'])
+                ->name('checkout.quote');
 
             Route::middleware(['storefront.rate:read', 'storefront.scope:inventory:read'])->group(function () {
                 Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');

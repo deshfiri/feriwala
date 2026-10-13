@@ -16,6 +16,7 @@ use App\Domain\Website\Queries\ResolveWebsitePriceRule;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Carbon\CarbonImmutable;
 
 /**
  * What a partner sets on one of their selected products (§15.1, P5-4, P5-6).
@@ -23,7 +24,7 @@ use App\Support\Money\Money;
  * Website category, display order, featured status, their own selling price, a
  * promotional price, a short promotional title and a short marketing
  * description — §15.1's list, and only where the administrator's rule permits
- * it.
+ * it. A promotion may carry a window (a flash deal, C4), locked with it.
  *
  * **Every figure is checked here, against the resolved terms**, on every save.
  * The screen is sent the bounds so a partner can see them, but a price is never
@@ -76,6 +77,24 @@ class UpdateWebsiteProduct
             $changes['promotional_price'] = $promotion === null
                 ? null
                 : $this->price($terms, $currency, $promotion, 'promotional_price');
+
+            // A promotion taken away takes its window with it.
+            if ($promotion === null) {
+                $changes['promotion_starts_at'] = null;
+                $changes['promotion_ends_at'] = null;
+            }
+        }
+
+        foreach (['promotion_starts_at', 'promotion_ends_at'] as $field) {
+            if (! array_key_exists($field, $attributes) || (array_key_exists('promotional_price', $changes) && $changes['promotional_price'] === null)) {
+                continue;
+            }
+
+            // The window decides what a customer is charged, so it is locked
+            // whenever the promotional price is (C4, H6).
+            $this->assertUnlocked($terms, 'promotional_price');
+
+            $changes[$field] = $attributes[$field] === null ? null : CarbonImmutable::parse((string) $attributes[$field]);
         }
 
         foreach (['promo_title', 'marketing_description', 'display_order', 'is_featured'] as $field) {
@@ -95,6 +114,7 @@ class UpdateWebsiteProduct
         }
 
         $this->assertPromotionIsAReduction($selection, $changes);
+        $this->assertPromotionWindow($selection, $changes);
 
         if ($changes === []) {
             return $selection;
@@ -105,7 +125,12 @@ class UpdateWebsiteProduct
 
             // The storefront's copy is now behind (§17.2).
             'sync_status' => WebsiteSyncStatus::Pending,
-        ])->save();
+        ]);
+
+        // What this save announces is the promotion as it stands now, so the
+        // scheduled sweep has nothing to announce again (C4).
+        $selection->promotion_live = $selection->promotionApplies();
+        $selection->save();
 
         $this->audit->handle(new AuditEntry(
             action: 'website.product_updated',
@@ -120,7 +145,9 @@ class UpdateWebsiteProduct
         // Only a product on sale is worth telling the storefront about; one
         // that is merely selected is not on the shop to be out of date.
         if ($selection->status === WebsiteProductStatus::Published) {
-            $priceChanged = array_key_exists('price', $changes) || array_key_exists('promotional_price', $changes);
+            $priceChanged = array_intersect_key($changes, array_flip([
+                'price', 'promotional_price', 'promotion_starts_at', 'promotion_ends_at',
+            ])) !== [];
 
             $this->sync->handle(
                 $selection,
@@ -197,6 +224,34 @@ class UpdateWebsiteProduct
 
         if (! $price instanceof Money || ! $promotion->lessThan($price)) {
             throw WebsiteRefused::promotionNotAReduction();
+        }
+    }
+
+    /**
+     * A window bounds a promotion, so it needs one, and it ends after it
+     * starts. The columns have the same CHECKs; this is the message.
+     *
+     * @param  array<string, mixed>  $changes
+     *
+     * @throws WebsiteRefused
+     */
+    protected function assertPromotionWindow(WebsiteProduct $selection, array $changes): void
+    {
+        $value = fn (string $field) => array_key_exists($field, $changes) ? $changes[$field] : $selection->{$field};
+
+        $starts = $value('promotion_starts_at');
+        $ends = $value('promotion_ends_at');
+
+        if ($starts === null && $ends === null) {
+            return;
+        }
+
+        if (! $value('promotional_price') instanceof Money) {
+            throw WebsiteRefused::promotionWindowNeedsAPromotion();
+        }
+
+        if ($starts instanceof CarbonImmutable && $ends instanceof CarbonImmutable && ! $ends->greaterThan($starts)) {
+            throw WebsiteRefused::promotionWindowOutOfOrder();
         }
     }
 

@@ -69,4 +69,44 @@ abstract class StorefrontController extends Controller
             ],
         ];
     }
+
+    /**
+     * Every money object in an outbound payload, with the frozen contract's
+     * legacy `minor_units` and `decimal` keys added beside its flat-Taka
+     * `amount` (contract §4.1's minor-unit compatibility period). The one place
+     * outbound legacy money keys are produced.
+     *
+     * @param  array<array-key, mixed>  $payload
+     * @return array<array-key, mixed>
+     */
+    protected function withLegacyMoney(array $payload): array
+    {
+        if ($this->isMoneyShape($payload)) {
+            $amount = (string) $payload['amount'];
+            assert(is_numeric($amount));
+
+            return $payload + [
+                // Exact: `amount` always has two decimal places here, so
+                // ×100 never truncates anything a person typed or the ERP
+                // computed.
+                'minor_units' => (int) bcmul($amount, '100', 0),
+                'decimal' => $amount,
+            ];
+        }
+
+        return array_map(
+            fn (mixed $value) => is_array($value) ? $this->withLegacyMoney($value) : $value,
+            $payload,
+        );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $value
+     */
+    protected function isMoneyShape(array $value): bool
+    {
+        return array_key_exists('amount', $value)
+            && array_key_exists('currency', $value)
+            && array_key_exists('formatted', $value);
+    }
 }

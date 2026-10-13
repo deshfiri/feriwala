@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Storefront\V1;
 
 use App\Domain\Account\Exceptions\ResendTooSoon;
+use App\Domain\Location\Queries\DeliveryAreas;
 use App\Domain\Order\Actions\CancelUnpaidOrder;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\InitiateOrderPayment;
@@ -55,6 +56,7 @@ class OrderController extends StorefrontController
         protected CancelUnpaidOrder $cancellations,
         protected WebsiteOrderPayload $payload,
         protected MobileNumber $mobiles,
+        protected DeliveryAreas $areas,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -79,6 +81,13 @@ class OrderController extends StorefrontController
 
         if ($mobile === null) {
             return StorefrontError::respond($request, 422, 'invalid_mobile_number', 'The customer\'s mobile number could not be resolved.');
+        }
+
+        // An optional delivery area must be one the directory knows (P2 H4).
+        $areaId = $input['shipping_address']['area_id'] ?? null;
+
+        if ($areaId !== null && $this->areas->find((string) $areaId) === null) {
+            return $this->invalid($request, ['shipping_address.area_id' => ['No such delivery area.']]);
         }
 
         try {
@@ -259,6 +268,13 @@ class OrderController extends StorefrontController
 
         $shipping = $this->address($input['shipping_address']);
 
+        // Kept beside the address only when sent, so an order without one is
+        // written exactly as before. It describes where the order goes; the
+        // delivery charge stays the flat per-package fee (P2 H3, H4).
+        if (isset($input['shipping_address']['area_id'])) {
+            $shipping['area_id'] = (string) $input['shipping_address']['area_id'];
+        }
+
         return new WebsiteOrderSubmission(
             reference: trim((string) $input['storefront_order_reference']),
             idempotencyKey: trim((string) $request->header('Idempotency-Key')),
@@ -325,44 +341,6 @@ class OrderController extends StorefrontController
     protected function orderResponse(array $payload, int $status = 200): JsonResponse
     {
         return new JsonResponse($this->withLegacyMoney($payload), $status);
-    }
-
-    /**
-     * Every money object in an outbound payload, with the legacy keys added
-     * beside it. The one place outbound legacy money keys are produced.
-     *
-     * @param  array<array-key, mixed>  $payload
-     * @return array<array-key, mixed>
-     */
-    protected function withLegacyMoney(array $payload): array
-    {
-        if ($this->isMoneyShape($payload)) {
-            $amount = (string) $payload['amount'];
-            assert(is_numeric($amount));
-
-            return $payload + [
-                // Exact: `amount` always has two decimal places here, so
-                // ×100 never truncates anything a person typed or the ERP
-                // computed.
-                'minor_units' => (int) bcmul($amount, '100', 0),
-                'decimal' => $amount,
-            ];
-        }
-
-        return array_map(
-            fn (mixed $value) => is_array($value) ? $this->withLegacyMoney($value) : $value,
-            $payload,
-        );
-    }
-
-    /**
-     * @param  array<array-key, mixed>  $value
-     */
-    protected function isMoneyShape(array $value): bool
-    {
-        return array_key_exists('amount', $value)
-            && array_key_exists('currency', $value)
-            && array_key_exists('formatted', $value);
     }
 
     /**
@@ -466,6 +444,7 @@ class OrderController extends StorefrontController
             'shipping_address.district' => ['nullable', 'string', 'max:120'],
             'shipping_address.postcode' => ['nullable', 'string', 'max:20'],
             'shipping_address.country' => ['required', 'string', 'size:2'],
+            'shipping_address.area_id' => ['nullable', 'string', 'max:80'],
             'billing_address' => ['sometimes', 'nullable', 'array'],
             'billing_address.line1' => ['required_with:billing_address', 'string', 'max:255'],
             'billing_address.city' => ['required_with:billing_address', 'string', 'max:120'],

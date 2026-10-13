@@ -12,7 +12,6 @@ use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Inventory\ReservationWindows;
 use App\Domain\Inventory\StockEnforcement;
-use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Order\Data\WebsiteOrderLine;
 use App\Domain\Order\Data\WebsiteOrderPaymentQuote;
 use App\Domain\Order\Data\WebsiteOrderQuote;
@@ -24,15 +23,14 @@ use App\Domain\Order\Exceptions\WebsiteOrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Queries\PriceWebsiteOrder;
+use App\Domain\Order\WebsiteCheckoutRules;
 use App\Domain\Supplier\Actions\AccrueSupplierPayable;
 use App\Domain\Supplier\Actions\AllocateSupplierOrderLine;
 use App\Domain\Supplier\Data\SupplierAllocation;
 use App\Domain\Supplier\Exceptions\SupplierAllocationRefused;
 use App\Domain\Website\Actions\RecordWebsiteCustomer;
-use App\Domain\Website\CodTerms;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
-use App\Domain\Website\WebsiteAddresses;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Concurrency\DistributedLock;
@@ -82,16 +80,14 @@ class PlaceWebsiteOrder
 
     public function __construct(
         protected PriceWebsiteOrder $pricing,
-        protected CodTerms $cod,
+        protected WebsiteCheckoutRules $rules,
         protected SendCodConfirmationCode $confirmations,
         protected RecordWebsiteCustomer $customers,
         protected RecordPaymentFromQuote $payments,
         protected StockAvailability $stock,
         protected PaymentGatewayManager $gateways,
-        protected WebsiteAddresses $addresses,
         protected AllocateSupplierOrderLine $supplierAllocation,
         protected AccrueSupplierPayable $supplierPayables,
-        protected KycRestrictions $kycRestrictions,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
         protected StockEnforcement $enforcement,
@@ -105,30 +101,20 @@ class PlaceWebsiteOrder
      */
     public function handle(Website $website, WebsiteOrderSubmission $submission): array
     {
-        if (! $website->status->isLive()) {
-            throw WebsiteOrderRefused::notAcceptingOrders();
-        }
-
         /*
-         * An outstanding KYC re-verification can stop new orders (§7.4), and
-         * a dropshipping order is a new order however it arrives.
-         *
-         * Deliberately `notAcceptingOrders()` — the same answer a paused shop
-         * gives. This path is the Storefront API, reached by a partner's own
-         * website and ultimately by their customer, and neither is entitled
-         * to learn that the merchant is under verification. A distinct
-         * KYC-shaped error here would leak an account's compliance state to
-         * anyone who could place an order.
+         * The checkout rules every storefront path shares — the advisory quote
+         * asks the same ones (P2): the website takes orders (an outstanding KYC
+         * re-verification answers exactly as a paused shop does, §7.4), what
+         * it may say about payment (D12), and no coupons.
          */
-        if ($this->kycRestrictions->blocksNewOrders($website->businessAccount)) {
-            throw WebsiteOrderRefused::notAcceptingOrders();
-        }
-
-        $this->checkPayment($website, $submission);
-
-        if ($submission->couponCode !== null && $submission->couponCode !== '') {
-            throw WebsiteOrderRefused::couponNotApplicable($submission->couponCode);
-        }
+        $this->rules->assertAcceptingOrders($website);
+        $this->rules->assertPaymentRequest(
+            $website,
+            $submission->paymentMethod,
+            $submission->claimedPaymentStatus,
+            $submission->returnUrl,
+        );
+        $this->rules->assertNoCoupon($submission->couponCode);
 
         try {
             return $this->lock->run(
@@ -225,11 +211,7 @@ class PlaceWebsiteOrder
 
         // What this shop may take on delivery, against what this order comes to.
         if ($submission->isCashOnDelivery()) {
-            $maximum = $this->cod->maximumFor($website, $quote->currency);
-
-            if ($maximum !== null && $quote->total->greaterThan($maximum)) {
-                throw WebsiteOrderRefused::codLimitExceeded($maximum);
-            }
+            $this->rules->assertWithinCodLimit($website, $quote->total);
         }
 
         $payment = $this->payments->handle(
@@ -266,7 +248,7 @@ class PlaceWebsiteOrder
         $payment->forceFill($submission->isCashOnDelivery()
             ? ['expires_at' => $this->paymentDeadline($reservations, $submission->reservationKind())]
             : [
-                'gateway' => $gateway = $this->gateway($submission, $quote),
+                'gateway' => $gateway = $this->rules->gatewayFor($submission->gateway, $quote->currency),
                 'gateway_mode' => $this->gateways->driver($gateway)->isSandbox()
                     ? GatewayCredentials::SANDBOX
                     : GatewayCredentials::LIVE,
@@ -465,57 +447,6 @@ class PlaceWebsiteOrder
         $first ??= $this->windows->expiryFor($kind);
 
         return $first->subSeconds(self::SETTLEMENT_MARGIN_SECONDS);
-    }
-
-    /**
-     * What the storefront may say about payment, and what it may not.
-     *
-     * Feriwala owns the gateway relationship (D12): a storefront cannot hold a
-     * Feriwala payment for an order that does not exist yet, so a claim that one
-     * is already paid cannot be verified and is refused. Cash on delivery waits
-     * for the confirmation and collection flow that owns it.
-     *
-     * @throws WebsiteOrderRefused
-     */
-    protected function checkPayment(Website $website, WebsiteOrderSubmission $submission): void
-    {
-        if (! in_array($submission->paymentMethod, ['online', 'cod'], true)) {
-            throw WebsiteOrderRefused::paymentMethodUnavailable($submission->paymentMethod);
-        }
-
-        // Whether this shop takes cash on delivery is the ERP's answer (§28).
-        if ($submission->isCashOnDelivery() && ! $this->cod->enabledFor($website)) {
-            throw WebsiteOrderRefused::codNotAvailable();
-        }
-
-        if ($submission->claimedPaymentStatus !== null && $submission->claimedPaymentStatus !== 'pending') {
-            throw WebsiteOrderRefused::paymentUnverified();
-        }
-
-        if ($submission->returnUrl !== null && ! $this->addresses->allows($website, $submission->returnUrl)) {
-            throw WebsiteOrderRefused::returnUrlNotAllowed();
-        }
-    }
-
-    /**
-     * The gateway the order will be paid through: the one asked for, if it is
-     * switched on, and otherwise the first that is.
-     *
-     * @throws WebsiteOrderRefused
-     */
-    protected function gateway(WebsiteOrderSubmission $submission, WebsiteOrderQuote $quote): string
-    {
-        $available = $this->gateways->availableFor($quote->currency);
-
-        if ($submission->gateway !== null) {
-            if (! in_array($submission->gateway, $available, true)) {
-                throw WebsiteOrderRefused::paymentMethodUnavailable($submission->gateway);
-            }
-
-            return $submission->gateway;
-        }
-
-        return $available[0] ?? throw WebsiteOrderRefused::paymentMethodUnavailable('online');
     }
 
     /**

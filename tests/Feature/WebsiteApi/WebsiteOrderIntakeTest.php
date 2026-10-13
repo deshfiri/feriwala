@@ -14,6 +14,8 @@ use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Inventory\StockReservations;
+use App\Domain\Location\Enums\BdLocationType;
+use App\Domain\Location\Models\BdLocation;
 use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
@@ -24,6 +26,7 @@ use App\Domain\Settings\SettingsRepository;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Website\Actions\ManageWebhookEndpoint;
 use App\Domain\Website\Enums\CredentialScope;
+use App\Domain\Website\Enums\DomainRoutingStatus;
 use App\Domain\Website\Enums\WebhookEvent;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
@@ -32,6 +35,7 @@ use App\Domain\Website\Models\StorefrontRequest;
 use App\Domain\Website\Models\WebhookDelivery;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
+use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Notifications\Orders\WebsiteOrderPaid;
 use App\Support\Money\Currency;
@@ -381,8 +385,44 @@ describe('taking the order', function () {
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'return_url_not_allowed');
 
+        // Recorded on the website but never verified: not the shop's (H8).
+        websiteOrderSubmit(['payment' => ['method' => 'online', 'return_url' => 'https://shop.test/thanks']])
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'return_url_not_allowed');
+
+        WebsiteDomain::factory()->serving()->create(['website_id' => $this->website->id, 'domain' => 'shop.test']);
+
         websiteOrderSubmit(['payment' => ['method' => 'online', 'return_url' => 'https://shop.test/thanks']])
             ->assertCreated();
+    });
+
+    it('checks the return address again when the customer comes back, and sends them home when it no longer holds', function () {
+        $domain = WebsiteDomain::factory()->serving()->create(['website_id' => $this->website->id, 'domain' => 'shop.test']);
+
+        websiteOrderSubmit(['payment' => ['method' => 'online', 'return_url' => 'https://shop.test/thanks']])->assertCreated();
+
+        $order = Order::query()->sole();
+        $home = 'https://'.$this->website->subdomain.'.'.config('website.storefront_domain').'/';
+
+        $this->post(route('website-orders.payment.return', $order->public_id))
+            ->assertStatus(303)
+            ->assertRedirect('https://shop.test/thanks?order='.$order->public_id.'&payment=return');
+
+        // The domain lapses after the order was taken.
+        $domain->forceFill(['routing_status' => DomainRoutingStatus::Suspended])->save();
+
+        $this->post(route('website-orders.payment.return', $order->public_id))
+            ->assertStatus(303)
+            ->assertRedirect($home.'?order='.$order->public_id.'&payment=return');
+
+        // The name now serves another website: the customer is never sent there.
+        $domain->delete();
+        $other = Website::factory()->forAccount(websiteTestAccount())->active()->create();
+        WebsiteDomain::factory()->serving()->create(['website_id' => $other->id, 'domain' => 'shop.test']);
+
+        $this->post(route('website-orders.payment.cancelled', $order->public_id))
+            ->assertStatus(303)
+            ->assertRedirect($home.'?order='.$order->public_id.'&payment=cancel');
     });
 
     it('refuses an order to a website that is not live', function () {
@@ -703,5 +743,245 @@ describe('the website\'s customers (contract §6.2)', function () {
         ]), overrides: ['headers' => ['Idempotency-Key' => (string) Str::uuid(), 'Content-Type' => 'application/json']])->assertOk();
 
         expect($order->refresh()->customer['name'])->toBe('Ayesha Rahman');
+    });
+});
+
+/**
+ * Ask for a checkout quote over the signed API.
+ *
+ * @param  array<string, mixed>  $body
+ * @param  array{0: mixed, 1: string}|null  $credential
+ */
+function websiteOrderQuote(array $body = [], ?array $credential = null): TestResponse
+{
+    [$record, $secret] = $credential ?? [test()->credential, test()->secret];
+
+    return storefrontCall($record, $secret, 'checkout/quote', method: 'POST', body: (string) json_encode([
+        'items' => [['sku' => test()->selection->product->sku, 'quantity' => 2]],
+        'payment_method' => 'online',
+        ...$body,
+    ]), overrides: ['headers' => ['Content-Type' => 'application/json']]);
+}
+
+/**
+ * The parts of an order body a quote fixes: each line's price and the totals.
+ *
+ * @return array<string, mixed>
+ */
+function websiteOrderFromQuote(TestResponse $quote): array
+{
+    $money = fn (array $value) => ['amount' => $value['amount'], 'currency' => $value['currency']];
+    $data = $quote->json('data');
+
+    return [
+        'items' => array_map(fn (array $line) => [
+            'sku' => $line['sku'],
+            'quantity' => $line['quantity'],
+            'unit_price' => $money($line['unit_price']),
+        ], $data['items']),
+        'totals' => [
+            'subtotal' => $money($data['subtotal']),
+            'discount' => $money($data['discount']),
+            'shipping' => $money($data['shipping']),
+            'tax' => $money($data['tax']),
+            'grand_total' => $money($data['grand_total']),
+        ],
+    ];
+}
+
+describe('the checkout quote (P2 H1–H3)', function () {
+    it('quotes exactly what order placement then accepts', function () {
+        $quote = websiteOrderQuote()->assertOk();
+
+        $quote->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('data.currency', 'BDT')
+            ->assertJsonPath('data.items.0.unit_price.amount', '2600.00')
+            ->assertJsonPath('data.items.0.line_total.amount', '5200.00')
+            ->assertJsonPath('data.subtotal.amount', '5200.00')
+            ->assertJsonPath('data.shipping.amount', '60.00')
+            ->assertJsonPath('data.tax.amount', '0.00')
+            ->assertJsonPath('data.grand_total.amount', '5260.00')
+            ->assertJsonPath('data.grand_total.minor_units', 526000)
+            ->assertJsonPath('data.delivery.basis', 'flat')
+            ->assertJsonPath('data.items.0.availability.reservable', true)
+            ->assertJsonPath('data.payment.methods', ['online']);
+
+        $body = websiteOrderBody(websiteOrderFromQuote($quote));
+
+        websiteOrderSubmit(body: $body)->assertCreated();
+    });
+
+    it('writes nothing and holds no stock', function () {
+        $before = [
+            'orders' => Order::query()->count(),
+            'payments' => Payment::query()->count(),
+            'reservations' => StockReservation::query()->count(),
+            'ledger' => LedgerEntry::query()->count(),
+            'customers' => WebsiteCustomer::query()->count(),
+            'available' => $this->stock->refresh()->available,
+        ];
+
+        websiteOrderQuote()->assertOk();
+        websiteOrderQuote()->assertOk();
+
+        expect([
+            'orders' => Order::query()->count(),
+            'payments' => Payment::query()->count(),
+            'reservations' => StockReservation::query()->count(),
+            'ledger' => LedgerEntry::query()->count(),
+            'customers' => WebsiteCustomer::query()->count(),
+            'available' => $this->stock->refresh()->available,
+        ])->toBe($before);
+    });
+
+    it('is advisory: a price changed after the quote is refused at placement with the right figures', function () {
+        $quote = websiteOrderQuote()->assertOk();
+
+        $this->selection->forceFill(['price' => Money::fromDecimal('2700.00', Currency::BDT)])->save();
+
+        websiteOrderSubmit(body: websiteOrderBody(websiteOrderFromQuote($quote)))
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'price_mismatch')
+            ->assertJsonPath('error.details.authoritative.grand_total.amount', '5460.00');
+
+        expect(Order::query()->count())->toBe(0);
+    });
+
+    it('is advisory across a flash deal: a window that closes after the quote is refused at placement', function () {
+        $this->selection->forceFill([
+            'promotional_price' => Money::fromDecimal('2200.00', Currency::BDT),
+            'promotion_ends_at' => now()->addMinutes(5),
+        ])->save();
+
+        $quote = websiteOrderQuote()->assertOk()
+            ->assertJsonPath('data.items.0.unit_price.amount', '2200.00')
+            ->assertJsonPath('data.grand_total.amount', '4460.00');
+
+        $this->travel(6)->minutes();
+
+        websiteOrderSubmit(body: websiteOrderBody(websiteOrderFromQuote($quote)))
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'price_mismatch')
+            ->assertJsonPath('error.details.authoritative.grand_total.amount', '5260.00');
+
+        expect(Order::query()->count())->toBe(0);
+    });
+
+    it('says when the stock is gone, and placement refuses the same cart', function () {
+        $quote = websiteOrderQuote()->assertOk();
+
+        app(StockLedger::class)->move($this->stock->refresh(), StockBucket::Available, null, 19, StockMovementType::Adjustment);
+
+        websiteOrderQuote()->assertOk()->assertJsonPath('data.items.0.availability.reservable', false);
+
+        websiteOrderSubmit(body: websiteOrderBody(websiteOrderFromQuote($quote)))
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'insufficient_stock');
+    });
+
+    it('never calls stock spread across warehouses reservable, as placement would not hold it', function () {
+        app(StockLedger::class)->move($this->stock->refresh(), StockBucket::Available, null, 19, StockMovementType::Adjustment);
+        $second = Warehouse::create(['code' => 'CTG', 'name' => 'Chattogram']);
+        $other = StockItem::create(['warehouse_id' => $second->id, 'product_id' => $this->selection->product_id]);
+        app(StockLedger::class)->move($other, null, StockBucket::Available, 1, StockMovementType::Adjustment);
+
+        $quote = websiteOrderQuote()->assertOk()
+            ->assertJsonPath('data.items.0.availability.quantity', 2)
+            ->assertJsonPath('data.items.0.availability.reservable', false);
+
+        websiteOrderSubmit(body: websiteOrderBody(websiteOrderFromQuote($quote)))
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'insufficient_stock');
+    });
+
+    it('answers cash on delivery the way placement does', function () {
+        websiteOrderQuote(['payment_method' => 'cod'])
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'payment_method_unavailable');
+
+        $this->website->forceFill(['payment_config' => ['cod' => ['enabled' => true, 'maximum_amount' => '5000.00']]])->save();
+
+        $quote = websiteOrderQuote(['payment_method' => 'cod'])->assertOk()
+            ->assertJsonPath('data.payment.cod.enabled', true)
+            ->assertJsonPath('data.payment.cod.eligible', false)
+            ->assertJsonPath('data.payment.cod.maximum.amount', '5000.00');
+
+        websiteOrderSubmit(body: websiteOrderBody([...websiteOrderFromQuote($quote), 'payment' => ['method' => 'cod']]))
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'cod_limit_exceeded');
+    });
+
+    it('refuses what placement refuses', function (Closure $arrange, array $body, int $status, string $code) {
+        $arrange($this);
+
+        websiteOrderQuote($body)->assertStatus($status)->assertJsonPath('error.code', $code);
+    })->with([
+        'a coupon' => [fn () => null, ['coupon_code' => 'EID10'], 422, 'coupon_not_applicable'],
+        'a website not taking orders' => [fn ($test) => $test->website->forceFill(['status' => WebsiteStatus::Maintenance])->save(), [], 409, 'website_not_accepting_orders'],
+        'an unknown product' => [fn () => null, ['items' => [['sku' => 'NO-SUCH-SKU', 'quantity' => 1]]], 422, 'product_unavailable'],
+        'too many of one product' => [fn ($test) => $test->selection->product->forceFill(['max_order_quantity' => 1])->save(), [], 422, 'quantity_not_allowed'],
+        'the same product twice' => [fn () => null, ['items' => [['sku' => 'A1', 'quantity' => 1], ['sku' => 'a1', 'quantity' => 1]]], 422, 'validation_failed'],
+        'no payment method' => [fn () => null, ['payment_method' => ''], 422, 'validation_failed'],
+    ]);
+
+    it('never prices another website\'s product', function () {
+        $other = Website::factory()->forAccount(websiteTestAccount(extra: [PackageFeature::DropshippingEnabled->value => '1']))->active()->create();
+        $theirs = websiteOrderSelection($other, 100000);
+
+        websiteOrderQuote(['items' => [['sku' => $theirs->product->sku, 'quantity' => 1]]])
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'product_unavailable');
+    });
+
+    it('needs the checkout scope', function () {
+        $credential = storefrontCredential($this->website, [CredentialScope::CatalogRead]);
+
+        websiteOrderQuote(credential: $credential)->assertForbidden();
+    });
+});
+
+describe('delivery areas (P2 H4)', function () {
+    beforeEach(function () {
+        $this->division = BdLocation::create(['type' => BdLocationType::Division, 'source_id' => '3', 'name_en' => 'Dhaka', 'name_bn' => 'ঢাকা', 'is_active' => true]);
+        $this->district = BdLocation::create(['type' => BdLocationType::District, 'source_id' => '26', 'source_parent_id' => '3', 'parent_id' => $this->division->id, 'name_en' => 'Dhaka', 'name_bn' => 'ঢাকা', 'is_active' => true]);
+        BdLocation::create(['type' => BdLocationType::District, 'source_id' => '27', 'source_parent_id' => '3', 'parent_id' => $this->division->id, 'name_en' => 'Gazipur', 'name_bn' => 'গাজীপুর', 'is_active' => false]);
+    });
+
+    it('walks the directory by stable identifiers, never database ids', function () {
+        $credential = storefrontCredential($this->website, [CredentialScope::CatalogRead]);
+
+        $divisions = storefrontCall($credential[0], $credential[1], 'delivery/areas')->assertOk();
+
+        $divisions->assertJsonPath('data.0.id', 'division:-:3')
+            ->assertJsonPath('data.0.type', 'division')
+            ->assertJsonPath('data.0.name.bn', 'ঢাকা')
+            ->assertJsonPath('data.0.has_children', true);
+
+        expect($divisions->getContent())->not->toContain('"id":'.$this->division->id.',');
+
+        storefrontCall($credential[0], $credential[1], 'delivery/areas', ['parent' => 'division:-:3'])
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', 'district:3:26')
+            ->assertJsonPath('data.0.has_children', false);
+
+        storefrontCall($credential[0], $credential[1], 'delivery/areas', ['parent' => 'district:9:999'])->assertNotFound();
+        storefrontCall($credential[0], $credential[1], 'delivery/areas', ['parent' => 'nonsense'])->assertNotFound();
+    });
+
+    it('accepts a known area on a quote and an order, and refuses an unknown one', function () {
+        websiteOrderQuote(['delivery' => ['area_id' => 'district:3:26']])->assertOk()
+            ->assertJsonPath('data.delivery.area_id', 'district:3:26')
+            ->assertJsonPath('data.shipping.amount', '60.00');
+
+        websiteOrderQuote(['delivery' => ['area_id' => 'district:3:27']])->assertStatus(422)->assertJsonPath('error.code', 'validation_failed');
+
+        websiteOrderSubmit(['shipping_address' => ['area_id' => 'district:3:26']])->assertCreated();
+
+        expect(Order::query()->sole()->shipping_address['area_id'] ?? null)->toBe('district:3:26');
+
+        websiteOrderSubmit(['storefront_order_reference' => 'SF-2', 'shipping_address' => ['area_id' => 'nowhere']])
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'validation_failed');
     });
 });

@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Enums\WebsiteSyncStatus;
@@ -173,5 +175,79 @@ describe('inventory', function () {
         storefrontCall($this->credential, $this->secret, 'inventory/'.$notSold->sku)
             ->assertNotFound()
             ->assertJsonPath('error.code', 'not_found');
+    });
+});
+
+/**
+ * The list, the detail and the stock endpoint all agree that `$selection` is
+ * not on sale.
+ */
+function storefrontCatalogueAbsent(mixed $test, WebsiteProduct $selection): void
+{
+    $product = Product::withTrashed()->findOrFail($selection->product_id);
+
+    storefrontCall($test->credential, $test->secret, 'products')
+        ->assertOk()
+        ->assertJsonMissing(['id' => $product->public_id]);
+
+    storefrontCall($test->credential, $test->secret, 'products/'.$product->public_id)
+        ->assertNotFound()
+        ->assertJsonPath('error.code', 'not_found');
+
+    storefrontCall($test->credential, $test->secret, 'inventory/'.$product->sku)->assertNotFound();
+}
+
+describe('what is on sale (P2 H9)', function () {
+    it('never lists a product that has been trashed', function () {
+        $trashed = storefrontSelection($this->website);
+        $kept = storefrontSelection($this->website);
+        $trashed->product->delete();
+
+        storefrontCatalogueAbsent($this, $trashed);
+
+        storefrontCall($this->credential, $this->secret, 'products')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $kept->product->public_id);
+    });
+
+    it('never lists a product this website\'s owner may not sell by dropshipping', function (array $product) {
+        $ineligible = storefrontSelection($this->website, productAttributes: $product);
+
+        storefrontCatalogueAbsent($this, $ineligible);
+    })->with([
+        'dropshipping switched off' => [['dropshipping_status' => ProductStatus::DropshippingDisabled]],
+        'not active' => [['status' => ProductStatus::Inactive]],
+    ]);
+
+    it('never lists a product whose category has been switched off', function () {
+        $selection = storefrontSelection($this->website);
+        $selection->product->category->forceFill(['is_active' => false])->save();
+
+        storefrontCatalogueAbsent($this, $selection);
+    });
+
+    it('never lists a selection that is not published', function () {
+        $selected = storefrontSelection($this->website, ['status' => WebsiteProductStatus::Unpublished, 'published_at' => null]);
+
+        storefrontCatalogueAbsent($this, $selected);
+    });
+
+    it('never lists another website\'s products, even ones it publishes', function () {
+        $other = Website::factory()->forAccount(websiteTestAccount(extra: [
+            PackageFeature::DropshippingEnabled->value => '1',
+        ]))->active()->create();
+        $theirs = storefrontSelection($other);
+
+        storefrontCatalogueAbsent($this, $theirs);
+    });
+
+    it('lists nothing for an owner whose package does not include dropshipping', function () {
+        $account = websiteTestAccount(extra: [PackageFeature::DropshippingEnabled->value => '0']);
+        $website = Website::factory()->forAccount($account)->active()->create();
+        [$credential, $secret] = storefrontCredential($website);
+        storefrontSelection($website);
+
+        storefrontCall($credential, $secret, 'products')->assertOk()->assertJsonCount(0, 'data');
     });
 });

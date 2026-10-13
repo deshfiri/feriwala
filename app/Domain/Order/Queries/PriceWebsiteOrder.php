@@ -32,8 +32,9 @@ use Carbon\CarbonImmutable;
  *     no variations — exactly the SKUs the inventory endpoint answers for;
  *   - the product must still be eligible for the website's owner on the
  *     dropshipping channel, and the quantity inside the product's bounds;
- *   - the price is the website's own selling price — the promotion where there
- *     is one — and is taxed per line at the rule in force for the product.
+ *   - the price is the website's own selling price — the promotion while it
+ *     applies, its window included ({@see WebsiteProduct::sellingPrice()}) —
+ *     and is taxed per line at the rule in force for the product.
  *
  * Delivery is the website delivery fee for the owner's package, then the global
  * rule, taxed as a fee. There is no website coupon yet, so the discount is zero.
@@ -118,7 +119,9 @@ class PriceWebsiteOrder
             ->published()
             ->first();
 
-        $price = $selection?->sellingPrice();
+        // At the quote's own instant, so a flash deal's edge cannot fall
+        // between two lines of one order (C4).
+        $price = $selection?->sellingPrice($at);
 
         if ($selection === null || $price === null || $price->currency !== $currency || ! $price->isPositive()
             || ! $this->eligibility->isEligible($product, $website->businessAccount, SalesChannel::Dropshipping)) {

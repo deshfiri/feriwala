@@ -6,6 +6,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Website\Jobs\AnnouncePaymentMethodsChanged;
 use App\Integrations\Payment\Contracts\PaymentGateway;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
@@ -56,6 +57,7 @@ class ConfigureGateway
     public function handle(User $actor, string $gateway, string $mode, array $credentials): void
     {
         $driver = $this->driverFor($gateway);
+        $before = $this->onlineCurrencies();
 
         if (! in_array($mode, self::MODES, true)) {
             throw new InvalidArgumentException('A gateway is either in sandbox or live mode.');
@@ -124,6 +126,8 @@ class ConfigureGateway
             module: 'payment',
             isSensitive: true,
         ));
+
+        $this->announceIfChanged($before);
     }
 
     /**
@@ -135,6 +139,7 @@ class ConfigureGateway
     public function setEnabled(User $actor, string $gateway, bool $enabled): void
     {
         $driver = $this->driverFor($gateway);
+        $before = $this->onlineCurrencies();
 
         if ($enabled) {
             $missing = $driver->missingConfiguration();
@@ -178,6 +183,40 @@ class ConfigureGateway
             module: 'payment',
             isSensitive: true,
         ));
+
+        $this->announceIfChanged($before);
+    }
+
+    /**
+     * The currencies a customer can pay online in right now — what decides
+     * whether a storefront offers online payment (`GET /site`).
+     *
+     * @return list<string>
+     */
+    protected function onlineCurrencies(): array
+    {
+        return array_values(array_map(
+            fn (Currency $currency) => $currency->value,
+            array_filter(Currency::cases(), fn (Currency $currency) => $this->gateways->availableFor($currency) !== []),
+        ));
+    }
+
+    /**
+     * Tell storefronts when this change turned online payment on or off in a
+     * currency (P2 D2). A change that leaves every currency as it was — a
+     * credential rotated, a second gateway beside a working one — tells nobody.
+     * The fan-out is queued: the admin's request never waits on it.
+     *
+     * @param  list<string>  $before
+     */
+    protected function announceIfChanged(array $before): void
+    {
+        $after = $this->onlineCurrencies();
+        $changed = array_values(array_unique([...array_diff($before, $after), ...array_diff($after, $before)]));
+
+        if ($changed !== []) {
+            AnnouncePaymentMethodsChanged::dispatch($changed)->afterCommit();
+        }
     }
 
     protected function writeEnabled(User $actor, string $gateway, bool $enabled): void

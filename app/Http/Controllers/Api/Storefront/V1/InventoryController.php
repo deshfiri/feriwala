@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Storefront\V1;
 use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Website\Api\StorefrontError;
 use App\Domain\Website\Models\Website;
-use App\Domain\Website\Models\WebsiteProduct;
+use App\Domain\Website\Queries\StorefrontSelections;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +26,7 @@ class InventoryController extends StorefrontController
 {
     public function __construct(
         protected StockAvailability $stock,
+        protected StorefrontSelections $selections,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -73,10 +74,8 @@ class InventoryController extends StorefrontController
      */
     protected function publishedSkus(Website $website): array
     {
-        $productIds = WebsiteProduct::query()
-            ->where('website_id', $website->id)
-            ->published()
-            ->pluck('product_id');
+        // On sale on this website: published and eligible (P2 H9).
+        $productIds = $this->selections->query($website)->pluck('website_products.product_id');
 
         if ($productIds->isEmpty()) {
             return [];

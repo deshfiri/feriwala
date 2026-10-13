@@ -7,10 +7,16 @@ use App\Domain\Website\Api\StorefrontProductPayload;
 use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Domain\Website\Queries\StorefrontProductListing;
+use App\Domain\Website\Queries\StorefrontSelections;
+use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 /**
@@ -24,39 +30,56 @@ use Throwable;
  * `updated_since` is what makes scheduled reconciliation cheap: a storefront
  * asks only for what changed, whether the partner changed the price or
  * Feriwala changed the product.
+ *
+ * @phpstan-import-type Filters from StorefrontProductListing
  */
 class ProductController extends StorefrontController
 {
+    /** What a payload reads, loaded with the page. */
+    protected const RELATIONS = [
+        'product.brand',
+        'product.category',
+        'product.media',
+        'product.variants.values.attribute',
+        'websiteCategory',
+    ];
+
     public function __construct(
         protected StorefrontProductPayload $payload,
+        protected StorefrontSelections $selections,
+        protected StorefrontProductListing $listing,
     ) {}
 
+    /**
+     * The catalogue, searched, filtered and sorted (contract §5.1, P2 C1).
+     *
+     * With no `sort` the order is the selection id, exactly as before, so a
+     * cursor issued before these parameters existed still pages correctly.
+     */
     public function index(Request $request): JsonResponse
     {
         $website = $this->website($request);
         $started = CarbonImmutable::now();
 
-        $since = null;
+        $filters = $this->filters($request);
 
-        if ($request->filled('updated_since')) {
-            try {
-                $since = CarbonImmutable::parse($request->string('updated_since')->toString());
-            } catch (Throwable) {
-                return StorefrontError::respond($request, 422, 'validation_failed', 'updated_since is not a date.', [
-                    'field' => 'updated_since',
-                ]);
-            }
+        if ($filters instanceof JsonResponse) {
+            return $filters;
         }
 
-        $page = $this->published($website)
-            ->when($since !== null, fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
-                ->where('website_products.updated_at', '>=', $since)
-                ->orWhereHas('product', fn (Builder $product) => $product->where('updated_at', '>=', $since))))
-            ->when($request->filled('category'), fn (Builder $query) => $query
-                ->whereHas('websiteCategory', fn (Builder $category) => $category
-                    ->where('slug', $request->string('category')->toString())
-                    ->orWhere('public_id', $request->string('category')->toString())))
-            ->orderBy('website_products.id')
+        $sort = $request->query('sort');
+
+        if ($sort !== null && (! is_string($sort) || ! in_array($sort, StorefrontProductListing::SORTS, true))) {
+            return StorefrontError::respond($request, 422, 'validation_failed', 'sort is not one this API offers.', [
+                'field' => 'sort',
+                'allowed' => StorefrontProductListing::SORTS,
+            ]);
+        }
+
+        $query = $this->listing->filtered($website, $filters, $started);
+
+        $page = ($sort === null ? $query->orderBy('website_products.id') : $this->listing->sorted($query, $sort, $started))
+            ->with(self::RELATIONS)
             ->cursorPaginate($this->limit($request));
 
         $items = collect($page->items());
@@ -69,6 +92,34 @@ class ProductController extends StorefrontController
         $this->noteRead($website, $items->pluck('id')->all(), $started);
 
         return $response;
+    }
+
+    /**
+     * What the catalogue can be filtered by: brands, variation attributes and
+     * values, and the price range, under the same filters as the list (C2).
+     */
+    public function facets(Request $request): JsonResponse
+    {
+        $website = $this->website($request);
+        $filters = $this->filters($request);
+
+        if ($filters instanceof JsonResponse) {
+            return $filters;
+        }
+
+        $at = CarbonImmutable::now();
+        $facets = $this->listing->facets($this->listing->filtered($website, $filters, $at), $at);
+
+        return new JsonResponse($this->withLegacyMoney([
+            'data' => [
+                'brands' => $facets['brands'],
+                'attributes' => $facets['attributes'],
+                'price_range' => $facets['price_range'] === null ? null : [
+                    'minimum' => $facets['price_range']['minimum']->jsonSerialize(),
+                    'maximum' => $facets['price_range']['maximum']->jsonSerialize(),
+                ],
+            ],
+        ]));
     }
 
     public function show(Request $request, string $product): JsonResponse
@@ -126,21 +177,107 @@ class ProductController extends StorefrontController
     }
 
     /**
-     * This website's published selections, and only its.
+     * This website's selections that are on sale, and only its: published, and
+     * eligible for its owner to sell (P2 H9).
      *
      * @return Builder<WebsiteProduct>
      */
     protected function published(Website $website): Builder
     {
-        return WebsiteProduct::query()
-            ->where('website_id', $website->id)
-            ->published()
-            ->with([
-                'product.brand',
-                'product.category',
-                'product.media',
-                'product.variants.values.attribute',
-                'websiteCategory',
+        return $this->selections->query($website)->with(self::RELATIONS);
+    }
+
+    /**
+     * The list's filters, validated, or the refusal (C1).
+     *
+     * `status` is the contract's own parameter: only published products are
+     * ever on this surface, so `published` is the one value it accepts.
+     *
+     * @return Filters|JsonResponse
+     */
+    protected function filters(Request $request): array|JsonResponse
+    {
+        $flag = ['sometimes', 'nullable', 'string', 'in:true,false,1,0'];
+
+        $validator = Validator::make($request->query(), [
+            'q' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'updated_since' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'price_min' => ['sometimes', 'nullable', 'string', new DecimalAmountRule],
+            'price_max' => ['sometimes', 'nullable', 'string', new DecimalAmountRule],
+            'category' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'brand' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'attributes' => ['sometimes', 'array', 'max:'.StorefrontProductListing::MAX_ATTRIBUTE_FILTERS],
+            'attributes.*' => ['string', 'max:100'],
+            'in_stock' => $flag,
+            'featured' => $flag,
+            'flash_deal' => $flag,
+            'status' => ['sometimes', 'nullable', 'string', 'in:published'],
+        ]);
+
+        if ($validator->fails()) {
+            return StorefrontError::respond($request, 422, 'validation_failed', 'The product filters are not valid.', [
+                'fields' => $validator->errors()->toArray(),
             ]);
+        }
+
+        /** @var array<string, mixed> $input */
+        $input = $validator->validated();
+        $filters = [];
+
+        $text = fn (string $key) => isset($input[$key]) && is_string($input[$key]) && trim($input[$key]) !== ''
+            ? trim($input[$key])
+            : null;
+
+        if (($since = $text('updated_since')) !== null) {
+            try {
+                $filters['updated_since'] = CarbonImmutable::parse($since);
+            } catch (Throwable) {
+                return StorefrontError::respond($request, 422, 'validation_failed', 'updated_since is not a date.', [
+                    'field' => 'updated_since',
+                ]);
+            }
+        }
+
+        foreach (['q', 'category', 'brand'] as $key) {
+            if (($value = $text($key)) !== null) {
+                $filters[$key] = $value;
+            }
+        }
+
+        foreach (['price_min', 'price_max'] as $key) {
+            if (($value = $text($key)) !== null) {
+                $filters[$key] = DecimalAmount::parse($value, Currency::base());
+            }
+        }
+
+        if (isset($filters['price_min'], $filters['price_max']) && $filters['price_min']->greaterThan($filters['price_max'])) {
+            return StorefrontError::respond($request, 422, 'validation_failed', 'price_min is above price_max.', [
+                'field' => 'price_min',
+            ]);
+        }
+
+        $attributes = [];
+
+        foreach ($input['attributes'] ?? [] as $attribute => $value) {
+            if (! is_string($attribute) || strlen($attribute) > 64 || ! is_string($value) || trim($value) === '') {
+                return StorefrontError::respond($request, 422, 'validation_failed', 'attributes takes an attribute slug and a value.', [
+                    'field' => 'attributes',
+                ]);
+            }
+
+            $attributes[$attribute] = trim($value);
+        }
+
+        if ($attributes !== []) {
+            $filters['attributes'] = $attributes;
+        }
+
+        foreach (['in_stock', 'featured', 'flash_deal'] as $key) {
+            if (($value = $text($key)) !== null) {
+                $filters[$key] = in_array($value, ['true', '1'], true);
+            }
+        }
+
+        return $filters;
     }
 }

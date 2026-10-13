@@ -60,6 +60,29 @@ const syncTones: Record<string, 'success' | 'warning' | 'danger'> = {
 };
 
 /**
+ * An instant as a `datetime-local` value, in the browser's own time.
+ */
+function toLocalInput(instant: string | null): string {
+    if (!instant) {
+        return '';
+    }
+
+    const date = new Date(instant);
+    const pad = (value: number) => String(value).padStart(2, '0');
+
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * A `datetime-local` value as an instant with its offset, or null when empty.
+ */
+function toInstant(value: unknown): string | null {
+    return typeof value === 'string' && value !== ''
+        ? new Date(value).toISOString()
+        : null;
+}
+
+/**
  * What one storefront sells (§15, §15.1, P5-2–P5-7).
  *
  * Products are **chosen** from the Feriwala catalogue, never written here
@@ -103,6 +126,27 @@ export default function WebsiteProducts({
                 <div className="text-muted-foreground text-xs">
                     {t('website.products.promotion')}:{' '}
                     {row.promotional_price.formatted}
+                    {!row.promotion_applies &&
+                        ` (${
+                            row.promotion_ends_at &&
+                            new Date(row.promotion_ends_at) <= new Date()
+                                ? t('website.products.promotion_ended')
+                                : t('website.products.promotion_scheduled')
+                        })`}
+                </div>
+            )}
+
+            {(row.promotion_starts_at || row.promotion_ends_at) && (
+                <div className="text-muted-foreground text-xs">
+                    {row.promotion_starts_at
+                        ? new Date(row.promotion_starts_at).toLocaleString(
+                              locale,
+                          )
+                        : '…'}{' '}
+                    –{' '}
+                    {row.promotion_ends_at
+                        ? new Date(row.promotion_ends_at).toLocaleString(locale)
+                        : '…'}
                 </div>
             )}
 
@@ -245,6 +289,13 @@ export default function WebsiteProducts({
                 selection: row.id,
             })}
             options={{ preserveScroll: true }}
+            // A window is typed in the browser's own time and sent as an
+            // instant, so the server stores exactly the moment meant (C4).
+            transform={(data) => ({
+                ...data,
+                promotion_starts_at: toInstant(data.promotion_starts_at),
+                promotion_ends_at: toInstant(data.promotion_ends_at),
+            })}
             className="bg-muted/40 mt-3 space-y-3 rounded-lg p-3"
         >
             {({ processing, errors }) => (
@@ -272,6 +323,33 @@ export default function WebsiteProducts({
                             )}
                             error={errors.promotional_price}
                         />
+
+                        {(
+                            [
+                                ['promotion_starts_at', 'starts'],
+                                ['promotion_ends_at', 'ends'],
+                            ] as const
+                        ).map(([field, key]) => (
+                            <div key={field} className="grid gap-1.5">
+                                <Label htmlFor={`promo-${key}-${row.id}`}>
+                                    {t(`website.products.${field}`)}
+                                </Label>
+                                <Input
+                                    id={`promo-${key}-${row.id}`}
+                                    name={field}
+                                    type="datetime-local"
+                                    defaultValue={toLocalInput(row[field])}
+                                    disabled={row.terms.locked_fields.includes(
+                                        'promotional_price',
+                                    )}
+                                />
+                                <InputError message={errors[field]} />
+                            </div>
+                        ))}
+
+                        <p className="text-muted-foreground text-xs sm:col-span-2">
+                            {t('website.products.promotion_window_help')}
+                        </p>
 
                         <div className="grid gap-1.5">
                             <Label htmlFor={`title-${row.id}`}>

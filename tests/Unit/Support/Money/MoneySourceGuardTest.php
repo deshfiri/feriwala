@@ -130,7 +130,8 @@ it('names no internal field with the withdrawn _minor suffix', function () {
 
 it('carries a minor_units key only through the frozen Storefront API compatibility adapter', function () {
     $allowed = [
-        'app/Http/Controllers/Api/Storefront/V1/OrderController.php' => 'the frozen contract §4.1 adapter: reads legacy input and adds the legacy output key, both derived from `amount`',
+        'app/Http/Controllers/Api/Storefront/V1/OrderController.php' => 'the frozen contract §4.1 adapter: reads legacy input, derived from `amount`',
+        'app/Http/Controllers/Api/Storefront/V1/StorefrontController.php' => 'the frozen contract §4.1 adapter: adds the legacy output key, derived from `amount`, for every storefront response that carries money',
         'app/Domain/Website/Api/StorefrontProductPayload.php' => 'the frozen contract §4.1 adapter for catalogue prices, derived exactly from `amount`',
         'app/Support/Money/Money.php' => 'a docblock stating the wire adapter, not Money, adds the legacy key',
     ];

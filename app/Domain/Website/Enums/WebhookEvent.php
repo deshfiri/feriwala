@@ -41,6 +41,13 @@ enum WebhookEvent: string
     case WebsiteSuspended = 'website.suspended';
     case WebsiteRestored = 'website.restored';
 
+    /*
+     * How the website is presented changed — branding, contact details, the
+     * hosts it is served on (P2 D2). Additive to v1 under §8: a hint to read
+     * `GET /site` again, carrying nothing but the website and the moment.
+     */
+    case WebsiteUpdated = 'website.updated';
+
     /**
      * Whether a delivery of this event is about one selected product, and so
      * decides that product's synchronisation status (P5-7).

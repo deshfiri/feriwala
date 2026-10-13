@@ -40,6 +40,7 @@ use App\Http\Controllers\Admin\ProductMerchandisingController;
 use App\Http\Controllers\Admin\ProductPriceTierController;
 use App\Http\Controllers\Admin\ProductStatusController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Api\Storefront\V1\CheckoutController as StorefrontCheckoutController;
 use App\Http\Controllers\Api\Storefront\V1\CustomerController as StorefrontCustomerController;
 use App\Http\Controllers\Api\Storefront\V1\OrderController as StorefrontOrderController;
 use App\Http\Controllers\Api\Storefront\V1\ReturnController as StorefrontReturnController;
@@ -127,11 +128,15 @@ function catalogueApiWebsiteCopyRoutes(): array
  * which is what the test below proves by fingerprinting the catalogue around a
  * submitted order.
  *
+ * The checkout quote (contract §6.0, D31) is a POST only because it carries a
+ * cart; it writes nothing at all, which its own tests prove.
+ *
  * @return array<string, class-string>
  */
 function catalogueApiStorefrontWriteRoutes(): array
 {
     return [
+        'storefront.v1.checkout.quote' => StorefrontCheckoutController::class,
         'storefront.v1.orders.store' => StorefrontOrderController::class,
         'storefront.v1.orders.payment-session' => StorefrontOrderController::class,
         'storefront.v1.orders.cancel' => StorefrontOrderController::class,

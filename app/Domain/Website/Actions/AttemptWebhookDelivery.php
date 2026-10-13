@@ -13,6 +13,8 @@ use App\Domain\Website\Models\WebhookLog;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Domain\Website\Models\WebsiteWebhookEndpoint;
+use App\Integrations\Store\Exceptions\StorePlatformException;
+use App\Integrations\Store\Support\OutboundAddressGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\DB;
@@ -43,10 +45,43 @@ class AttemptWebhookDelivery
 {
     public const NO_ENDPOINT = 'No active webhook endpoint.';
 
+    public const ADDRESS_REFUSED = 'The webhook address does not resolve to a public address.';
+
     public function __construct(
         protected HttpFactory $http,
         protected PaymentLogRedactor $redactor,
+        protected OutboundAddressGuard $guard,
     ) {}
+
+    /**
+     * The endpoint's host pinned to an address checked just now, as a
+     * `CURLOPT_RESOLVE` entry, or null when it may not be called (P2 D3).
+     *
+     * Resolved on every attempt, retries included, so an endpoint whose name
+     * has since been pointed inside the platform's network is refused; and the
+     * connection goes to exactly the address that was checked, so a DNS answer
+     * that changes between the check and the request (rebinding) cannot reach
+     * anywhere else.
+     */
+    protected function pin(string $url): ?string
+    {
+        $parts = parse_url($url);
+        $host = is_array($parts) ? trim((string) ($parts['host'] ?? ''), '[]') : '';
+
+        if (! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || $host === '') {
+            return null;
+        }
+
+        try {
+            $address = $this->guard->addressFor($host);
+        } catch (StorePlatformException) {
+            return null;
+        }
+
+        $port = (int) ($parts['port'] ?? 443);
+
+        return $host.':'.$port.':'.(str_contains($address, ':') ? '['.$address.']' : $address);
+    }
 
     public function handle(int $deliveryId): void
     {
@@ -98,6 +133,8 @@ class AttemptWebhookDelivery
 
         if ($endpoint === null) {
             $error = self::NO_ENDPOINT;
+        } elseif (($pinned = $this->pin($endpoint->url)) === null) {
+            $error = self::ADDRESS_REFUSED;
         } else {
             try {
                 $response = $this->http
@@ -106,7 +143,12 @@ class AttemptWebhookDelivery
                         WebhookSignature::HEADER_SIGNATURE => WebhookSignature::sign($endpoint->secret, $timestamp, $body),
                     ])
                     ->withBody($body, 'application/json')
-                    ->withOptions(['allow_redirects' => false])
+                    // Never followed: a redirect is an answer, not a new
+                    // address to post signed data to (D3).
+                    ->withOptions([
+                        'allow_redirects' => false,
+                        'curl' => [CURLOPT_RESOLVE => [$pinned]],
+                    ])
                     ->post($endpoint->url);
 
                 $status = $response->status();
@@ -157,6 +199,7 @@ class AttemptWebhookDelivery
             $status !== null && ($status < 200 || $status >= 300) => (string) __('website.integration.errors.answered', ['status' => $status]),
             $error === null => null,
             $error === self::NO_ENDPOINT => (string) __('website.integration.errors.no_endpoint'),
+            $error === self::ADDRESS_REFUSED => (string) __('website.integration.errors.address_refused'),
             str_contains($error, 'cURL error 28') || stripos($error, 'timed out') !== false => (string) __('website.integration.errors.timed_out'),
             default => (string) __('website.integration.errors.unreachable'),
         };

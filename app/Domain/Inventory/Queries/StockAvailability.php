@@ -4,6 +4,8 @@ namespace App\Domain\Inventory\Queries;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Supplier\Enums\OfferStatus;
+use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Queries\SupplierSourcedAvailability;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -169,6 +171,59 @@ class StockAvailability
             ->whereRaw('stock_items.available + COALESCE(stock_allocations.quantity, 0) > 0');
 
         return $inStock ? $products->whereExists($exists) : $products->whereNotExists($exists);
+    }
+
+    /**
+     * Whether the product in `$productColumn` has a stockable unit in stock,
+     * as a SQL condition — {@see forUnits()}'s answer, stated for the database
+     * so a storefront's `in_stock` filter pages there (C1).
+     *
+     * The same rule, unit by unit: the product itself when it has no
+     * variations, otherwise each active variation. A unit with any Supplier
+     * offer is in stock when its preferred, active offer from an approved
+     * Supplier holds stock (D25); any other unit when an active warehouse holds
+     * available units, or units allocated to this account (P3-30).
+     *
+     * `$productColumn` is a column reference written in the caller's code,
+     * never input — which `literal-string` makes PHPStan hold it to.
+     *
+     * @param  literal-string  $productColumn
+     * @return array{0: literal-string, 1: list<int|string>} the condition and its bindings
+     */
+    public function inStockSql(string $productColumn, ?BusinessAccount $account): array
+    {
+        $sql = <<<SQL
+            EXISTS (
+                SELECT 1 FROM (
+                    SELECT {$productColumn} AS product_id, NULL::bigint AS variant_id
+                    WHERE NOT EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = {$productColumn})
+                    UNION ALL
+                    SELECT pv.product_id, pv.id FROM product_variants pv
+                    WHERE pv.product_id = {$productColumn} AND pv.is_active
+                ) unit
+                WHERE CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM supplier_offers o
+                        WHERE o.product_id = unit.product_id AND o.product_variant_id IS NOT DISTINCT FROM unit.variant_id
+                    ) THEN EXISTS (
+                        SELECT 1 FROM supplier_offers o
+                        JOIN suppliers s ON s.id = o.supplier_id
+                        JOIN supplier_offer_stock st ON st.supplier_offer_id = o.id
+                        WHERE o.product_id = unit.product_id AND o.product_variant_id IS NOT DISTINCT FROM unit.variant_id
+                            AND o.is_preferred AND o.status = ? AND s.status = ? AND st.quantity > 0
+                    )
+                    ELSE EXISTS (
+                        SELECT 1 FROM stock_items si
+                        JOIN warehouses w ON w.id = si.warehouse_id AND w.is_active
+                        LEFT JOIN stock_allocations sa ON sa.stock_item_id = si.id AND sa.business_account_id = ?
+                        WHERE si.product_id = unit.product_id AND si.product_variant_id IS NOT DISTINCT FROM unit.variant_id
+                            AND si.available + COALESCE(sa.quantity, 0) > 0
+                    )
+                END
+            )
+            SQL;
+
+        return [$sql, [OfferStatus::Active->value, SupplierStatus::Approved->value, $account->id ?? 0]];
     }
 
     /**

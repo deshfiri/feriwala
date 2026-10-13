@@ -14,8 +14,10 @@ use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
 use App\Domain\Supplier\Actions\ExpireOverdueFulfilmentCommitments;
 use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
+use App\Domain\Website\Actions\AnnouncePromotionWindows;
 use App\Domain\Website\Actions\DispatchDueWebhookRetries;
 use App\Domain\Website\Actions\PruneStorefrontRequests;
+use App\Domain\Website\Actions\RefreshWebsiteBestSellers;
 use App\Domain\Website\Actions\SweepWebsiteLifecycle;
 use App\Domain\Website\Actions\SyncWebsiteCatalogue;
 use App\Domain\Website\Actions\SyncWebsiteInventory;
@@ -351,6 +353,30 @@ Schedule::call(fn () => app(SyncWebsiteCatalogue::class)->sweep())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Re-announce storefront products that are out of date (§17.2)');
+
+/*
+ * Best sellers (C3). Every fifteen minutes the 30-day sales summary is rebuilt
+ * in one transaction, so `sort=best_selling` is at most fifteen minutes behind
+ * and never aggregates orders on a storefront request.
+ */
+Schedule::call(fn () => app(RefreshWebsiteBestSellers::class)->handle())
+    ->name('website-best-sellers')
+    ->everyFifteenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Rebuild each website\'s 30-day best sellers (C3)');
+
+/*
+ * Flash deals opening and closing (C4). Every minute, because a window's edge
+ * changes the price on its own; each edge is announced once, however often
+ * this runs.
+ */
+Schedule::call(fn () => app(AnnouncePromotionWindows::class)->handle())
+    ->name('website-promotion-windows')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Announce storefront promotions that have opened or closed (C4)');
 
 /*
  * The referral commission outbox (D24, P7-43). Pays commissions whose holding

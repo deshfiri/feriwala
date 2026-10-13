@@ -72,6 +72,9 @@ function selection(
         sync_error: null,
         price: money('2500.00'),
         promotional_price: null,
+        promotion_starts_at: null,
+        promotion_ends_at: null,
+        promotion_applies: false,
         promo_title: null,
         marketing_description: null,
         is_featured: false,
@@ -187,6 +190,45 @@ describe('a storefront’s products', () => {
 
         expect(
             screen.getAllByText('website.products.no_price').length,
+        ).toBeGreaterThan(0);
+    });
+
+    it('says when a flash deal has not started yet or has ended', () => {
+        const { unmount } = render(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([
+                    selection({
+                        promotional_price: money('2200.00'),
+                        promotion_starts_at: '2999-01-01T00:00:00+00:00',
+                        promotion_applies: false,
+                    }),
+                ])}
+            />,
+        );
+
+        expect(
+            screen.getAllByText(/website\.products\.promotion_scheduled/)
+                .length,
+        ).toBeGreaterThan(0);
+
+        unmount();
+
+        render(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([
+                    selection({
+                        promotional_price: money('2200.00'),
+                        promotion_ends_at: '2000-01-01T00:00:00+00:00',
+                        promotion_applies: false,
+                    }),
+                ])}
+            />,
+        );
+
+        expect(
+            screen.getAllByText(/website\.products\.promotion_ended/).length,
         ).toBeGreaterThan(0);
     });
 

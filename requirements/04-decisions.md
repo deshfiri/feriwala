@@ -926,7 +926,7 @@ reused.
   custom domains still receive certificate authorisation, so the storefront can show its
   "unavailable" page over HTTPS. It accepts **no** orders and no checkout: order submission
   requires a live website, and a suspended website's credentials are refused by the Storefront API
-  altogether. This is about a suspended *website*. A suspended, unverified or lapsed *domain*
+  altogether. This is about a suspended _website_. A suspended, unverified or lapsed _domain_
   receives no new authorisation, and a closed website receives none at all. Nothing else about
   website or domain suspension changes.
 
@@ -949,7 +949,7 @@ reused.
   storefront can never declare an order paid (contract §6.1). Stock reservation, ledger and
   settlement rules are unchanged. Feriwala stays merchant of record (D12).
 - **Publishing** reuses the existing website product selection: a product the owner is eligible for
-  appears in My Products; *Connect to Website* adds it to one or more of the owner's own websites,
+  appears in My Products; _Connect to Website_ adds it to one or more of the owner's own websites,
   subject to package limits, website status, pricing rules and stock. The storefront shows only that
   website's published products.
 
@@ -992,3 +992,61 @@ reused.
   migrations without touching what existed before them.
 - Security review gates go-live: tenant isolation across hosts, certificate refusal for
   unverified names, credentials absent from client bundles, and DNS takeover cases.
+
+## D31 — Controlled commerce API (P2) (2026-10-12) 🔒
+
+**Approved by the Project Owner on 2026-10-12** as decisions H1–H9 of the P2 brief. Adds to the
+frozen Storefront API contract (§5.1.1–§5.1.3, §5.5, §6.0, §6.1, §7.1, §7.2) and makes two v1
+compatibility corrections. Merchant of record, the ledger, payment direction, supplier payables and
+stock reservation are unchanged.
+
+| #   | Decision                                                                                                                                                                                                                                |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1  | A checkout quote is **advisory**. `POST /orders` prices the cart again with zero tolerance and refuses any difference with `price_mismatch`.                                                                                            |
+| H2  | A quote **never reserves or deducts stock** and writes nothing. Its `reservable` answer applies the placement rules read-only.                                                                                                          |
+| H3  | Delivery stays the **flat per-package** website delivery fee. The weight and area engine is not switched on.                                                                                                                            |
+| H4  | Delivery areas come from the **BdLocation** directory, under stable natural-key identifiers.                                                                                                                                            |
+| H5  | Best sellers: a rolling **30-day** window of paid online orders and confirmed COD orders, excluding cancelled and refunded ones. Details approved later the same day — see below.                                                       |
+| H6  | **Owners** set promotional windows on their own selections, within the administrator's limits: the window is locked wherever the promotional price is.                                                                                  |
+| H7  | Search is **escaped `ILIKE`**, as a bound parameter. No `pg_trgm`.                                                                                                                                                                      |
+| H8  | A payment return address must be HTTPS on port 443, with no credentials or fragment, within a length limit, to the website's subdomain or a **verified, active** domain or alias — checked when the order is taken and again on return. |
+| H9  | A trashed or ineligible product is **never listed** on any catalogue endpoint.                                                                                                                                                          |
+
+### v1 compatibility corrections
+
+Both narrow behaviour that was a defect, not a documented promise; no field is removed or renamed.
+
+- **Stricter return addresses (H8).** A `return_url` on a domain that is recorded on the website
+  but not verified and active is now `422 return_url_not_allowed`. Orders already taken keep their
+  stored address; the redirect revalidates it and sends the customer to the website's home page if
+  it no longer passes. Payment settlement is server-side and unaffected.
+- **Eligibility-based listing (H9).** The catalogue lists only what order pricing accepts, so a
+  product that would have been refused at checkout is no longer listed.
+
+### Also recorded
+
+- `website.updated` tells a storefront to re-read `GET /site` after branding, contact, image,
+  serving-host or payment-method changes. A gateway change that turns online payment on or off in
+  a currency is announced, on the queue, to every served website in that currency with a webhook
+  endpoint — one pending event per website; a change that flips nothing announces nothing.
+  Cash-on-delivery terms have no writer yet: whatever comes to change them must announce through
+  the same mechanism (`AnnouncePaymentMethodsChanged` for a platform-wide change,
+  `AnnounceWebsiteUpdated` for one website). `website.suspended` is aligned with the code — low
+  balance and grace are not suspension.
+- Webhook endpoints are resolved at registration and before every attempt, every address must be
+  public, each attempt is pinned to the checked address, and redirects are never followed.
+
+### Best-seller semantics (H5) — approved 2026-10-13
+
+- **Window:** orders placed in the last 30 days.
+- **A sale:** a paid online order (its payment names a gateway and the order has `paid_at`), or a
+  cash-on-delivery order the customer confirmed — its payment names no gateway and its status
+  history holds the move to `confirmed` with source `storefront`, which only `ConfirmCodOrder`
+  writes. The current status alone never counts as confirmation.
+- **Excluded:** orders now `cancelled`, `refund_pending`, `partially_refunded` or `refunded`.
+- **Net units:** line quantity less the quantities received on `received` or `refunded` returns,
+  summed per line before joining so no return is deducted twice; never below zero.
+- **Ranking:** net units, then distinct orders still carrying a unit, both descending, then the
+  selection id. A selection with no sales follows all that sold, in selection order.
+- **Freshness:** a derived summary (`website_product_sales`) rebuilt every fifteen minutes in one
+  serialised transaction; the storefront reads it by key and never aggregates orders per request.

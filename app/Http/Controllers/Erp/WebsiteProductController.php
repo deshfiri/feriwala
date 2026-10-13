@@ -151,6 +151,9 @@ class WebsiteProductController extends Controller
             // (§36.1's server-side-only arithmetic).
             'price' => ['sometimes', new DecimalAmountRule],
             'promotional_price' => ['sometimes', 'nullable', new DecimalAmountRule],
+            // An instant with its offset; stored in UTC (C4).
+            'promotion_starts_at' => ['sometimes', 'nullable', 'date'],
+            'promotion_ends_at' => ['sometimes', 'nullable', 'date'],
             'promo_title' => ['sometimes', 'nullable', 'string', 'max:120'],
             'marketing_description' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'website_category_id' => ['sometimes', 'nullable', 'string', 'size:26'],

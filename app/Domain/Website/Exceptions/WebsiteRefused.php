@@ -192,6 +192,16 @@ class WebsiteRefused extends RuntimeException
     }
 
     /** The administrator holds this setting for this product (§15.1). */
+    public static function promotionWindowOutOfOrder(): self
+    {
+        return new self(__('website.refused.promotion_window_out_of_order'), 'promotion_ends_at');
+    }
+
+    public static function promotionWindowNeedsAPromotion(): self
+    {
+        return new self(__('website.refused.promotion_window_needs_a_promotion'), 'promotion_starts_at');
+    }
+
     public static function fieldLocked(string $field): self
     {
         return new self(__('website.refused.field_locked', [

@@ -2,14 +2,13 @@
 
 namespace App\Http\Controllers\Api\Storefront\V1;
 
-use App\Domain\Kyc\KycRestrictions;
-use App\Domain\Website\CodTerms;
+use App\Domain\Order\Exceptions\WebsiteOrderRefused;
+use App\Domain\Order\WebsiteCheckoutRules;
 use App\Domain\Website\Enums\DomainRoutingStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\WebsiteImageStore;
-use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Localization\Locale;
 use App\Support\Money\Currency;
 use Illuminate\Http\JsonResponse;
@@ -32,9 +31,7 @@ class SiteController extends StorefrontController
 {
     public function __construct(
         protected WebsiteImageStore $images,
-        protected CodTerms $cod,
-        protected KycRestrictions $kycRestrictions,
-        protected PaymentGatewayManager $gateways,
+        protected WebsiteCheckoutRules $checkout,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -42,14 +39,16 @@ class SiteController extends StorefrontController
         $website = $this->website($request);
         $currency = Currency::tryFrom($website->currency_code) ?? Currency::base();
 
-        $accepting = $website->status->isLive()
-            && ! $this->kycRestrictions->blocksNewOrders($website->businessAccount);
+        // The same answers checkout and order placement give (P2).
+        try {
+            $this->checkout->assertAcceptingOrders($website);
+            $accepting = true;
+        } catch (WebsiteOrderRefused) {
+            $accepting = false;
+        }
 
-        $codEnabled = $this->cod->enabledFor($website);
-        $methods = array_values(array_filter([
-            $this->gateways->availableFor($currency) !== [] ? 'online' : null,
-            $codEnabled ? 'cod' : null,
-        ]));
+        $codEnabled = $this->checkout->codEnabled($website);
+        $methods = $this->checkout->paymentMethods($website, $currency);
 
         return new JsonResponse([
             'data' => [
@@ -84,7 +83,7 @@ class SiteController extends StorefrontController
                     'payment_methods' => $methods,
                     'cod' => [
                         'enabled' => $codEnabled,
-                        'maximum' => $codEnabled ? $this->cod->maximumFor($website, $currency)?->jsonSerialize() : null,
+                        'maximum' => $codEnabled ? $this->checkout->codMaximum($website, $currency)?->jsonSerialize() : null,
                     ],
                     'guest_checkout' => true,
                 ],

@@ -257,6 +257,9 @@ export type WebsiteSelection = {
     sync_error: string | null;
     price: Money | null;
     promotional_price: Money | null;
+    promotion_starts_at: string | null;
+    promotion_ends_at: string | null;
+    promotion_applies: boolean;
     promo_title: string | null;
     marketing_description: string | null;
     is_featured: boolean;
