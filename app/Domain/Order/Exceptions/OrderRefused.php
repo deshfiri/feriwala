@@ -66,6 +66,12 @@ class OrderRefused extends RuntimeException
         return new self(__('wholesale.refused.payment_method_unavailable'), 'payment_method');
     }
 
+    /** The old gateway confirmed the money; switching would risk taking it twice. */
+    public static function alreadyPaidElsewhere(): self
+    {
+        return new self(__('orders.refused.already_paid_elsewhere'), 'payment_method');
+    }
+
     public static function nothingToPay(): self
     {
         return new self(__('orders.refused.nothing_to_pay'), 'cart');

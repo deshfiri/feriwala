@@ -1006,3 +1006,85 @@ it('is swept by the scheduler every minute', function () {
 
     expect(Artisan::output())->toContain('Confirm or cancel wholesale orders waiting for payment');
 });
+
+describe('changing the payment method (urgent: a failed gateway must not trap the order)', function () {
+    beforeEach(function () {
+        $settings = app(SettingsRepository::class);
+        $settings->define('payment.amarpay.enabled', 'payment', SettingType::Boolean, true);
+        $settings->define('payment.amarpay.mode', 'payment', SettingType::String, 'sandbox');
+        $settings->define('payment.amarpay.sandbox.store_id', 'payment', SettingType::String, 'amarpaytest', isEncrypted: true);
+        $settings->define('payment.amarpay.sandbox.signature_key', 'payment', SettingType::String, 'sig', isEncrypted: true);
+
+        // The first gateway has nothing paid to report.
+        $this->validation['status'] = 'FAILED';
+    });
+
+    it('offers the other available methods while the order waits for payment', function () {
+        $order = wholesaleOrderPlaced();
+
+        $this->get(route('wholesale.orders.show', $order->public_id))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('can.pay', true)
+                ->where('payment_methods', fn ($methods) => collect($methods)->pluck('name')->sort()->values()->all() === ['amarpay', 'sslcommerz']));
+    });
+
+    it('moves the same payment to the chosen gateway, keeping its amount and reference', function () {
+        $order = wholesaleOrderPlaced();
+        $before = $order->payment;
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id), ['payment_method' => 'amarpay']);
+
+        $after = $order->refresh()->payment;
+
+        expect($after->gateway)->toBe('amarpay')
+            ->and($after->id)->toBe($before->id)
+            ->and($after->reference)->toBe($before->reference)
+            ->and($after->amount->toDecimal())->toBe($before->amount->toDecimal())
+            ->and($after->gateway_reference)->toBeNull()
+            ->and($order->status)->toBe(OrderStatus::PaymentPending)
+            ->and(PaymentLog::query()->where('payment_id', $after->id)->where('event', 'method_changed')->exists())->toBeTrue();
+    });
+
+    it('refuses a gateway that is not available', function () {
+        $order = wholesaleOrderPlaced();
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id), ['payment_method' => 'nagad'])
+            ->assertSessionHasErrors('payment_method');
+
+        expect($order->refresh()->payment->gateway)->toBe('sslcommerz');
+    });
+
+    it('refuses to change the method while the gateway is still confirming the payment', function () {
+        $order = wholesaleOrderPlaced();
+        $order->payment?->transitionTo(PaymentStatus::Pending)->save();
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id), ['payment_method' => 'amarpay'])
+            ->assertSessionHasErrors(['order' => __('orders.refused.payment_in_flight')]);
+
+        expect($order->refresh()->payment->gateway)->toBe('sslcommerz');
+    });
+
+    it('will not switch away from a gateway that has in fact been paid, and settles it instead', function () {
+        $order = wholesaleOrderPlaced();
+        $this->validation['status'] = 'VALID';
+        // What its transaction lookup says: the payer did pay there.
+        $this->validation['APIConnect'] = 'DONE';
+        $this->validation['element'] = [['status' => 'VALID', 'val_id' => 'val-1', 'currency_amount' => '20000.00', 'currency_type' => 'BDT', 'tran_id' => $order->payment?->reference]];
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id), ['payment_method' => 'amarpay'])
+            ->assertSessionHasErrors('payment_method');
+
+        expect($order->refresh()->payment->gateway)->toBe('sslcommerz')
+            ->and($order->status)->toBe(OrderStatus::Paid);
+    });
+
+    it('cannot change another account\'s order', function () {
+        $order = wholesaleOrderPlaced();
+
+        $this->actingAs($this->rahim->owner)
+            ->post(route('wholesale.orders.payment.store', $order->public_id), ['payment_method' => 'amarpay'])
+            ->assertNotFound();
+
+        expect($order->refresh()->payment->gateway)->toBe('sslcommerz');
+    });
+});

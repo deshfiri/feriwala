@@ -1,4 +1,5 @@
 import { Form, Head, Link, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import {
     AlertTriangle,
     ArrowLeft,
@@ -30,8 +31,11 @@ import type {
 } from '@/types/orders';
 import type { CheckoutAddress } from '@/types/wholesale';
 
+type PaymentMethodOption = { name: string; label: string };
+
 type Props = {
     order: WholesaleOrderDetail;
+    payment_methods?: PaymentMethodOption[];
 };
 
 /**
@@ -45,6 +49,7 @@ type Props = {
  */
 export default function WholesaleOrder({
     order,
+    payment_methods = [],
     can = { pay: false, cancel: false },
 }: Props & { can?: WholesaleOrderAbilities }) {
     const { t, locale } = useTranslation();
@@ -87,7 +92,11 @@ export default function WholesaleOrder({
                 <OrderState order={order} />
 
                 {(can.pay || can.cancel) && (
-                    <OrderActions order={order} can={can} />
+                    <OrderActions
+                        order={order}
+                        can={can}
+                        methods={payment_methods}
+                    />
                 )}
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -281,8 +290,19 @@ function OrderState({ order }: Props) {
 function OrderActions({
     order,
     can,
-}: Props & { can: WholesaleOrderAbilities }) {
+    methods,
+}: Props & { can: WholesaleOrderAbilities; methods: PaymentMethodOption[] }) {
     const { t } = useTranslation();
+    const currentGateway = order.payment?.gateway;
+    const [method, setMethod] = useState(
+        methods.find(
+            (option) =>
+                option.label === currentGateway ||
+                option.name === currentGateway,
+        )?.name ??
+            methods[0]?.name ??
+            '',
+    );
     const cancelForm = useForm({});
     // The refusal comes back under the order, not under a field of this empty form.
     const cancelErrors: Partial<Record<string, string>> = cancelForm.errors;
@@ -292,7 +312,45 @@ function OrderActions({
             {can.pay && (
                 <Form {...WholesaleOrderController.pay.form(order.id)}>
                     {({ errors, processing }) => (
-                        <div className="space-y-1">
+                        <div className="space-y-3">
+                            {methods.length > 1 && (
+                                <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">
+                                        {t('orders.actions.method')}
+                                    </legend>
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('orders.actions.method_help')}
+                                    </p>
+                                    {methods.map((option) => (
+                                        <label
+                                            key={option.name}
+                                            className={cn(
+                                                'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm',
+                                                method === option.name
+                                                    ? 'border-brand bg-brand-subtle'
+                                                    : 'border-input hover:bg-muted',
+                                            )}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="payment_method"
+                                                value={option.name}
+                                                checked={method === option.name}
+                                                onChange={() =>
+                                                    setMethod(option.name)
+                                                }
+                                                className="accent-brand"
+                                            />
+                                            <span className="font-medium">
+                                                {option.label}
+                                            </span>
+                                        </label>
+                                    ))}
+                                    <InputError
+                                        message={errors.payment_method}
+                                    />
+                                </fieldset>
+                            )}
                             <Button type="submit" disabled={processing}>
                                 {processing ? (
                                     <Spinner />
