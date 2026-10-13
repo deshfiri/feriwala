@@ -54,6 +54,12 @@ return [
     ],
 
     'checkout' => [
+        'steps' => [
+            'label' => 'Checkout progress',
+            'address' => 'Address',
+            'confirm' => 'Confirm order',
+            'pay' => 'Pay',
+        ],
         'title' => 'Wholesale checkout',
         'description' => 'Review your order. Every figure is worked out again by Banij each time this page opens.',
         'back_to_cart' => 'Back to cart',

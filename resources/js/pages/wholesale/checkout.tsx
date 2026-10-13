@@ -1,9 +1,16 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, CreditCard, MapPin, TicketPercent } from 'lucide-react';
+import {
+    ArrowLeft,
+    Check,
+    CreditCard,
+    MapPin,
+    TicketPercent,
+} from 'lucide-react';
 import { useState } from 'react';
 import WholesaleCheckoutController from '@/actions/App/Http/Controllers/Erp/WholesaleCheckoutController';
 import WholesaleOrderController from '@/actions/App/Http/Controllers/Erp/WholesaleOrderController';
 import InputError from '@/components/input-error';
+import LineThumb from '@/components/line-thumb';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -55,7 +62,9 @@ export default function WholesaleCheckout({ checkout }: Props) {
                     description={t('wholesale.checkout.description')}
                 />
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                <CheckoutSteps checkout={checkout} />
+
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
                     <div className="min-w-0 space-y-6">
                         <SectionCard
                             title={t('wholesale.checkout.items')}
@@ -65,10 +74,14 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                 {checkout.lines.map((line) => (
                                     <li
                                         key={line.id}
-                                        className="flex flex-wrap items-start justify-between gap-3 px-5 py-3"
+                                        className="flex items-center gap-4 px-5 py-4"
                                     >
-                                        <div className="min-w-0">
-                                            <p className="font-medium">
+                                        <LineThumb
+                                            name={line.name}
+                                            quantity={line.quantity}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="leading-snug font-medium">
                                                 {line.name}
                                             </p>
                                             <p className="text-muted-foreground font-mono text-xs">
@@ -90,7 +103,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                         </div>
                                         <MoneyAmount
                                             amount={line.line_total}
-                                            className="font-semibold"
+                                            className="shrink-0 font-semibold"
                                         />
                                     </li>
                                 ))}
@@ -202,7 +215,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                         </SectionCard>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
                         <SectionCard title={t('wholesale.checkout.summary')}>
                             <dl className="space-y-3 text-sm">
                                 <SummaryRow
@@ -234,7 +247,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                         />
                                     </SummaryRow>
                                 )}
-                                <div className="border-border flex items-baseline justify-between gap-3 border-t pt-3">
+                                <div className="bg-muted/60 -mx-5 flex items-baseline justify-between gap-3 border-t px-5 py-4">
                                     <dt className="font-medium">
                                         {t('wholesale.checkout.total')}
                                     </dt>
@@ -338,6 +351,71 @@ export default function WholesaleCheckout({ checkout }: Props) {
     );
 }
 
+/**
+ * Address → Confirm → Pay, read from what the server already says: an address
+ * is chosen when the checkout is ready to confirm, confirmed when a standing
+ * confirmation exists, and payment is the step left.
+ */
+function CheckoutSteps({ checkout }: { checkout: CheckoutSummary }) {
+    const { t } = useTranslation();
+    const confirmed = checkout.confirmation?.status === 'confirmed';
+    const steps = [
+        { key: 'address', done: checkout.ready_to_confirm },
+        { key: 'confirm', done: confirmed },
+        { key: 'pay', done: false },
+    ];
+    const current = steps.findIndex((step) => !step.done);
+
+    return (
+        <ol
+            aria-label={t('wholesale.checkout.steps.label')}
+            className="grid grid-cols-3 gap-2"
+        >
+            {steps.map((step, position) => (
+                <li
+                    key={step.key}
+                    aria-current={position === current ? 'step' : undefined}
+                    className="flex flex-col gap-2"
+                >
+                    <span
+                        className={cn(
+                            'h-1 rounded-full',
+                            step.done
+                                ? 'bg-brand'
+                                : position === current
+                                  ? 'bg-brand/35'
+                                  : 'bg-border',
+                        )}
+                    />
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                        {step.done ? (
+                            <Check
+                                className="text-brand size-4"
+                                aria-hidden="true"
+                            />
+                        ) : (
+                            <span
+                                aria-hidden="true"
+                                className="text-muted-foreground text-xs tabular-nums"
+                            >
+                                {position + 1}
+                            </span>
+                        )}
+                        <span
+                            className={
+                                step.done || position === current
+                                    ? 'text-foreground'
+                                    : 'text-muted-foreground'
+                            }
+                        >
+                            {t(`wholesale.checkout.steps.${step.key}`)}
+                        </span>
+                    </span>
+                </li>
+            ))}
+        </ol>
+    );
+}
 /**
  * Payment method and checkout confirmation (P4-8).
  *

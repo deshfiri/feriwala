@@ -81,7 +81,23 @@ return [
         'cancelled_body' => 'No stock is held for it, and nothing further will be charged.',
     ],
 
+    'hero' => ['total' => 'Order total'],
+
+    'track' => [
+        'label' => 'Order progress',
+        'placed' => 'Placed',
+        'paid' => 'Paid',
+        'shipped' => 'Shipped',
+        'delivered' => 'Delivered',
+    ],
+
+    'pay_panel' => [
+        'title' => 'Complete your payment',
+        'help' => 'Your stock is held while you pay. Use another method if the first one failed.',
+    ],
+
     'sections' => [
+        'actions' => 'Order actions',
         'items' => 'Products',
         'summary' => 'Summary',
         'billing' => 'Billing address',
@@ -93,6 +109,7 @@ return [
     ],
 
     'lines' => [
+        'count' => ':count products',
         'quantity_each' => ':quantity × :amount',
         'discount' => 'Discount :amount',
         'tax' => 'Tax :amount',
