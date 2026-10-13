@@ -10,6 +10,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -38,6 +39,7 @@ use Illuminate\Support\Facades\DB;
  * @property CarbonImmutable|null $low_stock_alerted_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property CarbonImmutable|null $deleted_at
  * @property-read Warehouse $warehouse
  * @property-read Product|null $product
  * @property-read ProductVariant|null $variant
@@ -45,6 +47,7 @@ use Illuminate\Support\Facades\DB;
 class StockItem extends Model
 {
     use HasPublicId;
+    use SoftDeletes;
 
     protected $guarded = [];
 
@@ -205,6 +208,15 @@ class StockItem extends Model
     public function productWasDeleted(): bool
     {
         return $this->product_id === null;
+    }
+
+    /**
+     * Whether the Product this stock was held for is trashed or force deleted.
+     * Such stock can be deleted whatever its history.
+     */
+    public function productIsGone(): bool
+    {
+        return $this->product_id === null || $this->product?->trashed() === true;
     }
 
     /**

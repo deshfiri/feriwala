@@ -98,7 +98,7 @@ class StockController extends Controller
         $record = StockItem::query()
             ->with([
                 'warehouse:id,public_id,code,name,is_active',
-                'product:id,public_id,name,sku',
+                'product:id,public_id,name,sku,deleted_at',
                 'variant:id,public_id,product_id,sku',
             ])
             ->where('public_id', $item)
@@ -172,8 +172,9 @@ class StockController extends Controller
             // partial reload, and only accounts that can trade.
             'accounts' => Inertia::optional(fn () => $this->accountMatches($request)),
 
-            // Only a row nothing was ever recorded against can be removed.
-            'deletable' => ! $record->hasHistory(),
+            // A row nothing was ever recorded against, or one whose product is
+            // deleted, can be removed.
+            'deletable' => $record->productIsGone() || ! $record->hasHistory(),
 
             'can' => [
                 'adjust' => InventoryPolicy::canEdit($actor),

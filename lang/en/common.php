@@ -43,6 +43,9 @@ return [
         'no_results' => 'No results match your filters.',
         'showing' => 'Showing :from–:to of :total',
         'per_page' => 'Per page',
+        'view' => 'View',
+        'view_list' => 'List view',
+        'view_tile' => 'Tile view',
     ],
 
     'language' => [

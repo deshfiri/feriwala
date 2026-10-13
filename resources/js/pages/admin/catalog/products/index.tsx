@@ -516,6 +516,67 @@ export default function AdminProducts({
                             </div>
                         </div>
                     )}
+                    viewStorageKey="admin-products"
+                    renderTile={(row) => (
+                        <>
+                            <Link
+                                href={edit(row.id)}
+                                className="bg-muted block aspect-square overflow-hidden rounded-t-xl"
+                            >
+                                {row.image_url ? (
+                                    <img
+                                        src={row.image_url}
+                                        alt=""
+                                        className="size-full object-cover"
+                                    />
+                                ) : (
+                                    <span className="text-muted-foreground flex size-full flex-col items-center justify-center gap-1 text-xs">
+                                        <ImageOff
+                                            className="size-6"
+                                            aria-hidden="true"
+                                        />
+                                        {t('catalog.products.no_image')}
+                                    </span>
+                                )}
+                            </Link>
+                            <div className="flex flex-1 flex-col gap-2 p-3">
+                                <div className="min-w-0 space-y-0.5">
+                                    <Link
+                                        href={edit(row.id)}
+                                        className="line-clamp-2 font-medium hover:underline"
+                                    >
+                                        {row.name}
+                                    </Link>
+                                    <p className="text-muted-foreground font-mono text-xs">
+                                        {row.sku}
+                                    </p>
+                                    <p className="text-muted-foreground truncate text-xs">
+                                        {row.category}
+                                        {row.brand ? ` · ${row.brand}` : ''}
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <ProductStatusPill
+                                        status={row.status}
+                                        tone={row.status_tone}
+                                    />
+                                    {row.is_featured && (
+                                        <StatusPill
+                                            tone="info"
+                                            label={t(
+                                                'catalog.products.featured',
+                                            )}
+                                        />
+                                    )}
+                                </div>
+                                <StockState row={row} />
+                                <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                                    <MoneyAmount amount={row.wholesale_price} />
+                                    <RowLinks row={row} can={can} />
+                                </div>
+                            </div>
+                        </>
+                    )}
                     emptyState={
                         <EmptyState
                             icon={ShoppingBag}

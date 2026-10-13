@@ -9,6 +9,7 @@ use App\Domain\Inventory\Actions\DeleteStockItem;
 use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Inventory\Models\StockMovement;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\StockLedger;
 use App\Models\User;
@@ -76,6 +77,30 @@ describe('a stock row with a history', function () {
         $this->actingAs($this->manager)
             ->get(route('admin.inventory.stock.show', $this->item->public_id))
             ->assertInertia(fn (Assert $page) => $page->where('deletable', false));
+    });
+});
+
+describe('stock of a deleted product', function () {
+    it('is deleted whatever its history, which stays on record', function () {
+        app(StockLedger::class)->move($this->item, null, StockBucket::Available, 5, StockMovementType::Adjustment);
+        $this->item->product->delete();
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.inventory.stock.show', $this->item->public_id))
+            ->assertInertia(fn (Assert $page) => $page->where('deletable', true));
+
+        $this->actingAs($this->manager)
+            ->delete(route('admin.inventory.stock.destroy', $this->item->public_id))
+            ->assertRedirect(route('admin.inventory.stock.index'))
+            ->assertSessionHasNoErrors();
+
+        expect(StockItem::query()->count())->toBe(0)
+            ->and(StockItem::withTrashed()->count())->toBe(1)
+            ->and(StockMovement::query()->where('stock_item_id', $this->item->id)->count())->toBe(1);
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.inventory.stock.index'))
+            ->assertInertia(fn (Assert $page) => $page->has('items.data', 0));
     });
 });
 

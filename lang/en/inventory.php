@@ -198,7 +198,7 @@ return [
         'deleted' => ':sku is no longer held in :warehouse.',
         'delete' => 'Delete stock',
         'delete_title' => 'Delete this stock?',
-        'delete_description' => 'This removes :sku from :warehouse. It was never used, so nothing is lost. A stock row with any movement, reservation, allocation or order cannot be deleted.',
+        'delete_description' => 'This removes :sku from :warehouse and from every count. Any history it has stays on record. Stock of a live product that has a history cannot be deleted.',
         'delete_submit' => 'Delete stock',
         'delete_blocked' => 'This stock has a history, so it is part of the ledger and cannot be deleted.',
 

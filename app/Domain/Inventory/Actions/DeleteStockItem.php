@@ -38,17 +38,21 @@ class DeleteStockItem
             /** @var StockItem $locked */
             $locked = StockItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->hasHistory()) {
+            $hasHistory = $locked->hasHistory();
+
+            if ($hasHistory && ! $locked->productIsGone()) {
                 throw InventoryRefused::stockHasHistory();
             }
 
             $before = [
                 'warehouse' => $locked->warehouse->code,
                 'sku' => $locked->sku(),
+                ...$locked->buckets(),
             ];
             $productId = $locked->product_id;
 
-            $locked->delete();
+            // History is append-only, so a row that has any is archived, not erased.
+            $hasHistory ? $locked->delete() : $locked->forceDelete();
 
             $this->audit->handle(new AuditEntry(
                 action: 'inventory.stock_deleted',
