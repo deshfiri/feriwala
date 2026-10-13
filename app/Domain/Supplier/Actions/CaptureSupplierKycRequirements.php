@@ -43,7 +43,7 @@ class CaptureSupplierKycRequirements
             ->with('batch')
             ->get()
             ->filter(fn (KycDocumentType $type) => $type->batch === null || ($type->batch->is_active && ! $type->batch->isArchived()))
-            ->sortBy(fn (KycDocumentType $type) => [$type->batch?->sort_order ?? 0, $type->sort_order, $type->id])
+            ->sortBy(fn (KycDocumentType $type) => [$type->batchSortOrder(), $type->sort_order, $type->id])
             ->values();
 
         if ($types->isEmpty()) {

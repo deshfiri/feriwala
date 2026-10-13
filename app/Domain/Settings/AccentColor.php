@@ -79,19 +79,22 @@ final class AccentColor
     }
 
     /**
-     * The label colour for text laid on the accent itself (primary buttons).
+     * The label colour for text laid on the accent itself (primary buttons,
+     * the current navigation link). Always white: an administrator chooses the
+     * colour, and the text on it does not change with it.
      */
     public function onColor(): string
     {
-        return self::readableTextOn($this->channels());
+        return self::LIGHT_TEXT;
     }
 
     /**
-     * The label colour for text laid on the lifted dark-mode accent.
+     * The label colour for text laid on the lifted dark-mode accent. White as
+     * well, so a button or link reads the same in both themes.
      */
     public function onLiftedColor(): string
     {
-        return self::readableTextOn($this->liftedChannels());
+        return self::LIGHT_TEXT;
     }
 
     /**
@@ -164,17 +167,6 @@ final class AccentColor
 
     /**
      * @param  array{int, int, int}  $background
-     */
-    private static function readableTextOn(array $background): string
-    {
-        $light = self::contrast($background, self::hexChannels(self::LIGHT_TEXT));
-        $dark = self::contrast($background, self::hexChannels(self::DARK_TEXT));
-
-        return $light >= $dark ? self::LIGHT_TEXT : self::DARK_TEXT;
-    }
-
-    /**
-     * @return array{int, int, int}
      */
     private static function hexChannels(string $hex): array
     {

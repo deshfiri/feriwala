@@ -76,6 +76,15 @@ class KycDocumentType extends Model
     }
 
     /**
+     * Where this criterion's batch sits in the administrator's order; 0 for a
+     * criterion with no batch, so those lead the form rather than trail it.
+     */
+    public function batchSortOrder(): int
+    {
+        return $this->batch === null ? 0 : $this->batch->sort_order;
+    }
+
+    /**
      * Whether this criterion's batch is asking $package / $country at all.
      *
      * A criterion with no batch is not held back by one. Its own country and

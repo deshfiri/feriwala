@@ -63,7 +63,7 @@ describe('what the applicant sees', function () {
         // returning to the form is what does that.
         expect($rounds)->toHaveCount(1);
 
-        $reviewed = collect($rounds)->firstWhere('round', 1);
+        $reviewed = collect($rounds)->first();
 
         expect($reviewed['status'])->toBe(KycStatus::ResubmissionRequired->value)
             ->and($reviewed['status_label'])->not->toBe('')
@@ -76,7 +76,7 @@ describe('what the applicant sees', function () {
         $account = historyTestAccount();
 
         $rounds = app(ApplicantKycHistory::class)->forAccount($account);
-        $reviewed = collect($rounds)->firstWhere('round', 1);
+        $reviewed = collect($rounds)->first();
 
         expect($reviewed['feedback'][0]['feedback'])
             ->toBe('Your ID photo is too dark to read.');
@@ -86,7 +86,7 @@ describe('what the applicant sees', function () {
         $account = historyTestAccount();
 
         $rounds = app(ApplicantKycHistory::class)->forAccount($account);
-        $requirements = collect($rounds)->firstWhere('round', 1)['requirements'];
+        $requirements = collect($rounds)->first()['requirements'];
 
         expect($requirements)->toHaveCount(1)
             ->and($requirements[0]['name'])->toBe('National ID')

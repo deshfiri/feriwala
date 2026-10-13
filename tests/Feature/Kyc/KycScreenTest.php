@@ -37,7 +37,8 @@ describe('the form', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('onboarding/kyc')
-                ->where('submission.round', 1)
+                // One submission, no round number to show.
+                ->missing('submission.round')
                 ->where('submission.is_editable', true)
                 ->has('requirements', 1)
                 ->where('requirements.0.name', 'National ID'),

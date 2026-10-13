@@ -43,6 +43,20 @@ class KycBatch extends Model
     protected $guarded = [];
 
     /**
+     * The column defaults, stated on the model as well as in the table, so a
+     * batch built in this request reads the way one loaded later does — a rule
+     * that asks `is_active` would otherwise see null and refuse a batch that is
+     * switched on.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'audience' => 'account',
+        'is_active' => true,
+        'sort_order' => 0,
+    ];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -75,16 +89,28 @@ class KycBatch extends Model
         return $this->hasMany(KycBatchScope::class, 'kyc_batch_id');
     }
 
+    /**
+     * @param  Builder<KycBatch>  $query
+     * @return Builder<KycBatch>
+     */
     public function scopeForAccounts(Builder $query): Builder
     {
         return $query->whereIn('audience', [KycAudience::Account->value, KycAudience::Both->value]);
     }
 
+    /**
+     * @param  Builder<KycBatch>  $query
+     * @return Builder<KycBatch>
+     */
     public function scopeForSuppliers(Builder $query): Builder
     {
         return $query->whereIn('audience', [KycAudience::Supplier->value, KycAudience::Both->value]);
     }
 
+    /**
+     * @param  Builder<KycBatch>  $query
+     * @return Builder<KycBatch>
+     */
     public function scopeAvailable(Builder $query): Builder
     {
         return $query->where('is_active', true)->whereNull('archived_at');

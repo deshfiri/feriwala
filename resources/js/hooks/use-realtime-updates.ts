@@ -29,7 +29,11 @@ export function useRealtimeUpdates(): void {
     const knownIds = useRef<Set<string>>(new Set());
 
     useEffect(() => {
-        knownIds.current = new Set(notifications.map((item) => item.id));
+        // A page that shares no notification list (a Supplier's shell, a test)
+        // simply has nothing to compare against.
+        knownIds.current = new Set(
+            (notifications ?? []).map((item) => item.id),
+        );
     }, [notifications]);
 
     useEffect(() => {
@@ -58,7 +62,7 @@ export function useRealtimeUpdates(): void {
                     }
 
                     const fresh = (
-                        page.props.notifications as typeof notifications
+                        (page.props.notifications ?? []) as typeof notifications
                     ).filter(
                         (item) =>
                             item.readAt === null && !alreadyShown.has(item.id),

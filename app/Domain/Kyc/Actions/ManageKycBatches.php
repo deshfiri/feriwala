@@ -27,7 +27,7 @@ class ManageKycBatches
     ) {}
 
     /**
-     * @param  array{key: string, audience: string, name: string, description?: string|null, is_active?: bool, sort_order?: int|null}  $attributes
+     * @param  array<string, mixed>  $attributes
      * @param  array<int, array{package?: string|null, country?: string|null}>  $rules
      */
     public function create(array $attributes, array $rules, User $by): KycBatch

@@ -28,6 +28,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $max_size_kb
  * @property int $sort_order
  */
+/**
+ * @property array<int, string> $accepted_mime_types
+ * @property int|null $kyc_batch_id
+ * @property string|null $batch_key
+ * @property string|null $batch_name
+ * @property string|null $batch_description
+ * @property int $batch_sort_order
+ */
 class KycSubmissionRequirement extends Model
 {
     protected $guarded = [];
@@ -115,7 +123,7 @@ class KycSubmissionRequirement extends Model
             'batch_key' => $batch?->key,
             'batch_name' => $batch?->name,
             'batch_description' => $batch?->description,
-            'batch_sort_order' => $batch?->sort_order ?? 0,
+            'batch_sort_order' => $type->batchSortOrder(),
         ];
     }
 }

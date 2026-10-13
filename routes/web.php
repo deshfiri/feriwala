@@ -936,7 +936,7 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('branding.nav.update');
         Route::delete('settings/branding/nav', [BrandingController::class, 'destroyNav'])
             ->name('branding.nav.destroy');
-        Route::put('settings/branding/background',[BrandingController::class, 'updateBackground'])
+        Route::put('settings/branding/background', [BrandingController::class, 'updateBackground'])
             ->name('branding.background.update');
         Route::delete('settings/branding/background', [BrandingController::class, 'destroyBackground'])
             ->name('branding.background.destroy');

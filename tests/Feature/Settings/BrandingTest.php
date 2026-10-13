@@ -346,10 +346,10 @@ describe('the accent colour', function () {
         expect(brandingRootTag((string) $response->getContent()))->toContain('--brand-base: #1d4ed8;');
     });
 
-    it('lays dark text on a pale accent and flags it as hard to read', function () {
+    it('lays white text even on a pale accent, and flags it as hard to read', function () {
         $pale = AccentColor::fromHex('#fde047');
 
-        expect($pale->onColor())->toBe(AccentColor::DARK_TEXT)
+        expect($pale->onColor())->toBe(AccentColor::LIGHT_TEXT)
             ->and($pale->isReadableAsText())->toBeFalse()
             ->and(AccentColor::default()->onColor())->toBe(AccentColor::LIGHT_TEXT)
             ->and(AccentColor::fromHex('#1d4ed8')->isReadableAsText())->toBeTrue();

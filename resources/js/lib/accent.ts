@@ -17,8 +17,6 @@ export const ACCENT_PRESETS = [
 export const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
 const LIGHT_TEXT = '#ffffff';
-const DARK_TEXT = '#1d2630';
-const DARK_LIFT_PERCENT = 25;
 const MINIMUM_TEXT_CONTRAST = 4.5;
 
 type Channels = [number, number, number];
@@ -50,32 +48,22 @@ function contrast(first: Channels, second: Channels): number {
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-function readableTextOn(background: Channels): string {
-    return contrast(background, channels(LIGHT_TEXT)) >=
-        contrast(background, channels(DARK_TEXT))
-        ? LIGHT_TEXT
-        : DARK_TEXT;
-}
-
 /**
  * The custom properties a preview needs to paint `hex` exactly as the shell
  * will once it is saved.
+ *
+ * The label on the accent is always white, however light the colour — an
+ * administrator picks the colour, not the text on it.
  *
  * For the live preview only. It mirrors `App\Domain\Settings\AccentColor`,
  * which stays the authority: what every page actually paints is what the
  * server derives from the saved value.
  */
 export function accentPreviewStyle(hex: string): Record<string, string> {
-    const base = channels(hex);
-    const keep = 100 - DARK_LIFT_PERCENT;
-    const lifted = base.map((channel) =>
-        Math.floor((channel * keep + 255 * DARK_LIFT_PERCENT + 50) / 100),
-    ) as Channels;
-
     return {
         '--brand-base': hex,
-        '--brand-on': readableTextOn(base),
-        '--brand-lifted-on': readableTextOn(lifted),
+        '--brand-on': LIGHT_TEXT,
+        '--brand-lifted-on': LIGHT_TEXT,
     };
 }
 

@@ -98,7 +98,7 @@ class CaptureRoundRequirements
             // all; the criterion's own rules then narrow it further.
             ->filter(fn (KycDocumentType $type) => $type->batchAppliesTo($packageId, $country)
                 && $type->appliesTo($packageId, $country))
-            ->sortBy(fn (KycDocumentType $type) => [$type->batch?->sort_order ?? 0, $type->sort_order, $type->id])
+            ->sortBy(fn (KycDocumentType $type) => [$type->batchSortOrder(), $type->sort_order, $type->id])
             ->values();
     }
 

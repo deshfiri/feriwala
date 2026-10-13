@@ -190,13 +190,14 @@
      * is written onto <html> by `app.blade.php` before first paint and kept
      * in step by `BrandingHead` after a save. The label colours laid over it
      * (`--brand-on` on the accent, `--brand-lifted-on` on the lighter
-     * dark-mode accent) are chosen for contrast by
+     * dark-mode accent) are white whatever colour is chosen — an
+     * administrator picks the colour, not the text on it. See
      * `App\Domain\Settings\AccentColor`, whose default mirrors this one.
      * Primary actions stay near-black: the accent is the accent.
      */
     --brand-base: #ca6330;
     --brand-on: #ffffff;
-    --brand-lifted-on: #1d2630;
+    --brand-lifted-on: #ffffff;
 
     --brand: var(--brand-base);
     --brand-foreground: var(--brand-on);

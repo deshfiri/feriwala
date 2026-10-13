@@ -39,7 +39,7 @@ class ApplicableRequirements
             ->get()
             ->filter(fn (KycDocumentType $type) => $type->batchAppliesTo($packageKey, $account->owner?->country)
                 && $type->appliesTo($packageKey, $account->owner?->country))
-            ->sortBy(fn (KycDocumentType $type) => [$type->batch?->sort_order ?? 0, $type->sort_order, $type->id])
+            ->sortBy(fn (KycDocumentType $type) => [$type->batchSortOrder(), $type->sort_order, $type->id])
             ->values();
     }
 
@@ -62,7 +62,9 @@ class ApplicableRequirements
         $documents = $submission?->documents()->get()->keyBy('kyc_document_type_id') ?? collect();
         $fields = $submission?->fields()->get()->keyBy('kyc_document_type_id') ?? collect();
 
-        return $requirements->sortBy(fn (KycSubmissionRequirement $requirement) => [$requirement->batch_sort_order, $requirement->sort_order, $requirement->id])->map(function (KycSubmissionRequirement $requirement) use ($documents, $fields) {
+        // values(): sorting keeps the old keys, and a list with gaps in its keys
+        // reaches the browser as an object, not an array.
+        return $requirements->sortBy(fn (KycSubmissionRequirement $requirement) => [$requirement->batch_sort_order, $requirement->sort_order, $requirement->id])->values()->map(function (KycSubmissionRequirement $requirement) use ($documents, $fields) {
             $document = $documents->get($requirement->kyc_document_type_id);
             $field = $fields->get($requirement->kyc_document_type_id);
 
