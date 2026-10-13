@@ -90,6 +90,8 @@ function checkout(overrides: Partial<CheckoutSummary> = {}): CheckoutSummary {
         tax_added: money('0.00'),
         total: money('20000.00'),
         addresses: { billing: address, shipping: address },
+        address_book: [],
+        selected_address_id: null,
         ready_to_confirm: true,
         pending_order: null,
         resale_channels: ['own_website', 'marketplace', 'other'],

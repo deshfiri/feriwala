@@ -100,6 +100,17 @@ export type CheckoutAddress = {
 
 export type CheckoutAddressType = 'billing' | 'shipping';
 
+/** One of the Partner's saved addresses, as the checkout offers it. */
+export type CheckoutAddressBookEntry = {
+    id: string;
+    is_default: boolean;
+    contact_name: string;
+    contact_mobile: string;
+    line: string;
+    place: string;
+    has_postcode: boolean;
+};
+
 export type CheckoutPaymentMethod = { name: string; label: string };
 
 /**
@@ -130,6 +141,8 @@ export type CheckoutSummary = {
     tax_added: Money;
     total: Money;
     addresses: Record<CheckoutAddressType, CheckoutAddress | null>;
+    address_book: CheckoutAddressBookEntry[];
+    selected_address_id: string | null;
     ready_to_confirm: boolean;
     /** An order from this cart already waiting for payment (P4-9). */
     pending_order: { id: string; reference: string } | null;
