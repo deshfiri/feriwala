@@ -338,6 +338,7 @@ describe('no way into the catalogue except the administration', function () {
         ]);
         $website = Website::factory()->forAccount($account)->active()->create();
         $product = websiteTestProduct();
+        websiteTestPurchase($account, $product);
         $before = catalogueApiFingerprint();
 
         $this->actingAs($account->owner);

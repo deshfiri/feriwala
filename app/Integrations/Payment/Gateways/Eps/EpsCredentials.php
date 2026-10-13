@@ -26,7 +26,7 @@ class EpsCredentials extends GatewayCredentials
      */
     public function requiredKeys(): array
     {
-        return ['merchant_id', 'store_id', 'username', 'password', 'hash_key', 'device_type_id'];
+        return ['merchant_id', 'store_id', 'username', 'password', 'hash_key'];
     }
 
     public function merchantId(): string
@@ -52,10 +52,5 @@ class EpsCredentials extends GatewayCredentials
     public function hashKey(): string
     {
         return $this->require('hash_key');
-    }
-
-    public function deviceTypeId(): string
-    {
-        return $this->require('device_type_id');
     }
 }

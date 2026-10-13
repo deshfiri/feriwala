@@ -33,9 +33,16 @@ return [
         'more' => 'Details',
     ],
 
+    'tabs' => [
+        'label' => 'Show products',
+        'all' => 'All products',
+        'mine' => 'My Products',
+    ],
+    'mine_empty_title' => 'You have not bought anything yet',
+    'mine_empty_help' => 'Products appear here once a wholesale order for them is paid. Only these can be put on your website.',
+
     'actions' => [
         'order' => 'Order wholesale',
-        'publish' => 'Publish to website',
         'view' => 'View product',
     ],
 ];

@@ -115,6 +115,8 @@ describe('initiating', function () {
             && $request->hasHeader('x-hash', epsHash('PAY-260901-K7M3QX9P'))
             && $request->hasHeader('Authorization', 'Bearer a-jwt-token')
             && $request['merchantTransactionId'] === 'PAY-260901-K7M3QX9P'
+            && $request['customerAddress'] !== ''
+            && $request['customerCountry'] === 'BD'
             // The amount reaches EPS as a decimal string, never minor units.
             && $request['totalAmount'] === '6000.00');
     });
@@ -250,6 +252,22 @@ describe('server-side verification', function () {
 
         expect($status->isPaid())->toBeTrue()
             ->and($status->amount->toDecimal())->toBe('6000.00');
+    });
+
+    it('reads the PascalCase response shape from the EPS integration guide', function () {
+        Http::fake([
+            '*/v1/Auth/GetToken' => Http::response(['token' => 'a-jwt-token']),
+            '*/v1/EPSEngine/CheckMerchantTransactionStatus*' => Http::response([
+                'MerchantTransactionId' => 'PAY-1',
+                'Status' => 'Success',
+                'TotalAmount' => '6000.00',
+            ]),
+        ]);
+
+        $result = $this->gateway->verify('PAY-1');
+
+        expect($result->isPaid())->toBeTrue()
+            ->and($result->amount->toDecimal())->toBe('6000.00');
     });
 
     it('reads a nested data.status/data.amount shape too', function () {

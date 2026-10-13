@@ -485,6 +485,7 @@ return [
         'image_too_large' => 'That image is too large.',
         'not_editable' => 'This website is closed and cannot be changed.',
         'product_not_eligible' => 'This product is not available to your account for Partner Selling.',
+        'product_not_purchased' => 'Buy this product wholesale first. Only products you have bought can be put on your website.',
         'already_selected' => 'This website already sells that product.',
         'price_required' => 'Set a selling price before putting it on sale.',
         'publish_limit' => 'Your package allows :limit published product(s). Unpublish one to publish another.',

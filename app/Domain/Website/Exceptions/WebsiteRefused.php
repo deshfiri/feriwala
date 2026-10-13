@@ -112,6 +112,12 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.product_not_eligible'), 'product');
     }
 
+    /** A website sells what the account has bought: a paid wholesale order first. */
+    public static function productNotPurchased(): self
+    {
+        return new self(__('website.refused.product_not_purchased'), 'product');
+    }
+
     /** Choosing the same product twice is the same choice. */
     public static function alreadySelected(): self
     {

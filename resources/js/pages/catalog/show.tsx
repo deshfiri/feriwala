@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as productsIndex } from '@/routes/catalog';
+import { show as wholesaleShow } from '@/routes/catalog/wholesale';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { index as websiteProducts } from '@/routes/websites/products';
 import type {
@@ -42,6 +43,8 @@ type Props = {
      * website.
      */
     websites?: { id: string; name: string; selected: boolean }[];
+    /** Whether this account has bought the product; only then can it go on a website. */
+    purchased?: boolean;
     /** The product's public identifier, for choosing it for a storefront. */
     product_id?: string;
     /** Updates published for this product, newest first (new feature). */
@@ -66,6 +69,7 @@ export default function CatalogueProduct({
     product,
     related,
     websites = [],
+    purchased = false,
     product_id: productId,
     content,
     library_content: libraryContent = [],
@@ -97,6 +101,21 @@ export default function CatalogueProduct({
                     title={product.name}
                     description={`${product.category}${product.brand ? ` · ${product.brand}` : ''}`}
                 />
+
+                {modes.partner_selling && !purchased && (
+                    <SectionCard
+                        title={t('catalog.websites.title')}
+                        description={t('catalog.websites.buy_first')}
+                    >
+                        {modes.wholesale && (
+                            <Button size="sm" asChild>
+                                <Link href={wholesaleShow(product.slug)}>
+                                    {t('partner_products.actions.order')}
+                                </Link>
+                            </Button>
+                        )}
+                    </SectionCard>
+                )}
 
                 {modes.partner_selling && productId && websites.length > 0 && (
                     <SectionCard

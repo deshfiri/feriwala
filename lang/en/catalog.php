@@ -399,6 +399,7 @@ return [
         'description' => 'Adding it selects this product for your storefront. You set the price on the website’s own product screen, within the allowed range.',
         'add' => 'Add to this website',
         'already' => 'Already on this website',
+        'buy_first' => 'Only products you have bought can be put on your website. Buy this one wholesale, and once the order is paid it appears in My Products.',
         'manage' => 'Manage',
     ],
 

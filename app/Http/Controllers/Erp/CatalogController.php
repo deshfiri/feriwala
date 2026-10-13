@@ -15,6 +15,7 @@ use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
+use App\Domain\Catalog\PurchasedProducts;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\ContentLibrary\ContentBlocks;
 use App\Domain\ContentLibrary\Models\ContentLibraryItem;
@@ -63,6 +64,7 @@ class CatalogController extends Controller
 
     public function __construct(
         protected ProductEligibility $eligibility,
+        protected PurchasedProducts $purchased,
         protected ProductMediaStore $media,
         protected WholesalePriceResolver $prices,
         protected StockAvailability $stock,
@@ -125,6 +127,13 @@ class CatalogController extends Controller
             $query->whereRaw('1 = 0');
         }
 
+        // "My Products": only what this account has bought.
+        $mine = $request->string('scope')->toString() === 'mine';
+
+        if ($mine) {
+            $this->purchased->only($query, $account);
+        }
+
         if ($stock !== null) {
             $query = $this->stock->whereProductStock($query, $account, $stock === 'in_stock');
         }
@@ -169,6 +178,7 @@ class CatalogController extends Controller
                 'stock' => $stock,
                 'price_min' => $priceMin,
                 'price_max' => $priceMax,
+                'scope' => $mine ? 'mine' : 'all',
             ],
             'can' => [
                 'wholesale' => $wholesaleAllowed,
@@ -519,7 +529,8 @@ class CatalogController extends Controller
              * is what makes the door reachable from where a partner is already
              * standing.
              */
-            'websites' => $partnerSelling
+            'purchased' => $purchased = $this->purchased->has($account, $product),
+            'websites' => $partnerSelling && $purchased
                 ? $this->websitesFor($account, $product)
                 : [],
 

@@ -124,14 +124,16 @@ class EpsGateway extends Gateway
             ])
             ->timeout(20)
             ->post($this->host().self::INITIALIZE_PATH, [
-                'deviceTypeId' => $this->credentials->deviceTypeId(),
                 'merchantId' => $this->credentials->merchantId(),
                 'storeId' => $this->credentials->storeId(),
                 'transactionTypeId' => 1,
                 'financialEntityId' => 0,
                 'version' => '1',
-                'transactionDate' => now()->toIso8601String(),
                 'transitionStatusId' => 0,
+                'ipAddress' => request()->ip() ?? '127.0.0.1',
+                'valueA' => '',
+                'valueB' => '',
+                'valueC' => '',
                 'valueD' => '',
 
                 // EPS's own reference for this transaction and ours are the
@@ -152,13 +154,27 @@ class EpsGateway extends Gateway
                 'customerEmail' => $intent->customerEmail,
                 'customerPhone' => $intent->customerMobile ?? '',
 
+                // The EPS integration guide (v0.5) marks the address block
+                // mandatory; the payer's postal address is not captured at
+                // checkout, so these are fixed placeholders.
+                'customerAddress' => 'Dhaka',
+                'customerCity' => 'Dhaka',
+                'customerState' => 'Dhaka',
+                'customerPostcode' => '1200',
+                'customerCountry' => 'BD',
+
+                'shippingMethod' => 'NO',
+                'noOfItem' => '1',
                 'productName' => $intent->description,
                 'productProfile' => 'general',
                 'productCategory' => 'service',
             ]);
 
         if ($response->failed()) {
-            throw GatewayUnavailable::forGateway($this->name(), 'HTTP '.$response->status());
+            throw GatewayUnavailable::forGateway(
+                $this->name(),
+                'HTTP '.$response->status().' '.mb_substr($response->body(), 0, 200),
+            );
         }
 
         /** @var array<string, mixed> $body */
@@ -302,9 +318,11 @@ class EpsGateway extends Gateway
          * vendor's own sources touch a real response, and it does not
          * commit to a single shape either.
          */
-        $status = $body['transactionStatus']
+        $body = $this->lowercaseKeys($body);
+
+        $status = $body['transactionstatus']
             ?? $body['status']
-            ?? ($body['data']['transactionStatus'] ?? null)
+            ?? ($body['data']['transactionstatus'] ?? null)
             ?? ($body['data']['status'] ?? null);
 
         $status = is_string($status) ? mb_strtoupper($status) : null;
@@ -350,15 +368,33 @@ class EpsGateway extends Gateway
     }
 
     /**
+     * The guide's real response is PascalCase (`Status`, `TotalAmount`),
+     * where the SDK samples were camelCase — normalise so both read.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    protected function lowercaseKeys(array $body): array
+    {
+        $out = [];
+
+        foreach ($body as $key => $value) {
+            $out[mb_strtolower((string) $key)] = is_array($value) ? $this->lowercaseKeys($value) : $value;
+        }
+
+        return $out;
+    }
+
+    /**
      * The paid amount, read across the same uncertainty as the status field.
      *
      * @param  array<string, mixed>  $body
      */
     protected function amountFrom(array $body): ?Money
     {
-        $raw = $body['totalAmount']
+        $raw = $body['totalamount']
             ?? $body['amount']
-            ?? ($body['data']['totalAmount'] ?? null)
+            ?? ($body['data']['totalamount'] ?? null)
             ?? ($body['data']['amount'] ?? null);
 
         if (! is_numeric($raw)) {

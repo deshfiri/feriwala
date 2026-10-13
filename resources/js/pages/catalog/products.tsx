@@ -1,4 +1,4 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { ImageOff, Package, Search } from 'lucide-react';
 import { useState } from 'react';
 import TablePagination from '@/components/data-table/table-pagination';
@@ -28,6 +28,7 @@ type Props = {
         stock?: 'in_stock' | 'out_of_stock' | null;
         price_min?: string | null;
         price_max?: string | null;
+        scope?: 'all' | 'mine';
     };
     can: { wholesale: boolean; filter_wholesale: boolean };
     options: { categories: SelectOption[]; brands: SelectOption[] };
@@ -92,6 +93,35 @@ export default function PartnerProducts({
                     title={t('partner_products.title')}
                     description={t('partner_products.description')}
                 />
+
+                <div
+                    role="group"
+                    aria-label={t('partner_products.tabs.label')}
+                    className="flex gap-2"
+                >
+                    {(['all', 'mine'] as const).map((scope) => (
+                        <Button
+                            key={scope}
+                            type="button"
+                            size="sm"
+                            variant={
+                                (filters.scope ?? 'all') === scope
+                                    ? 'default'
+                                    : 'outline'
+                            }
+                            aria-pressed={(filters.scope ?? 'all') === scope}
+                            onClick={() =>
+                                setFilter(
+                                    'scope',
+                                    scope === 'mine' ? 'mine' : undefined,
+                                )
+                            }
+                            data-test={`products-scope-${scope}`}
+                        >
+                            {t(`partner_products.tabs.${scope}`)}
+                        </Button>
+                    ))}
+                </div>
 
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                     <div className="relative sm:col-span-2 xl:col-span-2">
@@ -220,12 +250,16 @@ export default function PartnerProducts({
                         title={t(
                             filtered
                                 ? 'catalog.browse.no_matches'
-                                : 'catalog.browse.empty',
+                                : filters.scope === 'mine'
+                                  ? 'partner_products.mine_empty_title'
+                                  : 'catalog.browse.empty',
                         )}
                         description={t(
                             filtered
                                 ? 'catalog.browse.no_matches_help'
-                                : 'catalog.browse.empty_help',
+                                : filters.scope === 'mine'
+                                  ? 'partner_products.mine_empty_help'
+                                  : 'catalog.browse.empty_help',
                         )}
                     />
                 ) : (
@@ -253,12 +287,8 @@ export default function PartnerProducts({
 
 export function ProductTile({ product }: { product: PartnerProductCard }) {
     const { t } = useTranslation();
-    const { account } = usePage().props;
     const wholesale = product.wholesale;
     const selling = product.partner_selling;
-    const canPublish =
-        selling !== null &&
-        Boolean(account?.allowsWebsites || account?.hasWebsites);
 
     return (
         <Card
@@ -449,13 +479,6 @@ export function ProductTile({ product }: { product: PartnerProductCard }) {
                         <Button asChild size="sm">
                             <Link href={wholesaleShow(product.slug)}>
                                 {t('partner_products.actions.order')}
-                            </Link>
-                        </Button>
-                    )}
-                    {canPublish && (
-                        <Button asChild size="sm" variant="outline">
-                            <Link href={productShow(product.slug)}>
-                                {t('partner_products.actions.publish')}
                             </Link>
                         </Button>
                     )}
