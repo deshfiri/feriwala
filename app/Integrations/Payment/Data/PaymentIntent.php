@@ -2,6 +2,7 @@
 
 namespace App\Integrations\Payment\Data;
 
+use App\Domain\Billing\Actions\PreparePaymentAttempt;
 use App\Domain\Billing\Models\Payment;
 use App\Support\Money\Money;
 
@@ -24,6 +25,15 @@ class PaymentIntent
         public readonly string $cancelUrl,
         public readonly string $ipnUrl,
         public readonly string $description,
+        public readonly ?PayerAddress $payerAddress = null,
+
+        /**
+         * The identifier this attempt is known by at a provider that wants one
+         * of its own per attempt (EPS's merchantTransactionId). Already saved on
+         * the payment when the gateway is called.
+         */
+        public readonly ?string $attemptReference = null,
+        public readonly ?string $ipAddress = null,
     ) {}
 
     public static function forPayment(
@@ -34,6 +44,8 @@ class PaymentIntent
         string $ipnUrl,
     ): self {
         $user = $payment->businessAccount?->owner;
+
+        $attempt = app(PreparePaymentAttempt::class)->handle($payment);
 
         return new self(
             reference: $payment->reference,
@@ -46,6 +58,11 @@ class PaymentIntent
             cancelUrl: $cancelUrl,
             ipnUrl: $ipnUrl,
             description: $payment->purpose->label(),
+            payerAddress: $attempt['address'],
+            attemptReference: $attempt['reference'],
+            // Laravel's own resolution, which honours the trusted-proxy
+            // configuration and never reads a raw client-supplied header.
+            ipAddress: request()->ip(),
         );
     }
 }

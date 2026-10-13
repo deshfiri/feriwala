@@ -899,6 +899,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::put('gateways', [PaymentGatewayController::class, 'update'])
             ->name('gateways.update');
 
+        // A real authentication call with the stored credentials; moves no money.
+        Route::post('gateways/test-connection', [PaymentGatewayController::class, 'testConnection'])
+            ->name('gateways.test-connection');
+
         // Switching a gateway on is its own action: entering a store password
         // is preparation, but this is the moment real customers reach it.
         Route::put('gateways/enabled', [PaymentGatewayController::class, 'toggle'])

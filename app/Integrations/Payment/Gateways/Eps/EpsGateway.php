@@ -2,6 +2,8 @@
 
 namespace App\Integrations\Payment\Gateways\Eps;
 
+use App\Domain\Billing\Actions\RecordGatewaySession;
+use App\Integrations\Payment\Contracts\TestsConnection;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayRedirect;
 use App\Integrations\Payment\Data\GatewayResult;
@@ -9,94 +11,69 @@ use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\Gateways\Gateway;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
+use App\Support\Concurrency\DistributedLock;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Illuminate\Contracts\Cache\Repository as Cache;
+use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpClient;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
 use Illuminate\Log\LogManager;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
  * EPS — Easy Payment System (§26, D7).
  *
- * Sources, read and pinned 2026-09-29:
- *   - https://www.eps.com.bd/ (links to the API documentation page and the
- *     official GitHub organisation)
- *   - https://www.eps.com.bd/eps-gateway (no endpoint paths, schemas or
- *     signing rules beyond what the linked SDKs contain)
- *   - https://www.eps.com.bd/ipn (the IPN's own page — AES-256-CBC, PKCS7,
- *     a "Data": "IV:CipherText" envelope, and a decrypted field list, but
- *     never states what the "Secret Key" it names actually is)
- *   - https://github.com/EPS-PG (the official GitHub organisation) —
- *     specifically EPS_Laravel at commit `2ae54af21eed1eb8cc8f05505379cff60dfd30b3`
- *     (`app/EPS/EPSPayment.php`, `config/epsPayment.php`,
- *     `app/Http/Controllers/EPSExampleController.php`) and EPS_PHP at commit
- *     `c1ace43cc8fb07f686eefe340363690074927603` (`Sandbox&ProductionPhP.php`,
- *     which is also where the sandbox and live base URLs actually live —
- *     neither repo's README states them)
+ * Built from, and only from, the EPS Merchant API Integration Guide v0.5
+ * (January 2024), which documents exactly three calls on one host
+ * (`https://pgapi.eps.com.bd`):
  *
- * **What those sources confirm**, independently verified against the live
- * sandbox using EPS_PHP's own published demo credentials (`Epsdemo@gmail.com`
- * / merchant `29e86e70-0ac6-45eb-ba04-9fcb0aaed12a`) — a real `GetToken` call
- * against {@see self::SANDBOX_HOST} returned a real JWT in exactly the shape
- * read from the source:
+ *   - `POST /v1/Auth/GetToken` — `x-hash` is the HMAC of the **username**;
+ *   - `POST /v1/EPSEngine/InitializeEPS` — `x-hash` is the HMAC of the
+ *     **merchantTransactionId**, with the bearer token from GetToken;
+ *   - `GET  /v1/EPSEngine/CheckMerchantTransactionStatus` — the same hash over
+ *     the identifier being asked about.
  *
- *   - Authentication is `x-hash: base64(hmac_sha512($signedString, $hashKey))`
- *     plus, after the first call, a bearer token from `POST /v1/Auth/GetToken`.
- *   - `GetToken`'s signed string is the username; `InitializeEPS` and
- *     `CheckMerchantTransactionStatus`'s signed string is the merchant's own
- *     transaction id.
- *   - `InitializeEPS`'s request body, and that it returns `RedirectURL` on
- *     success (`ErrorMessage` on failure, unconfirmed field name for the
- *     success shape's own field list beyond `RedirectURL`).
- *   - `CheckMerchantTransactionStatus` takes only the merchant's own
- *     transaction id — EPS never gives a way to ask by *its own* transaction
- *     identifier, so `verify()` and `status()` are, for this provider, the
- *     same question asked the same way.
+ * where the HMAC is `base64(hmac_sha512($data, $hashKey))`. Every hash and the
+ * token are produced here, per request; nobody ever pastes either one.
  *
- * **What is not confirmed, from any of the above, and not pursued further**:
- * the exact field names `CheckMerchantTransactionStatus` returns on a real
- * paid transaction. EPS_PHP's own published example — the only sample that
- * touches this response at all — tries four different possible field paths
- * (`transactionStatus`, `status`, `data.transactionStatus`, `data.status`)
- * and falls back to "UNKNOWN", which is the vendor's own code admitting it
- * does not reliably know its own response shape either. This driver reads
- * defensively across those same paths and refuses (never fabricates a paid
- * result) when none of them yield a recognisable status or amount — see
- * {@see interpret()}. Confirming this exactly needs either EPS's own
- * integration guide (integration@eps.com.bd) or a completed sandbox
- * transaction to inspect, and this session's sandbox access was for
- * confirming the *shape* of an authentication call, not for driving a test
- * transaction through to a paid state.
+ * The guide has no sandbox host and no IPN. The base URL is therefore a stored,
+ * validated setting ({@see EpsCredentials::baseUrl()}) and a mode without one is
+ * unconfigured, and {@see verifyWebhookSignature()} refuses everything: nothing
+ * here releases value except a direct status check (§26.4).
  *
- * The IPN channel ({@see verifyWebhookSignature()}) is separately
- * unconfirmed: nothing above states what the AES-256-CBC "Secret Key" is —
- * the same `hash_key` used for signing, a distinct value, or something
- * issued out of band — so it is not implemented, and `handleCallback()`
- * recognises an encrypted IPN body only well enough to refuse it rather than
- * silently misreading it. This does not weaken settlement: §26.4's own rule
- * holds regardless of channel — nothing releases value except a direct
- * `verify()`/`status()` call, which the browser-return path already reaches
- * with a real, unencrypted merchant transaction id every time a payer
- * returns.
+ * Nothing sensitive is logged — never the token, a hash, a credential, the
+ * payer or a payload. See {@see logCall()}.
  */
-class EpsGateway extends Gateway
+class EpsGateway extends Gateway implements TestsConnection
 {
-    public const SANDBOX_HOST = 'https://sandboxpgapi.eps.com.bd';
-
-    public const LIVE_HOST = 'https://pgapi.eps.com.bd';
-
     protected const GET_TOKEN_PATH = '/v1/Auth/GetToken';
 
     protected const INITIALIZE_PATH = '/v1/EPSEngine/InitializeEPS';
 
     protected const STATUS_PATH = '/v1/EPSEngine/CheckMerchantTransactionStatus';
 
+    /** The guide's `TransectionTypeId`: 1 = Web. */
+    protected const WEB_TRANSACTION_TYPE = 1;
+
+    /** Refresh this long before a token expires. */
+    protected const TOKEN_SKEW_SECONDS = 60;
+
+    /** Used only when a token carries no readable expiry. */
+    protected const TOKEN_FALLBACK_SECONDS = 300;
+
     public function __construct(
         protected HttpClient $http,
         protected LogManager $log,
         protected EpsCredentials $credentials,
+        protected Cache $cache,
+        protected DistributedLock $lock,
+        protected Encrypter $encrypter,
+        protected RecordGatewaySession $sessions,
     ) {}
 
     /**
@@ -111,91 +88,95 @@ class EpsGateway extends Gateway
         ];
     }
 
+    public function testConnection(): void
+    {
+        $this->requireConfigured();
+
+        $this->token(forceRefresh: true);
+    }
+
     public function initiate(PaymentIntent $intent): GatewayRedirect
     {
         $this->requireConfigured();
 
-        $token = $this->token();
+        $address = $intent->payerAddress
+            ?? throw GatewayUnavailable::missingPayerAddress($this->name());
 
-        $response = $this->http
-            ->withHeaders([
-                'x-hash' => $this->sign($intent->reference),
-                'Authorization' => "Bearer {$token}",
-            ])
-            ->timeout(20)
-            ->post($this->host().self::INITIALIZE_PATH, [
-                'merchantId' => $this->credentials->merchantId(),
-                'storeId' => $this->credentials->storeId(),
-                'transactionTypeId' => 1,
-                'financialEntityId' => 0,
-                'version' => '1',
-                'transitionStatusId' => 0,
-                'ipAddress' => request()->ip() ?? '127.0.0.1',
-                'valueA' => '',
-                'valueB' => '',
-                'valueC' => '',
-                'valueD' => '',
+        $this->requirePayerDetails($intent);
 
-                // EPS's own reference for this transaction and ours are the
-                // same string — the only identifier the browser return and
-                // CheckMerchantTransactionStatus both key on.
-                'merchantTransactionId' => $intent->reference,
-                'CustomerOrderId' => $intent->reference,
+        $transactionId = $intent->attemptReference;
 
-                // EPS expects a decimal string, not minor units. This is the
-                // one place the conversion happens.
-                'totalAmount' => $intent->amount->toDecimal(),
-
-                'successUrl' => $intent->successUrl,
-                'failUrl' => $intent->failUrl,
-                'cancelUrl' => $intent->cancelUrl,
-
-                'customerName' => $intent->customerName,
-                'customerEmail' => $intent->customerEmail,
-                'customerPhone' => $intent->customerMobile ?? '',
-
-                // The EPS integration guide (v0.5) marks the address block
-                // mandatory; the payer's postal address is not captured at
-                // checkout, so these are fixed placeholders.
-                'customerAddress' => 'Dhaka',
-                'customerCity' => 'Dhaka',
-                'customerState' => 'Dhaka',
-                'customerPostcode' => '1200',
-                'customerCountry' => 'BD',
-
-                'shippingMethod' => 'NO',
-                'noOfItem' => '1',
-                'productName' => $intent->description,
-                'productProfile' => 'general',
-                'productCategory' => 'service',
-            ]);
-
-        if ($response->failed()) {
-            throw GatewayUnavailable::forGateway(
-                $this->name(),
-                'HTTP '.$response->status().' '.mb_substr($response->body(), 0, 200),
-            );
+        if ($transactionId === null || ! preg_match('/^\d{10,}$/', $transactionId)) {
+            throw GatewayUnavailable::forGateway($this->name(), 'no transaction identifier was prepared for this attempt');
         }
 
-        /** @var array<string, mixed> $body */
-        $body = $response->json() ?? [];
+        // The decimal text goes into the JSON as a number exactly as written —
+        // never through a float.
+        $amountToken = '@@'.Str::random(12).'@@';
 
-        if (empty($body['RedirectURL'])) {
-            $this->log->channel('payment')->warning('EPS refused to start a session', [
-                'reference' => $intent->reference,
-                'reason' => $body['ErrorMessage'] ?? $body['errorMessage'] ?? null,
-            ]);
+        $payload = [
+            'merchantId' => $this->credentials->merchantId(),
+            'storeId' => $this->credentials->storeId(),
+            'CustomerOrderId' => $intent->reference,
+            'merchantTransactionId' => $transactionId,
+            'transactionTypeId' => self::WEB_TRANSACTION_TYPE,
+            'financialEntityId' => 0,
+            'transitionStatusId' => 0,
+            'totalAmount' => $amountToken,
+            'ipAddress' => $intent->ipAddress,
+            'version' => '1',
+            'successUrl' => $intent->successUrl,
+            'failUrl' => $intent->failUrl,
+            'cancelUrl' => $intent->cancelUrl,
+            'customerName' => $intent->customerName,
+            'customerEmail' => $intent->customerEmail,
+            'CustomerAddress' => $address->line,
+            'CustomerCity' => $address->city,
+            'CustomerState' => $address->state,
+            'CustomerPostcode' => $address->postcode,
+            'CustomerCountry' => $address->country,
+            'CustomerPhone' => $this->localPhone((string) $intent->customerMobile),
+            'ValueA' => '',
+            'ValueB' => '',
+            'ValueC' => '',
+            'ValueD' => '',
+            'ShippingMethod' => 'NO',
+            'NoOfItem' => '1',
+            'ProductName' => $intent->description,
+            'ProductProfile' => 'general',
+            'ProductCategory' => 'service',
+        ];
 
-            throw GatewayUnavailable::forGateway(
-                $this->name(),
-                (string) ($body['ErrorMessage'] ?? $body['errorMessage'] ?? 'session could not be created'),
-            );
-        }
-
-        return new GatewayRedirect(
-            url: (string) $body['RedirectURL'],
-            gatewayReference: $intent->reference,
+        $body = str_replace(
+            '"'.$amountToken.'"',
+            $intent->amount->toDecimal(),
+            (string) json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         );
+
+        $response = $this->send('POST', self::INITIALIZE_PATH, $transactionId, $intent->reference, $body);
+
+        /** @var array<string, mixed> $data */
+        $data = $this->lowercaseKeys($response->json() ?? []);
+
+        $errorMessage = $this->text($data['errormessage'] ?? null);
+        $errorCode = $this->text($data['errorcode'] ?? null);
+        $sessionId = $this->text($data['transactionid'] ?? null);
+        $redirectUrl = $this->text($data['redirecturl'] ?? null);
+
+        if ($response->failed() || $errorMessage !== null || $errorCode !== null) {
+            throw GatewayUnavailable::forGateway(
+                $this->name(),
+                $this->failureText($response->status(), $errorCode, $errorMessage),
+            );
+        }
+
+        if ($sessionId === null || $redirectUrl === null || ! $this->isEpsHostedUrl($redirectUrl)) {
+            throw GatewayUnavailable::malformedResponse($this->name());
+        }
+
+        $this->sessions->handle($intent->reference, $sessionId);
+
+        return new GatewayRedirect(url: $redirectUrl, gatewayReference: $transactionId);
     }
 
     /**
@@ -205,55 +186,43 @@ class EpsGateway extends Gateway
      * request says — a user can edit anything in that redirect. It reports
      * pending on an apparent success so the caller is forced through
      * verify().
-     *
-     * Also the entry point for a genuine IPN post ({@see PaymentWebhookController}
-     * routes every provider's notification through this same method) — an
-     * encrypted EPS IPN body carries none of the plain fields below, so it
-     * falls through to the `ipn_unsupported` refusal rather than being
-     * misread as an empty or malformed redirect.
      */
     public function handleCallback(Request $request): GatewayResult
     {
-        if ($request->has('Data') && ! $request->has('MerchantTransactionId') && ! $request->has('merchantTransactionId')) {
+        $query = $this->lowercaseKeys($request->all());
+
+        if (isset($query['data']) && ! isset($query['merchanttransactionid'])) {
             return GatewayResult::failed(
                 reference: null,
-                error: 'EPS IPN payloads are AES-256-CBC encrypted and this driver cannot decrypt them '
-                    .'(the "Secret Key" EPS documents is not identified anywhere in their public materials).',
+                error: 'EPS IPN payloads are encrypted and the guide does not say how to decrypt them.',
                 errorCode: 'ipn_unsupported',
-                raw: $request->all(),
             );
         }
 
-        $reference = $request->input('MerchantTransactionId', $request->input('merchantTransactionId'));
-        $reference = is_string($reference) && $reference !== '' ? $reference : null;
-
-        $status = mb_strtoupper((string) $request->input('Status', $request->input('status', '')));
+        $reference = $this->text($query['merchanttransactionid'] ?? null);
+        $status = mb_strtoupper((string) ($this->text($query['status'] ?? null) ?? ''));
 
         if (in_array($status, ['SUCCESS', 'COMPLETED'], true)) {
             return GatewayResult::pending(
                 reference: (string) $reference,
                 gatewayReference: $reference,
-                raw: $request->all(),
             );
         }
 
         if (in_array($status, ['CANCEL', 'CANCELLED', 'CANCELED'], true)) {
-            return GatewayResult::cancelled($reference, $request->all());
+            return GatewayResult::cancelled($reference);
         }
 
         return GatewayResult::failed(
             reference: $reference,
             error: $status !== '' ? "EPS reported this transaction as {$status}." : 'EPS did not report a recognisable status.',
             errorCode: $status !== '' ? $status : null,
-            raw: $request->all(),
             gatewayReference: $reference,
         );
     }
 
     /**
-     * Fails closed. See the class docblock: the IPN "Secret Key" EPS
-     * documents is not identified anywhere in their public materials, so
-     * nothing here can tell a genuine notification from a forged one.
+     * Fails closed: the guide documents no IPN signature.
      */
     public function verifyWebhookSignature(Request $request): bool
     {
@@ -261,11 +230,7 @@ class EpsGateway extends Gateway
     }
 
     /**
-     * Ask EPS directly what happened to a transaction.
-     *
-     * EPS exposes exactly one lookup, addressed by the merchant's own
-     * transaction id — there is no separate identifier to verify *its* side
-     * by, so `verify()` and {@see status()} ask the same question.
+     * Ask EPS directly what happened, addressed by our merchantTransactionId.
      */
     public function verify(string $gatewayReference): GatewayResult
     {
@@ -273,105 +238,436 @@ class EpsGateway extends Gateway
     }
 
     /**
-     * Ask what became of one of our own transaction ids (§28.1).
-     *
-     * The same call as {@see verify()} — EPS has no other. Kept as its own
-     * method because reconciliation calls it without a `gatewayReference`
-     * from anywhere else, which for EPS is always this same string anyway.
+     * The same single lookup the guide offers.
      */
     public function status(string $reference): GatewayResult
     {
         return $this->interpret($reference);
     }
 
-    protected function interpret(string $reference): GatewayResult
+    protected function interpret(string $merchantTransactionId): GatewayResult
     {
         $this->requireConfigured();
 
-        $token = $this->token();
-
-        try {
-            $response = $this->http
-                ->withHeaders([
-                    'x-hash' => $this->sign($reference),
-                    'Authorization' => "Bearer {$token}",
-                ])
-                ->timeout(20)
-                ->get($this->host().self::STATUS_PATH, [
-                    'merchantTransactionId' => $reference,
-                ]);
-        } catch (ConnectionException) {
-            throw GatewayUnavailable::forGateway($this->name(), 'verification connection failed');
-        }
-
-        if ($response->failed()) {
-            throw GatewayUnavailable::forGateway($this->name(), 'HTTP '.$response->status());
-        }
+        $response = $this->send(
+            'GET',
+            self::STATUS_PATH,
+            $merchantTransactionId,
+            $merchantTransactionId,
+            query: ['merchantTransactionId' => $merchantTransactionId],
+        );
 
         /** @var array<string, mixed> $body */
-        $body = $response->json() ?? [];
+        $body = $this->lowercaseKeys($response->json() ?? []);
 
-        /*
-         * Read across every shape EPS_PHP's own published example tries
-         * ("transactionStatus", "status", each nested under "data") rather
-         * than picking one — that example is the only place any of the
-         * vendor's own sources touch a real response, and it does not
-         * commit to a single shape either.
-         */
-        $body = $this->lowercaseKeys($body);
+        $errorCode = $this->text($body['errorcode'] ?? null);
+        $errorMessage = $this->text($body['errormessage'] ?? null);
 
-        $status = $body['transactionstatus']
-            ?? $body['status']
-            ?? ($body['data']['transactionstatus'] ?? null)
-            ?? ($body['data']['status'] ?? null);
+        if ($response->failed()) {
+            throw GatewayUnavailable::forGateway(
+                $this->name(),
+                $this->failureText($response->status(), $errorCode, $errorMessage),
+            );
+        }
 
-        $status = is_string($status) ? mb_strtoupper($status) : null;
+        $status = $this->text($body['status'] ?? null);
 
         if ($status === null) {
             throw GatewayUnavailable::malformedResponse($this->name());
         }
 
-        if (in_array($status, ['SUCCESS', 'COMPLETED'], true)) {
+        // The answer must be about the transaction that was asked about.
+        $echoed = $this->text($body['merchanttransactionid'] ?? null);
+
+        if ($echoed !== null && $echoed !== $merchantTransactionId) {
+            throw GatewayUnavailable::malformedResponse($this->name());
+        }
+
+        $reportedStatus = $status;
+        $status = mb_strtoupper($status);
+        $epsTransactionId = $this->text($body['epstransactionid'] ?? null);
+
+        // Only what is needed to explain the outcome. The payer's name, email,
+        // address and phone are in the response and are deliberately dropped.
+        $raw = array_filter([
+            'MerchantTransactionId' => $merchantTransactionId,
+            'EpsTransactionId' => $epsTransactionId,
+            'Status' => $reportedStatus,
+            'TotalAmount' => $this->text($body['totalamount'] ?? null),
+            'TransactionDate' => $this->text($body['transactiondate'] ?? null),
+            'FinancialEntity' => $this->text($body['financialentity'] ?? null),
+            'ErrorCode' => $errorCode,
+            'ErrorMessage' => $errorMessage,
+        ], fn (mixed $value) => $value !== null);
+
+        if ($status === 'SUCCESS') {
             $amount = $this->amountFrom($body);
 
+            // A success this driver cannot price is never guessed at.
             if ($amount === null) {
-                // A confirmed success this driver cannot price is not
-                // evidence of nothing — it is evidence this response shape
-                // was never confirmed. Refusing here is the whole point of
-                // never guessing at a field that decides how much money
-                // moves.
                 throw GatewayUnavailable::malformedResponse($this->name());
             }
 
             return GatewayResult::paid(
-                reference: $reference,
-                gatewayReference: $reference,
+                reference: $merchantTransactionId,
+                gatewayReference: $merchantTransactionId,
                 amount: $amount,
-                raw: $body,
+                raw: $raw,
+                settlementReference: $epsTransactionId,
             );
         }
 
-        if (in_array($status, ['PENDING', 'PROCESSING'], true)) {
-            return GatewayResult::pending($reference, $reference, $body);
+        if (in_array($status, ['PENDING', 'PROCESSING', 'INITIATED'], true)) {
+            return GatewayResult::pending($merchantTransactionId, $merchantTransactionId, $raw);
         }
 
         if (in_array($status, ['CANCEL', 'CANCELLED', 'CANCELED'], true)) {
-            return GatewayResult::cancelled($reference, $body);
+            return GatewayResult::cancelled($merchantTransactionId, $raw);
         }
 
         return GatewayResult::failed(
-            reference: $reference,
-            error: "EPS reported this transaction as {$status}.",
-            errorCode: $status,
-            raw: $body,
+            reference: $merchantTransactionId,
+            error: $errorMessage ?? "EPS reported this transaction as {$status}.",
+            errorCode: $errorCode ?? $status,
+            raw: $raw,
         );
     }
 
     /**
-     * The guide's real response is PascalCase (`Status`, `TotalAmount`),
-     * where the SDK samples were camelCase — normalise so both read.
+     * The paid amount, as exact decimal text in taka.
      *
-     * @param  array<string, mixed>  $body
+     * @param  array<string, mixed>  $body  keys already lower-cased
+     */
+    protected function amountFrom(array $body): ?Money
+    {
+        $raw = $body['totalamount'] ?? null;
+
+        if (! is_string($raw) && ! is_int($raw)) {
+            return null;
+        }
+
+        $raw = trim((string) $raw);
+
+        if (! preg_match('/^\d+(\.\d{1,2})?$/', $raw)) {
+            return null;
+        }
+
+        try {
+            return Money::fromDecimal($raw, Currency::BDT);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * One authenticated call, with the token and hash made here.
+     *
+     * A token EPS rejects is dropped and fetched again once. Returns the raw
+     * response for the caller to read; only a transport failure throws.
+     *
+     * @param  string  $hashed  what `x-hash` signs
+     * @param  string  $reference  what to correlate the log line with
+     * @param  array<string, string>  $query
+     */
+    protected function send(
+        string $method,
+        string $path,
+        string $hashed,
+        string $reference,
+        ?string $body = null,
+        array $query = [],
+    ): Response {
+        $token = $this->token();
+
+        $response = $this->dispatch($method, $path, $hashed, $reference, $body, $query, $token);
+
+        if ($response->status() === 401) {
+            $response = $this->dispatch(
+                $method, $path, $hashed, $reference, $body, $query,
+                $this->token(forceRefresh: true, rejected: $token),
+            );
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param  array<string, string>  $query
+     */
+    protected function dispatch(
+        string $method,
+        string $path,
+        string $hashed,
+        string $reference,
+        ?string $body,
+        array $query,
+        string $token,
+    ): Response {
+        $request = $this->http
+            ->withHeaders(['x-hash' => $this->sign($hashed), 'Authorization' => "Bearer {$token}"])
+            ->acceptJson()
+            ->timeout(20);
+
+        try {
+            $response = $method === 'GET'
+                ? $request->get($this->url($path), $query)
+                : $request->withBody((string) $body, 'application/json')->post($this->url($path));
+        } catch (ConnectionException) {
+            throw GatewayUnavailable::forGateway($this->name(), 'connection failed');
+        }
+
+        $this->logCall($method, $path, $reference, $response);
+
+        return $response;
+    }
+
+    /**
+     * A bearer token — from the cache while it is good, else from GetToken.
+     *
+     * Refreshes are serialised, so a burst of requests asks EPS once. When a
+     * token has just been rejected, anyone who finds a *different* cached
+     * token under the lock uses that instead of asking again.
+     */
+    protected function token(bool $forceRefresh = false, ?string $rejected = null): string
+    {
+        $key = $this->tokenCacheKey();
+
+        if (! $forceRefresh && ($cached = $this->cachedToken($key)) !== null) {
+            return $cached;
+        }
+
+        return $this->lock->run(
+            key: $key.':refresh',
+            callback: function () use ($key, $forceRefresh, $rejected): string {
+                $cached = $this->cachedToken($key);
+
+                if ($cached !== null && ($rejected !== null ? $cached !== $rejected : ! $forceRefresh)) {
+                    return $cached;
+                }
+
+                $this->cache->forget($key);
+
+                return $this->requestToken($key);
+            },
+            ttlSeconds: 30,
+            waitSeconds: 10,
+        );
+    }
+
+    protected function requestToken(string $key): string
+    {
+        $username = $this->credentials->username();
+
+        try {
+            $response = $this->http
+                ->withHeaders(['x-hash' => $this->sign($username)])
+                ->acceptJson()
+                ->asJson()
+                ->timeout(20)
+                ->post($this->url(self::GET_TOKEN_PATH), [
+                    'userName' => $username,
+                    'password' => $this->credentials->password(),
+                ]);
+        } catch (ConnectionException) {
+            throw GatewayUnavailable::forGateway($this->name(), 'connection failed');
+        }
+
+        $this->logCall('POST', self::GET_TOKEN_PATH, null, $response);
+
+        /** @var array<string, mixed> $body */
+        $body = $this->lowercaseKeys($response->json() ?? []);
+        $token = $body['token'] ?? null;
+
+        if ($response->failed() || ! is_string($token) || $token === '') {
+            throw GatewayUnavailable::forGateway(
+                $this->name(),
+                $response->failed() || $this->text($body['errormessage'] ?? null) !== null
+                    ? $this->failureText(
+                        $response->status(),
+                        $this->text($body['errorcode'] ?? null),
+                        $this->text($body['errormessage'] ?? null),
+                    )
+                    : 'could not obtain an access token',
+            );
+        }
+
+        $ttl = $this->tokenLifetime($token, $this->text($body['expiredate'] ?? null)) - self::TOKEN_SKEW_SECONDS;
+
+        if ($ttl > 0) {
+            $this->cache->put($key, $this->encrypter->encryptString($token), $ttl);
+        }
+
+        return $token;
+    }
+
+    protected function cachedToken(string $key): ?string
+    {
+        $stored = $this->cache->get($key);
+
+        if (! is_string($stored)) {
+            return null;
+        }
+
+        try {
+            return $this->encrypter->decryptString($stored);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Seconds the token is good for.
+     *
+     * The JWT's own `exp` is preferred — it is unambiguous. The guide's
+     * `expireDate` carries no zone (its sample is Bangladesh time), so it is
+     * read as Asia/Dhaka, and only when `exp` is absent.
+     */
+    protected function tokenLifetime(string $token, ?string $expireDate): int
+    {
+        $segments = explode('.', $token);
+
+        if (count($segments) === 3) {
+            $payload = json_decode((string) base64_decode(strtr($segments[1], '-_', '+/'), true), true);
+
+            if (is_array($payload) && is_numeric($payload['exp'] ?? null)) {
+                return (int) $payload['exp'] - time();
+            }
+        }
+
+        if ($expireDate !== null) {
+            try {
+                return (int) Carbon::parse($expireDate, 'Asia/Dhaka')->timestamp - time();
+            } catch (Throwable) {
+                // Fall through.
+            }
+        }
+
+        return self::TOKEN_FALLBACK_SECONDS;
+    }
+
+    /**
+     * Per provider, mode, endpoint and merchant — and never the username itself.
+     */
+    protected function tokenCacheKey(): string
+    {
+        return 'eps:token:'.hash('sha256', implode('|', [
+            $this->credentials->mode(),
+            $this->credentials->baseUrl(),
+            $this->credentials->username(),
+        ]));
+    }
+
+    /**
+     * `x-hash`: base64(hmac_sha512($data, hashKey)), raw digest.
+     */
+    protected function sign(string $data): string
+    {
+        return base64_encode(hash_hmac('sha512', $data, $this->credentials->hashKey(), true));
+    }
+
+    /**
+     * The one place a path meets the base URL.
+     */
+    protected function url(string $path): string
+    {
+        return $this->credentials->baseUrl().$path;
+    }
+
+    /**
+     * Whether a redirect address is an https page EPS itself hosts.
+     */
+    protected function isEpsHostedUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+
+        if (! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || isset($parts['user']) || isset($parts['pass'])) {
+            return false;
+        }
+
+        $host = mb_strtolower((string) ($parts['host'] ?? ''));
+
+        return $host === 'eps.com.bd' || str_ends_with($host, '.eps.com.bd');
+    }
+
+    /**
+     * The guide marks name, email and phone mandatory.
+     *
+     * @throws GatewayUnavailable
+     */
+    protected function requirePayerDetails(PaymentIntent $intent): void
+    {
+        $missing = array_keys(array_filter([
+            'name' => trim($intent->customerName) === '',
+            'email address' => trim($intent->customerEmail) === '',
+            'mobile number' => trim((string) $intent->customerMobile) === '',
+            'IP address' => ! filter_var($intent->ipAddress, FILTER_VALIDATE_IP),
+        ]));
+
+        if ($missing !== []) {
+            throw GatewayUnavailable::forGateway(
+                $this->name(),
+                'the payer\'s '.implode(', ', $missing).' is required before this payment can start',
+            );
+        }
+    }
+
+    /**
+     * `+8801712345678` / `8801712345678` → `01712345678`, the form EPS's own
+     * sample uses. Anything else is passed through as stored.
+     */
+    protected function localPhone(string $mobile): string
+    {
+        $digits = preg_replace('/[\s\-]/', '', $mobile) ?? $mobile;
+
+        return preg_match('/^\+?880(1\d{9})$/', $digits, $matches) ? '0'.$matches[1] : $digits;
+    }
+
+    /**
+     * Log one call, and nothing sensitive about it: no credential, hash,
+     * token, header, payer detail or payload — only where it went, how it
+     * ended, and EPS's own error.
+     */
+    protected function logCall(string $method, string $path, ?string $reference, Response $response): void
+    {
+        $body = $this->lowercaseKeys($response->json() ?? []);
+
+        $this->log->channel('payment')->info('EPS call', [
+            'correlation' => Str::lower(Str::random(12)),
+            'payment' => $reference,
+            'mode' => $this->credentials->mode(),
+            'host' => parse_url($this->credentials->baseUrl(), PHP_URL_HOST),
+            'path' => $path,
+            'method' => $method,
+            'status' => $response->status(),
+            'error_code' => $this->text($body['errorcode'] ?? null),
+            'error_message' => $this->text($body['errormessage'] ?? null),
+        ]);
+    }
+
+    protected function failureText(int $status, ?string $code, ?string $message): string
+    {
+        $detail = $message ?? $code;
+
+        return 'HTTP '.$status.($detail !== null ? ': '.mb_substr($detail, 0, 200) : '');
+    }
+
+    /**
+     * A non-empty string, or null — EPS sends `""` and `null` for "nothing".
+     */
+    protected function text(mixed $value): ?string
+    {
+        if (is_int($value)) {
+            $value = (string) $value;
+        }
+
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
+    }
+
+    /**
+     * The guide's responses are PascalCase where the SDK samples were
+     * camelCase; reading case-insensitively accepts both.
+     *
+     * @param  array<array-key, mixed>  $body
      * @return array<string, mixed>
      */
     protected function lowercaseKeys(array $body): array
@@ -385,78 +681,8 @@ class EpsGateway extends Gateway
         return $out;
     }
 
-    /**
-     * The paid amount, read across the same uncertainty as the status field.
-     *
-     * @param  array<string, mixed>  $body
-     */
-    protected function amountFrom(array $body): ?Money
-    {
-        $raw = $body['totalamount']
-            ?? $body['amount']
-            ?? ($body['data']['totalamount'] ?? null)
-            ?? ($body['data']['amount'] ?? null);
-
-        if (! is_numeric($raw)) {
-            return null;
-        }
-
-        try {
-            return Money::fromDecimal((string) $raw, Currency::BDT);
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * `x-hash`: base64(hmac_sha512($data, hash_key)) — confirmed against the
-     * live sandbox (see the class docblock).
-     */
-    protected function sign(string $data): string
-    {
-        return base64_encode(hash_hmac('sha512', $data, $this->credentials->hashKey(), true));
-    }
-
-    /**
-     * A bearer token from `POST /v1/Auth/GetToken`, signed with the
-     * username.
-     */
-    protected function token(): string
-    {
-        $response = $this->http
-            ->withHeaders(['x-hash' => $this->sign($this->credentials->username())])
-            ->timeout(20)
-            ->post($this->host().self::GET_TOKEN_PATH, [
-                'userName' => $this->credentials->username(),
-                'password' => $this->credentials->password(),
-            ]);
-
-        if ($response->failed()) {
-            throw GatewayUnavailable::forGateway($this->name(), 'HTTP '.$response->status());
-        }
-
-        /** @var array<string, mixed> $body */
-        $body = $response->json() ?? [];
-
-        $token = $body['token'] ?? null;
-
-        if (! is_string($token) || $token === '') {
-            throw GatewayUnavailable::forGateway(
-                $this->name(),
-                (string) ($body['errorMessage'] ?? 'could not obtain an access token'),
-            );
-        }
-
-        return $token;
-    }
-
     protected function credentials(): GatewayCredentials
     {
         return $this->credentials;
-    }
-
-    protected function host(): string
-    {
-        return $this->isSandbox() ? self::SANDBOX_HOST : self::LIVE_HOST;
     }
 }

@@ -64,6 +64,7 @@ class Payment extends Model
             'revenue' => MoneyCast::class,
             'settled_amount' => MoneyCast::class.':settled_currency_code',
             'gateway_fee' => MoneyCast::class.':gateway_fee_currency_code',
+            'payer_address_snapshot' => 'array',
             'initiated_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',

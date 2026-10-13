@@ -26,6 +26,7 @@ type GatewayRow = {
     required_configuration: string[];
     missing_configuration: string[];
     last_verified_at: string | null;
+    can_test_connection: boolean;
 };
 
 type Props = {
@@ -323,6 +324,44 @@ export default function Gateways({ gateways, modes, can }: Props) {
                                         </>
                                     )}
                                 </Form>
+
+                                {gateway.can_test_connection && (
+                                    <Form
+                                        {...PaymentGatewayController.testConnection.form()}
+                                        options={{ preserveScroll: true }}
+                                        className="mt-6 border-t pt-4"
+                                    >
+                                        {({ errors, processing }) => (
+                                            <>
+                                                <input
+                                                    type="hidden"
+                                                    name="gateway"
+                                                    value={gateway.name}
+                                                />
+
+                                                <p className="text-muted-foreground mb-3 text-xs">
+                                                    {t(
+                                                        'gateways.connection.help',
+                                                    )}
+                                                </p>
+
+                                                <InputError
+                                                    message={errors.connection}
+                                                />
+
+                                                <Button
+                                                    type="submit"
+                                                    variant="outline"
+                                                    disabled={processing}
+                                                >
+                                                    {t(
+                                                        'gateways.connection.test',
+                                                    )}
+                                                </Button>
+                                            </>
+                                        )}
+                                    </Form>
+                                )}
 
                                 <Form
                                     {...PaymentGatewayController.toggle.form()}

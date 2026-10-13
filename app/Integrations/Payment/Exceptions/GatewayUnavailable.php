@@ -27,6 +27,15 @@ class GatewayUnavailable extends RuntimeException
         );
     }
 
+    public static function missingPayerAddress(string $gateway): self
+    {
+        return new self(
+            "The {$gateway} gateway needs a complete postal address for the payer "
+            .'(street, city, division, postcode and country). Add a business or billing '
+            .'address with a postcode to this account, then try again.'
+        );
+    }
+
     public static function missingCredentials(string $gateway): self
     {
         return new self(

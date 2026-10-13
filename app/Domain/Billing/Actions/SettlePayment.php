@@ -264,9 +264,15 @@ class SettlePayment
         GatewayResult $result,
         string $gatewayReference,
     ): bool {
+        /*
+         * A gateway that issues its own per-attempt id (EPS) echoes that id
+         * rather than our reference. It counts only when it is the very id
+         * saved on this payment before the gateway was called.
+         */
         if ($result->reference !== null
             && $result->reference !== ''
-            && $result->reference !== $payment->reference) {
+            && $result->reference !== $payment->reference
+            && $result->reference !== $payment->gateway_reference) {
             $this->log->channel('payment')->critical('Gateway transaction names a different payment', [
                 'payment' => $payment->reference,
                 'reported_reference' => $result->reference,

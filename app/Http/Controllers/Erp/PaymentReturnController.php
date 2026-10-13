@@ -153,7 +153,7 @@ class PaymentReturnController extends Controller
         }
 
         try {
-            $result = $driver->status($payment->reference);
+            $result = $driver->status($payment->gateway_reference ?: $payment->reference);
         } catch (GatewayUnavailable $e) {
             $log->channel('payment')->warning('Could not reconcile on return', [
                 'payment' => $payment->reference,
