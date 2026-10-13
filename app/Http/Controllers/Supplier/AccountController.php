@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Supplier;
 
+use App\Domain\Account\Queries\OwnDeletionRequest;
 use App\Domain\Notification\Actions\MarkNotificationsRead;
 use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
@@ -72,12 +73,13 @@ class AccountController extends Controller
         return back();
     }
 
-    public function profile(Request $request): Response
+    public function profile(Request $request, OwnDeletionRequest $deletion): Response
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
 
         return Inertia::render('supplier/profile', [
+            'deletionRequest' => $deletion->for($supplier),
             'profile' => [
                 'reference' => $supplier->reference,
                 'business_name' => $supplier->business_name,

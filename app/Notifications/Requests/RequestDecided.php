@@ -34,6 +34,8 @@ class RequestDecided extends Notification implements ShouldQueue
 
     public const STOCK_UPDATE = 'stock_update';
 
+    public const DELETION = 'deletion';
+
     /**
      * @param  array<string, string>  $links  Public ids for the requester's own screen.
      */

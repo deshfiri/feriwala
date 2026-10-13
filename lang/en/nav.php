@@ -103,6 +103,8 @@ return [
         'log_out' => 'Log out',
     ],
 
+    'deletion_requests' => 'Deletion requests',
+
     'notifications' => [
         'title' => 'Notifications',
         'unread' => ':count unread',

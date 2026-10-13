@@ -36,7 +36,7 @@ class SubmissionVolume
 
         foreach ($queues as $queue) {
             // toBase() keeps Money-cast columns (an amount) out of the aggregate.
-            $rows = $queue->model()::query()
+            $rows = $queue->rows()
                 ->where('created_at', '>=', $start)
                 ->selectRaw('DATE(created_at) as day, count(*) as total')
                 ->groupBy('day')

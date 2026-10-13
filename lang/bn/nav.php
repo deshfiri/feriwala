@@ -97,6 +97,8 @@ return [
         'log_out' => 'লগ আউট',
     ],
 
+    'deletion_requests' => 'মোছার অনুরোধ',
+
     'notifications' => [
         'title' => 'বিজ্ঞপ্তি',
         'unread' => ':count টি অপঠিত',

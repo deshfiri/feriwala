@@ -6,6 +6,7 @@ use App\Http\Controllers\Erp\ReceiptController;
 use App\Http\Controllers\Erp\RenewalController;
 use App\Http\Controllers\Erp\StaffController;
 use App\Http\Controllers\Erp\SubscriptionController;
+use App\Http\Controllers\Settings\AccountDeletionController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -98,11 +99,17 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    // Nobody deletes their own account: they ask, and an authorised member of
+    // staff decides. There is deliberately no DELETE settings/profile.
+    Route::post('settings/account-deletion', [AccountDeletionController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('account-deletion.store');
+    Route::delete('settings/account-deletion', [AccountDeletionController::class, 'destroy'])
+        ->name('account-deletion.destroy');
 });
 
 Route::middleware(['auth', 'verified', 'business.activated'])->group(function () {
-    Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
     Route::get('settings/security', [SecurityController::class, 'edit'])
         ->middleware(RequirePassword::class)
         ->name('security.edit');

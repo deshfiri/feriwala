@@ -54,6 +54,8 @@ return [
             'returns' => 'Returns awaiting a decision',
             'refunds' => 'Refunds awaiting a decision',
             'website_requests' => 'Website requests awaiting setup',
+            'account_deletions' => 'Account deletion requests awaiting a decision',
+            'supplier_deletions' => 'Supplier deletion requests awaiting a decision',
         ],
         'trend' => [
             'orders' => 'Orders',

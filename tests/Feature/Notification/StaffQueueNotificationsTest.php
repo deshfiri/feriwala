@@ -72,7 +72,7 @@ it('does not tell a Supplier, who is not platform staff', function () {
     expect($supplier->notifications()->count())->toBe(0);
 });
 
-it('maps every queue to the view permission of the screen it links to', function () {
+it('maps every queue to the permission that opens the screen it links to', function () {
     expect(collect(StaffQueue::cases())->mapWithKeys(fn (StaffQueue $queue) => [$queue->value => $queue->permission()])->all())
         ->toBe([
             'kyc' => 'kyc.view',
@@ -85,6 +85,9 @@ it('maps every queue to the view permission of the screen it links to', function
             'order_return' => 'order.view',
             'refund_request' => 'payment.view',
             'website_request' => 'website.view',
+            // A request to be erased is shown only to someone who may erase.
+            'account_deletion' => 'account.delete',
+            'supplier_deletion' => 'supplier.delete',
         ]);
 });
 
@@ -172,6 +175,8 @@ it('links each queue to its own review screen', function () {
             'order_return' => route('admin.returns.index'),
             'refund_request' => route('admin.payments.index'),
             'website_request' => route('admin.websites.index'),
+            'account_deletion' => route('admin.deletions.index'),
+            'supplier_deletion' => route('admin.deletions.index'),
         ]);
 });
 

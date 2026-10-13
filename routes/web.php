@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContentLibraryController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\DeletionRequestController;
 use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
@@ -680,6 +681,19 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
+
+        /*
+         * Requests to have an account erased (§5.3). Nobody erases their own
+         * account: they ask, and someone holding ccount.delete (or
+         * supplier.delete) decides. Approving erases it, so that one is behind a
+         * confirmed password as well as the typed confirmation.
+         */
+        Route::get('deletions', [DeletionRequestController::class, 'index'])->name('deletions.index');
+        Route::get('deletions/{deletionRequest}', [DeletionRequestController::class, 'show'])->name('deletions.show');
+        Route::post('deletions/{deletionRequest}/approve', [DeletionRequestController::class, 'approve'])
+            ->middleware(RequirePassword::class)
+            ->name('deletions.approve');
+        Route::post('deletions/{deletionRequest}/reject', [DeletionRequestController::class, 'reject'])->name('deletions.reject');
 
         /*
          * The Supplier account domain (D25, P13-1, P13-7, P13-9, P13-13). A

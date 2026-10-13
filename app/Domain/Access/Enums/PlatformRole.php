@@ -202,7 +202,7 @@ enum PlatformRole: string
                 // for the same reason Admin holds no Payment permission at
                 // all: approving Suppliers and reviewing listings is
                 // operational; setting a confidential rate is not.
-                Module::Supplier->value => [Action::View],
+                Module::Supplier->value => [Action::View, Action::Delete],
                 Module::SupplierListing->value => [Action::View],
                 Module::SourcingGroup->value => [Action::View],
 

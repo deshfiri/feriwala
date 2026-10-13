@@ -59,6 +59,7 @@ import { index as stockReservations } from '@/routes/admin/inventory/reservation
 import { index as stockLevels } from '@/routes/admin/inventory/stock';
 import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
+import { index as deletionRequests } from '@/routes/admin/deletions';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as adminOrders } from '@/routes/admin/orders';
 import { index as packageCatalogue } from '@/routes/admin/packages';
@@ -502,13 +503,18 @@ export function useNavigation(): {
 
                 // The account queues: the directory, new accounts, activation
                 // approvals and KYC review. Verification rules are settings.
-                ...(permissions['account.view'] || permissions['kyc.view']
+                ...(permissions['account.view'] ||
+                permissions['kyc.view'] ||
+                permissions['account.delete'] ||
+                permissions['supplier.delete']
                     ? [
                           {
                               title: 'Accounts',
                               href: permissions['account.view']
                                   ? accountDirectory()
-                                  : kycQueue(),
+                                  : permissions['kyc.view']
+                                    ? kycQueue()
+                                    : deletionRequests(),
                               icon: Building2,
                               items: [
                                   ...(permissions['account.view']
@@ -542,6 +548,17 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.kyc_review'),
                                                 href: kycQueue(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['account.delete'] ||
+                                  permissions['supplier.delete']
+                                      ? [
+                                            {
+                                                title: t(
+                                                    'nav.deletion_requests',
+                                                ),
+                                                href: deletionRequests(),
                                             },
                                         ]
                                       : []),

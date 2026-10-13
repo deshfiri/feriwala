@@ -62,6 +62,8 @@ class DashboardController extends Controller
         StaffQueue::OrderReturn,
         StaffQueue::RefundRequest,
         StaffQueue::WebsiteRequest,
+        StaffQueue::AccountDeletion,
+        StaffQueue::SupplierDeletion,
     ];
 
     public function __invoke(

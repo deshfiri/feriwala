@@ -214,6 +214,18 @@ return [
             'title' => 'New website request',
             'description' => 'A partner has asked for a website to be set up.',
         ],
+        'queue.account_deletion' => [
+            'title' => 'New account deletion request',
+            'description' => 'Someone has asked to have their account erased.',
+        ],
+        'queue.supplier_deletion' => [
+            'title' => 'New Supplier deletion request',
+            'description' => 'A Supplier has asked to have its account erased.',
+        ],
+        'decision.deletion.rejected' => [
+            'title' => 'Your deletion request was not approved',
+            'description' => 'Open your profile to read why.',
+        ],
 
         /*
          * Staff answered something the recipient asked for. Only the outcome is

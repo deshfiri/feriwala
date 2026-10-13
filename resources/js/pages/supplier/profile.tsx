@@ -5,13 +5,18 @@ import TextArea from '@/components/forms/text-area';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
+import RequestAccountDeletion from '@/components/request-account-deletion';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
+import * as accountDeletion from '@/routes/supplier/account-deletion';
 import { update } from '@/routes/supplier/profile';
+import type { OwnDeletionRequest } from '@/types';
 
 export default function SupplierProfile({
     profile,
+    deletionRequest,
 }: {
+    deletionRequest: OwnDeletionRequest | null;
     profile: {
         reference: string;
         business_name: string;
@@ -133,6 +138,12 @@ export default function SupplierProfile({
                         )}
                     </Form>
                 </SectionCard>
+
+                <RequestAccountDeletion
+                    request={deletionRequest}
+                    requestForm={accountDeletion.store.form()}
+                    withdrawForm={accountDeletion.destroy.form()}
+                />
             </PageContainer>
         </>
     );

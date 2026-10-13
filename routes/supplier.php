@@ -3,6 +3,7 @@
 use App\Http\Controllers\BankLookupController;
 use App\Http\Controllers\LocationLookupController;
 use App\Http\Controllers\Supplier\AccountController;
+use App\Http\Controllers\Supplier\AccountDeletionController;
 use App\Http\Controllers\Supplier\AddressController;
 use App\Http\Controllers\Supplier\AllocationController;
 use App\Http\Controllers\Supplier\Auth\AuthenticatedSupplierSessionController;
@@ -93,6 +94,11 @@ Route::prefix('supplier')
             Route::post('notifications/{notification}/read', [AccountController::class, 'markNotificationRead'])->name('notifications.read-one');
             Route::get('profile', [AccountController::class, 'profile'])->name('profile.edit');
             Route::patch('profile', [AccountController::class, 'updateProfile'])->name('profile.update');
+
+            // A Supplier cannot delete itself: it asks, and an authorised member
+            // of staff decides.
+            Route::post('account-deletion', [AccountDeletionController::class, 'store'])->middleware('throttle:5,1')->name('account-deletion.store');
+            Route::delete('account-deletion', [AccountDeletionController::class, 'destroy'])->name('account-deletion.destroy');
             Route::get('security', [AccountController::class, 'security'])->name('security.edit');
             Route::put('security/password', [AccountController::class, 'updatePassword'])->name('security.password.update');
 

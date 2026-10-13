@@ -5,6 +5,8 @@ namespace App\Domain\Notification\Enums;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Account\Enums\DeletionRequestStatus;
+use App\Domain\Account\Models\AccountDeletionRequest;
 use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Kyc\Enums\KycStatus;
@@ -56,6 +58,8 @@ enum StaffQueue: string
     case OrderReturn = 'order_return';
     case RefundRequest = 'refund_request';
     case WebsiteRequest = 'website_request';
+    case AccountDeletion = 'account_deletion';
+    case SupplierDeletion = 'supplier_deletion';
 
     /**
      * The `notification.events.*` key and the stored `event` for this queue.
@@ -81,6 +85,8 @@ enum StaffQueue: string
             self::OrderReturn => PermissionModule::Order,
             self::RefundRequest => PermissionModule::Payment,
             self::WebsiteRequest => PermissionModule::Website,
+            self::AccountDeletion => PermissionModule::Account,
+            self::SupplierDeletion => PermissionModule::Supplier,
         };
     }
 
@@ -102,12 +108,25 @@ enum StaffQueue: string
             self::OrderReturn => 'returns',
             self::RefundRequest => 'refunds',
             self::WebsiteRequest => 'website_requests',
+            self::AccountDeletion => 'account_deletions',
+            self::SupplierDeletion => 'supplier_deletions',
         };
     }
 
+    /**
+     * The permission that opens the queue. Viewing is enough for every queue but
+     * the deletion requests: those hold someone's request to be erased, and only
+     * a person who may actually delete is shown them.
+     */
     public function permission(): string
     {
-        return PermissionCatalogue::name($this->module(), PermissionAction::View);
+        return PermissionCatalogue::name(
+            $this->module(),
+            match ($this) {
+                self::AccountDeletion, self::SupplierDeletion => PermissionAction::Delete,
+                default => PermissionAction::View,
+            },
+        );
     }
 
     public function mayBeSeenBy(User $user): bool
@@ -131,6 +150,7 @@ enum StaffQueue: string
             self::OrderReturn => route('admin.returns.index'),
             self::RefundRequest => route('admin.payments.index'),
             self::WebsiteRequest => route('admin.websites.index'),
+            self::AccountDeletion, self::SupplierDeletion => route('admin.deletions.index'),
         };
     }
 
@@ -150,6 +170,7 @@ enum StaffQueue: string
             self::OrderReturn => OrderReturn::class,
             self::RefundRequest => RefundRequest::class,
             self::WebsiteRequest => Website::class,
+            self::AccountDeletion, self::SupplierDeletion => AccountDeletionRequest::class,
         };
     }
 
@@ -171,6 +192,7 @@ enum StaffQueue: string
             self::OrderReturn => [ReturnStatus::Requested],
             self::RefundRequest => [RefundStatus::Requested],
             self::WebsiteRequest => [WebsiteStatus::SetupPending],
+            self::AccountDeletion, self::SupplierDeletion => [DeletionRequestStatus::Pending],
         });
     }
 
@@ -212,6 +234,7 @@ enum StaffQueue: string
             self::SupplierStockUpdate => 'STK',
             self::RefundRequest => 'RFD',
             self::WebsiteRequest => 'WEB',
+            self::AccountDeletion, self::SupplierDeletion => 'DEL',
             default => strtoupper(substr($this->value, 0, 3)),
         };
 
@@ -225,6 +248,24 @@ enum StaffQueue: string
      */
     public function waiting(): Builder
     {
-        return $this->model()::query()->whereIn('status', $this->waitingStatuses());
+        return $this->rows()->whereIn('status', $this->waitingStatuses());
+    }
+
+    /**
+     * Every row that belongs to this queue, waiting or not. Two queues can share
+     * a model — a deletion request is a person's or a Supplier's — so each reads
+     * only its own half, and counting both would count every request twice.
+     *
+     * @return Builder<Model>
+     */
+    public function rows(): Builder
+    {
+        $query = $this->model()::query();
+
+        return match ($this) {
+            self::AccountDeletion => $query->whereNotNull('user_id'),
+            self::SupplierDeletion => $query->whereNotNull('supplier_id'),
+            default => $query,
+        };
     }
 }

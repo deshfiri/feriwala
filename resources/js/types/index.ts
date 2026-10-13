@@ -5,6 +5,7 @@ export type * from './catalog';
 export type * from './chart';
 export type * from './dashboard';
 export type * from './data-table';
+export type * from './deletion';
 export type * from './kyc';
 export type * from './localization';
 export type * from './navigation';

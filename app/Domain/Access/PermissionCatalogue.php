@@ -61,6 +61,11 @@ class PermissionCatalogue
                 Action::Export, Action::Archive, Action::ViewSensitiveData,
                 Action::Suspend, Action::Reactivate,
 
+                // Deciding a request to have an account erased, and erasing it
+                // (§5.3). Nobody erases their own account; they ask, and a person
+                // holding this decides. Handed to staff by an administrator.
+                Action::Delete,
+
                 // Whether mobile verification is a required onboarding step
                 // at all (§5.1) -- a policy decision, not a per-applicant
                 // one, so it sits apart from Approve/Reject/Verify.
@@ -207,6 +212,10 @@ class PermissionCatalogue
             //   supplier.view / supplier.approve / supplier.suspend
             Module::Supplier->value => [
                 Action::View, Action::Approve, Action::Suspend,
+
+                // Deciding a Supplier's request to have its account erased, and
+                // erasing it. The same arrangement as ccount.delete.
+                Action::Delete,
 
                 // Staff-managed Supplier accounts: opening one on a
                 // Supplier's behalf (`create`), changing its non-immutable

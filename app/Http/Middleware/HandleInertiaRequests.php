@@ -50,6 +50,10 @@ class HandleInertiaRequests extends Middleware
         [PermissionModule::Kyc, PermissionAction::View],
         [PermissionModule::Account, PermissionAction::View],
 
+        // Deciding requests to erase an account (§5.3).
+        [PermissionModule::Account, PermissionAction::Delete],
+        [PermissionModule::Supplier, PermissionAction::Delete],
+
         // Configuring what applicants are asked for is a different job from
         // reviewing one application (§7.2).
         [PermissionModule::Kyc, PermissionAction::ManageSettings],

@@ -89,9 +89,9 @@ it('shows every card and the trend to a super admin', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('admin/dashboard')
-            // The five original cards plus the seven queue cards.
-            ->has('cards', 12)
-            ->has('breakdown', 12)
+            // The five original cards plus the nine queue cards.
+            ->has('cards', 14)
+            ->has('breakdown', 14)
             ->has('trend', 2)
             ->where('trend.0.key', 'orders')
             ->where('trend.1.key', 'submissions')

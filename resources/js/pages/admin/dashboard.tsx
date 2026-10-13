@@ -11,6 +11,7 @@ import {
     Truck,
     Undo2,
     UserCheck,
+    UserX,
     Wallet,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -54,6 +55,8 @@ const ICONS: Record<string, LucideIcon> = {
     returns: Undo2,
     refunds: ReceiptText,
     website_requests: Globe,
+    account_deletions: UserX,
+    supplier_deletions: UserX,
 };
 
 const TONES: Record<string, StatCardTone> = {
@@ -69,6 +72,8 @@ const TONES: Record<string, StatCardTone> = {
     returns: 'info',
     refunds: 'brand',
     website_requests: 'success',
+    account_deletions: 'danger',
+    supplier_deletions: 'danger',
 };
 
 const TREND_DAYS = 14;
