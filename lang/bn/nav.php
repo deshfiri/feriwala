@@ -67,6 +67,7 @@ return [
     'availability' => 'ওয়েবসাইটে প্রাপ্যতা',
     'allocations' => 'স্টক বরাদ্দ',
     'allocated_stock' => 'বরাদ্দকৃত স্টক',
+    'my_products' => 'আমার পণ্য',
     'invoices' => 'চালান',
     'suppliers' => 'সাপ্লায়ার',
     'supplier_listings' => 'সাপ্লায়ারের তালিকা',

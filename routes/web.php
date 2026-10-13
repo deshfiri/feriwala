@@ -342,6 +342,9 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // below stay as the product detail routes and for direct links.
         Route::get('catalog', [BusinessCatalogController::class, 'products'])
             ->name('catalog.index');
+        // What the account has bought, with reordering. Products does not offer it again.
+        Route::get('my-products', [BusinessCatalogController::class, 'mine'])
+            ->name('catalog.mine');
         Route::get('catalog/{product}', [BusinessCatalogController::class, 'product'])
             ->name('catalog.show')
             ->where('product', '(?!wholesale$|dropshipping$)[^/]+');

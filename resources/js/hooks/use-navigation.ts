@@ -12,6 +12,7 @@ import {
     MapPin,
     MonitorSmartphone,
     Network,
+    Package,
     PackageCheck,
     Palette,
     Settings,
@@ -84,7 +85,7 @@ import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawal
 import { index as accountWallets } from '@/routes/admin/wallets';
 import { index as adminWebsites } from '@/routes/admin/websites';
 import { index as websitePricing } from '@/routes/admin/website-pricing';
-import { index as productsIndex } from '@/routes/catalog';
+import { index as productsIndex, mine as myProducts } from '@/routes/catalog';
 import { edit as appearanceSettings } from '@/routes/appearance';
 import { index as invoices } from '@/routes/subscription/invoices';
 import { index as receipts } from '@/routes/subscription/receipts';
@@ -152,6 +153,11 @@ export function useNavigation(): {
                                         title: t('nav.products'),
                                         href: productsIndex(),
                                         icon: ShoppingBag,
+                                    },
+                                    {
+                                        title: t('nav.my_products'),
+                                        href: myProducts(),
+                                        icon: Package,
                                     },
                                 ]
                               : []),

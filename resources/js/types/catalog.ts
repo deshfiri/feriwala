@@ -439,6 +439,8 @@ export type PartnerProductCard = {
     category: string;
     brand: string | null;
     is_featured: boolean;
+    /** Bought before — reordering is offered under My Products, not in this list. */
+    purchased?: boolean;
     variant_count: number;
     package_scope: 'all' | 'selected';
     image: { url: string; alt: string | null } | null;

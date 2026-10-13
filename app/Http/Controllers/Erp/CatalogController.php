@@ -83,6 +83,14 @@ class CatalogController extends Controller
     }
 
     /**
+     * My Products: what this account has bought, with the way to buy it again.
+     */
+    public function mine(Request $request): Response
+    {
+        return $this->products($request);
+    }
+
+    /**
      * One Products workspace for the account: every product it may use, once,
      * with the ways it may use it (wholesale purchase, Partner Selling).
      *
@@ -128,7 +136,7 @@ class CatalogController extends Controller
         }
 
         // "My Products": only what this account has bought.
-        $mine = $request->string('scope')->toString() === 'mine';
+        $mine = $request->routeIs('catalog.mine') || $request->string('scope')->toString() === 'mine';
 
         if ($mine) {
             $this->purchased->only($query, $account);
@@ -163,10 +171,13 @@ class CatalogController extends Controller
 
         $stockStates = $wholesaleAllowed ? $this->stockStates($products->getCollection(), $account) : [];
 
+        $bought = $this->purchased->among($account, $products->getCollection()->pluck('id'));
+
         $products->through(fn (Product $product) => $this->unifiedCard(
             $product,
             $channels,
             $stockStates[$product->id] ?? null,
+            isset($bought[$product->id]),
         ));
 
         return Inertia::render('catalog/products', [
@@ -212,7 +223,7 @@ class CatalogController extends Controller
      * @param  array<int, SalesChannel>  $channels  the channels this account may use
      * @return array<string, mixed>
      */
-    protected function unifiedCard(Product $product, array $channels, ?bool $inStock): array
+    protected function unifiedCard(Product $product, array $channels, ?bool $inStock, bool $purchased = false): array
     {
         $image = $product->media->first();
 
@@ -227,6 +238,8 @@ class CatalogController extends Controller
             'category' => $product->category->name,
             'brand' => $product->brand?->name,
             'is_featured' => $product->is_featured,
+            // Bought before: reordering belongs to My Products, not this list.
+            'purchased' => $purchased,
             'variant_count' => (int) $product->variants_count,
             'package_scope' => $product->package_scope->value,
             'image' => $image === null ? null : [

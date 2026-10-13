@@ -73,6 +73,7 @@ return [
     'availability' => 'Website availability',
     'allocations' => 'Stock allocations',
     'allocated_stock' => 'Allocated stock',
+    'my_products' => 'My Products',
     'invoices' => 'Invoices',
     'suppliers' => 'Suppliers',
     'supplier_listings' => 'Supplier listings',

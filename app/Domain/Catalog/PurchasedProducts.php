@@ -26,6 +26,28 @@ class PurchasedProducts
     }
 
     /**
+     * Which of these products the account has bought.
+     *
+     * @param  iterable<int, int>  $productIds
+     * @return array<int, int>  the ids it has bought, keyed by id
+     */
+    public function among(BusinessAccount $account, iterable $productIds): array
+    {
+        $ids = collect($productIds)->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return $this->productIds($account)
+            ->whereIn('product_id', $ids)
+            ->distinct()
+            ->pluck('product_id')
+            ->mapWithKeys(fn (mixed $id) => [(int) $id => (int) $id])
+            ->all();
+    }
+
+    /**
      * Restrict a product query to what the account has bought.
      *
      * @param  Builder<Product>  $products

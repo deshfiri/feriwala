@@ -113,6 +113,37 @@ describe('the unified Products page', function () {
                 ->where('products.data.1.partner_selling', null));
     });
 
+    it('marks a bought product so Products does not offer it again, and My Products lists only bought ones', function () {
+        websiteTestPurchase($this->account, $this->both);
+
+        $all = collect($this->actingAs($this->account->owner)->get(route('catalog.index'))->viewData('page')['props']['products']['data']);
+
+        expect($all->firstWhere('sku', 'PP-BOTH')['purchased'])->toBeTrue()
+            ->and($all->firstWhere('sku', 'PP-WHOLE')['purchased'])->toBeFalse();
+
+        $this->actingAs($this->account->owner)->get(route('catalog.mine'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('catalog/products')
+                ->where('filters.scope', 'mine')
+                ->has('products.data', 1)
+                ->where('products.data.0.sku', 'PP-BOTH')
+                ->where('products.data.0.purchased', true));
+    });
+
+    it('does not list an unpaid order\'s product under My Products', function () {
+        websiteTestPurchase($this->account, $this->both, ['paid_at' => null]);
+
+        $this->actingAs($this->account->owner)->get(route('catalog.mine'))
+            ->assertInertia(fn (Assert $page) => $page->has('products.data', 0));
+    });
+
+    it('keeps another account\'s purchases out of My Products', function () {
+        websiteTestPurchase(partnerProductsAccount(), $this->both);
+
+        $this->actingAs($this->account->owner)->get(route('catalog.mine'))
+            ->assertInertia(fn (Assert $page) => $page->has('products.data', 0));
+    });
     it('lists the newest product first', function () {
         $newest = partnerProductsProduct('PP-NEWEST', 'Aardvark newest', $this->category, [
             'wholesale_status' => ProductStatus::WholesaleEnabled,

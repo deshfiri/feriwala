@@ -44,5 +44,7 @@ return [
     'actions' => [
         'order' => 'Order wholesale',
         'view' => 'View product',
+        'reorder' => 'Order again',
+        'in_my_products' => 'Bought — see My Products',
     ],
 ];
