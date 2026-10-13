@@ -518,6 +518,17 @@ html:not(.dark) {
     border-radius: var(--radius-xl);
     background-color: var(--popover);
     box-shadow: var(--shadow-lg);
+
+    /*
+     * A dialog is centred, so one taller than the screen loses its top and
+     * bottom — the title and the buttons — with no way to reach them. Cap it to
+     * the visible viewport (dvh follows a phone's collapsing address bar) and let
+     * it scroll inside itself, on every screen, not only those that remembered
+     * to ask.
+     */
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 /*
