@@ -406,6 +406,7 @@ class EpsGateway extends Gateway implements TestsConnection
         $request = $this->http
             ->withHeaders(['x-hash' => $this->sign($hashed), 'Authorization' => "Bearer {$token}"])
             ->acceptJson()
+            ->withoutRedirecting()
             ->timeout(20);
 
         try {
@@ -417,6 +418,7 @@ class EpsGateway extends Gateway implements TestsConnection
         }
 
         $this->logCall($method, $path, $reference, $response);
+        $this->refuseRedirect($response);
 
         return $response;
     }
@@ -463,6 +465,7 @@ class EpsGateway extends Gateway implements TestsConnection
                 ->withHeaders(['x-hash' => $this->sign($username)])
                 ->acceptJson()
                 ->asJson()
+                ->withoutRedirecting()
                 ->timeout(20)
                 ->post($this->url(self::GET_TOKEN_PATH), [
                     'userName' => $username,
@@ -473,6 +476,7 @@ class EpsGateway extends Gateway implements TestsConnection
         }
 
         $this->logCall('POST', self::GET_TOKEN_PATH, null, $response);
+        $this->refuseRedirect($response);
 
         /** @var array<string, mixed> $body */
         $body = $this->lowercaseKeys($response->json() ?? []);
@@ -642,6 +646,29 @@ class EpsGateway extends Gateway implements TestsConnection
             'error_code' => $this->text($body['errorcode'] ?? null),
             'error_message' => $this->text($body['errormessage'] ?? null),
         ]);
+    }
+
+    /**
+     * EPS answers a token its account may not use with a redirect to an
+     * `AccessDenied` page, never a JSON error. Followed, that lands on a bare
+     * 404 and hides the cause, so redirects are not followed and are named.
+     *
+     * @throws GatewayUnavailable
+     */
+    protected function refuseRedirect(Response $response): void
+    {
+        if (! $response->redirect()) {
+            return;
+        }
+
+        $denied = str_contains(mb_strtolower($response->header('Location')), 'accessdenied');
+
+        throw GatewayUnavailable::forGateway(
+            $this->name(),
+            $denied
+                ? 'EPS denied this merchant account access to the payment API. Ask EPS to enable API access for this merchant user.'
+                : 'EPS redirected the request (HTTP '.$response->status().') instead of answering it.',
+        );
     }
 
     protected function failureText(int $status, ?string $code, ?string $message): string

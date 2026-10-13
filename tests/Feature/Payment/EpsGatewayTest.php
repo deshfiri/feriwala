@@ -531,6 +531,18 @@ describe('initiating', function () {
         expect(fn () => epsGateway()->initiate(anEpsIntent()))->toThrow(GatewayUnavailable::class, 'HTTP 404: Store not found');
     });
 
+    it('names an EPS access-denied redirect instead of following it to a bare 404', function () {
+        epsFake([
+            '*/v1/Auth/GetToken' => epsTokenResponse(),
+            '*/v1/EPSEngine/InitializeEPS' => Http::response('', 302, ['Location' => 'http://pgapi.eps.com.bd/Identity/Account/AccessDenied?ReturnUrl=%2Fv1%2FEPSEngine%2FInitializeEPS']),
+            '*/Identity/Account/AccessDenied*' => Http::response('', 404),
+        ]);
+
+        expect(fn () => epsGateway()->initiate(anEpsIntent()))
+            ->toThrow(GatewayUnavailable::class, 'denied this merchant account access to the payment API');
+
+        expect(epsSent('/Identity/Account/AccessDenied'))->toHaveCount(0);
+    });
     it('throws when EPS cannot be reached', function () {
         epsFake(['*' => Http::failedConnection()]);
 
