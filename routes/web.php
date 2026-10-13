@@ -1318,6 +1318,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.stock.store');
         Route::get('inventory/stock/{item}', [StockController::class, 'show'])
             ->name('inventory.stock.show');
+        // Only for a row never used; one with a history is part of the ledger.
+        Route::delete('inventory/stock/{item}', [StockController::class, 'destroy'])
+            ->name('inventory.stock.destroy');
         Route::post('inventory/stock/{item}/adjustments', [StockAdjustmentController::class, 'store'])
             ->name('inventory.stock.adjustments.store');
         // When a SKU in a warehouse counts as running low (P3-29).

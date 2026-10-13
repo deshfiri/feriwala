@@ -46,6 +46,15 @@ class InventoryRefused extends RuntimeException
     }
 
     /**
+     * A stock row that has a history is part of the ledger and stays; only one
+     * that was never used can be removed.
+     */
+    public static function stockHasHistory(): self
+    {
+        return new self(__('inventory.refused.stock_has_history'));
+    }
+
+    /**
      * No active warehouse holds the whole quantity of a SKU (§19: out-of-stock
      * protection). A reservation is never split, and never oversells.
      */

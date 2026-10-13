@@ -10,6 +10,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /**
  * One stockable unit held in one warehouse (§19).
@@ -120,6 +121,19 @@ class StockItem extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(StockAllocation::class);
+    }
+
+    /**
+     * Whether anything has ever happened to this stock: a movement, a
+     * reservation, an allocation, or an order line sourced from it. A row with
+     * history is part of the ledger and cannot be deleted.
+     */
+    public function hasHistory(): bool
+    {
+        return $this->movements()->exists()
+            || $this->reservations()->exists()
+            || $this->allocations()->exists()
+            || DB::table('order_item_allocations')->where('linked_stock_item_id', $this->id)->exists();
     }
 
     /**
