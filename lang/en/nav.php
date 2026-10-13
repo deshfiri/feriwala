@@ -67,6 +67,7 @@ return [
     'storage_settings' => 'Storage (R2)',
     'account_verification_settings' => 'Account verification',
     'product_deletion_settings' => 'Product deletion',
+    'activity_log_retention' => 'Activity log retention',
     'content_library' => 'Content library',
     'stock' => 'Stock',
     'warehouses' => 'Warehouses',

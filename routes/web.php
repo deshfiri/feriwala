@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AccountVerificationSettingsController;
 use App\Http\Controllers\Admin\AccountWithdrawalController;
 use App\Http\Controllers\Admin\ActivationReviewController;
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\AuditRetentionSettingsController;
 use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
@@ -584,6 +585,17 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
 
         // Who did what (§36.2). Read-only; `audit.view_audit_logs`.
         Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');
+
+        // Clearing it (D29): `audit.delete`, a password and a reason, and the
+        // purge is recorded permanently.
+        Route::post('activity-log/purge', [ActivityLogController::class, 'purge'])->name('activity-log.purge');
+
+        // How long it is kept — `audit.view_audit_logs` to see,
+        // `audit.manage_settings` to change.
+        Route::get('activity-log-retention', [AuditRetentionSettingsController::class, 'index'])
+            ->name('activity-log-retention.index');
+        Route::put('activity-log-retention', [AuditRetentionSettingsController::class, 'update'])
+            ->name('activity-log-retention.update');
 
         /*
          * The twenty-one fixed PlatformRole cases, read-only as before, plus

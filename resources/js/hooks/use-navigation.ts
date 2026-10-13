@@ -325,7 +325,8 @@ export function useNavigation(): {
                 permissions['catalog.view'] ||
                 permissions['sms.view'] ||
                 permissions['system.manage_settings'] ||
-                permissions['integration.view']
+                permissions['integration.view'] ||
+                permissions['audit.view_audit_logs']
                     ? [
                           {
                               title: t('nav.settings_hub'),

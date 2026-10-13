@@ -61,6 +61,7 @@ return [
     'storage_settings' => 'স্টোরেজ (R2)',
     'account_verification_settings' => 'অ্যাকাউন্ট ভেরিফিকেশন',
     'product_deletion_settings' => 'পণ্য মুছে ফেলা',
+    'activity_log_retention' => 'কার্যকলাপ লগ সংরক্ষণ',
     'content_library' => 'কনটেন্ট লাইব্রেরি',
     'stock' => 'স্টক',
     'warehouses' => 'গুদাম',

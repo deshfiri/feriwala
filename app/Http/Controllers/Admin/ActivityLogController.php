@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Audit\Actions\PurgeAuditLogs;
+use App\Domain\Audit\AuditRetention;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Http\Controllers\Controller;
@@ -12,9 +14,13 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 /**
  * The record of what staff and the system did (§36.2).
@@ -29,6 +35,10 @@ class ActivityLogController extends Controller
 {
     public const PER_PAGE = 25;
 
+    public function __construct(
+        protected AuditRetention $retention,
+    ) {}
+
     public function index(Request $request): Response
     {
         $actor = $request->user();
@@ -41,6 +51,10 @@ class ActivityLogController extends Controller
         );
 
         $filters = $this->filters($request);
+        $canPurge = $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::Delete));
+        $personName = $filters['person'] === null || $filters['person'] === PurgeAuditLogs::SYSTEM
+            ? null
+            : User::query()->where('public_id', $filters['person'])->value('name');
 
         return Inertia::render('admin/activity-log/index', [
             'entries' => $this->query($filters)
@@ -50,7 +64,7 @@ class ActivityLogController extends Controller
                     'id' => $log->public_id,
                     'action' => $log->action,
                     'module' => $log->module,
-                    'actor' => $log->actor?->name ?? $log->actor_label,
+                    'actor' => data_get($log, 'actor.name') ?? $log->actor_label,
                     'actor_type' => $log->actor_type,
                     'subject' => $log->auditable_type === null ? null : class_basename($log->auditable_type),
                     'note' => $log->note,
@@ -62,6 +76,12 @@ class ActivityLogController extends Controller
                     'created_at' => $log->created_at->toIso8601String(),
                 ]),
             'filters' => $filters,
+            'person_name' => $personName,
+            'retention_days' => $this->retention->days(),
+            'can' => [
+                'purge' => $canPurge,
+                'manage_retention' => $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::ManageSettings)),
+            ],
             'summary' => $this->summary(),
             'people' => $this->people(),
             'modules' => AuditLog::query()
@@ -71,6 +91,49 @@ class ActivityLogController extends Controller
                 ->pluck('module')
                 ->all(),
         ]);
+    }
+
+    /**
+     * Clear the log: everything, or one person's (or the system's) entries,
+     * optionally only those older than some days. Needs `audit.delete`, the
+     * person's password and a reason; the purge is recorded permanently (D29).
+     */
+    public function purge(Request $request, PurgeAuditLogs $purge): RedirectResponse
+    {
+        $actor = $request->user();
+
+        abort_unless(
+            $actor instanceof User
+                && ! CatalogPolicy::isBusinessIdentity($actor)
+                && $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::Delete)),
+            403,
+        );
+
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'current_password'],
+            'reason' => ['required', 'string', 'min:'.PurgeAuditLogs::MINIMUM_REASON, 'max:1000'],
+            'scope' => ['required', Rule::in(['everyone', 'person'])],
+            'person' => ['required_if:scope,person', 'nullable', 'string', 'regex:/^(system|[0-9A-Za-z]{26})$/'],
+            'older_than_days' => ['nullable', 'integer', 'min:1', 'max:'.AuditRetention::MAXIMUM_DAYS],
+            'confirm' => ['accepted'],
+        ]);
+
+        $olderThanDays = $validated['older_than_days'] ?? null;
+
+        try {
+            $deleted = $purge->handle(
+                $actor,
+                $validated['scope'] === 'person' ? $validated['person'] : null,
+                $olderThanDays === null ? null : now()->subDays((int) $olderThanDays),
+                $validated['reason'],
+            );
+        } catch (InvalidArgumentException $invalid) {
+            throw ValidationException::withMessages(['reason' => $invalid->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('audit.purge.done', ['count' => $deleted])]);
+
+        return to_route('admin.activity-log.index');
     }
 
     /**
@@ -128,9 +191,9 @@ class ActivityLogController extends Controller
             $staff[] = [
                 'id' => $user->public_id,
                 'name' => $user->name,
-                'week' => (int) $row->week,
-                'total' => (int) $row->total,
-                'last_at' => CarbonImmutable::parse($row->last_at)->toIso8601String(),
+                'week' => (int) $row->getAttribute('week'),
+                'total' => (int) $row->getAttribute('total'),
+                'last_at' => CarbonImmutable::parse((string) $row->getAttribute('last_at'))->toIso8601String(),
             ];
         }
 

@@ -188,7 +188,7 @@ enum PlatformRole: string
                 Module::Website->value => $manage,
                 Module::Report->value => $read,
                 Module::Notification->value => [Action::View, Action::Create, Action::Edit],
-                Module::Audit->value => [Action::ViewAuditLogs],
+                Module::Audit->value => [Action::ViewAuditLogs, Action::Delete, Action::ManageSettings],
 
                 /*
                  * The one piece of money handling an Admin holds: seeing a

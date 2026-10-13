@@ -52,6 +52,7 @@ class HandleInertiaRequests extends Middleware
 
         // The activity log (§36.2).
         [PermissionModule::Audit, PermissionAction::ViewAuditLogs],
+        [PermissionModule::Audit, PermissionAction::ManageSettings],
 
         // Deciding requests to erase an account (§5.3).
         [PermissionModule::Account, PermissionAction::Delete],

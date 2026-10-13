@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import {
     Activity,
     ChevronDown,
@@ -6,6 +6,7 @@ import {
     History,
     Search,
     ShieldAlert,
+    Trash2,
     Users,
     X,
 } from 'lucide-react';
@@ -22,7 +23,9 @@ import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { index } from '@/routes/admin/activity-log';
+import { index as retentionSettings } from '@/routes/admin/activity-log-retention';
 import type { Paginator } from '@/types';
+import PurgeLogsDialog from './purge-logs-dialog';
 
 type ActivityEntry = {
     id: string;
@@ -72,6 +75,9 @@ type Props = {
     summary: Summary;
     people: People;
     modules: string[];
+    person_name: string | null;
+    retention_days: number | null;
+    can: { purge: boolean; manage_retention: boolean };
 };
 
 const controlClass =
@@ -116,8 +122,12 @@ export default function AdminActivityLog({
     summary,
     people,
     modules,
+    person_name,
+    retention_days,
+    can,
 }: Props) {
     const { t, locale } = useTranslation();
+    const [purging, setPurging] = useState(false);
     const { search, setSearch, setFilter, goToPage, clearAll } = useTableQuery({
         only: ['entries', 'filters'],
     });
@@ -174,7 +184,34 @@ export default function AdminActivityLog({
                 <PageHeader
                     title={t('audit.title')}
                     description={t('audit.description')}
+                    actions={
+                        can.purge ? (
+                            <Button
+                                variant="outline"
+                                onClick={() => setPurging(true)}
+                            >
+                                <Trash2 className="size-4" aria-hidden="true" />
+                                {t('audit.purge.open')}
+                            </Button>
+                        ) : undefined
+                    }
                 />
+
+                <p className="text-muted-foreground -mt-2 text-sm">
+                    {retention_days === null
+                        ? t('audit.retention_off')
+                        : t('audit.retention_note', {
+                              days: retention_days,
+                          })}{' '}
+                    {can.manage_retention && (
+                        <Link
+                            href={retentionSettings()}
+                            className="text-foreground underline underline-offset-4"
+                        >
+                            {t('audit.retention_change')}
+                        </Link>
+                    )}
+                </p>
 
                 <StatCardGrid>
                     <StatCard
@@ -398,6 +435,16 @@ export default function AdminActivityLog({
                     )}
                 </div>
             </PageContainer>
+
+            {can.purge && (
+                <PurgeLogsDialog
+                    key={filters.person ?? 'everyone'}
+                    open={purging}
+                    onClose={() => setPurging(false)}
+                    person={filters.person}
+                    personName={person_name}
+                />
+            )}
         </>
     );
 }

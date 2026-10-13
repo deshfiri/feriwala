@@ -788,3 +788,30 @@ recorded in [TODO.md](TODO.md)'s revision log under that date. Every layer in th
 form input, database, API payload, calculation, display — was confirmed against the shipped code by
 static analysis, the full Pest and Vitest suites, and a bounded live-browser pass, with no
 regression to the D4/D24-frozen boundaries this decision does not touch.
+
+## D29 — The activity log can be cleared, through one guarded path (2026-10-13) 🔒
+
+**Approved by the Project Owner on 2026-10-13**, deliberately and including financial and security
+entries. This amends §36.2 ("ordinary administrative users must not edit or delete audit logs") and
+the append-only rule for audit logs in CLAUDE.md. Ledger entries are untouched.
+
+- **Who:** `audit.delete` clears the log and `audit.manage_settings` sets how long it is kept. Admin
+  holds both; any other role gets them only if granted. A business identity is refused whatever it
+  holds.
+- **How:** one action, `PurgeAuditLogs`. A manual clear takes a reason of at least 10 characters and
+  the person's own password, for everything or for one staff member (or the system), optionally only
+  entries older than some days. A nightly sweep (`audit-log-retention`, 03:30) clears entries older
+  than the retention setting (`audit.log_retention_days`, default 0 = keep forever).
+- **What stays true:** UPDATE and TRUNCATE are still refused. The database refuses every DELETE
+  except inside the transaction the action opens (`feriwala.purge_audit_logs`, the same technique as
+  product force delete), and refuses to delete an `audit.logs_purged` record under any
+  circumstance. Every clearing writes that record — who, when, scope, how many, why — and it is
+  permanent. Changing the retention setting is itself audited.
+- **Cost, accepted:** once cleared, history including wallet, withdrawal, payment and permission
+  changes cannot be recovered or investigated. The Project Owner chose this over protecting those
+  categories.
+
+## D29 — The activity log can be cleared, through one guarded path (2026-10-13) 🔒
+
+**Approved by the Project Owner on 2026-10-13**, deliberately and including financial and security
+entries. This amends §36.2 (

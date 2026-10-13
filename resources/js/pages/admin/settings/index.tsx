@@ -15,6 +15,7 @@ import {
     Settings2,
     ShieldCheck,
     Trash2,
+    History,
 } from 'lucide-react';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -52,6 +53,7 @@ const ICONS: Record<string, LucideIcon> = {
     kyc_requirements: ListChecks,
     account_verification_settings: ShieldCheck,
     product_deletion_settings: Trash2,
+    activity_log_retention: History,
     sms: MessageSquare,
     branding: Palette,
     storage: HardDrive,

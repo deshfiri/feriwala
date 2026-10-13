@@ -193,10 +193,13 @@ class PermissionCatalogue
                 Action::View, Action::Create, Action::ManageBackups,
             ],
 
-            // Audit logs are append-only and not editable by ordinary
-            // administrators (§36.2), so no edit or delete exists.
+            // Audit logs are append-only and never editable (§36.2), so no edit
+            // exists. `audit.delete` is not a way to remove one row: it is the
+            // right to run the guarded purge (D29), which needs a password and a
+            // reason and leaves a permanent record. `audit.manage_settings`
+            // sets how long entries are kept.
             Module::Audit->value => [
-                Action::ViewAuditLogs, Action::Export,
+                Action::ViewAuditLogs, Action::Export, Action::Delete, Action::ManageSettings,
             ],
 
             Module::System->value => [
