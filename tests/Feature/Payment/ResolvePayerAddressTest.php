@@ -6,6 +6,7 @@ use App\Domain\Address\Actions\SaveSharedAddress;
 use App\Domain\Address\Enums\AddressOwnerType;
 use App\Domain\Address\Enums\ClientAddressType;
 use App\Domain\Billing\Actions\ResolvePayerAddress;
+use App\Domain\Order\Models\Order;
 
 function payerAddressSaveShared(int $accountId, ?string $postcode): void
 {
@@ -69,4 +70,38 @@ it('returns nothing rather than inventing an address', function () {
 
     expect(app(ResolvePayerAddress::class)->handle($account))->toBeNull()
         ->and(app(ResolvePayerAddress::class)->handle(null))->toBeNull();
+});
+
+it('prefers the address the order was placed with at checkout', function () {
+    $account = testBusinessAccount();
+    payerAddressSaveShared($account->id, '1207');
+
+    $order = new Order(['billing_address' => [
+        'line_1' => '5 Checkout Street',
+        'city' => 'Sylhet',
+        'district' => 'Sylhet',
+        'postcode' => '3100',
+        'country' => 'BD',
+    ]]);
+
+    $address = app(ResolvePayerAddress::class)->handle($account, $order);
+
+    expect($address->line)->toBe('5 Checkout Street')->and($address->postcode)->toBe('3100');
+});
+
+it('falls through to the Partner address book when the checkout address is incomplete', function () {
+    $account = testBusinessAccount();
+    payerAddressSaveShared($account->id, '1207');
+
+    $order = new Order(['billing_address' => ['line_1' => '5 Checkout Street', 'city' => 'Sylhet', 'postcode' => null, 'country' => 'BD']]);
+
+    expect(app(ResolvePayerAddress::class)->handle($account, $order)->line)->toBe('House 1, Road 2');
+});
+
+it('names exactly what is missing', function () {
+    $account = testBusinessAccount();
+    payerAddressSaveShared($account->id, null);
+
+    expect(app(ResolvePayerAddress::class)->missing($account))->toBe(['postcode'])
+        ->and(app(ResolvePayerAddress::class)->missing(testBusinessAccount()))->toBe(['street address', 'city', 'division or district', 'postcode', 'country']);
 });

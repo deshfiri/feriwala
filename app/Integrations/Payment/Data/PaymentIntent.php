@@ -34,6 +34,9 @@ class PaymentIntent
          */
         public readonly ?string $attemptReference = null,
         public readonly ?string $ipAddress = null,
+
+        /** @var list<string> what the payer's best address still lacks, when none was complete */
+        public readonly array $payerAddressMissing = [],
     ) {}
 
     public static function forPayment(
@@ -63,6 +66,7 @@ class PaymentIntent
             // Laravel's own resolution, which honours the trusted-proxy
             // configuration and never reads a raw client-supplied header.
             ipAddress: request()->ip(),
+            payerAddressMissing: $attempt['missing'],
         );
     }
 }

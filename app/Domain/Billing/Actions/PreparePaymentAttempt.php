@@ -3,6 +3,7 @@
 namespace App\Domain\Billing\Actions;
 
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Order\Models\Order;
 use App\Integrations\Payment\Data\PayerAddress;
 
 /**
@@ -25,15 +26,18 @@ class PreparePaymentAttempt
     ) {}
 
     /**
-     * @return array{reference: string|null, address: PayerAddress|null}
+     * @return array{reference: string|null, address: PayerAddress|null, missing: list<string>}
      */
     public function handle(Payment $payment): array
     {
         if (! in_array($payment->gateway, self::GATEWAYS, true)) {
-            return ['reference' => null, 'address' => $this->address->handle($payment->businessAccount)];
+            return ['reference' => null, 'address' => null, 'missing' => []];
         }
 
-        $address = $this->address->handle($payment->businessAccount);
+        // An order's payment is addressed with what the order was placed with.
+        $order = Order::query()->where('payment_id', $payment->id)->first();
+
+        $address = $this->address->handle($payment->businessAccount, $order);
         $reference = $this->newReference();
 
         $payment->forceFill([
@@ -47,7 +51,11 @@ class PreparePaymentAttempt
             ],
         ])->save();
 
-        return ['reference' => $reference, 'address' => $address];
+        return [
+            'reference' => $reference,
+            'address' => $address,
+            'missing' => $address === null ? $this->address->missing($payment->businessAccount, $order) : [],
+        ];
     }
 
     /**

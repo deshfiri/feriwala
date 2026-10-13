@@ -100,7 +100,7 @@ class EpsGateway extends Gateway implements TestsConnection
         $this->requireConfigured();
 
         $address = $intent->payerAddress
-            ?? throw GatewayUnavailable::missingPayerAddress($this->name());
+            ?? throw GatewayUnavailable::missingPayerAddress($this->name(), $intent->payerAddressMissing);
 
         $this->requirePayerDetails($intent);
 

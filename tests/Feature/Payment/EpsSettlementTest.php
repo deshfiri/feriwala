@@ -112,7 +112,7 @@ it('stops before contacting EPS when the account has no usable address', functio
         ->post(route('checkout.pay'), ['gateway' => 'eps'])
         ->assertSessionHasErrors('gateway');
 
-    expect(session('errors')->first('gateway'))->toContain('postal address');
+    expect(session('errors')->first('gateway'))->toContain('postal address')->toContain('Add it under Addresses');
 
     Http::assertNothingSent();
 });

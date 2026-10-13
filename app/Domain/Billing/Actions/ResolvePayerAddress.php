@@ -8,31 +8,100 @@ use App\Domain\Account\Models\UserAddress;
 use App\Domain\Address\Enums\AddressOwnerType;
 use App\Domain\Address\Enums\AddressStatus;
 use App\Domain\Address\Models\SharedAddress;
+use App\Domain\Order\Models\Order;
 use App\Integrations\Payment\Data\PayerAddress;
 
 /**
  * The postal address a gateway that requires one is given for a payer.
  *
- * Read from what the account already holds, in order: its shared business
- * address book (default first), then the owner's billing address, then their
- * present address. An address missing any part a gateway insists on is skipped
- * rather than patched — nothing is ever fabricated, so when none qualifies the
- * answer is `null` and the gateway refuses to start.
+ * One answer from every address the payer has already given, best first:
+ *
+ *   1. the billing, then shipping, address the order was placed with — what the
+ *      payer typed on the checkout page a moment ago;
+ *   2. the Partner portal's address book (business, then operational);
+ *   3. the owner's saved billing, shipping and present addresses.
+ *
+ * The first one with every part a gateway insists on wins. Nothing is ever
+ * defaulted or invented: when none is complete the answer is `null`, and
+ * {@see missing()} names what the most relevant address still lacks so the
+ * payer is told exactly what to add.
  */
 class ResolvePayerAddress
 {
-    public function handle(?BusinessAccount $account): ?PayerAddress
+    /** What a gateway needs, with the label shown to the payer. */
+    protected const PARTS = [
+        'line' => 'street address',
+        'city' => 'city',
+        'state' => 'division or district',
+        'postcode' => 'postcode',
+        'country' => 'country',
+    ];
+
+    public function handle(?BusinessAccount $account, ?Order $order = null): ?PayerAddress
     {
-        if ($account === null) {
-            return null;
+        foreach ($this->candidates($account, $order) as $candidate) {
+            if ($this->missingFrom($candidate) === []) {
+                /** @var array{line: string, city: string, state: string, postcode: string, country: string} $parts */
+                $parts = array_map(fn (mixed $part): string => trim((string) $part), $candidate);
+
+                return new PayerAddress(...$parts);
+            }
         }
 
-        return $this->fromSharedAddresses($account) ?? $this->fromOwnerAddresses($account);
+        return null;
     }
 
-    private function fromSharedAddresses(BusinessAccount $account): ?PayerAddress
+    /**
+     * What the most relevant address on file still lacks, as plain labels.
+     *
+     * @return list<string>
+     */
+    public function missing(?BusinessAccount $account, ?Order $order = null): array
     {
-        $addresses = SharedAddress::query()
+        foreach ($this->candidates($account, $order) as $candidate) {
+            return $this->missingFrom($candidate);
+        }
+
+        return array_values(self::PARTS);
+    }
+
+    /**
+     * @param  array<string, mixed>  $candidate
+     * @return list<string>
+     */
+    protected function missingFrom(array $candidate): array
+    {
+        $missing = [];
+
+        foreach (self::PARTS as $key => $label) {
+            $value = $candidate[$key] ?? null;
+
+            if (! is_string($value) || trim($value) === '') {
+                $missing[] = $label;
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
+     * Every address the payer has given, best first, as the five parts.
+     *
+     * @return iterable<array{line: mixed, city: mixed, state: mixed, postcode: mixed, country: mixed}>
+     */
+    protected function candidates(?BusinessAccount $account, ?Order $order): iterable
+    {
+        foreach ([$order?->billing_address, $order?->shipping_address] as $snapshot) {
+            if (is_array($snapshot) && $snapshot !== []) {
+                yield $this->fromFlat($snapshot);
+            }
+        }
+
+        if ($account === null) {
+            return;
+        }
+
+        $shared = SharedAddress::query()
             ->where('owner_type', AddressOwnerType::BusinessAccount->value)
             ->where('owner_id', $account->id)
             ->where('status', AddressStatus::Active->value)
@@ -40,72 +109,61 @@ class ResolvePayerAddress
             ->orderByDesc('id')
             ->get();
 
-        foreach ($addresses as $address) {
-            $resolved = $this->build(
-                line: $address->detailed_address,
-                city: $address->location_snapshot['district']['en'] ?? null,
-                state: $address->location_snapshot['division']['en'] ?? null,
-                postcode: $address->postcode,
-                country: 'BD',
-            );
-
-            if ($resolved !== null) {
-                return $resolved;
-            }
+        foreach ($shared as $address) {
+            yield [
+                'line' => $address->detailed_address,
+                'city' => $address->location_snapshot['district']['en'] ?? null,
+                'state' => $address->location_snapshot['division']['en'] ?? null,
+                'postcode' => $address->postcode,
+                'country' => 'BD',
+            ];
         }
 
-        return null;
-    }
-
-    private function fromOwnerAddresses(BusinessAccount $account): ?PayerAddress
-    {
         if ($account->owner === null) {
-            return null;
+            return;
         }
 
-        foreach ([AddressType::Billing, AddressType::Present] as $type) {
-            $addresses = UserAddress::query()->currentFor($account->owner->id, $type)->get();
-
-            foreach ($addresses as $address) {
-                $resolved = $this->build(
-                    line: $address->line_1,
-                    city: $address->city,
-                    state: $address->district,
-                    postcode: $address->postcode,
-                    country: $this->countryCode($address->country),
-                );
-
-                if ($resolved !== null) {
-                    return $resolved;
-                }
+        foreach ([AddressType::Billing, AddressType::Shipping, AddressType::Present] as $type) {
+            foreach (UserAddress::query()->currentFor($account->owner->id, $type)->get() as $address) {
+                yield $this->fromFlat($address->toSnapshot());
             }
         }
-
-        return null;
     }
 
-    private function build(mixed $line, mixed $city, mixed $state, mixed $postcode, mixed $country): ?PayerAddress
+    /**
+     * A checkout address (`line_1`, `city`, `district`, `postcode`, `country`).
+     *
+     * A city left blank falls back to the district it sits in, and the other
+     * way round — both are real places the payer named, not placeholders.
+     *
+     * @param  array<array-key, mixed>  $flat
+     * @return array{line: mixed, city: mixed, state: mixed, postcode: mixed, country: mixed}
+     */
+    protected function fromFlat(array $flat): array
     {
-        $parts = array_map(
-            fn (mixed $part): string => is_string($part) ? trim($part) : '',
-            [$line, $city, $state, $postcode, $country],
-        );
+        $city = $this->text($flat['city'] ?? null) ?? $this->text($flat['district'] ?? null);
+        $state = $this->text($flat['district'] ?? null) ?? $this->text($flat['city'] ?? null);
 
-        if (in_array('', $parts, true)) {
-            return null;
-        }
-
-        return new PayerAddress(...$parts);
+        return [
+            'line' => $flat['line_1'] ?? null,
+            'city' => $city,
+            'state' => $state,
+            'postcode' => $flat['postcode'] ?? null,
+            'country' => $this->countryCode($this->text($flat['country'] ?? null)),
+        ];
     }
 
-    private function countryCode(?string $country): ?string
+    protected function text(mixed $value): ?string
     {
-        $country = $country === null ? '' : trim($country);
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
+    }
 
-        return match (mb_strtolower($country)) {
+    protected function countryCode(?string $country): ?string
+    {
+        return match (mb_strtolower((string) $country)) {
             '' => null,
             'bangladesh', 'bd' => 'BD',
-            default => mb_strlen($country) === 2 ? mb_strtoupper($country) : null,
+            default => mb_strlen((string) $country) === 2 ? mb_strtoupper((string) $country) : null,
         };
     }
 }
