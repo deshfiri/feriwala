@@ -155,8 +155,9 @@ class CatalogController extends Controller
             ->when($priceMax !== null, fn (Builder $query) => $query->where('wholesale_price', '<=', $priceMax))
             ->orderByDesc('is_featured')
             ->orderByDesc('featured_at')
-            ->orderBy('name')
-            ->orderBy('id')
+            // Newest first: a product added today is the first one a Partner sees.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
@@ -313,8 +314,9 @@ class CatalogController extends Controller
             // Featured first (§11.1), newest featured first among them.
             ->orderByDesc('is_featured')
             ->orderByDesc('featured_at')
-            ->orderBy('name')
-            ->orderBy('id')
+            // Newest first: a product added today is the first one a Partner sees.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 

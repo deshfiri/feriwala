@@ -101,16 +101,36 @@ describe('the unified Products page', function () {
                 ->component('catalog/products')
                 ->where('facility_allowed', true)
                 ->has('products.data', 3)
-                ->where('products.data.0.bpc', 'PP-BOTH')
-                ->where('products.data.0.modes', ['wholesale' => true, 'partner_selling' => true])
-                ->where('products.data.0.wholesale.price.amount', '2000.00')
-                ->where('products.data.0.partner_selling.suggested_selling_price.amount', '2600.00')
-                ->where('products.data.0.partner_selling.minimum_selling_price.amount', '2300.00')
-                ->missing('products.data.0.base_cost')
-                ->where('products.data.1.modes', ['wholesale' => false, 'partner_selling' => true])
-                ->where('products.data.1.wholesale', null)
-                ->where('products.data.2.modes', ['wholesale' => true, 'partner_selling' => false])
-                ->where('products.data.2.partner_selling', null));
+                ->where('products.data.2.bpc', 'PP-BOTH')
+                ->where('products.data.2.modes', ['wholesale' => true, 'partner_selling' => true])
+                ->where('products.data.2.wholesale.price.amount', '2000.00')
+                ->where('products.data.2.partner_selling.suggested_selling_price.amount', '2600.00')
+                ->where('products.data.2.partner_selling.minimum_selling_price.amount', '2300.00')
+                ->missing('products.data.2.base_cost')
+                ->where('products.data.0.modes', ['wholesale' => false, 'partner_selling' => true])
+                ->where('products.data.0.wholesale', null)
+                ->where('products.data.1.modes', ['wholesale' => true, 'partner_selling' => false])
+                ->where('products.data.1.partner_selling', null));
+    });
+
+    it('lists the newest product first', function () {
+        $newest = partnerProductsProduct('PP-NEWEST', 'Aardvark newest', $this->category, [
+            'wholesale_status' => ProductStatus::WholesaleEnabled,
+        ]);
+        $newest->forceFill(['created_at' => now()->addDay()])->save();
+
+        $skus = collect($this->actingAs($this->account->owner)->get(route('catalog.index'))->viewData('page')['props']['products']['data'])->pluck('sku');
+
+        expect($skus->first())->toBe('PP-NEWEST')
+            ->and($skus->last())->toBe('PP-BOTH');
+    });
+
+    it('keeps a featured product ahead of newer ones', function () {
+        $this->both->forceFill(['is_featured' => true, 'featured_at' => now()])->save();
+
+        $skus = collect($this->actingAs($this->account->owner)->get(route('catalog.index'))->viewData('page')['props']['products']['data'])->pluck('sku');
+
+        expect($skus->first())->toBe('PP-BOTH');
     });
 
     it('drops the way a package does not include and the products that only had it', function () {
