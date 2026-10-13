@@ -61,6 +61,7 @@ return [
     'settings_hub' => 'Settings',
     'roles' => 'Roles & permissions',
     'platform_staff' => 'Platform Staff',
+    'activity_log' => 'Activity log',
     'sms' => 'SMS',
     'branding' => 'Branding',
     'storage_settings' => 'Storage (R2)',

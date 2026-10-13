@@ -55,6 +55,7 @@ return [
     'settings_hub' => 'সেটিংস',
     'roles' => 'ভূমিকা ও অনুমতি',
     'platform_staff' => 'প্ল্যাটফর্ম স্টাফ',
+    'activity_log' => 'কার্যকলাপের লগ',
     'sms' => 'এসএমএস',
     'branding' => 'ব্র্যান্ডিং',
     'storage_settings' => 'স্টোরেজ (R2)',

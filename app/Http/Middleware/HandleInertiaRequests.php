@@ -50,6 +50,9 @@ class HandleInertiaRequests extends Middleware
         [PermissionModule::Kyc, PermissionAction::View],
         [PermissionModule::Account, PermissionAction::View],
 
+        // The activity log (§36.2).
+        [PermissionModule::Audit, PermissionAction::ViewAuditLogs],
+
         // Deciding requests to erase an account (§5.3).
         [PermissionModule::Account, PermissionAction::Delete],
         [PermissionModule::Supplier, PermissionAction::Delete],

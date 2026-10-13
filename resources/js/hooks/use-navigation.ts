@@ -54,6 +54,7 @@ import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as deliverySettings } from '@/routes/admin/delivery-settings';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
+import { index as activityLog } from '@/routes/admin/activity-log';
 import { index as stockAllocations } from '@/routes/admin/inventory/allocations';
 import { index as stockAvailability } from '@/routes/admin/inventory/availability';
 import { index as stockReservations } from '@/routes/admin/inventory/reservations';
@@ -337,21 +338,38 @@ export function useNavigation(): {
                 // Who can do what on the platform. KYC review is an account
                 // queue and lives under Accounts; packages and KYC
                 // requirements are settings and live in the Settings hub.
-                ...(permissions['access.view']
+                // The activity log (§36.2) is read with its own permission, so
+                // it can be granted without the right to manage roles.
+                ...(permissions['access.view'] ||
+                permissions['audit.view_audit_logs']
                     ? [
                           {
                               title: 'Access',
-                              href: roles(),
+                              href: permissions['access.view']
+                                  ? roles()
+                                  : activityLog(),
                               icon: ShieldCheck,
                               items: [
-                                  {
-                                      title: t('nav.roles'),
-                                      href: roles(),
-                                  },
-                                  {
-                                      title: t('nav.platform_staff'),
-                                      href: platformStaffIndex(),
-                                  },
+                                  ...(permissions['access.view']
+                                      ? [
+                                            {
+                                                title: t('nav.roles'),
+                                                href: roles(),
+                                            },
+                                            {
+                                                title: t('nav.platform_staff'),
+                                                href: platformStaffIndex(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['audit.view_audit_logs']
+                                      ? [
+                                            {
+                                                title: t('nav.activity_log'),
+                                                href: activityLog(),
+                                            },
+                                        ]
+                                      : []),
                               ],
                           },
                       ]

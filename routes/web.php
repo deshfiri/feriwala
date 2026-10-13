@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\AccountVerificationSettingsController;
 use App\Http\Controllers\Admin\AccountWithdrawalController;
 use App\Http\Controllers\Admin\ActivationReviewController;
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
@@ -580,6 +581,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * permission gate, exactly as the dashboard's cards do above.
          */
         Route::get('settings', SettingsController::class)->name('settings');
+
+        // Who did what (§36.2). Read-only; `audit.view_audit_logs`.
+        Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');
 
         /*
          * The twenty-one fixed PlatformRole cases, read-only as before, plus
