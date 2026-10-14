@@ -59,7 +59,18 @@ class StartKycResubmission
                 'status' => KycStatus::Draft,
                 'round' => $latest->round + 1,
                 'deadline_at' => $this->deadlineFor($latest),
+
+                // A round opened against a batch version stays on it: the
+                // applicant is being asked to fix what was asked, not a new
+                // question, and what staff accepted is judged against the same
+                // structure it was accepted under.
+                'kyc_batch_id' => $latest->kyc_batch_id,
+                'kyc_batch_version_id' => $latest->kyc_batch_version_id,
             ]);
+
+            if ($submission->kyc_batch_version_id !== null) {
+                return $submission;
+            }
 
             /*
              * The new round is snapshotted afresh rather than inheriting the

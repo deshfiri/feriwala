@@ -5,6 +5,8 @@ namespace App\Domain\Supplier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Kyc\Batch\KycCompletion;
+use App\Domain\Kyc\Batch\SupplierKycRound;
 use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Enums\SupplierStatus;
@@ -12,6 +14,7 @@ use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
 use App\Domain\Supplier\Models\SupplierStatusChange;
+use App\Domain\Supplier\SupplierKycDocumentStore;
 use App\Notifications\Supplier\SupplierKycSubmitted;
 use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\DatabaseManager;
@@ -32,6 +35,8 @@ class SubmitSupplierKyc
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected KycCompletion $completion,
+        protected SupplierKycDocumentStore $documents,
     ) {}
 
     public function handle(Supplier $supplier): SupplierKycSubmission
@@ -109,6 +114,11 @@ class SubmitSupplierKyc
      */
     protected function missingRequirements(SupplierKycSubmission $submission): array
     {
+        // A round on a batch version is judged by the batch's group rules (D30).
+        if ($submission->kyc_batch_version_id !== null) {
+            return $this->completion->evaluate(new SupplierKycRound($submission, $this->documents))->missing();
+        }
+
         $documentKeys = $submission->documents()->pluck('document_type')->all();
         $fieldKeys = $submission->fields()->pluck('key')->all();
 

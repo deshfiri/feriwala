@@ -3,6 +3,7 @@
 namespace App\Domain\Supplier\Models;
 
 use App\Concerns\HasPublicId;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,6 +16,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $public_id
  * @property string $disk
  * @property string $path
+ * @property string $document_type
+ * @property string|null $slot_key
+ * @property CarbonInterface $created_at
  */
 class SupplierKycDocument extends Model
 {
@@ -32,6 +36,10 @@ class SupplierKycDocument extends Model
         return [
             'size_bytes' => 'integer',
             'is_encrypted' => 'boolean',
+            'captured_live' => 'boolean',
+            'captured_at' => 'immutable_datetime',
+            'capture_meta' => 'array',
+            'superseded_at' => 'immutable_datetime',
         ];
     }
 

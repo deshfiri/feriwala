@@ -2,6 +2,7 @@
 
 namespace App\Domain\Supplier\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property string $key
  * @property string $value
+ * @property string|null $slot_key
+ * @property CarbonInterface $updated_at
  */
 class SupplierKycField extends Model
 {

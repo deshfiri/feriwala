@@ -53,6 +53,13 @@ class ApplicableRequirements
         ?KycSubmission $submission = null,
         ?string $packageKey = null,
     ): array {
+        // A round on a batch version has its own grouped form; the flat list
+        // below — including its "fall back to live configuration" — is only for
+        // rounds opened before batches were versioned (D30).
+        if ($submission?->kyc_batch_version_id !== null) {
+            return [];
+        }
+
         $requirements = $submission?->requirements()->get() ?? collect();
 
         if ($requirements->isEmpty()) {

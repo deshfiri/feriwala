@@ -23,6 +23,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * @property int $business_account_id
  * @property KycStatus $status
+ * @property int|null $kyc_batch_id
+ * @property int|null $kyc_batch_version_id
+ * @property array<string, array<int, string>>|null $selections
  * @property int $round
  * @property CarbonImmutable|null $submitted_at
  * @property CarbonImmutable|null $reviewed_at
@@ -50,6 +53,7 @@ class KycSubmission extends Model
             'status' => KycStatus::class,
             'purpose' => KycRoundPurpose::class,
             'consequences' => 'array',
+            'selections' => 'array',
             'round' => 'integer',
             'submitted_at' => 'immutable_datetime',
             'reviewed_at' => 'immutable_datetime',

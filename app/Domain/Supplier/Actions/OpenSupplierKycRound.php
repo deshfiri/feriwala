@@ -2,6 +2,7 @@
 
 namespace App\Domain\Supplier\Actions;
 
+use App\Domain\Kyc\Batch\AssignKycBatch;
 use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
@@ -27,6 +28,7 @@ class OpenSupplierKycRound
 {
     public function __construct(
         protected CaptureSupplierKycRequirements $capture,
+        protected AssignKycBatch $batches,
     ) {}
 
     public function handle(Supplier $supplier): SupplierKycSubmission
@@ -37,8 +39,17 @@ class OpenSupplierKycRound
                 'status' => SupplierKycStatus::Draft,
             ]);
 
-        if ($round->status->isEditable()) {
-            $this->capture->handle($round);
+        // Already pinned to a batch version: that version is the round (D30).
+        if ($round->status->isEditable() && $round->kyc_batch_version_id === null) {
+            // A round with nothing in it yet is given the default batch, if there
+            // is one; one that has begun under the older flow keeps it.
+            $untouched = ! $round->requirements()->exists()
+                && ! $round->documents()->exists()
+                && ! $round->fields()->exists();
+
+            if (! ($untouched && $this->batches->forSupplier($round))) {
+                $this->capture->handle($round);
+            }
         }
 
         return $round;

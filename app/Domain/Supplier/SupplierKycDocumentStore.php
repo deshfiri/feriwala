@@ -124,6 +124,50 @@ class SupplierKycDocumentStore
     }
 
     /**
+     * Store a file as the evidence for one slot of a versioned round (D30).
+     *
+     * What is acceptable was already decided against the round's batch version
+     * by the batch engine, so there is no rule check here; the storage rules
+     * above still apply to every file.
+     *
+     * @param  array<string, mixed>|null  $captureMeta  safe technical facts about a live capture
+     */
+    public function storeEvidence(
+        SupplierKycSubmission $submission,
+        string $requirementKey,
+        string $slotKey,
+        UploadedFile $file,
+        bool $capturedLive = false,
+        ?array $captureMeta = null,
+    ): SupplierKycDocument {
+        $contents = (string) file_get_contents($file->getRealPath());
+
+        $path = sprintf(
+            'supplier-kyc/%s/%s/%s',
+            $submission->supplier_id,
+            $submission->public_id,
+            bin2hex(random_bytes(16)),
+        );
+
+        $this->storage->diskForLocal(self::DISK)->put($path, encrypt($contents));
+
+        return $submission->documents()->create([
+            'document_type' => $requirementKey,
+            'slot_key' => $slotKey,
+            'disk' => $this->storage->diskNameForLocal(self::DISK),
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => (string) $file->getMimeType(),
+            'size_bytes' => strlen($contents),
+            'checksum' => hash('sha256', $contents),
+            'is_encrypted' => true,
+            'captured_live' => $capturedLive,
+            'captured_at' => $capturedLive ? now() : null,
+            'capture_meta' => $captureMeta,
+        ]);
+    }
+
+    /**
      * Read a document's contents. Recording who accessed it is the caller's
      * job here (unlike the generic engine) because a Supplier reading their
      * own document is not the access §7.5 exists to police — only a staff

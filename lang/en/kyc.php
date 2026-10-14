@@ -1,6 +1,29 @@
 <?php
 
 return [
+    'batch' => [
+        'selfie_label' => 'Live selfie',
+        'selfie_instructions' => 'Taken now with your camera. Your face fully visible, in good light, without a hat or sunglasses.',
+        'selfie_required' => 'A live selfie is required.',
+        'choose_n' => ':group — :done of :needed completed',
+        'refused' => [
+            'legacy_round' => 'This application uses the earlier form. Use the form shown on your KYC page.',
+            'locked' => 'This application has been submitted and can no longer be changed.',
+            'unknown_slot' => 'That is not something this application asks for.',
+            'wrong_kind' => 'That item takes a different kind of answer (a file or a typed value).',
+            'already_accepted' => 'This item has already been accepted, so it cannot be replaced.',
+            'option_locked' => 'You have already submitted this option. Our team has to ask for it again before you can change it.',
+            'unknown_option' => 'That option is not part of this application.',
+            'not_choosable' => 'Everything in this group is required, so there is nothing to choose between.',
+            'live_only' => 'The selfie must be taken with your camera. Choose "Take selfie" instead of uploading a file.',
+            'format' => 'A :mime file is not accepted here. Allowed: :allowed.',
+            'too_large' => 'The file is :size KB, which is over the :limit KB limit.',
+            'empty_value' => 'Enter a value (up to 255 characters).',
+            'batch_unavailable' => 'That verification batch is switched off or retired.',
+            'wrong_audience' => 'That verification batch is for a different kind of applicant.',
+            'round_begun' => 'This application already has evidence in it, so it cannot be moved to another batch.',
+        ],
+    ],
     'batch_builder' => [
         'selfie_modes' => [
             'disabled' => 'Not asked',
@@ -13,6 +36,7 @@ return [
             'minimum_too_high' => '":group" needs at least :minimum, but offers only :count.',
             'nothing_required' => '":group" is set to "all required", but none of its requirements is required.',
             'no_required_slot' => '":requirement" has no required file or value, so it could never be incomplete.',
+            'duplicate_requirement' => '":requirement" is in more than one group. Keep it in one.',
         ],
     ],
     'batches' => [

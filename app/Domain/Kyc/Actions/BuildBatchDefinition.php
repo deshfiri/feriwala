@@ -71,6 +71,19 @@ class BuildBatchDefinition
             $problems[] = __('kyc.batch_builder.problems.empty');
         }
 
+        // A requirement is addressed by its key, so it can sit in one group only.
+        $seen = [];
+
+        foreach ($groups as $group) {
+            foreach ($group['requirements'] as $requirement) {
+                if (isset($seen[$requirement['key']])) {
+                    $problems[] = __('kyc.batch_builder.problems.duplicate_requirement', ['requirement' => $requirement['name']]);
+                }
+
+                $seen[$requirement['key']] = true;
+            }
+        }
+
         foreach ($groups as $group) {
             $name = $group['name'];
             $count = count($group['requirements']);
