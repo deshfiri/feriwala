@@ -10,6 +10,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 This application is a Laravel application running on PHP 8.5. You are an expert with the Laravel ecosystem. Always use the APIs that match the installed major version of each package — do not assume a version.
 
 Before relying on a package's API, confirm its installed version:
+
 - PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
 - JS packages: check `package.json` for the installed versions.
 
@@ -85,7 +86,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
 - Always use single quotes to prevent shell expansion: `php artisan tinker --execute 'Your::code();'`
-  - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
+    - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
 
 === php rules ===
 
@@ -314,6 +315,15 @@ DB_SEARCH_PATH=testing_mine php artisan test
 **Never switch session, cache, or queue to `file`/`sync`/`database` drivers**, even temporarily to
 work around a local environment problem. The application must stay stateless and horizontally
 scalable (§40, D10). `.env.example` is the reference.
+
+**Product media in local development.** With R2 not configured, product images go to the local
+`public` disk and their URLs are `{APP_URL}/storage/catalog/products/…`. Three things must hold
+for those URLs to load: `php artisan storage:link` has created `public/storage`; `APP_URL` is the
+origin the app is actually served on, port included (`http://127.0.0.1:8000` for
+`php artisan serve`, not bare `http://localhost`); and anything outside this machine — a preview
+storefront — can only load them if that origin is reachable from it over HTTPS. Each
+`product_media` row records its own disk, so a later move to R2 changes new uploads only; the
+storefront payload resolves every URL from the row's disk.
 
 ## UI
 

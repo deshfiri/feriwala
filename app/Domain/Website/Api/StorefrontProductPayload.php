@@ -92,14 +92,24 @@ class StorefrontProductPayload
                         'name' => $product->category->name,
                     ],
             ],
+            // Position 1 is the listing image; the rest are the gallery. Each
+            // URL comes from the disk the file was actually written to, so a
+            // file stored before a move to R2 (or after one) still resolves.
+            // `width`, `height` and `variant_id` are additive: the image's
+            // own size when known, and the listed variation it shows, if any.
             'media' => $product->media
                 ->sortBy('position')
                 ->values()
                 ->map(fn (ProductMedia $item) => [
-                    'url' => $this->media->url($item->path),
+                    'url' => $this->media->url($item->path, $item->disk),
                     'alt' => $item->alt_text,
                     'position' => $item->position,
                     'type' => $item->type,
+                    'width' => $item->width,
+                    'height' => $item->height,
+                    'variant_id' => $item->product_variant_id === null
+                        ? null
+                        : $variants->firstWhere('id', $item->product_variant_id)?->public_id,
                 ])
                 ->all(),
             'variants' => $variants->isEmpty()

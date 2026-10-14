@@ -856,7 +856,12 @@ stores' orders in the Owner Panel beside their Feriwala orders. Four decisions s
 - An external order is never deleted; its history is append-only; an older copy never overwrites a
   newer one; money is parsed from the store's text without passing through a float (D26).
 
-## D30 — Shared multi-tenant storefront; per-website credentials; owner operations (2026-10-12) 🔒
+## D30 — Shared multi-tenant storefront; per-website credentials; owner operations (2026-10-12) 🔒 — **SUPERSEDED 2026-10-13 by D32**
+
+> **Superseded by D32.** The shared multi-tenant deployment (§1), automatic credential
+> provisioning to a shared registry (§2, last bullet), the shared Caddy/VPS hosting model as the
+> default (§4) and the P3–P8 rollout order (§10) no longer apply. What D32 keeps from D30 is listed
+> there. The text below is kept as the record of what was decided on 2026-10-12.
 
 **Approved by the Project Owner on 2026-10-12.** Amends D10, D11, D12 (step 4 only) and D29, and
 adds to the frozen Storefront API contract without breaking it. The DFCOMMERCE Laravel project is a
@@ -1050,3 +1055,51 @@ Both narrow behaviour that was a defect, not a documented promise; no field is r
   selection id. A selection with no sales follows all that sold, in selection order.
 - **Freshness:** a derived summary (`website_product_sales`) rebuilt every fifteen minutes in one
   serialised transaction; the storefront reads it by key and never aggregates orders per request.
+
+## D32 — One independently installed storefront per Owner (P3) (2026-10-13) 🔒
+
+**Approved by the Project Owner on 2026-10-13.** Supersedes D30 §1, §2 (automatic provisioning),
+§4 and §10; amends D10 and D11 again. The Storefront API contract (`05`) stays frozen at v1 and the
+Central Banij ERP stays authoritative for catalogue, prices, stock, orders, payments, customers and
+money. Architecture-locked: changes need approval before implementation.
+
+### 1. One installation per Owner
+
+- Each Owner's website is served by **its own installation** of the storefront: separate source
+  code, hosting and domain, built from one reusable **Master Storefront Template**.
+- A shared multi-tenant Next.js deployment is **not** the default. Nothing in the ERP may assume
+  that two websites share a deployment, a host or a credential store.
+
+### 2. Credentials: generated in the ERP, entered by hand
+
+- **Only the Super Admin** generates, rotates and revokes a website's Storefront API credentials,
+  each scoped to one website.
+- The secret is shown **once**, as a ready-to-paste `.env` block, and an Admin enters it into the
+  storefront's **server-side** environment by hand. There is **no automatic provisioning** — no
+  registry, push or retrieval channel — and a secret never reaches a browser or client bundle.
+- The website is still taken only from the credential (contract §3.5); the ERP still resolves a
+  stated `X-Feriwala-Storefront-Host` itself and refuses a host that is not the website's.
+
+### 3. Who manages what
+
+| Super Admin (ERP)                                                           | Owner Panel (ERP)                                                        |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| API credentials, installation status, connection, activation and suspension | The website's business data: branding, contact, products, prices, orders |
+
+### 4. Kept from D30
+
+Per-website credentials and the ERP's independent host check (§2, except automatic provisioning);
+domain verification by DNS TXT before a domain counts as the website's (§3) — now the evidence for
+return-URL and host checks rather than for shared TLS; caching and session rules (§5), now the
+template's obligation; one order path through `POST /orders` with Feriwala's gateway and Feriwala as
+merchant of record (§6); owner order operations (§7); customer accounts (§8); website capacity (§9);
+additive, reversible migrations (§10, first bullet).
+
+### 5. ERP work in P3
+
+ER-1 Super Admin-only integration permissions · ER-2 storefront installation records and the Admin
+Storefront tab · ER-3 one-time credential display as an `.env` block · ER-4 safe rotation and
+emergency revocation · ER-7 a checkout-quote scope and credential presets · ER-9 existing ERP
+integration prerequisites · ER-11 order-specific authorisation tokens for order reads and per-order
+actions. Their contract details (`.env` names, token transport, scope names) are agreed with the
+storefront session before implementation.

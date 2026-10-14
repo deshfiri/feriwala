@@ -328,7 +328,10 @@ Product payload (abbreviated):
             "url": "https://...",
             "alt": "Navy cotton panjabi, front",
             "position": 1,
-            "type": "image"
+            "type": "image",
+            "width": 1600,
+            "height": 2000,
+            "variant_id": null
         }
     ],
     "variants": [
@@ -360,6 +363,15 @@ Product payload (abbreviated):
 **`price` is the website's own selling price** — resolved server-side from the partner's permitted
 price within admin bounds (§15.1). Wholesale price, base cost, and margin are **never** in this
 payload. The storefront cannot see what Feriwala paid, and cannot compute the partner's earning.
+
+#### 5.1.0 Media
+
+`media` is sorted by `position`; **position 1 is the listing (primary) image** and the rest are
+the gallery. `type` is `image` (JPEG, PNG or WebP) or `video` (MP4 or WebM). `url` is an absolute
+public URL on the storage host the file was written to. Additive (2026-10-13): `width` and
+`height` in pixels, or `null` when unknown (always `null` for video), and `variant_id` — the public
+id of a variation listed in `variants` that the image shows, or `null` for an image of the product
+as a whole. A storefront must allow the storage host in its image configuration.
 
 #### 5.1.1 What is listed (v1 compatibility correction, D31)
 
