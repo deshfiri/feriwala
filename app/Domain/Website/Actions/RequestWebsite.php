@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Billing\FeeRuleResolver;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Models\UserPackage;
@@ -172,6 +173,8 @@ class RequestWebsite
             accountId: $account->id,
             module: 'website',
         ));
+
+        StaffQueue::WebsiteRequest->announce($website);
 
         return $website;
     }

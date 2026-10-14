@@ -7,9 +7,11 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Data\AccountContext;
 use App\Domain\Account\StaffAllowance;
+use App\Domain\Notification\Events\NotificationsChanged;
 use App\Domain\Notification\Queries\RecentNotifications;
 use App\Domain\Package\Entitlements;
 use App\Domain\Settings\Branding;
+use App\Domain\Supplier\Models\Supplier;
 use App\Models\User;
 use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
@@ -47,6 +49,14 @@ class HandleInertiaRequests extends Middleware
     public const NAVIGATION_ABILITIES = [
         [PermissionModule::Kyc, PermissionAction::View],
         [PermissionModule::Account, PermissionAction::View],
+
+        // The activity log (§36.2).
+        [PermissionModule::Audit, PermissionAction::ViewAuditLogs],
+        [PermissionModule::Audit, PermissionAction::ManageSettings],
+
+        // Deciding requests to erase an account (§5.3).
+        [PermissionModule::Account, PermissionAction::Delete],
+        [PermissionModule::Supplier, PermissionAction::Delete],
 
         // Configuring what applicants are asked for is a different job from
         // reviewing one application (§7.2).
@@ -239,6 +249,17 @@ class HandleInertiaRequests extends Middleware
             'unreadNotificationCount' => fn () => $user === null
                 ? 0
                 : $this->notifications->unreadCountFor($user),
+
+            /*
+             * The private WebSocket channel this person may listen on — their
+             * own, whichever guard they are signed in through. The socket only
+             * ever nudges the page to reload; see `NotificationsChanged`.
+             */
+            'realtimeChannel' => fn () => match (true) {
+                $user !== null => NotificationsChanged::channelFor($user),
+                $request->user('supplier') instanceof Supplier => NotificationsChanged::channelFor($request->user('supplier')),
+                default => null,
+            },
         ];
     }
 

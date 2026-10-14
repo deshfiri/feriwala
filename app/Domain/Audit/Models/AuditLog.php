@@ -5,6 +5,7 @@ namespace App\Domain\Audit\Models;
 use App\Concerns\HasPublicId;
 use App\Domain\Audit\Exceptions\AuditLogIsImmutable;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,9 +21,20 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * since it still reads as authoritative.
  *
  * @property string $public_id
+ * @property int|null $actor_id
+ * @property string $actor_type
+ * @property string|null $actor_label
  * @property string $action
+ * @property string|null $auditable_type
  * @property array<string, mixed>|null $before
  * @property array<string, mixed>|null $after
+ * @property string|null $reason
+ * @property string|null $note
+ * @property string|null $ip_address
+ * @property string|null $module
+ * @property bool $is_sensitive
+ * @property CarbonImmutable $created_at
+ * @property-read User|null $actor
  */
 class AuditLog extends Model
 {

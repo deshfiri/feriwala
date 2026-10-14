@@ -8,6 +8,7 @@ vi.mock('@inertiajs/react', async () => {
     const { createElement } = await import('react');
 
     return {
+        router: { on: vi.fn(() => () => {}) },
         Head: () => null,
         Link: ({
             href,

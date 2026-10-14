@@ -1,4 +1,11 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
+import {
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
+    LayoutGrid,
+    LayoutList,
+    Search,
+} from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import ColumnVisibilityMenu from '@/components/data-table/column-visibility-menu';
 import TablePagination from '@/components/data-table/table-pagination';
@@ -6,8 +13,10 @@ import EmptyState from '@/components/states/empty-state';
 import ErrorState from '@/components/states/error-state';
 import PermissionDeniedState from '@/components/states/permission-denied-state';
 import TableSkeleton from '@/components/states/table-skeleton';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { useQueryReloading } from '@/hooks/use-navigation-pending';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -42,6 +51,8 @@ export default function DataTable<T>({
     selection,
     bulkActions,
     renderCard,
+    renderTile,
+    viewStorageKey,
     emptyState,
     onRetry,
     onlyReload,
@@ -70,6 +81,13 @@ export default function DataTable<T>({
      * table nobody can read (§33.6, §33.8).
      */
     renderCard?: (row: T) => ReactNode;
+    /**
+     * A tile for the grid view. When given, the toolbar offers a List / Tile
+     * switch; the tile fills a responsive grid at every width.
+     */
+    renderTile?: (row: T) => ReactNode;
+    /** Remembers the chosen view in this browser, per screen. */
+    viewStorageKey?: string;
     emptyState?: ReactNode;
     onRetry?: () => void;
     /** Inertia partial-reload keys, so a filter change re-fetches only the table. */
@@ -98,6 +116,34 @@ export default function DataTable<T>({
                     .map((column) => column.key),
             ),
     );
+
+    const [view, setView] = useState<'list' | 'tile'>(() => {
+        if (!renderTile || !viewStorageKey) return 'list';
+
+        try {
+            return localStorage.getItem(`data-table-view:${viewStorageKey}`) ===
+                'tile'
+                ? 'tile'
+                : 'list';
+        } catch {
+            return 'list';
+        }
+    });
+
+    const chooseView = (next: 'list' | 'tile') => {
+        setView(next);
+
+        if (!viewStorageKey) return;
+
+        try {
+            localStorage.setItem(`data-table-view:${viewStorageKey}`, next);
+        } catch {
+            // The choice still applies for this visit.
+        }
+    };
+
+    const tiled = Boolean(renderTile) && view === 'tile';
+    const reloading = useQueryReloading();
 
     const visibleColumns = columns.filter((column) => !hidden.has(column.key));
 
@@ -139,11 +185,54 @@ export default function DataTable<T>({
     const body = () => {
         if (state === 'forbidden') return <PermissionDeniedState />;
         if (state === 'error') return <ErrorState onRetry={onRetry} />;
-        if (state === 'loading') {
+        if (state === 'loading' || (state === 'ready' && reloading)) {
+            // The page being replaced is the best guide to the one coming: the
+            // same number of rows, in the same view.
+            const placeholderRows =
+                rows.length > 0
+                    ? rows.length
+                    : paginator.per_page > 10
+                      ? 8
+                      : paginator.per_page;
+
+            if (tiled) {
+                return (
+                    <div
+                        role="status"
+                        aria-busy="true"
+                        className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                    >
+                        <span className="sr-only">
+                            {t('common.table.loading')}
+                        </span>
+                        {Array.from({ length: placeholderRows }).map(
+                            (_, index) => (
+                                <div
+                                    key={index}
+                                    className="bg-card overflow-hidden rounded-xl border shadow-sm"
+                                >
+                                    <div
+                                        className="bg-muted aspect-square animate-pulse"
+                                        style={{
+                                            animationDelay: `${index * 40}ms`,
+                                        }}
+                                    />
+                                    <div className="space-y-2 p-3">
+                                        <div className="bg-muted h-4 w-3/4 animate-pulse rounded-full" />
+                                        <div className="bg-muted h-3 w-1/2 animate-pulse rounded-full" />
+                                        <div className="bg-muted h-3 w-1/3 animate-pulse rounded-full" />
+                                    </div>
+                                </div>
+                            ),
+                        )}
+                    </div>
+                );
+            }
+
             return (
                 <TableSkeleton
                     columns={visibleColumns.length}
-                    rows={paginator.per_page > 10 ? 8 : paginator.per_page}
+                    rows={placeholderRows}
                 />
             );
         }
@@ -156,6 +245,38 @@ export default function DataTable<T>({
                         }
                     />
                 )
+            );
+        }
+
+        if (tiled && renderTile) {
+            return (
+                <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {rows.map((row) => {
+                        const key = rowKey(row);
+                        const isSelected = selection?.selected.has(key);
+
+                        return (
+                            <div
+                                key={key}
+                                data-selected={isSelected || undefined}
+                                className="bg-card border-border data-[selected]:border-brand relative flex flex-col rounded-xl border shadow-sm transition-colors"
+                            >
+                                {selection && (
+                                    <div className="bg-card/90 absolute top-2 left-2 z-10 rounded-md p-1">
+                                        <Checkbox
+                                            checked={isSelected}
+                                            onCheckedChange={() =>
+                                                toggleRow(row)
+                                            }
+                                            aria-label="Select row"
+                                        />
+                                    </div>
+                                )}
+                                {renderTile(row)}
+                            </div>
+                        );
+                    })}
+                </div>
             );
         }
 
@@ -365,23 +486,61 @@ export default function DataTable<T>({
 
                         <div className="ml-auto flex flex-wrap items-center gap-2">
                             {actions}
-                            <ColumnVisibilityMenu
-                                columns={columns}
-                                hidden={hidden}
-                                onToggle={(key) =>
-                                    setHidden((current) => {
-                                        const next = new Set(current);
+                            {renderTile && (
+                                <div
+                                    role="group"
+                                    aria-label={t('common.table.view')}
+                                    className="border-input flex overflow-hidden rounded-md border"
+                                >
+                                    {(
+                                        [
+                                            ['list', LayoutList],
+                                            ['tile', LayoutGrid],
+                                        ] as const
+                                    ).map(([mode, Icon]) => (
+                                        <Button
+                                            key={mode}
+                                            type="button"
+                                            variant={
+                                                view === mode
+                                                    ? 'secondary'
+                                                    : 'ghost'
+                                            }
+                                            size="sm"
+                                            aria-pressed={view === mode}
+                                            onClick={() => chooseView(mode)}
+                                            className="h-8 rounded-none px-2.5"
+                                        >
+                                            <Icon
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            <span className="sr-only">
+                                                {t(`common.table.view_${mode}`)}
+                                            </span>
+                                        </Button>
+                                    ))}
+                                </div>
+                            )}
+                            {!tiled && (
+                                <ColumnVisibilityMenu
+                                    columns={columns}
+                                    hidden={hidden}
+                                    onToggle={(key) =>
+                                        setHidden((current) => {
+                                            const next = new Set(current);
 
-                                        if (next.has(key)) {
-                                            next.delete(key);
-                                        } else {
-                                            next.add(key);
-                                        }
+                                            if (next.has(key)) {
+                                                next.delete(key);
+                                            } else {
+                                                next.add(key);
+                                            }
 
-                                        return next;
-                                    })
-                                }
-                            />
+                                            return next;
+                                        })
+                                    }
+                                />
+                            )}
                         </div>
                     </>
                 )}

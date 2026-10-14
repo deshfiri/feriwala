@@ -7,6 +7,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Kyc\KycRestrictions;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Payout\Enums\PayoutOwnerType;
 use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Supplier\Actions\RequestSupplierWithdrawal;
@@ -97,7 +98,7 @@ class RequestAccountWithdrawal
         }
 
         try {
-            return $this->database->transaction(function () use ($account, $wallet, $payoutMethod, $amount, $idempotencyKey) {
+            $withdrawal = $this->database->transaction(function () use ($account, $wallet, $payoutMethod, $amount, $idempotencyKey) {
                 // Locked and re-checked here, tighter than the generic
                 // usableBalance() guard WalletService::reserve() applies on
                 // its own: §24.2 keeps the required deposit out of reach of
@@ -148,6 +149,10 @@ class RequestAccountWithdrawal
 
                 return $withdrawal;
             });
+
+            StaffQueue::AccountWithdrawal->announce($withdrawal);
+
+            return $withdrawal;
         } catch (UniqueConstraintViolationException $exception) {
             $racedWith = AccountWithdrawal::query()->where('idempotency_key', $idempotencyKey)->first();
 

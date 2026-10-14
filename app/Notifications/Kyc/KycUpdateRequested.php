@@ -65,7 +65,6 @@ class KycUpdateRequested extends Notification implements ShouldQueue
     {
         return [
             'event' => 'kyc.update_requested',
-            'round' => $this->submission->round,
             'instructions' => $this->submission->request_instructions,
             'deadline_at' => $this->submission->deadline_at?->toIso8601String(),
         ];

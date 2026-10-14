@@ -149,6 +149,13 @@ class SettingsController extends Controller
                         'route' => 'admin.product-deletion-settings.index',
                         'permission' => PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View),
                     ],
+                    [
+                        'key' => 'activity_log_retention',
+                        'title' => __('nav.activity_log_retention'),
+                        'description' => __('settings.hub.items.activity_log_retention'),
+                        'route' => 'admin.activity-log-retention.index',
+                        'permission' => PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::ViewAuditLogs),
+                    ],
                 ],
             ],
             [

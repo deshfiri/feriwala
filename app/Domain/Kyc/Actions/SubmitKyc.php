@@ -9,6 +9,7 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Exceptions\KycIncomplete;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Notification\Enums\StaffQueue;
 use Illuminate\Database\DatabaseManager;
 
 /**
@@ -39,7 +40,7 @@ class SubmitKyc
             throw KycIncomplete::missing($missing);
         }
 
-        return $this->database->transaction(function () use ($submission, $account) {
+        $submitted = $this->database->transaction(function () use ($submission, $account) {
             $submission->transitionTo(KycStatus::Submitted);
             $submission->submitted_at = now();
             $submission->save();
@@ -55,6 +56,10 @@ class SubmitKyc
 
             return $submission;
         });
+
+        StaffQueue::Kyc->announce($submitted);
+
+        return $submitted;
     }
 
     /**

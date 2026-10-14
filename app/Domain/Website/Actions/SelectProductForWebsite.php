@@ -7,6 +7,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\ProductEligibility;
+use App\Domain\Catalog\PurchasedProducts;
 use App\Domain\Package\Entitlements;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Enums\WebsiteSyncStatus;
@@ -37,6 +38,7 @@ class SelectProductForWebsite
 {
     public function __construct(
         protected ProductEligibility $eligibility,
+        protected PurchasedProducts $purchased,
         protected Entitlements $entitlements,
         protected ResolveWebsitePriceRule $pricing,
         protected RecordAuditLog $audit,
@@ -56,6 +58,11 @@ class SelectProductForWebsite
 
         if (! $this->eligibility->isEligible($product, $account, SalesChannel::Dropshipping)) {
             throw WebsiteRefused::productNotEligible();
+        }
+
+        // A website sells what the account has bought, nothing else.
+        if (! $this->purchased->has($account, $product)) {
+            throw WebsiteRefused::productNotPurchased();
         }
 
         $terms = $this->pricing->for($product, $this->entitlements->activePackage($account)?->package);

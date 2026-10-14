@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Supplier;
 
+use App\Domain\Account\Queries\OwnDeletionRequest;
+use App\Domain\Notification\Actions\MarkNotificationsRead;
 use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\SetLocale;
@@ -32,7 +34,17 @@ class AccountController extends Controller
         $notifications = $supplier->notifications()->latest()->limit(50)->get()->map(fn ($notification) => [
             'id' => $notification->id,
             'title' => SupplierLifecycleNotification::line((string) ($notification->data['event'] ?? 'unknown'), 'title'),
-            'description' => SupplierLifecycleNotification::line((string) ($notification->data['event'] ?? 'unknown'), 'description'),
+            'description' => trim(
+                SupplierLifecycleNotification::line((string) ($notification->data['event'] ?? 'unknown'), 'description')
+                .(filled($notification->data['reference'] ?? null)
+                    ? ' '.__('notification.reference', ['reference' => $notification->data['reference']])
+                    : '')
+            ),
+            // Where this Supplier acts on it: their own stock screen for an
+            // availability decision, nowhere for the rest.
+            'href' => str_starts_with((string) ($notification->data['event'] ?? ''), 'decision.stock_update.')
+                ? route('supplier.stock.index')
+                : null,
             'note' => $notification->data['note'] ?? null,
             'read' => $notification->read_at !== null,
             'created_at' => $notification->created_at?->toIso8601String(),
@@ -41,22 +53,33 @@ class AccountController extends Controller
         return Inertia::render('supplier/notifications', ['notifications' => $notifications]);
     }
 
-    public function markNotificationsRead(Request $request): RedirectResponse
+    public function markNotificationsRead(Request $request, MarkNotificationsRead $markRead): RedirectResponse
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
 
-        $supplier->unreadNotifications()->update(['read_at' => now()]);
+        $markRead->all($supplier);
 
         return back();
     }
 
-    public function profile(Request $request): Response
+    public function markNotificationRead(Request $request, string $notification, MarkNotificationsRead $markRead): RedirectResponse
+    {
+        /** @var Supplier $supplier */
+        $supplier = $request->user('supplier');
+
+        abort_unless($markRead->one($supplier, $notification), 404);
+
+        return back();
+    }
+
+    public function profile(Request $request, OwnDeletionRequest $deletion): Response
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
 
         return Inertia::render('supplier/profile', [
+            'deletionRequest' => $deletion->for($supplier),
             'profile' => [
                 'reference' => $supplier->reference,
                 'business_name' => $supplier->business_name,

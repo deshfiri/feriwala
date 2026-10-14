@@ -47,7 +47,6 @@ type Props = {
     };
     round: {
         id: string;
-        round: number;
         status_label: string;
         awaits_review: boolean;
         can_request_correction: boolean;

@@ -65,14 +65,14 @@ describe('who reaches the dashboard at all', function () {
             ->assertRedirect(route('onboarding.status'));
     });
 
-    it('sends platform staff to their own queues instead', function () {
+    it('sends platform staff to the admin dashboard instead', function () {
         $this->seed(RolesAndPermissionsSeeder::class);
 
         // D23: no business account, so the business ERP is not theirs to open.
         // The dashboard therefore never has to render an admin panel.
         $this->actingAs(testPlatformStaff(PlatformRole::KycManager))
             ->get(route('dashboard'))
-            ->assertRedirect(route('admin.kyc.index'));
+            ->assertRedirect(route('admin.dashboard'));
     });
 });
 

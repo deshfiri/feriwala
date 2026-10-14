@@ -103,7 +103,7 @@ class AccountDossier
             ->get()
             ->map(fn (KycSubmission $round) => [
                 'id' => $round->public_id,
-                'round' => $round->round,
+                'opened_at' => $round->created_at?->toIso8601String(),
                 'status' => $round->status->value,
                 'status_label' => $round->status->label(),
                 'status_tone' => $round->status->tone(),

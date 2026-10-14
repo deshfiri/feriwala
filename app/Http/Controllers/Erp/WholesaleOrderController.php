@@ -7,6 +7,7 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Order\Actions\CancelUnpaidOrder;
+use App\Domain\Order\Actions\ChangeOrderPaymentMethod;
 use App\Domain\Order\Actions\InitiateOrderPayment;
 use App\Domain\Order\Actions\PlaceWholesaleOrder;
 use App\Domain\Order\Enums\IntendedResaleChannel;
@@ -18,6 +19,7 @@ use App\Domain\Order\Queries\WholesaleOrderTracking;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\GatewayNavigation;
+use App\Integrations\Payment\PaymentGatewayManager;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +52,7 @@ class WholesaleOrderController extends Controller
     public function __construct(
         protected WholesaleOrderTracking $tracking,
         protected ProductEligibility $eligibility,
+        protected PaymentGatewayManager $gateways,
     ) {}
 
     public function index(Request $request): Response
@@ -73,6 +76,8 @@ class WholesaleOrderController extends Controller
 
         return Inertia::render('wholesale/orders/show', [
             'order' => $this->tracking->detail($record),
+            // What the buyer can switch to while the order still waits for payment.
+            'payment_methods' => $this->canPay($record) ? $this->methodsFor($record) : [],
             'can' => [
                 'pay' => $this->canPay($record),
                 'cancel' => $this->canCancel($request, $record),
@@ -116,12 +121,29 @@ class WholesaleOrderController extends Controller
     /**
      * Continue to payment for an order still waiting for it.
      */
-    public function pay(Request $request, string $order, InitiateOrderPayment $initiate): SymfonyResponse
+    public function pay(Request $request, string $order, InitiateOrderPayment $initiate, ChangeOrderPaymentMethod $change): SymfonyResponse
     {
         $account = $this->businessAccountFor($request);
         $record = $this->orderFor($request, $order);
 
         abort_unless($this->eligibility->allowsChannel($account, SalesChannel::Wholesale), 403);
+
+        $validated = $request->validate([
+            // Optional: a different gateway than the one the order started with.
+            'payment_method' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        if (filled($validated['payment_method'] ?? null)) {
+            try {
+                $change->handle($record, $validated['payment_method'], $request);
+            } catch (OrderRefused $refused) {
+                throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+            } catch (LockTimeout) {
+                throw ValidationException::withMessages(['order' => __('orders.refused.busy')]);
+            }
+
+            $record = $record->refresh();
+        }
 
         return $this->sendToGateway($request, $record, $initiate, refuseLoudly: true);
     }
@@ -176,6 +198,24 @@ class WholesaleOrderController extends Controller
         }
 
         return to_route('wholesale.orders.show', $order->public_id);
+    }
+
+    /**
+     * @return list<array{name: string, label: string}>
+     */
+    protected function methodsFor(Order $order): array
+    {
+        $currency = $order->payment?->amount->currency;
+
+        if ($currency === null) {
+            return [];
+        }
+
+        return array_map(function (string $name): array {
+            $label = config("payment.gateways.{$name}.label");
+
+            return ['name' => $name, 'label' => is_string($label) && $label !== '' ? $label : $name];
+        }, $this->gateways->availableFor($currency));
     }
 
     protected function canPay(Order $order): bool

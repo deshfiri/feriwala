@@ -143,11 +143,12 @@ export type ProductRow = {
     /** Whether the deletion setting allows this status to be deleted. */
     is_deletable: boolean;
     is_featured: boolean;
-    channels: ProductChannelState[];
     /** The listing image (position one), or null when there is none. */
     image_url: string | null;
-    media_count: number;
-    variants_count: number;
+    /** Whether central stock can fill an order for it now. */
+    in_stock: boolean;
+    /** Units available across its stockable units; 0 when out of stock. */
+    stock_quantity: number;
     updated_at: string;
 };
 
@@ -438,6 +439,8 @@ export type PartnerProductCard = {
     category: string;
     brand: string | null;
     is_featured: boolean;
+    /** Bought before — reordering is offered under My Products, not in this list. */
+    purchased?: boolean;
     variant_count: number;
     package_scope: 'all' | 'selected';
     image: { url: string; alt: string | null } | null;

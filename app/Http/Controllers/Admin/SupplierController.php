@@ -119,7 +119,6 @@ class SupplierController extends Controller
             ],
             'round' => $round === null ? null : [
                 'id' => $round->public_id,
-                'round' => $round->round,
                 'status' => $round->status->value,
                 'status_label' => $round->status->label(),
                 'submitted_at' => $round->submitted_at?->toIso8601String(),

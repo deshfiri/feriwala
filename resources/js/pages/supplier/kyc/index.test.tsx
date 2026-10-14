@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,6 @@ const translations = {
         kyc: {
             title: 'Application & KYC',
             description: 'Upload the documents we need.',
-            round: 'Round :round',
             documents: 'Documents',
             no_documents: 'No documents uploaded yet.',
             document_type: 'Document type',
@@ -18,7 +17,7 @@ const translations = {
             submit_help: 'Once submitted, your documents cannot be changed.',
             locked: 'This submission is being reviewed and is read-only.',
             feedback: 'Reviewer feedback',
-            history: 'Earlier rounds',
+            history: 'Earlier submissions',
             accepted: 'Choose an item below.',
             required: 'Required',
             optional: 'Optional',
@@ -65,7 +64,6 @@ type Document = {
 
 type Round = {
     id: string;
-    round: number;
     status: string;
     status_label: string;
     is_editable: boolean;
@@ -76,7 +74,6 @@ type Round = {
 
 const round = (overrides: Partial<Round> = {}): Round => ({
     id: 'round-1',
-    round: 1,
     status: 'draft',
     status_label: 'Draft',
     is_editable: true,
@@ -86,8 +83,17 @@ const round = (overrides: Partial<Round> = {}): Round => ({
     ...overrides,
 });
 
-function requirement(key: string, name: string) {
+function requirement(
+    key: string,
+    name: string,
+    batch: {
+        key: string;
+        name: string;
+        description: string | null;
+    } | null = null,
+) {
     return {
+        batch,
         key,
         name,
         instructions: null,
@@ -207,5 +213,47 @@ describe('the supplier KYC screen', () => {
         expect(
             screen.getAllByRole('button', { name: 'Save' }).length,
         ).toBeGreaterThan(0);
+    });
+    it('groups what is asked for under its batch, all on one form', () => {
+        const identity = {
+            key: 'identity',
+            name: 'Identity verification',
+            description: 'Prove who you are.',
+        };
+        const business = {
+            key: 'business',
+            name: 'Business verification',
+            description: null,
+        };
+
+        render(
+            <SupplierKyc
+                {...props(round())}
+                requirements={[
+                    requirement('nid_front', 'NID (front)', identity),
+                    requirement('selfie', 'Selfie', identity),
+                    requirement('trade_licence', 'Trade licence', business),
+                ]}
+            />,
+        );
+
+        expect(
+            screen.getByRole('heading', { name: 'Identity verification' }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole('heading', { name: 'Business verification' }),
+        ).toBeInTheDocument();
+        expect(screen.getByText('Prove who you are.')).toBeInTheDocument();
+
+        // One submit for the lot, not one per batch.
+        expect(screen.getAllByText('Submit for review')).toHaveLength(2);
+    });
+
+    it('draws no heading for a requirement that has no batch', () => {
+        render(<SupplierKyc {...props(round())} />);
+
+        expect(
+            screen.queryByRole('heading', { level: 3 }),
+        ).not.toBeInTheDocument();
     });
 });

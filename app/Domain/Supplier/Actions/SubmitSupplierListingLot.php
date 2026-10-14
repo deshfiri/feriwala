@@ -5,6 +5,7 @@ namespace App\Domain\Supplier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\LotStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
@@ -107,6 +108,7 @@ class SubmitSupplierListingLot
         $lot = $lot->refresh();
 
         $supplier->notify((new SupplierListingLotSubmitted($lot))->locale($supplier->locale));
+        StaffQueue::SupplierListingLot->announce($lot);
 
         return $lot;
     }

@@ -18,7 +18,7 @@ import ReasonTextarea from '@/components/forms/reason-textarea';
 
 type Props = {
     /** The round being withdrawn; null keeps the dialog closed. */
-    round: { id: string; round: number } | null;
+    round: { id: string } | null;
     onOpenChange: (open: boolean) => void;
 };
 
@@ -45,11 +45,7 @@ export default function WithdrawKycRequestDialog({
                 <DialogHeader>
                     <DialogTitle>{t('account.kyc_withdraw.title')}</DialogTitle>
                     <DialogDescription>
-                        {round
-                            ? t('account.kyc_withdraw.description', {
-                                  number: round.round,
-                              })
-                            : null}
+                        {round ? t('account.kyc_withdraw.description') : null}
                     </DialogDescription>
                 </DialogHeader>
 

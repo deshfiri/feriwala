@@ -188,7 +188,7 @@ enum PlatformRole: string
                 Module::Website->value => $manage,
                 Module::Report->value => $read,
                 Module::Notification->value => [Action::View, Action::Create, Action::Edit],
-                Module::Audit->value => [Action::ViewAuditLogs],
+                Module::Audit->value => [Action::ViewAuditLogs, Action::Delete, Action::ManageSettings],
 
                 /*
                  * The one piece of money handling an Admin holds: seeing a
@@ -202,7 +202,7 @@ enum PlatformRole: string
                 // for the same reason Admin holds no Payment permission at
                 // all: approving Suppliers and reviewing listings is
                 // operational; setting a confidential rate is not.
-                Module::Supplier->value => [Action::View],
+                Module::Supplier->value => [Action::View, Action::Delete],
                 Module::SupplierListing->value => [Action::View],
                 Module::SourcingGroup->value => [Action::View],
 

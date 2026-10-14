@@ -7,12 +7,14 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Notification\Actions\NotifyRequesterOfDecision;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnStatus;
 use App\Domain\Order\Exceptions\ReturnRefused;
 use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderReturnItem;
 use App\Models\User;
+use App\Notifications\Requests\RequestDecided;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -119,6 +121,21 @@ class DecideOrderReturn
 
             return $locked;
         });
+
+        // The partner who owns the website the return came through. The link is
+        // their own order screen, which resolves the website through their
+        // account — nobody else's shop opens from it.
+        app(NotifyRequesterOfDecision::class)->handle(
+            $decided->businessAccount->owner,
+            RequestDecided::RETURN,
+            $to === ReturnStatus::Approved,
+            $decided->public_id,
+            $decided->reference,
+            array_filter([
+                'website' => $decided->website?->public_id,
+                'order' => $decided->order->public_id,
+            ]),
+        );
 
         $this->audit->handle(new AuditEntry(
             action: $to === ReturnStatus::Approved ? 'order_return.approved' : 'order_return.rejected',

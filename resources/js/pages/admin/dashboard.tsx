@@ -1,10 +1,18 @@
 import { Head, Link } from '@inertiajs/react';
 import {
+    Banknote,
+    Boxes,
     ClipboardList,
+    Globe,
+    Layers,
     Package,
+    ReceiptText,
     ShieldCheck,
     Truck,
+    Undo2,
     UserCheck,
+    UserX,
+    Wallet,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import AreaTrend from '@/components/charts/area-trend';
@@ -40,6 +48,15 @@ const ICONS: Record<string, LucideIcon> = {
     orders: Package,
     supplier_kyc: Truck,
     supplier_listings: ClipboardList,
+    supplier_listing_lots: Layers,
+    supplier_stock: Boxes,
+    account_withdrawals: Banknote,
+    supplier_withdrawals: Wallet,
+    returns: Undo2,
+    refunds: ReceiptText,
+    website_requests: Globe,
+    account_deletions: UserX,
+    supplier_deletions: UserX,
 };
 
 const TONES: Record<string, StatCardTone> = {
@@ -48,6 +65,15 @@ const TONES: Record<string, StatCardTone> = {
     orders: 'brand',
     supplier_kyc: 'warning',
     supplier_listings: 'neutral',
+    supplier_listing_lots: 'neutral',
+    supplier_stock: 'info',
+    account_withdrawals: 'warning',
+    supplier_withdrawals: 'warning',
+    returns: 'info',
+    refunds: 'brand',
+    website_requests: 'success',
+    account_deletions: 'danger',
+    supplier_deletions: 'danger',
 };
 
 const TREND_DAYS = 14;

@@ -81,7 +81,23 @@ return [
         'cancelled_body' => 'No stock is held for it, and nothing further will be charged.',
     ],
 
+    'hero' => ['total' => 'Order total'],
+
+    'track' => [
+        'label' => 'Order progress',
+        'placed' => 'Placed',
+        'paid' => 'Paid',
+        'shipped' => 'Shipped',
+        'delivered' => 'Delivered',
+    ],
+
+    'pay_panel' => [
+        'title' => 'Complete your payment',
+        'help' => 'Your stock is held while you pay. Use another method if the first one failed.',
+    ],
+
     'sections' => [
+        'actions' => 'Order actions',
         'items' => 'Products',
         'summary' => 'Summary',
         'billing' => 'Billing address',
@@ -93,6 +109,7 @@ return [
     ],
 
     'lines' => [
+        'count' => ':count products',
         'quantity_each' => ':quantity × :amount',
         'discount' => 'Discount :amount',
         'tax' => 'Tax :amount',
@@ -326,6 +343,8 @@ return [
     'actions' => [
         'pay' => 'Continue to payment',
         'paying' => 'Opening payment…',
+        'method' => 'Payment method',
+        'method_help' => 'Payment failed or the gateway is down? Choose another method and continue.',
         'cancel' => 'Cancel order',
         'cancel_confirm' => 'Cancel this order? The stock held for it will be released.',
         'keep' => 'Keep order',
@@ -334,6 +353,7 @@ return [
     'refused' => [
         'checkout_not_confirmed' => 'Confirm the order summary before paying.',
         'nothing_to_pay' => 'There is nothing to pay for this order.',
+        'already_paid_elsewhere' => 'This order was already paid through its first payment method, so the method cannot be changed. We are confirming it.',
         'stock_unavailable' => 'Some of the stock in your order is no longer available. Review your cart and confirm again.',
         'awaiting_payment' => 'This cart already has an order waiting for payment. Pay for it or cancel it first.',
         'not_awaiting_payment' => 'This order is no longer waiting for payment.',

@@ -32,6 +32,7 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Location\Enums\BdLocationType;
 use App\Domain\Location\Models\BdLocation;
+use App\Domain\Order\Models\Order;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
@@ -420,6 +421,36 @@ function websiteTestProduct(array $attributes = []): Product
         'account_scope' => AccountScope::AnyAccount,
         ...$attributes,
     ]);
+}
+
+/**
+ * The account has bought the product: a wholesale order with one line, paid unless
+ * `$orderAttributes` says otherwise. A website only sells what its account bought.
+ *
+ * @param  array<string, mixed>  $orderAttributes
+ */
+function websiteTestPurchase(BusinessAccount $account, Product $product, array $orderAttributes = []): Order
+{
+    $order = Order::factory()->create([
+        'business_account_id' => $account->id,
+        'paid_at' => now(),
+        ...$orderAttributes,
+    ]);
+    $money = Money::fromDecimal('1500.00', Currency::BDT);
+
+    $order->items()->create([
+        'line_number' => 1,
+        'product_id' => $product->id,
+        'sku' => $product->sku,
+        'product_name' => $product->name,
+        'quantity' => 1,
+        'currency_code' => 'BDT',
+        'unit_price' => $money,
+        'line_subtotal' => $money,
+        'line_total' => $money,
+    ]);
+
+    return $order;
 }
 
 /**

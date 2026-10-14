@@ -29,6 +29,54 @@ beforeEach(function () {
 
     $this->website = Website::factory()->forAccount($this->account)->active()->create();
     $this->product = websiteTestProduct();
+    websiteTestPurchase($this->account, $this->product);
+});
+
+describe('only what was bought', function () {
+    it('refuses a product the account has not bought, and says to buy it first', function () {
+        $unbought = websiteTestProduct();
+
+        $this->actingAs($this->account->owner)
+            ->from(route('websites.products.index', $this->website->public_id))
+            ->post(route('websites.products.store', $this->website->public_id), ['product' => $unbought->public_id])
+            ->assertSessionHasErrors(['product' => __('website.refused.product_not_purchased')]);
+
+        expect(WebsiteProduct::query()->count())->toBe(0);
+    });
+
+    it('does not count an order that is unpaid, cancelled, or another account\'s', function () {
+        $unpaid = websiteTestProduct();
+        $cancelled = websiteTestProduct();
+        $theirs = websiteTestProduct();
+        websiteTestPurchase($this->account, $unpaid, ['paid_at' => null]);
+        websiteTestPurchase($this->account, $cancelled, ['cancelled_at' => now()]);
+        websiteTestPurchase(websiteTestAccount(), $theirs);
+
+        foreach ([$unpaid, $cancelled, $theirs] as $product) {
+            $this->actingAs($this->account->owner)
+                ->from(route('websites.products.index', $this->website->public_id))
+                ->post(route('websites.products.store', $this->website->public_id), ['product' => $product->public_id])
+                ->assertSessionHasErrors('product');
+        }
+
+        expect(WebsiteProduct::query()->count())->toBe(0);
+    });
+
+    it('lists only bought products under My Products, and offers websites only for those', function () {
+        $unbought = websiteTestProduct();
+
+        $this->actingAs($this->account->owner)->get(route('catalog.index', ['scope' => 'mine']))
+            ->assertInertia(fn ($page) => $page
+                ->where('filters.scope', 'mine')
+                ->has('products.data', 1)
+                ->where('products.data.0.slug', $this->product->slug));
+
+        $this->actingAs($this->account->owner)->get(route('catalog.show', $this->product->slug))
+            ->assertInertia(fn ($page) => $page->where('purchased', true)->has('websites', 1));
+
+        $this->actingAs($this->account->owner)->get(route('catalog.show', $unbought->slug))
+            ->assertInertia(fn ($page) => $page->where('purchased', false)->where('websites', []));
+    });
 });
 
 describe('choosing a product', function () {

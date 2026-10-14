@@ -6,6 +6,7 @@ import {
     Lock,
     PackageCheck,
     SlidersHorizontal,
+    Trash2,
     Unlock,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -36,6 +37,7 @@ import {
 } from '@/types/inventory';
 import AdjustStockDialog from './adjust-stock-dialog';
 import AllocateStockDialog from './allocate-stock-dialog';
+import DeleteStockDialog from './delete-stock-dialog';
 import ReleaseAllocationDialog from './release-allocation-dialog';
 import StockStatePill from './stock-state-pill';
 
@@ -46,7 +48,8 @@ type Props = {
     adjustment_kinds: AdjustmentKindOption[];
     allocations: StockAllocationRow[];
     accounts?: AccountOption[];
-    can: { adjust: boolean; allocate: boolean };
+    deletable: boolean;
+    can: { adjust: boolean; allocate: boolean; delete: boolean };
 };
 
 /**
@@ -65,10 +68,12 @@ export default function AdminStockItem({
     adjustment_kinds,
     allocations,
     accounts,
+    deletable,
     can,
 }: Props) {
     const { t, locale } = useTranslation();
     const [adjusting, setAdjusting] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [allocating, setAllocating] = useState(false);
     const [releasing, setReleasing] = useState<StockAllocationRow | null>(null);
 
@@ -190,6 +195,18 @@ export default function AdminStockItem({
                                         aria-hidden="true"
                                     />
                                     {t('inventory.adjustments.open')}
+                                </Button>
+                            )}
+                            {can.delete && deletable && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setDeleting(true)}
+                                >
+                                    <Trash2
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    {t('inventory.stock.delete')}
                                 </Button>
                             )}
                         </>
@@ -519,6 +536,14 @@ export default function AdminStockItem({
                     kinds={adjustment_kinds}
                     open={adjusting}
                     onClose={() => setAdjusting(false)}
+                />
+            )}
+
+            {can.delete && deletable && (
+                <DeleteStockDialog
+                    item={item}
+                    open={deleting}
+                    onClose={() => setDeleting(false)}
                 />
             )}
         </>

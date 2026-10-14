@@ -3,7 +3,6 @@ import type { StatusTone } from '@/lib/status';
 /** One row of the review queue (§7.3). */
 export type KycQueueRow = {
     id: string;
-    round: number;
     submitted_at: string | null;
     /** Whole days the applicant has been waiting, or null if never submitted. */
     waiting_days: number | null;
@@ -19,7 +18,6 @@ export type KycQueueRow = {
 
 export type KycSubmissionSummary = {
     id: string;
-    round: number;
     status: string;
     status_label: string;
     status_tone: StatusTone;
@@ -53,6 +51,8 @@ export type KycApplicant = {
 export type KycReviewDocument = {
     id: string;
     type: string | null;
+    /** The batch it was asked under, or null when it had none. */
+    batch: string | null;
     original_name: string;
     size_bytes: number;
     mime_type: string;
@@ -62,6 +62,7 @@ export type KycReviewDocument = {
 /** A typed detail, masked unless the viewer may open documents. */
 export type KycReviewField = {
     type: string | null;
+    batch: string | null;
     value: string;
 };
 
@@ -89,6 +90,32 @@ export type KycDocumentTypeScopeRow = {
     is_required: boolean | null;
 };
 
+/** One rule saying who a batch applies to; null matches anything (§7.2). */
+export type KycBatchRule = {
+    package: string | null;
+    country: string | null;
+};
+
+/**
+ * A verification batch as the admin screen sees it (§7.2): a group of criteria
+ * an applicant completes together, with the rules saying who is asked for it.
+ */
+export type KycBatchRow = {
+    /** The public id. */
+    id: string;
+    key: string;
+    audience: 'account' | 'supplier' | 'both';
+    name: string;
+    description: string | null;
+    is_active: boolean;
+    is_archived: boolean;
+    sort_order: number;
+    criteria_count: number;
+    /** Empty means everyone. */
+    rules: KycBatchRule[];
+    can: { update: boolean; delete: boolean };
+};
+
 /** A requirement in the catalogue, as the admin screen sees it (§7.2). */
 export type KycDocumentTypeRow = {
     /** The public id. §34.2 keeps database ids out of the client. */
@@ -107,6 +134,8 @@ export type KycDocumentTypeRow = {
     accepted_mime_types: string[];
     max_size_kb: number;
     sort_order: number;
+    /** The batch it sits in (its public id), or null for one made outside the admin screen. */
+    batch: string | null;
     /** Rounds opened against it — why deletion may be unavailable. */
     used_by_rounds: number;
     scopes: KycDocumentTypeScopeRow[];
@@ -125,7 +154,6 @@ export type KycRequirementStatus = 'supplied' | 'outstanding' | 'not_supplied';
  */
 export type KycHistoryRound = {
     id: string;
-    round: number;
     status: string;
     status_label: string;
     status_tone: StatusTone;

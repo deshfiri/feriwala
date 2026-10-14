@@ -17,10 +17,16 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductStatusChange;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Inventory\Enums\StockBucket;
+use App\Domain\Inventory\Enums\StockMovementType;
+use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Inventory\StockLedger;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -155,7 +161,7 @@ describe('the product list', function () {
             ->assertInertia(fn (Assert $page) => $page->where('products.data.0.sku', 'FW-A'));
     });
 
-    it('shows the listing image, both channels and how much hangs off each product', function () {
+    it('shows the listing image and no longer carries channels or counts of media and variations', function () {
         foreach ([1, 2] as $position) {
             ProductMedia::create([
                 'product_id' => $this->toaster->id,
@@ -174,14 +180,89 @@ describe('the product list', function () {
             ->get(route('admin.catalog.products.index', ['featured' => 'yes']))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('products.data.0.image_url', fn (string $url) => str_ends_with($url, '/1.png'))
-                ->where('products.data.0.media_count', 2)
-                ->where('products.data.0.variants_count', 1)
-                ->where('products.data.0.channels.0.enabled', false)
-                ->where('products.data.0.channels.1.status', 'wholesale_enabled')
-                ->where('products.data.0.is_featured', true),
+                ->where('products.data.0.is_featured', true)
+                // Those are inside the editor; the list does not repeat them.
+                ->missing('products.data.0.media_count')
+                ->missing('products.data.0.variants_count')
+                ->missing('products.data.0.channels'),
             );
     });
 
+    it('says whether each product is in stock, and how many', function () {
+        $warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
+        $stock = function (Product $product, int $units, ?ProductVariant $variant = null) use ($warehouse) {
+            $item = StockItem::create([
+                'warehouse_id' => $warehouse->id,
+                'product_id' => $product->id,
+                'product_variant_id' => $variant?->id,
+            ]);
+            app(StockLedger::class)->move($item, null, StockBucket::Available, $units, StockMovementType::Adjustment);
+        };
+
+        // FW-A has stock; FW-B has a stock record that is empty; FW-C has none at all.
+        $stock($this->toaster, 12);
+        StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $this->pan->id]);
+
+        $states = fn () => collect(catalogUiProps(
+            $this->actingAs($this->manager)->get(route('admin.catalog.products.index', ['sort' => 'sku', 'direction' => 'asc'])),
+            'products.data',
+        ))->mapWithKeys(fn (array $row) => [$row['sku'] => [$row['in_stock'], $row['stock_quantity']]])->all();
+
+        expect($states())->toBe([
+            'FW-A' => [true, 12],
+            'FW-B' => [false, 0],
+            'FW-C' => [false, 0],
+        ]);
+    });
+
+    it('counts a product with variations as in stock when any variation is, and sums them', function () {
+        $warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
+        $red = ProductVariant::create(['product_id' => $this->toaster->id, 'sku' => 'FW-A-R', 'combination_key' => 'red']);
+        $blue = ProductVariant::create(['product_id' => $this->toaster->id, 'sku' => 'FW-A-B', 'combination_key' => 'blue']);
+
+        foreach ([[$red, 0], [$blue, 5]] as [$variant, $units]) {
+            $item = StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $this->toaster->id, 'product_variant_id' => $variant->id]);
+
+            if ($units > 0) {
+                app(StockLedger::class)->move($item, null, StockBucket::Available, $units, StockMovementType::Adjustment);
+            }
+        }
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.catalog.products.index', ['sort' => 'sku', 'direction' => 'asc']))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('products.data.0.sku', 'FW-A')
+                ->where('products.data.0.in_stock', true)
+                ->where('products.data.0.stock_quantity', 5),
+            );
+    });
+
+    it('does not count stock held in a switched-off warehouse', function () {
+        $warehouse = Warehouse::create(['code' => 'SYL', 'name' => 'Sylhet', 'is_default' => false, 'is_active' => false]);
+        $item = StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $this->toaster->id]);
+        app(StockLedger::class)->move($item, null, StockBucket::Available, 9, StockMovementType::Adjustment);
+
+        $this->actingAs($this->manager)
+            ->get(route('admin.catalog.products.index', ['sort' => 'sku', 'direction' => 'asc']))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('products.data.0.in_stock', false)
+                ->where('products.data.0.stock_quantity', 0),
+            );
+    });
+
+    it('asks for stock once for the whole page, not once per product', function () {
+        foreach (range(1, 5) as $n) {
+            catalogUiProduct("FW-X{$n}", $this->garden);
+        }
+
+        $queries = fn () => collect(DB::getQueryLog())->pluck('query')->filter(fn (string $sql) => str_contains($sql, 'stock_items'))->count();
+
+        DB::enableQueryLog();
+        $this->actingAs($this->manager)->get(route('admin.catalog.products.index'))->assertOk();
+
+        // The availability answer reads stock_items a fixed number of times, however many products are listed.
+        expect($queries())->toBeLessThanOrEqual(2);
+    });
     it('offers each person only the bulk actions their permissions reach', function () {
         $targets = fn (User $user) => collect(catalogUiProps(
             $this->actingAs($user)->get(route('admin.catalog.products.index')),

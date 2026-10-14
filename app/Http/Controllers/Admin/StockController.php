@@ -6,6 +6,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Inventory\Actions\DeleteStockItem;
 use App\Domain\Inventory\Actions\SetLowStockThreshold;
 use App\Domain\Inventory\Actions\TrackStock;
 use App\Domain\Inventory\Enums\StockAdjustmentKind;
@@ -97,7 +98,7 @@ class StockController extends Controller
         $record = StockItem::query()
             ->with([
                 'warehouse:id,public_id,code,name,is_active',
-                'product:id,public_id,name,sku',
+                'product:id,public_id,name,sku,deleted_at',
                 'variant:id,public_id,product_id,sku',
             ])
             ->where('public_id', $item)
@@ -171,9 +172,14 @@ class StockController extends Controller
             // partial reload, and only accounts that can trade.
             'accounts' => Inertia::optional(fn () => $this->accountMatches($request)),
 
+            // A row nothing was ever recorded against, or one whose product is
+            // deleted, can be removed.
+            'deletable' => $record->productIsGone() || ! $record->hasHistory(),
+
             'can' => [
                 'adjust' => InventoryPolicy::canEdit($actor),
                 'allocate' => InventoryPolicy::canApprove($actor),
+                'delete' => InventoryPolicy::canEdit($actor),
             ],
         ]);
     }
@@ -212,6 +218,35 @@ class StockController extends Controller
         ])]);
 
         return back();
+    }
+
+    /**
+     * Stop holding a SKU that was never used. One with a history stays.
+     */
+    public function destroy(Request $request, string $item, DeleteStockItem $delete): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(InventoryPolicy::canEdit($actor), 403);
+
+        /** @var StockItem $record */
+        $record = StockItem::query()->with('warehouse:id,name')->where('public_id', $item)->firstOrFail();
+
+        $sku = $record->sku();
+        $warehouse = $record->warehouse->name;
+
+        try {
+            $delete->handle($actor, $record);
+        } catch (InventoryRefused $refused) {
+            throw ValidationException::withMessages(['item' => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('inventory.stock.deleted', [
+            'sku' => $sku,
+            'warehouse' => $warehouse,
+        ])]);
+
+        return to_route('admin.inventory.stock.index');
     }
 
     /**
@@ -293,7 +328,8 @@ class StockController extends Controller
                 $filters['sort'] !== null,
                 fn (Builder $query) => $query->orderBy((string) $filters['sort'], $filters['direction'] === 'desc' ? 'desc' : 'asc'),
             )
-            ->orderBy('id');
+            // Newest first by default, and the tie-break after any chosen sort.
+            ->orderByDesc('id');
     }
 
     /**

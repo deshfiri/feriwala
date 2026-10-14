@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Erp;
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Enums\AddressType;
 use App\Domain\Account\Models\UserAddress;
+use App\Domain\Address\Enums\AddressOwnerType;
+use App\Domain\Address\Models\SharedAddress;
+use App\Domain\Address\Queries\SharedAddressesForOwner;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\ProductEligibility;
@@ -14,6 +17,7 @@ use App\Domain\Wholesale\Actions\ApplyCheckoutCoupon;
 use App\Domain\Wholesale\Actions\ConfirmCheckout;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
+use App\Domain\Wholesale\Actions\UseSavedAddressForCheckout;
 use App\Domain\Wholesale\Data\CartLineQuote;
 use App\Domain\Wholesale\Exceptions\CheckoutRefused;
 use App\Domain\Wholesale\Models\Cart;
@@ -49,7 +53,7 @@ class WholesaleCheckoutController extends Controller
         protected PaymentGatewayManager $gateways,
     ) {}
 
-    public function show(Request $request, PlaceWholesaleOrder $orders): Response|RedirectResponse
+    public function show(Request $request, PlaceWholesaleOrder $orders, SharedAddressesForOwner $addresses, UseSavedAddressForCheckout $useAddress): Response|RedirectResponse
     {
         $account = $this->businessAccountFor($request);
 
@@ -70,6 +74,7 @@ class WholesaleCheckoutController extends Controller
         $fingerprint = $quote->fingerprint();
         $pending = $orders->awaitingPaymentFor($cart);
         $nonConditional = $account->isNonConditional();
+        $book = $this->addressBook($account->id, $quote->billingAddress, $addresses, $useAddress);
 
         return Inertia::render('wholesale/checkout', [
             'checkout' => [
@@ -99,6 +104,8 @@ class WholesaleCheckoutController extends Controller
                     'billing' => $quote->billingAddress?->toSnapshot(),
                     'shipping' => $quote->shippingAddress?->toSnapshot(),
                 ],
+                'address_book' => $book['rows'],
+                'selected_address_id' => $book['selected'],
                 'ready_to_confirm' => $quote->isReadyToConfirm(),
                 // An order from this cart already waiting for payment (P4-9).
                 'pending_order' => $pending === null ? null : [
@@ -147,6 +154,72 @@ class WholesaleCheckoutController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('wholesale.checkout.coupon_removed')]);
 
         return back();
+    }
+
+    /**
+     * Use one of the Partner's saved addresses for this checkout.
+     *
+     * The Addresses tab is the one place an address is kept; choosing one sets
+     * both the billing and the delivery address.
+     */
+    public function useAddress(Request $request, UseSavedAddressForCheckout $use): RedirectResponse
+    {
+        $account = $this->businessAccountFor($request);
+
+        abort_unless($this->eligibility->allowsChannel($account, SalesChannel::Wholesale), 403);
+
+        $validated = $request->validate([
+            'address' => ['required', 'string', 'max:64'],
+        ]);
+
+        try {
+            $use->handle($this->person($request), $account, $validated['address']);
+        } catch (CheckoutRefused $refused) {
+            throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('wholesale.checkout.address.saved_both')]);
+
+        return back();
+    }
+
+    /**
+     * The Partner's active saved addresses, and which one this checkout holds.
+     *
+     * @return array{rows: list<array<string, mixed>>, selected: string|null}
+     */
+    protected function addressBook(int $accountId, ?UserAddress $current, SharedAddressesForOwner $addresses, UseSavedAddressForCheckout $use): array
+    {
+        $rows = [];
+        $selected = null;
+
+        foreach ($addresses->forOwner(AddressOwnerType::BusinessAccount, $accountId) as $address) {
+            /** @var SharedAddress $address */
+            if ($address->status->value !== 'active') {
+                continue;
+            }
+
+            $fields = $use->fieldsFor($address);
+
+            if ($current !== null
+                && $current->line_1 === $fields['line_1']
+                && $current->postcode === $fields['postcode']
+                && $current->contact_name === $fields['contact_name']) {
+                $selected = $address->public_id;
+            }
+
+            $rows[] = [
+                'id' => $address->public_id,
+                'is_default' => $address->is_default,
+                'contact_name' => $address->contact_name,
+                'contact_mobile' => $address->contact_mobile,
+                'line' => $address->detailed_address,
+                'place' => implode(', ', array_filter([$fields['area'], $fields['city'], $fields['district'], $address->postcode])),
+                'has_postcode' => $address->postcode !== null && $address->postcode !== '',
+            ];
+        }
+
+        return ['rows' => $rows, 'selected' => $selected];
     }
 
     /**

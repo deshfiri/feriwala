@@ -121,6 +121,9 @@
     --color-brand-subtle: var(--brand-subtle);
     --color-brand-border: var(--brand-border);
 
+    --color-nav-active: var(--nav-active);
+    --color-nav-active-foreground: var(--nav-active-foreground);
+
     /*
      * Status system (§33.1 clear status colours).
      * Every status also carries an icon and a label in the UI — colour alone
@@ -187,13 +190,14 @@
      * is written onto <html> by `app.blade.php` before first paint and kept
      * in step by `BrandingHead` after a save. The label colours laid over it
      * (`--brand-on` on the accent, `--brand-lifted-on` on the lighter
-     * dark-mode accent) are chosen for contrast by
+     * dark-mode accent) are white whatever colour is chosen — an
+     * administrator picks the colour, not the text on it. See
      * `App\Domain\Settings\AccentColor`, whose default mirrors this one.
      * Primary actions stay near-black: the accent is the accent.
      */
     --brand-base: #ca6330;
     --brand-on: #ffffff;
-    --brand-lifted-on: #1d2630;
+    --brand-lifted-on: #ffffff;
 
     --brand: var(--brand-base);
     --brand-foreground: var(--brand-on);
@@ -201,11 +205,30 @@
     --brand-border: color-mix(in srgb, var(--brand-base) 30%, white);
 
     /*
+     * Buttons, checkboxes and switches. They follow the accent until an
+     * administrator picks a button colour, which `app.blade.php` and
+     * `BrandingHead` write onto <html> as these three properties.
+     */
+    --button-base: var(--brand-base);
+    --button-on: var(--brand-on);
+    --button-lifted-on: var(--brand-lifted-on);
+
+    /*
+     * The current navigation link. Same arrangement as the button: it follows
+     * the accent until Admin → Branding sets a navigation colour.
+     */
+    --nav-base: var(--brand-base);
+    --nav-on: var(--brand-on);
+    --nav-lifted-on: var(--brand-lifted-on);
+    --nav-active: var(--nav-base);
+    --nav-active-foreground: var(--nav-on);
+
+    /*
      * Neutrals carry a faint warm bias toward the accent. A pure grey beside
      * orange reads as two unrelated decisions; this reads as one palette, while
      * still presenting as the neutral grey D6 asks for.
      */
-    --background: oklch(0.976 0.002 75);
+    --background: oklch(1 0 0);
     --foreground: oklch(0.2 0.005 55);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.2 0.005 55);
@@ -216,16 +239,16 @@
     --elevated: oklch(1 0 0);
     --elevated-foreground: oklch(0.203 0.004 55);
 
-    /* Near-black carries primary actions; orange is the accent, not the workhorse. */
-    --primary: oklch(0.2 0.005 55);
-    --primary-foreground: oklch(0.985 0.002 75);
+    /* Buttons follow the brand colour unless Admin → Branding sets a button colour. */
+    --primary: var(--button-base);
+    --primary-foreground: var(--button-on);
 
-    --secondary: oklch(0.955 0.003 80);
+    --secondary: oklch(0.965 0 0);
     --secondary-foreground: oklch(0.2 0.005 55);
-    --muted: oklch(0.955 0.003 80);
+    --muted: oklch(0.965 0 0);
     /* Dark enough to hold 4.5:1 on the canvas as well as on a card (§33.9). */
-    --muted-foreground: oklch(0.52 0.009 65);
-    --accent: oklch(0.955 0.003 80);
+    --muted-foreground: oklch(0.52 0.005 65);
+    --accent: oklch(0.965 0 0);
     --accent-foreground: oklch(0.2 0.005 55);
 
     --destructive: oklch(0.54 0.19 27);
@@ -237,12 +260,12 @@
     --destructive-foreground: oklch(0.5 0.19 27);
 
     /* Dividers stay quiet; inputs sit one step firmer so a field reads as a field. */
-    --border: oklch(0.917 0.004 80);
-    --input: oklch(0.887 0.005 80);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.89 0 0);
     --ring: var(--brand);
 
-    --surface-subtle: oklch(0.982 0.002 75);
-    --surface-hover: oklch(0.97 0.003 75);
+    --surface-subtle: oklch(0.985 0 0);
+    --surface-hover: oklch(0.97 0 0);
     --overlay: oklch(0.2 0.01 55 / 0.45);
 
     --elevation-soft: oklch(0.25 0.01 60 / 0.05);
@@ -297,9 +320,9 @@
     --sidebar-foreground: oklch(0.38 0.008 60);
     --sidebar-primary: var(--brand);
     --sidebar-primary-foreground: var(--brand-foreground);
-    --sidebar-accent: oklch(0.962 0.003 75);
+    --sidebar-accent: var(--brand-subtle);
     --sidebar-accent-foreground: oklch(0.2 0.005 55);
-    --sidebar-border: oklch(0.917 0.004 80);
+    --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: var(--brand);
 }
 
@@ -325,8 +348,11 @@
     --elevated: oklch(0.265 0.004 60);
     --elevated-foreground: oklch(0.955 0.003 75);
 
-    --primary: oklch(0.955 0.003 75);
-    --primary-foreground: oklch(0.203 0.004 55);
+    --primary: color-mix(in srgb, var(--button-base) 75%, white);
+    --primary-foreground: var(--button-lifted-on);
+
+    --nav-active: color-mix(in srgb, var(--nav-base) 75%, white);
+    --nav-active-foreground: var(--nav-lifted-on);
 
     --secondary: oklch(0.265 0.004 60);
     --secondary-foreground: oklch(0.96 0.003 75);
@@ -382,10 +408,19 @@
     --sidebar-foreground: oklch(0.76 0.006 70);
     --sidebar-primary: var(--brand);
     --sidebar-primary-foreground: var(--brand-foreground);
-    --sidebar-accent: oklch(0.245 0.004 60);
+    --sidebar-accent: var(--brand-subtle);
     --sidebar-accent-foreground: oklch(0.97 0.003 75);
     --sidebar-border: oklch(0.265 0.005 60);
     --sidebar-ring: var(--brand);
+}
+
+/*
+ * The light-theme page background an administrator may set under Admin →
+ * Branding. `--canvas-custom` is written onto <html> by `app.blade.php` and
+ * `BrandingHead`; without it the white above stands. Dark keeps its own canvas.
+ */
+html:not(.dark) {
+    --background: var(--canvas-custom, oklch(1 0 0));
 }
 
 @layer base {
@@ -483,6 +518,17 @@
     border-radius: var(--radius-xl);
     background-color: var(--popover);
     box-shadow: var(--shadow-lg);
+
+    /*
+     * A dialog is centred, so one taller than the screen loses its top and
+     * bottom — the title and the buttons — with no way to reach them. Cap it to
+     * the visible viewport (dvh follows a phone's collapsing address bar) and let
+     * it scroll inside itself, on every screen, not only those that remembered
+     * to ask.
+     */
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 /*

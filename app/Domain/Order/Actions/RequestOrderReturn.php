@@ -2,6 +2,7 @@
 
 namespace App\Domain\Order\Actions;
 
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Order\Data\ReturnSubmission;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnStatus;
@@ -90,7 +91,7 @@ class RequestOrderReturn
      */
     protected function write(Order $order, ReturnSubmission $submission, OrderStatusChangeSource $source, ?User $actor): OrderReturn
     {
-        return $this->database->transaction(function () use ($order, $submission, $source, $actor) {
+        $created = $this->database->transaction(function () use ($order, $submission, $source, $actor) {
             /** @var Order $locked */
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
             $locked->load(['items', 'statusHistory']);
@@ -135,6 +136,10 @@ class RequestOrderReturn
 
             return $return;
         });
+
+        StaffQueue::OrderReturn->announce($created);
+
+        return $created;
     }
 
     /**

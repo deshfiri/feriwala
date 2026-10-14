@@ -132,6 +132,103 @@ class ManageBranding
     }
 
     /**
+     * Choose the button colour, or pass null to have buttons follow the accent.
+     *
+     * @throws AuthorizationException
+     */
+    public function setButton(User $actor, ?AccentColor $button): void
+    {
+        $this->authorize($actor);
+
+        $previous = $this->branding->customButton()?->hex();
+        $next = $button?->hex();
+
+        $this->settings->define(
+            Branding::BUTTON_SETTING,
+            'branding',
+            SettingType::String,
+            label: 'Button colour',
+            description: 'A six-digit hex colour. Empty means buttons follow the accent colour.',
+        );
+        $this->settings->set(Branding::BUTTON_SETTING, $next, $actor->id);
+
+        $this->audit->handle(new AuditEntry(
+            action: $next === null ? 'system.branding_button_restored' : 'system.branding_button_changed',
+            actorId: $actor->id,
+            before: ['button_color' => $previous],
+            after: ['button_color' => $next],
+            module: 'system',
+        ));
+    }
+
+    /**
+     * Choose the current navigation link colour, or pass null to have it
+     * follow the accent.
+     *
+     * @throws AuthorizationException
+     */
+    public function setNav(User $actor, ?AccentColor $nav): void
+    {
+        $this->authorize($actor);
+
+        $previous = $this->branding->customNav()?->hex();
+        $next = $nav?->hex();
+
+        $this->settings->define(
+            Branding::NAV_SETTING,
+            'branding',
+            SettingType::String,
+            label: 'Navigation colour',
+            description: 'A six-digit hex colour. Empty means the current menu item follows the accent colour.',
+        );
+        $this->settings->set(Branding::NAV_SETTING, $next, $actor->id);
+
+        $this->audit->handle(new AuditEntry(
+            action: $next === null ? 'system.branding_nav_restored' : 'system.branding_nav_changed',
+            actorId: $actor->id,
+            before: ['nav_color' => $previous],
+            after: ['nav_color' => $next],
+            module: 'system',
+        ));
+    }
+
+    /**
+     * Choose the light-mode page background, or pass null (or white) to go
+     * back to the shipped white.
+     *
+     * @throws AuthorizationException
+     * @throws InvalidArgumentException when the colour is too dark for the theme's text
+     */
+    public function setBackground(User $actor, ?AccentColor $background): void
+    {
+        $this->authorize($actor);
+
+        if ($background !== null && ! $background->isReadableUnderDarkText()) {
+            throw new InvalidArgumentException('That background is too dark for the text drawn on it.');
+        }
+
+        $previous = $this->branding->customBackground()?->hex();
+        $next = $background === null || $background->isWhite() ? null : $background->hex();
+
+        $this->settings->define(
+            Branding::BACKGROUND_SETTING,
+            'branding',
+            SettingType::String,
+            label: 'Background colour',
+            description: 'A six-digit hex colour for the light theme. Empty means white.',
+        );
+        $this->settings->set(Branding::BACKGROUND_SETTING, $next, $actor->id);
+
+        $this->audit->handle(new AuditEntry(
+            action: $next === null ? 'system.branding_background_restored' : 'system.branding_background_changed',
+            actorId: $actor->id,
+            before: ['background_color' => $previous],
+            after: ['background_color' => $next],
+            module: 'system',
+        ));
+    }
+
+    /**
      * @throws AuthorizationException
      */
     protected function authorize(User $actor): void

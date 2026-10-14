@@ -5,6 +5,7 @@ namespace App\Domain\Supplier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Supplier\Enums\ListingItemStatus;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
@@ -96,6 +97,7 @@ class SubmitSupplierListing
         // submission outside a lot.
         if (! $suppressNotification) {
             $supplier->notify((new SupplierListingSubmitted($listing))->locale($supplier->locale));
+            StaffQueue::SupplierListing->announce($listing);
         }
 
         return $listing->refresh();

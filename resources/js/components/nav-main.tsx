@@ -44,15 +44,12 @@ const itemClasses = cn(
 );
 
 /**
- * The current row is marked twice: a brand-tinted ground and a solid rail down
- * its leading edge. The tint alone would be the only carrier of meaning, and the
- * rail is what lets the eye find the current section while scanning a long
- * sidebar rather than reading every entry.
+ * The current row is a solid brand-coloured block with its own contrast label
+ * colour, so it reads at a glance while scanning a long sidebar. The text is
+ * bolder as well, so colour is not the only carrier of "current".
  */
 const activeItemClasses = cn(
-    'data-[active=true]:bg-brand-subtle data-[active=true]:text-brand data-[active=true]:[&>svg]:text-brand relative data-[active=true]:font-semibold',
-    'data-[active=true]:before:absolute data-[active=true]:before:inset-y-2 data-[active=true]:before:left-0',
-    'data-[active=true]:before:bg-brand data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full',
+    'data-[active=true]:bg-nav-active data-[active=true]:text-nav-active-foreground data-[active=true]:[&>svg]:text-nav-active-foreground data-[active=true]:hover:bg-nav-active data-[active=true]:hover:text-nav-active-foreground relative data-[active=true]:font-semibold',
 );
 
 function NavBadgePill({ badge }: { badge: NavBadge }) {
@@ -162,7 +159,7 @@ function NavBranch({
                                     <SidebarMenuSubButton
                                         asChild
                                         isActive={childActive}
-                                        className="text-sidebar-foreground data-[active=true]:bg-brand-subtle data-[active=true]:text-brand h-8 rounded-md px-2.5 data-[active=true]:font-semibold"
+                                        className="text-sidebar-foreground data-[active=true]:bg-nav-active data-[active=true]:text-nav-active-foreground data-[active=true]:hover:bg-nav-active data-[active=true]:hover:text-nav-active-foreground h-8 rounded-md px-2.5 data-[active=true]:font-semibold"
                                     >
                                         <Link
                                             href={child.href}

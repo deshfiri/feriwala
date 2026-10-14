@@ -21,4 +21,10 @@ export type Branding = {
     favicon_url: string;
     favicon_type: string;
     accent: BrandingAccent | null;
+    /** The button colour, in the same shape as `accent`; null while buttons follow the accent. */
+    button: BrandingAccent | null;
+    /** The current navigation link colour, in the same shape as `accent`; null while it follows the accent. */
+    nav: BrandingAccent | null;
+    /** The light-theme page background `#rrggbb`; null while it is white. */
+    background: string | null;
 };

@@ -54,25 +54,20 @@ it('derives every accent-coloured token from the chosen colour, in both themes',
     }
 });
 
-it('lays whichever label colour contrasts more on the accent', function (string $hex, string $on) {
-    expect(AccentColor::fromHex($hex)->onColor())->toBe($on);
+it('always lays white text on the accent, however light the colour', function (string $hex) {
+    expect(AccentColor::fromHex($hex)->onColor())->toBe(AccentColor::LIGHT_TEXT);
 })->with([
-    'the default orange' => ['#ca6330', AccentColor::LIGHT_TEXT],
-    'crimson' => ['#e11d48', AccentColor::LIGHT_TEXT],
-    'a deep blue' => ['#1d4ed8', AccentColor::LIGHT_TEXT],
-    'slate' => ['#1d2630', AccentColor::LIGHT_TEXT],
-    'a pale yellow' => ['#fde047', AccentColor::DARK_TEXT],
-    'white' => ['#ffffff', AccentColor::DARK_TEXT],
+    'the default orange' => ['#ca6330'],
+    'crimson' => ['#e11d48'],
+    'a deep blue' => ['#1d4ed8'],
+    'slate' => ['#1d2630'],
+    'a pale yellow' => ['#fde047'],
+    'white' => ['#ffffff'],
 ]);
 
-it('decides the dark-mode label on the lifted accent, not the base one', function () {
-    // The default orange carries white text, but lifted with 25% white it is
-    // light enough that the slate text reads better — which is what dark mode
-    // shows.
-    $orange = AccentColor::default();
-
-    expect($orange->onColor())->toBe(AccentColor::LIGHT_TEXT)
-        ->and($orange->onLiftedColor())->toBe(AccentColor::DARK_TEXT)
+it('lays white text on the lifted dark-mode accent too, so a button reads the same in both themes', function () {
+    expect(AccentColor::default()->onLiftedColor())->toBe(AccentColor::LIGHT_TEXT)
+        ->and(AccentColor::fromHex('#fde047')->onLiftedColor())->toBe(AccentColor::LIGHT_TEXT)
         ->and(AccentColor::fromHex('#1d2630')->onLiftedColor())->toBe(AccentColor::LIGHT_TEXT);
 });
 

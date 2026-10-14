@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\Actions\ConfigureGateway;
+use App\Domain\Billing\Actions\TestGatewayConnection;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Domain\Billing\Queries\GatewayPaymentTotals;
 use App\Http\Controllers\Controller;
+use App\Integrations\Payment\Contracts\TestsConnection;
 use App\Integrations\Payment\Data\GatewayOutcome;
+use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -158,6 +161,33 @@ class PaymentGatewayController extends Controller
     }
 
     /**
+     * A real authentication call with the stored credentials.
+     *
+     * Answers only "worked" or the provider's own safe error — the token the
+     * call obtains never leaves the server.
+     */
+    public function testConnection(Request $request, PaymentGatewayManager $gateways, TestGatewayConnection $test): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManageGateways($actor), 403);
+
+        $validated = $request->validate([
+            'gateway' => ['required', Rule::in($gateways->implemented())],
+        ]);
+
+        try {
+            $test->handle($actor, $validated['gateway']);
+        } catch (InvalidArgumentException|GatewayUnavailable $exception) {
+            throw ValidationException::withMessages(['connection' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('gateways.connection.ok')]);
+
+        return back();
+    }
+
+    /**
      * Every configured gateway, with when it last confirmed a payment.
      *
      * @return list<array<string, mixed>>
@@ -179,6 +209,9 @@ class PaymentGatewayController extends Controller
                  * a screen writes is a field that can be wrong.
                  */
                 'last_verified_at' => $verified[$entry['name']] ?? null,
+
+                'can_test_connection' => $gateways->isImplemented((string) $entry['name'])
+                    && $gateways->driver((string) $entry['name']) instanceof TestsConnection,
             ],
             $gateways->catalogue(),
         ));

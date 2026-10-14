@@ -65,6 +65,12 @@ return [
         'webhook_id' => 'Webhook ID',
     ],
 
+    'connection' => [
+        'test' => 'Test connection',
+        'help' => 'Signs in to the provider with the stored credentials. It moves no money and shows no token.',
+        'ok' => 'Connected — the provider accepted the stored credentials.',
+    ],
+
     'credentials' => [
         'description' => 'Stored encrypted. They are never shown again after saving — leave a field blank to keep what is already there.',
         'set' => 'Saved',

@@ -43,9 +43,12 @@ it('counts only the KYC submissions still awaiting a decision, and mirrors it in
             ->where('attention', 2)
             ->where('breakdown.0.key', 'kyc')
             ->where('breakdown.0.value', 2)
-            // A KYC manager holds no order.view, so no trend chart -- not an
-            // empty one, an absent one, exactly like the missing card would be.
-            ->where('trend', null),
+            // A KYC manager holds no order.view, so there is no orders series --
+            // but KYC is a queue they can open, so they do get the submissions
+            // series, counting the three KYC rows that arrived today.
+            ->has('trend', 1)
+            ->where('trend.0.key', 'submissions')
+            ->where('trend.0.points.13.value', 3),
         );
 });
 
@@ -86,8 +89,12 @@ it('shows every card and the trend to a super admin', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('admin/dashboard')
-            ->has('cards', 5)
-            ->has('breakdown', 5)
+            // The five original cards plus the nine queue cards.
+            ->has('cards', 14)
+            ->has('breakdown', 14)
+            ->has('trend', 2)
+            ->where('trend.0.key', 'orders')
+            ->where('trend.1.key', 'submissions')
             ->has('trend.0.points', 14),
         );
 });

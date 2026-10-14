@@ -35,7 +35,7 @@ class KycReviewController extends Controller
      * A whitelist rather than the parameter itself — `?sort=` arrives from the
      * browser and would otherwise be an ORDER BY the caller controls.
      */
-    protected const SORTABLE = ['submitted_at', 'round'];
+    protected const SORTABLE = ['submitted_at'];
 
     public function index(Request $request): Response
     {
@@ -70,7 +70,6 @@ class KycReviewController extends Controller
             ->withQueryString()
             ->through(fn (KycSubmission $submission) => [
                 'id' => $submission->public_id,
-                'round' => $submission->round,
                 'submitted_at' => $submission->submitted_at?->toIso8601String(),
                 // How long this applicant has been waiting. The figure a
                 // reviewer actually works from — a date alone makes them do
@@ -109,12 +108,15 @@ class KycReviewController extends Controller
             PermissionAction::ViewKycDocuments,
         ));
 
-        $submission->load(['businessAccount.owner', 'documents.documentType', 'fields.documentType', 'reviews.reviewer']);
+        $submission->load(['businessAccount.owner', 'documents.documentType', 'fields.documentType', 'reviews.reviewer', 'requirements']);
+
+        // The batch each criterion was asked under, as it was when the submission
+        // opened — the snapshot, so a later regrouping changes nothing here.
+        $batchOf = $submission->requirements->pluck('batch_name', 'kyc_document_type_id');
 
         return Inertia::render('admin/kyc/show', [
             'submission' => [
                 'id' => $submission->public_id,
-                'round' => $submission->round,
                 'status' => $submission->status->value,
                 'status_label' => $submission->status->label(),
                 'status_tone' => $submission->status->tone(),
@@ -144,6 +146,7 @@ class KycReviewController extends Controller
             'documents' => $submission->documents->map(fn ($document) => [
                 'id' => $document->public_id,
                 'type' => $document->documentType?->name,
+                'batch' => $batchOf->get($document->kyc_document_type_id),
                 'original_name' => $document->original_name,
                 'size_bytes' => $document->size_bytes,
                 'mime_type' => $document->mime_type,
@@ -156,6 +159,7 @@ class KycReviewController extends Controller
             // opens the record, which is itself a recorded access.
             'fields' => $submission->fields->map(fn ($field) => [
                 'type' => $field->documentType?->name,
+                'batch' => $batchOf->get($field->kyc_document_type_id),
                 'value' => $mayOpenDocuments ? $field->value : $field->masked(),
             ])->all(),
 

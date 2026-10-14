@@ -5,6 +5,7 @@ namespace App\Domain\Supplier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
@@ -95,6 +96,7 @@ class SubmitSupplierKyc
         });
 
         $supplier->notify((new SupplierKycSubmitted)->locale($supplier->locale));
+        StaffQueue::SupplierKyc->announce($submission);
 
         return $submission;
     }

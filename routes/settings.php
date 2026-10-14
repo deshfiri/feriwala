@@ -6,9 +6,11 @@ use App\Http\Controllers\Erp\ReceiptController;
 use App\Http\Controllers\Erp\RenewalController;
 use App\Http\Controllers\Erp\StaffController;
 use App\Http\Controllers\Erp\SubscriptionController;
+use App\Http\Controllers\Settings\AccountDeletionController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
+use Illuminate\Routing\RedirectController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,7 +20,15 @@ use Illuminate\Support\Facades\Route;
  * staff limit governs it.
  */
 Route::middleware(['auth', 'business.activated'])->group(function () {
-    Route::redirect('settings', '/settings/profile');
+    /*
+     * `Route::redirect()` answers every HTTP verb, which now includes QUERY, and
+     * Wayfinder's generated TypeScript has no such method — so `tsc` failed on
+     * the generated RedirectController. A settings index only ever needs to be
+     * opened, so this is the same framework redirect on GET and HEAD alone.
+     */
+    Route::match(['GET', 'HEAD'], 'settings', RedirectController::class)
+        ->defaults('destination', '/settings/profile')
+        ->defaults('status', 302);
 
     /*
      * The account's own subscription (§8.2).
@@ -89,11 +99,17 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    // Nobody deletes their own account: they ask, and an authorised member of
+    // staff decides. There is deliberately no DELETE settings/profile.
+    Route::post('settings/account-deletion', [AccountDeletionController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('account-deletion.store');
+    Route::delete('settings/account-deletion', [AccountDeletionController::class, 'destroy'])
+        ->name('account-deletion.destroy');
 });
 
 Route::middleware(['auth', 'verified', 'business.activated'])->group(function () {
-    Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
     Route::get('settings/security', [SecurityController::class, 'edit'])
         ->middleware(RequirePassword::class)
         ->name('security.edit');

@@ -138,7 +138,7 @@ describe('verifying', function () {
 
         $this->actingAs($staff)
             ->get(verificationUrlFor($staff))
-            ->assertRedirect(route('admin.kyc.index', absolute: false).'?verified=1');
+            ->assertRedirect(route('admin.dashboard', absolute: false).'?verified=1');
     });
 });
 

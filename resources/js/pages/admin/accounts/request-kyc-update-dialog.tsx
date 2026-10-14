@@ -19,7 +19,40 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import ReasonTextarea from '@/components/forms/reason-textarea';
 
-export type DocumentTypeOption = { id: string; name: string };
+export type DocumentTypeOption = {
+    id: string;
+    name: string;
+    /** The batch it sits in, or null for a criterion that has none. */
+    batch: { id: string; name: string } | null;
+};
+
+/** One batch's worth of criteria, as the dialog offers it. */
+type BatchGroup = {
+    key: string;
+    name: string | null;
+    types: DocumentTypeOption[];
+};
+
+/** Criteria grouped by batch, in the order they arrive; ungrouped ones last. */
+function groupByBatch(types: DocumentTypeOption[]): BatchGroup[] {
+    const groups = new Map<string, BatchGroup>();
+
+    for (const type of types) {
+        const key = type.batch?.id ?? '__none';
+        const group = groups.get(key) ?? {
+            key,
+            name: type.batch?.name ?? null,
+            types: [],
+        };
+
+        group.types.push(type);
+        groups.set(key, group);
+    }
+
+    return [...groups.values()].sort(
+        (a, b) => Number(a.key === '__none') - Number(b.key === '__none'),
+    );
+}
 
 export type ConsequenceOption = {
     value: string;
@@ -107,6 +140,21 @@ export default function RequestKycUpdateDialog({
 
     const allSelected =
         documentTypes.length > 0 && selected.length === documentTypes.length;
+
+    const groups = groupByBatch(documentTypes);
+
+    // A whole batch is switched on or off in one go: re-verification is asked
+    // for by batch, with the single criteria still adjustable underneath.
+    const toggleGroup = (group: BatchGroup) => {
+        const ids = group.types.map((type) => type.id);
+        const everyOneSelected = ids.every((id) => selected.includes(id));
+
+        setSelected((current) =>
+            everyOneSelected
+                ? current.filter((id) => !ids.includes(id))
+                : [...new Set([...current, ...ids])],
+        );
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -220,30 +268,89 @@ export default function RequestKycUpdateDialog({
                                     </p>
                                 ) : (
                                     <>
-                                        <ul className="divide-border divide-y rounded-lg border">
-                                            {documentTypes.map((type) => (
-                                                <li
-                                                    key={type.id}
-                                                    className="flex items-center gap-3 px-3 py-2"
-                                                >
-                                                    <Checkbox
-                                                        id={`document-${type.id}`}
-                                                        checked={selected.includes(
-                                                            type.id,
-                                                        )}
-                                                        onCheckedChange={() =>
-                                                            toggle(type.id)
-                                                        }
-                                                    />
-                                                    <Label
-                                                        htmlFor={`document-${type.id}`}
-                                                        className="flex-1 font-normal"
+                                        <div className="space-y-3">
+                                            {groups.map((group) => {
+                                                const ids = group.types.map(
+                                                    (type) => type.id,
+                                                );
+                                                const chosen = ids.filter(
+                                                    (id) =>
+                                                        selected.includes(id),
+                                                ).length;
+
+                                                return (
+                                                    <div
+                                                        key={group.key}
+                                                        className="rounded-lg border"
                                                     >
-                                                        {type.name}
-                                                    </Label>
-                                                </li>
-                                            ))}
-                                        </ul>
+                                                        {group.name !==
+                                                            null && (
+                                                            <div className="bg-surface-subtle flex items-center gap-3 border-b px-3 py-2">
+                                                                <Checkbox
+                                                                    id={`batch-${group.key}`}
+                                                                    checked={
+                                                                        chosen ===
+                                                                        ids.length
+                                                                            ? true
+                                                                            : chosen >
+                                                                                0
+                                                                              ? 'indeterminate'
+                                                                              : false
+                                                                    }
+                                                                    onCheckedChange={() =>
+                                                                        toggleGroup(
+                                                                            group,
+                                                                        )
+                                                                    }
+                                                                />
+                                                                <Label
+                                                                    htmlFor={`batch-${group.key}`}
+                                                                    className="flex-1 font-medium"
+                                                                >
+                                                                    {group.name}
+                                                                </Label>
+                                                                <span className="text-muted-foreground text-xs tabular-nums">
+                                                                    {chosen}/
+                                                                    {ids.length}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <ul className="divide-border divide-y">
+                                                            {group.types.map(
+                                                                (type) => (
+                                                                    <li
+                                                                        key={
+                                                                            type.id
+                                                                        }
+                                                                        className="flex items-center gap-3 px-3 py-2"
+                                                                    >
+                                                                        <Checkbox
+                                                                            id={`document-${type.id}`}
+                                                                            checked={selected.includes(
+                                                                                type.id,
+                                                                            )}
+                                                                            onCheckedChange={() =>
+                                                                                toggle(
+                                                                                    type.id,
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                        <Label
+                                                                            htmlFor={`document-${type.id}`}
+                                                                            className="flex-1 font-normal"
+                                                                        >
+                                                                            {
+                                                                                type.name
+                                                                            }
+                                                                        </Label>
+                                                                    </li>
+                                                                ),
+                                                            )}
+                                                        </ul>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
 
                                         {/* Posted as the real field; the
                                             checkboxes above drive this. */}

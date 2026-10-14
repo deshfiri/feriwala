@@ -1,9 +1,16 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, CreditCard, MapPin, TicketPercent } from 'lucide-react';
+import {
+    ArrowLeft,
+    Check,
+    CreditCard,
+    MapPin,
+    TicketPercent,
+} from 'lucide-react';
 import { useState } from 'react';
 import WholesaleCheckoutController from '@/actions/App/Http/Controllers/Erp/WholesaleCheckoutController';
 import WholesaleOrderController from '@/actions/App/Http/Controllers/Erp/WholesaleOrderController';
 import InputError from '@/components/input-error';
+import LineThumb from '@/components/line-thumb';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -16,14 +23,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { isPositive } from '@/lib/money';
 import { cn } from '@/lib/utils';
+import { index as addressesIndex } from '@/routes/addresses';
 import { show as cartShow } from '@/routes/wholesale/cart';
 import { show } from '@/routes/wholesale/checkout';
 import { show as orderShow } from '@/routes/wholesale/orders';
-import type {
-    CheckoutAddress,
-    CheckoutAddressType,
-    CheckoutSummary,
-} from '@/types/wholesale';
+import type { CheckoutSummary } from '@/types/wholesale';
 
 type Props = {
     checkout: CheckoutSummary;
@@ -58,7 +62,9 @@ export default function WholesaleCheckout({ checkout }: Props) {
                     description={t('wholesale.checkout.description')}
                 />
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                <CheckoutSteps checkout={checkout} />
+
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
                     <div className="min-w-0 space-y-6">
                         <SectionCard
                             title={t('wholesale.checkout.items')}
@@ -68,10 +74,14 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                 {checkout.lines.map((line) => (
                                     <li
                                         key={line.id}
-                                        className="flex flex-wrap items-start justify-between gap-3 px-5 py-3"
+                                        className="flex items-center gap-4 px-5 py-4"
                                     >
-                                        <div className="min-w-0">
-                                            <p className="font-medium">
+                                        <LineThumb
+                                            name={line.name}
+                                            quantity={line.quantity}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="leading-snug font-medium">
                                                 {line.name}
                                             </p>
                                             <p className="text-muted-foreground font-mono text-xs">
@@ -93,26 +103,14 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                         </div>
                                         <MoneyAmount
                                             amount={line.line_total}
-                                            className="font-semibold"
+                                            className="shrink-0 font-semibold"
                                         />
                                     </li>
                                 ))}
                             </ul>
                         </SectionCard>
 
-                        <div className="grid gap-6 md:grid-cols-2">
-                            <AddressCard
-                                type="billing"
-                                address={checkout.addresses.billing}
-                            />
-                            <AddressCard
-                                type="shipping"
-                                address={checkout.addresses.shipping}
-                                canCopyBilling={
-                                    checkout.addresses.billing !== null
-                                }
-                            />
-                        </div>
+                        <AddressPicker checkout={checkout} />
 
                         <SectionCard title={t('wholesale.checkout.coupon')}>
                             {coupon && (
@@ -217,7 +215,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                         </SectionCard>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
                         <SectionCard title={t('wholesale.checkout.summary')}>
                             <dl className="space-y-3 text-sm">
                                 <SummaryRow
@@ -249,7 +247,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                         />
                                     </SummaryRow>
                                 )}
-                                <div className="border-border flex items-baseline justify-between gap-3 border-t pt-3">
+                                <div className="bg-muted/60 -mx-5 flex items-baseline justify-between gap-3 border-t px-5 py-4">
                                     <dt className="font-medium">
                                         {t('wholesale.checkout.total')}
                                     </dt>
@@ -353,6 +351,71 @@ export default function WholesaleCheckout({ checkout }: Props) {
     );
 }
 
+/**
+ * Address → Confirm → Pay, read from what the server already says: an address
+ * is chosen when the checkout is ready to confirm, confirmed when a standing
+ * confirmation exists, and payment is the step left.
+ */
+function CheckoutSteps({ checkout }: { checkout: CheckoutSummary }) {
+    const { t } = useTranslation();
+    const confirmed = checkout.confirmation?.status === 'confirmed';
+    const steps = [
+        { key: 'address', done: checkout.ready_to_confirm },
+        { key: 'confirm', done: confirmed },
+        { key: 'pay', done: false },
+    ];
+    const current = steps.findIndex((step) => !step.done);
+
+    return (
+        <ol
+            aria-label={t('wholesale.checkout.steps.label')}
+            className="grid grid-cols-3 gap-2"
+        >
+            {steps.map((step, position) => (
+                <li
+                    key={step.key}
+                    aria-current={position === current ? 'step' : undefined}
+                    className="flex flex-col gap-2"
+                >
+                    <span
+                        className={cn(
+                            'h-1 rounded-full',
+                            step.done
+                                ? 'bg-brand'
+                                : position === current
+                                  ? 'bg-brand/35'
+                                  : 'bg-border',
+                        )}
+                    />
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                        {step.done ? (
+                            <Check
+                                className="text-brand size-4"
+                                aria-hidden="true"
+                            />
+                        ) : (
+                            <span
+                                aria-hidden="true"
+                                className="text-muted-foreground text-xs tabular-nums"
+                            >
+                                {position + 1}
+                            </span>
+                        )}
+                        <span
+                            className={
+                                step.done || position === current
+                                    ? 'text-foreground'
+                                    : 'text-muted-foreground'
+                            }
+                        >
+                            {t(`wholesale.checkout.steps.${step.key}`)}
+                        </span>
+                    </span>
+                </li>
+            ))}
+        </ol>
+    );
+}
 /**
  * Payment method and checkout confirmation (P4-8).
  *
@@ -675,233 +738,121 @@ function SummaryRow({
     );
 }
 
-const ADDRESS_FIELDS = [
-    { name: 'contact_name', autoComplete: 'name', required: true, max: 255 },
-    {
-        name: 'contact_mobile',
-        autoComplete: 'tel',
-        required: true,
-        max: 20,
-        inputMode: 'tel',
-    },
-    {
-        name: 'line_1',
-        autoComplete: 'address-line1',
-        required: true,
-        max: 255,
-    },
-    {
-        name: 'line_2',
-        autoComplete: 'address-line2',
-        required: false,
-        max: 255,
-    },
-    {
-        name: 'area',
-        autoComplete: 'address-level3',
-        required: false,
-        max: 255,
-    },
-    {
-        name: 'city',
-        autoComplete: 'address-level2',
-        required: true,
-        max: 255,
-    },
-    {
-        name: 'district',
-        autoComplete: 'address-level1',
-        required: false,
-        max: 255,
-    },
-    {
-        name: 'postcode',
-        autoComplete: 'postal-code',
-        required: false,
-        max: 16,
-    },
-] as const;
-
-function AddressCard({
-    type,
-    address,
-    canCopyBilling = false,
-}: {
-    type: CheckoutAddressType;
-    address: CheckoutAddress | null;
-    canCopyBilling?: boolean;
-}) {
+/**
+ * The one address this checkout uses, chosen from the Partner's saved addresses.
+ *
+ * Addresses are kept in the Addresses tab and nowhere else; choosing one here
+ * sets both billing and delivery. The page sends the chosen address's identifier
+ * and nothing else.
+ */
+function AddressPicker({ checkout }: { checkout: CheckoutSummary }) {
     const { t } = useTranslation();
-    const [editing, setEditing] = useState(false);
-    const formOpen = editing || address === null;
+    const book = checkout.address_book;
+    const [chosen, setChosen] = useState(
+        checkout.selected_address_id ??
+            book.find((entry) => entry.is_default)?.id ??
+            book[0]?.id ??
+            '',
+    );
 
     return (
         <SectionCard
-            title={t(`wholesale.checkout.address.${type}`)}
+            title={t('wholesale.checkout.address.choose')}
+            description={t('wholesale.checkout.address.choose_help')}
             actions={
-                address !== null && !editing ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(true)}
-                    >
-                        {t('wholesale.checkout.address.edit')}
-                    </Button>
-                ) : undefined
+                <Button asChild variant="ghost" size="sm">
+                    <Link href={addressesIndex()}>
+                        {t('wholesale.checkout.address.manage')}
+                    </Link>
+                </Button>
             }
         >
-            {!formOpen && address !== null && (
-                <address className="space-y-0.5 text-sm not-italic">
-                    <p className="font-medium">{address.contact_name}</p>
-                    <p className="text-muted-foreground tabular-nums">
-                        {address.contact_mobile}
-                    </p>
-                    <p>
-                        {[address.line_1, address.line_2]
-                            .filter(Boolean)
-                            .join(', ')}
-                    </p>
-                    <p>
-                        {[
-                            address.area,
-                            address.city,
-                            address.district,
-                            address.postcode,
-                        ]
-                            .filter(Boolean)
-                            .join(', ')}
-                    </p>
-                </address>
-            )}
-
-            {formOpen && (
-                <div className="space-y-4">
-                    {address === null && (
-                        <p className="text-muted-foreground text-sm">
-                            {t(`wholesale.checkout.address.none_${type}`)}
-                        </p>
-                    )}
-
-                    {type === 'shipping' && canCopyBilling && (
-                        <Form
-                            {...WholesaleCheckoutController.updateAddress.form(
-                                type,
-                            )}
-                            errorBag={type}
-                            options={{ preserveScroll: true }}
-                            onSuccess={() => setEditing(false)}
-                        >
-                            {({ errors, processing }) => (
-                                <>
-                                    <input
-                                        type="hidden"
-                                        name="same_as_billing"
-                                        value="1"
-                                    />
-                                    <Button
-                                        type="submit"
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={processing}
-                                    >
-                                        {processing && <Spinner />}
-                                        {t(
-                                            'wholesale.checkout.address.same_as_billing',
+            {book.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                    {t('wholesale.checkout.address.none_saved')}
+                </p>
+            ) : (
+                <Form
+                    {...WholesaleCheckoutController.useAddress.form()}
+                    options={{ preserveScroll: true }}
+                    className="space-y-3"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <fieldset className="space-y-2">
+                                <legend className="sr-only">
+                                    {t('wholesale.checkout.address.choose')}
+                                </legend>
+                                {book.map((entry) => (
+                                    <label
+                                        key={entry.id}
+                                        className={cn(
+                                            'flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm',
+                                            chosen === entry.id
+                                                ? 'border-brand bg-brand-subtle'
+                                                : 'border-input hover:bg-muted',
                                         )}
-                                    </Button>
-                                    <InputError
-                                        message={errors.same_as_billing}
-                                    />
-                                </>
-                            )}
-                        </Form>
-                    )}
-
-                    <Form
-                        {...WholesaleCheckoutController.updateAddress.form(
-                            type,
-                        )}
-                        errorBag={type}
-                        options={{ preserveScroll: true }}
-                        onSuccess={() => setEditing(false)}
-                        className="grid gap-3 sm:grid-cols-2"
-                    >
-                        {({ errors, processing }) => (
-                            <>
-                                {ADDRESS_FIELDS.map((field) => {
-                                    const id = `${type}-${field.name}`;
-                                    const wide =
-                                        field.name === 'line_1' ||
-                                        field.name === 'line_2';
-
-                                    return (
-                                        <div
-                                            key={field.name}
-                                            className={
-                                                wide
-                                                    ? 'grid gap-1.5 sm:col-span-2'
-                                                    : 'grid gap-1.5'
-                                            }
-                                        >
-                                            <Label htmlFor={id}>
-                                                {t(
-                                                    `wholesale.checkout.address.${field.name}`,
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="address"
+                                            value={entry.id}
+                                            checked={chosen === entry.id}
+                                            onChange={() => setChosen(entry.id)}
+                                            className="accent-brand mt-1"
+                                        />
+                                        <span className="min-w-0 space-y-0.5">
+                                            <span className="block font-medium">
+                                                {entry.contact_name}
+                                                {entry.is_default && (
+                                                    <span className="text-muted-foreground ml-2 text-xs font-normal">
+                                                        {t(
+                                                            'wholesale.checkout.address.default',
+                                                        )}
+                                                    </span>
                                                 )}
-                                            </Label>
-                                            <Input
-                                                id={id}
-                                                name={field.name}
-                                                autoComplete={`${type} ${field.autoComplete}`}
-                                                inputMode={
-                                                    'inputMode' in field
-                                                        ? field.inputMode
-                                                        : undefined
-                                                }
-                                                maxLength={field.max}
-                                                required={field.required}
-                                                defaultValue={
-                                                    address?.[field.name] ?? ''
-                                                }
-                                                aria-invalid={
-                                                    errors[field.name]
-                                                        ? true
-                                                        : undefined
-                                                }
-                                            />
-                                            <InputError
-                                                message={errors[field.name]}
-                                            />
-                                        </div>
-                                    );
-                                })}
-
-                                <div className="flex flex-wrap gap-2 sm:col-span-2">
-                                    <Button type="submit" disabled={processing}>
-                                        {processing && <Spinner />}
-                                        {t('wholesale.checkout.address.save')}
-                                    </Button>
-                                    {address !== null && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => setEditing(false)}
-                                        >
-                                            {t(
-                                                'wholesale.checkout.address.cancel',
+                                            </span>
+                                            <span className="text-muted-foreground block tabular-nums">
+                                                {entry.contact_mobile}
+                                            </span>
+                                            <span className="block">
+                                                {entry.line}
+                                            </span>
+                                            <span className="block">
+                                                {entry.place}
+                                            </span>
+                                            {!entry.has_postcode && (
+                                                <span className="text-warning block text-xs">
+                                                    {t(
+                                                        'wholesale.checkout.address.postcode_missing',
+                                                    )}
+                                                </span>
                                             )}
-                                        </Button>
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </Form>
-                </div>
+                                        </span>
+                                    </label>
+                                ))}
+                            </fieldset>
+
+                            <InputError message={errors.address} />
+
+                            <Button
+                                type="submit"
+                                disabled={
+                                    processing ||
+                                    chosen === '' ||
+                                    chosen === checkout.selected_address_id
+                                }
+                            >
+                                {processing && <Spinner />}
+                                {t('wholesale.checkout.address.use')}
+                            </Button>
+                        </>
+                    )}
+                </Form>
             )}
         </SectionCard>
     );
 }
-
 WholesaleCheckout.layout = {
     breadcrumbs: [
         {

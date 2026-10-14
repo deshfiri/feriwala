@@ -158,7 +158,8 @@ class ReconcileGatewayPayments
         }
 
         try {
-            $result = $driver->status($payment->reference);
+            // A provider that issued its own attempt id is asked by that id.
+            $result = $driver->status($payment->gateway_reference ?: $payment->reference);
         } catch (GatewayUnavailable $exception) {
             /*
              * Could not ask. Nothing is recorded against the payment and

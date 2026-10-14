@@ -54,6 +54,12 @@ return [
     ],
 
     'checkout' => [
+        'steps' => [
+            'label' => 'Checkout progress',
+            'address' => 'Address',
+            'confirm' => 'Confirm order',
+            'pay' => 'Pay',
+        ],
         'title' => 'Wholesale checkout',
         'description' => 'Review your order. Every figure is worked out again by Banij each time this page opens.',
         'back_to_cart' => 'Back to cart',
@@ -121,6 +127,15 @@ return [
             'billing_first' => 'Add a billing address first.',
             'saved_billing' => 'Billing address saved.',
             'saved_shipping' => 'Shipping address saved.',
+            'saved_both' => 'Address selected for billing and delivery.',
+            'not_available' => 'That address is not available. Choose one from your Addresses.',
+            'choose' => 'Billing and delivery address',
+            'choose_help' => 'Choose one of your saved addresses. It is used for billing and delivery.',
+            'use' => 'Use this address',
+            'none_saved' => 'You have no saved address yet. Add one, then come back to this checkout.',
+            'manage' => 'Manage addresses',
+            'postcode_missing' => 'No postcode — some payment methods need one.',
+            'default' => 'Default',
         ],
     ],
 

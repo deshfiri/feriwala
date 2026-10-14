@@ -42,7 +42,7 @@ type Owner = {
 
 type KycRound = {
     id: string;
-    round: number;
+    opened_at: string | null;
     status: string;
     status_label: string;
     status_tone: StatusTone;
@@ -402,9 +402,7 @@ export default function AdminAccountShow({
                                     >
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                             <span className="text-sm font-medium">
-                                                {t('account.detail.round', {
-                                                    number: round.round,
-                                                })}
+                                                {t('account.detail.entry')}
                                             </span>
                                             <StatusPill
                                                 tone={round.status_tone}

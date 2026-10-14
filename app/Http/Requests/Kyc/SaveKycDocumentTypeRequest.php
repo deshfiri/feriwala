@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Kyc;
 
 use App\Domain\Kyc\Enums\KycAudience;
+use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Package\Models\Package;
 use App\Support\Localization\Countries;
@@ -37,7 +38,16 @@ class SaveKycDocumentTypeRequest extends FormRequest
                 Rule::unique(KycDocumentType::class, 'key')
                     ->ignore($type instanceof KycDocumentType ? $type->id : null),
             ],
-            // Left out, a new type is for Client/Partner accounts, as before.
+            // Which batch the criterion sits in. The admin screen always sends it;
+            // left out, a criterion keeps the batch it has (or none), so older
+            // callers keep working. The batch's audience becomes the criterion's.
+            'batch' => [
+                'sometimes', 'nullable', 'string',
+                Rule::exists(KycBatch::class, 'public_id')->whereNull('archived_at'),
+            ],
+
+            // Left out, a new type is for Client/Partner accounts, as before. A
+            // batch overrides it.
             'audience' => ['sometimes', Rule::enum(KycAudience::class)],
             'name' => ['required', 'string', 'max:120'],
             'instructions' => ['nullable', 'string', 'max:2000'],
@@ -143,7 +153,17 @@ class SaveKycDocumentTypeRequest extends FormRequest
      */
     public function typeAttributes(): array
     {
-        return $this->safe()->except('scopes');
+        $attributes = $this->safe()->except(['scopes', 'batch']);
+
+        if (filled($this->validated('batch'))) {
+            $batch = KycBatch::query()->where('public_id', $this->validated('batch'))->firstOrFail();
+
+            // A criterion is asked of whoever its batch is asked of.
+            $attributes['kyc_batch_id'] = $batch->id;
+            $attributes['audience'] = $batch->audience->value;
+        }
+
+        return $attributes;
     }
 
     /**

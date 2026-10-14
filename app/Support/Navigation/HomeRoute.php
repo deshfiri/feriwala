@@ -30,11 +30,10 @@ use App\Models\User;
 class HomeRoute
 {
     /**
-     * Administrative landing screens, most-wanted first.
+     * The administrative screens whose permissions make someone platform staff.
      *
-     * Each is a route name and the permission that opens it. A staff member is
-     * sent to the first they can actually see, rather than to a fixed page half
-     * of them would be refused from.
+     * Each is a route name and the permission that opens it. Holding any one
+     * of them sends the person to the admin dashboard.
      *
      * @return array<string, array{0: PermissionModule, 1: PermissionAction}>
      */
@@ -80,9 +79,15 @@ class HomeRoute
             return 'staff.invitation.show';
         }
 
-        foreach (self::adminLandings() as $route => [$module, $action]) {
+        /*
+         * Any administrative permission opens the staff overview. It is the
+         * panel's front door — every card on it is gated on the permission of
+         * the screen it links to — so staff land on the dashboard rather than
+         * on whichever queue happens to rank first.
+         */
+        foreach (self::adminLandings() as [$module, $action]) {
             if ($user->can(PermissionCatalogue::name($module, $action))) {
-                return $route;
+                return 'admin.dashboard';
             }
         }
 

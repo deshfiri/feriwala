@@ -15,6 +15,7 @@ use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\ProductMediaStore;
+use App\Domain\Catalog\PurchasedProducts;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\ContentLibrary\ContentBlocks;
 use App\Domain\ContentLibrary\Models\ContentLibraryItem;
@@ -63,6 +64,7 @@ class CatalogController extends Controller
 
     public function __construct(
         protected ProductEligibility $eligibility,
+        protected PurchasedProducts $purchased,
         protected ProductMediaStore $media,
         protected WholesalePriceResolver $prices,
         protected StockAvailability $stock,
@@ -78,6 +80,14 @@ class CatalogController extends Controller
     public function dropshipping(Request $request): Response
     {
         return $this->browse($request, SalesChannel::Dropshipping);
+    }
+
+    /**
+     * My Products: what this account has bought, with the way to buy it again.
+     */
+    public function mine(Request $request): Response
+    {
+        return $this->products($request);
     }
 
     /**
@@ -125,6 +135,13 @@ class CatalogController extends Controller
             $query->whereRaw('1 = 0');
         }
 
+        // "My Products": only what this account has bought.
+        $mine = $request->routeIs('catalog.mine') || $request->string('scope')->toString() === 'mine';
+
+        if ($mine) {
+            $this->purchased->only($query, $account);
+        }
+
         if ($stock !== null) {
             $query = $this->stock->whereProductStock($query, $account, $stock === 'in_stock');
         }
@@ -146,17 +163,21 @@ class CatalogController extends Controller
             ->when($priceMax !== null, fn (Builder $query) => $query->where('wholesale_price', '<=', $priceMax))
             ->orderByDesc('is_featured')
             ->orderByDesc('featured_at')
-            ->orderBy('name')
-            ->orderBy('id')
+            // Newest first: a product added today is the first one a Partner sees.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
         $stockStates = $wholesaleAllowed ? $this->stockStates($products->getCollection(), $account) : [];
 
+        $bought = $this->purchased->among($account, $products->getCollection()->pluck('id'));
+
         $products->through(fn (Product $product) => $this->unifiedCard(
             $product,
             $channels,
             $stockStates[$product->id] ?? null,
+            isset($bought[$product->id]),
         ));
 
         return Inertia::render('catalog/products', [
@@ -169,6 +190,7 @@ class CatalogController extends Controller
                 'stock' => $stock,
                 'price_min' => $priceMin,
                 'price_max' => $priceMax,
+                'scope' => $mine ? 'mine' : 'all',
             ],
             'can' => [
                 'wholesale' => $wholesaleAllowed,
@@ -201,7 +223,7 @@ class CatalogController extends Controller
      * @param  array<int, SalesChannel>  $channels  the channels this account may use
      * @return array<string, mixed>
      */
-    protected function unifiedCard(Product $product, array $channels, ?bool $inStock): array
+    protected function unifiedCard(Product $product, array $channels, ?bool $inStock, bool $purchased = false): array
     {
         $image = $product->media->first();
 
@@ -216,6 +238,8 @@ class CatalogController extends Controller
             'category' => $product->category->name,
             'brand' => $product->brand?->name,
             'is_featured' => $product->is_featured,
+            // Bought before: reordering belongs to My Products, not this list.
+            'purchased' => $purchased,
             'variant_count' => (int) $product->variants_count,
             'package_scope' => $product->package_scope->value,
             'image' => $image === null ? null : [
@@ -303,8 +327,9 @@ class CatalogController extends Controller
             // Featured first (§11.1), newest featured first among them.
             ->orderByDesc('is_featured')
             ->orderByDesc('featured_at')
-            ->orderBy('name')
-            ->orderBy('id')
+            // Newest first: a product added today is the first one a Partner sees.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
@@ -519,7 +544,8 @@ class CatalogController extends Controller
              * is what makes the door reachable from where a partner is already
              * standing.
              */
-            'websites' => $partnerSelling
+            'purchased' => $purchased = $this->purchased->has($account, $product),
+            'websites' => $partnerSelling && $purchased
                 ? $this->websitesFor($account, $product)
                 : [],
 

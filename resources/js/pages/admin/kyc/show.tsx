@@ -72,7 +72,7 @@ export default function AdminKycShow({
 
             <PageContainer>
                 <PageHeader
-                    title={t('kyc.detail.title', { round: submission.round })}
+                    title={t('kyc.detail.title')}
                     description={applicant.name ?? undefined}
                     actions={
                         <>
@@ -159,6 +159,11 @@ export default function AdminKycShow({
                                             />
 
                                             <div className="min-w-0 flex-1">
+                                                {document.batch && (
+                                                    <p className="text-muted-foreground truncate text-xs">
+                                                        {document.batch}
+                                                    </p>
+                                                )}
                                                 <p className="truncate text-sm font-medium">
                                                     {document.type ??
                                                         document.original_name}
@@ -245,7 +250,9 @@ export default function AdminKycShow({
                                     {fields.map((field, position) => (
                                         <div key={`${field.type}-${position}`}>
                                             <dt className="text-muted-foreground text-xs">
-                                                {field.type ?? '—'}
+                                                {field.batch
+                                                    ? `${field.batch} · ${field.type ?? '—'}`
+                                                    : (field.type ?? '—')}
                                             </dt>
                                             <dd className="font-medium tabular-nums">
                                                 {field.value}

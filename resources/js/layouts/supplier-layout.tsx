@@ -20,8 +20,10 @@ import { usePage } from '@inertiajs/react';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import BrandingHead from '@/components/branding-head';
+import NavigationSkeleton from '@/components/navigation-skeleton';
 import { SupplierHeader } from '@/components/supplier/supplier-header';
 import { SupplierSidebar } from '@/components/supplier/supplier-sidebar';
+import { useRealtimeUpdates } from '@/hooks/use-realtime-updates';
 import { useTranslation } from '@/hooks/use-translation';
 import { dashboard } from '@/routes/supplier';
 import { index as addresses } from '@/routes/supplier/addresses';
@@ -73,6 +75,9 @@ export default function SupplierLayout({
     breadcrumbs?: BreadcrumbItemType[];
 }) {
     const { t } = useTranslation();
+
+    useRealtimeUpdates();
+
     const page = usePage<{ supplierAccount?: SupplierAccount | null }>();
     const account = page.props.supplierAccount ?? null;
 
@@ -222,7 +227,9 @@ export default function SupplierLayout({
                         breadcrumbs={breadcrumbs}
                         account={account}
                     />
-                    {children}
+                    <NavigationSkeleton mainId="supplier-main">
+                        {children}
+                    </NavigationSkeleton>
                 </AppContent>
             </AppShell>
         </>

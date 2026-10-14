@@ -4,6 +4,8 @@ use App\Http\Controllers\Admin\AccountController;
 use App\Http\Controllers\Admin\AccountVerificationSettingsController;
 use App\Http\Controllers\Admin\AccountWithdrawalController;
 use App\Http\Controllers\Admin\ActivationReviewController;
+use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\AuditRetentionSettingsController;
 use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
@@ -11,9 +13,11 @@ use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContentLibraryController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\DeletionRequestController;
 use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
+use App\Http\Controllers\Admin\KycBatchController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReverificationCancellationController;
 use App\Http\Controllers\Admin\KycReviewController;
@@ -86,6 +90,7 @@ use App\Http\Controllers\Erp\ExternalStoreController;
 use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
 use App\Http\Controllers\Erp\MobileVerificationController;
+use App\Http\Controllers\Erp\NotificationController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\OrderController as BusinessOrderController;
 use App\Http\Controllers\Erp\PackageSelectionController;
@@ -153,6 +158,13 @@ Route::middleware(['auth', 'verified', 'business.activated'])
  * signing in is the one the invitation was addressed to.
  */
 Route::middleware(['auth', 'noindex'])->group(function () {
+    // The header bell's read state. Open to every signed-in person, activated
+    // or not — an unactivated account is exactly who is being sent KYC notices.
+    Route::post('notifications/read', [NotificationController::class, 'readAll'])
+        ->name('notifications.read-all');
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
+        ->name('notifications.read');
+
     Route::get('staff/invitation/{token}', [StaffInvitationController::class, 'show'])
         ->name('staff.invitation.show');
     Route::post('staff/invitation/{token}', [StaffInvitationController::class, 'accept'])
@@ -336,6 +348,9 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // below stay as the product detail routes and for direct links.
         Route::get('catalog', [BusinessCatalogController::class, 'products'])
             ->name('catalog.index');
+        // What the account has bought, with reordering. Products does not offer it again.
+        Route::get('my-products', [BusinessCatalogController::class, 'mine'])
+            ->name('catalog.mine');
         Route::get('catalog/{product}', [BusinessCatalogController::class, 'product'])
             ->name('catalog.show')
             ->where('product', '(?!wholesale$|dropshipping$)[^/]+');
@@ -379,6 +394,8 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('wholesale.checkout.coupon.apply');
         Route::delete('wholesale/checkout/coupon', [WholesaleCheckoutController::class, 'removeCoupon'])
             ->name('wholesale.checkout.coupon.remove');
+        Route::put('wholesale/checkout/address', [WholesaleCheckoutController::class, 'useAddress'])
+            ->name('wholesale.checkout.address.use');
         Route::put('wholesale/checkout/addresses/{type}', [WholesaleCheckoutController::class, 'updateAddress'])
             ->whereIn('type', ['billing', 'shipping'])
             ->name('wholesale.checkout.addresses.update');
@@ -596,6 +613,20 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('settings', SettingsController::class)->name('settings');
 
+        // Who did what (§36.2). Read-only; `audit.view_audit_logs`.
+        Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');
+
+        // Clearing it (D29): `audit.delete`, a password and a reason, and the
+        // purge is recorded permanently.
+        Route::post('activity-log/purge', [ActivityLogController::class, 'purge'])->name('activity-log.purge');
+
+        // How long it is kept — `audit.view_audit_logs` to see,
+        // `audit.manage_settings` to change.
+        Route::get('activity-log-retention', [AuditRetentionSettingsController::class, 'index'])
+            ->name('activity-log-retention.index');
+        Route::put('activity-log-retention', [AuditRetentionSettingsController::class, 'update'])
+            ->name('activity-log-retention.update');
+
         /*
          * The twenty-one fixed PlatformRole cases, read-only as before, plus
          * a custom, database-backed role's full lifecycle (Role and
@@ -686,9 +717,34 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::delete('kyc/document-types/{documentType}', [KycDocumentTypeController::class, 'destroy'])
             ->name('kyc.document-types.destroy');
 
+        /*
+         * Verification batches: the groups of criteria an applicant completes in
+         * one submission, and the package and country rules saying who is asked
+         * for each. They live on the criteria screen; these are only its actions.
+         */
+        Route::post('kyc/batches', [KycBatchController::class, 'store'])->name('kyc.batches.store');
+        Route::post('kyc/batches/reorder', [KycBatchController::class, 'reorder'])->name('kyc.batches.reorder');
+        Route::patch('kyc/batches/{batch}', [KycBatchController::class, 'update'])->name('kyc.batches.update');
+        Route::patch('kyc/batches/{batch}/active', [KycBatchController::class, 'setActive'])->name('kyc.batches.active');
+        Route::post('kyc/batches/{batch}/archive', [KycBatchController::class, 'archive'])->name('kyc.batches.archive');
+        Route::delete('kyc/batches/{batch}', [KycBatchController::class, 'destroy'])->name('kyc.batches.destroy');
+
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
+
+        /*
+         * Requests to have an account erased (§5.3). Nobody erases their own
+         * account: they ask, and someone holding ccount.delete (or
+         * supplier.delete) decides. Approving erases it, so that one is behind a
+         * confirmed password as well as the typed confirmation.
+         */
+        Route::get('deletions', [DeletionRequestController::class, 'index'])->name('deletions.index');
+        Route::get('deletions/{deletionRequest}', [DeletionRequestController::class, 'show'])->name('deletions.show');
+        Route::post('deletions/{deletionRequest}/approve', [DeletionRequestController::class, 'approve'])
+            ->middleware(RequirePassword::class)
+            ->name('deletions.approve');
+        Route::post('deletions/{deletionRequest}/reject', [DeletionRequestController::class, 'reject'])->name('deletions.reject');
 
         /*
          * The Supplier account domain (D25, P13-1, P13-7, P13-9, P13-13). A
@@ -894,6 +950,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::put('gateways', [PaymentGatewayController::class, 'update'])
             ->name('gateways.update');
 
+        // A real authentication call with the stored credentials; moves no money.
+        Route::post('gateways/test-connection', [PaymentGatewayController::class, 'testConnection'])
+            ->name('gateways.test-connection');
+
         // Switching a gateway on is its own action: entering a store password
         // is preparation, but this is the moment real customers reach it.
         Route::put('gateways/enabled', [PaymentGatewayController::class, 'toggle'])
@@ -937,6 +997,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('branding.accent.update');
         Route::delete('settings/branding/accent', [BrandingController::class, 'destroyAccent'])
             ->name('branding.accent.destroy');
+        Route::put('settings/branding/button', [BrandingController::class, 'updateButton'])
+            ->name('branding.button.update');
+        Route::delete('settings/branding/button', [BrandingController::class, 'destroyButton'])
+            ->name('branding.button.destroy');
+        Route::put('settings/branding/nav', [BrandingController::class, 'updateNav'])
+            ->name('branding.nav.update');
+        Route::delete('settings/branding/nav', [BrandingController::class, 'destroyNav'])
+            ->name('branding.nav.destroy');
+        Route::put('settings/branding/background', [BrandingController::class, 'updateBackground'])
+            ->name('branding.background.update');
+        Route::delete('settings/branding/background', [BrandingController::class, 'destroyBackground'])
+            ->name('branding.background.destroy');
         Route::post('settings/branding/{asset}', [BrandingController::class, 'update'])
             ->whereIn('asset', ['logo', 'favicon'])
             ->name('branding.update');
@@ -1292,6 +1364,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('inventory.stock.store');
         Route::get('inventory/stock/{item}', [StockController::class, 'show'])
             ->name('inventory.stock.show');
+        // Only for a row never used; one with a history is part of the ledger.
+        Route::delete('inventory/stock/{item}', [StockController::class, 'destroy'])
+            ->name('inventory.stock.destroy');
         Route::post('inventory/stock/{item}/adjustments', [StockAdjustmentController::class, 'store'])
             ->name('inventory.stock.adjustments.store');
         // When a SKU in a warehouse counts as running low (P3-29).

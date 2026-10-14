@@ -7,7 +7,11 @@
     properties in step after a save without a full reload.
 --}}
 @php($accent = $page['props']['branding']['accent'] ?? null)
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark']) @if (is_array($accent)) style="--brand-base: {{ $accent['color'] }}; --brand-on: {{ $accent['on'] }}; --brand-lifted-on: {{ $accent['lifted_on'] }};" @endif>
+@php($button = $page['props']['branding']['button'] ?? null)
+@php($nav = $page['props']['branding']['nav'] ?? null)
+@php($canvas =$page['props']['branding']['background'] ?? null)
+@php($brandingStyle = (is_array($accent) ? "--brand-base: {$accent['color']}; --brand-on: {$accent['on']}; --brand-lifted-on: {$accent['lifted_on']};" : '').(is_array($button) ? " --button-base: {$button['color']}; --button-on: {$button['on']}; --button-lifted-on: {$button['lifted_on']};" : '').(is_array($nav) ? " --nav-base: {$nav['color']}; --nav-on: {$nav['on']}; --nav-lifted-on: {$nav['lifted_on']};" : '').(is_string($canvas) ? " --canvas-custom: {$canvas};" : ''))
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark']) @if ($brandingStyle !== '') style="{{ $brandingStyle }}" @endif>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -38,7 +42,11 @@
         --}}
         <style>
             html {
-                background-color: oklch(0.976 0.002 75);
+                background-color: oklch(1 0 0);
+            }
+
+            html:not(.dark) {
+                background-color: var(--canvas-custom, oklch(1 0 0));
             }
 
             html.dark {

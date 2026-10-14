@@ -1103,3 +1103,33 @@ emergency revocation · ER-7 a checkout-quote scope and credential presets · ER
 integration prerequisites · ER-11 order-specific authorisation tokens for order reads and per-order
 actions. Their contract details (`.env` names, token transport, scope names) are agreed with the
 storefront session before implementation.
+
+## D33 — The activity log can be cleared, through one guarded path (2026-10-13) 🔒
+
+> **Numbering note (2026-10-14).** This decision was recorded on `main` on 2026-10-13 as **D29**.
+> That number already records _External store connections_ above (2026-10-11), so it was
+> renumbered **D33** when `origin/main` was merged into `external-stores`. Its meaning and text are
+> unchanged; they follow verbatim. The copy on `main` also ended with a truncated repeat of this
+> heading and its first sentence, which added nothing and is not carried over. Code and comments
+> that cite "D29" for the activity-log purge (8 files) still read D29 until a separately approved
+> cleanup.
+
+**Approved by the Project Owner on 2026-10-13**, deliberately and including financial and security
+entries. This amends §36.2 ("ordinary administrative users must not edit or delete audit logs") and
+the append-only rule for audit logs in CLAUDE.md. Ledger entries are untouched.
+
+- **Who:** `audit.delete` clears the log and `audit.manage_settings` sets how long it is kept. Admin
+  holds both; any other role gets them only if granted. A business identity is refused whatever it
+  holds.
+- **How:** one action, `PurgeAuditLogs`. A manual clear takes a reason of at least 10 characters and
+  the person's own password, for everything or for one staff member (or the system), optionally only
+  entries older than some days. A nightly sweep (`audit-log-retention`, 03:30) clears entries older
+  than the retention setting (`audit.log_retention_days`, default 0 = keep forever).
+- **What stays true:** UPDATE and TRUNCATE are still refused. The database refuses every DELETE
+  except inside the transaction the action opens (`feriwala.purge_audit_logs`, the same technique as
+  product force delete), and refuses to delete an `audit.logs_purged` record under any
+  circumstance. Every clearing writes that record — who, when, scope, how many, why — and it is
+  permanent. Changing the retention setting is itself audited.
+- **Cost, accepted:** once cleared, history including wallet, withdrawal, payment and permission
+  changes cannot be recovered or investigated. The Project Owner chose this over protecting those
+  categories.

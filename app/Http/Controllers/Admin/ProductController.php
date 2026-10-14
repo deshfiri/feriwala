@@ -31,6 +31,7 @@ use App\Domain\ContentLibrary\ContentBlocks;
 use App\Domain\ContentLibrary\Models\ContentLibraryItem;
 use App\Domain\ContentLibrary\Policies\ContentLibraryPolicy;
 use App\Domain\Inventory\Actions\SyncProductStockStatus;
+use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Package\Models\Package;
 use App\Domain\Sourcing\Queries\ProductSuppliersSection;
 use App\Domain\Storage\ManagedStorage;
@@ -42,6 +43,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -76,7 +78,7 @@ class ProductController extends Controller
         protected ProductDeletionRule $deletionRule,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, StockAvailability $availability): Response
     {
         $actor = $this->actor($request);
 
@@ -98,8 +100,9 @@ class ProductController extends Controller
                 'brand:id,name',
                 // The listing image only: position one, and never a video.
                 'media' => fn ($query) => $query->where('type', ProductMedia::TYPE_IMAGE)->where('position', 1),
+                // Only the SKUs, to ask central stock about each stockable unit.
+                'variants:id,product_id,sku',
             ])
-            ->withCount(['variants', 'media'])
             ->when($filters['search'] !== '', fn (Builder $query) => $query->where(
                 fn (Builder $inner) => $inner
                     ->where('name', 'ilike', $pattern)
@@ -128,8 +131,11 @@ class ProductController extends Controller
             )
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (Product $product) => $this->row($product));
+            ->withQueryString();
+
+        // One availability question for the whole page, not one per product.
+        $stock = $this->stockFor($products->getCollection(), $availability);
+        $products = $products->through(fn (Product $product) => $this->row($product, $stock[$product->id] ?? ['in_stock' => false, 'quantity' => 0]));
 
         return Inertia::render('admin/catalog/products/index', [
             'products' => $products,
@@ -512,9 +518,10 @@ class ProductController extends Controller
      * how much hangs off it, so the list answers "which of these is not ready"
      * without opening each editor.
      *
+     * @param  array{in_stock: bool, quantity: int}  $stock
      * @return array<string, mixed>
      */
-    protected function row(Product $product): array
+    protected function row(Product $product, array $stock): array
     {
         $image = $product->media->first();
 
@@ -529,17 +536,42 @@ class ProductController extends Controller
             'status_tone' => $product->status->tone(),
             'is_deletable' => $this->deletionRule->allows($product->status),
             'is_featured' => $product->is_featured,
-            'channels' => array_map(fn (SalesChannel $channel) => [
-                'channel' => $channel->value,
-                'status' => $product->channelStatus($channel)->value,
-                'tone' => $product->channelStatus($channel)->tone(),
-                'enabled' => $product->sellsThrough($channel),
-            ], SalesChannel::cases()),
             'image_url' => $image === null ? null : $this->mediaStore->url($image->path, $image->disk),
-            'media_count' => (int) $product->getAttribute('media_count'),
-            'variants_count' => (int) $product->getAttribute('variants_count'),
+            'in_stock' => $stock['in_stock'],
+            'stock_quantity' => $stock['quantity'],
             'updated_at' => $product->updated_at->toIso8601String(),
         ];
+    }
+
+    /**
+     * Whether each product on the page has stock somebody can order, and how
+     * many.
+     *
+     * Asked of {@see StockAvailability}, the one place availability is worked
+     * out, so this list can never disagree with what a website is told. A product
+     * with variations is in stock when any variation is, and its quantity is the
+     * sum; one with no stock record at all is simply out of stock.
+     *
+     * @param  Collection<int, Product>  $products
+     * @return array<int, array{in_stock: bool, quantity: int}> keyed by product id
+     */
+    protected function stockFor(Collection $products, StockAvailability $availability): array
+    {
+        $answers = $availability->forSkus(
+            $products->flatMap(fn (Product $product) => $product->variants->isEmpty()
+                ? [$product->sku]
+                : $product->variants->pluck('sku'))->all(),
+        );
+
+        return $products->mapWithKeys(function (Product $product) use ($answers) {
+            $skus = $product->variants->isEmpty() ? [$product->sku] : $product->variants->pluck('sku')->all();
+            $units = array_filter(array_map(fn (string $sku) => $answers[mb_strtoupper($sku)] ?? null, $skus));
+
+            return [$product->id => [
+                'in_stock' => collect($units)->contains(fn (array $unit) => $unit['in_stock']),
+                'quantity' => (int) collect($units)->sum('quantity'),
+            ]];
+        })->all();
     }
 
     /**

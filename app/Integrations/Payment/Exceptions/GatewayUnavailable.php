@@ -27,6 +27,21 @@ class GatewayUnavailable extends RuntimeException
         );
     }
 
+    /**
+     * @param  list<string>  $missing  what the payer's best address lacks
+     */
+    public static function missingPayerAddress(string $gateway, array $missing = []): self
+    {
+        $what = $missing === []
+            ? 'No address is on file for this account.'
+            : 'Your address is missing: '.implode(', ', $missing).'.';
+
+        return new self(
+            "The {$gateway} gateway needs a complete postal address for the payer. {$what} "
+            .'Add it under Addresses (street, city, division, postcode and country), then try again.'
+        );
+    }
+
     public static function missingCredentials(string $gateway): self
     {
         return new self(

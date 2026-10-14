@@ -47,7 +47,7 @@ describe('signing in', function () {
         $this->post(route('login.store'), [
             'email' => $staff->email,
             'password' => 'password',
-        ])->assertRedirect(route('admin.kyc.index', absolute: false));
+        ])->assertRedirect(route('admin.dashboard', absolute: false));
 
         $this->assertAuthenticatedAs($staff);
     });
@@ -87,8 +87,8 @@ describe('choosing the landing', function () {
         expect(app(HomeRoute::class)->nameFor($owner->refresh()))->toBe('dashboard');
     });
 
-    it('sends staff to the first admin screen they can actually see', function () {
-        // Not a fixed page half of them would be refused from.
+    it('sends any staff member with an administrative permission to the admin dashboard', function () {
+        // Not whichever queue ranks first: KYC is no one's front door.
         $staff = User::factory()->staff()->create();
         $staff->givePermissionTo(PermissionCatalogue::name(
             PermissionModule::Package,
@@ -96,7 +96,7 @@ describe('choosing the landing', function () {
         ));
 
         expect(app(HomeRoute::class)->nameFor($staff->refresh()))
-            ->toBe('admin.packages.index');
+            ->toBe('admin.dashboard');
     });
 
     it('falls back to a screen every identity can reach', function () {
@@ -135,7 +135,7 @@ describe('the funnel gate', function () {
 
         $this->actingAs($staff)
             ->get(route('dashboard'))
-            ->assertRedirect(route('admin.kyc.index', absolute: false));
+            ->assertRedirect(route('admin.dashboard', absolute: false));
     });
 
     it('still sends an unactivated business to its stepper', function () {
@@ -153,10 +153,10 @@ describe('the funnel gate', function () {
 
         $this->actingAs($staff)
             ->get(route('dashboard'))
-            ->assertRedirect(route('admin.kyc.index', absolute: false));
+            ->assertRedirect(route('admin.dashboard', absolute: false));
 
         $this->actingAs($staff)
-            ->get(route('admin.kyc.index'))
+            ->get(route('admin.dashboard'))
             ->assertOk();
     });
 });
@@ -184,9 +184,8 @@ describe('the eight cases that must stay covered', function () {
 
     it('never lands staff on an admin screen they cannot open', function () {
         /*
-         * The landing walks the admin screens in order and stops at the first
-         * the person can actually see. A fixed page would refuse half of them,
-         * which is the lockout in a smaller form.
+         * The dashboard opens for every staff member, with each card gated on
+         * its own permission, so the landing is never a page they are refused.
          */
         $limited = User::factory()->staff()->create();
         $limited->givePermissionTo(PermissionCatalogue::name(
@@ -196,7 +195,7 @@ describe('the eight cases that must stay covered', function () {
 
         $landing = app(HomeRoute::class)->nameFor($limited->refresh());
 
-        expect($landing)->toBe('admin.packages.index');
+        expect($landing)->toBe('admin.dashboard');
 
         $this->actingAs($limited)->get(route($landing))->assertOk();
 
@@ -274,6 +273,6 @@ describe('the eight cases that must stay covered', function () {
         );
 
         expect($response->getTargetUrl())
-            ->toContain(route('admin.kyc.index', absolute: false));
+            ->toContain(route('admin.dashboard', absolute: false));
     });
 });

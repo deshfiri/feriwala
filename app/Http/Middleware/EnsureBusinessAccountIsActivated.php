@@ -53,6 +53,7 @@ class EnsureBusinessAccountIsActivated
         'well-known.',      // passkey discovery, needed to sign in at all
         'staff.invitation.', // joining someone else's account needs no account
         'locale.',
+        'notifications.',   // the header bell's read state
         'logout',
         'password.',
 
@@ -79,7 +80,6 @@ class EnsureBusinessAccountIsActivated
      */
     public const PENDING_ROUTE_PREFIXES = [
         'support.',         // not built — Phase 8
-        'notifications.',   // not built — Phase 8
     ];
 
     public function __construct(

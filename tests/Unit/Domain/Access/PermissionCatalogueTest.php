@@ -123,12 +123,15 @@ describe('immutability guarantees', function () {
             ->and($ledger)->not->toContain('ledger.delete');
     });
 
-    it('offers no way to edit or delete an audit log', function () {
-        // §36.2: ordinary administrative users must not edit or delete these.
+    it('offers no way to edit an audit log, and only the guarded purge to remove them', function () {
+        // §36.2: nobody edits these. `audit.delete` is the right to run the
+        // purge (D29) — password, reason, and a permanent record — not a way
+        // to remove one row.
         $audit = PermissionCatalogue::forModule(PermissionModule::Audit);
 
         expect($audit)->not->toContain('audit.edit')
-            ->and($audit)->not->toContain('audit.delete');
+            ->and($audit)->not->toContain('audit.create')
+            ->and($audit)->toContain('audit.delete');
     });
 
     it('offers no way to delete a KYC submission', function () {

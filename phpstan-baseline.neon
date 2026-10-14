@@ -7,12 +7,6 @@ parameters:
 			path: app/Http/Controllers/Settings/ProfileController.php
 
 		-
-			message: '#^Cannot call method delete\(\) on App\\Models\\User\|null\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Settings/ProfileController.php
-
-		-
 			message: '#^Cannot call method fill\(\) on App\\Models\\User\|null\.$#'
 			identifier: method.nonObject
 			count: 1

@@ -179,6 +179,12 @@ class AccountController extends Controller
                 ->map(fn ($type) => [
                     'id' => $type->public_id,
                     'name' => $type->name,
+                    // The batch it sits in, so the dialog offers a whole batch to
+                    // ask again for rather than a flat list of documents.
+                    'batch' => $type->batch === null ? null : [
+                        'id' => $type->batch->public_id,
+                        'name' => $type->batch->name,
+                    ],
                 ])
                 ->all(),
 

@@ -104,7 +104,7 @@ vi.mock('@inertiajs/react', async () => {
                 { href: typeof href === 'string' ? href : href.url, ...rest },
                 children as never,
             ),
-        router: { post: vi.fn() },
+        router: { post: vi.fn(), on: vi.fn(() => () => {}) },
         usePage: () => page,
     };
 });

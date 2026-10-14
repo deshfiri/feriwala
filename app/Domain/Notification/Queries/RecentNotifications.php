@@ -3,6 +3,7 @@
 namespace App\Domain\Notification\Queries;
 
 use App\Domain\Notification\Data\HeaderNotification;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Models\User;
 use Illuminate\Notifications\DatabaseNotification;
 
@@ -94,7 +95,25 @@ class RecentNotifications
             }
         }
 
-        return $this->line($event, 'description');
+        return $this->withReference($this->line($event, 'description'), $data);
+    }
+
+    /**
+     * Appends the submission's own reference — `WDR-…`, `RET-…` — so a reviewer
+     * can match the bell entry to a row. Only ever that reference; the stored
+     * notification holds nothing else about the submitter.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function withReference(?string $description, array $data): ?string
+    {
+        $reference = $data['reference'] ?? null;
+
+        if (! is_string($reference) || $reference === '') {
+            return $description;
+        }
+
+        return trim(($description ?? '').' '.__('notification.reference', ['reference' => $reference]));
     }
 
     /**
@@ -157,7 +176,21 @@ class RecentNotifications
             'identity.new_device_sign_in',
             'identity.password_changed' => route('security.edit'),
 
-            default => null,
+            'decision.return.approved',
+            'decision.return.rejected' => is_string($data['website'] ?? null) && is_string($data['order'] ?? null)
+                ? route('websites.orders.show', [$data['website'], $data['order']])
+                : null,
+
+            // A staff member who raised the refund goes to the platform's
+            // payments screen; an account's own user to their own receipt.
+            'decision.refund.approved',
+            'decision.refund.rejected' => ($data['audience'] ?? null) === 'staff'
+                ? route('admin.payments.index')
+                : (is_string($data['payment'] ?? null)
+                    ? route('subscription.receipts.show', $data['payment'])
+                    : null),
+
+            default => StaffQueue::fromEvent($event)?->route(),
         };
     }
 }

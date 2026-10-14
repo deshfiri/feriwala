@@ -38,6 +38,11 @@ declare module '@inertiajs/core' {
              * someone with twelve unread should not be told they have ten.
              */
             unreadNotificationCount: number;
+            /**
+             * This person's private WebSocket channel, or null for a guest.
+             * Named by public id; the server only authorises its own owner.
+             */
+            realtimeChannel: string | null;
             [key: string]: unknown;
         };
     }

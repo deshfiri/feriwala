@@ -35,9 +35,11 @@ class ApplicableRequirements
         return KycDocumentType::query()
             ->forAccounts()
             ->active()
-            ->with('scopes')
+            ->with(['scopes', 'batch.scopes'])
             ->get()
-            ->filter(fn (KycDocumentType $type) => $type->appliesTo($packageKey, $account->owner?->country))
+            ->filter(fn (KycDocumentType $type) => $type->batchAppliesTo($packageKey, $account->owner?->country)
+                && $type->appliesTo($packageKey, $account->owner?->country))
+            ->sortBy(fn (KycDocumentType $type) => [$type->batchSortOrder(), $type->sort_order, $type->id])
             ->values();
     }
 
@@ -60,11 +62,14 @@ class ApplicableRequirements
         $documents = $submission?->documents()->get()->keyBy('kyc_document_type_id') ?? collect();
         $fields = $submission?->fields()->get()->keyBy('kyc_document_type_id') ?? collect();
 
-        return $requirements->map(function (KycSubmissionRequirement $requirement) use ($documents, $fields) {
+        // values(): sorting keeps the old keys, and a list with gaps in its keys
+        // reaches the browser as an object, not an array.
+        return $requirements->sortBy(fn (KycSubmissionRequirement $requirement) => [$requirement->batch_sort_order, $requirement->sort_order, $requirement->id])->values()->map(function (KycSubmissionRequirement $requirement) use ($documents, $fields) {
             $document = $documents->get($requirement->kyc_document_type_id);
             $field = $fields->get($requirement->kyc_document_type_id);
 
             return [
+                'batch' => $this->batchOf($requirement->batch_key, $requirement->batch_name, $requirement->batch_description),
                 'key' => $requirement->key,
                 'name' => $requirement->name,
                 'instructions' => $requirement->instructions,
@@ -112,6 +117,7 @@ class ApplicableRequirements
             $field = $fields->get($type->id);
 
             return [
+                'batch' => $this->batchOf($type->batch?->key, $type->batch?->name, $type->batch?->description),
                 'key' => $type->key,
                 'name' => $type->name,
                 'instructions' => $type->instructions,
@@ -128,5 +134,17 @@ class ApplicableRequirements
                 'value_preview' => $field?->masked(),
             ];
         })->all();
+    }
+
+    /**
+     * The batch a requirement is shown under, or null when it has none (a
+     * criterion made outside the admin screen, or one asked for before batches
+     * existed). The form draws no heading for those.
+     *
+     * @return array{key: string, name: string, description: string|null}|null
+     */
+    protected function batchOf(?string $key, ?string $name, ?string $description): ?array
+    {
+        return $key === null || $name === null ? null : ['key' => $key, 'name' => $name, 'description' => $description];
     }
 }

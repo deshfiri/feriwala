@@ -1,20 +1,25 @@
 import { Form, Head, usePage } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
-import DeleteUser from '@/components/delete-user';
+import RequestAccountDeletion from '@/components/request-account-deletion';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
+import * as accountDeletion from '@/routes/account-deletion';
 import { edit } from '@/routes/profile';
-import type { Auth } from '@/types';
+import type { Auth, OwnDeletionRequest } from '@/types';
 
 type PageProps = {
     auth: Auth;
 };
 
-export default function Profile() {
+export default function Profile({
+    deletionRequest,
+}: {
+    deletionRequest: OwnDeletionRequest | null;
+}) {
     const { auth } = usePage<PageProps>().props;
     const { t } = useTranslation();
 
@@ -100,7 +105,11 @@ export default function Profile() {
                 </Form>
             </div>
 
-            <DeleteUser />
+            <RequestAccountDeletion
+                request={deletionRequest}
+                requestForm={accountDeletion.store.form()}
+                withdrawForm={accountDeletion.destroy.form()}
+            />
         </>
     );
 }

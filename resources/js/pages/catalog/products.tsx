@@ -1,4 +1,4 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { ImageOff, Package, Search } from 'lucide-react';
 import { useState } from 'react';
 import TablePagination from '@/components/data-table/table-pagination';
@@ -14,7 +14,11 @@ import { Input } from '@/components/ui/input';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
-import { show as productShow } from '@/routes/catalog';
+import {
+    index,
+    mine as myProducts,
+    show as productShow,
+} from '@/routes/catalog';
 import { show as wholesaleShow } from '@/routes/catalog/wholesale';
 import type { Paginator, PartnerProductCard, SelectOption } from '@/types';
 
@@ -28,6 +32,7 @@ type Props = {
         stock?: 'in_stock' | 'out_of_stock' | null;
         price_min?: string | null;
         price_max?: string | null;
+        scope?: 'all' | 'mine';
     };
     can: { wholesale: boolean; filter_wholesale: boolean };
     options: { categories: SelectOption[]; brands: SelectOption[] };
@@ -92,6 +97,37 @@ export default function PartnerProducts({
                     title={t('partner_products.title')}
                     description={t('partner_products.description')}
                 />
+
+                <div
+                    role="group"
+                    aria-label={t('partner_products.tabs.label')}
+                    className="flex gap-2"
+                >
+                    {(['all', 'mine'] as const).map((scope) => (
+                        <Button
+                            key={scope}
+                            asChild
+                            size="sm"
+                            variant={
+                                (filters.scope ?? 'all') === scope
+                                    ? 'default'
+                                    : 'outline'
+                            }
+                        >
+                            <Link
+                                href={scope === 'mine' ? myProducts() : index()}
+                                aria-current={
+                                    (filters.scope ?? 'all') === scope
+                                        ? 'page'
+                                        : undefined
+                                }
+                                data-test={`products-scope-${scope}`}
+                            >
+                                {t(`partner_products.tabs.${scope}`)}
+                            </Link>
+                        </Button>
+                    ))}
+                </div>
 
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                     <div className="relative sm:col-span-2 xl:col-span-2">
@@ -220,12 +256,16 @@ export default function PartnerProducts({
                         title={t(
                             filtered
                                 ? 'catalog.browse.no_matches'
-                                : 'catalog.browse.empty',
+                                : filters.scope === 'mine'
+                                  ? 'partner_products.mine_empty_title'
+                                  : 'catalog.browse.empty',
                         )}
                         description={t(
                             filtered
                                 ? 'catalog.browse.no_matches_help'
-                                : 'catalog.browse.empty_help',
+                                : filters.scope === 'mine'
+                                  ? 'partner_products.mine_empty_help'
+                                  : 'catalog.browse.empty_help',
                         )}
                     />
                 ) : (
@@ -236,7 +276,10 @@ export default function PartnerProducts({
                         >
                             {products.data.map((product) => (
                                 <li key={product.slug} className="flex">
-                                    <ProductTile product={product} />
+                                    <ProductTile
+                                        product={product}
+                                        scope={filters.scope ?? 'all'}
+                                    />
                                 </li>
                             ))}
                         </ul>
@@ -251,14 +294,18 @@ export default function PartnerProducts({
     );
 }
 
-export function ProductTile({ product }: { product: PartnerProductCard }) {
+export function ProductTile({
+    product,
+    scope = 'all',
+}: {
+    product: PartnerProductCard;
+    scope?: 'all' | 'mine';
+}) {
     const { t } = useTranslation();
-    const { account } = usePage().props;
+    // Bought already: buying it again is offered under My Products, not here.
+    const reorderElsewhere = product.purchased === true && scope !== 'mine';
     const wholesale = product.wholesale;
     const selling = product.partner_selling;
-    const canPublish =
-        selling !== null &&
-        Boolean(account?.allowsWebsites || account?.hasWebsites);
 
     return (
         <Card
@@ -445,17 +492,19 @@ export function ProductTile({ product }: { product: PartnerProductCard }) {
                 </details>
 
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
-                    {wholesale && (
+                    {wholesale && !reorderElsewhere && (
                         <Button asChild size="sm">
                             <Link href={wholesaleShow(product.slug)}>
-                                {t('partner_products.actions.order')}
+                                {scope === 'mine'
+                                    ? t('partner_products.actions.reorder')
+                                    : t('partner_products.actions.order')}
                             </Link>
                         </Button>
                     )}
-                    {canPublish && (
+                    {reorderElsewhere && (
                         <Button asChild size="sm" variant="outline">
-                            <Link href={productShow(product.slug)}>
-                                {t('partner_products.actions.publish')}
+                            <Link href={myProducts()}>
+                                {t('partner_products.actions.in_my_products')}
                             </Link>
                         </Button>
                     )}

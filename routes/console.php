@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Audit\Actions\PurgeAuditLogs;
 use App\Domain\Billing\Actions\ExpireUnpaidPayments;
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Billing\Actions\SettleRefund;
@@ -132,6 +133,23 @@ Schedule::call(fn () => app(SweepWalletBalances::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Check every wallet against what its account must hold (§24.3)');
+
+/*
+ * The activity log retention sweep (D29): remove entries older than the number of
+ * days an administrator set under Settings → Activity log retention.
+ *
+ * Does nothing while that setting is off, which is the default — deleting a trail
+ * is a choice somebody made, never what happens unconfigured. Each run that
+ * removes anything leaves a permanent `audit.logs_purged` entry saying how much
+ * and why. `onOneServer` keeps two servers from each recording the same purge.
+ */
+Schedule::call(fn () => app(PurgeAuditLogs::class)->purgeExpired())
+    ->name('audit-log-retention')
+    ->dailyAt('03:30')
+    ->timezone(config('app.timezone'))
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Clear activity log entries older than the retention setting (D29)');
 
 /*
  * The §28.1 wallet reconciliation: does every balance still add up?

@@ -14,6 +14,7 @@ import {
     MapPin,
     MonitorSmartphone,
     Network,
+    Package,
     PackageCheck,
     Palette,
     Settings,
@@ -55,12 +56,14 @@ import { index as productCatalogue } from '@/routes/admin/catalog/products';
 import { index as deliverySettings } from '@/routes/admin/delivery-settings';
 import { index as depositRules } from '@/routes/admin/deposit-rules';
 import { index as paymentGateways } from '@/routes/admin/gateways';
+import { index as activityLog } from '@/routes/admin/activity-log';
 import { index as stockAllocations } from '@/routes/admin/inventory/allocations';
 import { index as stockAvailability } from '@/routes/admin/inventory/availability';
 import { index as stockReservations } from '@/routes/admin/inventory/reservations';
 import { index as stockLevels } from '@/routes/admin/inventory/stock';
 import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
+import { index as deletionRequests } from '@/routes/admin/deletions';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as adminOrders } from '@/routes/admin/orders';
 import { index as packageCatalogue } from '@/routes/admin/packages';
@@ -85,7 +88,7 @@ import { index as supplierWithdrawals } from '@/routes/admin/supplier-withdrawal
 import { index as accountWallets } from '@/routes/admin/wallets';
 import { index as adminWebsites } from '@/routes/admin/websites';
 import { index as websitePricing } from '@/routes/admin/website-pricing';
-import { index as productsIndex } from '@/routes/catalog';
+import { index as productsIndex, mine as myProducts } from '@/routes/catalog';
 import { edit as appearanceSettings } from '@/routes/appearance';
 import { index as invoices } from '@/routes/subscription/invoices';
 import { index as receipts } from '@/routes/subscription/receipts';
@@ -155,6 +158,11 @@ export function useNavigation(): {
                                         title: t('nav.products'),
                                         href: productsIndex(),
                                         icon: ShoppingBag,
+                                    },
+                                    {
+                                        title: t('nav.my_products'),
+                                        href: myProducts(),
+                                        icon: Package,
                                     },
                                 ]
                               : []),
@@ -340,7 +348,8 @@ export function useNavigation(): {
                 permissions['catalog.view'] ||
                 permissions['sms.view'] ||
                 permissions['system.manage_settings'] ||
-                permissions['integration.view']
+                permissions['integration.view'] ||
+                permissions['audit.view_audit_logs']
                     ? [
                           {
                               title: t('nav.settings_hub'),
@@ -353,21 +362,38 @@ export function useNavigation(): {
                 // Who can do what on the platform. KYC review is an account
                 // queue and lives under Accounts; packages and KYC
                 // requirements are settings and live in the Settings hub.
-                ...(permissions['access.view']
+                // The activity log (§36.2) is read with its own permission, so
+                // it can be granted without the right to manage roles.
+                ...(permissions['access.view'] ||
+                permissions['audit.view_audit_logs']
                     ? [
                           {
                               title: 'Access',
-                              href: roles(),
+                              href: permissions['access.view']
+                                  ? roles()
+                                  : activityLog(),
                               icon: ShieldCheck,
                               items: [
-                                  {
-                                      title: t('nav.roles'),
-                                      href: roles(),
-                                  },
-                                  {
-                                      title: t('nav.platform_staff'),
-                                      href: platformStaffIndex(),
-                                  },
+                                  ...(permissions['access.view']
+                                      ? [
+                                            {
+                                                title: t('nav.roles'),
+                                                href: roles(),
+                                            },
+                                            {
+                                                title: t('nav.platform_staff'),
+                                                href: platformStaffIndex(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['audit.view_audit_logs']
+                                      ? [
+                                            {
+                                                title: t('nav.activity_log'),
+                                                href: activityLog(),
+                                            },
+                                        ]
+                                      : []),
                               ],
                           },
                       ]
@@ -525,13 +551,18 @@ export function useNavigation(): {
 
                 // The account queues: the directory, new accounts, activation
                 // approvals and KYC review. Verification rules are settings.
-                ...(permissions['account.view'] || permissions['kyc.view']
+                ...(permissions['account.view'] ||
+                permissions['kyc.view'] ||
+                permissions['account.delete'] ||
+                permissions['supplier.delete']
                     ? [
                           {
                               title: 'Accounts',
                               href: permissions['account.view']
                                   ? accountDirectory()
-                                  : kycQueue(),
+                                  : permissions['kyc.view']
+                                    ? kycQueue()
+                                    : deletionRequests(),
                               icon: Building2,
                               items: [
                                   ...(permissions['account.view']
@@ -565,6 +596,17 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.kyc_review'),
                                                 href: kycQueue(),
+                                            },
+                                        ]
+                                      : []),
+                                  ...(permissions['account.delete'] ||
+                                  permissions['supplier.delete']
+                                      ? [
+                                            {
+                                                title: t(
+                                                    'nav.deletion_requests',
+                                                ),
+                                                href: deletionRequests(),
                                             },
                                         ]
                                       : []),
