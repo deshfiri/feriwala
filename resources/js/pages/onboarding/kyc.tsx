@@ -4,6 +4,7 @@ import { useState } from 'react';
 import FileField from '@/components/forms/file-field';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import BatchKycForm from '@/components/kyc/batch-form';
 import PageContainer from '@/components/page-container';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { history as kycHistory } from '@/routes/kyc';
+import * as evidence from '@/routes/kyc/evidence';
+import type { KycBatch } from '@/types';
 
 type Requirement = {
     /**
@@ -53,10 +56,13 @@ export default function KycForm({
     submission,
     requirements,
     feedback,
+    batch = null,
 }: {
     submission: Submission;
     requirements: Requirement[];
     feedback: string | null;
+    /** Set for a round on a batch version (D30); null keeps the flat form. */
+    batch?: KycBatch | null;
 }) {
     const { t } = useTranslation();
 
@@ -139,6 +145,18 @@ export default function KycForm({
                             </Link>
                         </Button>
                     </section>
+                ) : batch ? (
+                    <BatchKycForm
+                        batch={batch}
+                        endpoints={{
+                            file: evidence.file.url(),
+                            value: evidence.value.url(),
+                            remove: evidence.remove.url(),
+                            choose: evidence.choose.url(),
+                            deselect: evidence.deselect.url(),
+                            submit: '/kyc/submit',
+                        }}
+                    />
                 ) : (
                     <>
                         {/* Every batch that applies, on one form: the applicant

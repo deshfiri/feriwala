@@ -87,6 +87,7 @@ use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
+use App\Http\Controllers\Erp\KycEvidenceController;
 use App\Http\Controllers\Erp\MobileVerificationController;
 use App\Http\Controllers\Erp\NotificationController;
 use App\Http\Controllers\Erp\OnboardingController;
@@ -198,6 +199,14 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // membership; there is no account identifier in the URL to change.
         Route::get('kyc/history', [KycController::class, 'history'])->name('kyc.history');
         Route::post('kyc/documents', [KycController::class, 'storeDocument'])->name('kyc.documents.store');
+
+        // A round on a KYC batch (D30): evidence goes into slots, and options are
+        // chosen within groups. Saved one item at a time, like the rest of the form.
+        Route::post('kyc/evidence/file', [KycEvidenceController::class, 'file'])->name('kyc.evidence.file');
+        Route::post('kyc/evidence/value', [KycEvidenceController::class, 'value'])->name('kyc.evidence.value');
+        Route::post('kyc/evidence/remove', [KycEvidenceController::class, 'remove'])->name('kyc.evidence.remove');
+        Route::post('kyc/evidence/choose', [KycEvidenceController::class, 'choose'])->name('kyc.evidence.choose');
+        Route::post('kyc/evidence/deselect', [KycEvidenceController::class, 'deselect'])->name('kyc.evidence.deselect');
         Route::post('kyc/submit', [KycController::class, 'submit'])->name('kyc.submit');
 
         // Package selection and the combined activation checkout (§8.2, §9).

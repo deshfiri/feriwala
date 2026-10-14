@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Erp;
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Kyc\Actions\OpenKycDraft;
 use App\Domain\Kyc\Actions\SubmitKyc;
+use App\Domain\Kyc\Batch\KycRoundPresenter;
+use App\Domain\Kyc\Batch\PartnerKycRound;
 use App\Domain\Kyc\Exceptions\KycIncomplete;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocumentType;
@@ -33,12 +35,17 @@ class KycController extends Controller
         Request $request,
         OpenKycDraft $openDraft,
         ApplicableRequirements $requirements,
+        KycRoundPresenter $presenter,
+        KycDocumentStore $store,
     ): Response {
         $account = $this->businessAccountFor($request);
 
         $submission = $openDraft->handle($account);
 
         return Inertia::render('onboarding/kyc', [
+            // The grouped form, for a round on a batch version (D30); null for
+            // one that keeps the earlier flat list below.
+            'batch' => $presenter->present(new PartnerKycRound($submission, $store)),
             'submission' => [
                 'id' => $submission->public_id,
                 'status' => $submission->status->value,
@@ -86,6 +93,12 @@ class KycController extends Controller
 
         $submission = $openDraft->handle($account);
 
+        if ($submission->kyc_batch_version_id !== null) {
+            // A round on a batch has its own endpoints, which know about groups
+            // and slots; this one only understands the flat list.
+            throw ValidationException::withMessages(['file' => __('kyc.batch.refused.use_new_form')]);
+        }
+
         if (! $submission->status->isEditable()) {
             throw ValidationException::withMessages([
                 'file' => 'This submission is being reviewed and cannot be changed.',
@@ -129,6 +142,12 @@ class KycController extends Controller
         $account = $this->businessAccountFor($request);
 
         $submission = $openDraft->handle($account);
+
+        // Sending a batch round off is a deliberate act: the applicant confirms
+        // that what they gave is theirs and complete.
+        if ($submission->kyc_batch_version_id !== null) {
+            $request->validate(['confirm' => ['accepted']]);
+        }
 
         try {
             $submit->handle($submission);
