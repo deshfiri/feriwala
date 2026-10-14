@@ -20,6 +20,7 @@ import { usePage } from '@inertiajs/react';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import BrandingHead from '@/components/branding-head';
+import NavigationSkeleton from '@/components/navigation-skeleton';
 import { SupplierHeader } from '@/components/supplier/supplier-header';
 import { SupplierSidebar } from '@/components/supplier/supplier-sidebar';
 import { useRealtimeUpdates } from '@/hooks/use-realtime-updates';
@@ -226,7 +227,9 @@ export default function SupplierLayout({
                         breadcrumbs={breadcrumbs}
                         account={account}
                     />
-                    {children}
+                    <NavigationSkeleton mainId="supplier-main">
+                        {children}
+                    </NavigationSkeleton>
                 </AppContent>
             </AppShell>
         </>

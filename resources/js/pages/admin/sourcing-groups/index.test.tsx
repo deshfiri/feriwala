@@ -49,7 +49,7 @@ vi.mock('@inertiajs/react', async () => {
                 null,
                 children({ processing: false, errors: {} }) as never,
             ),
-        router: { get: vi.fn() },
+        router: { get: vi.fn(), on: vi.fn(() => () => {}) },
         usePage: () => ({
             props: { translations, locale: { current: 'en' }, url: '/' },
             url: '/admin/sourcing-groups',

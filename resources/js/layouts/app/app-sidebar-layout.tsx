@@ -3,6 +3,7 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import BrandingHead from '@/components/branding-head';
+import NavigationSkeleton from '@/components/navigation-skeleton';
 import { useRealtimeUpdates } from '@/hooks/use-realtime-updates';
 import { useTranslation } from '@/hooks/use-translation';
 import type { AppLayoutProps } from '@/types';
@@ -31,7 +32,9 @@ export default function AppSidebarLayout({
                 className="min-w-0 overflow-x-clip"
             >
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
-                {children}
+                <NavigationSkeleton mainId="main-content">
+                    {children}
+                </NavigationSkeleton>
             </AppContent>
         </AppShell>
     );

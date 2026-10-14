@@ -16,6 +16,7 @@ import TableSkeleton from '@/components/states/table-skeleton';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { useQueryReloading } from '@/hooks/use-navigation-pending';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -142,6 +143,7 @@ export default function DataTable<T>({
     };
 
     const tiled = Boolean(renderTile) && view === 'tile';
+    const reloading = useQueryReloading();
 
     const visibleColumns = columns.filter((column) => !hidden.has(column.key));
 
@@ -183,11 +185,54 @@ export default function DataTable<T>({
     const body = () => {
         if (state === 'forbidden') return <PermissionDeniedState />;
         if (state === 'error') return <ErrorState onRetry={onRetry} />;
-        if (state === 'loading') {
+        if (state === 'loading' || (state === 'ready' && reloading)) {
+            // The page being replaced is the best guide to the one coming: the
+            // same number of rows, in the same view.
+            const placeholderRows =
+                rows.length > 0
+                    ? rows.length
+                    : paginator.per_page > 10
+                      ? 8
+                      : paginator.per_page;
+
+            if (tiled) {
+                return (
+                    <div
+                        role="status"
+                        aria-busy="true"
+                        className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                    >
+                        <span className="sr-only">
+                            {t('common.table.loading')}
+                        </span>
+                        {Array.from({ length: placeholderRows }).map(
+                            (_, index) => (
+                                <div
+                                    key={index}
+                                    className="bg-card overflow-hidden rounded-xl border shadow-sm"
+                                >
+                                    <div
+                                        className="bg-muted aspect-square animate-pulse"
+                                        style={{
+                                            animationDelay: `${index * 40}ms`,
+                                        }}
+                                    />
+                                    <div className="space-y-2 p-3">
+                                        <div className="bg-muted h-4 w-3/4 animate-pulse rounded-full" />
+                                        <div className="bg-muted h-3 w-1/2 animate-pulse rounded-full" />
+                                        <div className="bg-muted h-3 w-1/3 animate-pulse rounded-full" />
+                                    </div>
+                                </div>
+                            ),
+                        )}
+                    </div>
+                );
+            }
+
             return (
                 <TableSkeleton
                     columns={visibleColumns.length}
-                    rows={paginator.per_page > 10 ? 8 : paginator.per_page}
+                    rows={placeholderRows}
                 />
             );
         }

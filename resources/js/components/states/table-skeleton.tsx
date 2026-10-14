@@ -1,3 +1,4 @@
+import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 
 /**
@@ -17,13 +18,15 @@ export default function TableSkeleton({
     columns?: number;
     className?: string;
 }) {
+    const { t } = useTranslation();
+
     return (
         <div
             className={cn('divide-border divide-y', className)}
             role="status"
             aria-busy="true"
         >
-            <span className="sr-only">Loading</span>
+            <span className="sr-only">{t('common.table.loading')}</span>
 
             {Array.from({ length: rows }).map((_, row) => (
                 <div

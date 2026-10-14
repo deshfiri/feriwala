@@ -37,7 +37,12 @@ vi.mock('@inertiajs/react', async () => {
                 { action, method: 'post' },
                 children({ errors: {}, processing: false }) as never,
             ),
-        router: { reload: vi.fn(), get: vi.fn(), visit: vi.fn() },
+        router: {
+            reload: vi.fn(),
+            get: vi.fn(),
+            visit: vi.fn(),
+            on: vi.fn(() => () => {}),
+        },
         usePage: () => ({
             props: { translations: {} },
             url: '/websites/x/products',
