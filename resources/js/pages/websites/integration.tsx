@@ -1,16 +1,16 @@
-import { Form, Head, Link, router } from '@inertiajs/react';
-import { KeyRound } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import FormField from '@/components/forms/form-field';
+import { Form, Head, Link } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
-import EmptyState from '@/components/states/empty-state';
+import WebsiteWebhookSummary, {
+    type WebhookRow,
+} from '@/components/website-webhook-summary';
+import WebsiteCredentialList, {
+    type CredentialRow,
+} from '@/components/website-credential-list';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import WebsiteIntegrationController from '@/actions/App/Http/Controllers/Erp/WebsiteIntegrationController';
@@ -18,19 +18,7 @@ import { websiteHealthTone } from '@/lib/website';
 import { index as websitesIndex, show as websiteShow } from '@/routes/websites';
 import type { WebsiteDetail } from '@/types/website';
 
-export type CredentialRow = {
-    id: string;
-    name: string;
-    key_id: string;
-    secret_hint: string;
-    scopes: string[];
-    last_used_at: string | null;
-    rotated_at: string | null;
-    previous_secret_expires_at: string | null;
-    revoked_at: string | null;
-    revoked_reason: string | null;
-    created_at: string;
-};
+export type { CredentialRow };
 
 export type ApiCallRow = {
     request_id: string;
@@ -42,13 +30,7 @@ export type ApiCallRow = {
     created_at: string;
 };
 
-export type WebhookRow = {
-    url: string;
-    secret_hint: string;
-    is_active: boolean;
-    rotated_at: string | null;
-    previous_secret_expires_at: string | null;
-};
+export type { WebhookRow };
 
 export type DeliveryRow = {
     event_id: string;
@@ -75,15 +57,12 @@ export type FailureRow = {
 type Props = {
     website: WebsiteDetail;
     credentials: CredentialRow[];
-    scopes: { value: string; label: string; default: boolean }[];
     recent_calls: ApiCallRow[];
     api_base: string;
     webhook?: WebhookRow | null;
     deliveries?: DeliveryRow[];
     failures?: FailureRow[];
 };
-
-type Issued = { key_id: string; secret: string };
 
 const deliveryTones: Record<string, 'success' | 'warning' | 'danger' | 'info'> =
     {
@@ -96,14 +75,18 @@ const deliveryTones: Record<string, 'success' | 'warning' | 'danger' | 'info'> =
 /**
  * Connecting a storefront to the ERP (§17.3, contract §3, P5-17, P5-27, P5-28).
  *
- * A secret arrives exactly once, as flash data on the response that made it,
- * and lives only in this component's state until the page is left. It is
- * never a page prop that a reload could bring back.
+ * The storefront's API credentials are shown, never managed, here: Banij
+ * administration issues, rotates and revokes them and configures the storefront
+ * by hand (D32 §2), so no credential secret ever reaches this screen.
+ *
+ * The webhook is shown the same way: its address and the last four characters
+ * of its signing secret. Setting, rotating and switching it off are Banij
+ * administration's (Option P1). Retrying a failed delivery and synchronising
+ * stay here.
  */
 export default function WebsiteIntegration({
     website,
     credentials,
-    scopes,
     recent_calls: recentCalls,
     api_base: apiBase,
     webhook = null,
@@ -111,27 +94,6 @@ export default function WebsiteIntegration({
     failures = [],
 }: Props) {
     const { t, locale } = useTranslation();
-    const [issued, setIssued] = useState<Issued | null>(null);
-    const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
-
-    useEffect(
-        () =>
-            router.on('flash', (event) => {
-                const flash = (event as CustomEvent).detail?.flash;
-                const credential = flash?.credential as Issued | undefined;
-                const signing = flash?.webhook_secret as string | undefined;
-
-                if (credential?.secret) {
-                    setIssued(credential);
-                }
-
-                if (signing) {
-                    setWebhookSecret(signing);
-                }
-            }),
-        [],
-    );
-
     const when = (value: string | null) =>
         value
             ? new Date(value).toLocaleString(locale)
@@ -165,393 +127,30 @@ export default function WebsiteIntegration({
                     </span>
                 </div>
 
-                {issued && (
-                    <div
-                        className="border-warning bg-warning-subtle space-y-2 rounded-xl border p-4"
-                        role="alert"
-                    >
-                        <p className="text-sm font-medium">
-                            {t('website.integration.secret_once')}
-                        </p>
-                        <dl className="grid gap-2 text-sm">
-                            <div>
-                                <dt className="text-muted-foreground text-xs">
-                                    {t('website.integration.key_id')}
-                                </dt>
-                                <dd className="font-mono break-all">
-                                    {issued.key_id}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt className="text-muted-foreground text-xs">
-                                    {t('website.integration.secret')}
-                                </dt>
-                                <dd className="font-mono break-all">
-                                    {issued.secret}
-                                </dd>
-                            </div>
-                        </dl>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setIssued(null)}
-                        >
-                            {t('website.integration.stored_it')}
-                        </Button>
-                    </div>
-                )}
-
                 <SectionCard
-                    title={t('website.integration.issue_title')}
-                    description={t('website.integration.issue_hint')}
+                    title={t('website.integration.credentials')}
+                    description={t('website.integration.managed_by_admin')}
                 >
-                    <Form
-                        {...WebsiteIntegrationController.storeCredential.form(
-                            website.id,
+                    <WebsiteCredentialList
+                        credentials={credentials}
+                        emptyHelp={t(
+                            'website.integration.no_credentials_owner',
                         )}
-                        options={{ preserveScroll: true }}
-                        className="space-y-4"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <FormField
-                                    label={t('website.integration.name')}
-                                    error={errors.name}
-                                    required
-                                >
-                                    {(field) => (
-                                        <Input
-                                            {...field}
-                                            name="name"
-                                            maxLength={80}
-                                            required
-                                        />
-                                    )}
-                                </FormField>
-
-                                <fieldset className="space-y-2">
-                                    <legend className="text-sm font-medium">
-                                        {t('website.integration.scopes_title')}
-                                    </legend>
-                                    {scopes.map((scope) => (
-                                        <label
-                                            key={scope.value}
-                                            className="flex items-center gap-2 text-sm"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                name="scopes[]"
-                                                value={scope.value}
-                                                defaultChecked={scope.default}
-                                            />
-                                            <span>{scope.label}</span>
-                                            <code className="text-muted-foreground text-xs">
-                                                {scope.value}
-                                            </code>
-                                        </label>
-                                    ))}
-                                    <InputError message={errors.scopes} />
-                                </fieldset>
-
-                                <InputError message={errors.website} />
-
-                                <Button type="submit" disabled={processing}>
-                                    {processing && <Spinner />}
-                                    {t('website.integration.issue')}
-                                </Button>
-                            </>
-                        )}
-                    </Form>
-                </SectionCard>
-
-                <SectionCard title={t('website.integration.credentials')}>
-                    {credentials.length === 0 ? (
-                        <EmptyState
-                            icon={KeyRound}
-                            title={t('website.integration.no_credentials')}
-                            description={t(
-                                'website.integration.no_credentials_help',
-                            )}
-                        />
-                    ) : (
-                        <ul className="divide-border divide-y">
-                            {credentials.map((credential) => (
-                                <li
-                                    key={credential.id}
-                                    className="space-y-3 py-4 first:pt-0 last:pb-0"
-                                >
-                                    <div className="flex flex-wrap items-start justify-between gap-3">
-                                        <div className="min-w-0 space-y-1">
-                                            <div className="text-sm font-medium">
-                                                {credential.name}
-                                            </div>
-                                            <div className="text-muted-foreground font-mono text-xs break-all">
-                                                {credential.key_id} · …
-                                                {credential.secret_hint}
-                                            </div>
-                                            <div className="text-muted-foreground text-xs">
-                                                {credential.scopes.join(', ')}
-                                            </div>
-                                            <div className="text-muted-foreground text-xs">
-                                                {t(
-                                                    'website.integration.last_used',
-                                                )}
-                                                :{' '}
-                                                {when(credential.last_used_at)}
-                                            </div>
-                                            {credential.previous_secret_expires_at && (
-                                                <div className="text-muted-foreground text-xs">
-                                                    {t(
-                                                        'website.integration.grace_until',
-                                                        {
-                                                            date: when(
-                                                                credential.previous_secret_expires_at,
-                                                            ),
-                                                        },
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <StatusPill
-                                            tone={
-                                                credential.revoked_at
-                                                    ? 'danger'
-                                                    : 'success'
-                                            }
-                                            label={
-                                                credential.revoked_at
-                                                    ? t(
-                                                          'website.integration.revoked',
-                                                      )
-                                                    : t(
-                                                          'website.integration.active',
-                                                      )
-                                            }
-                                        />
-                                    </div>
-
-                                    {credential.revoked_at ? (
-                                        <p className="text-muted-foreground text-xs">
-                                            {credential.revoked_reason}
-                                        </p>
-                                    ) : (
-                                        <div className="flex flex-wrap items-end gap-3">
-                                            <Form
-                                                {...WebsiteIntegrationController.rotateCredential.form(
-                                                    {
-                                                        website: website.id,
-                                                        credential:
-                                                            credential.id,
-                                                    },
-                                                )}
-                                                options={{
-                                                    preserveScroll: true,
-                                                }}
-                                            >
-                                                {({ processing }) => (
-                                                    <Button
-                                                        type="submit"
-                                                        size="sm"
-                                                        variant="outline"
-                                                        disabled={processing}
-                                                    >
-                                                        {t(
-                                                            'website.integration.rotate',
-                                                        )}
-                                                    </Button>
-                                                )}
-                                            </Form>
-
-                                            <Form
-                                                {...WebsiteIntegrationController.revokeCredential.form(
-                                                    {
-                                                        website: website.id,
-                                                        credential:
-                                                            credential.id,
-                                                    },
-                                                )}
-                                                options={{
-                                                    preserveScroll: true,
-                                                }}
-                                                className="flex flex-wrap items-end gap-2"
-                                            >
-                                                {({ processing, errors }) => (
-                                                    <>
-                                                        <div className="grid gap-1">
-                                                            <Label
-                                                                htmlFor={`revoke-${credential.id}`}
-                                                            >
-                                                                {t(
-                                                                    'website.integration.revoke_reason',
-                                                                )}
-                                                            </Label>
-                                                            <Input
-                                                                id={`revoke-${credential.id}`}
-                                                                name="reason"
-                                                                minLength={5}
-                                                                maxLength={500}
-                                                                required
-                                                            />
-                                                            <InputError
-                                                                message={
-                                                                    errors.reason
-                                                                }
-                                                            />
-                                                        </div>
-                                                        <Button
-                                                            type="submit"
-                                                            size="sm"
-                                                            variant="destructive"
-                                                            disabled={
-                                                                processing
-                                                            }
-                                                        >
-                                                            {t(
-                                                                'website.integration.revoke',
-                                                            )}
-                                                        </Button>
-                                                    </>
-                                                )}
-                                            </Form>
-                                        </div>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    />
                 </SectionCard>
 
                 <SectionCard
                     title={t('website.integration.webhook_title')}
                     description={t('website.integration.webhook_hint')}
                 >
-                    {webhookSecret && (
-                        <div
-                            className="border-warning bg-warning-subtle mb-4 space-y-2 rounded-xl border p-4"
-                            role="alert"
-                        >
-                            <p className="text-sm font-medium">
-                                {t('website.integration.secret_once')}
-                            </p>
-                            <p className="font-mono text-sm break-all">
-                                {webhookSecret}
-                            </p>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setWebhookSecret(null)}
-                            >
-                                {t('website.integration.stored_it')}
-                            </Button>
-                        </div>
-                    )}
+                    <div className="space-y-4">
+                        <WebsiteWebhookSummary webhook={webhook} />
 
-                    {webhook && (
-                        <div className="mb-4 space-y-1 text-sm">
-                            <div className="font-mono break-all">
-                                {webhook.url}
-                            </div>
-                            <div className="text-muted-foreground text-xs">
-                                {t('website.integration.secret')}: …
-                                {webhook.secret_hint}
-                            </div>
-                            <StatusPill
-                                tone={webhook.is_active ? 'success' : 'neutral'}
-                                label={
-                                    webhook.is_active
-                                        ? t('website.integration.active')
-                                        : t('website.integration.disabled')
-                                }
-                            />
-                            {webhook.previous_secret_expires_at && (
-                                <div className="text-muted-foreground text-xs">
-                                    {t('website.integration.grace_until', {
-                                        date: when(
-                                            webhook.previous_secret_expires_at,
-                                        ),
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                        <p className="text-muted-foreground text-xs">
+                            {t('website.integration.webhook_managed_by_admin')}
+                        </p>
 
-                    <Form
-                        {...WebsiteIntegrationController.storeWebhook.form(
-                            website.id,
-                        )}
-                        options={{ preserveScroll: true }}
-                        className="flex flex-wrap items-end gap-2"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <div className="grid min-w-0 flex-1 gap-1">
-                                    <Label htmlFor="webhook-url">
-                                        {t('website.integration.webhook_url')}
-                                    </Label>
-                                    <Input
-                                        id="webhook-url"
-                                        name="url"
-                                        type="url"
-                                        placeholder="https://"
-                                        defaultValue={webhook?.url ?? ''}
-                                        maxLength={500}
-                                        required
-                                    />
-                                    <InputError message={errors.url} />
-                                </div>
-                                <Button
-                                    type="submit"
-                                    size="sm"
-                                    disabled={processing}
-                                >
-                                    {processing && <Spinner />}
-                                    {t('website.integration.webhook_save')}
-                                </Button>
-                            </>
-                        )}
-                    </Form>
-
-                    {webhook && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            <Form
-                                {...WebsiteIntegrationController.rotateWebhook.form(
-                                    website.id,
-                                )}
-                                options={{ preserveScroll: true }}
-                            >
-                                {({ processing }) => (
-                                    <Button
-                                        type="submit"
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={processing}
-                                    >
-                                        {t('website.integration.rotate')}
-                                    </Button>
-                                )}
-                            </Form>
-
-                            {webhook.is_active && (
-                                <Form
-                                    {...WebsiteIntegrationController.disableWebhook.form(
-                                        website.id,
-                                    )}
-                                    options={{ preserveScroll: true }}
-                                >
-                                    {({ processing }) => (
-                                        <Button
-                                            type="submit"
-                                            size="sm"
-                                            variant="ghost"
-                                            disabled={processing}
-                                        >
-                                            {t('website.integration.disable')}
-                                        </Button>
-                                    )}
-                                </Form>
-                            )}
-
+                        {webhook && (
                             <Form
                                 {...WebsiteIntegrationController.syncNow.form(
                                     website.id,
@@ -572,8 +171,8 @@ export default function WebsiteIntegration({
                                     </div>
                                 )}
                             </Form>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </SectionCard>
 
                 <SectionCard

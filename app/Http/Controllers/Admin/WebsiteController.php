@@ -5,12 +5,18 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Website\Actions\ManageWebsiteDomainRouting;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
 use App\Domain\Website\Actions\ProvisionWebsiteService;
+use App\Domain\Website\Enums\CredentialPreset;
+use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteCredential;
 use App\Domain\Website\Models\WebsiteDomain;
+use App\Domain\Website\Models\WebsiteWebhookEndpoint;
 use App\Domain\Website\Queries\WebsiteOverview;
+use App\Domain\Website\StorefrontEnvironmentBlock;
+use App\Domain\Website\WebsiteAddresses;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
@@ -79,11 +85,37 @@ class WebsiteController extends Controller
          */
         Gate::authorize('viewAny', Website::class);
 
+        $managesIntegration = $request->user()?->can('manageIntegration', $website) ?? false;
+
         return Inertia::render('admin/websites/show', [
             'website' => $this->overview->detail($website, forStaff: true),
             'can' => [
                 'administer' => $request->user()?->can('administer', $website) ?? false,
+                'manage_integration' => $managesIntegration,
             ],
+
+            // The storefront's API credentials (D32 §2), for those who may
+            // manage them and nobody else. Never a secret: the key id and its
+            // last four characters say which one it is.
+            'credentials' => $managesIntegration ? $this->credentialsOf($website) : [],
+            'webhook' => $managesIntegration ? $this->webhookOf($website) : null,
+            'credential_scopes' => $managesIntegration ? array_map(fn (CredentialScope $scope) => [
+                'value' => $scope->value,
+                'label' => __('website.integration.scopes.'.$scope->value),
+            ], CredentialScope::cases()) : [],
+            'credential_presets' => $managesIntegration ? array_map(fn (CredentialPreset $preset) => [
+                'value' => $preset->value,
+                'label' => $preset->label(),
+                'scopes' => array_map(fn (CredentialScope $scope) => $scope->value, $preset->scopes()),
+            ], CredentialPreset::cases()) : [],
+            'storefront_connection' => $managesIntegration ? [
+                'erp_origin' => StorefrontEnvironmentBlock::origin((string) config('app.url')),
+                'origin_accepted' => StorefrontEnvironmentBlock::isAcceptedOrigin((string) config('app.url')),
+                // What the storefront keeps in its public site.config.json.
+                'website_id' => $website->public_id,
+                'primary_host' => app(WebsiteAddresses::class)->hosts($website)[0]
+                    ?? $website->subdomain.'.'.config('website.storefront_domain'),
+            ] : null,
             // Only the moves the map actually allows from where it stands, so
             // the screen cannot offer one the action would refuse.
             'transitions' => array_map(fn (WebsiteStatus $status) => [
@@ -91,6 +123,52 @@ class WebsiteController extends Controller
                 'label' => __('website.statuses.'.$status->value),
             ], $website->status->transitionsTo()),
         ]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function credentialsOf(Website $website): array
+    {
+        return WebsiteCredential::query()
+            ->where('website_id', $website->id)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (WebsiteCredential $credential) => [
+                'id' => $credential->public_id,
+                'name' => $credential->name,
+                'key_id' => $credential->key_id,
+                'secret_hint' => $credential->secret_hint,
+                'scopes' => $credential->scopes,
+                'last_used_at' => $credential->last_used_at?->toIso8601String(),
+                'rotated_at' => $credential->rotated_at?->toIso8601String(),
+                'previous_secret_expires_at' => $credential->previous_secret_expires_at?->toIso8601String(),
+                'revoked_at' => $credential->revoked_at?->toIso8601String(),
+                'revoked_reason' => $credential->revoked_reason,
+                'created_at' => $credential->created_at->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The webhook endpoint by its address and the last four characters of its
+     * signing secret, never the secret.
+     *
+     * @return array{url: string, secret_hint: string, is_active: bool, rotated_at: string|null, previous_secret_expires_at: string|null}|null
+     */
+    protected function webhookOf(Website $website): ?array
+    {
+        /** @var WebsiteWebhookEndpoint|null $endpoint */
+        $endpoint = WebsiteWebhookEndpoint::query()->where('website_id', $website->id)->first();
+
+        return $endpoint === null ? null : [
+            'url' => $endpoint->url,
+            'secret_hint' => $endpoint->secret_hint,
+            'is_active' => $endpoint->is_active,
+            'rotated_at' => $endpoint->rotated_at?->toIso8601String(),
+            'previous_secret_expires_at' => $endpoint->previous_secret_expires_at?->toIso8601String(),
+        ];
     }
 
     /**

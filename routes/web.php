@@ -76,7 +76,9 @@ use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
+use App\Http\Controllers\Admin\WebsiteCredentialController as AdminWebsiteCredentialController;
 use App\Http\Controllers\Admin\WebsitePricingController;
+use App\Http\Controllers\Admin\WebsiteWebhookController as AdminWebsiteWebhookController;
 use App\Http\Controllers\Admin\WithdrawalLimitsController;
 use App\Http\Controllers\BankLookupController;
 use App\Http\Controllers\DashboardController;
@@ -511,21 +513,13 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
 
         Route::get('websites/{website}/integration', [WebsiteIntegrationController::class, 'show'])
             ->name('websites.integration.show');
-        Route::post('websites/{website}/credentials', [WebsiteIntegrationController::class, 'storeCredential'])
-            ->name('websites.credentials.store');
-        Route::post('websites/{website}/credentials/{credential}/rotation', [WebsiteIntegrationController::class, 'rotateCredential'])
-            ->name('websites.credentials.rotate');
-        Route::post('websites/{website}/credentials/{credential}/revocation', [WebsiteIntegrationController::class, 'revokeCredential'])
-            ->name('websites.credentials.revoke');
 
-        // Where the storefront is told things, and what it was told (contract
-        // §7, P5-20, P5-22, P5-25, P5-26). One endpoint per website in v1.
-        Route::put('websites/{website}/webhook', [WebsiteIntegrationController::class, 'storeWebhook'])
-            ->name('websites.webhook.store');
-        Route::post('websites/{website}/webhook/rotation', [WebsiteIntegrationController::class, 'rotateWebhook'])
-            ->name('websites.webhook.rotate');
-        Route::delete('websites/{website}/webhook', [WebsiteIntegrationController::class, 'disableWebhook'])
-            ->name('websites.webhook.disable');
+        // The storefront's API credentials are issued, rotated and revoked by
+        // authorised platform staff only (D32 §2), under admin.websites.
+
+        // What the storefront was told (contract §7, P5-22, P5-25, P5-26). The
+        // webhook address and its signing secret are set, rotated and switched
+        // off by authorised platform staff only (D32 §2, Option P1).
         Route::post('websites/{website}/deliveries/{delivery}/retry', [WebsiteIntegrationController::class, 'retryDelivery'])
             ->name('websites.deliveries.retry');
         Route::post('websites/{website}/sync', [WebsiteIntegrationController::class, 'syncNow'])
@@ -1586,6 +1580,28 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('websites/{website}/domains/{domain}/suspension', [AdminWebsiteController::class, 'suspendDomain'])
             ->whereNumber('domain')
             ->name('websites.domains.suspension.store');
+
+        /*
+         * The storefront's API credentials (D32 §2, P3 ER-1). Behind
+         * `website.manage_integrations`, which only the Super Admin holds unless
+         * a role is deliberately given it. The owner never handles a secret;
+         * issuing and rotating answer with it once, as JSON, never in the session.
+         */
+        Route::post('websites/{website}/credentials', [AdminWebsiteCredentialController::class, 'store'])
+            ->name('websites.credentials.store');
+        Route::post('websites/{website}/credentials/{credential}/rotation', [AdminWebsiteCredentialController::class, 'rotate'])
+            ->name('websites.credentials.rotate');
+        Route::post('websites/{website}/credentials/{credential}/revocation', [AdminWebsiteCredentialController::class, 'revoke'])
+            ->name('websites.credentials.revoke');
+
+        // The storefront's webhook endpoint and signing secret (contract §7.2),
+        // behind the same permission. The secret is answered once, as JSON.
+        Route::put('websites/{website}/webhook', [AdminWebsiteWebhookController::class, 'store'])
+            ->name('websites.webhook.store');
+        Route::post('websites/{website}/webhook/rotation', [AdminWebsiteWebhookController::class, 'rotate'])
+            ->name('websites.webhook.rotate');
+        Route::delete('websites/{website}/webhook', [AdminWebsiteWebhookController::class, 'disable'])
+            ->name('websites.webhook.disable');
 
         /*
          * What partners may charge for what they sell (§15.1, P5-5). Behind

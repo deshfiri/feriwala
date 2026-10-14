@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Catalog\Models\Product;
@@ -27,9 +28,12 @@ use App\Domain\Website\Models\WebsiteWebhookEndpoint;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Telling a storefront that something changed (contract §7, §17.2, §17.3,
@@ -124,39 +128,59 @@ describe('signature', function () {
 });
 
 describe('endpoint', function () {
-    it('saves an HTTPS address and shows its signing secret once', function () {
-        $this->actingAs($this->account->owner)
-            ->put(route('websites.webhook.store', $this->website->public_id), [
+    beforeEach(function () {
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $this->superAdmin = testPlatformStaff(PlatformRole::SuperAdmin);
+    });
+
+    it('saves an HTTPS address and answers with its signing secret once, as JSON', function () {
+        $response = $this->actingAs($this->superAdmin)
+            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), [
                 'url' => 'https://shop.example.com/feriwala/webhooks',
             ])
-            ->assertRedirect(route('websites.integration.show', $this->website->public_id));
+            ->assertOk()
+            ->assertHeader('Pragma', 'no-cache');
 
         $endpoint = WebsiteWebhookEndpoint::query()->where('website_id', $this->website->id)->firstOrFail();
 
         expect($endpoint->is_active)->toBeTrue()
+            ->and($endpoint->created_by)->toBe($this->superAdmin->id)
             ->and(strlen($endpoint->secret))->toBe(64)
-            ->and(DB::table('website_webhook_endpoints')->where('id', $endpoint->id)->value('secret'))->not->toBe($endpoint->secret);
+            ->and($response->json('secret'))->toBe($endpoint->secret)
+            ->and($response->headers->get('Cache-Control'))->toContain('no-store')
+            ->and(DB::table('website_webhook_endpoints')->where('id', $endpoint->id)->value('secret'))->not->toBe($endpoint->secret)
+            ->and(json_encode(session()->all()))->not->toContain($endpoint->secret);
 
-        $landing = $this->actingAs($this->account->owner)
-            ->get(route('websites.integration.show', $this->website->public_id));
+        // Changing the address later issues no new secret.
+        $this->actingAs($this->superAdmin)
+            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), [
+                'url' => 'https://shop.example.com/feriwala/hooks-v2',
+            ])
+            ->assertOk()
+            ->assertJsonPath('secret', null);
 
-        expect($landing->viewData('page')['flash']['webhook_secret'] ?? null)->toBe($endpoint->secret)
-            ->and($landing->viewData('page')['props']['webhook']['secret_hint'])->toBe(substr($endpoint->secret, -4))
-            ->and(json_encode($landing->viewData('page')['props']))->not->toContain($endpoint->secret);
+        expect($endpoint->refresh()->secret)->toBe($response->json('secret'));
 
-        $reload = $this->actingAs($this->account->owner)
-            ->get(route('websites.integration.show', $this->website->public_id));
+        $admin = $this->actingAs($this->superAdmin)->get(route('admin.websites.show', $this->website->public_id));
+        $owner = $this->actingAs($this->account->owner)->get(route('websites.integration.show', $this->website->public_id));
 
-        expect(json_encode($reload->viewData('page')))->not->toContain($endpoint->secret)
+        foreach ([$admin, $owner] as $page) {
+            $page->assertOk();
+
+            expect($page->viewData('page')['props']['webhook']['secret_hint'])->toBe(substr($endpoint->secret, -4))
+                ->and(json_encode($page->viewData('page')))->not->toContain($endpoint->secret);
+        }
+
+        expect(AuditLog::query()->where('action', 'website.webhook_configured')->exists())->toBeTrue()
             ->and(AuditLog::query()->get()->contains(fn (AuditLog $log) => str_contains((string) json_encode($log->toArray()), $endpoint->secret)))
             ->toBeFalse();
     });
 
     it('refuses an address the ERP must not post to', function (string $url) {
-        $this->actingAs($this->account->owner)
-            ->from(route('websites.integration.show', $this->website->public_id))
-            ->put(route('websites.webhook.store', $this->website->public_id), ['url' => $url])
-            ->assertSessionHasErrors('url');
+        $this->actingAs($this->superAdmin)
+            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => $url])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('url');
 
         expect(WebsiteWebhookEndpoint::query()->count())->toBe(0);
     })->with([
@@ -168,34 +192,87 @@ describe('endpoint', function () {
         'ipv6 loopback' => 'https://[::1]/hooks',
     ]);
 
-    it('rotates the secret, keeping the previous one for its window', function () {
+    it('rotates the secret, answering with the new one and keeping the previous one for its window', function () {
         [$endpoint, $secret] = webhookTestEndpoint($this->website);
 
-        $this->actingAs($this->account->owner)
-            ->post(route('websites.webhook.rotate', $this->website->public_id))
-            ->assertRedirect();
+        $response = $this->actingAs($this->superAdmin)
+            ->postJson(route('admin.websites.webhook.rotate', $this->website->public_id))
+            ->assertOk();
 
         $endpoint->refresh();
 
         expect($endpoint->secret)->not->toBe($secret)
+            ->and($response->json('secret'))->toBe($endpoint->secret)
             ->and($endpoint->previous_secret)->toBe($secret)
             ->and($endpoint->previous_secret_expires_at)->not->toBeNull();
     });
 
-    it('is managed only by the owner of the website', function () {
-        $theirs = Website::factory()->forAccount(websiteTestAccount())->active()->create();
+    it('switches the endpoint off', function () {
+        [$endpoint] = webhookTestEndpoint($this->website);
 
-        $this->actingAs($this->account->owner)
-            ->put(route('websites.webhook.store', $theirs->public_id), ['url' => 'https://shop.example.com/hooks'])
-            ->assertNotFound();
+        $this->actingAs($this->superAdmin)
+            ->delete(route('admin.websites.webhook.disable', $this->website->public_id))
+            ->assertRedirect(route('admin.websites.show', $this->website->public_id));
 
-        $staff = User::factory()->staffOf($this->account, AccountRole::Staff)->create();
+        expect($endpoint->refresh()->is_active)->toBeFalse();
+    });
 
-        $this->actingAs($staff)
-            ->put(route('websites.webhook.store', $this->website->public_id), ['url' => 'https://shop.example.com/hooks'])
+    it('lets staff explicitly granted website.manage_integrations manage it', function () {
+        $operator = tap(
+            testPlatformStaff(PlatformRole::SystemAdministrator),
+            fn (User $staff) => $staff->givePermissionTo('website.manage_integrations'),
+        );
+
+        $this->actingAs($operator)
+            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => 'https://shop.example.com/hooks'])
+            ->assertOk();
+
+        expect(WebsiteWebhookEndpoint::query()->count())->toBe(1);
+    });
+
+    it('refuses anyone without website.manage_integrations, and leaves the secret alone', function (string $actor) {
+        [$endpoint, $secret] = webhookTestEndpoint($this->website);
+
+        $who = match ($actor) {
+            'an Admin' => testPlatformStaff(PlatformRole::Admin),
+            'the owner' => $this->account->owner,
+            'account staff' => User::factory()->staffOf($this->account, AccountRole::Staff)->create(),
+        };
+
+        $this->actingAs($who)
+            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => 'https://evil.example.com/hooks'])
             ->assertForbidden();
 
-        expect(WebsiteWebhookEndpoint::query()->count())->toBe(0);
+        $this->actingAs($who)
+            ->postJson(route('admin.websites.webhook.rotate', $this->website->public_id))
+            ->assertForbidden();
+
+        $this->actingAs($who)
+            ->delete(route('admin.websites.webhook.disable', $this->website->public_id))
+            ->assertForbidden();
+
+        $endpoint->refresh();
+
+        expect($endpoint->secret)->toBe($secret)
+            ->and($endpoint->url)->toBe('https://shop.example.com/feriwala/webhooks')
+            ->and($endpoint->is_active)->toBeTrue();
+    })->with(['an Admin', 'the owner', 'account staff']);
+
+    it('shows an Admin without the permission neither the webhook nor its secret', function () {
+        [$endpoint] = webhookTestEndpoint($this->website);
+
+        $page = $this->actingAs(testPlatformStaff(PlatformRole::Admin))
+            ->get(route('admin.websites.show', $this->website->public_id))
+            ->assertOk();
+
+        expect($page->viewData('page')['props']['webhook'])->toBeNull()
+            ->and(json_encode($page->viewData('page')))->not->toContain($endpoint->secret);
+    });
+
+    it('leaves the owner no way to manage the webhook', function () {
+        expect(Route::has('websites.webhook.store'))->toBeFalse()
+            ->and(Route::has('websites.webhook.rotate'))->toBeFalse()
+            ->and(Route::has('websites.webhook.disable'))->toBeFalse();
     });
 });
 

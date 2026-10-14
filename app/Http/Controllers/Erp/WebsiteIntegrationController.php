@@ -4,13 +4,9 @@ namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Website\Actions\AttemptWebhookDelivery;
-use App\Domain\Website\Actions\ManageWebhookEndpoint;
-use App\Domain\Website\Actions\ManageWebsiteCredentials;
 use App\Domain\Website\Actions\RetryWebhookDelivery;
 use App\Domain\Website\Actions\SyncWebsiteCatalogue;
 use App\Domain\Website\Actions\SyncWebsiteInventory;
-use App\Domain\Website\Data\IssuedCredential;
-use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\ApiLog;
 use App\Domain\Website\Models\SyncQueueFailure;
@@ -25,7 +21,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,13 +28,15 @@ use Inertia\Response;
 /**
  * Connecting a storefront to the ERP (§17.3, contract §3, §9, P5-17, P5-27, P5-28).
  *
- * The partner's own website's credentials — issued, rotated, revoked — and the
- * record of the calls its storefront has made. Self-scoped like every other
- * website screen.
+ * The record of the calls the partner's own storefront has made, and which
+ * credentials it holds. Self-scoped like every other website screen.
  *
- * **A secret is shown exactly once**, in the response to issuing or rotating it,
- * as flash data that is gone by the next page load. It is never a page prop a
- * reload could bring back, and never in a log.
+ * **The owner sees credentials and the webhook but never manages them.**
+ * Issuing, rotating and revoking a credential, and setting, rotating or
+ * switching off the webhook and its signing secret, belong to authorised
+ * platform staff (D32 §2, Option P1), who configure the storefront installation
+ * by hand. Nothing here carries a secret, only an identifier and the last four
+ * characters. Retrying a delivery and synchronising stay with the owner.
  */
 class WebsiteIntegrationController extends Controller
 {
@@ -75,11 +72,6 @@ class WebsiteIntegrationController extends Controller
                     'created_at' => $credential->created_at->toIso8601String(),
                 ])
                 ->all(),
-            'scopes' => array_map(fn (CredentialScope $scope) => [
-                'value' => $scope->value,
-                'label' => __('website.integration.scopes.'.$scope->value),
-                'default' => in_array($scope, CredentialScope::defaults(), true),
-            ], CredentialScope::cases()),
 
             // The last calls this storefront made, as they were answered. The
             // log was redacted before it was stored; nothing here is a secret.
@@ -141,57 +133,6 @@ class WebsiteIntegrationController extends Controller
                 ])
                 ->all(),
         ]);
-    }
-
-    /**
-     * Where the storefront is told things (contract §7.2, P5-20).
-     */
-    public function storeWebhook(Request $request, string $website, ManageWebhookEndpoint $webhooks): RedirectResponse
-    {
-        $record = $this->websiteFor($request, $website);
-
-        Gate::authorize('manage', $record);
-
-        $validated = $request->validate([
-            'url' => ['required', 'string', 'max:500', 'url:https'],
-        ]);
-
-        $result = $this->attempt(fn () => $webhooks->configure($record, $this->person($request), $validated['url']));
-
-        if ($result['secret'] !== null) {
-            Inertia::flash('webhook_secret', $result['secret']);
-        }
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.webhook_saved')]);
-
-        return to_route('websites.integration.show', $record->public_id);
-    }
-
-    public function rotateWebhook(Request $request, string $website, ManageWebhookEndpoint $webhooks): RedirectResponse
-    {
-        $record = $this->websiteFor($request, $website);
-
-        Gate::authorize('manage', $record);
-
-        $secret = $webhooks->rotate($this->endpointFor($record), $this->person($request));
-
-        Inertia::flash('webhook_secret', $secret);
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.webhook_rotated')]);
-
-        return to_route('websites.integration.show', $record->public_id);
-    }
-
-    public function disableWebhook(Request $request, string $website, ManageWebhookEndpoint $webhooks): RedirectResponse
-    {
-        $record = $this->websiteFor($request, $website);
-
-        Gate::authorize('manage', $record);
-
-        $webhooks->disable($this->endpointFor($record), $this->person($request));
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.webhook_disabled')]);
-
-        return to_route('websites.integration.show', $record->public_id);
     }
 
     /**
@@ -272,98 +213,6 @@ class WebsiteIntegrationController extends Controller
         ];
     }
 
-    protected function endpointFor(Website $website): WebsiteWebhookEndpoint
-    {
-        /** @var WebsiteWebhookEndpoint|null $endpoint */
-        $endpoint = WebsiteWebhookEndpoint::query()->with('website')->where('website_id', $website->id)->first();
-
-        abort_if($endpoint === null, 404);
-
-        return $endpoint;
-    }
-
-    public function storeCredential(Request $request, string $website, ManageWebsiteCredentials $credentials): RedirectResponse
-    {
-        $record = $this->websiteFor($request, $website);
-
-        Gate::authorize('manage', $record);
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:80'],
-            'scopes' => ['required', 'array', 'min:1'],
-            'scopes.*' => ['string', Rule::enum(CredentialScope::class)],
-        ]);
-
-        $issued = $this->attempt(fn () => $credentials->issue(
-            $record,
-            $this->person($request),
-            $validated['name'],
-            array_map(fn (string $scope) => CredentialScope::from($scope), $validated['scopes']),
-        ));
-
-        $this->showOnce($issued);
-
-        return to_route('websites.integration.show', $record->public_id);
-    }
-
-    public function rotateCredential(
-        Request $request,
-        string $website,
-        string $credential,
-        ManageWebsiteCredentials $credentials,
-    ): RedirectResponse {
-        $record = $this->websiteFor($request, $website);
-
-        Gate::authorize('manage', $record);
-
-        $issued = $this->attempt(fn () => $credentials->rotate(
-            $this->credentialFor($record, $credential),
-            $this->person($request),
-        ));
-
-        $this->showOnce($issued);
-
-        return to_route('websites.integration.show', $record->public_id);
-    }
-
-    public function revokeCredential(
-        Request $request,
-        string $website,
-        string $credential,
-        ManageWebsiteCredentials $credentials,
-    ): RedirectResponse {
-        $record = $this->websiteFor($request, $website);
-
-        Gate::authorize('manage', $record);
-
-        $validated = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:500'],
-        ]);
-
-        $credentials->revoke(
-            $this->credentialFor($record, $credential),
-            $this->person($request),
-            $validated['reason'],
-        );
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.credential_revoked')]);
-
-        return to_route('websites.integration.show', $record->public_id);
-    }
-
-    /**
-     * Hand the secret to the one response that may carry it.
-     */
-    protected function showOnce(IssuedCredential $issued): void
-    {
-        Inertia::flash('credential', [
-            'key_id' => $issued->credential->key_id,
-            'secret' => $issued->secret,
-        ]);
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.credential_issued')]);
-    }
-
     /**
      * @template TReturn
      *
@@ -377,20 +226,6 @@ class WebsiteIntegrationController extends Controller
         } catch (WebsiteRefused $refused) {
             throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
         }
-    }
-
-    protected function credentialFor(Website $website, string $credential): WebsiteCredential
-    {
-        /** @var WebsiteCredential|null $record */
-        $record = WebsiteCredential::query()
-            ->with('website')
-            ->where('website_id', $website->id)
-            ->where('public_id', $credential)
-            ->first();
-
-        abort_if($record === null, 404);
-
-        return $record;
     }
 
     protected function websiteFor(Request $request, string $website): Website

@@ -42,5 +42,7 @@ return [
         'admin.payments.manual-settlement',
         'admin.wallets.adjustments.*',
         'admin.wallets.reversals.*',
+        // Revoking a storefront's API credential cuts off a live storefront.
+        'admin.websites.credentials.*',
     ],
 ];

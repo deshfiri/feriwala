@@ -13,6 +13,7 @@ use App\Domain\Website\Models\WebsiteCredential;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /**
  * Issuing, rotating and revoking a storefront's credentials (§17.3, contract §3.1, P5-17).
@@ -41,14 +42,20 @@ class ManageWebsiteCredentials
     ) {}
 
     /**
-     * @param  array<int, CredentialScope>  $scopes
+     * @param  array<int, CredentialScope>  $scopes  at least one, chosen explicitly
      *
      * @throws WebsiteRefused
+     * @throws InvalidArgumentException when no scope is given
      */
     public function issue(Website $website, User $actor, string $name, array $scopes): IssuedCredential
     {
         if ($website->status->isTerminal()) {
             throw WebsiteRefused::notEditable();
+        }
+
+        // Every scope is chosen on purpose; none is granted by default (ER-7).
+        if ($scopes === []) {
+            throw new InvalidArgumentException('A credential needs at least one scope, chosen explicitly.');
         }
 
         $secret = $this->newSecret();
@@ -61,7 +68,7 @@ class ManageWebsiteCredentials
             'secret_hint' => substr($secret, -4),
             'scopes' => array_values(array_unique(array_map(
                 fn (CredentialScope $scope) => $scope->value,
-                $scopes === [] ? CredentialScope::defaults() : $scopes,
+                $scopes,
             ))),
             'created_by' => $actor->id,
         ]);

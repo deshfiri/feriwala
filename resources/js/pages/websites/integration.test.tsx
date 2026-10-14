@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { WebsiteDetail } from '@/types/website';
 import type {
@@ -130,16 +130,6 @@ const credential = (overrides: Partial<CredentialRow> = {}): CredentialRow => ({
     ...overrides,
 });
 
-const scopes = [
-    { value: 'catalog:read', label: 'Read the catalogue', default: true },
-    {
-        value: 'inventory:read',
-        label: 'Read stock availability',
-        default: true,
-    },
-    { value: 'orders:write', label: 'Submit orders', default: false },
-];
-
 const calls: ApiCallRow[] = [
     {
         request_id: '01REQUEST',
@@ -158,7 +148,6 @@ describe('connecting a storefront', () => {
             <WebsiteIntegration
                 website={website}
                 credentials={[credential()]}
-                scopes={scopes}
                 recent_calls={calls}
                 api_base="https://erp.test/api/storefront/v1"
             />,
@@ -167,51 +156,11 @@ describe('connecting a storefront', () => {
         expect(
             screen.getByText(/wsk_01J8Z9K3M7QX2P4R6T8V0W1Y3B/),
         ).toBeInTheDocument();
-        expect(
-            screen.queryByText('website.integration.secret_once'),
-        ).not.toBeInTheDocument();
+        expect(screen.getByText(/d265/)).toBeInTheDocument();
+        expect(screen.getByText(/invalid_signature/)).toBeInTheDocument();
     });
 
-    it('shows a freshly issued secret once, from the flash, until it is dismissed', () => {
-        render(
-            <WebsiteIntegration
-                website={website}
-                credentials={[credential()]}
-                scopes={scopes}
-                recent_calls={[]}
-                api_base="https://erp.test/api/storefront/v1"
-            />,
-        );
-
-        act(() => {
-            listeners.forEach((listener) =>
-                listener(
-                    new CustomEvent('flash', {
-                        detail: {
-                            flash: {
-                                credential: {
-                                    key_id: 'wsk_01J8Z9K3M7QX2P4R6T8V0W1Y3B',
-                                    secret: 'a'.repeat(64),
-                                },
-                            },
-                        },
-                    }),
-                ),
-            );
-        });
-
-        expect(screen.getByText('a'.repeat(64))).toBeInTheDocument();
-
-        act(() => {
-            screen
-                .getByRole('button', { name: 'website.integration.stored_it' })
-                .click();
-        });
-
-        expect(screen.queryByText('a'.repeat(64))).not.toBeInTheDocument();
-    });
-
-    it('offers rotation and revocation only on a credential that still works', () => {
+    it('leaves issuing, rotating and revoking to Banij administration', () => {
         render(
             <WebsiteIntegration
                 website={website}
@@ -224,19 +173,43 @@ describe('connecting a storefront', () => {
                         revoked_reason: 'Leaked in a screenshot.',
                     }),
                 ]}
-                scopes={scopes}
-                recent_calls={calls}
+                recent_calls={[]}
                 api_base="https://erp.test/api/storefront/v1"
             />,
         );
 
         expect(
-            screen.getAllByRole('button', {
-                name: 'website.integration.rotate',
-            }),
-        ).toHaveLength(1);
+            screen.getByText('website.integration.managed_by_admin'),
+        ).toBeInTheDocument();
         expect(screen.getByText('Leaked in a screenshot.')).toBeInTheDocument();
-        expect(screen.getByText(/invalid_signature/)).toBeInTheDocument();
+
+        for (const action of ['issue', 'rotate', 'revoke']) {
+            expect(
+                screen.queryByRole('button', {
+                    name: `website.integration.${action}`,
+                }),
+            ).not.toBeInTheDocument();
+        }
+
+        expect(
+            document.querySelector('form[action*="/credentials"]'),
+        ).toBeNull();
+    });
+
+    it('does not listen for a secret in the flash at all', () => {
+        listeners.length = 0;
+
+        render(
+            <WebsiteIntegration
+                website={website}
+                credentials={[credential()]}
+                recent_calls={[]}
+                api_base="https://erp.test/api/storefront/v1"
+                webhook={webhook}
+            />,
+        );
+
+        expect(listeners).toHaveLength(0);
     });
 });
 
@@ -271,12 +244,11 @@ const delivery: DeliveryRow = {
 };
 
 describe('telling a storefront what changed', () => {
-    it('shows the webhook by its address and hint, with its deliveries and failures', () => {
+    it('shows the webhook by its address and hint, with its deliveries and failures, read-only', () => {
         render(
             <WebsiteIntegration
                 website={website}
                 credentials={[]}
-                scopes={scopes}
                 recent_calls={[]}
                 api_base="https://erp.test/api/storefront/v1"
                 webhook={webhook}
@@ -286,11 +258,12 @@ describe('telling a storefront what changed', () => {
         );
 
         expect(
-            screen.getByDisplayValue(
-                'https://nasrin.example.com/feriwala/webhooks',
-            ),
+            screen.getByText('https://nasrin.example.com/feriwala/webhooks'),
         ).toBeInTheDocument();
         expect(screen.getByText(/9f3c/)).toBeInTheDocument();
+        expect(
+            screen.getByText('website.integration.webhook_managed_by_admin'),
+        ).toBeInTheDocument();
         expect(
             screen.getByText('website.integration.delivery_states.retrying'),
         ).toBeInTheDocument();
@@ -312,26 +285,30 @@ describe('telling a storefront what changed', () => {
                 name: 'website.integration.sync_now',
             }),
         ).toBeInTheDocument();
-        expect(
-            screen.getByRole('button', { name: 'website.integration.disable' }),
-        ).toBeInTheDocument();
+
+        for (const action of ['webhook_save', 'rotate', 'disable']) {
+            expect(
+                screen.queryByRole('button', {
+                    name: `website.integration.${action}`,
+                }),
+            ).not.toBeInTheDocument();
+        }
+
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
 
-    it('offers only the address form before a webhook exists', () => {
+    it('says when no webhook has been set, and offers no synchronisation', () => {
         render(
             <WebsiteIntegration
                 website={website}
                 credentials={[]}
-                scopes={scopes}
                 recent_calls={[]}
                 api_base="https://erp.test/api/storefront/v1"
             />,
         );
 
         expect(
-            screen.getByRole('button', {
-                name: 'website.integration.webhook_save',
-            }),
+            screen.getByText('website.integration.no_webhook'),
         ).toBeInTheDocument();
         expect(
             screen.queryByRole('button', {
@@ -344,40 +321,5 @@ describe('telling a storefront what changed', () => {
         expect(
             screen.getByText('website.integration.no_deliveries'),
         ).toBeInTheDocument();
-    });
-
-    it('shows a new signing secret once, from the flash, until it is dismissed', () => {
-        listeners.length = 0;
-
-        render(
-            <WebsiteIntegration
-                website={website}
-                credentials={[]}
-                scopes={scopes}
-                recent_calls={[]}
-                api_base="https://erp.test/api/storefront/v1"
-                webhook={webhook}
-            />,
-        );
-
-        act(() => {
-            listeners.forEach((listener) =>
-                listener(
-                    new CustomEvent('flash', {
-                        detail: { flash: { webhook_secret: 'b'.repeat(64) } },
-                    }),
-                ),
-            );
-        });
-
-        expect(screen.getByText('b'.repeat(64))).toBeInTheDocument();
-
-        act(() => {
-            screen
-                .getByRole('button', { name: 'website.integration.stored_it' })
-                .click();
-        });
-
-        expect(screen.queryByText('b'.repeat(64))).not.toBeInTheDocument();
     });
 });

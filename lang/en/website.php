@@ -380,6 +380,10 @@ return [
         'credentials' => 'Credentials',
         'no_credentials' => 'No credentials yet',
         'no_credentials_help' => 'Your storefront cannot connect until it has one.',
+        'managed_by_admin' => 'Banij administration issues, rotates and revokes these credentials and configures your storefront with them. Contact support if one needs to change.',
+        'no_credentials_owner' => 'Banij administration has not issued one for this storefront yet.',
+        'webhook_managed_by_admin' => 'Banij administration sets this address and its signing secret and configures your storefront with them. Contact support if it needs to change.',
+        'no_webhook' => 'No webhook address has been set for this storefront yet.',
         'last_used' => 'Last used',
         'grace_until' => 'The previous secret keeps working until :date.',
         'active' => 'Active',
@@ -432,6 +436,26 @@ return [
             'customers:write' => 'Create and update its own customers',
             'returns:write' => 'Submit return and refund requests',
         ],
+    ],
+
+    'credentials' => [
+        'title' => 'Storefront API credentials',
+        'hint' => 'Credentials this storefront uses to call the ERP. Issued here and entered into the storefront installation by hand; nothing is sent to it.',
+        'issue_hint' => 'Choose the scopes explicitly. The secret is shown once, in a dialog, and never again.',
+        'none_help' => 'The storefront cannot connect until a credential is issued and configured on it.',
+        'presets_title' => 'Start from',
+        'presets' => [
+            'catalogue' => 'Catalogue only',
+            'storefront' => 'Full storefront',
+        ],
+        'site_config' => 'Public site.config.json values',
+        'once_title' => 'Credential issued',
+        'env_title' => 'Server-side .env for the storefront',
+        'copy' => 'Copy',
+        'copied' => 'Copied',
+        'origin_not_https' => 'The ERP address is not HTTPS. The storefront refuses it; set APP_URL to the public HTTPS origin before configuring a live storefront.',
+        'rotate_confirm' => 'Rotate this secret? The old secret keeps working for its grace period, then stops — the storefront must be updated before then.',
+        'webhook_once_title' => 'Webhook signing secret',
     ],
 
     'themes' => [

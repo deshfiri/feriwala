@@ -90,6 +90,20 @@ class WebsitePolicy
         return $user->can(PermissionCatalogue::name(PermissionModule::Website, PermissionAction::Edit));
     }
 
+    /**
+     * Issue, rotate and revoke the storefront's API credentials (D32 §2, P3 ER-1).
+     *
+     * Platform staff explicitly granted `website.manage_integrations` — the
+     * Super Admin, or a role somebody deliberately gave it — and nobody else.
+     * Never the account that owns the website: its storefront is configured by
+     * an authorised operator, so the owner never handles a raw secret. A
+     * business identity is refused `website.*` whatever it holds.
+     */
+    public function manageIntegration(User $user, Website $website): bool
+    {
+        return $user->can(PermissionCatalogue::name(PermissionModule::Website, PermissionAction::ManageIntegrations));
+    }
+
     protected function belongsToAccountOf(User $user, Website $website): bool
     {
         $account = $user->businessAccount;

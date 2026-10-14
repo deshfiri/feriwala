@@ -23,11 +23,24 @@ import { index } from '@/routes/admin/websites';
 import type { StatusTone } from '@/lib/status';
 import type { WebsiteDetail, WebsiteDomainRow } from '@/types/website';
 import ReasonTextarea from '@/components/forms/reason-textarea';
+import type { CredentialRow } from '@/components/website-credential-list';
+import type { WebhookRow } from '@/components/website-webhook-summary';
+import StorefrontWebhook from './storefront-webhook';
+import StorefrontCredentials, {
+    type CredentialPresetOption,
+    type CredentialScopeOption,
+    type StorefrontConnection,
+} from './storefront-credentials';
 
 type Props = {
     website: WebsiteDetail;
-    can: { administer: boolean };
+    can: { administer: boolean; manage_integration?: boolean };
     transitions: { value: string; label: string }[];
+    credentials?: CredentialRow[];
+    webhook?: WebhookRow | null;
+    credential_scopes?: CredentialScopeOption[];
+    credential_presets?: CredentialPresetOption[];
+    storefront_connection?: StorefrontConnection | null;
 };
 
 const controlClass =
@@ -40,7 +53,16 @@ const controlClass =
  * screen cannot put up a button the action would refuse. Every move needs a
  * reason: a storefront going dark is something its owner will ask about.
  */
-export default function AdminWebsiteShow({ website, can, transitions }: Props) {
+export default function AdminWebsiteShow({
+    website,
+    can,
+    transitions,
+    credentials = [],
+    webhook = null,
+    credential_scopes: credentialScopes = [],
+    credential_presets: credentialPresets = [],
+    storefront_connection: storefrontConnection = null,
+}: Props) {
     const { t, locale } = useTranslation();
 
     const date = (value: string | null) =>
@@ -112,6 +134,23 @@ export default function AdminWebsiteShow({ website, can, transitions }: Props) {
                         </ul>
                     )}
                 </SectionCard>
+
+                {can.manage_integration && storefrontConnection && (
+                    <StorefrontCredentials
+                        websiteId={website.id}
+                        credentials={credentials}
+                        scopes={credentialScopes}
+                        presets={credentialPresets}
+                        connection={storefrontConnection}
+                    />
+                )}
+
+                {can.manage_integration && storefrontConnection && (
+                    <StorefrontWebhook
+                        websiteId={website.id}
+                        webhook={webhook}
+                    />
+                )}
 
                 {can.administer && (
                     <SectionCard
