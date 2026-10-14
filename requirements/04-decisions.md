@@ -1104,6 +1104,26 @@ integration prerequisites · ER-11 order-specific authorisation tokens for order
 actions. Their contract details (`.env` names, token transport, scope names) are agreed with the
 storefront session before implementation.
 
+### Option P1 — Admin-controlled provisioning (2026-10-14, approved by the Project Owner)
+
+Implements §2 and §3 above without changing them.
+
+- **Who.** Issuing, rotating and revoking a website's Storefront API credentials, and setting,
+  rotating and switching off its webhook endpoint and signing secret, require
+  `website.manage_integrations`. Only the Super Admin holds it by default; another staff role has it
+  only if it is deliberately granted. The Owner Panel shows credentials and the webhook read-only,
+  by identifier and last four characters, and keeps retrying deliveries and synchronising.
+- **How a secret travels.** Once, in the JSON response that issued it, marked `no-store`. A
+  credential comes as the storefront's three `.env` lines (`BANIJ_ERP_BASE_URL`,
+  `BANIJ_CREDENTIAL_KEY_ID`, `BANIJ_CREDENTIAL_SECRET`); a webhook secret is shown raw. No secret
+  goes into the session, a flash message, a page prop, an audit entry, a log or browser storage.
+- **Scopes.** A new credential needs scopes chosen explicitly. There is no default grant; presets
+  only fill in the choice.
+- **Existing secrets.** Credentials and webhook secrets issued before this change are kept and are
+  not rotated by it. Revoking a credential always needs a stated reason.
+- **Nothing is pushed.** An operator enters the values into the storefront installation by hand,
+  as §2 already requires.
+
 ## D33 — The activity log can be cleared, through one guarded path (2026-10-13) 🔒
 
 > **Numbering note (2026-10-14).** This decision was recorded on `main` on 2026-10-13 as **D29**.
@@ -1133,3 +1153,13 @@ the append-only rule for audit logs in CLAUDE.md. Ledger entries are untouched.
 - **Cost, accepted:** once cleared, history including wallet, withdrawal, payment and permission
   changes cannot be recovered or investigated. The Project Owner chose this over protecting those
   categories.
+
+### Restriction (2026-10-14, approved by the Project Owner)
+
+Narrows **Who** above; nothing else in D33 changes. Clearing the log and changing its retention are
+the **Super Admin's alone**: the Admin role keeps `audit.view_audit_logs` and no longer holds
+`audit.delete` or `audit.manage_settings`, and both actions also require the Super Admin role, so a
+custom role given either permission is still refused (`App\Domain\Audit\AuditLogAuthority`).
+Automatic retention stays off (`audit.log_retention_days` unset, entries kept forever) until the
+Super Admin sets it. The guarded database path, the permanent `audit.logs_purged` record and the
+refusal of UPDATE and TRUNCATE are unchanged, as is the immutability of ledger entries.
