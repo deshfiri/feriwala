@@ -66,6 +66,10 @@ describe('opening the log for one person', function () {
     it('lists active staff and narrows the feed to the one chosen', function () {
         $other = testPlatformStaff(PlatformRole::SystemAdministrator);
 
+        // Most recent first: created_at is kept to the second, so act a minute
+        // later rather than leave the order to a tie inside one second.
+        $this->travel(1)->minutes();
+
         app(RecordAuditLog::class)->handle(new AuditEntry(
             action: 'access.role_changed',
             actorId: $other->id,

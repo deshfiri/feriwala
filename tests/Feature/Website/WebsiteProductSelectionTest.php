@@ -77,6 +77,57 @@ describe('only what was bought', function () {
         $this->actingAs($this->account->owner)->get(route('catalog.show', $unbought->slug))
             ->assertInertia(fn ($page) => $page->where('purchased', false)->where('websites', []));
     });
+
+    it('keeps a selection made before purchases were required, while refusing a new one', function () {
+        $unbought = websiteTestProduct();
+        $legacy = WebsiteProduct::create([
+            'website_id' => $this->website->id,
+            'business_account_id' => $this->account->id,
+            'product_id' => $unbought->id,
+            'status' => WebsiteProductStatus::Published,
+            'sync_status' => WebsiteSyncStatus::Synced,
+            'currency_code' => 'BDT',
+            'price' => Money::fromDecimal('2500.00', Currency::BDT),
+            'published_at' => now(),
+        ]);
+
+        $this->actingAs($this->account->owner)
+            ->patch(route('websites.products.update', [$this->website->public_id, $legacy->public_id]), ['price' => '2600.00'])
+            ->assertSessionHasNoErrors();
+
+        expect($legacy->refresh()->price->toDecimal())->toBe('2600.00')
+            ->and($legacy->status)->toBe(WebsiteProductStatus::Published);
+
+        $second = Website::factory()->forAccount($this->account)->active()->create();
+
+        $this->actingAs($this->account->owner)
+            ->from(route('websites.products.index', $second->public_id))
+            ->post(route('websites.products.store', $second->public_id), ['product' => $unbought->public_id])
+            ->assertSessionHasErrors(['product' => __('website.refused.product_not_purchased')]);
+
+        expect(WebsiteProduct::query()->where('product_id', $unbought->id)->count())->toBe(1);
+    });
+
+    it('connects one bought product to each of the account\'s websites, once per website', function () {
+        $account = websiteTestAccount(2, extra: [
+            PackageFeature::ProductPublishLimit->value => '2',
+            PackageFeature::DropshippingEnabled->value => '1',
+        ]);
+        $websites = Website::factory()->forAccount($account)->active()->count(2)->create();
+        websiteTestPurchase($account, $this->product);
+
+        $this->actingAs($account->owner)->get(route('catalog.show', $this->product->slug))
+            ->assertInertia(fn ($page) => $page->where('purchased', true)->has('websites', 2));
+
+        foreach ($websites as $website) {
+            $this->actingAs($account->owner)
+                ->post(route('websites.products.store', $website->public_id), ['product' => $this->product->public_id])
+                ->assertRedirect();
+        }
+
+        expect(WebsiteProduct::query()->where('product_id', $this->product->id)->where('business_account_id', $account->id)->pluck('website_id')->sort()->values()->all())
+            ->toBe($websites->pluck('id')->sort()->values()->all());
+    });
 });
 
 describe('choosing a product', function () {
