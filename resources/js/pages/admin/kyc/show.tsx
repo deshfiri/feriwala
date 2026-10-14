@@ -17,10 +17,12 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { show as accountDossier } from '@/routes/admin/accounts';
-import { decide, index } from '@/routes/admin/kyc';
+import { decide, evidenceReview, index } from '@/routes/admin/kyc';
 import { download, show as documentShow } from '@/routes/kyc/documents';
+import BatchReview from '@/components/kyc/batch-review';
 import type {
     KycApplicant,
+    KycBatchForReview,
     KycDecisionOutcome,
     KycReviewDocument,
     KycReviewField,
@@ -45,12 +47,15 @@ export default function AdminKycShow({
     documents,
     fields,
     history,
+    batch = null,
 }: {
     submission: KycSubmissionSummary;
     applicant: KycApplicant;
     documents: KycReviewDocument[];
     fields: KycReviewField[];
     history: KycReviewHistoryEntry[];
+    /** Set for a round on a batch version (D30), which is reviewed group by group. */
+    batch?: KycBatchForReview | null;
 }) {
     const { t, locale } = useTranslation();
     const [outcome, setOutcome] = useState<KycDecisionOutcome>('approve');
@@ -141,127 +146,142 @@ export default function AdminKycShow({
                             </dl>
                         </SectionCard>
 
-                        <SectionCard title={t('kyc.detail.documents')}>
-                            {documents.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    {t('kyc.detail.no_documents')}
-                                </p>
-                            ) : (
-                                <ul className="divide-border divide-y">
-                                    {documents.map((document) => (
-                                        <li
-                                            key={document.id}
-                                            className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-                                        >
-                                            <FileText
-                                                className="text-muted-foreground size-4 shrink-0"
-                                                aria-hidden="true"
-                                            />
+                        {batch && (
+                            <BatchReview
+                                batch={batch}
+                                verdictUrl={evidenceReview.url(submission.id)}
+                                documentUrl={(id) => documentShow.url(id)}
+                            />
+                        )}
 
-                                            <div className="min-w-0 flex-1">
-                                                {document.batch && (
-                                                    <p className="text-muted-foreground truncate text-xs">
-                                                        {document.batch}
-                                                    </p>
-                                                )}
-                                                <p className="truncate text-sm font-medium">
-                                                    {document.type ??
-                                                        document.original_name}
-                                                </p>
-                                                <p className="text-muted-foreground truncate text-xs">
-                                                    {document.original_name} ·{' '}
-                                                    {formatSize(
-                                                        document.size_bytes,
+                        {!batch && (
+                            <SectionCard title={t('kyc.detail.documents')}>
+                                {documents.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">
+                                        {t('kyc.detail.no_documents')}
+                                    </p>
+                                ) : (
+                                    <ul className="divide-border divide-y">
+                                        {documents.map((document) => (
+                                            <li
+                                                key={document.id}
+                                                className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+                                            >
+                                                <FileText
+                                                    className="text-muted-foreground size-4 shrink-0"
+                                                    aria-hidden="true"
+                                                />
+
+                                                <div className="min-w-0 flex-1">
+                                                    {document.batch && (
+                                                        <p className="text-muted-foreground truncate text-xs">
+                                                            {document.batch}
+                                                        </p>
                                                     )}
-                                                </p>
-                                            </div>
+                                                    <p className="truncate text-sm font-medium">
+                                                        {document.type ??
+                                                            document.original_name}
+                                                    </p>
+                                                    <p className="text-muted-foreground truncate text-xs">
+                                                        {document.original_name}{' '}
+                                                        ·{' '}
+                                                        {formatSize(
+                                                            document.size_bytes,
+                                                        )}
+                                                    </p>
+                                                </div>
 
-                                            {document.can_open ? (
-                                                <div className="flex items-center gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        asChild
-                                                    >
-                                                        {/* A plain anchor, not
+                                                {document.can_open ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            asChild
+                                                        >
+                                                            {/* A plain anchor, not
                                                             an Inertia visit —
                                                             the response is a
                                                             file, not a page. */}
-                                                        <a
-                                                            href={documentShow.url(
-                                                                document.id,
-                                                            )}
-                                                            target="_blank"
-                                                            rel="noreferrer"
+                                                            <a
+                                                                href={documentShow.url(
+                                                                    document.id,
+                                                                )}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                            >
+                                                                <Eye
+                                                                    className="size-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                {t(
+                                                                    'kyc.detail.view',
+                                                                )}
+                                                            </a>
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            asChild
                                                         >
-                                                            <Eye
-                                                                className="size-4"
-                                                                aria-hidden="true"
-                                                            />
-                                                            {t(
-                                                                'kyc.detail.view',
-                                                            )}
-                                                        </a>
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        asChild
-                                                    >
-                                                        <a
-                                                            href={download.url(
-                                                                document.id,
-                                                            )}
-                                                        >
-                                                            <Download
-                                                                className="size-4"
-                                                                aria-hidden="true"
-                                                            />
-                                                            {t(
-                                                                'kyc.detail.download',
-                                                            )}
-                                                        </a>
-                                                    </Button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                                                    <Lock
-                                                        className="size-3.5"
-                                                        aria-hidden="true"
-                                                    />
-                                                    {t(
-                                                        'kyc.detail.documents_hidden',
-                                                    )}
-                                                </span>
-                                            )}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </SectionCard>
+                                                            <a
+                                                                href={download.url(
+                                                                    document.id,
+                                                                )}
+                                                            >
+                                                                <Download
+                                                                    className="size-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                {t(
+                                                                    'kyc.detail.download',
+                                                                )}
+                                                            </a>
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                                                        <Lock
+                                                            className="size-3.5"
+                                                            aria-hidden="true"
+                                                        />
+                                                        {t(
+                                                            'kyc.detail.documents_hidden',
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </SectionCard>
+                        )}
 
-                        <SectionCard title={t('kyc.detail.fields')}>
-                            {fields.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    {t('kyc.detail.no_fields')}
-                                </p>
-                            ) : (
-                                <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                                    {fields.map((field, position) => (
-                                        <div key={`${field.type}-${position}`}>
-                                            <dt className="text-muted-foreground text-xs">
-                                                {field.batch
-                                                    ? `${field.batch} · ${field.type ?? '—'}`
-                                                    : (field.type ?? '—')}
-                                            </dt>
-                                            <dd className="font-medium tabular-nums">
-                                                {field.value}
-                                            </dd>
-                                        </div>
-                                    ))}
-                                </dl>
-                            )}
-                        </SectionCard>
+                        {!batch && (
+                            <SectionCard title={t('kyc.detail.fields')}>
+                                {fields.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">
+                                        {t('kyc.detail.no_fields')}
+                                    </p>
+                                ) : (
+                                    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                                        {fields.map((field, position) => (
+                                            <div
+                                                key={`${field.type}-${position}`}
+                                            >
+                                                <dt className="text-muted-foreground text-xs">
+                                                    {field.batch
+                                                        ? `${field.batch} · ${field.type ?? '—'}`
+                                                        : (field.type ?? '—')}
+                                                </dt>
+                                                <dd className="font-medium tabular-nums">
+                                                    {field.value}
+                                                </dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                )}
+                            </SectionCard>
+                        )}
 
                         <SectionCard title={t('kyc.detail.history')}>
                             {history.length === 0 ? (
@@ -393,7 +413,13 @@ export default function AdminKycShow({
                                                         'kyc.decision.feedback_help',
                                                     )}
                                                     error={errors.feedback}
-                                                    required
+                                                    // On a batch, the rejected slots and their
+                                                    // notes are added to whatever is written
+                                                    // here, so it may be left empty.
+                                                    required={
+                                                        !batch ||
+                                                        outcome === 'reject'
+                                                    }
                                                 >
                                                     {(field) => (
                                                         <textarea
@@ -445,6 +471,15 @@ export default function AdminKycShow({
                                                     />
                                                 )}
                                             </FormField>
+
+                                            {errors.outcome && (
+                                                <p
+                                                    role="alert"
+                                                    className="text-danger text-sm font-medium"
+                                                >
+                                                    {errors.outcome}
+                                                </p>
+                                            )}
 
                                             <SubmitButton
                                                 processing={processing}

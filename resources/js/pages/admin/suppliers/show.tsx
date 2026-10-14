@@ -16,8 +16,12 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import ManagedSupplierController from '@/actions/App/Http/Controllers/Admin/ManagedSupplierController';
 import { index } from '@/routes/admin/suppliers';
-import type { SupplierProductsState } from '@/types';
+import type { KycBatchForReview, SupplierProductsState } from '@/types';
 import AssignedProductsSection from './assigned-products-section';
+import BatchReview from '@/components/kyc/batch-review';
+import NativeSelect from '@/components/forms/native-select';
+import { evidenceReview } from '@/routes/admin/suppliers/kyc';
+import { store as assignBatch } from '@/routes/admin/suppliers/kyc/batch';
 import { show as documentShow } from '@/routes/admin/suppliers/kyc/documents';
 import { store as correction } from '@/routes/admin/suppliers/kyc/correction';
 import { store as approval } from '@/routes/admin/suppliers/approval';
@@ -61,6 +65,12 @@ type Props = {
         fields: { label: string; value: string }[];
         missing_required: string[];
     } | null;
+    /** A round on a batch version (D30), reviewed group by group; null for the flat list. */
+    batch?: KycBatchForReview | null;
+    /** The batch templates a round may be opened against; empty without permission. */
+    kyc_batches?: { id: string; name: string; is_default: boolean }[];
+    /** The round is empty, so it may still be moved to another template. */
+    can_assign_batch?: boolean;
     /** Email/mobile standing, including what staff confirmed by hand. */
     contact: ContactState;
     /** Staff-only: Products this Supplier has; null without product_supplier.view. */
@@ -86,6 +96,9 @@ const RAW_ROOT =
 export default function AdminSupplierShow({
     supplier,
     round,
+    batch = null,
+    kyc_batches = [],
+    can_assign_batch = false,
     contact,
     assigned_products,
     status_history,
@@ -248,96 +261,111 @@ export default function AdminSupplierShow({
                             )}
                         />
 
-                        <SectionCard
-                            title={t('supplier.admin.suppliers.evidence')}
-                        >
-                            {round !== null && round.fields.length > 0 && (
-                                <dl className="border-border mb-4 grid gap-3 border-b pb-4 text-sm sm:grid-cols-2">
-                                    {round.fields.map((field) => (
-                                        <div key={field.label}>
-                                            <dt className="text-muted-foreground text-xs">
-                                                {field.label}
-                                            </dt>
-                                            <dd className="font-medium break-words">
-                                                {field.value}
-                                            </dd>
-                                        </div>
-                                    ))}
-                                </dl>
-                            )}
+                        {batch && (
+                            <BatchReview
+                                batch={batch}
+                                verdictUrl={evidenceReview.url(supplier.id)}
+                                documentUrl={(id) =>
+                                    documentShow.url([supplier.id, id])
+                                }
+                            />
+                        )}
 
-                            {round !== null &&
-                                round.missing_required.length > 0 && (
-                                    <p
-                                        role="alert"
-                                        className="text-danger mb-4 text-sm font-medium"
-                                    >
-                                        {t(
-                                            'supplier.admin.suppliers.missing_required',
-                                            {
-                                                items: round.missing_required.join(
-                                                    ', ',
-                                                ),
-                                            },
-                                        )}
-                                    </p>
+                        {!batch && (
+                            <SectionCard
+                                title={t('supplier.admin.suppliers.evidence')}
+                            >
+                                {round !== null && round.fields.length > 0 && (
+                                    <dl className="border-border mb-4 grid gap-3 border-b pb-4 text-sm sm:grid-cols-2">
+                                        {round.fields.map((field) => (
+                                            <div key={field.label}>
+                                                <dt className="text-muted-foreground text-xs">
+                                                    {field.label}
+                                                </dt>
+                                                <dd className="font-medium break-words">
+                                                    {field.value}
+                                                </dd>
+                                            </div>
+                                        ))}
+                                    </dl>
                                 )}
 
-                            {round === null ||
-                            (round.documents.length === 0 &&
-                                round.fields.length === 0) ? (
-                                <p className="text-muted-foreground text-sm">
-                                    {t('supplier.admin.suppliers.no_evidence')}
-                                </p>
-                            ) : (
-                                <ul className="divide-border divide-y">
-                                    {round.documents.map((document) => (
-                                        <li
-                                            key={document.id}
-                                            className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+                                {round !== null &&
+                                    round.missing_required.length > 0 && (
+                                        <p
+                                            role="alert"
+                                            className="text-danger mb-4 text-sm font-medium"
                                         >
-                                            <FileText
-                                                className="text-muted-foreground size-4 shrink-0"
-                                                aria-hidden="true"
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-medium">
-                                                    {document.label}
-                                                </p>
-                                                <p className="text-muted-foreground truncate text-xs">
-                                                    {document.original_name} ·{' '}
-                                                    {formatSize(
-                                                        document.size_bytes,
-                                                    )}
-                                                </p>
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                asChild
+                                            {t(
+                                                'supplier.admin.suppliers.missing_required',
+                                                {
+                                                    items: round.missing_required.join(
+                                                        ', ',
+                                                    ),
+                                                },
+                                            )}
+                                        </p>
+                                    )}
+
+                                {round === null ||
+                                (round.documents.length === 0 &&
+                                    round.fields.length === 0) ? (
+                                    <p className="text-muted-foreground text-sm">
+                                        {t(
+                                            'supplier.admin.suppliers.no_evidence',
+                                        )}
+                                    </p>
+                                ) : (
+                                    <ul className="divide-border divide-y">
+                                        {round.documents.map((document) => (
+                                            <li
+                                                key={document.id}
+                                                className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0"
                                             >
-                                                <a
-                                                    href={documentShow.url([
-                                                        supplier.id,
-                                                        document.id,
-                                                    ])}
-                                                    target="_blank"
-                                                    rel="noreferrer"
+                                                <FileText
+                                                    className="text-muted-foreground size-4 shrink-0"
+                                                    aria-hidden="true"
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-sm font-medium">
+                                                        {document.label}
+                                                    </p>
+                                                    <p className="text-muted-foreground truncate text-xs">
+                                                        {document.original_name}{' '}
+                                                        ·{' '}
+                                                        {formatSize(
+                                                            document.size_bytes,
+                                                        )}
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    asChild
                                                 >
-                                                    <Eye
-                                                        className="size-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                    {t(
-                                                        'supplier.admin.suppliers.view_document',
-                                                    )}
-                                                </a>
-                                            </Button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </SectionCard>
+                                                    <a
+                                                        href={documentShow.url([
+                                                            supplier.id,
+                                                            document.id,
+                                                        ])}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                    >
+                                                        <Eye
+                                                            className="size-4"
+                                                            aria-hidden="true"
+                                                        />
+                                                        {t(
+                                                            'supplier.admin.suppliers.view_document',
+                                                        )}
+                                                    </a>
+                                                </Button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </SectionCard>
+                        )}
 
                         {assigned_products && (
                             <AssignedProductsSection
@@ -380,6 +408,78 @@ export default function AdminSupplierShow({
                     </div>
 
                     <aside className="space-y-6 lg:col-span-1">
+                        {can_assign_batch && kyc_batches.length > 0 && (
+                            <SectionCard
+                                title={t('kyc.assign.title')}
+                                description={t('kyc.assign.supplier_help')}
+                            >
+                                <Form
+                                    {...assignBatch.form(supplier.id)}
+                                    options={{ preserveScroll: true }}
+                                    className="space-y-3"
+                                >
+                                    {({ processing, errors }) => (
+                                        <>
+                                            <FormField
+                                                label={t('kyc.assign.label')}
+                                                error={errors.batch}
+                                            >
+                                                {(control) => (
+                                                    <NativeSelect
+                                                        {...control}
+                                                        name="batch"
+                                                        defaultValue={
+                                                            batch
+                                                                ? ''
+                                                                : (kyc_batches.find(
+                                                                      (one) =>
+                                                                          one.is_default,
+                                                                  )?.id ?? '')
+                                                        }
+                                                        required
+                                                    >
+                                                        <option
+                                                            value=""
+                                                            disabled
+                                                        >
+                                                            {t(
+                                                                'kyc.assign.choose',
+                                                            )}
+                                                        </option>
+                                                        {kyc_batches.map(
+                                                            (option) => (
+                                                                <option
+                                                                    key={
+                                                                        option.id
+                                                                    }
+                                                                    value={
+                                                                        option.id
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        option.name
+                                                                    }
+                                                                    {option.is_default
+                                                                        ? ` (${t('kyc.builder.default_badge')})`
+                                                                        : ''}
+                                                                </option>
+                                                            ),
+                                                        )}
+                                                    </NativeSelect>
+                                                )}
+                                            </FormField>
+                                            <SubmitButton
+                                                processing={processing}
+                                                variant="outline"
+                                            >
+                                                {t('kyc.assign.submit')}
+                                            </SubmitButton>
+                                        </>
+                                    )}
+                                </Form>
+                            </SectionCard>
+                        )}
+
                         <SectionCard
                             title={t('supplier.admin.suppliers.decision')}
                         >
@@ -409,7 +509,9 @@ export default function AdminSupplierShow({
                                                     label: t(
                                                         'supplier.admin.suppliers.feedback',
                                                     ),
-                                                    required: true,
+                                                    // On a batch the rejected slots and
+                                                    // their notes are added, so it may be empty.
+                                                    required: !batch,
                                                 },
                                             ],
                                             'outline',

@@ -19,6 +19,7 @@ import {
     Receipt,
     ReceiptText,
     Share2,
+    ListChecks,
     ShieldCheck,
     ShoppingBag,
     Truck,
@@ -62,6 +63,7 @@ import { index as stockLevels } from '@/routes/admin/inventory/stock';
 import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as deletionRequests } from '@/routes/admin/deletions';
+import { index as kycBatches } from '@/routes/admin/kyc/batch-builder';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as adminOrders } from '@/routes/admin/orders';
 import { index as packageCatalogue } from '@/routes/admin/packages';
@@ -853,6 +855,11 @@ export function useNavigation(): {
                               title: t('nav.kyc_requirements'),
                               href: kycRequirements(),
                               icon: ShieldCheck,
+                          },
+                          {
+                              title: t('nav.kyc_batches'),
+                              href: kycBatches(),
+                              icon: ListChecks,
                           },
                       ]
                     : []),

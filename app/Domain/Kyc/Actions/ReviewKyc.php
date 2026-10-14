@@ -6,8 +6,12 @@ use App\Domain\Account\Actions\ActivateAccountAutomatically;
 use App\Domain\Account\Actions\ChangeAccountStatus;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Kyc\Batch\KycApprovalReadiness;
+use App\Domain\Kyc\Batch\KycReviewRefused;
+use App\Domain\Kyc\Batch\PartnerKycRound;
 use App\Domain\Kyc\Data\KycDecision;
 use App\Domain\Kyc\Enums\KycStatus;
+use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycReview;
 use App\Domain\Kyc\Models\KycSubmission;
 use Illuminate\Database\DatabaseManager;
@@ -31,10 +35,14 @@ class ReviewKyc
         protected ActivateAccountAutomatically $automaticActivation,
         protected LiftKycDeadlineRestriction $liftRestriction,
         protected DatabaseManager $database,
+        protected KycApprovalReadiness $readiness,
+        protected KycDocumentStore $store,
     ) {}
 
     public function handle(KycSubmission $submission, KycDecision $decision): KycReview
     {
+        $this->guardBatchRound($submission, $decision);
+
         $review = $this->database->transaction(function () use ($submission, $decision) {
             $from = $submission->status;
 
@@ -93,6 +101,35 @@ class ReviewKyc
         }
 
         return $review;
+    }
+
+    /**
+     * A round on a batch is approved only when every required group is satisfied
+     * and every piece of evidence that satisfies one has been accepted; sending
+     * it back needs at least one rejected slot to point at (D30). A round with no
+     * batch is untouched.
+     *
+     * @throws KycReviewRefused
+     */
+    protected function guardBatchRound(KycSubmission $submission, KycDecision $decision): void
+    {
+        if ($submission->kyc_batch_version_id === null) {
+            return;
+        }
+
+        $round = new PartnerKycRound($submission, $this->store);
+
+        if ($decision->outcome === KycStatus::Approved) {
+            $problems = $this->readiness->problems($round);
+
+            if ($problems !== []) {
+                throw KycReviewRefused::notReadyToApprove($problems);
+            }
+        }
+
+        if ($decision->outcome === KycStatus::ResubmissionRequired && $this->readiness->corrections($round) === []) {
+            throw KycReviewRefused::nothingRejected();
+        }
     }
 
     /**

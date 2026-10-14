@@ -3,6 +3,7 @@
 namespace App\Domain\Kyc\Batch;
 
 use App\Domain\Kyc\Models\KycBatchVersion;
+use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Models\SupplierKycDocument;
 use App\Domain\Supplier\Models\SupplierKycEvidenceReview;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
@@ -164,6 +165,23 @@ final class SupplierKycRound implements KycRound
                 ? $field->forceFill(['superseded_at' => now()])->save()
                 : $field->delete();
         }
+    }
+
+    public function awaitsReview(): bool
+    {
+        return in_array($this->submission->status, [SupplierKycStatus::Submitted, SupplierKycStatus::UnderReview], true);
+    }
+
+    public function recordVerdict(string $requirement, string $slot, string $status, ?string $note, int $reviewerId): void
+    {
+        SupplierKycEvidenceReview::create([
+            'supplier_kyc_submission_id' => $this->submission->id,
+            'requirement_key' => $requirement,
+            'slot_key' => $slot,
+            'status' => $status,
+            'note' => $note,
+            'reviewed_by' => $reviewerId,
+        ]);
     }
 
     private function retire(SupplierKycDocument $document): void

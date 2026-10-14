@@ -123,6 +123,8 @@ type Props = {
     document_types: DocumentTypeOption[];
     /** What staff may attach to a re-verification round (§7.4). */
     kyc_consequences: ConsequenceOption[];
+    /** Batch templates a re-verification round may be opened against (D30). */
+    kyc_batches: { id: string; name: string; is_default: boolean }[];
     can: {
         request_kyc_update: boolean;
         withdraw_kyc_request: boolean;
@@ -159,6 +161,7 @@ export default function AdminAccountShow({
     assignable_packages: assignablePackages,
     document_types: documentTypes,
     kyc_consequences: kycConsequences,
+    kyc_batches: kycBatches,
     contact,
     can,
     blockers,
@@ -821,6 +824,7 @@ export default function AdminAccountShow({
                 accountId={business.id}
                 documentTypes={documentTypes}
                 consequenceOptions={kycConsequences}
+                batches={kycBatches}
             />
 
             <WithdrawKycRequestDialog

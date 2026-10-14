@@ -125,6 +125,90 @@ export type KycBatch = {
     missing: string[];
 };
 
+/** What stands between a round on a batch and approval, for the reviewer. */
+export type KycBatchReviewState = {
+    /** Unmet groups, rejected evidence and evidence nobody has looked at. */
+    problems: string[];
+    /** The rejected slots as the applicant will be told. */
+    corrections: string[];
+    awaits_review: boolean;
+    can_judge: boolean;
+    can_open_documents: boolean;
+};
+
+/** A round on a batch as the reviewer sees it: the applicant's payload plus the review state. */
+export type KycBatchForReview = KycBatch & { review: KycBatchReviewState };
+
+export type KycBuilderSlot = {
+    /** Null for a slot not saved yet. */
+    id: string | null;
+    label: string;
+    label_bn: string | null;
+    instructions: string | null;
+    instructions_bn: string | null;
+    required: boolean;
+    evidence: 'file' | 'image' | 'pdf' | 'value' | 'declaration';
+    mimes: string[];
+    max_kb: number | null;
+    value_label: string | null;
+    value_label_bn: string | null;
+    sensitive: boolean;
+};
+
+export type KycBuilderRequirement = {
+    id: string | null;
+    name: string;
+    name_bn: string | null;
+    instructions: string | null;
+    instructions_bn: string | null;
+    required: boolean;
+    slots: KycBuilderSlot[];
+};
+
+export type KycBuilderGroup = {
+    id: string | null;
+    name: string;
+    name_bn: string | null;
+    description: string | null;
+    description_bn: string | null;
+    rule: 'all' | 'any' | 'min';
+    minimum: number | null;
+    required: boolean;
+    requirements: KycBuilderRequirement[];
+};
+
+export type KycBuilderBatch = {
+    id: string;
+    key: string;
+    name: string;
+    name_bn: string | null;
+    description: string | null;
+    description_bn: string | null;
+    audience: 'account' | 'supplier' | 'both';
+    selfie_mode: 'disabled' | 'optional' | 'required';
+    selfie_allows_upload: boolean;
+    is_active: boolean;
+    is_default: boolean;
+    is_archived: boolean;
+    published_version: number;
+    has_unpublished_changes: boolean;
+    rules: KycBatchRule[];
+};
+
+/** One row of the template list. */
+export type KycBatchTemplateRow = {
+    id: string;
+    name: string;
+    name_bn: string | null;
+    audience: 'account' | 'supplier' | 'both';
+    is_active: boolean;
+    is_default: boolean;
+    selfie_mode: 'disabled' | 'optional' | 'required';
+    groups_count: number;
+    published_version: number;
+    has_unpublished_changes: boolean;
+};
+
 export type KycReviewDocument = {
     id: string;
     type: string | null;

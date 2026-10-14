@@ -12,6 +12,7 @@ use App\Domain\Account\Queries\AccountDossier;
 use App\Domain\Account\Queries\ContactVerificationState;
 use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Enums\KycConsequence;
+use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
@@ -205,6 +206,31 @@ class AccountController extends Controller
                 ],
                 KycConsequence::cases(),
             ),
+
+            /*
+             * The batch templates staff may open this round against (D30): the ones
+             * that are switched on and meant for a Partner, and — for rules that
+             * name a package or a country — that actually reach this account. The
+             * default one is flagged, so the dialog can say what "no choice" means.
+             */
+            'kyc_batches' => KycBatch::query()
+                ->forAccounts()
+                ->available()
+                ->with('scopes')
+                ->orderBy('sort_order')
+                ->get()
+                ->filter(fn (KycBatch $batch) => $batch->appliesTo(
+                    $this->requirements->packageIdForAccount($account),
+                    $account->owner?->country,
+                    $batch->scopes,
+                ))
+                ->map(fn (KycBatch $batch) => [
+                    'id' => $batch->public_id,
+                    'name' => $batch->name,
+                    'is_default' => $batch->is_default,
+                ])
+                ->values()
+                ->all(),
 
             'can' => [
                 /*

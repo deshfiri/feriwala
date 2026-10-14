@@ -188,6 +188,23 @@ final class PartnerKycRound implements KycRound
         }
     }
 
+    public function awaitsReview(): bool
+    {
+        return $this->submission->status->awaitsReview();
+    }
+
+    public function recordVerdict(string $requirement, string $slot, string $status, ?string $note, int $reviewerId): void
+    {
+        KycEvidenceReview::create([
+            'kyc_submission_id' => $this->submission->id,
+            'requirement_key' => $requirement,
+            'slot_key' => $slot,
+            'status' => $status,
+            'note' => $note,
+            'reviewed_by' => $reviewerId,
+        ]);
+    }
+
     private function retire(KycDocument $document): void
     {
         if ($this->hasBeenSubmitted()) {

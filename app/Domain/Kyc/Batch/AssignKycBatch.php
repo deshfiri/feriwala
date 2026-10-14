@@ -7,6 +7,7 @@ use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Kyc\Actions\CaptureRoundRequirements;
 use App\Domain\Kyc\Actions\PublishKycBatchVersion;
 use App\Domain\Kyc\Enums\KycAudience;
+use App\Domain\Kyc\Exceptions\InvalidKycBatch;
 use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
@@ -40,6 +41,7 @@ class AssignKycBatch
      * @return bool whether the round was pinned to a batch
      *
      * @throws InvalidArgumentException
+     * @throws InvalidKycBatch when the batch could never be completed as it stands
      */
     public function forPartner(KycSubmission $round, ?KycBatch $explicit = null, ?User $by = null): bool
     {
@@ -64,6 +66,7 @@ class AssignKycBatch
 
     /**
      * @throws InvalidArgumentException
+     * @throws InvalidKycBatch when the batch could never be completed as it stands
      */
     public function forSupplier(SupplierKycSubmission $round, ?KycBatch $explicit = null, ?User $by = null): bool
     {

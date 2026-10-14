@@ -6,11 +6,15 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Kyc\Actions\ReviewKyc;
+use App\Domain\Kyc\Batch\KycApprovalReadiness;
+use App\Domain\Kyc\Batch\KycReviewRefused;
+use App\Domain\Kyc\Batch\SupplierKycRound;
 use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
+use App\Domain\Supplier\SupplierKycDocumentStore;
 use App\Notifications\Supplier\SupplierKycCorrectionRequested;
 use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\DatabaseManager;
@@ -30,14 +34,36 @@ class RequestSupplierKycCorrection
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected KycApprovalReadiness $readiness,
+        protected SupplierKycDocumentStore $store,
     ) {}
 
+    /**
+     * For a round on a batch, the feedback may be left blank: it is then written
+     * from the rejected slots and the reviewer's notes on them, so the Supplier is
+     * told exactly which item to replace. A batch round with nothing rejected has
+     * nothing to ask for.
+     *
+     * @throws KycReviewRefused
+     */
     public function handle(
         SupplierKycSubmission $submission,
         int $reviewerId,
         string $userVisibleFeedback,
         ?string $internalReason = null,
     ): SupplierKycSubmission {
+        if ($submission->kyc_batch_version_id !== null) {
+            $corrections = $this->readiness->corrections(new SupplierKycRound($submission, $this->store));
+
+            if ($corrections === []) {
+                throw KycReviewRefused::nothingRejected();
+            }
+
+            $userVisibleFeedback = trim($userVisibleFeedback) === ''
+                ? implode("\n", $corrections)
+                : trim($userVisibleFeedback)."\n".implode("\n", $corrections);
+        }
+
         if (trim($userVisibleFeedback) === '') {
             throw new InvalidArgumentException('Tell the Supplier what to fix — without it they will resubmit the same thing.');
         }

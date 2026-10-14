@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Actions\RequestKycUpdate;
 use App\Domain\Kyc\Enums\KycConsequence;
+use App\Domain\Kyc\Exceptions\InvalidKycBatch;
+use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -66,7 +68,15 @@ class KycUpdateRequestController extends Controller
              */
             'consequences' => ['sometimes', 'array'],
             'consequences.*' => [Rule::enum(KycConsequence::class)],
+
+            // The batch template the round opens against (D30). Absent means the
+            // default for Partners, or the earlier flow when there is none.
+            'batch' => ['nullable', 'string', Rule::exists(KycBatch::class, 'public_id')],
         ]);
+
+        $batch = filled($validated['batch'] ?? null)
+            ? KycBatch::query()->where('public_id', $validated['batch'])->first()
+            : null;
 
         /** @var User $actor */
         $actor = $request->user();
@@ -87,7 +97,11 @@ class KycUpdateRequestController extends Controller
                         $validated['consequences'],
                     )
                     : null,
+                batch: $batch,
             );
+        } catch (InvalidKycBatch $exception) {
+            // The chosen batch could never be completed as it stands.
+            throw ValidationException::withMessages(['batch' => $exception->problems]);
         } catch (InvalidArgumentException $exception) {
             // A round already in progress is a rejected form, not a 500.
             throw ValidationException::withMessages(['reason' => $exception->getMessage()]);

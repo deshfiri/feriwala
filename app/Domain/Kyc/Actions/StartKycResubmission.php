@@ -3,6 +3,7 @@
 namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Kyc\Batch\CarryForwardKycEvidence;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -24,6 +25,7 @@ class StartKycResubmission
         protected KycDeadlines $deadlines,
         protected CaptureRoundRequirements $captureRequirements,
         protected DatabaseManager $database,
+        protected CarryForwardKycEvidence $carryForward,
     ) {}
 
     public function handle(BusinessAccount $account): KycSubmission
@@ -69,6 +71,9 @@ class StartKycResubmission
             ]);
 
             if ($submission->kyc_batch_version_id !== null) {
+                // What was accepted comes with it: only the rest is asked again.
+                $this->carryForward->handle($latest, $submission);
+
                 return $submission;
             }
 

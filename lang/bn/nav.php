@@ -30,6 +30,7 @@ return [
 
     'kyc_review' => 'কেওয়াইসি পর্যালোচনা',
     'kyc_requirements' => 'যাচাইকরণের শর্তাবলি',
+    'kyc_batches' => 'কেওয়াইসি ব্যাচ',
     'packages' => 'প্যাকেজ',
     'products' => 'পণ্য',
     'product_categories' => 'পণ্যের ক্যাটেগরি',
