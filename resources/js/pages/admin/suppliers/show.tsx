@@ -20,7 +20,7 @@ import type { KycBatchForReview, SupplierProductsState } from '@/types';
 import AssignedProductsSection from './assigned-products-section';
 import BatchReview from '@/components/kyc/batch-review';
 import NativeSelect from '@/components/forms/native-select';
-import { evidenceReview } from '@/routes/admin/suppliers/kyc';
+import { evidenceReview, evidenceValue } from '@/routes/admin/suppliers/kyc';
 import { store as assignBatch } from '@/routes/admin/suppliers/kyc/batch';
 import { show as documentShow } from '@/routes/admin/suppliers/kyc/documents';
 import { store as correction } from '@/routes/admin/suppliers/kyc/correction';
@@ -267,6 +267,11 @@ export default function AdminSupplierShow({
                                 verdictUrl={evidenceReview.url(supplier.id)}
                                 documentUrl={(id) =>
                                     documentShow.url([supplier.id, id])
+                                }
+                                revealUrl={(requirement, slot) =>
+                                    evidenceValue.url(supplier.id, {
+                                        query: { requirement, slot },
+                                    })
                                 }
                             />
                         )}

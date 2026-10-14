@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     Archive,
     ChevronDown,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import KycBatchController from '@/actions/App/Http/Controllers/Admin/KycBatchController';
+import { index as kycBatchesIndex } from '@/routes/admin/kyc/batch-builder';
 import KycDocumentTypeController from '@/actions/App/Http/Controllers/Admin/KycDocumentTypeController';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -144,6 +145,15 @@ export default function KycDocumentTypes({
             <Head title={t('kyc.document_types.title')} />
 
             <PageContainer>
+                <p className="bg-surface-subtle flex flex-wrap items-center gap-x-2 rounded-lg border p-3 text-sm">
+                    {t('kyc.builder.legacy_notice')}
+                    <Link
+                        href={kycBatchesIndex()}
+                        className="text-brand font-medium underline underline-offset-2"
+                    >
+                        {t('kyc.builder.legacy_link')}
+                    </Link>
+                </p>
                 <PageHeader
                     title={t('kyc.document_types.title')}
                     description={t('kyc.document_types.description')}

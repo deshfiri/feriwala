@@ -207,9 +207,8 @@ describe('a Partner', function () {
 
         $meta = KycDocument::query()->sole()->capture_meta;
 
-        expect($meta)->toHaveKeys(['width', 'height', 'facing', 'user_agent'])
-            ->and($meta)->not->toHaveKeys(['face_vector', 'location'])
-            ->and(mb_strlen($meta['user_agent']))->toBe(180);
+        // The frame's size and which camera — and no browser, device, face or place.
+        expect($meta)->toEqualCanonicalizing(['width' => 640, 'height' => 480, 'facing' => 'user']);
     });
 
     it('cannot send the application off until every group is satisfied, and then must confirm', function () {

@@ -2,6 +2,7 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Kyc\Actions\ManageKycDocumentTypes;
 use App\Domain\Kyc\Enums\KycAudience;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycBatch;
@@ -15,6 +16,7 @@ use App\Domain\Supplier\Models\SupplierKycDocument;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\StandardKycBatchSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -72,13 +74,13 @@ function adminBatchStructure(): array
 /** Builds a template through the screens' own endpoints, so the whole path is exercised. */
 function adminBatchBuilt(User $admin, string $audience = 'account', string $name = 'Standard ID', string $selfie = 'disabled'): KycBatch
 {
-    test()->actingAs($admin)->post(route('admin.kyc.batch-builder.store'), [
+    test()->actingAs($admin, 'web')->post(route('admin.kyc.batch-builder.store'), [
         'name' => $name, 'audience' => $audience, 'selfie_mode' => $selfie, 'selfie_allows_upload' => 0,
     ])->assertSessionHasNoErrors();
 
     $batch = KycBatch::query()->latest('id')->firstOrFail();
 
-    test()->actingAs($admin)->put(route('admin.kyc.batch-builder.structure', $batch), adminBatchStructure())
+    test()->actingAs($admin, 'web')->put(route('admin.kyc.batch-builder.structure', $batch), adminBatchStructure())
         ->assertSessionHasNoErrors();
 
     return $batch->refresh();
@@ -88,8 +90,8 @@ function adminBatchLive(User $admin, string $audience = 'account', string $selfi
 {
     $batch = adminBatchBuilt($admin, $audience, 'Standard ID '.$audience, $selfie);
 
-    test()->actingAs($admin)->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasNoErrors();
-    test()->actingAs($admin)->patch(route('admin.kyc.batch-builder.default', $batch), ['is_default' => 1])->assertSessionHasNoErrors();
+    test()->actingAs($admin, 'web')->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasNoErrors();
+    test()->actingAs($admin, 'web')->patch(route('admin.kyc.batch-builder.default', $batch), ['is_default' => 1])->assertSessionHasNoErrors();
 
     return $batch->refresh();
 }
@@ -135,7 +137,7 @@ describe('building a template', function () {
     it('keeps an item\'s key when it is renamed, and retires what is taken out instead of deleting it', function () {
         $batch = adminBatchBuilt($this->admin);
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.batch-builder.edit', $batch))->assertInertia(function (Assert $page) use ($batch) {
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.edit', $batch))->assertInertia(function (Assert $page) use ($batch) {
             $groups = $page->toArray()['props']['groups'];
 
             // Rename the National ID, drop the passport and the second slot.
@@ -143,7 +145,7 @@ describe('building a template', function () {
             $groups[0]['requirements'][0]['slots'] = [$groups[0]['requirements'][0]['slots'][0]];
             $groups[0]['requirements'] = [$groups[0]['requirements'][0]];
 
-            test()->actingAs(test()->admin)->put(route('admin.kyc.batch-builder.structure', $batch), ['groups' => $groups])
+            test()->actingAs(test()->admin, 'web')->put(route('admin.kyc.batch-builder.structure', $batch), ['groups' => $groups])
                 ->assertSessionHasNoErrors();
         });
 
@@ -165,7 +167,7 @@ describe('building a template', function () {
         $payload = adminBatchStructure();
         $payload['groups'][1]['requirements'][0]['id'] = $foreign;
 
-        $this->actingAs($this->admin)->put(route('admin.kyc.batch-builder.structure', $mine), $payload)->assertSessionHasErrors('groups');
+        $this->actingAs($this->admin, 'web')->put(route('admin.kyc.batch-builder.structure', $mine), $payload)->assertSessionHasErrors('groups');
 
         expect(KycDocumentType::query()->where('public_id', $foreign)->value('kyc_batch_id'))->toBe($theirs->id);
     });
@@ -177,12 +179,12 @@ describe('building a template', function () {
         $payload['groups'][0]['rule'] = 'min';
         $payload['groups'][0]['minimum'] = 5;
 
-        $this->actingAs($this->admin)->put(route('admin.kyc.batch-builder.structure', $batch), $payload)->assertSessionHasNoErrors();
+        $this->actingAs($this->admin, 'web')->put(route('admin.kyc.batch-builder.structure', $batch), $payload)->assertSessionHasNoErrors();
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.batch-builder.edit', $batch))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.edit', $batch))
             ->assertInertia(fn (Assert $page) => $page->has('problems', 1));
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.batch-builder.publish', $batch))->assertSessionHasErrors('publish');
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.batch-builder.publish', $batch))->assertSessionHasErrors('publish');
 
         expect($batch->refresh()->published_version)->toBe(0);
     });
@@ -193,23 +195,23 @@ describe('building a template', function () {
         $payload = adminBatchStructure();
         $payload['groups'][0]['rule'] = 'min';
 
-        $this->actingAs($this->admin)->put(route('admin.kyc.batch-builder.structure', $batch), $payload)->assertSessionHasErrors('groups.0.minimum');
+        $this->actingAs($this->admin, 'web')->put(route('admin.kyc.batch-builder.structure', $batch), $payload)->assertSessionHasErrors('groups.0.minimum');
     });
 
     it('says when the live structure differs from what was published', function () {
         $batch = adminBatchBuilt($this->admin);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.batch-builder.publish', $batch))->assertSessionHasNoErrors();
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.batch-builder.publish', $batch))->assertSessionHasNoErrors();
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.batch-builder.edit', $batch))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.edit', $batch))
             ->assertInertia(fn (Assert $page) => $page->where('batch.published_version', 1)->where('batch.has_unpublished_changes', false));
 
         $payload = adminBatchStructure();
         $payload['groups'][1]['name'] = 'Trade';
 
-        $this->actingAs($this->admin)->put(route('admin.kyc.batch-builder.structure', $batch), $payload);
+        $this->actingAs($this->admin, 'web')->put(route('admin.kyc.batch-builder.structure', $batch), $payload);
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.batch-builder.edit', $batch))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.edit', $batch))
             ->assertInertia(fn (Assert $page) => $page->where('batch.has_unpublished_changes', true));
     });
 
@@ -217,7 +219,7 @@ describe('building a template', function () {
         $batch = adminBatchBuilt($this->admin);
         $before = KycSubmission::query()->count() + KycDocument::query()->count();
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.batch-builder.preview', $batch))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.preview', $batch))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/kyc/batches/preview')
                 ->where('form.groups.0.name', 'Identity')
@@ -225,7 +227,7 @@ describe('building a template', function () {
                 ->where('form.editable', true)
                 ->where('form.complete', false));
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.batch-builder.preview', [$batch, 'as' => 'bn']))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.preview', [$batch, 'as' => 'bn']))
             ->assertInertia(fn (Assert $page) => $page->where('as', 'bn'));
 
         expect(KycSubmission::query()->count() + KycDocument::query()->count())->toBe($before);
@@ -241,13 +243,13 @@ describe('the batch, group, option and slot hierarchy', function () {
     beforeEach(function () {
         $image = ['evidence' => 'image', 'required' => true, 'mimes' => ['image/jpeg', 'image/png'], 'max_kb' => 2048];
 
-        test()->actingAs($this->admin)->post(route('admin.kyc.batch-builder.store'), [
+        test()->actingAs($this->admin, 'web')->post(route('admin.kyc.batch-builder.store'), [
             'name' => 'Standard KYC', 'audience' => 'account', 'selfie_mode' => 'disabled', 'selfie_allows_upload' => 0,
         ]);
 
         $this->batch = KycBatch::query()->latest('id')->firstOrFail();
 
-        $this->actingAs($this->admin)->put(route('admin.kyc.batch-builder.structure', $this->batch), ['groups' => [
+        $this->actingAs($this->admin, 'web')->put(route('admin.kyc.batch-builder.structure', $this->batch), ['groups' => [
             ['name' => 'Identity Verification', 'rule' => 'any', 'required' => true, 'requirements' => [
                 ['name' => 'National ID', 'required' => true, 'slots' => [['label' => 'Front side', ...$image], ['label' => 'Back side', ...$image]]],
                 ['name' => 'Passport', 'required' => true, 'slots' => [['label' => 'Bio-data page', ...$image]]],
@@ -258,8 +260,8 @@ describe('the batch, group, option and slot hierarchy', function () {
             ]],
         ]])->assertSessionHasNoErrors();
 
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.active', $this->batch), ['is_active' => 1]);
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.default', $this->batch), ['is_default' => 1]);
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $this->batch), ['is_active' => 1]);
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.default', $this->batch), ['is_default' => 1]);
 
         $this->applicant = testBusinessAccount(AccountStatus::KycPending)->owner;
     });
@@ -334,7 +336,7 @@ describe('taking a template live', function () {
     it('publishes it when activated, so what goes live is what was previewed', function () {
         $batch = adminBatchBuilt($this->admin);
 
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasNoErrors();
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasNoErrors();
 
         expect($batch->refresh()->is_active)->toBeTrue()
             ->and($batch->published_version)->toBe(1);
@@ -343,11 +345,11 @@ describe('taking a template live', function () {
     it('will not activate a batch no applicant could complete', function () {
         $batch = adminBatchBuilt($this->admin);
 
-        $this->actingAs($this->admin)->put(route('admin.kyc.batch-builder.structure', $batch), ['groups' => [[
+        $this->actingAs($this->admin, 'web')->put(route('admin.kyc.batch-builder.structure', $batch), ['groups' => [[
             'name' => 'Empty', 'rule' => 'all', 'required' => true, 'requirements' => [],
         ]]]);
 
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasErrors('publish');
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasErrors('publish');
 
         expect($batch->refresh()->is_active)->toBeFalse();
     });
@@ -357,10 +359,10 @@ describe('taking a template live', function () {
         $second = adminBatchBuilt($this->admin, 'account', 'Second');
 
         // Not switched on yet: refused.
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.default', $second), ['is_default' => 1])->assertSessionHasErrors('is_default');
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.default', $second), ['is_default' => 1])->assertSessionHasErrors('is_default');
 
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.active', $second), ['is_active' => 1]);
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.default', $second), ['is_default' => 1])->assertSessionHasNoErrors();
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $second), ['is_active' => 1]);
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.default', $second), ['is_default' => 1])->assertSessionHasNoErrors();
 
         expect($first->refresh()->is_default)->toBeFalse()
             ->and($second->refresh()->is_default)->toBeTrue();
@@ -375,7 +377,7 @@ describe('taking a template live', function () {
     it('stops being the default when it is switched off', function () {
         $batch = adminBatchLive($this->admin);
 
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 0]);
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 0]);
 
         expect($batch->refresh()->is_default)->toBeFalse();
     });
@@ -383,7 +385,7 @@ describe('taking a template live', function () {
     it('clones into a separate, switched-off copy and leaves the original alone', function () {
         $source = adminBatchLive($this->admin);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.batch-builder.clone', $source))->assertSessionHasNoErrors();
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.batch-builder.clone', $source))->assertSessionHasNoErrors();
 
         $copy = KycBatch::query()->latest('id')->firstOrFail();
 
@@ -428,7 +430,7 @@ describe('taking a template live', function () {
     it('lists the templates', function () {
         adminBatchLive($this->admin);
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.batch-builder.index'))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/kyc/batches/index')
                 ->where('batches.0.is_default', true)
@@ -442,12 +444,12 @@ describe('opening a round against a chosen template', function () {
     it('pins a Partner round to the template and version staff chose', function () {
         $default = adminBatchLive($this->admin);
         $other = adminBatchBuilt($this->admin, 'account', 'Short form');
-        $this->actingAs($this->admin)->patch(route('admin.kyc.batch-builder.active', $other), ['is_active' => 1]);
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $other), ['is_active' => 1]);
 
         $account = testBusinessAccount(AccountStatus::Active);
         KycSubmission::create(['business_account_id' => $account->id, 'status' => KycStatus::Approved, 'round' => 1, 'submitted_at' => now(), 'reviewed_at' => now()]);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.request-update', $account), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.request-update', $account), [
             'reason' => 'Periodic', 'instructions' => 'Please update.', 'batch' => $other->public_id,
         ])->assertSessionHasNoErrors();
 
@@ -463,7 +465,7 @@ describe('opening a round against a chosen template', function () {
         $account = testBusinessAccount(AccountStatus::Active);
         KycSubmission::create(['business_account_id' => $account->id, 'status' => KycStatus::Approved, 'round' => 1, 'submitted_at' => now(), 'reviewed_at' => now()]);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.request-update', $account), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.request-update', $account), [
             'reason' => 'Periodic', 'instructions' => 'Please update.', 'batch' => $supplierBatch->public_id,
         ])->assertSessionHasErrors('reason');
 
@@ -474,7 +476,7 @@ describe('opening a round against a chosen template', function () {
         $batch = adminBatchLive($this->admin, 'supplier');
         $supplier = Supplier::factory()->kycPending()->create();
 
-        $this->actingAs($this->admin)->post(route('admin.suppliers.kyc.batch.store', $supplier), ['batch' => $batch->public_id])
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.kyc.batch.store', $supplier), ['batch' => $batch->public_id])
             ->assertSessionHasNoErrors();
 
         $round = SupplierKycSubmission::query()->where('supplier_id', $supplier->id)->sole();
@@ -486,7 +488,7 @@ describe('opening a round against a chosen template', function () {
             'mime_type' => 'image/jpeg', 'size_bytes' => 10, 'disk' => 'kyc', 'path' => 'x', 'checksum' => 'x', 'is_encrypted' => false,
         ]);
 
-        $this->actingAs($this->admin)->post(route('admin.suppliers.kyc.batch.store', $supplier), ['batch' => $batch->public_id])
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.kyc.batch.store', $supplier), ['batch' => $batch->public_id])
             ->assertSessionHasErrors('batch');
     });
 
@@ -537,7 +539,7 @@ describe('reviewing a Partner round group by group', function () {
     });
 
     it('shows the round as groups, with what stands between it and approval', function () {
-        $this->actingAs($this->admin)->get(route('admin.kyc.show', $this->round))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.show', $this->round))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/kyc/show')
                 ->where('batch.groups.0.key', 'identity')
@@ -549,11 +551,11 @@ describe('reviewing a Partner round group by group', function () {
     });
 
     it('accepts and rejects evidence slot by slot, and a rejection must say what to fix', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [['requirement' => adminBatchKey($this->batch, 'Passport'), 'slot' => 'photo_page', 'status' => 'rejected']],
         ])->assertSessionHasErrors('verdicts');
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [
                 ['requirement' => adminBatchKey($this->batch, 'Passport'), 'slot' => 'photo_page', 'status' => 'rejected', 'note' => 'The photo is blurred.'],
                 ['requirement' => adminBatchKey($this->batch, 'TIN'), 'slot' => 'tin_number', 'status' => 'accepted'],
@@ -562,7 +564,7 @@ describe('reviewing a Partner round group by group', function () {
 
         expect(KycEvidenceReview::query()->count())->toBe(2);
 
-        $this->actingAs($this->admin)->get(route('admin.kyc.show', $this->round))
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.show', $this->round))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('batch.groups.0.options.1.slots.0.current.verdict', 'rejected')
                 ->where('batch.groups.0.options.1.slots.0.current.note', 'The photo is blurred.')
@@ -570,7 +572,7 @@ describe('reviewing a Partner round group by group', function () {
     });
 
     it('lands a set of verdicts whole or not at all', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [
                 ['requirement' => adminBatchKey($this->batch, 'TIN'), 'slot' => 'tin_number', 'status' => 'accepted'],
                 // The NID back was never given.
@@ -582,53 +584,53 @@ describe('reviewing a Partner round group by group', function () {
     });
 
     it('will not approve until every required group is satisfied and every item looked at', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
             ->assertSessionHasErrors('outcome');
 
         // One accepted, one still unreviewed.
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [adminBatchVerdicts($this->batch)[1]],
         ]);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
             ->assertSessionHasErrors('outcome');
 
         expect($this->round->refresh()->status)->toBe(KycStatus::Submitted);
     });
 
     it('will not approve while a required item stands rejected, even though it was reviewed', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [
                 [...adminBatchVerdicts($this->batch)[0], 'status' => 'rejected', 'note' => 'Blurred.'],
                 adminBatchVerdicts($this->batch)[1],
             ],
         ]);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
             ->assertSessionHasErrors('outcome');
     });
 
     it('approves once everything owed has been accepted', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), ['verdicts' => adminBatchVerdicts($this->batch)]);
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), ['verdicts' => adminBatchVerdicts($this->batch)]);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'approve'])
             ->assertSessionHasNoErrors();
 
         expect($this->round->refresh()->status)->toBe(KycStatus::Approved);
     });
 
     it('can only be sent back with something rejected, and tells the applicant which items', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'resubmit', 'feedback' => 'Please redo.'])
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'resubmit', 'feedback' => 'Please redo.'])
             ->assertSessionHasErrors('outcome');
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [
                 [...adminBatchVerdicts($this->batch)[0], 'status' => 'rejected', 'note' => 'The photo is blurred.'],
                 adminBatchVerdicts($this->batch)[1],
             ],
         ]);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'resubmit'])
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'resubmit'])
             ->assertSessionHasNoErrors();
 
         $review = $this->round->refresh()->reviews()->latest('id')->firstOrFail();
@@ -638,13 +640,13 @@ describe('reviewing a Partner round group by group', function () {
     });
 
     it('asks again only for what failed: the accepted evidence comes with the next round', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [
                 [...adminBatchVerdicts($this->batch)[0], 'status' => 'rejected', 'note' => 'Blurred.'],
                 adminBatchVerdicts($this->batch)[1],
             ],
         ]);
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'resubmit']);
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'resubmit']);
 
         $this->actingAs($this->applicant)->get(route('kyc.create'));
 
@@ -683,14 +685,14 @@ describe('reviewing a Partner round group by group', function () {
             ->post(route('admin.kyc.evidence-review', $this->round), ['verdicts' => adminBatchVerdicts($this->batch)])
             ->assertForbidden();
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.decide', $this->round), ['outcome' => 'reject', 'reason' => 'No.', 'feedback' => 'No.']);
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.decide', $this->round), ['outcome' => 'reject', 'reason' => 'No.', 'feedback' => 'No.']);
 
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), ['verdicts' => adminBatchVerdicts($this->batch)])
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), ['verdicts' => adminBatchVerdicts($this->batch)])
             ->assertSessionHasErrors('verdicts');
     });
 
     it('writes the shape of a verdict to the audit log and never its note or the evidence', function () {
-        $this->actingAs($this->admin)->post(route('admin.kyc.evidence-review', $this->round), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.kyc.evidence-review', $this->round), [
             'verdicts' => [[...adminBatchVerdicts($this->batch)[0], 'status' => 'rejected', 'note' => 'Secret instruction text.']],
         ]);
 
@@ -713,13 +715,10 @@ describe('reviewing a Supplier round group by group', function () {
 
         $this->round = $this->supplier->kycSubmissions()->firstOrFail();
 
-        // Signing a Supplier in made their guard the default one; the reviewer
-        // that follows is a staff member on the ordinary one.
-        auth()->shouldUse('web');
     });
 
     it('shows the round as groups, for a reviewer only', function () {
-        $this->actingAs($this->admin)->get(route('admin.suppliers.show', $this->supplier))
+        $this->actingAs($this->admin, 'web')->get(route('admin.suppliers.show', $this->supplier))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('batch.groups.0.key', 'identity')
@@ -728,28 +727,28 @@ describe('reviewing a Supplier round group by group', function () {
     });
 
     it('will not approve until everything owed has been accepted, then approves', function () {
-        $this->actingAs($this->admin)->post(route('admin.suppliers.approval.store', $this->supplier))->assertSessionHasErrors('note');
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.approval.store', $this->supplier))->assertSessionHasErrors('note');
 
-        $this->actingAs($this->admin)->post(route('admin.suppliers.kyc.evidence-review', $this->supplier), ['verdicts' => adminBatchVerdicts($this->batch)])
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.kyc.evidence-review', $this->supplier), ['verdicts' => adminBatchVerdicts($this->batch)])
             ->assertSessionHasNoErrors();
 
-        $this->actingAs($this->admin)->post(route('admin.suppliers.approval.store', $this->supplier))->assertSessionHasNoErrors();
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.approval.store', $this->supplier))->assertSessionHasNoErrors();
 
         expect($this->round->refresh()->status->value)->toBe('approved');
     });
 
     it('sends only the rejected item back, in the same round, and tells the Supplier which', function () {
-        $this->actingAs($this->admin)->post(route('admin.suppliers.kyc.correction.store', $this->supplier), ['feedback' => ''])
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.kyc.correction.store', $this->supplier), ['feedback' => ''])
             ->assertSessionHasErrors('feedback');
 
-        $this->actingAs($this->admin)->post(route('admin.suppliers.kyc.evidence-review', $this->supplier), [
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.kyc.evidence-review', $this->supplier), [
             'verdicts' => [
                 [...adminBatchVerdicts($this->batch)[0], 'status' => 'rejected', 'note' => 'Page cut off.'],
                 adminBatchVerdicts($this->batch)[1],
             ],
         ]);
 
-        $this->actingAs($this->admin)->post(route('admin.suppliers.kyc.correction.store', $this->supplier), ['feedback' => ''])
+        $this->actingAs($this->admin, 'web')->post(route('admin.suppliers.kyc.correction.store', $this->supplier), ['feedback' => ''])
             ->assertSessionHasNoErrors();
 
         expect($this->round->refresh()->status->value)->toBe('correction_required')
@@ -771,5 +770,174 @@ describe('reviewing a Supplier round group by group', function () {
         $this->actingAs(User::factory()->staff()->create())
             ->post(route('admin.suppliers.kyc.evidence-review', $this->supplier), ['verdicts' => adminBatchVerdicts($this->batch)])
             ->assertForbidden();
+    });
+});
+
+describe('the example batch, and the hierarchy on screen', function () {
+    it('seeds Standard KYC once: groups, options and slots, published and switched off', function () {
+        $this->seed(StandardKycBatchSeeder::class);
+
+        $batch = KycBatch::query()->where('key', 'standard_kyc')->sole();
+        $identity = $batch->groups()->where('key', 'identity_verification')->sole();
+        $business = $batch->groups()->where('key', 'business_verification')->sole();
+
+        expect($batch->groups()->count())->toBe(2)
+            ->and($batch->is_active)->toBeFalse()
+            ->and($batch->is_default)->toBeFalse()
+            ->and($batch->published_version)->toBe(1)
+            ->and($identity->completion_rule->value)->toBe('any')
+            ->and($business->completion_rule->value)->toBe('all')
+            ->and($identity->items()->count())->toBe(3)
+            ->and($business->items()->count())->toBe(2);
+
+        // National ID's front and back are two slots of one option.
+        $nid = KycDocumentType::query()->where('key', 'standard_kyc_national_id')->sole();
+
+        expect($nid->slots()->pluck('label')->all())->toBe(['Front image', 'Back image'])
+            ->and(KycDocumentType::query()->where('kyc_batch_id', $batch->id)->count())->toBe(5);
+    });
+
+    it('is idempotent: seeding again changes nothing', function () {
+        $this->seed(StandardKycBatchSeeder::class);
+
+        $before = [KycBatch::query()->count(), KycDocumentType::query()->count(), DB::table('kyc_requirement_slots')->count(), DB::table('kyc_batch_versions')->count()];
+
+        $this->seed(StandardKycBatchSeeder::class);
+
+        expect([KycBatch::query()->count(), KycDocumentType::query()->count(), DB::table('kyc_requirement_slots')->count(), DB::table('kyc_batch_versions')->count()])->toBe($before);
+    });
+
+    it('never touches a batch staff made, whatever its key', function () {
+        // A staff-made batch with that name: nothing is created or changed.
+        $theirs = KycBatch::create(['key' => 'their_own', 'name' => 'Standard KYC', 'audience' => 'account', 'is_active' => true]);
+
+        $this->seed(StandardKycBatchSeeder::class);
+
+        expect(KycBatch::query()->count())->toBe(1)
+            ->and($theirs->refresh()->groups()->count())->toBe(0)
+            ->and($theirs->is_active)->toBeTrue()
+            ->and(KycDocumentType::query()->where('kyc_batch_id', $theirs->id)->count())->toBe(0);
+    });
+
+    it('reaches the list and the builder as a tree: groups, options, slots', function () {
+        $this->seed(StandardKycBatchSeeder::class);
+        $batch = KycBatch::query()->where('key', 'standard_kyc')->sole();
+
+        $tree = fn (Assert $page, string $prefix) => $page
+            ->where("{$prefix}.groups.0.name", 'Identity Verification')
+            ->where("{$prefix}.groups.0.rule", 'any')
+            ->has("{$prefix}.groups.0.options", 3)
+            ->where("{$prefix}.groups.0.options.0.name", 'National ID')
+            ->has("{$prefix}.groups.0.options.0.slots", 2)
+            ->where("{$prefix}.groups.0.options.1.name", 'Passport')
+            ->has("{$prefix}.groups.0.options.1.slots", 1)
+            ->where("{$prefix}.groups.1.name", 'Business Verification')
+            ->where("{$prefix}.groups.1.rule", 'all')
+            ->has("{$prefix}.groups.1.options", 2);
+
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.index'))
+            ->assertInertia(fn (Assert $page) => $tree($page, 'batches.0.outline'));
+
+        $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.edit', $batch))
+            ->assertInertia(fn (Assert $page) => $tree($page, 'outline')
+                ->has('groups', 2)
+                ->has('groups.0.requirements', 3)
+                ->has('groups.0.requirements.0.slots', 2));
+    });
+
+    it('lets a Passport alone satisfy Identity while Business Verification is still owed', function () {
+        $this->seed(StandardKycBatchSeeder::class);
+        $batch = KycBatch::query()->where('key', 'standard_kyc')->sole();
+
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasNoErrors();
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.default', $batch), ['is_default' => 1])->assertSessionHasNoErrors();
+
+        $applicant = testBusinessAccount(AccountStatus::KycPending)->owner;
+        $this->actingAs($applicant)->get(route('kyc.create'));
+
+        $this->actingAs($applicant)->post(route('kyc.evidence.file'), [
+            'requirement' => 'standard_kyc_passport', 'slot' => 'bio_page_image_pdf', 'file' => adminBatchImage('passport.jpg'),
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($applicant)->get(route('kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page
+                // Identity is done with the Passport alone: no NID, no Licence.
+                ->where('batch.groups.0.satisfied', true)
+                ->where('batch.groups.0.done', 1)
+                ->where('batch.groups.0.options.0.chosen', false)
+                ->where('batch.groups.0.options.1.chosen', true)
+                // Business Verification is its own group and still owed, in full.
+                ->where('batch.groups.1.satisfied', false)
+                ->where('batch.groups.1.done', 0)
+                ->where('batch.groups.1.needed', 2)
+                ->where('batch.complete', false));
+
+        $this->actingAs($applicant)->post(route('kyc.submit'), ['confirm' => 1])->assertSessionHasErrors('submission');
+
+        // One Business option is not enough; both are.
+        $this->actingAs($applicant)->post(route('kyc.evidence.file'), [
+            'requirement' => 'standard_kyc_trade_licence', 'slot' => 'licence_pdf', 'file' => UploadedFile::fake()->create('licence.pdf', 50, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($applicant)->get(route('kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch.groups.1.done', 1)->where('batch.complete', false));
+
+        $this->actingAs($applicant)->post(route('kyc.evidence.file'), [
+            'requirement' => 'standard_kyc_business_address', 'slot' => 'address_document', 'file' => adminBatchImage('address.jpg'),
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($applicant)->get(route('kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch.groups.1.satisfied', true)->where('batch.complete', true));
+
+        $this->actingAs($applicant)->post(route('kyc.submit'), ['confirm' => 1])->assertSessionHasNoErrors();
+    });
+
+    it('gives a batch made on the older criteria screen its place in the hierarchy', function () {
+        $batch = KycBatch::create(['key' => 'older_screen', 'name' => 'Older screen', 'audience' => 'account', 'is_active' => false]);
+        KycDocumentType::factory()->create(['kyc_batch_id' => $batch->id, 'audience' => 'account', 'key' => 'older_doc', 'name' => 'Older document']);
+
+        // Opening it twice places it once.
+        foreach ([1, 2] as $visit) {
+            $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.edit', $batch))
+                ->assertInertia(fn (Assert $page) => $page
+                    ->has('groups', 1)
+                    ->where('groups.0.name', 'Requirements')
+                    ->where('groups.0.rule', 'all')
+                    ->has('groups.0.requirements', 1)
+                    ->where('groups.0.requirements.0.name', 'Older document')
+                    ->has('groups.0.requirements.0.slots', 1));
+        }
+
+        expect($batch->groups()->count())->toBe(1)
+            ->and(KycDocumentType::query()->where('key', 'older_doc')->sole()->slots()->count())->toBe(1);
+    });
+
+    it('places a criterion made on the older screen in a group straight away', function () {
+        $batch = KycBatch::create(['key' => 'older_screen', 'name' => 'Older screen', 'audience' => 'account', 'is_active' => false]);
+
+        app(ManageKycDocumentTypes::class)->create([
+            'key' => 'made_there', 'name' => 'Made there', 'kyc_batch_id' => $batch->id, 'audience' => 'account',
+            'is_required' => true, 'is_active' => true, 'accepted_mime_types' => ['image/jpeg'], 'max_size_kb' => 2048,
+            'requires_file' => true, 'requires_value' => false,
+        ], $this->admin);
+
+        expect($batch->groups()->sole()->items()->count())->toBe(1);
+    });
+
+    it('is found from the Settings hub, and only by someone who may view batches', function () {
+        $keys = fn (User $user) => collect($this->actingAs($user, 'web')->get(route('admin.settings'))->viewData('page')['props']['sections'])
+            ->flatMap(fn ($section) => collect($section['items'])->pluck('key'))->all();
+
+        expect($keys($this->admin))->toContain('kyc_batches');
+
+        $viewer = User::factory()->staff()->create();
+        $viewer->givePermissionTo('kyc_batch.view');
+
+        expect($keys($viewer))->toContain('kyc_batches');
+
+        $other = User::factory()->staff()->create();
+        $other->givePermissionTo('kyc.view');
+
+        expect($keys($other))->not->toContain('kyc_batches');
     });
 });

@@ -78,6 +78,11 @@ class KycUpdateRequestController extends Controller
             ? KycBatch::query()->where('public_id', $validated['batch'])->first()
             : null;
 
+        // Choosing the template is its own permission, beyond asking for an update.
+        if ($batch !== null) {
+            Gate::authorize('assign', KycBatch::class);
+        }
+
         /** @var User $actor */
         $actor = $request->user();
 

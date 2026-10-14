@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Audit\Actions\RecordAuditLog;
+use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Kyc\Actions\ReviewKyc;
 use App\Domain\Kyc\Batch\KycApprovalReadiness;
 use App\Domain\Kyc\Batch\KycReviewRefused;
@@ -14,9 +16,11 @@ use App\Domain\Kyc\Batch\RecordKycVerdict;
 use App\Domain\Kyc\Data\KycDecision;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDocumentStore;
+use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -142,7 +146,11 @@ class KycReviewController extends Controller
                     // Whether a file link is offered at all; the document route
                     // checks again on every request (§7.5).
                     'can_open_documents' => $mayOpenDocuments,
-                    'can_judge' => $round->awaitsReview() && $reviewer->can('review', $submission),
+                    'can_judge' => $round->awaitsReview()
+                        && $reviewer->can('review', $submission)
+                        && $reviewer->can('review', KycBatch::class),
+                    // Whether a typed value may be revealed in full; each reveal is recorded.
+                    'can_view_sensitive' => $reviewer->can('viewSensitive', KycBatch::class),
                 ],
             ],
             'submission' => [
@@ -258,6 +266,45 @@ class KycReviewController extends Controller
     }
 
     /**
+     * One typed value of a round on a batch, in full. Everything else on the page
+     * carries it masked; this is the deliberate way to read it, so it needs its own
+     * permission and leaves its own audit entry — which slot was read, never what it
+     * said.
+     */
+    public function revealValue(Request $request, KycSubmission $submission, KycDocumentStore $store, RecordAuditLog $audit): JsonResponse
+    {
+        Gate::authorize('view', $submission);
+        Gate::authorize('viewSensitive', KycBatch::class);
+
+        $validated = $request->validate([
+            'requirement' => ['required', 'string', 'max:64'],
+            'slot' => ['required', 'string', 'max:48'],
+        ]);
+
+        $round = new PartnerKycRound($submission, $store);
+        $slot = $round->definition()?->slot($validated['requirement'], $validated['slot']);
+
+        // Only a typed value the batch actually asks for.
+        abort_unless($slot !== null && in_array($slot['evidence'], ['value', 'declaration'], true), 404);
+
+        $value = $round->revealValue($validated['requirement'], $validated['slot']);
+
+        abort_if($value === null, 404);
+
+        $audit->handle((new AuditEntry(
+            action: 'kyc.value_viewed',
+            actorId: $request->user()?->id,
+            auditableType: KycSubmission::class,
+            auditableId: $submission->id,
+            after: ['requirement' => $validated['requirement'], 'slot' => $validated['slot']],
+            accountId: $submission->business_account_id,
+            module: 'kyc',
+        ))->withContext($request));
+
+        return response()->json(['value' => $value])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
      * Accept or reject evidence on a round on a batch, slot by slot. One or many
      * verdicts in one post, so "accept everything pending" is a single request that
      * either lands whole or not at all.
@@ -268,7 +315,9 @@ class KycReviewController extends Controller
         RecordKycVerdict $record,
         KycDocumentStore $store,
     ): RedirectResponse {
+        // Both: this round's reviewer, and a holder of the batch review permission.
         Gate::authorize('review', $submission);
+        Gate::authorize('review', KycBatch::class);
 
         /** @var User $reviewer */
         $reviewer = $request->user();

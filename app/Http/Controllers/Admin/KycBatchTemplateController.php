@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Kyc\Actions\AdoptLegacyCriteria;
 use App\Domain\Kyc\Actions\BuildBatchDefinition;
 use App\Domain\Kyc\Actions\CloneKycBatch;
 use App\Domain\Kyc\Actions\GenerateKycKey;
@@ -56,7 +60,7 @@ class KycBatchTemplateController extends Controller
 
     public function index(): Response
     {
-        $this->authorizeManage();
+        Gate::authorize('viewAny', KycBatch::class);
 
         $batches = KycBatch::query()
             ->whereNull('archived_at')
@@ -77,14 +81,21 @@ class KycBatchTemplateController extends Controller
                 'groups_count' => $batch->groups_count,
                 'published_version' => $batch->published_version,
                 'has_unpublished_changes' => $this->publisher->hasUnpublishedChanges($batch),
+                // The tree the batch is: groups, options, evidence slots.
+                'outline' => $this->outline($batch),
             ])->all(),
             'audiences' => $this->audiences(),
+            // What the viewer may do, so a control they would be refused is not drawn.
+            'can' => [
+                'create' => Gate::allows('create', KycBatch::class),
+                'activate' => $this->holds(PermissionAction::Activate),
+            ],
         ]);
     }
 
     public function store(SaveKycBatchTemplateRequest $request, ManageKycBatches $manage, GenerateKycKey $keys): RedirectResponse
     {
-        $this->authorizeManage();
+        Gate::authorize('create', KycBatch::class);
 
         $attributes = $request->batchAttributes();
 
@@ -99,9 +110,16 @@ class KycBatchTemplateController extends Controller
         return to_route('admin.kyc.batch-builder.edit', $batch)->with('success', __('kyc.batch_builder.created'));
     }
 
-    public function edit(KycBatch $batch): Response
+    public function edit(KycBatch $batch, AdoptLegacyCriteria $adopt): Response
     {
-        $this->authorizeManage();
+        Gate::authorize('view', $batch);
+
+        // A batch made on the older criteria screen has criteria but no groups.
+        // Give them their place (additive, idempotent) so what is shown is the
+        // whole hierarchy — and only for someone who may edit it anyway.
+        if (Gate::allows('update', $batch)) {
+            $adopt->handle($batch);
+        }
 
         $batch->load(['scopes', 'groups.items.requirement.slots']);
         $definition = $this->definitions->handle($batch);
@@ -144,6 +162,12 @@ class KycBatchTemplateController extends Controller
             ])->all(),
             // Everything that would stop it being published, in one list.
             'problems' => $this->definitions->problems($definition),
+            'outline' => $this->outline($batch),
+            'can' => [
+                'create' => Gate::allows('create', KycBatch::class),
+                'update' => Gate::allows('update', $batch),
+                'activate' => Gate::allows('activate', $batch),
+            ],
             'options' => [
                 'audiences' => $this->audiences(),
                 'selfie_modes' => array_map(
@@ -154,9 +178,10 @@ class KycBatchTemplateController extends Controller
                     fn (KycCompletionRule $rule) => ['value' => $rule->value, 'label' => __("kyc.batch_builder.rules.{$rule->value}")],
                     KycCompletionRule::cases(),
                 ),
+                // In the order a person thinks of them.
                 'evidence_types' => array_map(
                     fn (KycEvidenceType $type) => ['value' => $type->value, 'label' => __("kyc.batch_builder.evidence_types.{$type->value}")],
-                    KycEvidenceType::cases(),
+                    [KycEvidenceType::Image, KycEvidenceType::File, KycEvidenceType::Pdf, KycEvidenceType::Value, KycEvidenceType::Declaration],
                 ),
                 'packages' => Package::query()->orderBy('name')->get(['public_id', 'name'])
                     ->map(fn (Package $package) => ['value' => $package->public_id, 'label' => $package->name])->all(),
@@ -167,7 +192,7 @@ class KycBatchTemplateController extends Controller
 
     public function update(SaveKycBatchTemplateRequest $request, KycBatch $batch, ManageKycBatches $manage): RedirectResponse
     {
-        $this->authorizeManage();
+        Gate::authorize('update', $batch);
 
         try {
             $manage->update($batch, $request->batchAttributes(), $request->ruleRows(), $this->actor($request));
@@ -180,7 +205,7 @@ class KycBatchTemplateController extends Controller
 
     public function structure(SaveKycBatchStructureRequest $request, KycBatch $batch, SaveKycBatchStructure $save): RedirectResponse
     {
-        $this->authorizeManage();
+        Gate::authorize('update', $batch);
 
         try {
             $save->handle($batch, $request->groups(), $this->actor($request));
@@ -197,7 +222,7 @@ class KycBatchTemplateController extends Controller
      */
     public function preview(Request $request, KycBatch $batch, KycRoundPresenter $presenter): Response
     {
-        $this->authorizeManage();
+        Gate::authorize('view', $batch);
 
         $locale = $request->query('as') === 'bn' ? 'bn' : 'en';
         $previous = app()->getLocale();
@@ -231,7 +256,8 @@ class KycBatchTemplateController extends Controller
 
     public function clone(Request $request, KycBatch $batch, CloneKycBatch $clone): RedirectResponse
     {
-        $this->authorizeManage();
+        Gate::authorize('create', KycBatch::class);
+        Gate::authorize('view', $batch);
 
         $copy = $clone->handle($batch, $this->actor($request));
 
@@ -244,7 +270,7 @@ class KycBatchTemplateController extends Controller
      */
     public function publish(Request $request, KycBatch $batch): RedirectResponse
     {
-        $this->authorizeManage();
+        Gate::authorize('activate', $batch);
 
         try {
             $version = $this->publisher->handle($batch, $this->actor($request));
@@ -260,7 +286,7 @@ class KycBatchTemplateController extends Controller
      */
     public function active(Request $request, KycBatch $batch, ManageKycBatches $manage): RedirectResponse
     {
-        $this->authorizeManage();
+        Gate::authorize('activate', $batch);
 
         $validated = $request->validate(['is_active' => ['required', 'boolean']]);
 
@@ -279,7 +305,7 @@ class KycBatchTemplateController extends Controller
 
     public function default(Request $request, KycBatch $batch, ManageKycBatches $manage): RedirectResponse
     {
-        $this->authorizeManage();
+        Gate::authorize('activate', $batch);
 
         $validated = $request->validate(['is_default' => ['required', 'boolean']]);
 
@@ -290,6 +316,35 @@ class KycBatchTemplateController extends Controller
         }
 
         return back()->with('success', __('kyc.batch_builder.default_saved'));
+    }
+
+    /**
+     * The batch as a tree — its groups, the options in each, the evidence slots in
+     * each option — in the reader's language. Built from the live structure, so it
+     * is what publishing would freeze.
+     *
+     * @return array{groups: array<int, array<string, mixed>>}
+     */
+    protected function outline(KycBatch $batch): array
+    {
+        $definition = $this->definitions->handle($batch);
+
+        return ['groups' => array_map(fn (array $group) => [
+            'name' => KycRoundDefinition::localized($group, 'name'),
+            'rule' => $group['rule'],
+            'minimum' => $group['minimum'],
+            'required' => $group['required'],
+            'options' => array_map(fn (array $option) => [
+                'name' => KycRoundDefinition::localized($option, 'name'),
+                'required' => $option['required'],
+                'slots' => array_map(fn (array $slot) => [
+                    'label' => KycRoundDefinition::localized($slot, 'label'),
+                    'evidence' => $slot['evidence'],
+                    'required' => $slot['required'],
+                    'sensitive' => $slot['sensitive'],
+                ], $option['slots']),
+            ], $group['requirements']),
+        ], $definition['groups'])];
     }
 
     /**
@@ -362,9 +417,9 @@ class KycBatchTemplateController extends Controller
         );
     }
 
-    protected function authorizeManage(): void
+    protected function holds(PermissionAction $action): bool
     {
-        Gate::authorize('create', KycDocumentType::class);
+        return (bool) auth()->user()?->can(PermissionCatalogue::name(PermissionModule::KycBatch, $action));
     }
 
     protected function actor(Request $request): User

@@ -43,6 +43,12 @@ class ManageKycDocumentTypes
 
             $this->record('kyc.document_type_created', $type, $by, after: $type->getAttributes());
 
+            // Into the batch's hierarchy at once, so the builder shows it as an
+            // option the moment it exists (D30).
+            if ($type->batch !== null) {
+                app(AdoptLegacyCriteria::class)->handle($type->batch);
+            }
+
             return $type;
         });
     }

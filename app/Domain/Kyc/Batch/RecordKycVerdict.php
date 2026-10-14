@@ -57,13 +57,15 @@ final class RecordKycVerdict
         }
 
         // Only a slot the version asks for, and only one that holds something.
-        if ($definition->slot($requirement, $slot) === null
-            || ! isset($round->evidence()[KycEvidenceItem::keyFor($requirement, $slot)])) {
+        $item = $round->evidence()[KycEvidenceItem::keyFor($requirement, $slot)] ?? null;
+
+        if ($definition->slot($requirement, $slot) === null || $item === null) {
             throw KycReviewRefused::nothingToJudge();
         }
 
-        $this->database->transaction(function () use ($round, $by, $requirement, $slot, $status, $note) {
-            $round->recordVerdict($requirement, $slot, $status, $status === self::REJECTED ? $note : null, $by->id);
+        $this->database->transaction(function () use ($round, $by, $requirement, $slot, $status, $note, $item) {
+            // The verdict names the very evidence it judged.
+            $round->recordVerdict($requirement, $slot, $status, $status === self::REJECTED ? $note : null, $by->id, $item->ref);
 
             $this->audit($round, $by, $requirement, $slot, $status);
         });

@@ -182,6 +182,8 @@ enum PlatformRole: string
                     Action::Suspend, Action::Reactivate, Action::ManageSettings,
                 ],
                 Module::Package->value => $manage,
+                // Sees the templates, builds none and switches none.
+                Module::KycBatch->value => [Action::View],
                 Module::Catalog->value => [...$manage, Action::ManageSettings],
                 Module::Order->value => [...$manage, ...$review],
                 Module::Inventory->value => $read,
@@ -221,6 +223,13 @@ enum PlatformRole: string
                 Module::Kyc->value => [
                     Action::View, Action::Edit, Action::Export,
                     ...$review, Action::ViewKycDocuments, Action::ManageSettings,
+                ],
+                // The whole batch lifecycle, including revealing a typed value in
+                // full (sensitive, so this stays a two-factor role).
+                Module::KycBatch->value => [
+                    Action::View, Action::Create, Action::Edit,
+                    Action::Activate, Action::Assign, Action::Review,
+                    Action::ViewSensitiveData,
                 ],
                 Module::Account->value => [Action::View, Action::Export],
             ],
@@ -375,6 +384,9 @@ enum PlatformRole: string
                     Action::Create, Action::Edit, Action::Verify,
                 ],
                 Module::SupplierKyc->value => [Action::View, Action::Review],
+                // Opening a Supplier's round on a chosen batch and grading it;
+                // building or switching batches on stays with the KYC Manager.
+                Module::KycBatch->value => [Action::View, Action::Assign, Action::Review],
                 Module::SupplierListing->value => [Action::View, Action::Review, Action::Approve],
                 Module::SupplierPricing->value => [Action::View, Action::Edit],
                 Module::SupplierStock->value => [Action::View, Action::Edit],

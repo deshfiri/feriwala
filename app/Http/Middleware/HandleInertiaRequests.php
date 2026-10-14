@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Support\Localization\Locale;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Inertia\Middleware;
 
@@ -48,6 +49,15 @@ class HandleInertiaRequests extends Middleware
      */
     public const NAVIGATION_ABILITIES = [
         [PermissionModule::Kyc, PermissionAction::View],
+
+        // KYC batch templates (D30): the nav entry needs view; the page then
+        // says which of build / activate / assign / review the viewer holds.
+        [PermissionModule::KycBatch, PermissionAction::View],
+        [PermissionModule::KycBatch, PermissionAction::Create],
+        [PermissionModule::KycBatch, PermissionAction::Activate],
+        [PermissionModule::KycBatch, PermissionAction::Assign],
+        [PermissionModule::KycBatch, PermissionAction::Review],
+        [PermissionModule::KycBatch, PermissionAction::ViewSensitiveData],
         [PermissionModule::Account, PermissionAction::View],
 
         // The activity log (§36.2).
@@ -188,11 +198,23 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        // The `web` guard named explicitly. `auth:supplier` makes `supplier`
-        // the *default* guard for the rest of the request (Authenticate calls
-        // `shouldUse()`), so a bare `user()` here would hand a Supplier to
-        // code that only understands `App\Models\User` (D25).
-        $user = $request->user('web');
+        /*
+         * One identity per request: the guard the route asked for.
+         *
+         * A browser can hold a staff session and a Supplier session at the same
+         * time, each on its own guard. `auth:supplier` makes `supplier` the
+         * default guard for the request (Authenticate calls `shouldUse()`), and
+         * `auth` makes `web` the default; that is how the route says which person
+         * it is for. The shell then shares only that person — otherwise a Supplier
+         * page would carry the staff member's profile, notifications and realtime
+         * channel (and a staff page the Supplier's), purely because both sessions
+         * happen to exist (D25).
+         *
+         * The guards are always named explicitly: a bare `user()` would hand a
+         * Supplier to code that only understands `App\Models\User`.
+         */
+        $onSupplierPortal = Auth::getDefaultDriver() === 'supplier';
+        $user = $onSupplierPortal ? null : $request->user('web');
 
         return [
             ...parent::share($request),
@@ -214,7 +236,7 @@ class HandleInertiaRequests extends Middleware
              * `auth.user`, on its own guard. Only what the portal shell needs;
              * never the password, payout detail or any confidential figure.
              */
-            'supplierAccount' => fn () => $this->supplierAccount($request),
+            'supplierAccount' => fn () => $onSupplierPortal || $user === null ? $this->supplierAccount($request) : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
             /*
@@ -270,7 +292,8 @@ class HandleInertiaRequests extends Middleware
     {
         $supplier = $request->user('supplier');
 
-        if ($supplier === null) {
+        // Only a Supplier is ever described here, whatever the guard holds.
+        if (! $supplier instanceof Supplier) {
             return null;
         }
 

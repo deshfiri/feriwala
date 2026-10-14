@@ -17,7 +17,12 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { show as accountDossier } from '@/routes/admin/accounts';
-import { decide, evidenceReview, index } from '@/routes/admin/kyc';
+import {
+    decide,
+    evidenceReview,
+    evidenceValue,
+    index,
+} from '@/routes/admin/kyc';
 import { download, show as documentShow } from '@/routes/kyc/documents';
 import BatchReview from '@/components/kyc/batch-review';
 import type {
@@ -151,6 +156,11 @@ export default function AdminKycShow({
                                 batch={batch}
                                 verdictUrl={evidenceReview.url(submission.id)}
                                 documentUrl={(id) => documentShow.url(id)}
+                                revealUrl={(requirement, slot) =>
+                                    evidenceValue.url(submission.id, {
+                                        query: { requirement, slot },
+                                    })
+                                }
                             />
                         )}
 

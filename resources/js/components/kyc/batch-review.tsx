@@ -8,7 +8,7 @@ import {
     Lock,
     X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,22 @@ type Verdict = {
     note?: string;
 };
 
+/**
+ * How a typed value is read in full, for those allowed to. The ordinary payload
+ * carries only the masked form; revealing is a separate request that the server
+ * checks and records every time, and the value is held here only until the
+ * reviewer hides it or leaves the page.
+ */
+type RevealAccess = {
+    allowed: boolean;
+    url: (requirement: string, slot: string) => string;
+};
+
+const RevealContext = createContext<RevealAccess>({
+    allowed: false,
+    url: () => '#',
+});
+
 const formatSize = (bytes: number): string =>
     bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`;
 
@@ -47,12 +63,15 @@ export default function BatchReview({
     batch,
     verdictUrl,
     documentUrl,
+    revealUrl,
 }: {
     batch: KycBatchForReview;
     /** Where verdicts are posted (the Partner or the Supplier endpoint). */
     verdictUrl: string;
     /** The authorised route that serves one document. */
     documentUrl: (documentId: string) => string;
+    /** The route that returns one typed value in full (and records that it was read). */
+    revealUrl: (requirement: string, slot: string) => string;
 }) {
     const { t } = useTranslation();
     const [busy, setBusy] = useState(false);
@@ -77,128 +96,135 @@ export default function BatchReview({
     );
 
     return (
-        <div className="space-y-6">
-            <SectionCard
-                title={batch.name}
-                description={t('kyc.review_ui.subtitle', {
-                    version: batch.version,
-                })}
-                actions={
-                    review.can_judge && pending.length > 0 ? (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() =>
-                                send(
-                                    pending.map((entry) => ({
-                                        requirement: entry.current.requirement,
-                                        slot: entry.current.slot,
-                                        status: 'accepted' as const,
-                                    })),
-                                )
-                            }
-                        >
-                            {busy ? (
-                                <Spinner className="size-4" />
-                            ) : (
-                                <CheckCheck
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                            )}
-                            {t('kyc.review_ui.accept_all', {
-                                count: pending.length,
-                            })}
-                        </Button>
-                    ) : undefined
-                }
-            >
-                <div aria-live="polite" className="space-y-2">
-                    {review.problems.length === 0 ? (
-                        <p className="text-success flex items-center gap-2 text-sm font-medium">
-                            <Check className="size-4" aria-hidden="true" />
-                            {t('kyc.review_ui.ready')}
-                        </p>
-                    ) : (
-                        <>
-                            <p className="text-sm font-medium">
-                                {t('kyc.review_ui.before_approval')}
-                            </p>
-                            <ul className="text-muted-foreground list-disc space-y-0.5 pl-5 text-xs">
-                                {review.problems.map((line) => (
-                                    <li key={line}>{line}</li>
-                                ))}
-                            </ul>
-                        </>
-                    )}
-
-                    {review.corrections.length > 0 && (
-                        <div className="bg-warning-subtle mt-3 space-y-1 rounded-md p-3">
-                            <p className="text-sm font-medium">
-                                {t('kyc.review_ui.corrections_title')}
-                            </p>
-                            <p className="text-muted-foreground text-xs">
-                                {t('kyc.review_ui.corrections_help')}
-                            </p>
-                            <ul className="list-disc space-y-0.5 pl-5 text-xs">
-                                {review.corrections.map((line) => (
-                                    <li key={line}>{line}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-
-                    {error && (
-                        <p
-                            role="alert"
-                            className="text-danger text-sm font-medium"
-                        >
-                            {error}
-                        </p>
-                    )}
-                </div>
-            </SectionCard>
-
-            {batch.groups.map((group) => (
-                <ReviewGroup
-                    key={group.key}
-                    group={group}
-                    canJudge={review.can_judge}
-                    canOpen={review.can_open_documents}
-                    busy={busy}
-                    send={send}
-                    documentUrl={documentUrl}
-                />
-            ))}
-
-            {batch.selfie && (
+        <RevealContext.Provider
+            value={{ allowed: review.can_view_sensitive, url: revealUrl }}
+        >
+            <div className="space-y-6">
                 <SectionCard
-                    title={t('kyc.review_ui.selfie')}
+                    title={batch.name}
+                    description={t('kyc.review_ui.subtitle', {
+                        version: batch.version,
+                    })}
                     actions={
-                        <StatusPill
-                            tone={batch.selfie.required ? 'info' : 'neutral'}
-                            label={t(
-                                batch.selfie.required
-                                    ? 'kyc.batch_form.required'
-                                    : 'kyc.batch_form.optional',
-                            )}
-                        />
+                        review.can_judge && pending.length > 0 ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={busy}
+                                onClick={() =>
+                                    send(
+                                        pending.map((entry) => ({
+                                            requirement:
+                                                entry.current.requirement,
+                                            slot: entry.current.slot,
+                                            status: 'accepted' as const,
+                                        })),
+                                    )
+                                }
+                            >
+                                {busy ? (
+                                    <Spinner className="size-4" />
+                                ) : (
+                                    <CheckCheck
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                {t('kyc.review_ui.accept_all', {
+                                    count: pending.length,
+                                })}
+                            </Button>
+                        ) : undefined
                     }
                 >
-                    <SlotReview
-                        requirement={batch.selfie.requirement}
-                        slot={batch.selfie.slot}
+                    <div aria-live="polite" className="space-y-2">
+                        {review.problems.length === 0 ? (
+                            <p className="text-success flex items-center gap-2 text-sm font-medium">
+                                <Check className="size-4" aria-hidden="true" />
+                                {t('kyc.review_ui.ready')}
+                            </p>
+                        ) : (
+                            <>
+                                <p className="text-sm font-medium">
+                                    {t('kyc.review_ui.before_approval')}
+                                </p>
+                                <ul className="text-muted-foreground list-disc space-y-0.5 pl-5 text-xs">
+                                    {review.problems.map((line) => (
+                                        <li key={line}>{line}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+
+                        {review.corrections.length > 0 && (
+                            <div className="bg-warning-subtle mt-3 space-y-1 rounded-md p-3">
+                                <p className="text-sm font-medium">
+                                    {t('kyc.review_ui.corrections_title')}
+                                </p>
+                                <p className="text-muted-foreground text-xs">
+                                    {t('kyc.review_ui.corrections_help')}
+                                </p>
+                                <ul className="list-disc space-y-0.5 pl-5 text-xs">
+                                    {review.corrections.map((line) => (
+                                        <li key={line}>{line}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {error && (
+                            <p
+                                role="alert"
+                                className="text-danger text-sm font-medium"
+                            >
+                                {error}
+                            </p>
+                        )}
+                    </div>
+                </SectionCard>
+
+                {batch.groups.map((group) => (
+                    <ReviewGroup
+                        key={group.key}
+                        group={group}
                         canJudge={review.can_judge}
                         canOpen={review.can_open_documents}
                         busy={busy}
                         send={send}
                         documentUrl={documentUrl}
                     />
-                </SectionCard>
-            )}
-        </div>
+                ))}
+
+                {batch.selfie && (
+                    <SectionCard
+                        title={t('kyc.review_ui.selfie')}
+                        actions={
+                            <StatusPill
+                                tone={
+                                    batch.selfie.required ? 'info' : 'neutral'
+                                }
+                                label={t(
+                                    batch.selfie.required
+                                        ? 'kyc.batch_form.required'
+                                        : 'kyc.batch_form.optional',
+                                )}
+                            />
+                        }
+                    >
+                        <SlotReview
+                            requirement={batch.selfie.requirement}
+                            slot={batch.selfie.slot}
+                            canJudge={review.can_judge}
+                            canOpen={review.can_open_documents}
+                            busy={busy}
+                            send={send}
+                            documentUrl={documentUrl}
+                        />
+                    </SectionCard>
+                )}
+            </div>
+        </RevealContext.Provider>
     );
 }
 
@@ -363,6 +389,77 @@ function ReviewOption({
     );
 }
 
+function ValueView({
+    requirement,
+    slot,
+    preview,
+    typed,
+}: {
+    requirement: string;
+    slot: string;
+    preview: string;
+    typed: boolean;
+}) {
+    const { t } = useTranslation();
+    const access = useContext(RevealContext);
+    const [value, setValue] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    const reveal = async () => {
+        setBusy(true);
+        setFailed(false);
+
+        try {
+            const response = await fetch(access.url(requirement, slot), {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw new Error('refused');
+            }
+
+            setValue((await response.json()).value as string);
+        } catch {
+            setFailed(true);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm tabular-nums" aria-live="polite">
+                {value ?? preview}
+            </p>
+
+            {typed && access.allowed && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => (value === null ? reveal() : setValue(null))}
+                >
+                    {value === null
+                        ? t('kyc.review_ui.show_value')
+                        : t('kyc.review_ui.hide_value')}
+                </Button>
+            )}
+
+            {failed && (
+                <span role="alert" className="text-danger text-xs">
+                    {t('kyc.review_ui.reveal_failed')}
+                </span>
+            )}
+        </div>
+    );
+}
+
 function SlotReview({
     requirement,
     slot,
@@ -474,10 +571,15 @@ function SlotReview({
                             )}
                         </>
                     ) : (
-                        <p className="text-sm tabular-nums">
-                            {current.value_preview ??
-                                t('kyc.review_ui.declared')}
-                        </p>
+                        <ValueView
+                            requirement={requirement}
+                            slot={slot.key}
+                            preview={
+                                current.value_preview ??
+                                t('kyc.review_ui.declared')
+                            }
+                            typed={slot.evidence === 'value'}
+                        />
                     )}
                 </div>
             )}

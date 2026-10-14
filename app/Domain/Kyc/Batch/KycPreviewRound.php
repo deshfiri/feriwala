@@ -73,7 +73,12 @@ final class KycPreviewRound implements KycRound
         return false;
     }
 
-    public function recordVerdict(string $requirement, string $slot, string $status, ?string $note, int $reviewerId): void
+    public function revealValue(string $requirement, string $slot): ?string
+    {
+        return null;
+    }
+
+    public function recordVerdict(string $requirement, string $slot, string $status, ?string $note, int $reviewerId, ?string $evidenceRef = null): void
     {
         throw new BadMethodCallException('A preview cannot be changed.');
     }

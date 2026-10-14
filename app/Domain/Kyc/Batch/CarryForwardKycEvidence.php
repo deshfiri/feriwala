@@ -44,9 +44,13 @@ final class CarryForwardKycEvidence
         $carried = 0;
 
         foreach ($accepted as $item) {
-            $item->kind === KycEvidenceItem::FILE
+            $ref = $item->kind === KycEvidenceItem::FILE
                 ? $this->copyDocument($from, $to, $item)
                 : $this->copyField($from, $to, $item);
+
+            if ($ref === null) {
+                continue;
+            }
 
             $verdict = KycEvidenceReview::query()
                 ->where('kyc_submission_id', $from->id)
@@ -64,6 +68,7 @@ final class CarryForwardKycEvidence
                 'status' => KycEvidenceReview::ACCEPTED,
                 'note' => null,
                 'reviewed_by' => $verdict?->reviewed_by,
+                'evidence_ref' => $ref,
             ]);
 
             $carried++;
@@ -78,7 +83,10 @@ final class CarryForwardKycEvidence
         return $carried;
     }
 
-    private function copyDocument(KycSubmission $from, KycSubmission $to, KycEvidenceItem $item): void
+    /**
+     * @return string|null the copy's identity, which its carried verdict names
+     */
+    private function copyDocument(KycSubmission $from, KycSubmission $to, KycEvidenceItem $item): ?string
     {
         $document = $from->documents()
             ->whereNull('superseded_at')
@@ -86,14 +94,16 @@ final class CarryForwardKycEvidence
             ->first();
 
         if ($document === null) {
-            return;
+            return null;
         }
 
         $copy = $document->replicate();
         $copy->forceFill(['kyc_submission_id' => $to->id, 'public_id' => null])->save();
+
+        return $copy->public_id;
     }
 
-    private function copyField(KycSubmission $from, KycSubmission $to, KycEvidenceItem $item): void
+    private function copyField(KycSubmission $from, KycSubmission $to, KycEvidenceItem $item): ?string
     {
         $field = $from->fields()
             ->whereNull('superseded_at')
@@ -102,9 +112,12 @@ final class CarryForwardKycEvidence
             ->first();
 
         if ($field === null) {
-            return;
+            return null;
         }
 
-        $field->replicate()->forceFill(['kyc_submission_id' => $to->id, 'slot_key' => $item->slot])->save();
+        $copy = $field->replicate();
+        $copy->forceFill(['kyc_submission_id' => $to->id, 'slot_key' => $item->slot])->save();
+
+        return KycEvidenceItem::refForField($copy->id);
     }
 }

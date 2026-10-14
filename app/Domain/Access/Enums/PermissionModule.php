@@ -17,6 +17,9 @@ enum PermissionModule: string
     case Cms = 'cms';
     case Account = 'account';
     case Kyc = 'kyc';
+
+    /** Reusable, versioned KYC verification batches (D30). */
+    case KycBatch = 'kyc_batch';
     case Package = 'package';
     case Payment = 'payment';
     case Wallet = 'wallet';
@@ -75,6 +78,7 @@ enum PermissionModule: string
             self::Cms => 'Landing page & CMS',
             self::Account => 'Accounts',
             self::Kyc => 'KYC',
+            self::KycBatch => 'KYC batches',
             self::Package => 'Packages',
             self::Payment => 'Payments',
             self::Wallet => 'Wallets',

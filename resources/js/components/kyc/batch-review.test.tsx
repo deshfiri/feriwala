@@ -97,6 +97,7 @@ function batch(
             awaits_review: true,
             can_judge: true,
             can_open_documents: true,
+            can_view_sensitive: false,
             ...overrides,
         },
     };
@@ -116,6 +117,7 @@ function mount(value: KycBatchForReview): HTMLDivElement {
                 batch={value}
                 verdictUrl="/verdicts"
                 documentUrl={(id) => `/documents/${id}`}
+                revealUrl={() => '/reveal'}
             />,
         );
     });

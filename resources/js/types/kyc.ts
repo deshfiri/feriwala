@@ -134,6 +134,8 @@ export type KycBatchReviewState = {
     awaits_review: boolean;
     can_judge: boolean;
     can_open_documents: boolean;
+    /** May reveal a typed value in full; each reveal is recorded. */
+    can_view_sensitive: boolean;
 };
 
 /** A round on a batch as the reviewer sees it: the applicant's payload plus the review state. */
@@ -207,6 +209,26 @@ export type KycBatchTemplateRow = {
     groups_count: number;
     published_version: number;
     has_unpublished_changes: boolean;
+    outline: KycOutline;
+};
+
+/** One evidence slot as the outline draws it. */
+export type KycOutlineSlot = {
+    label: string;
+    evidence: 'file' | 'image' | 'pdf' | 'value' | 'declaration';
+    required: boolean;
+    sensitive: boolean;
+};
+
+/** A batch as a tree: groups, the options in each, the evidence slots in each. */
+export type KycOutline = {
+    groups: {
+        name: string;
+        rule: 'all' | 'any' | 'min';
+        minimum: number | null;
+        required: boolean;
+        options: { name: string; required: boolean; slots: KycOutlineSlot[] }[];
+    }[];
 };
 
 export type KycReviewDocument = {

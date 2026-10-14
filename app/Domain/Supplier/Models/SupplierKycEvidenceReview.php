@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property string $requirement_key
  * @property string|null $slot_key
+ * @property string|null $evidence_ref
  * @property string $status
  * @property string|null $note
  * @property CarbonImmutable $created_at

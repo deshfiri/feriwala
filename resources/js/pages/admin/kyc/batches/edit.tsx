@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import StructureOutline from '@/components/kyc/structure-outline';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     active,
@@ -36,6 +37,7 @@ import {
 import type {
     KycBatchRule,
     KycBuilderBatch,
+    KycOutline,
     KycBuilderGroup,
     KycBuilderRequirement,
     KycBuilderSlot,
@@ -178,11 +180,17 @@ export default function KycBatchBuilder({
     groups: savedGroups,
     problems,
     options,
+    can,
+    outline,
 }: {
     batch: KycBuilderBatch;
     groups: KycBuilderGroup[];
     problems: string[];
     options: Options;
+    /** The saved structure drawn as a tree: groups, options, evidence slots. */
+    outline: KycOutline;
+    /** What this viewer may do with this batch. */
+    can: { create: boolean; update: boolean; activate: boolean };
 }) {
     const { t } = useTranslation();
     const [groups, setGroups] = useState<KycBuilderGroup[]>(savedGroups);
@@ -318,7 +326,7 @@ export default function KycBatchBuilder({
                     <Button
                         variant="outline"
                         size="sm"
-                        disabled={busy !== null}
+                        disabled={busy !== null || !can.create}
                         onClick={() =>
                             request('clone', (callbacks) =>
                                 router.post(clone.url(batch.id), {}, callbacks),
@@ -333,6 +341,7 @@ export default function KycBatchBuilder({
                         size="sm"
                         disabled={
                             busy !== null ||
+                            !can.activate ||
                             dirty ||
                             !isPublishable ||
                             (batch.published_version > 0 &&
@@ -360,6 +369,7 @@ export default function KycBatchBuilder({
                         size="sm"
                         disabled={
                             busy !== null ||
+                            !can.activate ||
                             dirty ||
                             (!batch.is_active && !isPublishable)
                         }
@@ -384,7 +394,7 @@ export default function KycBatchBuilder({
                         <Button
                             variant="outline"
                             size="sm"
-                            disabled={busy !== null}
+                            disabled={busy !== null || !can.activate}
                             onClick={() =>
                                 request('default', (callbacks) =>
                                     router.patch(
@@ -428,230 +438,245 @@ export default function KycBatchBuilder({
                 )}
 
                 <SectionCard
+                    title={t('kyc.builder.outline_title')}
+                    description={t('kyc.builder.outline_help')}
+                >
+                    <StructureOutline
+                        outline={outline}
+                        selfie={batch.selfie_mode}
+                    />
+                </SectionCard>
+
+                <SectionCard
                     title={t('kyc.builder.details_title')}
                     description={t('kyc.builder.details_help')}
                 >
-                    <form
-                        className="grid gap-4 sm:grid-cols-2"
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            request('details', (callbacks) =>
-                                router.patch(
-                                    update.url(batch.id),
-                                    details as never,
-                                    callbacks,
-                                ),
-                            );
-                        }}
-                    >
-                        <Field label={t('kyc.builder.name')}>
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    value={details.name}
-                                    required
-                                    maxLength={120}
-                                    onChange={(event) =>
-                                        setDetails({
-                                            ...details,
-                                            name: event.target.value,
-                                        })
-                                    }
-                                />
-                            )}
-                        </Field>
-                        <Field label={t('kyc.builder.name_bn')}>
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    lang="bn"
-                                    value={details.name_bn}
-                                    maxLength={120}
-                                    onChange={(event) =>
-                                        setDetails({
-                                            ...details,
-                                            name_bn: event.target.value,
-                                        })
-                                    }
-                                />
-                            )}
-                        </Field>
-                        <Field label={t('kyc.builder.description')}>
-                            {(id) => (
-                                <textarea
-                                    id={id}
-                                    rows={2}
-                                    maxLength={1000}
-                                    value={details.description}
-                                    onChange={(event) =>
-                                        setDetails({
-                                            ...details,
-                                            description: event.target.value,
-                                        })
-                                    }
-                                    className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-                                />
-                            )}
-                        </Field>
-                        <Field label={t('kyc.builder.description_bn')}>
-                            {(id) => (
-                                <textarea
-                                    id={id}
-                                    lang="bn"
-                                    rows={2}
-                                    maxLength={1000}
-                                    value={details.description_bn}
-                                    onChange={(event) =>
-                                        setDetails({
-                                            ...details,
-                                            description_bn: event.target.value,
-                                        })
-                                    }
-                                    className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-                                />
-                            )}
-                        </Field>
-                        <Field
-                            label={t('kyc.builder.audience')}
-                            hint={t('kyc.builder.audience_help')}
+                    <fieldset disabled={!can.update} className="contents">
+                        <form
+                            className="grid gap-4 sm:grid-cols-2"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                request('details', (callbacks) =>
+                                    router.patch(
+                                        update.url(batch.id),
+                                        details as never,
+                                        callbacks,
+                                    ),
+                                );
+                            }}
                         >
-                            {(id) => (
-                                <NativeSelect
-                                    id={id}
-                                    value={details.audience}
-                                    onChange={(event) =>
-                                        setDetails({
-                                            ...details,
-                                            audience: event.target
-                                                .value as typeof details.audience,
-                                        })
-                                    }
-                                >
-                                    {options.audiences.map((option) => (
-                                        <option
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </NativeSelect>
-                            )}
-                        </Field>
-                        <Field
-                            label={t('kyc.builder.selfie')}
-                            hint={t('kyc.builder.selfie_help')}
-                        >
-                            {(id) => (
-                                <NativeSelect
-                                    id={id}
-                                    value={details.selfie_mode}
-                                    onChange={(event) =>
-                                        setDetails({
-                                            ...details,
-                                            selfie_mode: event.target
-                                                .value as typeof details.selfie_mode,
-                                        })
-                                    }
-                                >
-                                    {options.selfie_modes.map((option) => (
-                                        <option
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </NativeSelect>
-                            )}
-                        </Field>
+                            <Field label={t('kyc.builder.name')}>
+                                {(id) => (
+                                    <Input
+                                        id={id}
+                                        value={details.name}
+                                        required
+                                        maxLength={120}
+                                        onChange={(event) =>
+                                            setDetails({
+                                                ...details,
+                                                name: event.target.value,
+                                            })
+                                        }
+                                    />
+                                )}
+                            </Field>
+                            <Field label={t('kyc.builder.name_bn')}>
+                                {(id) => (
+                                    <Input
+                                        id={id}
+                                        lang="bn"
+                                        value={details.name_bn}
+                                        maxLength={120}
+                                        onChange={(event) =>
+                                            setDetails({
+                                                ...details,
+                                                name_bn: event.target.value,
+                                            })
+                                        }
+                                    />
+                                )}
+                            </Field>
+                            <Field label={t('kyc.builder.description')}>
+                                {(id) => (
+                                    <textarea
+                                        id={id}
+                                        rows={2}
+                                        maxLength={1000}
+                                        value={details.description}
+                                        onChange={(event) =>
+                                            setDetails({
+                                                ...details,
+                                                description: event.target.value,
+                                            })
+                                        }
+                                        className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                                    />
+                                )}
+                            </Field>
+                            <Field label={t('kyc.builder.description_bn')}>
+                                {(id) => (
+                                    <textarea
+                                        id={id}
+                                        lang="bn"
+                                        rows={2}
+                                        maxLength={1000}
+                                        value={details.description_bn}
+                                        onChange={(event) =>
+                                            setDetails({
+                                                ...details,
+                                                description_bn:
+                                                    event.target.value,
+                                            })
+                                        }
+                                        className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                                    />
+                                )}
+                            </Field>
+                            <Field
+                                label={t('kyc.builder.audience')}
+                                hint={t('kyc.builder.audience_help')}
+                            >
+                                {(id) => (
+                                    <NativeSelect
+                                        id={id}
+                                        value={details.audience}
+                                        onChange={(event) =>
+                                            setDetails({
+                                                ...details,
+                                                audience: event.target
+                                                    .value as typeof details.audience,
+                                            })
+                                        }
+                                    >
+                                        {options.audiences.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </NativeSelect>
+                                )}
+                            </Field>
+                            <Field
+                                label={t('kyc.builder.selfie')}
+                                hint={t('kyc.builder.selfie_help')}
+                            >
+                                {(id) => (
+                                    <NativeSelect
+                                        id={id}
+                                        value={details.selfie_mode}
+                                        onChange={(event) =>
+                                            setDetails({
+                                                ...details,
+                                                selfie_mode: event.target
+                                                    .value as typeof details.selfie_mode,
+                                            })
+                                        }
+                                    >
+                                        {options.selfie_modes.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </NativeSelect>
+                                )}
+                            </Field>
 
-                        {details.selfie_mode !== 'disabled' && (
+                            {details.selfie_mode !== 'disabled' && (
+                                <div className="sm:col-span-2">
+                                    <Check
+                                        checked={details.selfie_allows_upload}
+                                        onChange={(checked) =>
+                                            setDetails({
+                                                ...details,
+                                                selfie_allows_upload: checked,
+                                            })
+                                        }
+                                    >
+                                        {t('kyc.builder.selfie_upload')}
+                                    </Check>
+                                    <p className="text-muted-foreground mt-1 text-xs">
+                                        {t('kyc.builder.selfie_upload_help')}
+                                    </p>
+                                </div>
+                            )}
+
+                            {details.audience !== 'supplier' && (
+                                <fieldset className="space-y-2 sm:col-span-2">
+                                    <legend className="text-sm font-medium">
+                                        {t('kyc.builder.applicability')}
+                                    </legend>
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('kyc.builder.applicability_help')}
+                                    </p>
+
+                                    {details.rules.map((rule, i) => (
+                                        <RuleRow
+                                            key={i}
+                                            rule={rule}
+                                            options={options}
+                                            onChange={(next) =>
+                                                setDetails({
+                                                    ...details,
+                                                    rules: details.rules.map(
+                                                        (one, at) =>
+                                                            at === i
+                                                                ? next
+                                                                : one,
+                                                    ),
+                                                })
+                                            }
+                                            onRemove={() =>
+                                                setDetails({
+                                                    ...details,
+                                                    rules: details.rules.filter(
+                                                        (_, at) => at !== i,
+                                                    ),
+                                                })
+                                            }
+                                        />
+                                    ))}
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            setDetails({
+                                                ...details,
+                                                rules: [
+                                                    ...details.rules,
+                                                    {
+                                                        package: null,
+                                                        country: null,
+                                                    },
+                                                ],
+                                            })
+                                        }
+                                    >
+                                        <Plus
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {t('kyc.builder.add_rule')}
+                                    </Button>
+                                </fieldset>
+                            )}
+
                             <div className="sm:col-span-2">
-                                <Check
-                                    checked={details.selfie_allows_upload}
-                                    onChange={(checked) =>
-                                        setDetails({
-                                            ...details,
-                                            selfie_allows_upload: checked,
-                                        })
-                                    }
-                                >
-                                    {t('kyc.builder.selfie_upload')}
-                                </Check>
-                                <p className="text-muted-foreground mt-1 text-xs">
-                                    {t('kyc.builder.selfie_upload_help')}
-                                </p>
-                            </div>
-                        )}
-
-                        {details.audience !== 'supplier' && (
-                            <fieldset className="space-y-2 sm:col-span-2">
-                                <legend className="text-sm font-medium">
-                                    {t('kyc.builder.applicability')}
-                                </legend>
-                                <p className="text-muted-foreground text-xs">
-                                    {t('kyc.builder.applicability_help')}
-                                </p>
-
-                                {details.rules.map((rule, i) => (
-                                    <RuleRow
-                                        key={i}
-                                        rule={rule}
-                                        options={options}
-                                        onChange={(next) =>
-                                            setDetails({
-                                                ...details,
-                                                rules: details.rules.map(
-                                                    (one, at) =>
-                                                        at === i ? next : one,
-                                                ),
-                                            })
-                                        }
-                                        onRemove={() =>
-                                            setDetails({
-                                                ...details,
-                                                rules: details.rules.filter(
-                                                    (_, at) => at !== i,
-                                                ),
-                                            })
-                                        }
-                                    />
-                                ))}
-
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                        setDetails({
-                                            ...details,
-                                            rules: [
-                                                ...details.rules,
-                                                {
-                                                    package: null,
-                                                    country: null,
-                                                },
-                                            ],
-                                        })
-                                    }
-                                >
-                                    <Plus
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    {t('kyc.builder.add_rule')}
+                                <Button type="submit" disabled={busy !== null}>
+                                    {busy === 'details' && <Spinner />}
+                                    {t('kyc.builder.save_details')}
                                 </Button>
-                            </fieldset>
-                        )}
-
-                        <div className="sm:col-span-2">
-                            <Button type="submit" disabled={busy !== null}>
-                                {busy === 'details' && <Spinner />}
-                                {t('kyc.builder.save_details')}
-                            </Button>
-                        </div>
-                    </form>
+                            </div>
+                        </form>
+                    </fieldset>
                 </SectionCard>
 
                 <SectionCard
@@ -673,61 +698,72 @@ export default function KycBatchBuilder({
                         </Button>
                     }
                 >
-                    <div className="space-y-6">
-                        {groups.length === 0 && (
-                            <p className="text-muted-foreground text-sm">
-                                {t('kyc.builder.empty_groups')}
-                            </p>
-                        )}
-
-                        {groups.map((group, gi) => (
-                            <GroupEditor
-                                key={group.id ?? `new-${gi}`}
-                                group={group}
-                                position={gi}
-                                total={groups.length}
-                                options={options}
-                                mutate={(change) =>
-                                    mutate((draft) => change(draft[gi], draft))
-                                }
-                                onMove={(to) =>
-                                    mutate((draft) => {
-                                        const moved = move(draft, gi, to);
-                                        draft.splice(0, draft.length, ...moved);
-                                    })
-                                }
-                                onRemove={() =>
-                                    mutate((draft) => {
-                                        draft.splice(gi, 1);
-                                    })
-                                }
-                            />
-                        ))}
-
-                        <div className="flex flex-wrap items-center gap-3">
-                            <Button
-                                type="button"
-                                disabled={busy !== null || !dirty}
-                                onClick={() =>
-                                    request('structure', (callbacks) =>
-                                        router.put(
-                                            structure.url(batch.id),
-                                            { groups } as never,
-                                            callbacks,
-                                        ),
-                                    )
-                                }
-                            >
-                                {busy === 'structure' && <Spinner />}
-                                {t('kyc.builder.save_structure')}
-                            </Button>
-                            {dirty && (
-                                <span className="text-muted-foreground text-xs">
-                                    {t('kyc.builder.unsaved')}
-                                </span>
+                    <fieldset
+                        disabled={!can.update}
+                        className="m-0 min-w-0 border-0 p-0"
+                    >
+                        <div className="space-y-6">
+                            {groups.length === 0 && (
+                                <p className="text-muted-foreground text-sm">
+                                    {t('kyc.builder.empty_groups')}
+                                </p>
                             )}
+
+                            {groups.map((group, gi) => (
+                                <GroupEditor
+                                    key={group.id ?? `new-${gi}`}
+                                    group={group}
+                                    position={gi}
+                                    total={groups.length}
+                                    options={options}
+                                    mutate={(change) =>
+                                        mutate((draft) =>
+                                            change(draft[gi], draft),
+                                        )
+                                    }
+                                    onMove={(to) =>
+                                        mutate((draft) => {
+                                            const moved = move(draft, gi, to);
+                                            draft.splice(
+                                                0,
+                                                draft.length,
+                                                ...moved,
+                                            );
+                                        })
+                                    }
+                                    onRemove={() =>
+                                        mutate((draft) => {
+                                            draft.splice(gi, 1);
+                                        })
+                                    }
+                                />
+                            ))}
+
+                            <div className="flex flex-wrap items-center gap-3">
+                                <Button
+                                    type="button"
+                                    disabled={busy !== null || !dirty}
+                                    onClick={() =>
+                                        request('structure', (callbacks) =>
+                                            router.put(
+                                                structure.url(batch.id),
+                                                { groups } as never,
+                                                callbacks,
+                                            ),
+                                        )
+                                    }
+                                >
+                                    {busy === 'structure' && <Spinner />}
+                                    {t('kyc.builder.save_structure')}
+                                </Button>
+                                {dirty && (
+                                    <span className="text-muted-foreground text-xs">
+                                        {t('kyc.builder.unsaved')}
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    </fieldset>
                 </SectionCard>
             </PageContainer>
         </>
@@ -1330,21 +1366,50 @@ function SlotEditor({
                     {(id) => (
                         <NativeSelect
                             id={id}
-                            value={slot.evidence}
+                            value={
+                                slot.evidence === 'value' && slot.sensitive
+                                    ? 'value_sensitive'
+                                    : slot.evidence
+                            }
                             onChange={(event) =>
                                 mutate((s) => {
-                                    s.evidence = event.target
-                                        .value as KycBuilderSlot['evidence'];
+                                    const kind = event.target.value;
+
+                                    // A sensitive typed value is a typed value that is
+                                    // masked on screen and revealed only on request.
+                                    s.evidence = (
+                                        kind === 'value_sensitive'
+                                            ? 'value'
+                                            : kind
+                                    ) as KycBuilderSlot['evidence'];
+                                    s.sensitive = kind === 'value_sensitive';
                                     // The old formats may not suit the new kind.
                                     s.mimes = [];
                                 })
                             }
                         >
-                            {options.evidence_types.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
+                            {options.evidence_types
+                                .flatMap((option) =>
+                                    option.value === 'value'
+                                        ? [
+                                              option,
+                                              {
+                                                  value: 'value_sensitive',
+                                                  label: t(
+                                                      'kyc.builder.kind_sensitive',
+                                                  ),
+                                              },
+                                          ]
+                                        : [option],
+                                )
+                                .map((option) => (
+                                    <option
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </option>
+                                ))}
                         </NativeSelect>
                     )}
                 </Field>
@@ -1452,18 +1517,6 @@ function SlotEditor({
                                 />
                             )}
                         </Field>
-                        <div className="flex items-end">
-                            <Check
-                                checked={slot.sensitive}
-                                onChange={(checked) =>
-                                    mutate((s) => {
-                                        s.sensitive = checked;
-                                    })
-                                }
-                            >
-                                {t('kyc.builder.slot_sensitive')}
-                            </Check>
-                        </div>
                     </>
                 )}
             </div>

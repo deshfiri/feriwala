@@ -22,8 +22,11 @@ beforeEach(function () {
 it('seeds a catalogue covering every scoping shape', function () {
     // Global, country-scoped, package-scoped, value-only, and one paused —
     // so every branch of §7.2 resolution has something real to exercise.
-    expect(KycDocumentType::query()->count())->toBe(6)
-        ->and(KycDocumentType::query()->active()->count())->toBe(5)
+    // The six older criteria, and the five options of the example Standard KYC
+    // batch (National ID, Passport, Driving Licence, Trade Licence, Business
+    // Address), which are all active.
+    expect(KycDocumentType::query()->count())->toBe(11)
+        ->and(KycDocumentType::query()->active()->count())->toBe(10)
         ->and(KycDocumentType::query()->where('key', 'trade_licence')->first()->scopes)
         ->toHaveCount(1)
         ->and(KycDocumentType::query()->where('key', 'company_registration')->first()->scopes->first()->package_public_id)
@@ -60,7 +63,7 @@ it('opens the requirement catalogue for the KYC manager', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('admin/kyc/document-types')
-            ->has('types', 6)
+            ->has('types', 11)
             ->where('can.create', true),
         );
 });

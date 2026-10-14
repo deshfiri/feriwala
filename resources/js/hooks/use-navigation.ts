@@ -532,6 +532,7 @@ export function useNavigation(): {
                 // approvals and KYC review. Verification rules are settings.
                 ...(permissions['account.view'] ||
                 permissions['kyc.view'] ||
+                permissions['kyc_batch.view'] ||
                 permissions['account.delete'] ||
                 permissions['supplier.delete']
                     ? [
@@ -541,7 +542,9 @@ export function useNavigation(): {
                                   ? accountDirectory()
                                   : permissions['kyc.view']
                                     ? kycQueue()
-                                    : deletionRequests(),
+                                    : permissions['kyc_batch.view']
+                                      ? kycBatches()
+                                      : deletionRequests(),
                               icon: Building2,
                               items: [
                                   ...(permissions['account.view']
@@ -575,6 +578,16 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.kyc_review'),
                                                 href: kycQueue(),
+                                            },
+                                        ]
+                                      : []),
+                                  // The reusable verification forms: batches, their
+                                  // groups, options and evidence slots (D30).
+                                  ...(permissions['kyc_batch.view']
+                                      ? [
+                                            {
+                                                title: t('nav.kyc_batches'),
+                                                href: kycBatches(),
                                             },
                                         ]
                                       : []),
@@ -856,6 +869,10 @@ export function useNavigation(): {
                               href: kycRequirements(),
                               icon: ShieldCheck,
                           },
+                      ]
+                    : []),
+                ...(permissions['kyc_batch.view']
+                    ? [
                           {
                               title: t('nav.kyc_batches'),
                               href: kycBatches(),

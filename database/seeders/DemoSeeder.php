@@ -58,6 +58,9 @@ class DemoSeeder extends Seeder
         $this->platformStaff();
         $this->businessAccounts();
 
+        // One complete example batch (groups, options, slots), switched off.
+        $this->call(StandardKycBatchSeeder::class);
+
         $this->command->info('Seeded. Every login uses the password: '.self::PASSWORD);
     }
 

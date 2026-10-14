@@ -729,6 +729,7 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
         Route::post('kyc/{submission}/evidence-review', [KycReviewController::class, 'reviewEvidence'])->name('kyc.evidence-review');
+        Route::get('kyc/{submission}/evidence-value', [KycReviewController::class, 'revealValue'])->name('kyc.evidence-value');
 
         /*
          * Requests to have an account erased (§5.3). Nobody erases their own
@@ -762,6 +763,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('suppliers.kyc.correction.store');
         Route::post('suppliers/{supplier}/kyc/evidence-review', [SupplierController::class, 'reviewEvidence'])
             ->name('suppliers.kyc.evidence-review');
+        Route::get('suppliers/{supplier}/kyc/evidence-value', [SupplierController::class, 'revealValue'])
+            ->name('suppliers.kyc.evidence-value');
         Route::post('suppliers/{supplier}/kyc/batch', [SupplierController::class, 'assignBatch'])
             ->name('suppliers.kyc.batch.store');
         Route::post('suppliers/{supplier}/approval', [SupplierController::class, 'approve'])->name('suppliers.approval.store');

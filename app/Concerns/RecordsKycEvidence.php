@@ -41,17 +41,15 @@ trait RecordsKycEvidence
 
         $live = $request->boolean('captured_live');
 
-        // Only safe technical facts about a capture: the frame size, which camera,
-        // and the browser. Nothing about the face, and no analysis of it.
+        // Only the frame's size and which camera took it — enough for a reviewer to
+        // see it is a still from a camera. No browser or device identifiers, nothing
+        // about the face, and no analysis of it.
         $meta = $live
-            ? [
-                ...array_filter([
-                    'width' => $validated['capture_meta']['width'] ?? null,
-                    'height' => $validated['capture_meta']['height'] ?? null,
-                    'facing' => $validated['capture_meta']['facing'] ?? null,
-                ]),
-                'user_agent' => mb_substr((string) $request->userAgent(), 0, 180),
-            ]
+            ? array_filter([
+                'width' => $validated['capture_meta']['width'] ?? null,
+                'height' => $validated['capture_meta']['height'] ?? null,
+                'facing' => $validated['capture_meta']['facing'] ?? null,
+            ])
             : null;
 
         return $this->attempt('file', fn () => $evidence->file(

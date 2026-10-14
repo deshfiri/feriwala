@@ -25,9 +25,11 @@ use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycDocument;
+use App\Domain\Supplier\Models\SupplierKycSubmission;
 use App\Domain\Supplier\SupplierKycDocumentStore;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -129,12 +131,15 @@ class SupplierController extends Controller
                     // Whoever reached this page may open a document; the route
                     // authorises and records each opening.
                     'can_open_documents' => true,
-                    'can_judge' => $batchRound->awaitsReview() && Gate::allows('review', $round),
+                    'can_judge' => $batchRound->awaitsReview()
+                        && Gate::allows('review', $round)
+                        && Gate::allows('review', KycBatch::class),
+                    'can_view_sensitive' => Gate::allows('viewSensitive', KycBatch::class),
                 ],
             ],
             // The templates a Supplier round may be opened against, for staff who
             // may set the Supplier up; empty otherwise so the control is absent.
-            'kyc_batches' => Gate::allows('update', $supplier)
+            'kyc_batches' => Gate::allows('assign', KycBatch::class)
                 ? KycBatch::query()->forSuppliers()->available()->orderBy('sort_order')->get()
                     ->map(fn (KycBatch $batch) => [
                         'id' => $batch->public_id,
@@ -143,7 +148,7 @@ class SupplierController extends Controller
                     ])->all()
                 : [],
             'can_assign_batch' => $round !== null
-                && Gate::allows('update', $supplier)
+                && Gate::allows('assign', KycBatch::class)
                 && in_array($round->status, [SupplierKycStatus::Draft, SupplierKycStatus::CorrectionRequired], true)
                 && $round->documents->isEmpty() && $round->fields->isEmpty(),
             'supplier' => [
@@ -275,6 +280,7 @@ class SupplierController extends Controller
         $round = $supplier->kycSubmissions()->firstOrFail();
 
         Gate::authorize('review', $round);
+        Gate::authorize('review', KycBatch::class);
 
         /** @var User $reviewer */
         $reviewer = $request->user();
@@ -303,6 +309,47 @@ class SupplierController extends Controller
     }
 
     /**
+     * One typed value of a Supplier's round on a batch, in full. The page carries it
+     * masked; this is the deliberate, recorded way to read it, behind its own
+     * permission. The audit entry names the slot, never the value.
+     */
+    public function revealValue(
+        Request $request,
+        Supplier $supplier,
+        SupplierKycDocumentStore $store,
+        RecordAuditLog $audit,
+    ): JsonResponse {
+        Gate::authorize('view', $supplier);
+        Gate::authorize('viewSensitive', KycBatch::class);
+
+        $validated = $request->validate([
+            'requirement' => ['required', 'string', 'max:64'],
+            'slot' => ['required', 'string', 'max:48'],
+        ]);
+
+        $submission = $supplier->kycSubmissions()->firstOrFail();
+        $round = new SupplierKycRound($submission, $store);
+        $slot = $round->definition()?->slot($validated['requirement'], $validated['slot']);
+
+        abort_unless($slot !== null && in_array($slot['evidence'], ['value', 'declaration'], true), 404);
+
+        $value = $round->revealValue($validated['requirement'], $validated['slot']);
+
+        abort_if($value === null, 404);
+
+        $audit->handle((new AuditEntry(
+            action: 'supplier_kyc.value_viewed',
+            actorId: $request->user()?->id,
+            auditableType: SupplierKycSubmission::class,
+            auditableId: $submission->id,
+            after: ['requirement' => $validated['requirement'], 'slot' => $validated['slot']],
+            module: PermissionModule::SupplierKyc->value,
+        ))->withContext($request));
+
+        return response()->json(['value' => $value])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
      * Pin the Supplier's open round to a chosen batch template (D30). Allowed only
      * while the round has nothing in it: once the Supplier has given evidence,
      * moving them to another batch would orphan it.
@@ -313,7 +360,7 @@ class SupplierController extends Controller
         OpenSupplierKycRound $open,
         AssignKycBatch $assign,
     ): RedirectResponse {
-        Gate::authorize('update', $supplier);
+        Gate::authorize('assign', KycBatch::class);
 
         /** @var User $actor */
         $actor = $request->user();

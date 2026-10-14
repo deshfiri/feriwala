@@ -19,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import StructureOutline from '@/components/kyc/structure-outline';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     active,
@@ -42,9 +43,12 @@ import type { KycBatchTemplateRow, SelectOption } from '@/types';
 export default function KycBatchTemplates({
     batches,
     audiences,
+    can,
 }: {
     batches: KycBatchTemplateRow[];
     audiences: SelectOption[];
+    /** What this viewer may do; a control they would be refused is not drawn. */
+    can: { create: boolean; activate: boolean };
 }) {
     const { t } = useTranslation();
     const [creating, setCreating] = useState(false);
@@ -68,10 +72,12 @@ export default function KycBatchTemplates({
                     title={t('kyc.builder.list_title')}
                     description={t('kyc.builder.list_help')}
                     actions={
-                        <Button onClick={() => setCreating(true)}>
-                            <Plus className="size-4" aria-hidden="true" />
-                            {t('kyc.builder.new_batch')}
-                        </Button>
+                        can.create && (
+                            <Button onClick={() => setCreating(true)}>
+                                <Plus className="size-4" aria-hidden="true" />
+                                {t('kyc.builder.new_batch')}
+                            </Button>
+                        )
                     }
                 />
 
@@ -163,61 +169,65 @@ export default function KycBatchTemplates({
                                             {t('kyc.builder.preview')}
                                         </Link>
                                     </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={busy === batch.id}
-                                        onClick={() =>
-                                            act(batch.id, () =>
-                                                router.post(
-                                                    clone.url(batch.id),
-                                                    {},
-                                                    {
-                                                        onFinish: () =>
-                                                            setBusy(null),
-                                                    },
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        <Copy
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        {t('kyc.builder.clone')}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={busy === batch.id}
-                                        onClick={() =>
-                                            act(batch.id, () =>
-                                                router.patch(
-                                                    active.url(batch.id),
-                                                    {
-                                                        is_active:
-                                                            !batch.is_active,
-                                                    },
-                                                    {
-                                                        preserveScroll: true,
-                                                        onFinish: () =>
-                                                            setBusy(null),
-                                                    },
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        <Power
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        {t(
-                                            batch.is_active
-                                                ? 'kyc.builder.deactivate'
-                                                : 'kyc.builder.activate',
-                                        )}
-                                    </Button>
-                                    {batch.is_active && (
+                                    {can.create && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={busy === batch.id}
+                                            onClick={() =>
+                                                act(batch.id, () =>
+                                                    router.post(
+                                                        clone.url(batch.id),
+                                                        {},
+                                                        {
+                                                            onFinish: () =>
+                                                                setBusy(null),
+                                                        },
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            <Copy
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            {t('kyc.builder.clone')}
+                                        </Button>
+                                    )}
+                                    {can.activate && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={busy === batch.id}
+                                            onClick={() =>
+                                                act(batch.id, () =>
+                                                    router.patch(
+                                                        active.url(batch.id),
+                                                        {
+                                                            is_active:
+                                                                !batch.is_active,
+                                                        },
+                                                        {
+                                                            preserveScroll: true,
+                                                            onFinish: () =>
+                                                                setBusy(null),
+                                                        },
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            <Power
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            {t(
+                                                batch.is_active
+                                                    ? 'kyc.builder.deactivate'
+                                                    : 'kyc.builder.activate',
+                                            )}
+                                        </Button>
+                                    )}
+                                    {can.activate && batch.is_active && (
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -252,6 +262,16 @@ export default function KycBatchTemplates({
                                             )}
                                         </Button>
                                     )}
+                                </div>
+
+                                <div className="bg-surface-subtle w-full rounded-lg border p-4">
+                                    <p className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">
+                                        {t('kyc.builder.outline_title')}
+                                    </p>
+                                    <StructureOutline
+                                        outline={batch.outline}
+                                        selfie={batch.selfie_mode}
+                                    />
                                 </div>
                             </li>
                         ))}

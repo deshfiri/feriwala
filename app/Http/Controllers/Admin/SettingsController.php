@@ -135,6 +135,15 @@ class SettingsController extends Controller
                         'route' => 'admin.kyc.document-types.index',
                         'permission' => PermissionCatalogue::name(PermissionModule::Kyc, PermissionAction::ManageSettings),
                     ],
+                    // Batch → groups → options → evidence slots (D30). The card above
+                    // is the older screen that knows only a batch and its criteria.
+                    [
+                        'key' => 'kyc_batches',
+                        'title' => __('nav.kyc_batches'),
+                        'description' => __('settings.hub.items.kyc_batches'),
+                        'route' => 'admin.kyc.batch-builder.index',
+                        'permission' => PermissionCatalogue::name(PermissionModule::KycBatch, PermissionAction::View),
+                    ],
                     [
                         'key' => 'account_verification_settings',
                         'title' => __('nav.account_verification_settings'),

@@ -213,7 +213,7 @@ class AccountController extends Controller
              * name a package or a country — that actually reach this account. The
              * default one is flagged, so the dialog can say what "no choice" means.
              */
-            'kyc_batches' => KycBatch::query()
+            'kyc_batches' => ! Gate::allows('assign', KycBatch::class) ? [] : KycBatch::query()
                 ->forAccounts()
                 ->available()
                 ->with('scopes')

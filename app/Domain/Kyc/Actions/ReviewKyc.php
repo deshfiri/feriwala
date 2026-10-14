@@ -14,6 +14,9 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycReview;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Notifications\Account\KycApproved;
+use App\Notifications\Account\KycRejected;
+use App\Notifications\Account\KycResubmissionRequested;
 use Illuminate\Database\DatabaseManager;
 
 /**
@@ -73,6 +76,14 @@ class ReviewKyc
             return $review;
         });
 
+        // A round on a batch tells its applicant the outcome. Only the
+        // applicant-facing feedback travels — never a value, a file, a reviewer's
+        // name or the internal note. Rounds opened before batches keep the
+        // notifications they always had.
+        if ($submission->kyc_batch_version_id !== null) {
+            $this->tellApplicant($submission, $decision);
+        }
+
         // KYC approval or its withdrawal is one of the requirements the
         // activation gate watches (§5.1). Re-evaluated after the transaction
         // commits, so the gate never sees a half-applied decision.
@@ -101,6 +112,22 @@ class ReviewKyc
         }
 
         return $review;
+    }
+
+    protected function tellApplicant(KycSubmission $submission, KycDecision $decision): void
+    {
+        $owner = $submission->businessAccount()->first()?->owner;
+
+        if ($owner === null) {
+            return;
+        }
+
+        match ($decision->outcome) {
+            KycStatus::Approved => $owner->notify(new KycApproved),
+            KycStatus::Rejected => $owner->notify(new KycRejected($decision->userVisibleFeedback)),
+            KycStatus::ResubmissionRequired => $owner->notify(new KycResubmissionRequested((string) $decision->userVisibleFeedback)),
+            default => null,
+        };
     }
 
     /**
