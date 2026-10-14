@@ -211,11 +211,11 @@ class WholesaleOrderController extends Controller
             return [];
         }
 
-        return array_map(function (string $name): array {
+        return array_values(array_map(function (string $name): array {
             $label = config("payment.gateways.{$name}.label");
 
             return ['name' => $name, 'label' => is_string($label) && $label !== '' ? $label : $name];
-        }, $this->gateways->availableFor($currency));
+        }, $this->gateways->availableFor($currency)));
     }
 
     protected function canPay(Order $order): bool

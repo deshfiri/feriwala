@@ -29,7 +29,7 @@ class PurchasedProducts
      * Which of these products the account has bought.
      *
      * @param  iterable<int, int>  $productIds
-     * @return array<int, int>  the ids it has bought, keyed by id
+     * @return array<int, int> the ids it has bought, keyed by id
      */
     public function among(BusinessAccount $account, iterable $productIds): array
     {

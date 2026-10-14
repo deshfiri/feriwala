@@ -151,22 +151,9 @@ final class AccentColor
     }
 
     /**
-     * The accent mixed with white in sRGB, as `color-mix(in srgb, …)` does.
+     * The red, green and blue channels of a `#rrggbb` colour.
      *
      * @return array{int, int, int}
-     */
-    private function liftedChannels(): array
-    {
-        $keep = 100 - self::DARK_LIFT_PERCENT;
-
-        return array_map(
-            fn (int $channel): int => intdiv($channel * $keep + 255 * self::DARK_LIFT_PERCENT + 50, 100),
-            $this->channels(),
-        );
-    }
-
-    /**
-     * @param  array{int, int, int}  $background
      */
     private static function hexChannels(string $hex): array
     {
