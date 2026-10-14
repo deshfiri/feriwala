@@ -3,6 +3,7 @@
 namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Kyc\Batch\AssignKycBatch;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
 use App\Domain\Kyc\Models\KycSubmission;
@@ -21,6 +22,7 @@ class OpenKycDraft
     public function __construct(
         protected StartKycResubmission $startResubmission,
         protected CaptureRoundRequirements $captureRequirements,
+        protected AssignKycBatch $batches,
         protected KycDeadlines $deadlines,
         protected DatabaseManager $database,
     ) {}
@@ -75,6 +77,21 @@ class OpenKycDraft
      */
     protected function withRequirements(KycSubmission $submission): KycSubmission
     {
+        // Already pinned to a batch version: that version is the round.
+        if ($submission->kyc_batch_version_id !== null) {
+            return $submission;
+        }
+
+        // A round with nothing in it yet is given the default batch, if there is
+        // one that applies (D30). One that has begun under the older flow keeps it.
+        $untouched = ! $submission->requirements()->exists()
+            && ! $submission->documents()->exists()
+            && ! $submission->fields()->exists();
+
+        if ($untouched && $this->batches->forPartner($submission)) {
+            return $submission;
+        }
+
         $this->captureRequirements->handle($submission);
 
         return $submission;

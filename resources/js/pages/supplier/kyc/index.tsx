@@ -3,6 +3,7 @@ import { FileText, Lock } from 'lucide-react';
 import FileField from '@/components/forms/file-field';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
+import BatchKycForm from '@/components/kyc/batch-form';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -12,6 +13,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { submit } from '@/routes/supplier/kyc';
 import { store } from '@/routes/supplier/kyc/documents';
+import * as evidence from '@/routes/supplier/kyc/evidence';
+import type { KycBatch } from '@/types';
 
 type Round = {
     id: string;
@@ -86,7 +89,10 @@ export default function SupplierKyc({
     round,
     history,
     requirements,
+    batch = null,
 }: {
+    /** Set for a round on a batch version (D30); null keeps the flat form. */
+    batch?: KycBatch | null;
     supplier_status: string;
     round: Round;
     history: {
@@ -130,38 +136,56 @@ export default function SupplierKyc({
                     </SectionCard>
                 )}
 
-                <SectionCard title={t('supplier.kyc.documents')}>
-                    {round.documents.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">
-                            {t('supplier.kyc.no_documents')}
-                        </p>
-                    ) : (
-                        <ul className="divide-border divide-y">
-                            {round.documents.map((document) => (
-                                <li
-                                    key={document.id}
-                                    className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-                                >
-                                    <FileText
-                                        className="text-muted-foreground size-4 shrink-0"
-                                        aria-hidden="true"
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-medium">
-                                            {document.label}
-                                        </p>
-                                        <p className="text-muted-foreground truncate text-xs">
-                                            {document.original_name} Â·{' '}
-                                            {formatSize(document.size_bytes)}
-                                        </p>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </SectionCard>
+                {batch && (
+                    <BatchKycForm
+                        batch={batch}
+                        endpoints={{
+                            file: evidence.file.url(),
+                            value: evidence.value.url(),
+                            remove: evidence.remove.url(),
+                            choose: evidence.choose.url(),
+                            deselect: evidence.deselect.url(),
+                            submit: submit.url(),
+                        }}
+                    />
+                )}
 
-                {round.is_editable ? (
+                {!batch && (
+                    <SectionCard title={t('supplier.kyc.documents')}>
+                        {round.documents.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                {t('supplier.kyc.no_documents')}
+                            </p>
+                        ) : (
+                            <ul className="divide-border divide-y">
+                                {round.documents.map((document) => (
+                                    <li
+                                        key={document.id}
+                                        className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+                                    >
+                                        <FileText
+                                            className="text-muted-foreground size-4 shrink-0"
+                                            aria-hidden="true"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium">
+                                                {document.label}
+                                            </p>
+                                            <p className="text-muted-foreground truncate text-xs">
+                                                {document.original_name} Â·{' '}
+                                                {formatSize(
+                                                    document.size_bytes,
+                                                )}
+                                            </p>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </SectionCard>
+                )}
+
+                {batch ? null : round.is_editable ? (
                     <>
                         <SectionCard
                             title={t('supplier.kyc.upload')}

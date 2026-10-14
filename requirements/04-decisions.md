@@ -1163,3 +1163,36 @@ custom role given either permission is still refused (`App\Domain\Audit\AuditLog
 Automatic retention stays off (`audit.log_retention_days` unset, entries kept forever) until the
 Super Admin sets it. The guarded database path, the permanent `audit.logs_purged` record and the
 refusal of UPDATE and TRUNCATE are unchanged, as is the immutability of ledger entries.
+
+## D30 — KYC verification batches are versioned templates (2026-10-14)
+
+**Instructed by the Project Owner on 2026-10-14.** One system for Partners and Suppliers; no second
+KYC. D25 stands: Partner and Supplier submissions, evidence, reviews, guards and permissions stay
+in their own tables. Only the **catalogue** — batches, requirements, slots — is shared, as the
+document-type catalogue and `KycAudience` already were.
+
+- **Shape.** `kyc_batches` (the existing table) becomes the template header: bilingual name, live
+  selfie mode (`disabled`/`optional`/`required`) with an explicit upload fallback flag, and a default
+  flag (one per audience, enforced by a partial unique index). A batch holds **groups**; a group has
+  a completion rule — `all`, `any`, or `min` with a count — and holds **requirements** (the existing
+  `kyc_document_types`); a requirement holds **evidence slots** (file, image, PDF, typed value,
+  declaration) with their own labels in English and Bangla, formats, size, sensitivity and order.
+- **Versioning.** Editing changes only the live structure. **Publishing** freezes it into an
+  append-only `kyc_batch_versions` row (full definition + checksum); an unchanged republish returns
+  the same version. A round points at one version and reads its structure from that alone, so a
+  later edit cannot reach an open or judged round. A batch no one could complete — an empty group,
+  a minimum above the options, a requirement with nothing required — is refused at publish.
+- **Legacy compatibility.** New migrations only. Existing criteria are mapped mechanically, not
+  guessed: each gets one file slot if it asked for a file and one value slot if it asked for a typed
+  value; each existing batch gets one "all required" group holding exactly its criteria with their own
+  required/optional flag; criteria outside any batch go into a "legacy ungrouped" batch per audience
+  rather than being dropped. A batch never published gets version 1 the first time a round needs it,
+  from that unchanged structure. Rounds already open keep their own requirement snapshot rows and are
+  read through an adapter that presents them in the same shape as a versioned round. Approved
+  accounts, submitted evidence, decisions and audit history are not touched.
+- **Evidence** records the slot it fills; a file uploaded before slots existed is the `file` slot of
+  its requirement. After submission a replaced file is marked superseded and kept, never deleted.
+  Per-slot verdicts are append-only rows; the latest is current.
+- **Previews.** KYC files are encrypted by the application before they reach storage, so a storage
+  temporary URL would hand out ciphertext. Previews stay on the authorised streaming path
+  (permission checked, access recorded, no-store); no raw path or permanent URL exists.

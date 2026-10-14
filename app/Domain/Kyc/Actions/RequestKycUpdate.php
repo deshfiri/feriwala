@@ -5,10 +5,12 @@ namespace App\Domain\Kyc\Actions;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Kyc\Batch\AssignKycBatch;
 use App\Domain\Kyc\Enums\KycConsequence;
 use App\Domain\Kyc\Enums\KycRoundPurpose;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
+use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Models\User;
 use App\Notifications\Kyc\KycUpdateRequested;
@@ -43,6 +45,7 @@ class RequestKycUpdate
     public function __construct(
         protected KycDeadlines $deadlines,
         protected CaptureRoundRequirements $captureRequirements,
+        protected AssignKycBatch $batches,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
@@ -70,6 +73,7 @@ class RequestKycUpdate
         ?CarbonImmutable $deadline = null,
         ?array $documentTypeIds = null,
         ?array $consequences = null,
+        ?KycBatch $batch = null,
     ): KycSubmission {
         $reason = trim($reason);
         $instructions = trim($instructions);
@@ -102,6 +106,14 @@ class RequestKycUpdate
             );
         }
 
+        if ($batch !== null && $documentTypeIds !== null) {
+            // A batch is the whole request; picking documents out of it is a
+            // different thing, and doing both would ask for neither clearly.
+            throw new InvalidArgumentException(
+                'Choose a batch or select individual documents, not both.'
+            );
+        }
+
         $consequences = $this->normaliseConsequences($consequences);
 
         $submission = $this->database->transaction(
@@ -113,6 +125,7 @@ class RequestKycUpdate
                 $deadline,
                 $documentTypeIds,
                 $consequences,
+                $batch,
             )
         );
 
@@ -173,6 +186,7 @@ class RequestKycUpdate
         ?CarbonImmutable $deadline,
         ?array $documentTypeIds = null,
         ?array $consequences = null,
+        ?KycBatch $batch = null,
     ): KycSubmission {
         /*
          * The **account** is locked, not the latest round.
@@ -246,10 +260,17 @@ class RequestKycUpdate
          * matches nothing applicable would open a round demanding no documents,
          * which the account holder could never satisfy or clear.
          */
-        $captured = $this->captureRequirements->handle(
-            $submission,
-            onlyTypeIds: $documentTypeIds,
-        );
+        // A batch chosen by staff, or the default one — unless the request names
+        // individual documents, which is the older, narrower way of asking.
+        $pinned = ($documentTypeIds === null || $batch !== null)
+            && $this->batches->forPartner($submission, $batch, $requestedBy);
+
+        $captured = $pinned
+            ? 1
+            : $this->captureRequirements->handle(
+                $submission,
+                onlyTypeIds: $documentTypeIds,
+            );
 
         if ($documentTypeIds !== null && $captured === 0) {
             throw new InvalidArgumentException(

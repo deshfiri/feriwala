@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Supplier;
 
+use App\Domain\Kyc\Batch\KycRoundPresenter;
+use App\Domain\Kyc\Batch\SupplierKycRound;
 use App\Domain\Supplier\Actions\OpenSupplierKycRound;
 use App\Domain\Supplier\Actions\SubmitSupplierKyc;
 use App\Domain\Supplier\Models\Supplier;
@@ -26,13 +28,14 @@ use InvalidArgumentException;
  */
 class KycController extends Controller
 {
-    public function create(Request $request, OpenSupplierKycRound $openRound): Response
+    public function create(Request $request, OpenSupplierKycRound $openRound, KycRoundPresenter $presenter, SupplierKycDocumentStore $store): Response
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
 
         $round = $openRound->handle($supplier);
         $round->load('documents');
+        $batch = $presenter->present(new SupplierKycRound($round, $store));
 
         $history = $supplier->kycSubmissions()->with('documents')->get();
         $requirements = $round->requirements()->get();
@@ -40,6 +43,9 @@ class KycController extends Controller
         $fields = $round->fields()->get()->keyBy('key');
 
         return Inertia::render('supplier/kyc/index', [
+            // The grouped form, for a round on a batch version (D30); null for
+            // one that keeps the earlier flat list below.
+            'batch' => $batch,
             'supplier_status' => $supplier->status->value,
             'round' => [
                 'id' => $round->public_id,
@@ -98,6 +104,12 @@ class KycController extends Controller
 
         $round = $openRound->handle($supplier);
 
+        if ($round->kyc_batch_version_id !== null) {
+            // A round on a batch has its own endpoints, which know about groups
+            // and slots; this one only understands the flat list.
+            throw ValidationException::withMessages(['file' => __('kyc.batch.refused.use_new_form')]);
+        }
+
         $validated = $request->validate([
             'document_type' => ['required', 'string', Rule::in($round->requirements()->pluck('key')->all())],
             'file' => ['nullable', 'file', 'max:'.SupplierKycDocumentStore::MAX_SIZE_KB],
@@ -145,10 +157,16 @@ class KycController extends Controller
         return back()->with('success', $requirement->name.' saved.');
     }
 
-    public function submit(Request $request, SubmitSupplierKyc $submit): RedirectResponse
+    public function submit(Request $request, SubmitSupplierKyc $submit, OpenSupplierKycRound $openRound): RedirectResponse
     {
         /** @var Supplier $supplier */
         $supplier = $request->user('supplier');
+
+        // Sending a batch round off is a deliberate act: the applicant confirms
+        // that what they gave is theirs and complete.
+        if ($openRound->handle($supplier)->kyc_batch_version_id !== null) {
+            $request->validate(['confirm' => ['accepted']]);
+        }
 
         try {
             $submit->handle($supplier);

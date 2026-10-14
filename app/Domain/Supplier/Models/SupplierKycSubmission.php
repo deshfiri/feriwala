@@ -21,6 +21,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $public_id
  * @property int $supplier_id
  * @property int $round
+ * @property int|null $kyc_batch_id
+ * @property int|null $kyc_batch_version_id
+ * @property array<string, array<int, string>>|null $selections
  * @property SupplierKycStatus $status
  * @property CarbonImmutable|null $submitted_at
  * @property CarbonImmutable|null $reviewed_at
@@ -47,6 +50,7 @@ class SupplierKycSubmission extends Model
     {
         return [
             'status' => SupplierKycStatus::class,
+            'selections' => 'array',
             'round' => 'integer',
             'submitted_at' => 'immutable_datetime',
             'reviewed_at' => 'immutable_datetime',

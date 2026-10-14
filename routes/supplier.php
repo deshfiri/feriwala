@@ -17,6 +17,7 @@ use App\Http\Controllers\Supplier\Auth\VerifySupplierEmailController;
 use App\Http\Controllers\Supplier\DashboardController;
 use App\Http\Controllers\Supplier\FulfilmentController;
 use App\Http\Controllers\Supplier\KycController;
+use App\Http\Controllers\Supplier\KycEvidenceController;
 use App\Http\Controllers\Supplier\ListingController;
 use App\Http\Controllers\Supplier\ListingLotController;
 use App\Http\Controllers\Supplier\ListingLotItemController;
@@ -110,6 +111,14 @@ Route::prefix('supplier')
             Route::get('kyc', [KycController::class, 'create'])->name('kyc.create');
             Route::post('kyc/documents', [KycController::class, 'storeDocument'])->name('kyc.documents.store');
             Route::post('kyc/submit', [KycController::class, 'submit'])->name('kyc.submit');
+
+            // A round on a KYC batch (D30): evidence goes into slots, and options
+            // are chosen within groups.
+            Route::post('kyc/evidence/file', [KycEvidenceController::class, 'file'])->name('kyc.evidence.file');
+            Route::post('kyc/evidence/value', [KycEvidenceController::class, 'value'])->name('kyc.evidence.value');
+            Route::post('kyc/evidence/remove', [KycEvidenceController::class, 'remove'])->name('kyc.evidence.remove');
+            Route::post('kyc/evidence/choose', [KycEvidenceController::class, 'choose'])->name('kyc.evidence.choose');
+            Route::post('kyc/evidence/deselect', [KycEvidenceController::class, 'deselect'])->name('kyc.evidence.deselect');
 
             /*
              * Product Listing Requests (D25, P13-9). Only Approved Suppliers

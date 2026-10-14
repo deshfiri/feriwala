@@ -96,6 +96,18 @@ class KycDocumentType extends Model
     }
 
     /**
+     * The evidence this requirement is made of: its files and typed values.
+     *
+     * @return HasMany<KycRequirementSlot, $this>
+     */
+    public function slots(): HasMany
+    {
+        return $this->hasMany(KycRequirementSlot::class, 'kyc_document_type_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    /**
      * @return HasMany<KycDocumentTypeScope, $this>
      */
     public function scopes(): HasMany

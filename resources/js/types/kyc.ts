@@ -48,6 +48,83 @@ export type KycApplicant = {
  * without an authorisation check, so the page builds the route from the id and
  * the server checks again on every request.
  */
+/** What a slot currently holds. Never a path, a checksum or a value in full. */
+export type KycBatchEvidence = {
+    requirement: string;
+    slot: string;
+    kind: 'file' | 'value';
+    document: string | null;
+    name: string | null;
+    size_bytes: number | null;
+    live: boolean;
+    value_preview: string | null;
+    verdict: 'accepted' | 'rejected' | null;
+    note: string | null;
+};
+
+/** One file, typed value or declaration a requirement is made of. */
+export type KycBatchSlot = {
+    key: string;
+    label: string;
+    instructions: string | null;
+    required: boolean;
+    evidence: 'file' | 'image' | 'pdf' | 'value' | 'declaration';
+    mimes: string[];
+    max_kb: number | null;
+    value_label: string | null;
+    sensitive: boolean;
+    current: KycBatchEvidence | null;
+};
+
+export type KycBatchOption = {
+    key: string;
+    name: string;
+    instructions: string | null;
+    required: boolean;
+    chosen: boolean;
+    complete: boolean;
+    provided: number;
+    total: number;
+    slots: KycBatchSlot[];
+};
+
+export type KycBatchGroup = {
+    key: string;
+    name: string;
+    description: string | null;
+    rule: 'all' | 'any' | 'min';
+    /** The applicant chooses between options (any one, or a minimum). */
+    choose: boolean;
+    required: boolean;
+    needed: number;
+    done: number;
+    offered: number;
+    satisfied: boolean;
+    options: KycBatchOption[];
+};
+
+export type KycBatchSelfie = {
+    mode: 'optional' | 'required';
+    required: boolean;
+    satisfied: boolean;
+    /** A picked file may stand in for the camera. */
+    allows_upload: boolean;
+    requirement: string;
+    slot: KycBatchSlot;
+};
+
+/** A round on a KYC batch, as the applicant's form receives it. */
+export type KycBatch = {
+    name: string;
+    description: string | null;
+    version: number;
+    editable: boolean;
+    groups: KycBatchGroup[];
+    selfie: KycBatchSelfie | null;
+    complete: boolean;
+    missing: string[];
+};
+
 export type KycReviewDocument = {
     id: string;
     type: string | null;

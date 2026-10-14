@@ -2,6 +2,7 @@
 
 namespace App\Domain\Kyc\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,6 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * The value is encrypted at rest. These are identity and banking details, and
  * §7.5 requires encryption where appropriate; a database backup or a stray
  * query log should not expose them.
+ *
+ * @property string|null $slot_key
+ * @property CarbonInterface $updated_at
  */
 class KycSubmissionField extends Model
 {

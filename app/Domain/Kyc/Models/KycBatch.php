@@ -4,6 +4,7 @@ namespace App\Domain\Kyc\Models;
 
 use App\Concerns\HasPublicId;
 use App\Domain\Kyc\Enums\KycAudience;
+use App\Domain\Kyc\Enums\KycSelfieMode;
 use App\Domain\Supplier\Models\SupplierKycRequirement;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,7 +32,13 @@ use Illuminate\Support\Collection;
  * @property string $key
  * @property KycAudience $audience
  * @property string $name
+ * @property string|null $name_bn
  * @property string|null $description
+ * @property string|null $description_bn
+ * @property KycSelfieMode $selfie_mode
+ * @property bool $selfie_allows_upload
+ * @property bool $is_default
+ * @property int $published_version
  * @property bool $is_active
  * @property CarbonImmutable|null $archived_at
  * @property int $sort_order
@@ -53,6 +60,10 @@ class KycBatch extends Model
     protected $attributes = [
         'audience' => 'account',
         'is_active' => true,
+        'is_default' => false,
+        'selfie_mode' => 'disabled',
+        'selfie_allows_upload' => false,
+        'published_version' => 0,
         'sort_order' => 0,
     ];
 
@@ -64,9 +75,42 @@ class KycBatch extends Model
         return [
             'audience' => KycAudience::class,
             'is_active' => 'boolean',
+            'is_default' => 'boolean',
+            'selfie_mode' => KycSelfieMode::class,
+            'selfie_allows_upload' => 'boolean',
+            'published_version' => 'integer',
             'archived_at' => 'immutable_datetime',
             'sort_order' => 'integer',
         ];
+    }
+
+    /**
+     * The groups of this batch, in the order an applicant sees them. This is the
+     * live, editable structure: rounds read a published version instead.
+     *
+     * @return HasMany<KycBatchGroup, $this>
+     */
+    public function groups(): HasMany
+    {
+        return $this->hasMany(KycBatchGroup::class, 'kyc_batch_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<KycBatchVersion, $this>
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(KycBatchVersion::class, 'kyc_batch_id')->orderByDesc('version');
+    }
+
+    /**
+     * The newest published version, or null before the first publish.
+     */
+    public function latestVersion(): ?KycBatchVersion
+    {
+        return $this->versions()->first();
     }
 
     /**

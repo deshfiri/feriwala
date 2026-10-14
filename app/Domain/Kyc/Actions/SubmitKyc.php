@@ -5,8 +5,11 @@ namespace App\Domain\Kyc\Actions;
 use App\Domain\Account\Actions\ChangeAccountStatus;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Kyc\Batch\KycCompletion;
+use App\Domain\Kyc\Batch\PartnerKycRound;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Exceptions\KycIncomplete;
+use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Notification\Enums\StaffQueue;
@@ -25,6 +28,8 @@ class SubmitKyc
     public function __construct(
         protected ChangeAccountStatus $changeAccountStatus,
         protected DatabaseManager $database,
+        protected KycCompletion $completion,
+        protected KycDocumentStore $documents,
     ) {}
 
     /**
@@ -78,6 +83,11 @@ class SubmitKyc
         ?string $packageKey,
         ?string $country,
     ): array {
+        // A round on a batch version is judged by the batch's group rules (D30).
+        if ($submission->kyc_batch_version_id !== null) {
+            return $this->completion->evaluate(new PartnerKycRound($submission, $this->documents))->missing();
+        }
+
         $requirements = $submission->requirements()->get();
 
         if ($requirements->isEmpty()) {

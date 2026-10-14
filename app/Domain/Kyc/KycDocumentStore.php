@@ -114,6 +114,52 @@ class KycDocumentStore
     }
 
     /**
+     * Store a file as the evidence for one slot of a versioned round (D30).
+     *
+     * What is acceptable was already decided against the round's batch version
+     * by the batch engine, so there is no rule check here — only what §7.5 asks
+     * of every file: a private disk, a random name, encryption at rest, a
+     * checksum, and no URL. The live selfie has no catalogue type (`$type` is
+     * null), and says so by its slot key.
+     *
+     * @param  array<string, mixed>|null  $captureMeta  safe technical facts about a live capture
+     */
+    public function storeEvidence(
+        KycSubmission $submission,
+        ?KycDocumentType $type,
+        string $slotKey,
+        UploadedFile $file,
+        bool $capturedLive = false,
+        ?array $captureMeta = null,
+    ): KycDocument {
+        $contents = (string) file_get_contents($file->getRealPath());
+
+        $path = sprintf(
+            'kyc/%s/%s/%s',
+            $submission->business_account_id,
+            $submission->public_id,
+            bin2hex(random_bytes(16)),
+        );
+
+        $this->storage->diskForLocal(self::DISK)->put($path, encrypt($contents));
+
+        return $submission->documents()->create([
+            'kyc_document_type_id' => $type?->id,
+            'slot_key' => $slotKey,
+            'disk' => $this->storage->diskNameForLocal(self::DISK),
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => (string) $file->getMimeType(),
+            'size_bytes' => strlen($contents),
+            'checksum' => hash('sha256', $contents),
+            'is_encrypted' => true,
+            'captured_live' => $capturedLive,
+            'captured_at' => $capturedLive ? now() : null,
+            'capture_meta' => $captureMeta,
+        ]);
+    }
+
+    /**
      * Read a document's contents, recording who did so (§7.5).
      *
      * The access record is written **before** the file is returned. If recording

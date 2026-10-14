@@ -3,6 +3,7 @@
 namespace App\Domain\Kyc\Models;
 
 use App\Concerns\HasPublicId;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,6 +22,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $public_id
  * @property string $disk
  * @property string $path
+ * @property int|null $kyc_document_type_id null for the live selfie, which has no catalogue entry
+ * @property string|null $slot_key
+ * @property CarbonInterface $created_at
+ * @property-read KycDocumentType|null $documentType
  */
 class KycDocument extends Model
 {
@@ -44,6 +49,10 @@ class KycDocument extends Model
         return [
             'size_bytes' => 'integer',
             'is_encrypted' => 'boolean',
+            'captured_live' => 'boolean',
+            'captured_at' => 'immutable_datetime',
+            'capture_meta' => 'array',
+            'superseded_at' => 'immutable_datetime',
         ];
     }
 
