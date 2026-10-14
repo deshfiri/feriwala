@@ -1,6 +1,20 @@
 <?php
 
 return [
+    'batch_builder' => [
+        'selfie_modes' => [
+            'disabled' => 'Not asked',
+            'optional' => 'Optional',
+            'required' => 'Required',
+        ],
+        'problems' => [
+            'empty' => 'This batch asks for nothing. Add a group, or turn on the live selfie.',
+            'group_empty' => '":group" has no requirements. Add one, or remove the group.',
+            'minimum_too_high' => '":group" needs at least :minimum, but offers only :count.',
+            'nothing_required' => '":group" is set to "all required", but none of its requirements is required.',
+            'no_required_slot' => '":requirement" has no required file or value, so it could never be incomplete.',
+        ],
+    ],
     'batches' => [
         'add' => 'New batch',
         'empty_title' => 'No batches yet',
