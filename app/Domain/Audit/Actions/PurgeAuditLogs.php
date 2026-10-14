@@ -2,12 +2,9 @@
 
 namespace App\Domain\Audit\Actions;
 
-use App\Domain\Access\Enums\PermissionAction;
-use App\Domain\Access\Enums\PermissionModule;
-use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Audit\AuditLogAuthority;
 use App\Domain\Audit\AuditRetention;
 use App\Domain\Audit\Data\AuditEntry;
-use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -26,7 +23,8 @@ use InvalidArgumentException;
  *
  * What keeps this from being a quiet way to erase a trail:
  *
- *  - the right to do it is `audit.delete`, held by nobody who was not given it;
+ *  - the right to do it is the Super Admin's alone ({@see AuditLogAuthority}),
+ *    and a custom role holding `audit.delete` is still refused;
  *  - a person must state a reason, and the controller confirms their password;
  *  - the database refuses every DELETE except inside the transaction opened
  *    here, and refuses to delete a purge record at all;
@@ -57,8 +55,7 @@ class PurgeAuditLogs
      */
     public function handle(User $actor, ?string $person, ?CarbonInterface $olderThan, string $reason): int
     {
-        if (CatalogPolicy::isBusinessIdentity($actor)
-            || ! $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::Delete))) {
+        if (! AuditLogAuthority::mayPurge($actor)) {
             throw new AuthorizationException('You may not clear the activity log.');
         }
 

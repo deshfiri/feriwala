@@ -16,13 +16,15 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /*
- * Clearing the activity log (D29): the one guarded way an audit entry is ever
- * deleted. The log stays append-only for everything else.
+ * Clearing the activity log (D29, carried as D33): the one guarded way an audit
+ * entry is ever deleted, and since 2026-10-14 the Super Admin's alone. The log
+ * stays append-only for everything else.
  */
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
+    $this->superAdmin = testPlatformStaff(PlatformRole::SuperAdmin);
     $this->admin = testPlatformStaff(PlatformRole::Admin);
     $this->other = testPlatformStaff(PlatformRole::SystemAdministrator);
 
@@ -58,7 +60,7 @@ function purgeAuditOldEntry(string $action, int $days): void
 
 describe('clearing everything', function () {
     it('deletes every entry, and leaves a permanent record of the clearing', function () {
-        $this->actingAs($this->admin)
+        $this->actingAs($this->superAdmin)
             ->post(route('admin.activity-log.purge'), purgeAuditPayload())
             ->assertRedirect(route('admin.activity-log.index'))
             ->assertSessionHasNoErrors();
@@ -67,14 +69,14 @@ describe('clearing everything', function () {
 
         expect($remaining)->toHaveCount(1)
             ->and($remaining->first()->action)->toBe('audit.logs_purged')
-            ->and($remaining->first()->actor_id)->toBe($this->admin->id)
+            ->and($remaining->first()->actor_id)->toBe($this->superAdmin->id)
             ->and($remaining->first()->reason)->toBe('Housekeeping after the audit review')
             ->and($remaining->first()->before)->toBe(['deleted' => 4])
             ->and($remaining->first()->after['scope'])->toBe('everyone');
     });
 
     it('can never delete the record of a clearing, even inside a purge', function () {
-        app(PurgeAuditLogs::class)->handle($this->admin, null, null, 'Housekeeping after the audit review');
+        app(PurgeAuditLogs::class)->handle($this->superAdmin, null, null, 'Housekeeping after the audit review');
 
         expect(fn () => DB::transaction(function () {
             DB::statement("SELECT set_config('feriwala.purge_audit_logs', 'on', true)");
@@ -92,7 +94,7 @@ describe('clearing everything', function () {
 
 describe('clearing narrower', function () {
     it('clears only one staff member\'s entries', function () {
-        $this->actingAs($this->admin)
+        $this->actingAs($this->superAdmin)
             ->post(route('admin.activity-log.purge'), purgeAuditPayload(['scope' => 'person', 'person' => $this->admin->public_id]))
             ->assertSessionHasNoErrors();
 
@@ -102,7 +104,7 @@ describe('clearing narrower', function () {
     });
 
     it('clears only the system\'s entries', function () {
-        $this->actingAs($this->admin)
+        $this->actingAs($this->superAdmin)
             ->post(route('admin.activity-log.purge'), purgeAuditPayload(['scope' => 'person', 'person' => 'system']))
             ->assertSessionHasNoErrors();
 
@@ -113,7 +115,7 @@ describe('clearing narrower', function () {
     it('clears only entries older than the days given', function () {
         purgeAuditOldEntry('old.thing', 40);
 
-        $this->actingAs($this->admin)
+        $this->actingAs($this->superAdmin)
             ->post(route('admin.activity-log.purge'), purgeAuditPayload(['older_than_days' => 30]))
             ->assertSessionHasNoErrors();
 
@@ -124,7 +126,7 @@ describe('clearing narrower', function () {
 
 describe('who may clear it, and on what terms', function () {
     it('refuses a wrong password, a short reason and a missing confirmation, and deletes nothing', function (array $override, string $field) {
-        $this->actingAs($this->admin)
+        $this->actingAs($this->superAdmin)
             ->post(route('admin.activity-log.purge'), purgeAuditPayload($override))
             ->assertSessionHasErrors($field);
 
@@ -149,6 +151,24 @@ describe('who may clear it, and on what terms', function () {
         ),
     ]);
 
+    it('refuses an Admin, and staff whose role was given the permission, at the screen and in the action', function (Closure $identity) {
+        $actor = $identity();
+
+        $this->actingAs($actor)
+            ->post(route('admin.activity-log.purge'), purgeAuditPayload())
+            ->assertForbidden();
+
+        expect(fn () => app(PurgeAuditLogs::class)->handle($actor, null, null, 'Housekeeping after the audit review'))
+            ->toThrow(AuthorizationException::class)
+            ->and(AuditLog::query()->count())->toBe(4);
+    })->with([
+        'an Admin' => fn () => test()->admin,
+        'staff granted audit.delete' => fn () => tap(
+            testPlatformStaff(PlatformRole::SystemAdministrator),
+            fn (User $staff) => $staff->givePermissionTo('audit.delete'),
+        ),
+    ]);
+
     it('refuses a caller that skipped the controller', function () {
         expect(fn () => app(PurgeAuditLogs::class)->handle(testPlatformStaff(PlatformRole::ProductManager), null, null, 'Housekeeping after the audit review'))
             ->toThrow(AuthorizationException::class);
@@ -157,7 +177,7 @@ describe('who may clear it, and on what terms', function () {
     });
 
     it('shows the clear control only to those who may use it', function () {
-        $this->actingAs($this->admin)->get(route('admin.activity-log.index'))
+        $this->actingAs($this->superAdmin)->get(route('admin.activity-log.index'))
             ->assertInertia(fn ($page) => $page->where('can.purge', true));
 
         $viewer = testPlatformStaff(PlatformRole::ProductManager);
@@ -165,6 +185,9 @@ describe('who may clear it, and on what terms', function () {
 
         $this->actingAs($viewer)->get(route('admin.activity-log.index'))
             ->assertInertia(fn ($page) => $page->where('can.purge', false));
+
+        $this->actingAs($this->admin)->get(route('admin.activity-log.index'))
+            ->assertInertia(fn ($page) => $page->where('can.purge', false)->where('can.manage_retention', false));
     });
 });
 
@@ -193,15 +216,15 @@ describe('automatic clearing after a number of days', function () {
 });
 
 describe('the retention setting', function () {
-    it('is changed by an Admin, audited, and refused to anybody without the permission', function () {
-        $this->actingAs($this->admin)
+    it('is changed by the Super Admin, audited, and refused to anybody else', function () {
+        $this->actingAs($this->superAdmin)
             ->put(route('admin.activity-log-retention.update'), ['days' => 90])
             ->assertSessionHasNoErrors();
 
         expect(app(AuditRetention::class)->days())->toBe(90)
             ->and(AuditLog::query()->where('action', 'audit.retention_changed')->exists())->toBeTrue();
 
-        $this->actingAs($this->admin)
+        $this->actingAs($this->superAdmin)
             ->put(route('admin.activity-log-retention.update'), ['days' => 0])
             ->assertSessionHasNoErrors();
 
@@ -211,7 +234,14 @@ describe('the retention setting', function () {
             ->put(route('admin.activity-log-retention.update'), ['days' => 5])
             ->assertForbidden();
 
+        // An Admin may read the log but not shorten how long it is kept.
         $this->actingAs($this->admin)
+            ->put(route('admin.activity-log-retention.update'), ['days' => 5])
+            ->assertForbidden();
+
+        expect(app(AuditRetention::class)->days())->toBeNull();
+
+        $this->actingAs($this->superAdmin)
             ->put(route('admin.activity-log-retention.update'), ['days' => 99999])
             ->assertSessionHasErrors('days');
     });

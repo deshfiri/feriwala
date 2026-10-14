@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Audit\Actions\PurgeAuditLogs;
+use App\Domain\Audit\AuditLogAuthority;
 use App\Domain\Audit\AuditRetention;
 use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Catalog\Policies\CatalogPolicy;
@@ -51,7 +52,7 @@ class ActivityLogController extends Controller
         );
 
         $filters = $this->filters($request);
-        $canPurge = $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::Delete));
+        $canPurge = AuditLogAuthority::mayPurge($actor);
         $personName = $filters['person'] === null || $filters['person'] === PurgeAuditLogs::SYSTEM
             ? null
             : User::query()->where('public_id', $filters['person'])->value('name');
@@ -80,7 +81,7 @@ class ActivityLogController extends Controller
             'retention_days' => $this->retention->days(),
             'can' => [
                 'purge' => $canPurge,
-                'manage_retention' => $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::ManageSettings)),
+                'manage_retention' => AuditLogAuthority::mayManageRetention($actor),
             ],
             'summary' => $this->summary(),
             'people' => $this->people(),
@@ -95,19 +96,14 @@ class ActivityLogController extends Controller
 
     /**
      * Clear the log: everything, or one person's (or the system's) entries,
-     * optionally only those older than some days. Needs `audit.delete`, the
-     * person's password and a reason; the purge is recorded permanently (D29).
+     * optionally only those older than some days. The Super Admin only, with
+     * their password and a reason; the purge is recorded permanently (D29).
      */
     public function purge(Request $request, PurgeAuditLogs $purge): RedirectResponse
     {
         $actor = $request->user();
 
-        abort_unless(
-            $actor instanceof User
-                && ! CatalogPolicy::isBusinessIdentity($actor)
-                && $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::Delete)),
-            403,
-        );
+        abort_unless($actor instanceof User && AuditLogAuthority::mayPurge($actor), 403);
 
         $validated = $request->validate([
             'password' => ['required', 'string', 'current_password'],

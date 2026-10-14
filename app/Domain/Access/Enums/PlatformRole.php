@@ -188,7 +188,9 @@ enum PlatformRole: string
                 Module::Website->value => $manage,
                 Module::Report->value => $read,
                 Module::Notification->value => [Action::View, Action::Create, Action::Edit],
-                Module::Audit->value => [Action::ViewAuditLogs, Action::Delete, Action::ManageSettings],
+                // Reading, not removing: clearing the log or setting its
+                // retention is the Super Admin's alone (D33, 2026-10-14).
+                Module::Audit->value => [Action::ViewAuditLogs],
 
                 /*
                  * The one piece of money handling an Admin holds: seeing a

@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Audit\Actions\ConfigureAuditRetention;
+use App\Domain\Audit\AuditLogAuthority;
 use App\Domain\Audit\AuditRetention;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Http\Controllers\Controller;
@@ -18,8 +19,8 @@ use Inertia\Response;
 /**
  * How many days the activity log is kept before it is cleared automatically.
  *
- * Seen by anyone who may read the log; changed only with `audit.manage_settings`.
- * Zero keeps entries without limit.
+ * Seen by anyone who may read the log; changed only by the Super Admin
+ * ({@see AuditLogAuthority}). Zero keeps entries without limit.
  */
 class AuditRetentionSettingsController extends Controller
 {
@@ -37,7 +38,7 @@ class AuditRetentionSettingsController extends Controller
         return Inertia::render('admin/audit-retention-settings', [
             'settings' => ['days' => $this->retention->days() ?? 0],
             'maximum' => AuditRetention::MAXIMUM_DAYS,
-            'can' => ['manage' => $this->can($actor, PermissionAction::ManageSettings)],
+            'can' => ['manage' => AuditLogAuthority::mayManageRetention($actor)],
         ]);
     }
 
@@ -45,7 +46,7 @@ class AuditRetentionSettingsController extends Controller
     {
         $actor = $this->actor($request);
 
-        abort_unless($this->can($actor, PermissionAction::ManageSettings), 403);
+        abort_unless(AuditLogAuthority::mayManageRetention($actor), 403);
 
         $validated = $request->validate([
             'days' => ['required', 'integer', 'min:0', 'max:'.AuditRetention::MAXIMUM_DAYS],

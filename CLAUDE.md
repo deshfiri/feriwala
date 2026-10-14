@@ -248,7 +248,10 @@ seems wrong, raise it rather than routing past it.
     No new internal code may read or write it.
 
 2. **Ledger entries are immutable.** No update, no delete. Corrections are new adjustment,
-   reversal, or corrective rows. The same applies to audit logs.
+   reversal, or corrective rows. The same applies to audit logs, with one exception: the guarded
+   purge recorded in [D33](requirements/04-decisions.md), which only the Super Admin may run and
+   which always leaves a permanent `audit.logs_purged` record. Nothing else may update or delete an
+   audit log, and ledger entries have no exception at all.
 3. **Every financial mutation** runs inside a database transaction with row locking, is idempotent
    when externally triggered, and writes a ledger entry.
 4. **Statuses move through `transitionTo()`**, never by assigning the attribute. Status enums

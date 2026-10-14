@@ -2,12 +2,9 @@
 
 namespace App\Domain\Audit\Actions;
 
-use App\Domain\Access\Enums\PermissionAction;
-use App\Domain\Access\Enums\PermissionModule;
-use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Audit\AuditLogAuthority;
 use App\Domain\Audit\AuditRetention;
 use App\Domain\Audit\Data\AuditEntry;
-use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
@@ -17,7 +14,8 @@ use InvalidArgumentException;
 /**
  * Sets how long the audit log is kept, or turns automatic deletion off.
  *
- * Audited, and sensitive: shortening it is how a trail is quietly cut down.
+ * Audited, and sensitive: shortening it is how a trail is quietly cut down,
+ * so it is the Super Admin's alone ({@see AuditLogAuthority}).
  */
 class ConfigureAuditRetention
 {
@@ -35,8 +33,7 @@ class ConfigureAuditRetention
      */
     public function handle(User $actor, ?int $days): void
     {
-        if (CatalogPolicy::isBusinessIdentity($actor)
-            || ! $actor->can(PermissionCatalogue::name(PermissionModule::Audit, PermissionAction::ManageSettings))) {
+        if (! AuditLogAuthority::mayManageRetention($actor)) {
             throw new AuthorizationException('You may not change how long the activity log is kept.');
         }
 
