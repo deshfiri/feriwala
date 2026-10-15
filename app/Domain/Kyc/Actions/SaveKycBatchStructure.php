@@ -131,6 +131,8 @@ class SaveKycBatchStructure
             'name_bn' => $this->blankToNull($input['name_bn'] ?? null),
             'description' => $this->blankToNull($input['description'] ?? null),
             'description_bn' => $this->blankToNull($input['description_bn'] ?? null),
+            'selector_label' => $this->blankToNull($input['selector_label'] ?? null),
+            'selector_label_bn' => $this->blankToNull($input['selector_label_bn'] ?? null),
             'completion_rule' => $rule,
             'minimum_required' => $rule === KycCompletionRule::Minimum ? max(1, (int) ($input['minimum'] ?? 1)) : null,
             'is_required' => (bool) ($input['required'] ?? true),

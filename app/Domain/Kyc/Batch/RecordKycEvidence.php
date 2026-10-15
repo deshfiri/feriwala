@@ -238,19 +238,27 @@ final class RecordKycEvidence
     }
 
     /**
-     * Whether an option can no longer be walked away from: its round has been
-     * submitted and it holds evidence no reviewer has rejected.
+     * Whether an option can no longer be walked away from: it holds evidence a
+     * reviewer accepted, or its round has been submitted and it holds evidence no
+     * reviewer has rejected.
      *
      * @param  array<string, mixed>  $option
      */
     private function optionLocked(KycRound $round, array $option): bool
     {
-        if (! $round->hasBeenSubmitted()) {
-            return false;
-        }
-
         foreach ($round->evidence() as $item) {
-            if ($item->requirement === $option['key'] && ! $item->isRejected()) {
+            if ($item->requirement !== $option['key']) {
+                continue;
+            }
+
+            // Accepted stays accepted, in any round: a correction round carries
+            // accepted evidence in unsent, and switching away would discard it.
+            if ($item->isAccepted()) {
+                return true;
+            }
+
+            // Sent and not sent back: staff has to ask for it again.
+            if ($round->hasBeenSubmitted() && ! $item->isRejected()) {
                 return true;
             }
         }

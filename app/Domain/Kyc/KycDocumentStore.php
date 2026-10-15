@@ -220,7 +220,12 @@ class KycDocumentStore
             );
         }
 
-        $this->storage->resolveNamedDisk($document->disk)->delete($document->path);
         $document->delete();
+
+        // A file carried into a correction round is the same stored file as the
+        // earlier round's; only the last row pointing at it may take it off disk.
+        if (! KycDocument::query()->where('disk', $document->disk)->where('path', $document->path)->exists()) {
+            $this->storage->resolveNamedDisk($document->disk)->delete($document->path);
+        }
     }
 }

@@ -13,6 +13,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { submit } from '@/routes/supplier/kyc';
 import { store } from '@/routes/supplier/kyc/documents';
+import { show as ownDocument } from '@/routes/supplier/kyc/documents';
 import * as evidence from '@/routes/supplier/kyc/evidence';
 import type { KycBatch } from '@/types';
 
@@ -146,6 +147,7 @@ export default function SupplierKyc({
                             choose: evidence.choose.url(),
                             deselect: evidence.deselect.url(),
                             submit: submit.url(),
+                            preview: (id) => ownDocument.url(id),
                         }}
                     />
                 )}

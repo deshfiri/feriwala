@@ -80,6 +80,7 @@ final class KycEvidenceItem
             'name' => $this->name,
             'size_bytes' => $this->sizeBytes,
             'live' => $this->capturedLive,
+            'image' => $this->mime !== null && str_starts_with($this->mime, 'image/'),
             'value_preview' => $this->maskedValue,
             'verdict' => $this->verdict,
             'note' => $this->note,

@@ -17,6 +17,7 @@ use App\Http\Controllers\Supplier\Auth\VerifySupplierEmailController;
 use App\Http\Controllers\Supplier\DashboardController;
 use App\Http\Controllers\Supplier\FulfilmentController;
 use App\Http\Controllers\Supplier\KycController;
+use App\Http\Controllers\Supplier\KycDocumentController;
 use App\Http\Controllers\Supplier\KycEvidenceController;
 use App\Http\Controllers\Supplier\ListingController;
 use App\Http\Controllers\Supplier\ListingLotController;
@@ -111,6 +112,8 @@ Route::prefix('supplier')
             Route::get('kyc', [KycController::class, 'create'])->name('kyc.create');
             Route::post('kyc/documents', [KycController::class, 'storeDocument'])->name('kyc.documents.store');
             Route::post('kyc/submit', [KycController::class, 'submit'])->name('kyc.submit');
+            // Their own uploaded file, to check a draft before sending it.
+            Route::get('kyc/documents/{document}', [KycDocumentController::class, 'show'])->name('kyc.documents.show');
 
             // A round on a KYC batch (D30): evidence goes into slots, and options
             // are chosen within groups.

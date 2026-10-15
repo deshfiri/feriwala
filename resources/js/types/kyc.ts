@@ -57,6 +57,8 @@ export type KycBatchEvidence = {
     name: string | null;
     size_bytes: number | null;
     live: boolean;
+    /** An image, so it can be shown as a picture. */
+    image: boolean;
     value_preview: string | null;
     verdict: 'accepted' | 'rejected' | null;
     note: string | null;
@@ -85,6 +87,10 @@ export type KycBatchOption = {
     complete: boolean;
     provided: number;
     total: number;
+    /** It holds files the applicant has not sent yet: switching away would discard them. */
+    has_draft: boolean;
+    /** It cannot be walked away from: accepted, or sent and not sent back. */
+    locked: boolean;
     slots: KycBatchSlot[];
 };
 
@@ -95,6 +101,10 @@ export type KycBatchGroup = {
     rule: 'all' | 'any' | 'min';
     /** The applicant chooses between options (any one, or a minimum). */
     choose: boolean;
+    /** What staff called the dropdown, if they did. */
+    selector_label: string | null;
+    /** The options in use: the one chosen, those chosen, or all of them. */
+    selected: string[];
     required: boolean;
     needed: number;
     done: number;
@@ -173,6 +183,9 @@ export type KycBuilderGroup = {
     name_bn: string | null;
     description: string | null;
     description_bn: string | null;
+    /** What the applicant's dropdown for this group is called. */
+    selector_label: string | null;
+    selector_label_bn: string | null;
     rule: 'all' | 'any' | 'min';
     minimum: number | null;
     required: boolean;
