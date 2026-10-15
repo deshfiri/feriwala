@@ -28,6 +28,7 @@ import { show as cartShow } from '@/routes/wholesale/cart';
 import { show } from '@/routes/wholesale/checkout';
 import { show as orderShow } from '@/routes/wholesale/orders';
 import type { CheckoutSummary } from '@/types/wholesale';
+import GatewayFxNote from '@/components/gateway-fx-note';
 
 type Props = {
     checkout: CheckoutSummary;
@@ -530,8 +531,11 @@ function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
                                         onChange={() => setMethod(option.name)}
                                         className="accent-brand"
                                     />
-                                    <span className="font-medium">
-                                        {option.label}
+                                    <span className="min-w-0">
+                                        <span className="font-medium">
+                                            {option.label}
+                                        </span>
+                                        <GatewayFxNote fx={option.fx} />
                                     </span>
                                 </label>
                             ))}

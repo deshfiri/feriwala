@@ -23,8 +23,9 @@ use Illuminate\Support\Facades\Http;
  * two of them could not answer either question — what the customer paid, or
  * what the business received.
  *
- * And underneath all of it: the base ledger is in taka and version 1 performs no
- * exchange-rate accounting, so nothing here converts anything.
+ * And underneath all of it: the base ledger is in taka. D4 was amended to let an
+ * administrator-set rate take a Taka payment through an international gateway, but
+ * only as a quote kept beside the charge — it never rewrites the ledger.
  */
 
 beforeEach(function () {
@@ -134,7 +135,7 @@ describe('the fee the provider kept', function () {
     });
 });
 
-describe('no exchange-rate accounting (D4)', function () {
+describe('the ledger stays in taka (D4)', function () {
     it('posts the ledger in the currency the payment was taken in', function () {
         $topUp = Payment::create([
             'business_account_id' => $this->account->id,
@@ -159,12 +160,12 @@ describe('no exchange-rate accounting (D4)', function () {
         expect($entry->currency_code)->toBe('BDT');
     });
 
-    it('offers no gateway that would need a rate for a taka amount', function () {
+    it('offers no gateway that would need a rate nobody has set', function () {
         /*
-         * The international providers decline any currency they cannot settle
-         * without converting, so a taka payment is never offered a gateway that
-         * would have to invent a rate — refused before initiation rather than
-         * reconciled afterwards.
+         * With no rate set the international providers decline a taka amount, so
+         * a taka payment is never offered a gateway that would have to invent a
+         * rate. Setting one is the administrator's act; see
+         * ExchangeRateConversionTest.
          */
         $offered = app(PaymentGatewayManager::class)->availableFor(Currency::BDT);
 
@@ -172,11 +173,12 @@ describe('no exchange-rate accounting (D4)', function () {
             ->and($offered)->not->toContain('paypal');
     });
 
-    it('stores no exchange rate anywhere on a payment', function () {
+    it('keeps an exchange rate only as the quote beside a charge', function () {
         /*
-         * A rate column would be an invitation to start converting, and D4 is
-         * explicit that version 1 does not. Asserted against the schema so
-         * adding one is a deliberate act.
+         * The one sanctioned rate column is `fx_rate`, kept with the charge it
+         * quoted. Anything else rate-like is a second source of truth for what a
+         * payment is worth. Asserted against the schema so adding one is a
+         * deliberate act.
          */
         $columns = array_map(
             fn (object $column) => $column->column_name,
@@ -193,6 +195,6 @@ describe('no exchange-rate accounting (D4)', function () {
                 || str_contains($column, '_rate'),
         ));
 
-        expect($rateLike)->toBe([]);
+        expect($rateLike)->toBe(['fx_rate']);
     });
 });

@@ -51,6 +51,27 @@ on top of auth/authorization.
 - If an international gateway ever settles in another currency, record **original currency,
   original amount, and settlement information** — never silently rewrite the BDT base ledger. 🔒
 
+### Amendment — administrator-set exchange rates (approved 2026-10-15)
+
+A Taka payment may be taken through a gateway that cannot accept Taka (Stripe, PayPal). 🔒
+
+- **The rate is the administrator's, entered by hand** under Admin → Payments → Exchange rates:
+  Taka per one unit of USD, EUR or GBP. Nothing fetches a rate. With no rate set, such a gateway is
+  not offered for a Taka payment, exactly as before.
+- **BDT stays the obligation and the ledger.** `payments.amount` and every posting, invoice and
+  wallet credit remain Taka. The conversion is a quote kept beside the charge
+  (`charge_amount`, `charge_currency_code`, `fx_rate`, `fx_quoted_at`) — never a rewrite.
+- **Charging rounds up** to the cent, so the platform is never short; **refunding rounds down**,
+  so partial refunds can never total more than was charged. A refund is converted at the rate the
+  payment was quoted at, not the current one.
+- **The quote is fixed once per charge currency** for the life of the payment, so a retry is
+  charged the same and an earlier attempt that completes late still matches.
+- **Verification is against the quoted figure.** A gateway reporting any other amount or currency
+  does not settle the payment. The provider's own settlement stays in `settled_amount` with its
+  own currency, as before.
+- Only Taka converts into a foreign currency; a foreign payment is never converted into another.
+- Changing a rate is audited (`payment.exchange_rates_updated`) and affects new payments only.
+
 ## D5 — Local environment (was Q5) — **AMENDED 2026-09-01, confirmed 2026-09-03**
 
 **Native services in WSL Ubuntu. No Docker.**

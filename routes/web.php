@@ -992,6 +992,13 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('settings/payments', [PaymentGatewayController::class, 'switches'])
             ->name('gateways.switches');
 
+        // The rates that let a Taka payment go through an international gateway
+        // (D4, amended). Behind the same permission as the credentials.
+        Route::get('settings/payments/exchange-rates', [PaymentGatewayController::class, 'exchangeRates'])
+            ->name('gateways.exchange-rates');
+        Route::put('settings/payments/exchange-rates', [PaymentGatewayController::class, 'updateExchangeRates'])
+            ->name('gateways.exchange-rates.update');
+
         /*
          * Payments and their gateway trail (§42, P1-54).
          *

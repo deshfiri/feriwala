@@ -1,5 +1,6 @@
 import type { Money } from '@/lib/money';
 import type { IntendedResaleChannel } from '@/types/orders';
+import type { GatewayFx } from '@/components/gateway-fx-note';
 
 /**
  * The ERP wholesale cart, exactly as the server prices it (§14).
@@ -111,7 +112,12 @@ export type CheckoutAddressBookEntry = {
     has_postcode: boolean;
 };
 
-export type CheckoutPaymentMethod = { name: string; label: string };
+export type CheckoutPaymentMethod = {
+    name: string;
+    label: string;
+    /** Set when the gateway is charged in another currency at the administrator's rate. */
+    fx?: GatewayFx | null;
+};
 
 /**
  * A confirmation on the cart. `stale` means the checkout priced now is no longer

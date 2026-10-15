@@ -36,8 +36,13 @@ import type {
     WholesaleOrderDetail,
 } from '@/types/orders';
 import type { CheckoutAddress } from '@/types/wholesale';
+import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
 
-type PaymentMethodOption = { name: string; label: string };
+type PaymentMethodOption = {
+    name: string;
+    label: string;
+    fx?: GatewayFx | null;
+};
 
 type Props = {
     order: WholesaleOrderDetail;
@@ -487,8 +492,13 @@ function OrderActions({
                                                     }
                                                     className="accent-brand"
                                                 />
-                                                <span className="font-medium">
-                                                    {option.label}
+                                                <span className="min-w-0">
+                                                    <span className="font-medium">
+                                                        {option.label}
+                                                    </span>
+                                                    <GatewayFxNote
+                                                        fx={option.fx}
+                                                    />
                                                 </span>
                                             </label>
                                         ))}

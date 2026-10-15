@@ -205,8 +205,10 @@ class ProcessRefund
              * reference for providers that carry only one.
              */
             gatewayReference: $this->addressFor($payment),
-            amount: $request->amount,
-            originalAmount: $payment->amount,
+            // In what the gateway was charged: the Taka figure for a Taka
+            // gateway, otherwise the share at the rate the money was taken at.
+            amount: $payment->gatewayShareOf($request->amount),
+            originalAmount: $payment->expectedGatewayAmount(),
             reason: $request->reason,
             idempotencyKey: (string) $request->idempotency_key,
         );

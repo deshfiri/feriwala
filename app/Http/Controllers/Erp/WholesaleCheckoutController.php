@@ -87,6 +87,11 @@ class WholesaleCheckoutController extends Controller
                 'payment_methods' => array_map(fn (string $name) => [
                     'name' => $name,
                     'label' => $this->gatewayLabel($name),
+                    'fx' => $this->gateways->conversionNotice(
+                        $name,
+                        $quote->total->currency,
+                        $nonConditional ? $quote->delivery : $quote->total,
+                    ),
                 ], $methods),
                 'confirmation' => $this->confirmation($cart, $fingerprint, $methods),
                 'lines' => array_map(fn (CartLineQuote $line) => $this->line($line), $quote->cart->lines),

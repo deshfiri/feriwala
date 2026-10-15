@@ -9,6 +9,7 @@ import { pay } from '@/routes/subscription/renew';
 import { show as subscriptionShow } from '@/routes/subscription';
 import type { Money } from '@/lib/money';
 import type { AccountSubscriptionRow } from '@/types';
+import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
 
 type QuoteLine = {
     type: string;
@@ -34,7 +35,7 @@ type Props = {
         currency: string;
         is_payable: boolean;
     };
-    gateways: { name: string; label: string }[];
+    gateways: { name: string; label: string; fx?: GatewayFx | null }[];
 };
 
 /**
@@ -169,8 +170,11 @@ export default function Renewal({ current, renewal, quote, gateways }: Props) {
                                                 }
                                                 className="accent-brand"
                                             />
-                                            <span className="font-medium">
-                                                {option.label}
+                                            <span className="min-w-0">
+                                                <span className="font-medium">
+                                                    {option.label}
+                                                </span>
+                                                <GatewayFxNote fx={option.fx} />
                                             </span>
                                         </label>
                                     ))}

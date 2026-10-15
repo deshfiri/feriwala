@@ -19,6 +19,7 @@ use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\PaymentGatewayManager;
+use App\Support\Money\Currency;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -88,7 +89,8 @@ class PackageChangeController extends Controller
             'gateways' => array_map(fn (string $name) => [
                 'name' => $name,
                 'label' => config("payment.gateways.{$name}.label", $name),
-            ], $gateways->available()),
+                'fx' => $gateways->conversionNotice($name, Currency::base()),
+            ], $gateways->availableFor(Currency::base())),
         ]);
     }
 
@@ -104,7 +106,7 @@ class PackageChangeController extends Controller
 
         $validated = $request->validate([
             'package' => ['required', 'string'],
-            'gateway' => ['required', 'string', Rule::in($gateways->available())],
+            'gateway' => ['required', 'string', Rule::in($gateways->availableFor(Currency::base()))],
         ]);
 
         $current = $this->currentTerm($account);

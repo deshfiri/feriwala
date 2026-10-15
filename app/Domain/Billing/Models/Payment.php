@@ -10,6 +10,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\ExchangeRates;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
@@ -32,6 +33,9 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property Money $revenue
  * @property Money|null $settled_amount
  * @property Money|null $gateway_fee
+ * @property Money|null $charge_amount what an international gateway was asked for, when Taka was converted
+ * @property string|null $fx_rate Taka per one unit of the charge currency, as quoted
+ * @property CarbonImmutable|null $fx_quoted_at
  * @property CarbonImmutable|null $initiated_at
  * @property CarbonImmutable|null $expires_at
  * @property CarbonImmutable|null $completed_at
@@ -64,6 +68,8 @@ class Payment extends Model
             'revenue' => MoneyCast::class,
             'settled_amount' => MoneyCast::class.':settled_currency_code',
             'gateway_fee' => MoneyCast::class.':gateway_fee_currency_code',
+            'charge_amount' => MoneyCast::class.':charge_currency_code',
+            'fx_quoted_at' => 'immutable_datetime',
             'payer_address_snapshot' => 'array',
             'initiated_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
@@ -77,6 +83,40 @@ class Payment extends Model
     public function referencePrefix(): ReferencePrefix
     {
         return ReferencePrefix::Payment;
+    }
+
+    /**
+     * What the gateway must report for this payment to settle.
+     *
+     * The Taka amount for a Taka gateway; the quoted foreign figure when an
+     * international gateway was asked for the equivalent (D4, amended). The
+     * payer's obligation and every posting stay `amount`.
+     */
+    public function expectedGatewayAmount(): Money
+    {
+        return $this->charge_amount ?? $this->amount;
+    }
+
+    /**
+     * A Taka share of this payment, in what the gateway was asked for.
+     *
+     * The whole payment is exactly the charge. A part is converted at the rate
+     * the money was taken at — never today's — and rounded down, so partial
+     * refunds can never add up to more than was charged.
+     */
+    public function gatewayShareOf(Money $base): Money
+    {
+        if ($this->charge_amount === null) {
+            return $base;
+        }
+
+        if ($base->equals($this->amount)) {
+            return $this->charge_amount;
+        }
+
+        $rate = rtrim(rtrim((string) $this->fx_rate, '0'), '.');
+
+        return app(ExchangeRates::class)->shareOf($base, $this->charge_amount->currency, $rate);
     }
 
     /**

@@ -1,5 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
 import {
+    ArrowLeftRight,
     Banknote,
     CreditCard,
     KeyRound,
@@ -21,7 +22,11 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
-import { index as gatewaysIndex, switches } from '@/routes/admin/gateways';
+import {
+    exchangeRates,
+    index as gatewaysIndex,
+    switches,
+} from '@/routes/admin/gateways';
 import { index as paymentsIndex } from '@/routes/admin/payments';
 import { settings } from '@/routes/admin';
 
@@ -191,6 +196,15 @@ export default function PaymentSwitches({ gateways, summary, can }: Props) {
                                         className="size-4"
                                     />
                                     {t('gateways.switches.payment_log')}
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <Link href={exchangeRates()} prefetch>
+                                    <ArrowLeftRight
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                    {t('gateways.rates.nav')}
                                 </Link>
                             </Button>
                             <Button asChild variant="outline">

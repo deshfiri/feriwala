@@ -13,6 +13,7 @@ use App\Integrations\Payment\Gateways\Gateway;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpClient;
 use Illuminate\Http\Request;
 
@@ -469,7 +470,13 @@ class PayPalGateway extends Gateway
             $request = $request->withHeaders(['PayPal-Request-Id' => $idempotencyKey]);
         }
 
-        $response = $request->{$method}($this->host().$path, $payload);
+        try {
+            $response = $request->{$method}($this->host().$path, $payload);
+        } catch (ConnectionException) {
+            // An unreachable provider is an answer the payer can be given, not
+            // a fault page: nothing was charged and nothing is known.
+            throw GatewayUnavailable::forGateway($this->name(), 'it could not be reached');
+        }
 
         /** @var array<string, mixed> $body */
         $body = $response->json() ?? [];
@@ -492,11 +499,15 @@ class PayPalGateway extends Gateway
     {
         $this->requireConfigured();
 
-        $response = $this->http
-            ->asForm()
-            ->timeout(30)
-            ->withBasicAuth($this->credentials->clientId(), $this->credentials->clientSecret())
-            ->post($this->host().'/v1/oauth2/token', ['grant_type' => 'client_credentials']);
+        try {
+            $response = $this->http
+                ->asForm()
+                ->timeout(30)
+                ->withBasicAuth($this->credentials->clientId(), $this->credentials->clientSecret())
+                ->post($this->host().'/v1/oauth2/token', ['grant_type' => 'client_credentials']);
+        } catch (ConnectionException) {
+            throw GatewayUnavailable::forGateway($this->name(), 'it could not be reached');
+        }
 
         if ($response->failed()) {
             throw GatewayUnavailable::forGateway($this->name(), 'HTTP '.$response->status());

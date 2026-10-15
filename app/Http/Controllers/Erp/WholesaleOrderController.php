@@ -201,21 +201,25 @@ class WholesaleOrderController extends Controller
     }
 
     /**
-     * @return list<array{name: string, label: string}>
+     * @return list<array{name: string, label: string, fx: array<string, mixed>|null}>
      */
     protected function methodsFor(Order $order): array
     {
-        $currency = $order->payment?->amount->currency;
+        $amount = $order->payment?->amount;
 
-        if ($currency === null) {
+        if ($amount === null) {
             return [];
         }
 
-        return array_values(array_map(function (string $name): array {
+        return array_values(array_map(function (string $name) use ($amount): array {
             $label = config("payment.gateways.{$name}.label");
 
-            return ['name' => $name, 'label' => is_string($label) && $label !== '' ? $label : $name];
-        }, $this->gateways->availableFor($currency)));
+            return [
+                'name' => $name,
+                'label' => is_string($label) && $label !== '' ? $label : $name,
+                'fx' => $this->gateways->conversionNotice($name, $amount->currency, $amount),
+            ];
+        }, $this->gateways->availableFor($amount->currency)));
     }
 
     protected function canPay(Order $order): bool

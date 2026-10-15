@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Billing\Actions\ConfigureExchangeRates;
 use App\Domain\Billing\Actions\ConfigureGateway;
 use App\Domain\Billing\Actions\TestGatewayConnection;
+use App\Domain\Billing\ExchangeRates;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Billing\Policies\BillingSettingsPolicy;
 use App\Domain\Billing\Queries\GatewayPaymentTotals;
@@ -13,6 +15,8 @@ use App\Integrations\Payment\Data\GatewayOutcome;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -92,6 +96,101 @@ class PaymentGatewayController extends Controller
             ],
             'can' => ['manage' => BillingSettingsPolicy::canManageGateways($actor)],
         ]);
+    }
+
+    /**
+     * The rates at which Taka is taken through international gateways (D4,
+     * amended).
+     *
+     * Shown with what each rate does: which gateways it makes available for a
+     * Taka payment, and what ৳1,000 comes to — worked out here, so the
+     * administrator checks a figure the server will actually use.
+     */
+    public function exchangeRates(Request $request, PaymentGatewayManager $gateways, ExchangeRates $rates): Response
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canView($actor), 403);
+
+        $sample = Money::fromDecimal('1000', Currency::base());
+
+        $currencies = array_map(function (Currency $currency) use ($rates, $sample): array {
+            $rate = $rates->rateFor($currency);
+
+            return [
+                'currency' => $currency->value,
+                'rate' => $rate,
+                'sample' => $rate === null ? null : $rates->chargeFor($sample, $currency, $rate)->jsonSerialize(),
+            ];
+        }, ExchangeRates::convertible());
+
+        // Gateways that cannot take Taka themselves: the ones a rate matters to.
+        $dependent = [];
+
+        foreach ($gateways->implemented() as $name) {
+            $supported = $gateways->driver($name)->supportedCurrencies();
+
+            if (in_array(Currency::base(), $supported, true)) {
+                continue;
+            }
+
+            $dependent[] = [
+                'name' => $name,
+                'label' => (string) config("payment.gateways.{$name}.label", $name),
+                'currencies' => array_map(fn (Currency $currency) => $currency->value, $supported),
+                'is_available' => in_array($name, $gateways->available(), true),
+                'offered_for_taka' => in_array($name, $gateways->availableFor(Currency::base()), true),
+                'charge_currency' => $gateways->chargeCurrencyFor($name, Currency::base())?->value,
+            ];
+        }
+
+        return Inertia::render('admin/exchange-rates', [
+            'rates' => $currencies,
+            'gateways' => $dependent,
+            'sample' => $sample->jsonSerialize(),
+            'can' => ['manage' => BillingSettingsPolicy::canManageGateways($actor)],
+        ]);
+    }
+
+    public function updateExchangeRates(Request $request, ConfigureExchangeRates $configure): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(BillingSettingsPolicy::canManageGateways($actor), 403);
+
+        $codes = array_map(fn (Currency $currency) => $currency->value, ExchangeRates::convertible());
+
+        $validated = $request->validate([
+            'rates' => ['required', 'array'],
+            'rates.*' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        /** @var array<string, string|null> $rates */
+        $rates = $validated['rates'];
+
+        // Unknown currencies are not stored and not ignored: say so.
+        foreach (array_keys($rates) as $code) {
+            if (! in_array($code, $codes, true)) {
+                throw ValidationException::withMessages(["rates.{$code}" => __('gateways.rates.unknown_currency')]);
+            }
+        }
+
+        try {
+            $configure->handle($actor, $rates);
+        } catch (InvalidArgumentException $exception) {
+            $failing = array_find(
+                $codes,
+                fn (string $code) => str_contains($exception->getMessage(), "[{$code}]") || str_contains($exception->getMessage(), "for {$code} "),
+            );
+
+            throw ValidationException::withMessages([
+                $failing !== null ? "rates.{$failing}" : 'rates' => $exception->getMessage(),
+            ]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('gateways.rates.saved')]);
+
+        return back();
     }
 
     /**

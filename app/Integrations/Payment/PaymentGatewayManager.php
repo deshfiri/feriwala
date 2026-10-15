@@ -2,11 +2,13 @@
 
 namespace App\Integrations\Payment;
 
+use App\Domain\Billing\ExchangeRates;
 use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Contracts\PaymentGateway;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Contracts\Container\Container;
 use InvalidArgumentException;
 
@@ -30,6 +32,7 @@ class PaymentGatewayManager
     public function __construct(
         protected Container $container,
         protected SettingsRepository $settings,
+        protected ExchangeRates $rates,
     ) {}
 
     /**
@@ -145,9 +148,9 @@ class PaymentGatewayManager
     /**
      * Gateways that can take a payment in this currency (D4).
      *
-     * A gateway that does not accept the currency is not a gateway this payer
-     * can use, whatever else is configured — so it is filtered out before it is
-     * ever offered rather than failing at initiation.
+     * A gateway that cannot take the currency, and has no exchange rate set to
+     * take it in another, is not a gateway this payer can use — so it is
+     * filtered out before it is ever offered rather than failing at initiation.
      *
      * @return array<int, string>
      */
@@ -156,12 +159,75 @@ class PaymentGatewayManager
         $available = [];
 
         foreach ($this->available() as $name) {
-            if (in_array($currency, $this->driver($name)->supportedCurrencies(), true)) {
+            if ($this->chargeCurrencyFor($name, $currency) !== null) {
                 $available[] = $name;
             }
         }
 
         return $available;
+    }
+
+    /**
+     * The currency a gateway would actually be asked for, for a payment in this
+     * one — or null when it cannot take the payment at all (D4, amended).
+     *
+     * The payment's own currency when the gateway accepts it. Otherwise, for a
+     * Taka payment only, the first currency the gateway accepts that an
+     * administrator has set a rate for. Nothing is ever converted without a rate
+     * somebody entered, and a payment already in a foreign currency is never
+     * converted into another.
+     */
+    public function chargeCurrencyFor(string $gateway, Currency $paymentCurrency): ?Currency
+    {
+        $supported = $this->driver($gateway)->supportedCurrencies();
+
+        if (in_array($paymentCurrency, $supported, true)) {
+            return $paymentCurrency;
+        }
+
+        if ($paymentCurrency !== Currency::base()) {
+            return null;
+        }
+
+        foreach ($supported as $currency) {
+            if ($this->rates->hasRate($currency)) {
+                return $currency;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * What a payer should be told before choosing a gateway that converts.
+     *
+     * Null when the gateway takes the payment in its own currency, so there is
+     * nothing to say. Otherwise the currency they will be charged in, the rate
+     * (Taka per unit) and — when the amount is known — the figure itself.
+     *
+     * @return array{currency: string, rate: string, charge: array<string, mixed>|null}|null
+     */
+    public function conversionNotice(string $gateway, Currency $paymentCurrency, ?Money $amount = null): ?array
+    {
+        $charge = $this->chargeCurrencyFor($gateway, $paymentCurrency);
+
+        if ($charge === null || $charge === $paymentCurrency) {
+            return null;
+        }
+
+        $rate = $this->rates->rateFor($charge);
+
+        if ($rate === null) {
+            return null;
+        }
+
+        return [
+            'currency' => $charge->value,
+            'rate' => $rate,
+            'charge' => $amount !== null && $amount->currency === $paymentCurrency
+                ? $this->rates->chargeFor($amount, $charge, $rate)->jsonSerialize()
+                : null,
+        ];
     }
 
     /**

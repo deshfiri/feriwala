@@ -27,6 +27,7 @@ use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
+use App\Support\Money\Currency;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -106,7 +107,8 @@ class CheckoutController extends Controller
             'gateways' => array_map(fn (string $name) => [
                 'name' => $name,
                 'label' => config("payment.gateways.{$name}.label", $name),
-            ], $gateways->available()),
+                'fx' => $gateways->conversionNotice($name, Currency::base(), $quote->total()),
+            ], $gateways->availableFor(Currency::base())),
         ]);
     }
 
@@ -144,7 +146,7 @@ class CheckoutController extends Controller
         $account = $this->businessAccountFor($request);
 
         $validated = $request->validate([
-            'gateway' => ['required', 'string', Rule::in($gateways->available())],
+            'gateway' => ['required', 'string', Rule::in($gateways->availableFor(Currency::base()))],
         ]);
 
         $subscription = $this->pendingSubscription($account);

@@ -14,12 +14,13 @@ import WalletTopUpController from '@/actions/App/Http/Controllers/Erp/WalletTopU
 import { show } from '@/routes/wallet';
 import { isPositive, type Money } from '@/lib/money';
 import type { WalletBalances } from '@/types/wallet';
+import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
 
 type Props = {
     balances: WalletBalances;
     minimum: Money;
     suggested: Money;
-    gateways: { value: string; label: string }[];
+    gateways: { value: string; label: string; fx?: GatewayFx | null }[];
 };
 
 const controlClass =
@@ -122,6 +123,22 @@ export default function WalletTopUp({
                                             </option>
                                         ))}
                                     </select>
+
+                                    {gateways
+                                        .filter((gateway) => gateway.fx)
+                                        .map((gateway) => (
+                                            <p
+                                                key={gateway.value}
+                                                className="text-xs"
+                                            >
+                                                <span className="font-medium">
+                                                    {gateway.label}
+                                                </span>
+                                                <GatewayFxNote
+                                                    fx={gateway.fx}
+                                                />
+                                            </p>
+                                        ))}
 
                                     <InputError message={errors.gateway} />
                                 </div>

@@ -164,11 +164,13 @@ class SettlePayment
         // The amount check. A gateway reporting a different figure means the
         // request was tampered with or the gateway is misconfigured — either
         // way it does not pay for this order.
-        if (! $result->matchesAmount($payment->amount)) {
+        if (! $result->matchesAmount($payment->expectedGatewayAmount())) {
             $this->log->channel('payment')->critical('Payment amount mismatch', [
                 'payment' => $payment->reference,
-                'expected' => $payment->amount->toDecimal(),
+                'expected' => $payment->expectedGatewayAmount()->toDecimal(),
+                'expected_currency' => $payment->expectedGatewayAmount()->currency->value,
                 'reported' => $result->amount?->toDecimal(),
+                'reported_currency' => $result->amount?->currency->value,
                 'gateway' => $payment->gateway,
             ]);
 

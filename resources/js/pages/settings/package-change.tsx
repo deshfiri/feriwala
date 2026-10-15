@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { store } from '@/routes/subscription/change';
 import { isPositive, type Money } from '@/lib/money';
+import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
 
 type Excess = {
     feature: string;
@@ -40,7 +41,7 @@ type Option = {
 type Props = {
     current: { package: string | null; expires_at: string | null };
     options: Option[];
-    gateways: { name: string; label: string }[];
+    gateways: { name: string; label: string; fx?: GatewayFx | null }[];
 };
 
 /**
@@ -222,6 +223,10 @@ export default function PackageChange({ current, options, gateways }: Props) {
                                                     type="hidden"
                                                     name="gateway"
                                                     value={gateway}
+                                                />
+
+                                                <GatewayFxNote
+                                                    fx={gateways[0]?.fx}
                                                 />
 
                                                 {errors.package && (

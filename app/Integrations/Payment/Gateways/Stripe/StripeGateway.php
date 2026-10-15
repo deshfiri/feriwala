@@ -13,6 +13,7 @@ use App\Integrations\Payment\Gateways\Gateway;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpClient;
 use Illuminate\Http\Request;
 
@@ -446,7 +447,13 @@ class StripeGateway extends Gateway
             $request = $request->withHeaders(['Idempotency-Key' => $idempotencyKey]);
         }
 
-        $response = $request->{$method}(self::HOST.$path, $payload);
+        try {
+            $response = $request->{$method}(self::HOST.$path, $payload);
+        } catch (ConnectionException) {
+            // An unreachable provider is an answer the payer can be given, not
+            // a fault page: nothing was charged and nothing is known.
+            throw GatewayUnavailable::forGateway($this->name(), 'it could not be reached');
+        }
 
         /** @var array<string, mixed> $body */
         $body = $response->json() ?? [];

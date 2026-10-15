@@ -3,6 +3,7 @@
 namespace App\Integrations\Payment\Data;
 
 use App\Domain\Billing\Actions\PreparePaymentAttempt;
+use App\Domain\Billing\Actions\QuoteGatewayCharge;
 use App\Domain\Billing\Models\Payment;
 use App\Support\Money\Money;
 
@@ -37,6 +38,13 @@ class PaymentIntent
 
         /** @var list<string> what the payer's best address still lacks, when none was complete */
         public readonly array $payerAddressMissing = [],
+
+        /**
+         * What the payer actually owes, in the platform's currency. `amount` is
+         * what the gateway is asked to collect and equals this unless an
+         * exchange rate was applied (D4, amended).
+         */
+        public readonly ?Money $originalAmount = null,
     ) {}
 
     public static function forPayment(
@@ -50,9 +58,13 @@ class PaymentIntent
 
         $attempt = app(PreparePaymentAttempt::class)->handle($payment);
 
+        // What this gateway is asked for: the Taka amount, or its equivalent at
+        // the administrator's rate, stamped on the payment before the call.
+        $charge = app(QuoteGatewayCharge::class)->handle($payment);
+
         return new self(
             reference: $payment->reference,
-            amount: $payment->amount,
+            amount: $charge,
             customerName: (string) $user?->name,
             customerEmail: (string) $user?->email,
             customerMobile: $user?->mobile,
@@ -67,6 +79,7 @@ class PaymentIntent
             // configuration and never reads a raw client-supplied header.
             ipAddress: request()->ip(),
             payerAddressMissing: $attempt['missing'],
+            originalAmount: $payment->amount,
         );
     }
 }

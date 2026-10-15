@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { Money } from '@/lib/money';
+import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
 
 type QuoteLine = {
     type: string;
@@ -76,7 +77,7 @@ export default function Checkout({
         /** Money arrived after the checkout expired. Do not invite another. */
         reconciling: boolean;
     };
-    gateways: { name: string; label: string }[];
+    gateways: { name: string; label: string; fx?: GatewayFx | null }[];
 }) {
     const { t, locale } = useTranslation();
     const [gateway, setGateway] = useState(gateways[0]?.name ?? '');
@@ -289,8 +290,11 @@ export default function Checkout({
                                             }
                                             className="accent-brand"
                                         />
-                                        <span className="font-medium">
-                                            {option.label}
+                                        <span className="min-w-0">
+                                            <span className="font-medium">
+                                                {option.label}
+                                            </span>
+                                            <GatewayFxNote fx={option.fx} />
                                         </span>
                                     </label>
                                 ))}

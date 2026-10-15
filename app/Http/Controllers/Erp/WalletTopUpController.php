@@ -16,6 +16,7 @@ use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\GatewayNavigation;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
+use App\Support\Money\Currency;
 use App\Support\Money\DecimalAmount;
 use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\Request;
@@ -73,7 +74,8 @@ class WalletTopUpController extends Controller
             'gateways' => array_map(fn (string $gateway) => [
                 'value' => $gateway,
                 'label' => $gateway,
-            ], $gateways->available()),
+                'fx' => $gateways->conversionNotice($gateway, Currency::base()),
+            ], $gateways->availableFor(Currency::base())),
         ]);
     }
 
@@ -90,7 +92,7 @@ class WalletTopUpController extends Controller
             // — never minor units. `DecimalAmountRule` refuses anything that
             // is not an exact whole-or-two-decimal-place amount.
             'amount' => ['required', new DecimalAmountRule],
-            'gateway' => ['required', 'string', Rule::in($gateways->available())],
+            'gateway' => ['required', 'string', Rule::in($gateways->availableFor(Currency::base()))],
         ]);
 
         $amount = DecimalAmount::parse($validated['amount']);

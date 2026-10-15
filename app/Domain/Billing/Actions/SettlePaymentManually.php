@@ -234,7 +234,7 @@ class SettlePaymentManually
                     throw ManualSettlementRefused::contradicted('That gateway transaction does not belong to this payment.');
                 }
 
-                if (! $result->matchesAmount($payment->amount)) {
+                if (! $result->matchesAmount($payment->expectedGatewayAmount())) {
                     throw ManualSettlementRefused::contradicted('The amount the gateway confirmed does not match this payment.');
                 }
 
