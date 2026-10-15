@@ -405,16 +405,27 @@ export default function RequestKycUpdateDialog({
 
                                         {/* Posted as the real field; the
                                             checkboxes above drive this. */}
-                                        {(batch === '' ? selected : []).map(
-                                            (id) => (
-                                                <input
-                                                    key={id}
-                                                    type="hidden"
-                                                    name="document_type_ids[]"
-                                                    value={id}
-                                                />
-                                            ),
-                                        )}
+                                        {/*
+                                            Posted only when the list was narrowed.
+                                            Every document ticked means "everything
+                                            that applies", which the server reads
+                                            from an absent field — and an explicit
+                                            list would turn off the default batch,
+                                            sending the applicant to the older
+                                            document-by-document form.
+                                        */}
+                                        {(batch === '' &&
+                                        selected.length < documentTypes.length
+                                            ? selected
+                                            : []
+                                        ).map((id) => (
+                                            <input
+                                                key={id}
+                                                type="hidden"
+                                                name="document_type_ids[]"
+                                                value={id}
+                                            />
+                                        ))}
 
                                         <p className="text-muted-foreground text-xs">
                                             {t(

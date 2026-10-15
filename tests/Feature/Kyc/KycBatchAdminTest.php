@@ -941,3 +941,123 @@ describe('the example batch, and the hierarchy on screen', function () {
         expect($keys($other))->not->toContain('kyc_batches');
     });
 });
+
+describe('a form opened before any batch was switched on', function () {
+    it('moves a Partner who has given nothing onto the default batch the next time they open it', function () {
+        $account = testBusinessAccount(AccountStatus::KycPending);
+        $applicant = $account->owner;
+        // Something the older form asks for, so it has a snapshot to write.
+        KycDocumentType::factory()->create(['audience' => 'account']);
+
+        // Opened with no batch on: the older document-by-document form, with its snapshot.
+        $this->actingAs($applicant)->get(route('kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch', null));
+
+        $round = KycSubmission::query()->where('business_account_id', $account->id)->sole();
+
+        expect($round->kyc_batch_version_id)->toBeNull()->and($round->requirements()->count())->toBeGreaterThan(0);
+
+        adminBatchLive($this->admin);
+
+        $this->actingAs($applicant)->get(route('kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('batch.groups.0.key', 'identity')
+                ->where('requirements', []));
+
+        expect($round->refresh()->kyc_batch_version_id)->not->toBeNull()
+            // The older snapshot described nothing the applicant did; the version is the round.
+            ->and($round->requirements()->count())->toBe(0);
+    });
+
+    it('leaves a Partner who has already started on the older form', function () {
+        $account = testBusinessAccount(AccountStatus::KycPending);
+        $applicant = $account->owner;
+        // Something the older form asks for, so it has a snapshot to write.
+        KycDocumentType::factory()->create(['audience' => 'account']);
+
+        $this->actingAs($applicant)->get(route('kyc.create'));
+
+        $round = KycSubmission::query()->where('business_account_id', $account->id)->sole();
+        $round->fields()->create(['kyc_document_type_id' => $round->requirements()->first()->kyc_document_type_id, 'value' => '123']);
+
+        adminBatchLive($this->admin);
+
+        $this->actingAs($applicant)->get(route('kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch', null));
+
+        expect($round->refresh()->kyc_batch_version_id)->toBeNull();
+    });
+
+    it('leaves a later round on the form it was opened for', function () {
+        $account = testBusinessAccount(AccountStatus::KycPending);
+        $round = KycSubmission::create(['business_account_id' => $account->id, 'status' => KycStatus::Draft, 'round' => 2]);
+
+        adminBatchLive($this->admin);
+
+        $this->actingAs($account->owner)->get(route('kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch', null));
+
+        expect($round->refresh()->kyc_batch_version_id)->toBeNull();
+    });
+
+    it('moves a Supplier who has given nothing onto the default batch, and leaves one who has been sent', function () {
+        $supplier = Supplier::factory()->kycPending()->create();
+
+        $this->actingAs($supplier, 'supplier')->get(route('supplier.kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch', null));
+
+        adminBatchLive($this->admin, 'supplier');
+
+        $this->actingAs($supplier, 'supplier')->get(route('supplier.kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch.groups.0.key', 'identity'));
+
+        // One that was sent under the older form keeps it.
+        $other = Supplier::factory()->kycPending()->create();
+        $sent = SupplierKycSubmission::create(['supplier_id' => $other->id, 'round' => 1, 'status' => 'correction_required', 'submitted_at' => now()]);
+
+        $this->actingAs($other, 'supplier')->get(route('supplier.kyc.create'))
+            ->assertInertia(fn (Assert $page) => $page->where('batch', null));
+
+        expect($sent->refresh()->kyc_batch_version_id)->toBeNull();
+    });
+
+    it('opens a re-verification on the default batch unless staff narrowed the documents', function () {
+        $default = adminBatchLive($this->admin);
+
+        foreach ([null, ['narrow' => true]] as $narrowed) {
+            $account = testBusinessAccount(AccountStatus::Active);
+            KycSubmission::create(['business_account_id' => $account->id, 'status' => KycStatus::Approved, 'round' => 1, 'submitted_at' => now(), 'reviewed_at' => now()]);
+
+            $payload = ['reason' => 'Periodic', 'instructions' => 'Please update.'];
+
+            if ($narrowed !== null) {
+                $payload['document_type_ids'] = [KycDocumentType::factory()->create(['audience' => 'account'])->public_id];
+            }
+
+            $this->actingAs($this->admin, 'web')->post(route('admin.kyc.request-update', $account), $payload)->assertSessionHasNoErrors();
+
+            $round = KycSubmission::query()->where('business_account_id', $account->id)->orderByDesc('round')->firstOrFail();
+
+            // Absent means "everything that applies": the default batch. A narrowed
+            // list is a different request and stays on the documents named.
+            expect($round->kyc_batch_id)->toBe($narrowed === null ? $default->id : null);
+        }
+    });
+
+    it('says which applicants still see the older form because no batch is their default', function () {
+        $uncovered = fn () => $this->actingAs($this->admin, 'web')->get(route('admin.kyc.batch-builder.index'))->viewData('page')['props']['uncovered'];
+
+        expect($uncovered())->toBe(['account', 'supplier']);
+
+        adminBatchLive($this->admin, 'account');
+
+        expect($uncovered())->toBe(['supplier']);
+
+        // One batch for both serves the other audience too.
+        $both = adminBatchBuilt($this->admin, 'both', 'Both audiences');
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.active', $both), ['is_active' => 1]);
+        $this->actingAs($this->admin, 'web')->patch(route('admin.kyc.batch-builder.default', $both), ['is_default' => 1]);
+
+        expect($uncovered())->toBe([]);
+    });
+});

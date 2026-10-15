@@ -43,10 +43,13 @@ import type { KycBatchTemplateRow, SelectOption } from '@/types';
 export default function KycBatchTemplates({
     batches,
     audiences,
+    uncovered,
     can,
 }: {
     batches: KycBatchTemplateRow[];
     audiences: SelectOption[];
+    /** Audiences with no default batch: they are still shown the older document list. */
+    uncovered: ('account' | 'supplier')[];
     /** What this viewer may do; a control they would be refused is not drawn. */
     can: { create: boolean; activate: boolean };
 }) {
@@ -80,6 +83,27 @@ export default function KycBatchTemplates({
                         )
                     }
                 />
+
+                {uncovered.length > 0 && (
+                    <section
+                        role="status"
+                        className="bg-warning-subtle border-warning/30 space-y-1 rounded-lg border p-4"
+                    >
+                        <p className="text-sm font-semibold">
+                            {t('kyc.builder.uncovered_title')}
+                        </p>
+                        <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                            {uncovered.map((audience) => (
+                                <li key={audience}>
+                                    {t(`kyc.builder.uncovered_${audience}`)}
+                                </li>
+                            ))}
+                        </ul>
+                        <p className="text-muted-foreground text-xs">
+                            {t('kyc.builder.uncovered_help')}
+                        </p>
+                    </section>
+                )}
 
                 {batches.length === 0 ? (
                     <EmptyState

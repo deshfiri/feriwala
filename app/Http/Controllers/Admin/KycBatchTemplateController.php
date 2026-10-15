@@ -85,6 +85,9 @@ class KycBatchTemplateController extends Controller
                 'outline' => $this->outline($batch),
             ])->all(),
             'audiences' => $this->audiences(),
+            // Who is still shown the older individual-document form because no
+            // batch is switched on as their default.
+            'uncovered' => $this->uncoveredAudiences(),
             // What the viewer may do, so a control they would be refused is not drawn.
             'can' => [
                 'create' => Gate::allows('create', KycBatch::class),
@@ -316,6 +319,26 @@ class KycBatchTemplateController extends Controller
         }
 
         return back()->with('success', __('kyc.batch_builder.default_saved'));
+    }
+
+    /**
+     * The audiences a new round would still open on the older flow: Partners and
+     * Suppliers each need an available default of their own, or one for both.
+     *
+     * @return array<int, string> 'account' and/or 'supplier'
+     */
+    protected function uncoveredAudiences(): array
+    {
+        $defaults = KycBatch::query()->available()->where('is_default', true)->pluck('audience')
+            ->map(fn ($audience) => $audience instanceof KycAudience ? $audience->value : (string) $audience)
+            ->all();
+
+        $both = in_array(KycAudience::Both->value, $defaults, true);
+
+        return array_values(array_filter([
+            $both || in_array(KycAudience::Account->value, $defaults, true) ? null : KycAudience::Account->value,
+            $both || in_array(KycAudience::Supplier->value, $defaults, true) ? null : KycAudience::Supplier->value,
+        ]));
     }
 
     /**

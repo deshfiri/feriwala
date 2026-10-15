@@ -131,6 +131,11 @@ class AssignKycBatch
     {
         $version = $this->publisher->latestOrPublish($batch);
 
+        // Only an empty round reaches here, so the older flow's snapshot of what
+        // was asked (written when the form was first opened) describes nothing the
+        // applicant did. The batch version is the round from now on.
+        $round->requirements()->delete();
+
         $round->forceFill([
             'kyc_batch_id' => $batch->id,
             'kyc_batch_version_id' => $version->id,
