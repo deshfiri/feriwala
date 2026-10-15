@@ -15,6 +15,9 @@
 .env
 .env.backup
 .env.production
+# Every local environment file is secret; only the template is tracked.
+.env.*
+!.env.example
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
