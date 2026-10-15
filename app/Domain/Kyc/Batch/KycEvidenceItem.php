@@ -35,11 +35,21 @@ final class KycEvidenceItem
         public readonly ?string $maskedValue = null,
         public readonly ?string $verdict = null,
         public readonly ?string $note = null,
+        public readonly ?string $ref = null,
     ) {}
 
     public function key(): string
     {
         return self::keyFor($this->requirement, $this->slot);
+    }
+
+    /**
+     * What a verdict names to say which evidence it judged: a document's public id,
+     * or a typed value's row. Never shown to anyone.
+     */
+    public static function refForField(int $id): string
+    {
+        return 'field:'.$id;
     }
 
     public static function keyFor(string $requirement, string $slot): string

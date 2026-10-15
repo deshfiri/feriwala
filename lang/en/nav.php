@@ -39,6 +39,7 @@ return [
 
     'kyc_review' => 'KYC review',
     'kyc_requirements' => 'Verification requirements',
+    'kyc_batches' => 'KYC batches',
     'packages' => 'Packages',
     'products' => 'Products',
     'product_categories' => 'Product categories',

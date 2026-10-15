@@ -40,6 +40,16 @@ return [
             'description' => 'Review the feedback and submit your documents again.',
         ],
 
+        'account.kyc_approved' => [
+            'title' => 'Your verification has been approved',
+            'description' => 'You can continue setting up your account.',
+        ],
+
+        'account.kyc_rejected' => [
+            'title' => 'Your verification was not approved',
+            'description' => 'Open your status to see what to do next.',
+        ],
+
         'account.activated' => [
             'title' => 'Your account is now active',
             'description' => 'You now have full access to your Banij account.',

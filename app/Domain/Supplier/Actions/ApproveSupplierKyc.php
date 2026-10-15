@@ -5,11 +5,15 @@ namespace App\Domain\Supplier\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Kyc\Batch\KycApprovalReadiness;
+use App\Domain\Kyc\Batch\KycReviewRefused;
+use App\Domain\Kyc\Batch\SupplierKycRound;
 use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
+use App\Domain\Supplier\SupplierKycDocumentStore;
 use App\Notifications\Supplier\SupplierApproved;
 use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\DatabaseManager;
@@ -29,10 +33,23 @@ class ApproveSupplierKyc
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected KycApprovalReadiness $readiness,
+        protected SupplierKycDocumentStore $store,
     ) {}
 
+    /**
+     * @throws KycReviewRefused when a round on a batch still has an unmet group or unreviewed evidence
+     */
     public function handle(SupplierKycSubmission $submission, int $reviewerId, ?string $decisionNote = null): SupplierKycSubmission
     {
+        if ($submission->kyc_batch_version_id !== null) {
+            $problems = $this->readiness->problems(new SupplierKycRound($submission, $this->store));
+
+            if ($problems !== []) {
+                throw KycReviewRefused::notReadyToApprove($problems);
+            }
+        }
+
         $supplier = $this->database->transaction(function () use ($submission, $reviewerId, $decisionNote) {
             /** @var Supplier $locked */
             $locked = Supplier::query()->lockForUpdate()->findOrFail($submission->supplier_id);

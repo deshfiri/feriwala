@@ -14,6 +14,11 @@ enum KycAudience: string
     case Supplier = 'supplier';
     case Both = 'both';
 
+    public function label(): string
+    {
+        return __("kyc.batch_builder.audiences.{$this->value}");
+    }
+
     /**
      * @return list<string>
      */

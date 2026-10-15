@@ -83,6 +83,24 @@ class PublishKycBatchVersion
     }
 
     /**
+     * Whether the live structure differs from the newest published version — what
+     * the builder shows as "unpublished changes". A batch never published has
+     * changes by definition.
+     */
+    public function hasUnpublishedChanges(KycBatch $batch): bool
+    {
+        $latest = $batch->latestVersion();
+
+        if ($latest === null) {
+            return true;
+        }
+
+        $checksum = hash('sha256', (string) json_encode($this->definitions->handle($batch), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        return ! hash_equals($latest->checksum, $checksum);
+    }
+
+    /**
      * The version a new round should open with: the newest, publishing the first
      * one on the spot for a batch that has never had one.
      *

@@ -61,6 +61,17 @@ enum PermissionAction: string
      */
     case SettleManually = 'settle_manually';
 
+    /**
+     * Taking a configuration live or off: publishing a KYC batch, switching it on,
+     * and choosing which one is the default. Apart from `edit`, because building a
+     * batch and deciding that every new applicant is asked for it are different
+     * decisions (D30).
+     */
+    case Activate = 'activate';
+
+    /** Choosing which template a KYC round is opened against (D30). */
+    case Assign = 'assign';
+
     public function label(): string
     {
         return match ($this) {
@@ -89,6 +100,8 @@ enum PermissionAction: string
             self::Review => 'Review',
             self::Reactivate => 'Reactivate',
             self::SettleManually => 'Settle manually',
+            self::Activate => 'Activate',
+            self::Assign => 'Assign',
         };
     }
 

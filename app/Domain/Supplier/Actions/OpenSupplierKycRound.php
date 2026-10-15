@@ -41,11 +41,18 @@ class OpenSupplierKycRound
 
         // Already pinned to a batch version: that version is the round (D30).
         if ($round->status->isEditable() && $round->kyc_batch_version_id === null) {
-            // A round with nothing in it yet is given the default batch, if there
-            // is one; one that has begun under the older flow keeps it.
-            $untouched = ! $round->requirements()->exists()
+            // A round the Supplier has given nothing to is given the default batch,
+            // if there is one; one that has begun under the older flow keeps it. The
+            // older flow's snapshot of what was asked is written when the form is
+            // first opened and is not something the Supplier did, so it does not
+            // count as having begun.
+            //
+            // Never a round that has been sent: one reopened for a correction is
+            // being fixed against what was asked.
+            $untouched = $round->submitted_at === null
                 && ! $round->documents()->exists()
-                && ! $round->fields()->exists();
+                && ! $round->fields()->exists()
+                && $round->selections === null;
 
             if (! ($untouched && $this->batches->forSupplier($round))) {
                 $this->capture->handle($round);

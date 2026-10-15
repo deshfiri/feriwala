@@ -108,6 +108,16 @@ class KycDocumentType extends Model
     }
 
     /**
+     * The places this criterion holds in a batch's groups (D30).
+     *
+     * @return HasMany<KycBatchGroupRequirement, $this>
+     */
+    public function groupPlaces(): HasMany
+    {
+        return $this->hasMany(KycBatchGroupRequirement::class, 'kyc_document_type_id');
+    }
+
+    /**
      * @return HasMany<KycDocumentTypeScope, $this>
      */
     public function scopes(): HasMany

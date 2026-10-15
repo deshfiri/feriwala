@@ -3,6 +3,7 @@
 namespace App\Domain\Kyc\Batch;
 
 use App\Domain\Kyc\Models\KycBatchVersion;
+use App\Domain\Supplier\Enums\SupplierKycStatus;
 use App\Domain\Supplier\Models\SupplierKycDocument;
 use App\Domain\Supplier\Models\SupplierKycEvidenceReview;
 use App\Domain\Supplier\Models\SupplierKycSubmission;
@@ -69,7 +70,7 @@ final class SupplierKycRound implements KycRound
 
         foreach ($this->submission->documents()->whereNull('superseded_at')->get() as $document) {
             $slot = $document->slot_key ?? 'file';
-            $verdict = $this->verdictFor($verdicts, $document->document_type, $slot, $document->created_at);
+            $verdict = $this->verdictFor($verdicts, $document->document_type, $slot, $document->public_id, $document->created_at);
 
             $items[KycEvidenceItem::keyFor($document->document_type, $slot)] = new KycEvidenceItem(
                 requirement: $document->document_type,
@@ -77,6 +78,7 @@ final class SupplierKycRound implements KycRound
                 kind: KycEvidenceItem::FILE,
                 recordedAt: $document->created_at,
                 documentId: $document->public_id,
+                ref: $document->public_id,
                 name: $document->original_name,
                 sizeBytes: $document->size_bytes,
                 mime: $document->mime_type,
@@ -88,7 +90,7 @@ final class SupplierKycRound implements KycRound
 
         foreach ($this->submission->fields()->whereNull('superseded_at')->get() as $field) {
             $slot = $field->slot_key ?? 'value';
-            $verdict = $this->verdictFor($verdicts, $field->key, $slot, $field->updated_at);
+            $verdict = $this->verdictFor($verdicts, $field->key, $slot, KycEvidenceItem::refForField($field->id), $field->updated_at);
 
             $items[KycEvidenceItem::keyFor($field->key, $slot)] = new KycEvidenceItem(
                 requirement: $field->key,
@@ -96,6 +98,7 @@ final class SupplierKycRound implements KycRound
                 kind: KycEvidenceItem::VALUE,
                 recordedAt: $field->updated_at,
                 maskedValue: $field->masked(),
+                ref: KycEvidenceItem::refForField($field->id),
                 verdict: $verdict?->status,
                 note: $verdict?->note,
             );
@@ -166,6 +169,35 @@ final class SupplierKycRound implements KycRound
         }
     }
 
+    public function awaitsReview(): bool
+    {
+        return in_array($this->submission->status, [SupplierKycStatus::Submitted, SupplierKycStatus::UnderReview], true);
+    }
+
+    public function revealValue(string $requirement, string $slot): ?string
+    {
+        $field = $this->submission->fields()
+            ->whereNull('superseded_at')
+            ->where('key', $requirement)
+            ->where(fn ($query) => $query->where('slot_key', $slot)->orWhereNull('slot_key'))
+            ->first();
+
+        return $field === null ? null : (string) $field->value;
+    }
+
+    public function recordVerdict(string $requirement, string $slot, string $status, ?string $note, int $reviewerId, ?string $evidenceRef = null): void
+    {
+        SupplierKycEvidenceReview::create([
+            'supplier_kyc_submission_id' => $this->submission->id,
+            'requirement_key' => $requirement,
+            'slot_key' => $slot,
+            'status' => $status,
+            'note' => $note,
+            'reviewed_by' => $reviewerId,
+            'evidence_ref' => $evidenceRef,
+        ]);
+    }
+
     private function retire(SupplierKycDocument $document): void
     {
         if ($this->hasBeenSubmitted()) {
@@ -194,10 +226,21 @@ final class SupplierKycRound implements KycRound
     /**
      * @param  array<string, SupplierKycEvidenceReview>  $verdicts
      */
-    private function verdictFor(array $verdicts, string $requirement, string $slot, CarbonInterface $recordedAt): ?SupplierKycEvidenceReview
+    private function verdictFor(array $verdicts, string $requirement, string $slot, string $ref, CarbonInterface $recordedAt): ?SupplierKycEvidenceReview
     {
         $review = $verdicts[KycEvidenceItem::keyFor($requirement, $slot)] ?? null;
 
-        return $review !== null && $review->created_at->greaterThanOrEqualTo($recordedAt) ? $review : null;
+        if ($review === null) {
+            return null;
+        }
+
+        // A verdict names the evidence it judged, so a replacement — even one made in
+        // the same second — is never read as already judged.
+        if ($review->evidence_ref !== null) {
+            return $review->evidence_ref === $ref ? $review : null;
+        }
+
+        // Verdicts written before they named their evidence: matched by time.
+        return $review->created_at->greaterThanOrEqualTo($recordedAt) ? $review : null;
     }
 }

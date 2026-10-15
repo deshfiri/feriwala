@@ -80,6 +80,24 @@ class PermissionCatalogue
                 Action::Export, Action::ViewKycDocuments, Action::ManageSettings,
             ],
 
+            /*
+             * KYC batches (D30), split by what each person does with one:
+             *
+             *   view / create / edit   build and preview a template
+             *   activate               publish it, switch it on or off, make it the default
+             *   assign                 choose it when opening a Partner or Supplier round
+             *   review                 accept or send back evidence on a round on a batch
+             *   view_sensitive_data    reveal a typed value (TIN, NID number) in full
+             *
+             * Nothing here deletes: a batch used by any round is archived, and a
+             * published version is immutable.
+             */
+            Module::KycBatch->value => [
+                Action::View, Action::Create, Action::Edit,
+                Action::Activate, Action::Assign, Action::Review,
+                Action::ViewSensitiveData,
+            ],
+
             Module::Package->value => [
                 ...self::crud(),
                 Action::Archive, Action::Approve, Action::Export, Action::ManageSettings,

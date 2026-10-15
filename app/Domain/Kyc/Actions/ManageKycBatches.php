@@ -4,6 +4,7 @@ namespace App\Domain\Kyc\Actions;
 
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Kyc\Exceptions\InvalidKycBatch;
 use App\Domain\Kyc\Models\KycBatch;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -24,6 +25,7 @@ class ManageKycBatches
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected PublishKycBatchVersion $publisher,
     ) {}
 
     /**
@@ -62,10 +64,13 @@ class ManageKycBatches
             $before = $batch->getOriginal();
 
             $batch->fill($attributes)->save();
+            $changes = $batch->getChanges();
 
-            // A criterion's audience is its batch's.
-            if ($batch->wasChanged('audience')) {
+            // A criterion's audience is its batch's — and the default is per
+            // audience, so a batch that moves to another gives its place up.
+            if (array_key_exists('audience', $changes)) {
                 $batch->types()->update(['audience' => $batch->audience->value]);
+                $batch->forceFill(['is_default' => false])->save();
             }
 
             $this->syncRules($batch, $rules);
@@ -74,8 +79,8 @@ class ManageKycBatches
                 'kyc.batch_updated',
                 $batch,
                 $by,
-                before: array_intersect_key($before, $batch->getChanges()),
-                after: $batch->getChanges(),
+                before: array_intersect_key($before, $changes),
+                after: $changes,
             );
 
             return $batch;
@@ -88,11 +93,61 @@ class ManageKycBatches
             throw new InvalidArgumentException('An archived batch cannot be reactivated.');
         }
 
-        $batch->forceFill(['is_active' => $isActive])->save();
+        // A switched-off batch cannot be the default: new rounds would be pinned
+        // to something applicants are not meant to see.
+        $batch->forceFill(['is_active' => $isActive, ...($isActive ? [] : ['is_default' => false])])->save();
 
         $this->record('kyc.batch_updated', $batch, $by, after: ['is_active' => $isActive]);
 
         return $batch;
+    }
+
+    /**
+     * Switch a batch on for the first time or again: its current structure is
+     * published as a version (so what goes live is exactly what was previewed) and
+     * only then does it become available to applicants.
+     *
+     * @throws InvalidKycBatch when an applicant could never complete it
+     */
+    public function activate(KycBatch $batch, User $by): KycBatch
+    {
+        if ($batch->isArchived()) {
+            throw new InvalidArgumentException(__('kyc.batch_builder.refused.archived'));
+        }
+
+        $this->publisher->handle($batch, $by);
+
+        return $this->setActive($batch->refresh(), true, $by);
+    }
+
+    /**
+     * Make a batch the one a new round for its audience opens with when staff
+     * choose none. One per audience: the previous default is released in the same
+     * step, and the database holds the same line.
+     */
+    public function setDefault(KycBatch $batch, bool $isDefault, User $by): KycBatch
+    {
+        if ($isDefault && ($batch->isArchived() || ! $batch->is_active || $batch->published_version < 1)) {
+            // A default nobody could be given — switched off, retired or never
+            // published — would quietly leave new rounds on the older flow.
+            throw new InvalidArgumentException(__('kyc.batch_builder.refused.default_unavailable'));
+        }
+
+        return $this->database->transaction(function () use ($batch, $isDefault, $by) {
+            if ($isDefault) {
+                KycBatch::query()
+                    ->where('audience', $batch->audience->value)
+                    ->where('is_default', true)
+                    ->whereKeyNot($batch->id)
+                    ->update(['is_default' => false]);
+            }
+
+            $batch->forceFill(['is_default' => $isDefault])->save();
+
+            $this->record('kyc.batch_default_changed', $batch, $by, after: ['audience' => $batch->audience->value, 'is_default' => $isDefault]);
+
+            return $batch;
+        });
     }
 
     public function archive(KycBatch $batch, User $by): KycBatch

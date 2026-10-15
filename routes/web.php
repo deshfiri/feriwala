@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
 use App\Http\Controllers\Admin\KycBatchController;
+use App\Http\Controllers\Admin\KycBatchTemplateController;
 use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReverificationCancellationController;
 use App\Http\Controllers\Admin\KycReviewController;
@@ -732,9 +733,27 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('kyc/batches/{batch}/archive', [KycBatchController::class, 'archive'])->name('kyc.batches.archive');
         Route::delete('kyc/batches/{batch}', [KycBatchController::class, 'destroy'])->name('kyc.batches.destroy');
 
+        /*
+         * KYC batch templates (D30): the list, the builder, the preview and the acts
+         * that take one live. Its own prefix, so "kyc/{submission}" below can never
+         * read one of these as a submission.
+         */
+        Route::get('kyc-batches', [KycBatchTemplateController::class, 'index'])->name('kyc.batch-builder.index');
+        Route::post('kyc-batches', [KycBatchTemplateController::class, 'store'])->name('kyc.batch-builder.store');
+        Route::get('kyc-batches/{batch}', [KycBatchTemplateController::class, 'edit'])->name('kyc.batch-builder.edit');
+        Route::patch('kyc-batches/{batch}', [KycBatchTemplateController::class, 'update'])->name('kyc.batch-builder.update');
+        Route::put('kyc-batches/{batch}/structure', [KycBatchTemplateController::class, 'structure'])->name('kyc.batch-builder.structure');
+        Route::get('kyc-batches/{batch}/preview', [KycBatchTemplateController::class, 'preview'])->name('kyc.batch-builder.preview');
+        Route::post('kyc-batches/{batch}/clone', [KycBatchTemplateController::class, 'clone'])->name('kyc.batch-builder.clone');
+        Route::post('kyc-batches/{batch}/publish', [KycBatchTemplateController::class, 'publish'])->name('kyc.batch-builder.publish');
+        Route::patch('kyc-batches/{batch}/active', [KycBatchTemplateController::class, 'active'])->name('kyc.batch-builder.active');
+        Route::patch('kyc-batches/{batch}/default', [KycBatchTemplateController::class, 'default'])->name('kyc.batch-builder.default');
+
         Route::get('kyc', [KycReviewController::class, 'index'])->name('kyc.index');
         Route::get('kyc/{submission}', [KycReviewController::class, 'show'])->name('kyc.show');
         Route::post('kyc/{submission}/decide', [KycReviewController::class, 'decide'])->name('kyc.decide');
+        Route::post('kyc/{submission}/evidence-review', [KycReviewController::class, 'reviewEvidence'])->name('kyc.evidence-review');
+        Route::get('kyc/{submission}/evidence-value', [KycReviewController::class, 'revealValue'])->name('kyc.evidence-value');
 
         /*
          * Requests to have an account erased (§5.3). Nobody erases their own
@@ -766,6 +785,12 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('suppliers.kyc.documents.show');
         Route::post('suppliers/{supplier}/kyc/correction', [SupplierController::class, 'requestCorrection'])
             ->name('suppliers.kyc.correction.store');
+        Route::post('suppliers/{supplier}/kyc/evidence-review', [SupplierController::class, 'reviewEvidence'])
+            ->name('suppliers.kyc.evidence-review');
+        Route::get('suppliers/{supplier}/kyc/evidence-value', [SupplierController::class, 'revealValue'])
+            ->name('suppliers.kyc.evidence-value');
+        Route::post('suppliers/{supplier}/kyc/batch', [SupplierController::class, 'assignBatch'])
+            ->name('suppliers.kyc.batch.store');
         Route::post('suppliers/{supplier}/approval', [SupplierController::class, 'approve'])->name('suppliers.approval.store');
         Route::post('suppliers/{supplier}/rejection', [SupplierController::class, 'reject'])->name('suppliers.rejection.store');
         Route::post('suppliers/{supplier}/suspension', [SupplierController::class, 'suspend'])->name('suppliers.suspension.store');

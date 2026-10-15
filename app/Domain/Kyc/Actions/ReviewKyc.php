@@ -6,10 +6,17 @@ use App\Domain\Account\Actions\ActivateAccountAutomatically;
 use App\Domain\Account\Actions\ChangeAccountStatus;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Kyc\Batch\KycApprovalReadiness;
+use App\Domain\Kyc\Batch\KycReviewRefused;
+use App\Domain\Kyc\Batch\PartnerKycRound;
 use App\Domain\Kyc\Data\KycDecision;
 use App\Domain\Kyc\Enums\KycStatus;
+use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycReview;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Notifications\Account\KycApproved;
+use App\Notifications\Account\KycRejected;
+use App\Notifications\Account\KycResubmissionRequested;
 use Illuminate\Database\DatabaseManager;
 
 /**
@@ -31,10 +38,14 @@ class ReviewKyc
         protected ActivateAccountAutomatically $automaticActivation,
         protected LiftKycDeadlineRestriction $liftRestriction,
         protected DatabaseManager $database,
+        protected KycApprovalReadiness $readiness,
+        protected KycDocumentStore $store,
     ) {}
 
     public function handle(KycSubmission $submission, KycDecision $decision): KycReview
     {
+        $this->guardBatchRound($submission, $decision);
+
         $review = $this->database->transaction(function () use ($submission, $decision) {
             $from = $submission->status;
 
@@ -65,6 +76,14 @@ class ReviewKyc
             return $review;
         });
 
+        // A round on a batch tells its applicant the outcome. Only the
+        // applicant-facing feedback travels — never a value, a file, a reviewer's
+        // name or the internal note. Rounds opened before batches keep the
+        // notifications they always had.
+        if ($submission->kyc_batch_version_id !== null) {
+            $this->tellApplicant($submission, $decision);
+        }
+
         // KYC approval or its withdrawal is one of the requirements the
         // activation gate watches (§5.1). Re-evaluated after the transaction
         // commits, so the gate never sees a half-applied decision.
@@ -93,6 +112,51 @@ class ReviewKyc
         }
 
         return $review;
+    }
+
+    protected function tellApplicant(KycSubmission $submission, KycDecision $decision): void
+    {
+        $owner = $submission->businessAccount()->first()?->owner;
+
+        if ($owner === null) {
+            return;
+        }
+
+        match ($decision->outcome) {
+            KycStatus::Approved => $owner->notify(new KycApproved),
+            KycStatus::Rejected => $owner->notify(new KycRejected($decision->userVisibleFeedback)),
+            KycStatus::ResubmissionRequired => $owner->notify(new KycResubmissionRequested((string) $decision->userVisibleFeedback)),
+            default => null,
+        };
+    }
+
+    /**
+     * A round on a batch is approved only when every required group is satisfied
+     * and every piece of evidence that satisfies one has been accepted; sending
+     * it back needs at least one rejected slot to point at (D30). A round with no
+     * batch is untouched.
+     *
+     * @throws KycReviewRefused
+     */
+    protected function guardBatchRound(KycSubmission $submission, KycDecision $decision): void
+    {
+        if ($submission->kyc_batch_version_id === null) {
+            return;
+        }
+
+        $round = new PartnerKycRound($submission, $this->store);
+
+        if ($decision->outcome === KycStatus::Approved) {
+            $problems = $this->readiness->problems($round);
+
+            if ($problems !== []) {
+                throw KycReviewRefused::notReadyToApprove($problems);
+            }
+        }
+
+        if ($decision->outcome === KycStatus::ResubmissionRequired && $this->readiness->corrections($round) === []) {
+            throw KycReviewRefused::nothingRejected();
+        }
     }
 
     /**

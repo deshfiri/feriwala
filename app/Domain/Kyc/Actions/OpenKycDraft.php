@@ -82,11 +82,23 @@ class OpenKycDraft
             return $submission;
         }
 
-        // A round with nothing in it yet is given the default batch, if there is
-        // one that applies (D30). One that has begun under the older flow keeps it.
-        $untouched = ! $submission->requirements()->exists()
+        // A round the applicant has given nothing to is given the default batch, if
+        // there is one that applies (D30). One that has begun under the older flow
+        // keeps it.
+        //
+        // "Given nothing" means no file, no typed value and no choice made. The
+        // older flow's snapshot of what was asked is not something the applicant
+        // did: it is written the first time the form is opened, so counting it
+        // would mean a form merely looked at before a batch was switched on could
+        // never move onto it.
+        //
+        // Only a first round, though: a later one was opened to fix or renew
+        // something specific (by the reviewer's feedback, or by staff choosing what
+        // to ask for), and a different form would answer a different question.
+        $untouched = $submission->round === 1
             && ! $submission->documents()->exists()
-            && ! $submission->fields()->exists();
+            && ! $submission->fields()->exists()
+            && $submission->selections === null;
 
         if ($untouched && $this->batches->forPartner($submission)) {
             return $submission;

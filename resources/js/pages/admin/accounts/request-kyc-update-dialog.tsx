@@ -2,6 +2,7 @@ import { Form } from '@inertiajs/react';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KycUpdateRequestController from '@/actions/App/Http/Controllers/Admin/KycUpdateRequestController';
+import NativeSelect from '@/components/forms/native-select';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -69,6 +70,8 @@ type Props = {
     accountId: string;
     documentTypes: DocumentTypeOption[];
     consequenceOptions: ConsequenceOption[];
+    /** The batch templates this round may be opened against (D30). */
+    batches?: { id: string; name: string; is_default: boolean }[];
 };
 
 /**
@@ -96,10 +99,13 @@ export default function RequestKycUpdateDialog({
     accountId,
     documentTypes,
     consequenceOptions,
+    batches = [],
 }: Props) {
     const { t } = useTranslation();
     const [selected, setSelected] = useState<string[]>([]);
     const [consequences, setConsequences] = useState<string[]>([]);
+    // Empty means "no choice": the default batch, or the earlier flow without one.
+    const [batch, setBatch] = useState('');
 
     // Re-seeded each time it opens, so a cancelled edit does not carry into the
     // next request.
@@ -107,6 +113,7 @@ export default function RequestKycUpdateDialog({
         if (open) {
             setSelected(documentTypes.map((type) => type.id));
             setConsequences([]);
+            setBatch('');
         }
     }, [open, documentTypes]);
 
@@ -230,7 +237,51 @@ export default function RequestKycUpdateDialog({
                                 <InputError message={errors.deadline} />
                             </div>
 
-                            <fieldset className="space-y-2">
+                            {batches.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="batch">
+                                        {t('kyc.assign.label')}
+                                    </Label>
+                                    <NativeSelect
+                                        id="batch"
+                                        name="batch"
+                                        value={batch}
+                                        onChange={(event) =>
+                                            setBatch(event.target.value)
+                                        }
+                                    >
+                                        <option value="">
+                                            {batches.some(
+                                                (one) => one.is_default,
+                                            )
+                                                ? t('kyc.assign.use_default')
+                                                : t('kyc.assign.use_earlier')}
+                                        </option>
+                                        {batches.map((option) => (
+                                            <option
+                                                key={option.id}
+                                                value={option.id}
+                                            >
+                                                {option.name}
+                                                {option.is_default
+                                                    ? ` (${t('kyc.builder.default_badge')})`
+                                                    : ''}
+                                            </option>
+                                        ))}
+                                    </NativeSelect>
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('kyc.assign.partner_help')}
+                                    </p>
+                                    <InputError message={errors.batch} />
+                                </div>
+                            )}
+
+                            {/* A chosen batch is the whole request; picking
+                                documents out of it is a different request. */}
+                            <fieldset
+                                className="space-y-2"
+                                hidden={batch !== ''}
+                            >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <legend className="text-sm font-medium">
                                         {t('account.kyc_update.documents')}
@@ -354,7 +405,20 @@ export default function RequestKycUpdateDialog({
 
                                         {/* Posted as the real field; the
                                             checkboxes above drive this. */}
-                                        {selected.map((id) => (
+                                        {/*
+                                            Posted only when the list was narrowed.
+                                            Every document ticked means "everything
+                                            that applies", which the server reads
+                                            from an absent field — and an explicit
+                                            list would turn off the default batch,
+                                            sending the applicant to the older
+                                            document-by-document form.
+                                        */}
+                                        {(batch === '' &&
+                                        selected.length < documentTypes.length
+                                            ? selected
+                                            : []
+                                        ).map((id) => (
                                             <input
                                                 key={id}
                                                 type="hidden"
@@ -466,7 +530,8 @@ export default function RequestKycUpdateDialog({
                                     type="submit"
                                     disabled={
                                         processing ||
-                                        (documentTypes.length > 0 &&
+                                        (batch === '' &&
+                                            documentTypes.length > 0 &&
                                             selected.length === 0)
                                     }
                                 >

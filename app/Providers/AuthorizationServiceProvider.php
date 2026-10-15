@@ -18,9 +18,11 @@ use App\Domain\Courier\Policies\ShipmentPolicy;
 use App\Domain\ExternalStore\Models\ExternalStore;
 use App\Domain\ExternalStore\Policies\ExternalStorePolicy;
 use App\Domain\Inventory\Policies\InventoryPolicy;
+use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Kyc\Policies\KycBatchPolicy;
 use App\Domain\Kyc\Policies\KycDocumentPolicy;
 use App\Domain\Kyc\Policies\KycDocumentTypePolicy;
 use App\Domain\Kyc\Policies\KycSubmissionPolicy;
@@ -68,6 +70,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // Configuring what applicants are asked for is `kyc.manage_settings`,
         // not `kyc.approve` — shaping the catalogue is not reviewing a case.
         Gate::policy(KycDocumentType::class, KycDocumentTypePolicy::class);
+
+        // Reusable KYC batches (D30): building, switching on, assigning and
+        // grading are separate permissions, not one `manage_settings`.
+        Gate::policy(KycBatch::class, KycBatchPolicy::class);
         Gate::policy(BusinessAccount::class, BusinessAccountPolicy::class);
 
         // Shaping what Feriwala sells is its own permission set (§8.1):

@@ -76,7 +76,7 @@ final class PartnerKycRound implements KycRound
                 ? KycRoundDefinition::SELFIE_REQUIREMENT
                 : (string) $document->documentType?->key;
             $slot = $document->slot_key ?? 'file';
-            $verdict = $this->verdictFor($verdicts, $requirement, $slot, $document->created_at);
+            $verdict = $this->verdictFor($verdicts, $requirement, $slot, $document->public_id, $document->created_at);
 
             $items[KycEvidenceItem::keyFor($requirement, $slot)] = new KycEvidenceItem(
                 requirement: $requirement,
@@ -84,6 +84,7 @@ final class PartnerKycRound implements KycRound
                 kind: KycEvidenceItem::FILE,
                 recordedAt: $document->created_at,
                 documentId: $document->public_id,
+                ref: $document->public_id,
                 name: $document->original_name,
                 sizeBytes: $document->size_bytes,
                 mime: $document->mime_type,
@@ -103,7 +104,7 @@ final class PartnerKycRound implements KycRound
             }
 
             $slot = $field->slot_key ?? 'value';
-            $verdict = $this->verdictFor($verdicts, $requirement, $slot, $field->updated_at);
+            $verdict = $this->verdictFor($verdicts, $requirement, $slot, KycEvidenceItem::refForField($field->id), $field->updated_at);
 
             $items[KycEvidenceItem::keyFor($requirement, $slot)] = new KycEvidenceItem(
                 requirement: $requirement,
@@ -111,6 +112,7 @@ final class PartnerKycRound implements KycRound
                 kind: KycEvidenceItem::VALUE,
                 recordedAt: $field->updated_at,
                 maskedValue: $field->masked(),
+                ref: KycEvidenceItem::refForField($field->id),
                 verdict: $verdict?->status,
                 note: $verdict?->note,
             );
@@ -188,6 +190,37 @@ final class PartnerKycRound implements KycRound
         }
     }
 
+    public function awaitsReview(): bool
+    {
+        return $this->submission->status->awaitsReview();
+    }
+
+    public function revealValue(string $requirement, string $slot): ?string
+    {
+        $type = $this->type($requirement);
+
+        $field = $this->submission->fields()
+            ->whereNull('superseded_at')
+            ->where('kyc_document_type_id', $type?->id)
+            ->where(fn ($query) => $query->where('slot_key', $slot)->orWhereNull('slot_key'))
+            ->first();
+
+        return $field === null ? null : (string) $field->value;
+    }
+
+    public function recordVerdict(string $requirement, string $slot, string $status, ?string $note, int $reviewerId, ?string $evidenceRef = null): void
+    {
+        KycEvidenceReview::create([
+            'kyc_submission_id' => $this->submission->id,
+            'requirement_key' => $requirement,
+            'slot_key' => $slot,
+            'status' => $status,
+            'note' => $note,
+            'reviewed_by' => $reviewerId,
+            'evidence_ref' => $evidenceRef,
+        ]);
+    }
+
     private function retire(KycDocument $document): void
     {
         if ($this->hasBeenSubmitted()) {
@@ -230,10 +263,21 @@ final class PartnerKycRound implements KycRound
      *
      * @param  array<string, KycEvidenceReview>  $verdicts
      */
-    private function verdictFor(array $verdicts, string $requirement, string $slot, CarbonInterface $recordedAt): ?KycEvidenceReview
+    private function verdictFor(array $verdicts, string $requirement, string $slot, string $ref, CarbonInterface $recordedAt): ?KycEvidenceReview
     {
         $review = $verdicts[KycEvidenceItem::keyFor($requirement, $slot)] ?? null;
 
-        return $review !== null && $review->created_at->greaterThanOrEqualTo($recordedAt) ? $review : null;
+        if ($review === null) {
+            return null;
+        }
+
+        // A verdict names the evidence it judged, so a replacement — even one made in
+        // the same second — is never read as already judged.
+        if ($review->evidence_ref !== null) {
+            return $review->evidence_ref === $ref ? $review : null;
+        }
+
+        // Verdicts written before they named their evidence: matched by time.
+        return $review->created_at->greaterThanOrEqualTo($recordedAt) ? $review : null;
     }
 }

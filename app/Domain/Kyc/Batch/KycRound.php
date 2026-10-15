@@ -83,4 +83,25 @@ interface KycRound
      * never been submitted, superseded (and kept) once it has.
      */
     public function discard(string $requirement, string $slot): void;
+
+    /**
+     * Whether a reviewer may still judge its evidence: submitted and not yet
+     * decided.
+     */
+    public function awaitsReview(): bool;
+
+    /**
+     * A typed value in full, for a reviewer who may see it. Never part of the
+     * round's ordinary payload, which carries only the masked form; each reveal is
+     * its own recorded act.
+     */
+    public function revealValue(string $requirement, string $slot): ?string;
+
+    /**
+     * Write a reviewer's verdict on one slot. Append-only: a later verdict
+     * supersedes an earlier one, and neither is ever changed.
+     *
+     * @param  'accepted'|'rejected'  $status
+     */
+    public function recordVerdict(string $requirement, string $slot, string $status, ?string $note, int $reviewerId, ?string $evidenceRef = null): void;
 }

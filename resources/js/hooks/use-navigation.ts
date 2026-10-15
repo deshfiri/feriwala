@@ -21,6 +21,7 @@ import {
     Receipt,
     ReceiptText,
     Share2,
+    ListChecks,
     ShieldCheck,
     ShoppingBag,
     Truck,
@@ -64,6 +65,7 @@ import { index as stockLevels } from '@/routes/admin/inventory/stock';
 import { index as warehouses } from '@/routes/admin/inventory/warehouses';
 import { index as kycQueue } from '@/routes/admin/kyc';
 import { index as deletionRequests } from '@/routes/admin/deletions';
+import { index as kycBatches } from '@/routes/admin/kyc/batch-builder';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as adminOrders } from '@/routes/admin/orders';
 import { index as packageCatalogue } from '@/routes/admin/packages';
@@ -553,6 +555,7 @@ export function useNavigation(): {
                 // approvals and KYC review. Verification rules are settings.
                 ...(permissions['account.view'] ||
                 permissions['kyc.view'] ||
+                permissions['kyc_batch.view'] ||
                 permissions['account.delete'] ||
                 permissions['supplier.delete']
                     ? [
@@ -562,7 +565,9 @@ export function useNavigation(): {
                                   ? accountDirectory()
                                   : permissions['kyc.view']
                                     ? kycQueue()
-                                    : deletionRequests(),
+                                    : permissions['kyc_batch.view']
+                                      ? kycBatches()
+                                      : deletionRequests(),
                               icon: Building2,
                               items: [
                                   ...(permissions['account.view']
@@ -596,6 +601,16 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.kyc_review'),
                                                 href: kycQueue(),
+                                            },
+                                        ]
+                                      : []),
+                                  // The reusable verification forms: batches, their
+                                  // groups, options and evidence slots (D30).
+                                  ...(permissions['kyc_batch.view']
+                                      ? [
+                                            {
+                                                title: t('nav.kyc_batches'),
+                                                href: kycBatches(),
                                             },
                                         ]
                                       : []),
@@ -876,6 +891,15 @@ export function useNavigation(): {
                               title: t('nav.kyc_requirements'),
                               href: kycRequirements(),
                               icon: ShieldCheck,
+                          },
+                      ]
+                    : []),
+                ...(permissions['kyc_batch.view']
+                    ? [
+                          {
+                              title: t('nav.kyc_batches'),
+                              href: kycBatches(),
+                              icon: ListChecks,
                           },
                       ]
                     : []),
