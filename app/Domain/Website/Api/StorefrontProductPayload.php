@@ -131,7 +131,7 @@ class StorefrontProductPayload
             'seo' => [
                 'title' => $product->meta_title ?? $product->name,
                 'description' => $product->meta_description ?? $product->short_description,
-                'canonical' => 'https://'.$website->host().'/products/'.$product->slug,
+                'canonical' => $website->origin().'/products/'.$product->slug,
             ],
             'published_at' => $selection->published_at?->toIso8601String(),
             'updated_at' => ($selection->updated_at->greaterThan($product->updated_at)

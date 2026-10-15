@@ -13,6 +13,7 @@ use App\Domain\Website\Actions\SettleWebsiteCharge;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
 use App\Domain\Website\Exceptions\WebsiteRefused;
+use App\Domain\Website\LocalAddress;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCharge;
 use App\Domain\Website\Models\WebsiteDomain;
@@ -98,18 +99,35 @@ class WebsiteController extends Controller
 
         Gate::authorize('create', Website::class);
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:120'],
-            'subdomain' => [
-                'required', 'string', 'min:3', 'max:63',
+        // On a developer's machine the address may be a URL such as
+        // http://127.0.0.1:8001, taken as it is (config website.allow_local_addresses).
+        $local = LocalAddress::parse((string) $request->input('subdomain'));
 
-                // The shape a hostname label may take: letters, digits and
-                // hyphens, never starting or ending with one.
-                'regex:/^[a-z0-9]([a-z0-9-]{1,61})?[a-z0-9]$/',
-                Rule::notIn((array) config('website.reserved_subdomains', [])),
-                Rule::unique('websites', 'subdomain'),
-            ],
-        ]);
+        if ($local !== null) {
+            $request->validate(['name' => ['required', 'string', 'min:2', 'max:120']]);
+
+            if (Website::query()->where('domain', $local['host'])->exists()) {
+                throw ValidationException::withMessages(['subdomain' => WebsiteRefused::subdomainTaken()->getMessage()]);
+            }
+
+            $validated = [
+                'name' => (string) $request->input('name'),
+                'subdomain' => LocalAddress::label($local['host']),
+            ];
+        } else {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'min:2', 'max:120'],
+                'subdomain' => [
+                    'required', 'string', 'min:3', 'max:63',
+
+                    // The shape a hostname label may take: letters, digits and
+                    // hyphens, never starting or ending with one.
+                    'regex:/^[a-z0-9]([a-z0-9-]{1,61})?[a-z0-9]$/',
+                    Rule::notIn((array) config('website.reserved_subdomains', [])),
+                    Rule::unique('websites', 'subdomain'),
+                ],
+            ]);
+        }
 
         try {
             $website = $request_website->handle(
@@ -120,6 +138,10 @@ class WebsiteController extends Controller
             );
         } catch (WebsiteRefused $refused) {
             throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+        }
+
+        if ($local !== null) {
+            $website->forceFill(['domain' => $local['host']])->save();
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.requested')]);

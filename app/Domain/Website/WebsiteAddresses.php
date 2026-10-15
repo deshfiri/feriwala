@@ -36,6 +36,11 @@ class WebsiteAddresses
      */
     public function hosts(Website $website): array
     {
+        // A local address is its own host: there is no DNS to consult.
+        if (($origin = LocalAddress::originOf($website)) !== null) {
+            return [(string) parse_url($origin, PHP_URL_HOST).(parse_url($origin, PHP_URL_PORT) !== null ? ':'.parse_url($origin, PHP_URL_PORT) : '')];
+        }
+
         $candidates = [
             $website->domain,
             $website->subdomain.'.'.config('website.storefront_domain'),
@@ -58,6 +63,10 @@ class WebsiteAddresses
      */
     public function home(Website $website): ?string
     {
+        if (($origin = LocalAddress::originOf($website)) !== null) {
+            return $origin.'/';
+        }
+
         $host = $this->hosts($website)[0] ?? null;
 
         return $host === null ? null : 'https://'.$host.'/';
@@ -78,6 +87,14 @@ class WebsiteAddresses
         // where browsers and parsers disagree about the host.
         if ($url === '' || strlen($url) > self::MAX_URL_LENGTH || preg_match('/^[\x21-\x7e]+$/', $url) !== 1 || str_contains($url, '\\')) {
             return false;
+        }
+
+        // A local website's own origin, over plain http, and nothing else.
+        if (($origin = LocalAddress::originOf($website)) !== null
+            && (str_starts_with($url, $origin.'/') || $url === $origin)
+            && ! str_contains($url, '#')
+            && ! str_contains(substr($url, strlen($origin)), '@')) {
+            return true;
         }
 
         $parts = parse_url($url);

@@ -11,6 +11,7 @@ use App\Domain\Package\Models\UserPackage;
 use App\Domain\Website\Enums\WebsiteConnectionHealth;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteTheme;
+use App\Domain\Website\LocalAddress;
 use App\Models\User;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -191,6 +192,15 @@ class Website extends Model
     public function host(): string
     {
         return $this->domain ?? $this->subdomain.'.'.config('website.storefront_domain');
+    }
+
+    /**
+     * The address customers type, with its scheme: https, or the plain-http
+     * origin of a local address a developer set.
+     */
+    public function origin(): string
+    {
+        return LocalAddress::originOf($this) ?? 'https://'.$this->host();
     }
 
     /**

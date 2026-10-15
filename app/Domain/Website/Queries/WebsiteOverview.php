@@ -203,7 +203,7 @@ class WebsiteOverview
             'website' => $website === null ? null : [
                 'id' => $website->public_id,
                 'host' => $website->host(),
-                'url' => 'https://'.$website->host(),
+                'url' => $website->origin(),
             ],
             'domain_name' => $registeredDomain->domain ?? $website?->domain,
             'partner_name' => $allocation->businessAccount->name,

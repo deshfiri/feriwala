@@ -103,7 +103,11 @@ export default function RequestWebsite({
                                     description={t(
                                         'website.create.subdomain_hint',
                                     )}
-                                    hint={`${subdomain || 'your-shop'}.${storefrontDomain}`}
+                                    hint={
+                                        /[:/]/.test(subdomain)
+                                            ? subdomain
+                                            : `${subdomain || 'your-shop'}.${storefrontDomain}`
+                                    }
                                     error={errors.subdomain}
                                     required
                                 >
@@ -117,7 +121,7 @@ export default function RequestWebsite({
                                                     event.target.value.toLowerCase(),
                                                 )
                                             }
-                                            maxLength={63}
+                                            maxLength={120}
                                             required
                                         />
                                     )}

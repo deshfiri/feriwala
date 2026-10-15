@@ -18,6 +18,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Local addresses
+    |--------------------------------------------------------------------------
+    |
+    | Lets a website's address be a local one — `http://127.0.0.1:8001`,
+    | `localhost:8080` — typed straight into the setup form with no further
+    | checking, so a storefront can be tried on a developer's own machine.
+    |
+    | On only when the application itself runs as `local` (or when it is asked
+    | for outright). A production site never has it, because a customer must
+    | never be sent to a plain-HTTP address or to somebody's own network.
+    |
+    */
+
+    'allow_local_addresses' => (bool) env('WEBSITE_ALLOW_LOCAL_ADDRESSES', env('APP_ENV') === 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Subdomains nobody may claim
     |--------------------------------------------------------------------------
     |
