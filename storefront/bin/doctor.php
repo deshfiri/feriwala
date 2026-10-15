@@ -42,7 +42,10 @@ try {
 }
 
 $report(str_starts_with((string) Env::get('APP_URL', ''), 'https://') || Env::isLocal(), 'APP_URL is https', (string) Env::get('APP_URL'));
-$report(strlen((string) Env::get('WEBHOOK_SECRET', '')) >= 16, 'WEBHOOK_SECRET set');
+// Optional: without it the catalogue refreshes as its cache expires instead of
+// the moment the ERP says something changed.
+$webhook = (string) Env::get('WEBHOOK_SECRET', '');
+$report($webhook === '' || strlen($webhook) >= 16, 'Webhook secret', $webhook === '' ? 'not set (optional — the cache refreshes the catalogue)' : 'set');
 
 try {
     $erp = App::erp();

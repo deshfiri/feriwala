@@ -30,16 +30,15 @@ plain HTTP, and its payment return URL must be `https://`).
 
 1. Point the web server's document root at **`storefront/public/`** — nothing else is served.
 2. Create a database and a user for it.
-3. `cp .env.example .env` and fill it in (database, `APP_URL`, `ERP_BASE_URL`, `ERP_KEY_ID`,
-   `ERP_SECRET`, `WEBHOOK_SECRET`). The credential comes from the ERP: *Websites → API credentials*,
-   with scopes `catalog:read`, `inventory:read`, `orders:read`, `orders:write`, `customers:write`,
-   `returns:write`.
-4. `php bin/migrate.php` — creates the tables; safe to run again.
-5. `php bin/doctor.php` — checks the database, the ERP credentials, the website's status and the
-   webhook secret. Exit code 1 if something needs attention.
-6. In the ERP, register the webhook endpoint `https://<your-host>/webhooks/feriwala` and copy its
-   signing secret into `WEBHOOK_SECRET`. During a rotation put the old one in
-   `WEBHOOK_SECRET_PREVIOUS`.
+3. **Connect the store in the ERP.** In the admin dashboard open the partner's website and use
+   *Connect the store*: give this storefront's address and it shows a **Store ID** and a **token**
+   (once). Platform staff authorised to manage integrations can do this on the partner's behalf.
+4. `cp .env.example .env` and fill it in: the database, `APP_URL`, and the three connection lines
+   the dashboard showed — `ERP_BASE_URL`, `STORE_ID`, `STORE_TOKEN`. That is the whole connection.
+   (`WEBHOOK_SECRET` is optional; the dashboard shows it when it registered a webhook.)
+5. `php bin/migrate.php` — creates the tables; safe to run again.
+6. `php bin/doctor.php` — checks the database, the connection to the ERP, the website's status.
+   Exit code 1 if something needs attention.
 7. Cron, hourly: `php /path/to/storefront/bin/prune.php` (expired sessions and cache, abandoned
    baskets).
 

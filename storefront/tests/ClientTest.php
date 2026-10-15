@@ -106,11 +106,34 @@ test('tolerates unknown fields and treats an unreadable success as a fault', fun
     throws(ErpException::class, fn () => $client->withoutBackoff()->get('/site'), 'malformed_response');
 });
 
+test('is connected by a store id and a token, and still reads the earlier names', function () {
+    Env::set('APP_ENV', 'local');
+    Env::set('ERP_BASE_URL', 'http://erp.test');
+    Env::set('STORE_ID', 'wsk_NEWNAME');
+    Env::set('STORE_TOKEN', 'new-token');
+    Env::set('ERP_KEY_ID', 'wsk_OLDNAME');
+    Env::set('ERP_SECRET', 'old-secret');
+
+    same('wsk_NEWNAME', Client::storeId(), 'the new name wins');
+    same('new-token', Client::storeToken());
+
+    Env::set('STORE_ID', '');
+    Env::set('STORE_TOKEN', '');
+
+    same('wsk_OLDNAME', Client::storeId(), 'the earlier name still works');
+    same('old-secret', Client::storeToken());
+
+    Env::set('ERP_KEY_ID', '');
+    Env::set('ERP_SECRET', '');
+
+    throws(RuntimeException::class, fn () => Client::fromEnv());
+});
+
 test('refuses plain http outside local development', function () {
     Env::set('APP_ENV', 'production');
     Env::set('ERP_BASE_URL', 'http://erp.test');
-    Env::set('ERP_KEY_ID', 'wsk_K');
-    Env::set('ERP_SECRET', 's');
+    Env::set('STORE_ID', 'wsk_K');
+    Env::set('STORE_TOKEN', 's');
 
     try {
         throws(RuntimeException::class, fn () => Client::fromEnv());

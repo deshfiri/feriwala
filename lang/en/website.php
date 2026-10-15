@@ -569,7 +569,28 @@ return [
         'lookup_failed' => 'The DNS lookup could not be made. Try again shortly.',
     ],
 
+    'connect' => [
+        'title' => 'Connect the store',
+        'hint' => 'Give the storefront\'s address. You get a Store ID and a token; put them, with the ERP address, in the storefront\'s .env and it is connected.',
+        'address' => 'Store address',
+        'address_hint' => 'A domain such as shop.example.com. On a developer machine, a local address such as http://127.0.0.1:8001 is accepted as it is.',
+        'submit' => 'Connect store',
+        'done_title' => 'Store connected',
+        'done_hint' => 'Copy this into the storefront\'s .env. The token is shown once; if it is lost, rotate it.',
+        'store_id' => 'Store ID',
+        'token' => 'Token',
+        'env' => 'The storefront\'s .env',
+        'webhook_registered' => 'Webhook registered at :url — its secret is in the block above.',
+        'webhook_skipped' => 'No webhook was registered (a local address, or not reachable yet). The storefront refreshes its catalogue as its cache expires.',
+        'copy' => 'Copy',
+        'copied' => 'Copied',
+        'close' => 'I have stored it',
+        'connected' => 'This store is connected. Its credentials are listed below; rotate the token to issue a new one.',
+    ],
+
     'refused' => [
+        'already_connected' => 'This website already has a live store connection. Rotate its token, or revoke it first.',
+        'address_invalid' => 'Enter the store\'s address as a domain such as shop.example.com.',
         'not_entitled' => 'Your package does not include a dedicated website.',
         'entitlement_expired' => 'Your package website’s domain and hosting period has ended. Renew your package to add a website.',
         'limit_reached' => 'Your package allows :limit website(s). Close one or change your package to add another.',

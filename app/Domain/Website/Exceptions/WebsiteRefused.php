@@ -45,6 +45,18 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.subdomain_taken'), 'subdomain');
     }
 
+    /** The store already has a live connection: rotate its token instead. */
+    public static function alreadyConnected(): self
+    {
+        return new self(__('website.refused.already_connected'), 'address');
+    }
+
+    /** The address is neither a domain nor a local address. */
+    public static function addressInvalid(): self
+    {
+        return new self(__('website.refused.address_invalid'), 'address');
+    }
+
     public static function domainTaken(): self
     {
         return new self(__('website.refused.domain_taken'), 'domain');

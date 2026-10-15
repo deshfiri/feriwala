@@ -42,9 +42,11 @@ final class Client
     public static function fromEnv(): self
     {
         $base = rtrim((string) Env::get('ERP_BASE_URL', ''), '/');
+        $storeId = self::storeId();
+        $token = self::storeToken();
 
-        if ($base === '' || Env::get('ERP_KEY_ID', '') === '' || Env::get('ERP_SECRET', '') === '') {
-            throw new \RuntimeException('ERP_BASE_URL, ERP_KEY_ID and ERP_SECRET must be set.');
+        if ($base === '' || $storeId === '' || $token === '') {
+            throw new \RuntimeException('ERP_BASE_URL, STORE_ID and STORE_TOKEN must be set.');
         }
 
         // The ERP refuses plain HTTP rather than redirecting it, because a
@@ -56,11 +58,28 @@ final class Client
 
         return new self(
             $base,
-            (string) Env::get('ERP_KEY_ID'),
-            (string) Env::get('ERP_SECRET'),
+            $storeId,
+            $token,
             Env::get('ERP_STOREFRONT_HOST') ?: null,
             Env::int('ERP_TIMEOUT', 10),
         );
+    }
+
+    /**
+     * The store's id, from the admin dashboard's "Connect store". The earlier
+     * name, `ERP_KEY_ID`, is still read, so an existing installation keeps working.
+     */
+    public static function storeId(): string
+    {
+        return (string) (Env::get('STORE_ID') ?: Env::get('ERP_KEY_ID', ''));
+    }
+
+    /**
+     * The store's token. The earlier name, `ERP_SECRET`, is still read.
+     */
+    public static function storeToken(): string
+    {
+        return (string) (Env::get('STORE_TOKEN') ?: Env::get('ERP_SECRET', ''));
     }
 
     public function withoutBackoff(): self

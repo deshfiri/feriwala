@@ -25,6 +25,7 @@ import type { WebsiteDetail, WebsiteDomainRow } from '@/types/website';
 import ReasonTextarea from '@/components/forms/reason-textarea';
 import type { CredentialRow } from '@/components/website-credential-list';
 import type { WebhookRow } from '@/components/website-webhook-summary';
+import ConnectStore from './connect-store';
 import StorefrontWebhook from './storefront-webhook';
 import StorefrontCredentials, {
     type CredentialPresetOption,
@@ -134,6 +135,15 @@ export default function AdminWebsiteShow({
                         </ul>
                     )}
                 </SectionCard>
+
+                {can.manage_integration && storefrontConnection && (
+                    <ConnectStore
+                        websiteId={website.id}
+                        connected={credentials.some(
+                            (credential) => !credential.revoked_at,
+                        )}
+                    />
+                )}
 
                 {can.manage_integration && storefrontConnection && (
                     <StorefrontCredentials

@@ -95,7 +95,13 @@ class ExchangeRates
 
     public static function isValidRate(string $rate): bool
     {
-        return preg_match(self::PATTERN, $rate) === 1 && bccomp($rate, '0', 6) > 0;
+        if (preg_match(self::PATTERN, $rate) !== 1) {
+            return false;
+        }
+
+        assert(is_numeric($rate));
+
+        return bccomp($rate, '0', 6) > 0;
     }
 
     /**

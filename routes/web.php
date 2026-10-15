@@ -76,6 +76,7 @@ use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
+use App\Http\Controllers\Admin\WebsiteConnectionController as AdminWebsiteConnectionController;
 use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\Admin\WebsiteCredentialController as AdminWebsiteCredentialController;
 use App\Http\Controllers\Admin\WebsitePricingController;
@@ -1630,6 +1631,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::post('websites/{website}/credentials', [AdminWebsiteCredentialController::class, 'store'])
             ->name('websites.credentials.store');
+        // One step: the website's address in, a store id and a token out.
+        Route::post('websites/{website}/connection', [AdminWebsiteConnectionController::class, 'store'])
+            ->name('websites.connection');
+
         Route::post('websites/{website}/credentials/{credential}/rotation', [AdminWebsiteCredentialController::class, 'rotate'])
             ->name('websites.credentials.rotate');
         Route::post('websites/{website}/credentials/{credential}/revocation', [AdminWebsiteCredentialController::class, 'revoke'])
