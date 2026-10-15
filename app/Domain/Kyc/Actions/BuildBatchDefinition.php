@@ -142,6 +142,9 @@ class BuildBatchDefinition
             'name_bn' => $group->name_bn,
             'description' => $group->description,
             'description_bn' => $group->description_bn,
+            // What the applicant's dropdown for this group is called.
+            'selector_label' => $group->selector_label,
+            'selector_label_bn' => $group->selector_label_bn,
             'rule' => $group->completion_rule->value,
             'minimum' => $group->minimum_required,
             'required' => $group->is_required,

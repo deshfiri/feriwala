@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { history as kycHistory } from '@/routes/kyc';
+import { show as documentShow } from '@/routes/kyc/documents';
 import * as evidence from '@/routes/kyc/evidence';
 import type { KycBatch } from '@/types';
 
@@ -155,6 +156,7 @@ export default function KycForm({
                             choose: evidence.choose.url(),
                             deselect: evidence.deselect.url(),
                             submit: '/kyc/submit',
+                            preview: (id) => documentShow.url(id),
                         }}
                     />
                 ) : (

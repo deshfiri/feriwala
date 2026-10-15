@@ -98,6 +98,8 @@ const newGroup = (): KycBuilderGroup => ({
     name_bn: null,
     description: null,
     description_bn: null,
+    selector_label: null,
+    selector_label_bn: null,
     rule: 'all',
     minimum: null,
     required: true,
@@ -1022,6 +1024,45 @@ function GroupEditor({
                         </NativeSelect>
                     )}
                 </Field>
+                {group.rule !== 'all' && (
+                    <>
+                        <Field
+                            label={t('kyc.builder.selector_label')}
+                            hint={t('kyc.builder.selector_label_help')}
+                        >
+                            {(id) => (
+                                <Input
+                                    id={id}
+                                    value={group.selector_label ?? ''}
+                                    maxLength={120}
+                                    placeholder={t('kyc.batch_form.select_one')}
+                                    onChange={(event) =>
+                                        mutate((g) => {
+                                            g.selector_label =
+                                                event.target.value;
+                                        })
+                                    }
+                                />
+                            )}
+                        </Field>
+                        <Field label={t('kyc.builder.selector_label_bn')}>
+                            {(id) => (
+                                <Input
+                                    id={id}
+                                    lang="bn"
+                                    value={group.selector_label_bn ?? ''}
+                                    maxLength={120}
+                                    onChange={(event) =>
+                                        mutate((g) => {
+                                            g.selector_label_bn =
+                                                event.target.value;
+                                        })
+                                    }
+                                />
+                            )}
+                        </Field>
+                    </>
+                )}
                 {group.rule === 'min' && (
                     <Field label={t('kyc.builder.group_minimum')}>
                         {(id) => (

@@ -57,17 +57,22 @@ final class KycCompletionResult
                 continue;
             }
 
-            $lines[] = __('kyc.batch.choose_n', [
-                'group' => $group['name'],
-                'needed' => $group['needed'],
-                'done' => $group['done'],
-            ]);
+            $chosen = count(array_filter($group['options'], fn (array $option) => $option['chosen']));
+
+            // Nothing picked yet: say to pick, not that something is "0 of 1" done.
+            if ($chosen === 0) {
+                $lines[] = $group['rule'] === 'any'
+                    ? __('kyc.batch.choose_one', ['group' => $group['name']])
+                    : __('kyc.batch.choose_some', ['group' => $group['name'], 'needed' => $group['needed']]);
+            } elseif ($group['rule'] === 'min' && $chosen < $group['needed']) {
+                $lines[] = __('kyc.batch.choose_some', ['group' => $group['name'], 'needed' => $group['needed']]);
+            }
 
             // For the option they started: say what that option is still missing.
             foreach ($group['options'] as $option) {
                 if ($option['chosen'] && ! $option['complete']) {
                     foreach (array_merge($option['missing'], $option['rejected']) as $slot) {
-                        $lines[] = $option['name'].': '.$slot;
+                        $lines[] = $group['name'].' — '.$option['name'].': '.$slot;
                     }
                 }
             }

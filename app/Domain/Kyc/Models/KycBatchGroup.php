@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $name_bn
  * @property string|null $description
  * @property string|null $description_bn
+ * @property string|null $selector_label
+ * @property string|null $selector_label_bn
  * @property KycCompletionRule $completion_rule
  * @property int|null $minimum_required
  * @property bool $is_required

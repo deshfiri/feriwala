@@ -35,6 +35,8 @@ class SaveKycBatchStructureRequest extends FormRequest
             'groups.*.name_bn' => ['nullable', 'string', 'max:120'],
             'groups.*.description' => ['nullable', 'string', 'max:500'],
             'groups.*.description_bn' => ['nullable', 'string', 'max:500'],
+            'groups.*.selector_label' => ['nullable', 'string', 'max:120'],
+            'groups.*.selector_label_bn' => ['nullable', 'string', 'max:120'],
             'groups.*.rule' => ['required', Rule::enum(KycCompletionRule::class)],
             'groups.*.minimum' => ['nullable', 'integer', 'min:1', 'max:20'],
             'groups.*.required' => ['required', 'boolean'],

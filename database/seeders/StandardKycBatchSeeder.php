@@ -46,7 +46,12 @@ class StandardKycBatchSeeder extends Seeder
         }
 
         if (KycBatch::query()->where('key', self::KEY)->orWhere('name', self::NAME)->exists()) {
-            $this->command->info('Standard KYC batch already exists — left exactly as it is.');
+            // The example batch this seeder made earlier gains the dropdown label it
+            // did not have then — and only that, and only where nobody has set one.
+            // A batch that merely shares the name, or has been changed, is left as it is.
+            $this->nameTheIdentityDropdown($publisher);
+
+            $this->command->info('Standard KYC batch already exists — left as it is.');
 
             return;
         }
@@ -77,6 +82,31 @@ class StandardKycBatchSeeder extends Seeder
     }
 
     /**
+     * Fills the Identity group's empty dropdown label on the seeded batch and
+     * publishes the result as a new version (rounds already open keep theirs).
+     */
+    private function nameTheIdentityDropdown(PublishKycBatchVersion $publisher): void
+    {
+        $batch = KycBatch::query()->where('key', self::KEY)->first();
+        $group = $batch?->groups()->where('key', 'identity_verification')->whereNull('selector_label')->first();
+
+        if ($batch === null || $group === null || $group->completion_rule->value !== 'any') {
+            return;
+        }
+
+        $group->forceFill([
+            'selector_label' => 'Select identification document',
+            'selector_label_bn' => 'পরিচয়ের নথি বাছাই করুন',
+        ])->save();
+
+        $actor = User::role(PlatformRole::SuperAdmin->value)->orderBy('id')->first();
+
+        if ($actor !== null && $batch->published_version > 0) {
+            $publisher->handle($batch->refresh(), $actor);
+        }
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     private function groups(): array
@@ -87,6 +117,8 @@ class StandardKycBatchSeeder extends Seeder
                 'name_bn' => 'পরিচয় যাচাই',
                 'description' => 'Choose one way to prove who you are.',
                 'description_bn' => 'আপনি কে তা প্রমাণ করার একটি উপায় বেছে নিন।',
+                'selector_label' => 'Select identification document',
+                'selector_label_bn' => 'পরিচয়ের নথি বাছাই করুন',
                 'rule' => 'any',
                 'required' => true,
                 'requirements' => [

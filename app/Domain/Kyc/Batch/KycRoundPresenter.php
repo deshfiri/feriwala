@@ -42,6 +42,15 @@ final class KycRoundPresenter
             foreach ($group['requirements'] as $position => $requirement) {
                 $option = $state['options'][$position];
 
+                // What this option holds right now, and whether it can still be
+                // walked away from. An option with accepted evidence is locked
+                // (whatever the round), and so is one that has been sent and not
+                // sent back — switching away would discard evidence behind a
+                // decision. Only an unsent draft can be thrown out.
+                $held = array_filter($evidence, fn (KycEvidenceItem $item) => $item->requirement === $requirement['key']);
+                $accepted = array_filter($held, fn (KycEvidenceItem $item) => $item->isAccepted());
+                $standing = array_filter($held, fn (KycEvidenceItem $item) => ! $item->isRejected());
+
                 $options[] = [
                     'key' => $requirement['key'],
                     'name' => KycRoundDefinition::localized($requirement, 'name'),
@@ -51,6 +60,8 @@ final class KycRoundPresenter
                     'complete' => $option['complete'],
                     'provided' => $option['provided'],
                     'total' => $option['total'],
+                    'has_draft' => $round->isEditable() && $held !== [],
+                    'locked' => $accepted !== [] || ($round->hasBeenSubmitted() && $standing !== []),
                     'slots' => array_map(
                         fn (array $slot) => $this->slot($slot, $evidence[KycEvidenceItem::keyFor($requirement['key'], $slot['key'])] ?? null),
                         $requirement['slots'],
@@ -62,6 +73,14 @@ final class KycRoundPresenter
                 'key' => $group['key'],
                 'name' => KycRoundDefinition::localized($group, 'name'),
                 'description' => KycRoundDefinition::localized($group, 'description') ?: null,
+                // The dropdown's label, when staff named it; the form has a default.
+                'selector_label' => KycRoundDefinition::localized($group, 'selector_label') ?: null,
+                // The options in use: the one chosen (any one), those chosen (at
+                // least N), or all of them (all required).
+                'selected' => array_values(array_map(
+                    fn (array $option) => $option['key'],
+                    array_filter($options, fn (array $option) => $option['chosen']),
+                )),
                 'rule' => $rule->value,
                 // The instruction in words: "Provide any one", "Provide any 2 of 3".
                 'choose' => $rule->choosesBetweenOptions(),
