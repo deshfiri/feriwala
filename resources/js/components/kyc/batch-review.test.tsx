@@ -71,6 +71,7 @@ function batch(
                 choose: false,
                 selector_label: null,
                 selected: ['passport'],
+                status: 'in_progress',
                 required: true,
                 needed: 1,
                 done: 0,

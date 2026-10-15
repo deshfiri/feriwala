@@ -63,12 +63,16 @@ export default function GroupCard({
                                 : 'kyc.batch_form.optional',
                         )}
                     />
-                    {group.satisfied && group.required && (
-                        <StatusPill
-                            tone="success"
-                            label={t('kyc.batch_form.complete')}
-                        />
-                    )}
+                    <StatusPill
+                        tone={
+                            group.status === 'complete'
+                                ? 'success'
+                                : group.status === 'in_progress'
+                                  ? 'info'
+                                  : 'neutral'
+                        }
+                        label={t(`kyc.batch_form.status_${group.status}`)}
+                    />
                 </>
             }
         >
@@ -91,7 +95,19 @@ export default function GroupCard({
                     />
                 )}
 
-                {group.rule === 'all' && (
+                {group.rule === 'all' &&
+                    group.options.length === 1 && (
+                        // One required option: nothing to choose, so its files are
+                        // simply there under the group.
+                        <OptionPanel
+                            option={group.options[0]}
+                            endpoints={endpoints}
+                            editable={editable}
+                            bare
+                        />
+                    )}
+
+                {group.rule === 'all' && group.options.length !== 1 && (
                     <>
                         <GroupProgress group={group} />
                         <div className="space-y-3">
@@ -467,29 +483,34 @@ function OptionPanel({
     option,
     endpoints,
     editable,
+    bare = false,
 }: {
     option: KycBatchOption;
     endpoints: KycBatchEndpoints;
     editable: boolean;
+    /** No frame, name or count: the group's own heading already says it. */
+    bare?: boolean;
 }) {
     const { t } = useTranslation();
 
     return (
-        <div className="rounded-lg border p-3">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">{option.name}</h3>
-                <StatusPill
-                    tone={option.complete ? 'success' : 'neutral'}
-                    label={
-                        option.complete
-                            ? t('kyc.batch_form.complete')
-                            : t('kyc.batch_form.items', {
-                                  provided: option.provided,
-                                  total: option.total,
-                              })
-                    }
-                />
-            </div>
+        <div className={bare ? '' : 'rounded-lg border p-3'}>
+            {!bare && (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-medium">{option.name}</h3>
+                    <StatusPill
+                        tone={option.complete ? 'success' : 'neutral'}
+                        label={
+                            option.complete
+                                ? t('kyc.batch_form.complete')
+                                : t('kyc.batch_form.items', {
+                                      provided: option.provided,
+                                      total: option.total,
+                                  })
+                        }
+                    />
+                </div>
+            )}
 
             {option.instructions && (
                 <p className="text-muted-foreground mb-3 text-xs">

@@ -110,6 +110,8 @@ export type KycBatchGroup = {
     done: number;
     offered: number;
     satisfied: boolean;
+    /** What the group holds right now, worked out by the server. */
+    status: 'not_started' | 'in_progress' | 'complete';
     options: KycBatchOption[];
 };
 

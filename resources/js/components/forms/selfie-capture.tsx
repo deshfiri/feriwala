@@ -34,10 +34,13 @@ export default function SelfieCapture({
     onCapture,
     saving = false,
     disabled = false,
+    onCancel,
 }: {
     onCapture: (file: File, meta: SelfieCaptureMeta) => void;
     saving?: boolean;
     disabled?: boolean;
+    /** Leave a retake and keep the selfie already saved. */
+    onCancel?: () => void;
 }) {
     const { t } = useTranslation();
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -157,18 +160,16 @@ export default function SelfieCapture({
                             : 'kyc.batch_form.camera_unsupported',
                     )}
                 </p>
-                {phase === 'denied' && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={start}
-                        disabled={disabled}
-                    >
-                        <RefreshCw className="size-4" aria-hidden="true" />
-                        {t('kyc.batch_form.selfie_start')}
-                    </Button>
-                )}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={start}
+                    disabled={disabled}
+                >
+                    <RefreshCw className="size-4" aria-hidden="true" />
+                    {t('kyc.batch_form.camera_retry')}
+                </Button>
             </div>
         );
     }
@@ -206,10 +207,25 @@ export default function SelfieCapture({
 
             <div className="flex flex-wrap gap-2">
                 {phase === 'idle' && (
-                    <Button type="button" onClick={start} disabled={disabled}>
-                        <Camera className="size-4" aria-hidden="true" />
-                        {t('kyc.batch_form.selfie_start')}
-                    </Button>
+                    <>
+                        <Button
+                            type="button"
+                            onClick={start}
+                            disabled={disabled}
+                        >
+                            <Camera className="size-4" aria-hidden="true" />
+                            {t('kyc.batch_form.selfie_start')}
+                        </Button>
+                        {onCancel && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={onCancel}
+                            >
+                                {t('kyc.batch_form.selfie_cancel')}
+                            </Button>
+                        )}
+                    </>
                 )}
 
                 {phase === 'live' && (

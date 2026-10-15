@@ -90,6 +90,8 @@ final class KycRoundPresenter
                 'done' => $state['done'],
                 'offered' => $state['offered'],
                 'satisfied' => $state['satisfied'],
+                // Not started / in progress / complete, from what the group holds.
+                'status' => $this->groupStatus($state['satisfied'], $options),
                 'options' => $options,
             ];
         }
@@ -104,6 +106,24 @@ final class KycRoundPresenter
             'complete' => $result->isComplete(),
             'missing' => $result->missing(),
         ];
+    }
+
+    /**
+     * A group with nothing in it is "not started" even when an optional group
+     * is technically satisfied; one holding something is "in progress" until the
+     * server says it is satisfied.
+     *
+     * @param  array<int, array<string, mixed>>  $options
+     */
+    private function groupStatus(bool $satisfied, array $options): string
+    {
+        $provided = array_sum(array_map(fn (array $option) => $option['provided'], $options));
+
+        if ($provided === 0) {
+            return 'not_started';
+        }
+
+        return $satisfied ? 'complete' : 'in_progress';
     }
 
     /**

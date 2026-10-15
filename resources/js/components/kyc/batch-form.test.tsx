@@ -107,19 +107,24 @@ function group(
         done: 0,
         offered: options.length,
         satisfied: false,
+        status: 'not_started',
         options,
         ...overrides,
     };
 }
 
-const batch = (groups: KycBatchGroup[], editable = true): KycBatch => ({
+const batch = (
+    groups: KycBatchGroup[],
+    editable = true,
+    selfie: KycBatch['selfie'] = null,
+): KycBatch => ({
     name: 'Standard KYC',
     description: null,
     version: 1,
     editable,
     complete: false,
     missing: [],
-    selfie: null,
+    selfie,
     groups,
 });
 
@@ -429,5 +434,263 @@ describe('a locked round', () => {
         expect(select(view).disabled).toBe(true);
         expect(view.textContent).not.toContain('kyc.batch_form.submit_button');
         expect(view.textContent).toContain('kyc.batch_form.locked');
+    });
+});
+
+describe('group status and a lone required option', () => {
+    it.each([
+        ['not_started', 'kyc.batch_form.status_not_started'],
+        ['in_progress', 'kyc.batch_form.status_in_progress'],
+        ['complete', 'kyc.batch_form.status_complete'],
+    ] as const)('shows a %s group as such', (status, label) => {
+        const view = mount(
+            batch([
+                group('any', [nid({ chosen: true }), passport(), licence()], {
+                    status,
+                }),
+            ]),
+        );
+
+        expect(view.textContent).toContain(
+            status === 'complete' ? 'kyc.batch_form.status_complete' : label,
+        );
+    });
+
+    it('opens a single required option directly, with no selector and no frame', () => {
+        const view = mount(
+            batch([
+                group('all', [nid({ chosen: true })], {
+                    selected: ['nid'],
+                    needed: 1,
+                    offered: 1,
+                }),
+            ]),
+        );
+
+        expect(select(view)).toBeNull();
+        expect(view.querySelectorAll('input[type="checkbox"]').length).toBe(1);
+        expect(fileInputs(view)).toBe(2);
+        // No per-option heading and no "every option" instruction for one option.
+        expect(view.querySelector('h3')).toBeNull();
+        expect(view.textContent).not.toContain('kyc.batch_form.all_required');
+    });
+});
+
+describe('the live selfie', () => {
+    const slotOf = (current: unknown = null) => ({
+        key: 'capture',
+        label: 'Live selfie',
+        instructions: null,
+        required: true,
+        evidence: 'image' as const,
+        mimes: ['image/jpeg'],
+        max_kb: 3072,
+        value_label: null,
+        sensitive: false,
+        current,
+    });
+    const selfie = (
+        required: boolean,
+        current: unknown = null,
+        allows_upload = false,
+    ): KycBatch['selfie'] =>
+        ({
+            mode: required ? 'required' : 'optional',
+            required,
+            satisfied: current !== null,
+            allows_upload,
+            requirement: '__selfie',
+            slot: slotOf(current),
+        }) as KycBatch['selfie'];
+
+    const stop = vi.fn();
+    const getUserMedia = vi.fn();
+
+    beforeEach(() => {
+        stop.mockReset();
+        getUserMedia.mockReset();
+        getUserMedia.mockImplementation(async () => ({
+            getTracks: () => [{ stop }],
+        }));
+        Object.defineProperty(navigator, 'mediaDevices', {
+            configurable: true,
+            value: {
+                getUserMedia,
+            },
+        });
+        HTMLMediaElement.prototype.play = vi.fn(async () => undefined);
+        Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', {
+            configurable: true,
+            get: () => 640,
+        });
+        Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', {
+            configurable: true,
+            get: () => 480,
+        });
+        HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+            drawImage: vi.fn(),
+        })) as never;
+        HTMLCanvasElement.prototype.toBlob = function (callback: BlobCallback) {
+            callback(new Blob(['frame'], { type: 'image/jpeg' }));
+        };
+        URL.createObjectURL = vi.fn(() => 'blob:selfie');
+        URL.revokeObjectURL = vi.fn();
+    });
+
+    const flush = () => act(async () => {});
+
+    it('is not shown at all when the batch does not ask for one', () => {
+        const view = mount(batch([group('any', [nid(), passport()])]));
+
+        expect(view.textContent).not.toContain('kyc.batch_form.selfie_title');
+        expect(view.textContent).not.toContain('kyc.batch_form.selfie_start');
+    });
+
+    it('is labelled required, or optional, as the batch says', () => {
+        const required = mount(batch([], true, selfie(true))).textContent ?? '';
+
+        expect(required).toContain('kyc.batch_form.selfie_required');
+
+        act(() => root.unmount());
+        container.remove();
+
+        const optional =
+            mount(batch([], true, selfie(false))).textContent ?? '';
+
+        expect(optional).toContain('kyc.batch_form.optional');
+        expect(optional).not.toContain('kyc.batch_form.selfie_required');
+    });
+
+    it('offers the camera and no file picker unless the business allows one', () => {
+        const view = mount(batch([], true, selfie(true)));
+
+        expect(view.textContent).toContain('kyc.batch_form.selfie_start');
+        expect(fileInputs(view)).toBe(0);
+
+        act(() => root.unmount());
+        container.remove();
+
+        const fallback = mount(batch([], true, selfie(true, null, true)));
+
+        expect(fileInputs(fallback)).toBe(1);
+    });
+
+    it('opens the camera facing the user, previews the frame, retakes and saves it', async () => {
+        const view = mount(batch([], true, selfie(true)));
+
+        await act(async () => {
+            button('kyc.batch_form.selfie_start')?.click();
+        });
+        await flush();
+
+        expect(getUserMedia).toHaveBeenCalledTimes(1);
+        expect(getUserMedia.mock.calls[0][0].video.facingMode).toBe('user');
+        expect(getUserMedia.mock.calls[0][0].audio).toBe(false);
+
+        await act(async () => {
+            button('kyc.batch_form.selfie_take')?.click();
+        });
+        await flush();
+
+        // A preview, before anything is saved, and the camera is released.
+        expect(view.querySelector('img')).not.toBeNull();
+        expect(stop).toHaveBeenCalled();
+        expect(post).not.toHaveBeenCalled();
+        expect(view.textContent).toContain('kyc.batch_form.selfie_retake');
+
+        // Retake goes back to a live camera.
+        await act(async () => {
+            button('kyc.batch_form.selfie_retake')?.click();
+        });
+        await flush();
+        expect(getUserMedia).toHaveBeenCalledTimes(2);
+
+        await act(async () => {
+            button('kyc.batch_form.selfie_take')?.click();
+        });
+        await flush();
+        await act(async () => {
+            button('kyc.batch_form.selfie_use')?.click();
+        });
+
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(post.mock.calls[0][0]).toBe('/f');
+        expect(post.mock.calls[0][1]).toMatchObject({
+            requirement: '__selfie',
+            slot: 'capture',
+            captured_live: 1,
+            capture_meta: { width: 640, height: 480, facing: 'user' },
+        });
+    });
+
+    it('says why, and offers a retry, when the camera is refused', async () => {
+        getUserMedia.mockRejectedValueOnce(
+            new DOMException('no', 'NotAllowedError'),
+        );
+
+        const view = mount(batch([], true, selfie(true)));
+
+        await act(async () => {
+            button('kyc.batch_form.selfie_start')?.click();
+        });
+        await flush();
+
+        expect(view.querySelector('[role="alert"]')?.textContent).toContain(
+            'kyc.batch_form.camera_denied',
+        );
+        expect(view.textContent).toContain('kyc.batch_form.camera_retry');
+        // Refusal is not a reason to hand over a file picker.
+        expect(fileInputs(view)).toBe(0);
+    });
+
+    it('shows a saved selfie as saved, and keeps an accepted one locked', () => {
+        const saved = {
+            kind: 'file',
+            document: 'doc-selfie',
+            name: 'selfie.jpg',
+            size_bytes: 1000,
+            live: true,
+            image: true,
+            value_preview: null,
+            verdict: null,
+            note: null,
+        };
+        const open = mount(batch([], true, selfie(true, saved)));
+
+        expect(open.textContent).toContain('kyc.batch_form.selfie_saved');
+        expect(open.textContent).toContain('kyc.batch_form.selfie_retake');
+        expect(open.textContent).not.toContain('kyc.batch_form.selfie_start');
+
+        act(() => root.unmount());
+        container.remove();
+
+        const accepted = mount(
+            batch([], true, selfie(true, { ...saved, verdict: 'accepted' })),
+        );
+
+        expect(accepted.textContent).not.toContain(
+            'kyc.batch_form.selfie_retake',
+        );
+        expect(accepted.textContent).not.toContain(
+            'kyc.batch_form.selfie_start',
+        );
+    });
+
+    it('offers the camera again when the reviewer sent the selfie back', () => {
+        const rejected = {
+            kind: 'file',
+            document: 'doc-selfie',
+            name: 'selfie.jpg',
+            size_bytes: 1000,
+            live: true,
+            image: true,
+            value_preview: null,
+            verdict: 'rejected',
+            note: 'Too dark.',
+        };
+        const view = mount(batch([], true, selfie(true, rejected)));
+
+        expect(view.textContent).toContain('Too dark.');
+        expect(view.textContent).toContain('kyc.batch_form.selfie_start');
     });
 });

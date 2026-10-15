@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import { CheckCircle2, Lock, Upload } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import SelfieCapture from '@/components/forms/selfie-capture';
 import SubmitButton from '@/components/forms/submit-button';
 import SectionCard from '@/components/section-card';
@@ -106,6 +106,18 @@ function SelfieCard({
     const accepted = current?.verdict === 'accepted';
     const rejected = current?.verdict === 'rejected';
     const locked = !editable || accepted;
+    // A saved selfie is shown as saved, with a way to retake it; the camera only
+    // comes back when the applicant asks (or the reviewer sent it back).
+    const [retaking, setRetaking] = useState(false);
+    const savedUrl =
+        current?.document && endpoints.preview
+            ? endpoints.preview(current.document)
+            : null;
+    const showSaved = current !== null && !rejected && !retaking;
+
+    useEffect(() => {
+        setRetaking(false);
+    }, [current?.document]);
 
     return (
         <SectionCard
@@ -141,16 +153,45 @@ function SelfieCard({
                     </p>
                 )}
 
-                {current && !rejected && (
-                    <p className="text-success flex items-center gap-1.5 text-sm font-medium">
-                        <CheckCircle2 className="size-4" aria-hidden="true" />
-                        {t('kyc.batch_form.selfie_saved')}
-                    </p>
+                {showSaved && (
+                    <div className="space-y-2">
+                        <p className="text-success flex items-center gap-1.5 text-sm font-medium">
+                            <CheckCircle2
+                                className="size-4"
+                                aria-hidden="true"
+                            />
+                            {accepted
+                                ? t('kyc.batch_form.accepted')
+                                : t('kyc.batch_form.selfie_saved')}
+                        </p>
+                        {savedUrl && current?.image && (
+                            <img
+                                src={savedUrl}
+                                alt={t('kyc.batch_form.selfie_title')}
+                                className="aspect-[4/3] w-full max-w-xs rounded-xl border object-cover"
+                            />
+                        )}
+                        {!locked && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setRetaking(true)}
+                            >
+                                {t('kyc.batch_form.selfie_retake')}
+                            </Button>
+                        )}
+                    </div>
                 )}
 
-                {!locked && (
+                {!locked && !showSaved && (
                     <SelfieCapture
                         saving={request.busy}
+                        onCancel={
+                            current && !rejected
+                                ? () => setRetaking(false)
+                                : undefined
+                        }
                         onCapture={(file, meta) =>
                             request.send(
                                 endpoints.file,
