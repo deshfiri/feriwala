@@ -46,6 +46,7 @@ beforeEach(function () {
         'price' => Money::fromDecimal('3900.00', Currency::BDT),
         'published_at' => now(),
     ]);
+    websiteTestOwnsSelection($this->theirSelection, 100);
 
     $this->theirCategory = WebsiteCategory::create([
         'website_id' => $this->theirs->id,
@@ -70,7 +71,7 @@ it('answers another website\'s product as not found, by identifier or by slug', 
 });
 
 it('shows each shop only its own price for a product both of them sell', function () {
-    WebsiteProduct::create([
+    websiteTestOwnsSelection(WebsiteProduct::create([
         'website_id' => $this->mine->id,
         'business_account_id' => $this->mine->business_account_id,
         'product_id' => $this->theirProduct->id,
@@ -79,7 +80,7 @@ it('shows each shop only its own price for a product both of them sell', functio
         'currency_code' => 'BDT',
         'price' => Money::fromDecimal('2500.00', Currency::BDT),
         'published_at' => now(),
-    ]);
+    ]), 100);
 
     $body = storefrontCall($this->credential, $this->secret, 'products/'.$this->theirProduct->public_id)
         ->assertOk()
@@ -97,7 +98,7 @@ it('never carries a Supplier\'s identity or rate through stock or a product page
     $product = websiteTestProduct();
     $offer = supplierTestOffer(product: $product, supplierRate: '900.00', preferred: true);
 
-    WebsiteProduct::create([
+    websiteTestOwnsSelection(WebsiteProduct::create([
         'website_id' => $this->mine->id,
         'business_account_id' => $this->mine->business_account_id,
         'product_id' => $product->id,
@@ -106,16 +107,16 @@ it('never carries a Supplier\'s identity or rate through stock or a product page
         'currency_code' => 'BDT',
         'price' => Money::fromDecimal('2500.00', Currency::BDT),
         'published_at' => now(),
-    ]);
+    ]), 100);
 
     $productBody = storefrontCall($this->credential, $this->secret, 'products/'.$product->public_id)
         ->assertOk()
-        ->assertJsonPath('variants.0.availability.quantity', 10)
+        ->assertJsonPath('variants.0.availability.quantity', 100)
         ->getContent();
 
     $inventoryBody = storefrontCall($this->credential, $this->secret, 'inventory/'.$product->sku)
         ->assertOk()
-        ->assertJsonPath('quantity', 10)
+        ->assertJsonPath('quantity', 100)
         ->getContent();
 
     foreach ([$productBody, $inventoryBody] as $body) {

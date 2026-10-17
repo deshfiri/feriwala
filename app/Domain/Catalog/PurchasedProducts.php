@@ -15,8 +15,15 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * "Bought" is a paid wholesale order of the account that was not cancelled. An
  * order that is merely placed does not count, and neither does one the account
- * never paid for. The server's answer, and the only one: the catalogue, the
- * website picker and the selection action all ask here.
+ * never paid for. And the account must still **own units of it** (D34): the
+ * purchase gave it stock, and a purchase that has since been reversed — its units
+ * taken back — stops being one. A product whose units are all sold or reserved
+ * still counts, because the account has accounted for every one of them.
+ *
+ * Buying a product makes it eligible, nothing more: it reaches a storefront only
+ * when the owner selects it for that storefront. The server's answer, and the
+ * only one: the catalogue, the website picker and the selection action all ask
+ * here.
  */
 class PurchasedProducts
 {
@@ -71,6 +78,12 @@ class PurchasedProducts
                 ->where('business_account_id', $account->id)
                 ->where('source', OrderSource::ErpWholesale)
                 ->whereNotNull('paid_at')
-                ->whereNull('cancelled_at'));
+                ->whereNull('cancelled_at'))
+            ->whereExists(fn ($owned) => $owned
+                ->selectRaw('1')
+                ->from('partner_stock_items')
+                ->whereColumn('partner_stock_items.product_id', 'order_items.product_id')
+                ->where('partner_stock_items.business_account_id', $account->id)
+                ->whereRaw('(available + reserved + processing + sold + returned + damaged) > 0'));
     }
 }

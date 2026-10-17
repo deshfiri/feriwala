@@ -110,4 +110,12 @@ return [
         'segments' => ':count segment|:count segments',
         'attempts' => ':count attempt|:count attempts',
     ],
+
+    'storefront_verification' => [
+        'title' => 'Storefront order confirmation',
+        'description' => 'Cash-on-delivery customers confirm their order with an SMS code. Turn this on to require it for every storefront; otherwise each Partner decides for their own.',
+        'label' => 'Require the SMS code on every storefront',
+        'save' => 'Save',
+        'saved' => 'Storefront order confirmation policy saved.',
+    ],
 ];

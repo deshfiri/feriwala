@@ -95,6 +95,7 @@ use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
 use App\Http\Controllers\Erp\KycEvidenceController;
 use App\Http\Controllers\Erp\MobileVerificationController;
+use App\Http\Controllers\Erp\MyProductWebsiteController;
 use App\Http\Controllers\Erp\NotificationController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\OrderController as BusinessOrderController;
@@ -364,6 +365,9 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // What the account has bought, with reordering. Products does not offer it again.
         Route::get('my-products', [BusinessCatalogController::class, 'mine'])
             ->name('catalog.mine');
+        // Put a bought product on one of the Partner's storefronts, or take it off.
+        Route::put('my-products/{product}/websites/{website}', [MyProductWebsiteController::class, 'update'])
+            ->name('catalog.mine.websites.update');
         Route::get('catalog/{product}', [BusinessCatalogController::class, 'product'])
             ->name('catalog.show')
             ->where('product', '(?!wholesale$|dropshipping$)[^/]+');
@@ -474,6 +478,9 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
             ->name('websites.settings.edit');
         Route::put('websites/{website}/settings', [WebsiteSettingsController::class, 'update'])
             ->name('websites.settings.update');
+        // Whether this storefront's cash-on-delivery customers confirm with an SMS code.
+        Route::put('websites/{website}/settings/sms-verification', [WebsiteSettingsController::class, 'updateSmsVerification'])
+            ->name('websites.settings.sms-verification.update');
         Route::post('websites/{website}/settings/{asset}', [WebsiteSettingsController::class, 'updateImage'])
             ->whereIn('asset', ['logo', 'banner'])
             ->name('websites.settings.image.update');
@@ -1023,6 +1030,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::put('sms/credentials', [SmsController::class, 'updateCredentials'])->name('sms.credentials.update');
         // §30's per-event switch: one business event's texts on or off.
         Route::put('sms/events', [SmsController::class, 'toggleEvent'])->name('sms.events.toggle');
+        // Require the order confirmation code of every storefront (platform policy).
+        Route::put('sms/storefront-verification', [SmsController::class, 'updateStorefrontVerification'])->name('sms.storefront-verification.update');
 
         /*
          * The platform's logo, browser icon and accent colour, behind `system.manage_settings`.
@@ -1603,6 +1612,13 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('websites.show');
         Route::post('websites/{website}/status', [AdminWebsiteController::class, 'updateStatus'])
             ->name('websites.status.store');
+        // Staff may set a partner's logo and banner too (`website.edit`).
+        Route::post('websites/{website}/images/{asset}', [AdminWebsiteController::class, 'updateImage'])
+            ->whereIn('asset', ['logo', 'banner'])
+            ->name('websites.images.update');
+        Route::delete('websites/{website}/images/{asset}', [AdminWebsiteController::class, 'destroyImage'])
+            ->whereIn('asset', ['logo', 'banner'])
+            ->name('websites.images.destroy');
         Route::post('websites/{website}/domains', [AdminWebsiteController::class, 'storeDomain'])
             ->name('websites.domains.store');
         Route::post('websites/{website}/hostings', [AdminWebsiteController::class, 'storeHosting'])

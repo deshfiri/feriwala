@@ -12,11 +12,6 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
-use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
-use App\Domain\Inventory\Models\StockItem;
-use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Package\Enums\PackageFeature;
@@ -68,8 +63,6 @@ use Illuminate\Support\Str;
  */
 
 beforeEach(function () {
-    websiteTestEveryoneBought();
-
     $this->seed(RolesAndPermissionsSeeder::class);
 });
 
@@ -398,9 +391,7 @@ describe('no way into the catalogue except the administration', function () {
             'published_at' => now(),
         ]);
 
-        $warehouse = Warehouse::query()->firstOrCreate(['code' => 'DHK'], ['name' => 'Dhaka', 'is_default' => true]);
-        $item = StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $product->id]);
-        app(StockLedger::class)->move($item, null, StockBucket::Available, 20, StockMovementType::Adjustment);
+        websiteTestOwns($account, $product, 20);
 
         FeeRule::create([
             'fee_type' => FeeType::WebsiteDelivery->value,

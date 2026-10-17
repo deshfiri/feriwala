@@ -35,7 +35,7 @@ beforeEach(function () {
  */
 function storefrontSelection(Website $website, array $attributes = [], array $productAttributes = []): WebsiteProduct
 {
-    return WebsiteProduct::create([
+    $selection = WebsiteProduct::create([
         'website_id' => $website->id,
         'business_account_id' => $website->business_account_id,
         'product_id' => websiteTestProduct($productAttributes)->id,
@@ -46,6 +46,10 @@ function storefrontSelection(Website $website, array $attributes = [], array $pr
         'published_at' => now(),
         ...$attributes,
     ]);
+
+    websiteTestOwnsSelection($selection, 100);
+
+    return $selection;
 }
 
 describe('products', function () {

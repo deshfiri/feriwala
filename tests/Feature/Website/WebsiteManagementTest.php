@@ -1,11 +1,13 @@
 <?php
 
+use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteTheme;
 use App\Domain\Website\Models\Website;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -115,6 +117,46 @@ describe('what a partner may change', function () {
                 'image' => UploadedFile::fake()->create('shop.svg', 10, 'image/svg+xml'),
             ])
             ->assertSessionHasErrors('image');
+
+        expect($this->website->refresh()->logo_path)->toBeNull();
+    });
+
+    it('lets platform staff set and remove a partner\'s logo and banner', function () {
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $staff = testPlatformStaff(PlatformRole::SuperAdmin);
+
+        foreach (['logo' => 'logo_path', 'banner' => 'banner_path'] as $asset => $column) {
+            $this->actingAs($staff)
+                ->post(route('admin.websites.images.update', [$this->website->public_id, $asset]), [
+                    'image' => UploadedFile::fake()->image("{$asset}.png", 600, 200),
+                ])
+                ->assertRedirect(route('admin.websites.show', $this->website->public_id));
+
+            $path = $this->website->refresh()->{$column};
+
+            expect($path)->not->toBeNull();
+            Storage::disk('public')->assertExists($path);
+        }
+
+        $this->actingAs($staff)
+            ->get(route('admin.websites.show', $this->website->public_id))
+            ->assertInertia(fn ($page) => $page
+                ->where('website.logo_url', fn ($url) => str_contains((string) $url, '/storage/websites/'))
+                ->where('website.banner_url', fn ($url) => str_contains((string) $url, '/storage/websites/')));
+
+        $this->actingAs($staff)
+            ->delete(route('admin.websites.images.destroy', [$this->website->public_id, 'banner']))
+            ->assertRedirect();
+
+        expect($this->website->refresh()->banner_path)->toBeNull();
+    });
+
+    it('refuses the admin image routes to a partner', function () {
+        $this->actingAs($this->account->owner)
+            ->post(route('admin.websites.images.update', [$this->website->public_id, 'logo']), [
+                'image' => UploadedFile::fake()->image('logo.png', 300, 300),
+            ])
+            ->assertForbidden();
 
         expect($this->website->refresh()->logo_path)->toBeNull();
     });

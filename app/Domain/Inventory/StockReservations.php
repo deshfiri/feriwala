@@ -68,6 +68,7 @@ class StockReservations
         protected ReservationWindows $windows,
         protected DatabaseManager $database,
         protected SupplierStockReservations $supplierStock,
+        protected PartnerStockReservations $partnerStock,
     ) {}
 
     /**
@@ -114,6 +115,68 @@ class StockReservations
                 }
 
                 return $this->sameSupplierReservation($existing, $offer, $quantity, $kind, $account);
+            }
+        });
+    }
+
+    /**
+     * Hold `$quantity` of the Partner's own units of one Product Variation for the
+     * order named by `$reference` (D34).
+     *
+     * The same lifecycle as {@see reserve()} with a different source of units:
+     * the reference makes it idempotent, one lock per Partner unit serialises
+     * racing orders, and commit, release and expire below end it exactly once.
+     * Central stock, Supplier stock and other Partners' stock are never touched.
+     *
+     * @throws InventoryRefused when the Partner has fewer available than that, or
+     *                          the reference already reserved something else
+     * @throws LockTimeout
+     */
+    public function reserveFromPartner(
+        BusinessAccount $account,
+        Product $product,
+        ?ProductVariant $variant,
+        int $quantity,
+        ReservationKind $kind,
+        string $reference,
+    ): StockReservation {
+        if ($quantity <= 0) {
+            throw new InvalidArgumentException('A reservation holds at least one unit.');
+        }
+
+        if ($variant !== null && $variant->product_id !== $product->id) {
+            throw InventoryRefused::variationNotOfProduct();
+        }
+
+        if ($existing = $this->find($reference)) {
+            return $this->samePartnerReservation($existing, $account, $product, $variant, $quantity, $kind);
+        }
+
+        $key = 'inventory:reserve:partner:'.$account->id.':'.$product->id.':'.($variant->id ?? 'product');
+
+        return $this->locks->run($key, function () use ($account, $product, $variant, $quantity, $kind, $reference) {
+            if ($existing = $this->find($reference)) {
+                return $this->samePartnerReservation($existing, $account, $product, $variant, $quantity, $kind);
+            }
+
+            try {
+                return $this->partnerStock->hold(
+                    $account,
+                    $product->id,
+                    $variant?->id,
+                    $variant !== null ? $variant->sku : $product->sku,
+                    $quantity,
+                    $kind,
+                    $reference,
+                );
+            } catch (UniqueConstraintViolationException $exception) {
+                $existing = $this->find($reference);
+
+                if ($existing === null) {
+                    throw $exception;
+                }
+
+                return $this->samePartnerReservation($existing, $account, $product, $variant, $quantity, $kind);
             }
         });
     }
@@ -383,6 +446,9 @@ class StockReservations
                 if ($locked->isSupplierSourced()) {
                     // A Supplier offer's units: same lifecycle, its own stock.
                     $this->supplierStock->end($locked, $to, $reason);
+                } elseif ($locked->isPartnerSourced()) {
+                    // A Partner's own units: same lifecycle, its own stock (D34).
+                    $this->partnerStock->end($locked, $to, $reason);
                 } else {
                     $this->endCentral($locked, $to, $reason, $overriddenBy);
                 }
@@ -439,6 +505,33 @@ class StockReservations
         );
 
         $allocation?->forceFill(['quantity' => $allocation->quantity + $locked->quantity])->save();
+    }
+
+    /**
+     * A retried Partner-stock reserve must be the same request too.
+     *
+     * @throws InventoryRefused
+     */
+    protected function samePartnerReservation(
+        StockReservation $existing,
+        BusinessAccount $account,
+        Product $product,
+        ?ProductVariant $variant,
+        int $quantity,
+        ReservationKind $kind,
+    ): StockReservation {
+        $stock = $existing->partnerStock;
+
+        if ($stock === null
+            || $stock->business_account_id !== $account->id
+            || $stock->product_id !== $product->id
+            || $stock->product_variant_id !== $variant?->id
+            || $existing->quantity !== $quantity
+            || $existing->kind !== $kind) {
+            throw InventoryRefused::referenceInUse($existing->reference);
+        }
+
+        return $existing;
     }
 
     /**
@@ -501,6 +594,6 @@ class StockReservations
 
     protected function find(string $reference): ?StockReservation
     {
-        return StockReservation::query()->with(['item', 'supplierStock'])->where('reference', $reference)->first();
+        return StockReservation::query()->with(['item', 'supplierStock', 'partnerStock'])->where('reference', $reference)->first();
     }
 }

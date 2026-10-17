@@ -3,7 +3,7 @@
 namespace App\Domain\Website\Queries;
 
 use App\Domain\Catalog\Models\Category;
-use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\Queries\PartnerStockAvailability;
 use App\Domain\Website\Actions\RefreshWebsiteBestSellers;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCategory;
@@ -64,7 +64,7 @@ class StorefrontProductListing
 
     public function __construct(
         protected StorefrontSelections $selections,
-        protected StockAvailability $stock,
+        protected PartnerStockAvailability $stock,
     ) {}
 
     /**

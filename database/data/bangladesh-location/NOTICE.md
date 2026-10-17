@@ -8,10 +8,10 @@ builds, README) is irrelevant to this importer.
 - **Pinned commit**: `95b646aa863396eaeca81a25723cc814f24aa0c5`
 - **Imported**: 2026-09-28
 - **Files bundled**:
-  - `locationBdDivisonsToUnionsEnglish.json` → `en.json` (460,124 bytes,
-    sha256 `8a2767f18d8a56b7ef90767ad2bd5c5f8a5401eae12911995aaafd37c9b173c3`)
-  - `locationBdDivisonsToUnionsBangla.json` → `bn.json` (482,775 bytes,
-    sha256 `93bafc4c5adbe8f6c8e5f71dbab94d6de766e257a6bd8e9f1e3399d881287f58`)
+    - `locationBdDivisonsToUnionsEnglish.json` → `en.json` (460,124 bytes,
+      sha256 `8a2767f18d8a56b7ef90767ad2bd5c5f8a5401eae12911995aaafd37c9b173c3`)
+    - `locationBdDivisonsToUnionsBangla.json` → `bn.json` (482,775 bytes,
+      sha256 `93bafc4c5adbe8f6c8e5f71dbab94d6de766e257a6bd8e9f1e3399d881287f58`)
 - **License**: MIT (full text below), from upstream `LICENSE` at the same commit.
 
 Both files are byte-identical copies of the upstream JSON — renamed only, never

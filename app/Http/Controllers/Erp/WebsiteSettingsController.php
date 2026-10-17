@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Website\Actions\ManageWebsiteBranding;
+use App\Domain\Website\Actions\SetWebsiteSmsVerification;
+use App\Domain\Website\BannerLink;
+use App\Domain\Website\CheckoutVerification;
 use App\Domain\Website\Enums\WebsiteTheme;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
@@ -11,6 +14,7 @@ use App\Domain\Website\Queries\WebsiteOverview;
 use App\Domain\Website\WebsiteImageStore;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -40,6 +44,7 @@ class WebsiteSettingsController extends Controller
     public function __construct(
         protected WebsiteOverview $overview,
         protected WebsiteImageStore $images,
+        protected CheckoutVerification $verification,
     ) {}
 
     public function edit(Request $request, string $website): Response
@@ -58,7 +63,34 @@ class WebsiteSettingsController extends Controller
                 'max_bytes' => WebsiteImageStore::MAX_BYTES,
                 'accepted' => WebsiteImageStore::ACCEPTED_MIME_TYPES,
             ],
+            // The customer's SMS code at checkout: this shop's own choice, and
+            // whether the platform's policy overrides it.
+            'sms_verification' => [
+                'enabled' => $record->sms_verification_enabled,
+                'locked' => $this->verification->lockedFor($record),
+                'effective' => $this->verification->requiredFor($record),
+            ],
         ]);
+    }
+
+    /**
+     * Whether this storefront's cash-on-delivery customers confirm with an SMS code.
+     */
+    public function updateSmsVerification(Request $request, string $website, SetWebsiteSmsVerification $verification): RedirectResponse
+    {
+        $record = $this->websiteFor($request, $website);
+
+        Gate::authorize('manage', $record);
+
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $this->attempt(fn () => $verification->handle($record, $this->person($request), (bool) $validated['enabled']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.sms_verification_saved')]);
+
+        return to_route('websites.settings.edit', $record->public_id);
     }
 
     public function update(Request $request, string $website, ManageWebsiteBranding $branding): RedirectResponse
@@ -80,7 +112,16 @@ class WebsiteSettingsController extends Controller
             'contact_email' => ['nullable', 'email', 'max:255'],
             'contact_phone' => ['nullable', 'string', 'max:32'],
             'contact_address' => ['nullable', 'string', 'max:500'],
+
+            // The banner image is the link: an address on this shop, or https.
+            'banner_link_url' => ['nullable', 'string', 'max:'.BannerLink::MAX_LENGTH, function (string $attribute, mixed $value, Closure $fail): void {
+                if (is_string($value) && trim($value) !== '' && ! BannerLink::isAcceptable(trim($value))) {
+                    $fail(__('website.refused.banner_link_invalid'));
+                }
+            }],
         ]);
+
+        $validated['banner_link_url'] = BannerLink::normalise($validated['banner_link_url'] ?? null);
 
         $this->attempt(fn () => $branding->update($record, $this->person($request), [
             ...$validated,

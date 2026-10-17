@@ -125,6 +125,11 @@ describe('website settings', () => {
                 website={website()}
                 themes={themes}
                 image_limits={limits}
+                sms_verification={{
+                    enabled: true,
+                    locked: false,
+                    effective: true,
+                }}
             />,
         );
 
@@ -142,6 +147,11 @@ describe('website settings', () => {
                 website={website()}
                 themes={themes}
                 image_limits={limits}
+                sms_verification={{
+                    enabled: true,
+                    locked: false,
+                    effective: true,
+                }}
             />,
         );
 
@@ -158,6 +168,11 @@ describe('website settings', () => {
                 })}
                 themes={themes}
                 image_limits={limits}
+                sms_verification={{
+                    enabled: true,
+                    locked: false,
+                    effective: true,
+                }}
             />,
         );
 
@@ -172,6 +187,11 @@ describe('website settings', () => {
                 website={website()}
                 themes={themes}
                 image_limits={limits}
+                sms_verification={{
+                    enabled: true,
+                    locked: false,
+                    effective: true,
+                }}
             />,
         );
 

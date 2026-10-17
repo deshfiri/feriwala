@@ -9,9 +9,9 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
-use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\Queries\PartnerStockAvailability;
 use App\Domain\Inventory\ReservationWindows;
-use App\Domain\Inventory\StockEnforcement;
+use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Data\WebsiteOrderLine;
 use App\Domain\Order\Data\WebsiteOrderPaymentQuote;
 use App\Domain\Order\Data\WebsiteOrderQuote;
@@ -24,11 +24,8 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Queries\PriceWebsiteOrder;
 use App\Domain\Order\WebsiteCheckoutRules;
-use App\Domain\Supplier\Actions\AccrueSupplierPayable;
-use App\Domain\Supplier\Actions\AllocateSupplierOrderLine;
-use App\Domain\Supplier\Data\SupplierAllocation;
-use App\Domain\Supplier\Exceptions\SupplierAllocationRefused;
 use App\Domain\Website\Actions\RecordWebsiteCustomer;
+use App\Domain\Website\CheckoutVerification;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
@@ -84,13 +81,13 @@ class PlaceWebsiteOrder
         protected SendCodConfirmationCode $confirmations,
         protected RecordWebsiteCustomer $customers,
         protected RecordPaymentFromQuote $payments,
-        protected StockAvailability $stock,
+        protected PartnerStockAvailability $stock,
         protected PaymentGatewayManager $gateways,
-        protected AllocateSupplierOrderLine $supplierAllocation,
-        protected AccrueSupplierPayable $supplierPayables,
+        protected StockReservations $reservations,
+        protected CheckoutVerification $verification,
+        protected ConfirmCodOrder $codConfirmation,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
-        protected StockEnforcement $enforcement,
         protected ReservationWindows $windows,
     ) {}
 
@@ -183,8 +180,13 @@ class PlaceWebsiteOrder
         try {
             $order = $this->database->transaction(fn () => $this->write($website, $submission, $quote, $key));
 
-            // The customer is asked to confirm only once the order is real.
-            $this->askForConfirmation($order, $submission);
+            // The customer is asked to confirm only once the order is real —
+            // and only where the shop (or the platform) asks for a code at all.
+            if ($submission->isCashOnDelivery() && ! $this->verification->requiredFor($website)) {
+                $order = $this->codConfirmation->withoutCode($order)->refresh()->load(['items', 'payment']);
+            } else {
+                $this->askForConfirmation($order, $submission);
+            }
         } catch (UniqueConstraintViolationException $exception) {
             // A racing submission of the same order won. Its order is the answer.
             $existing = $this->existingFor($website, $submission->reference);
@@ -229,15 +231,9 @@ class PlaceWebsiteOrder
 
         $payment->payable()->associate($order);
 
-        [$reservations, $allocations] = $this->reserve($order, $website, $quote, $submission->reservationKind());
+        $reservations = $this->reserve($order, $website, $quote, $submission->reservationKind());
 
-        $items = $this->writeLines($order, $quote, $reservations, $allocations);
-
-        foreach ($items as $item) {
-            if ($item->isSupplierBacked()) {
-                $this->supplierPayables->handle($item);
-            }
-        }
+        $this->writeLines($order, $quote, $reservations);
 
         /*
          * A cash-on-delivery payment names no gateway: the money is collected
@@ -318,10 +314,11 @@ class PlaceWebsiteOrder
 
     /**
      * Hold every line's stock for the website's owner, in product order — from
-     * a Supplier's preferred offer where the variation is Supplier-sourced
-     * (D25, P13-21), and from central stock otherwise.
+     * the units that owner bought and nothing else (D34). Central warehouse stock
+     * and Supplier offers are never drawn on for a storefront order, and a line
+     * the owner has too few of refuses the order: stock always blocks here.
      *
-     * @return array{0: array<int, StockReservation|null>, 1: array<int, SupplierAllocation|null>} both keyed by the line's position
+     * @return array<int, StockReservation> keyed by the line's position
      *
      * @throws WebsiteOrderRefused
      */
@@ -337,36 +334,27 @@ class PlaceWebsiteOrder
         ]);
 
         $reservations = [];
-        $allocations = [];
 
         foreach ($positions as $position) {
             $line = $lines[$position];
 
             try {
-                [$reservations[$position], $allocations[$position]] = $this->supplierAllocation->handle(
+                $reservations[$position] = $this->reservations->reserveFromPartner(
+                    $website->businessAccount,
                     $line->product,
                     $line->variant,
                     $line->quantity,
-                    $quote->currency,
                     $kind,
                     $order->reference.'-L'.($position + 1),
-                    $website->businessAccount,
                 );
-            } catch (SupplierAllocationRefused|InventoryRefused) {
-                // Never named to the storefront's customer: which Supplier, or
-                // why its offer could not serve, is Feriwala's own business (D25).
-                if ($this->enforcement->enforced()) {
-                    throw WebsiteOrderRefused::insufficientStock($line->sku, $line->quantity, $this->available($line, $website));
-                }
-
-                $reservations[$position] = null;
-                $allocations[$position] = null;
+            } catch (InventoryRefused) {
+                throw WebsiteOrderRefused::insufficientStock($line->sku, $line->quantity, $this->available($line, $website));
             } catch (LockTimeout) {
                 throw WebsiteOrderRefused::busy();
             }
         }
 
-        return [$reservations, $allocations];
+        return $reservations;
     }
 
     /**
@@ -382,14 +370,12 @@ class PlaceWebsiteOrder
 
     /**
      * Snapshot every line as it sold: what, how many, at what price, its tax at
-     * the rate in force, the website selection it came from, the stock held,
-     * and — for a Supplier-sourced line — the Supplier allocation (D25, P13-21).
+     * the rate in force, the website selection it came from, and the stock held.
      *
-     * @param  array<int, StockReservation|null>  $reservations
-     * @param  array<int, SupplierAllocation|null>  $allocations
+     * @param  array<int, StockReservation>  $reservations
      * @return Collection<int, OrderItem>
      */
-    protected function writeLines(Order $order, WebsiteOrderQuote $quote, array $reservations, array $allocations): Collection
+    protected function writeLines(Order $order, WebsiteOrderQuote $quote, array $reservations): Collection
     {
         $items = collect();
 
@@ -418,8 +404,7 @@ class PlaceWebsiteOrder
                 'tax_code' => $taxed ? $line->tax->code : null,
                 'tax_rate_basis_points' => $taxed ? $line->tax->rateBasisPoints : null,
                 'tax_mode' => $taxed ? $line->tax->mode->value : null,
-                'stock_reservation_id' => $reservations[$position]?->id,
-                ...($allocations[$position]?->lineSnapshot() ?? []),
+                'stock_reservation_id' => $reservations[$position]->id,
             ]));
         }
 
@@ -429,17 +414,17 @@ class PlaceWebsiteOrder
     /**
      * The payment window: closed a margin before the first reservation runs out.
      *
-     * With no stock held at all (stock does not block orders), the window is the
-     * reservation window for the order's kind.
+     * With no stock held at all, the window is the reservation window for the
+     * order's kind.
      *
-     * @param  array<int, StockReservation|null>  $reservations
+     * @param  array<int, StockReservation>  $reservations
      */
     protected function paymentDeadline(array $reservations, ReservationKind $kind): CarbonImmutable
     {
         $first = null;
 
         foreach ($reservations as $reservation) {
-            if ($reservation !== null && ($first === null || $reservation->expires_at->lessThan($first))) {
+            if ($first === null || $reservation->expires_at->lessThan($first)) {
                 $first = $reservation->expires_at;
             }
         }

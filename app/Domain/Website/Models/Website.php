@@ -53,6 +53,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $about
  * @property string|null $logo_path
  * @property string|null $banner_path
+ * @property string|null $banner_link_url
+ * @property bool $sms_verification_enabled
  * @property string $primary_color
  * @property string $secondary_color
  * @property WebsiteTheme $theme
@@ -104,6 +106,7 @@ class Website extends Model
             'hosting_fee' => MoneyCast::class,
             'required_deposit' => MoneyCast::class,
             'minimum_balance' => MoneyCast::class,
+            'sms_verification_enabled' => 'boolean',
             'payment_config' => 'array',
             'shipping_config' => 'array',
             'api_connected_at' => 'immutable_datetime',

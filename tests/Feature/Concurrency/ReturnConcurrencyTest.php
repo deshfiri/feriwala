@@ -6,11 +6,10 @@ use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\RefundRequest;
+use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
-use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
+use App\Domain\Inventory\PartnerStock;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Actions\DecideOrderReturn;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
@@ -66,7 +65,7 @@ beforeEach(function () {
     $this->watermarks = [];
 
     foreach ([
-        'orders', 'payments', 'stock_reservations', 'stock_movements', 'webhook_deliveries',
+        'orders', 'payments', 'stock_reservations', 'stock_movements', 'partner_stock_movements', 'webhook_deliveries',
         'website_customers', 'audit_logs', 'order_returns', 'order_return_items', 'refund_requests',
         'categories', 'users', 'settings', 'roles', 'permissions',
     ] as $table) {
@@ -108,7 +107,7 @@ beforeEach(function () {
     $this->warehouse = Warehouse::create(['code' => 'RET-'.Str::upper(Str::random(6)), 'name' => 'Dhaka', 'is_default' => true]);
     $this->product = websiteTestProduct();
 
-    WebsiteProduct::create([
+    $selection = WebsiteProduct::create([
         'website_id' => $this->website->id,
         'business_account_id' => $this->account->id,
         'product_id' => $this->product->id,
@@ -119,8 +118,8 @@ beforeEach(function () {
         'published_at' => now(),
     ]);
 
-    $this->item = StockItem::create(['warehouse_id' => $this->warehouse->id, 'product_id' => $this->product->id]);
-    app(StockLedger::class)->move($this->item, null, StockBucket::Available, 10, StockMovementType::Adjustment);
+    // What the shop sells is what its owner bought: a committed purchase, through the real credit.
+    $this->item = websiteTestOwnsSelection($selection, 10);
 
     // One person holding every right a return needs, for every worker.
     $this->staff = testPlatformStaff(PlatformRole::OrderManager);
@@ -137,9 +136,10 @@ afterEach(function () {
     // the cleanup, only for rows this test wrote, and go straight back on.
     $guards = [
         'orders' => 'orders_never_deleted',
-        'order_items' => 'order_items_are_snapshots',
+        'order_items' => 'order_items_no_delete',
         'order_status_history' => 'order_status_history_no_delete',
         'stock_movements' => 'stock_movements_no_delete',
+        'partner_stock_movements' => 'partner_stock_movements_no_delete',
         'audit_logs' => 'audit_logs_no_delete',
         'order_returns' => 'order_returns_no_delete',
         'order_return_items' => 'order_return_items_no_delete',
@@ -164,6 +164,7 @@ afterEach(function () {
 
     DB::table('orders')->whereIn('id', $orders)->delete();
     DB::table('stock_movements')->where('id', '>', $this->watermarks['stock_movements'])->delete();
+    DB::table('partner_stock_movements')->where('id', '>', $this->watermarks['partner_stock_movements'])->delete();
     DB::table('audit_logs')->where('id', '>', $this->watermarks['audit_logs'])->delete();
 
     foreach ($guards as $table => $trigger) {
@@ -175,7 +176,7 @@ afterEach(function () {
     DB::table('payment_allocations')->whereIn('payment_id', DB::table('payments')->where('id', '>', $this->watermarks['payments'])->pluck('id'))->delete();
     DB::table('payments')->where('id', '>', $this->watermarks['payments'])->delete();
     DB::table('website_customers')->where('id', '>', $this->watermarks['website_customers'])->delete();
-    DB::table('stock_items')->where('id', $this->item->id)->delete();
+    DB::table('partner_stock_items')->where('business_account_id', $this->account->id)->delete();
     DB::table('website_products')->where('website_id', $this->website->id)->delete();
     DB::table('website_webhook_endpoints')->where('website_id', $this->website->id)->delete();
     DB::table('websites')->where('id', $this->website->id)->delete();
@@ -256,7 +257,7 @@ function returnRaceApprovedReturn(): OrderReturn
         $order->moveTo($status, new StatusChange(reason: 'Moved by the test, as fulfilment will.'), OrderStatusChangeSource::System);
     }
 
-    app(StockLedger::class)->move(test()->item, StockBucket::Processing, StockBucket::Sold, 3, StockMovementType::Adjustment);
+    app(PartnerStock::class)->move(test()->item, StockBucket::Processing, StockBucket::Sold, 3, PartnerStockMovementType::Adjustment);
 
     [$return] = app(RequestOrderReturn::class)->handle($order->refresh(), new ReturnSubmission(
         reason: ReturnReason::NotAsDescribed,
@@ -312,7 +313,7 @@ function returnRaceFork(array $jobs, callable $work): void
 it('puts the same returned goods back into stock once, however many workers count them in', function () {
     $return = returnRaceApprovedReturn();
     $line = $return->items()->sole()->public_id;
-    $sold = (int) DB::table('stock_items')->where('id', $this->item->id)->value('sold');
+    $sold = (int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('sold');
 
     returnRaceFork(range(1, 5), function () use ($return, $line) {
         /** @var OrderReturn $fresh */
@@ -331,17 +332,17 @@ it('puts the same returned goods back into stock once, however many workers coun
 
     expect($return->status)->toBe(ReturnStatus::Received);
 
-    $restorations = DB::table('stock_movements')
-        ->where('id', '>', $this->watermarks['stock_movements'])
+    $restorations = DB::table('partner_stock_movements')
+        ->where('id', '>', $this->watermarks['partner_stock_movements'])
         ->where('source_type', 'order_return')
         ->get();
 
     // One movement, two units, out of sold and onto the shelf — not five.
     expect($restorations)->toHaveCount(1)
         ->and($restorations->first()->quantity)->toBe(2)
-        ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('sold'))->toBe($sold - 2)
-        ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('available'))->toBe(9)
-        ->and($return->items()->sole()->stock_movement_id)->toBe($restorations->first()->id);
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('sold'))->toBe($sold - 2)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('available'))->toBe(9)
+        ->and($return->items()->sole()->partner_stock_movement_id)->toBe($restorations->first()->id);
 
     expect(DB::table('order_return_status_history')->where('order_return_id', $return->id)->where('new_status', ReturnStatus::Received->value)->count())->toBe(1)
         ->and(DB::table('audit_logs')->where('action', 'order_return.received')->where('auditable_id', $return->id)->count())->toBe(1);

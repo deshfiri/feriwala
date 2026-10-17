@@ -19,6 +19,7 @@ use App\Domain\Catalog\PurchasedProducts;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\ContentLibrary\ContentBlocks;
 use App\Domain\ContentLibrary\Models\ContentLibraryItem;
+use App\Domain\Inventory\Queries\PartnerStockSummary;
 use App\Domain\Inventory\Queries\StockAvailability;
 use App\Domain\Inventory\StockEnforcement;
 use App\Domain\Storage\ManagedStorage;
@@ -65,6 +66,7 @@ class CatalogController extends Controller
     public function __construct(
         protected ProductEligibility $eligibility,
         protected PurchasedProducts $purchased,
+        protected PartnerStockSummary $ownership,
         protected ProductMediaStore $media,
         protected WholesalePriceResolver $prices,
         protected StockAvailability $stock,
@@ -173,11 +175,16 @@ class CatalogController extends Controller
 
         $bought = $this->purchased->among($account, $products->getCollection()->pluck('id'));
 
+        // My Products also says how many of each the account owns and where it is
+        // on sale (D34); the full catalogue has no such thing to say.
+        $owned = $mine ? $this->ownership->forProducts($account, $products->getCollection()->pluck('id')) : [];
+
         $products->through(fn (Product $product) => $this->unifiedCard(
             $product,
             $channels,
             $stockStates[$product->id] ?? null,
             isset($bought[$product->id]),
+            $owned[$product->id] ?? null,
         ));
 
         return Inertia::render('catalog/products', [
@@ -221,9 +228,10 @@ class CatalogController extends Controller
 
     /**
      * @param  array<int, SalesChannel>  $channels  the channels this account may use
+     * @param  array<string, mixed>|null  $ownership  what the account owns of it, in My Products only
      * @return array<string, mixed>
      */
-    protected function unifiedCard(Product $product, array $channels, ?bool $inStock, bool $purchased = false): array
+    protected function unifiedCard(Product $product, array $channels, ?bool $inStock, bool $purchased = false, ?array $ownership = null): array
     {
         $image = $product->media->first();
 
@@ -240,6 +248,7 @@ class CatalogController extends Controller
             'is_featured' => $product->is_featured,
             // Bought before: reordering belongs to My Products, not this list.
             'purchased' => $purchased,
+            'ownership' => $ownership,
             'variant_count' => (int) $product->variants_count,
             'package_scope' => $product->package_scope->value,
             'image' => $image === null ? null : [

@@ -7,11 +7,7 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttribute;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductVariant;
-use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
-use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Enums\WebsiteProductStatus;
@@ -50,7 +46,7 @@ function discoverySelection(string $name, string $price, array $selection = [], 
 {
     $website ??= test()->website;
 
-    return WebsiteProduct::create([
+    $selection = WebsiteProduct::create([
         'website_id' => $website->id,
         'business_account_id' => $website->business_account_id,
         'product_id' => websiteTestProduct(['name' => $name, ...$product])->id,
@@ -61,6 +57,10 @@ function discoverySelection(string $name, string $price, array $selection = [], 
         'published_at' => now(),
         ...$selection,
     ]);
+
+    websiteTestOwnsSelection($selection, 100);
+
+    return $selection;
 }
 
 /**
@@ -192,9 +192,8 @@ describe('filtering (C1)', function () {
     it('filters stock by the figure the product shows, this account\'s allocation included', function () {
         $warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
         $stocked = discoverySelection('Stocked', '2600.00');
-        $item = StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $stocked->product_id]);
-        app(StockLedger::class)->move($item, null, StockBucket::Available, 3, StockMovementType::Adjustment);
-        discoverySelection('Empty', '2600.00');
+        $item = websiteTestOwnsSelection($stocked, 3);
+        websiteTestSellOut(discoverySelection('Empty', '2600.00'));
 
         discoveryList(['in_stock' => 'true'])->assertOk()->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.name', 'Stocked')

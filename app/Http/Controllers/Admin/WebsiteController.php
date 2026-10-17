@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Website\Actions\ManageWebsiteBranding;
 use App\Domain\Website\Actions\ManageWebsiteDomainRouting;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
 use App\Domain\Website\Actions\ProvisionWebsiteService;
@@ -17,12 +18,14 @@ use App\Domain\Website\Models\WebsiteWebhookEndpoint;
 use App\Domain\Website\Queries\WebsiteOverview;
 use App\Domain\Website\StorefrontEnvironmentBlock;
 use App\Domain\Website\WebsiteAddresses;
+use App\Domain\Website\WebsiteImageStore;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -92,6 +95,10 @@ class WebsiteController extends Controller
             'can' => [
                 'administer' => $request->user()?->can('administer', $website) ?? false,
                 'manage_integration' => $managesIntegration,
+            ],
+            'image_limits' => [
+                'max_bytes' => WebsiteImageStore::MAX_BYTES,
+                'accepted' => WebsiteImageStore::ACCEPTED_MIME_TYPES,
             ],
 
             // The storefront's API credentials (D32 §2), for those who may
@@ -213,6 +220,51 @@ class WebsiteController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.status_changed')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Put a logo or a banner on a partner's storefront on their behalf.
+     */
+    public function updateImage(
+        Request $request,
+        Website $website,
+        string $asset,
+        ManageWebsiteBranding $branding,
+    ): RedirectResponse {
+        Gate::authorize('administer', $website);
+
+        $request->validate([
+            'image' => [
+                'required', 'file',
+                'mimetypes:'.implode(',', WebsiteImageStore::ACCEPTED_MIME_TYPES),
+                'max:'.(int) (WebsiteImageStore::MAX_BYTES / 1024),
+            ],
+        ]);
+
+        $file = $request->file('image');
+
+        abort_if(! $file instanceof UploadedFile, 422);
+
+        $this->attemptRouting(fn () => $branding->putImage($website, $this->person($request), $asset, $file));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.image_saved')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    public function destroyImage(
+        Request $request,
+        Website $website,
+        string $asset,
+        ManageWebsiteBranding $branding,
+    ): RedirectResponse {
+        Gate::authorize('administer', $website);
+
+        $this->attemptRouting(fn () => $branding->removeImage($website, $this->person($request), $asset));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.image_removed')]);
 
         return to_route('admin.websites.show', $website->public_id);
     }

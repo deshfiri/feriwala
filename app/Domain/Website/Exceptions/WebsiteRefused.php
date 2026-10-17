@@ -176,6 +176,21 @@ class WebsiteRefused extends RuntimeException
     }
 
     /** Choosing the same product twice is the same choice. */
+    public static function nothingToSell(): self
+    {
+        return new self(__('website.refused.nothing_to_sell'), 'product');
+    }
+
+    public static function smsVerificationRequiredByPlatform(): self
+    {
+        return new self(__('website.refused.sms_verification_required_by_platform'), 'sms_verification_enabled');
+    }
+
+    public static function bannerLinkInvalid(): self
+    {
+        return new self(__('website.refused.banner_link_invalid'), 'banner_link_url');
+    }
+
     public static function alreadySelected(): self
     {
         return new self(__('website.refused.already_selected'), 'product');

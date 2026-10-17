@@ -4,12 +4,8 @@ use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentStatus;
-use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Enums\StockReservationStatus;
-use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
 use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
@@ -44,8 +40,6 @@ use Inertia\Testing\AssertableInertia as Assert;
  * gateway's own identifiers.
  */
 beforeEach(function () {
-    websiteTestEveryoneBought();
-
     $settings = app(SettingsRepository::class);
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
@@ -88,8 +82,7 @@ function websiteOrderScreensSelection(Website $website): WebsiteProduct
         'published_at' => now(),
     ]);
 
-    $item = StockItem::create(['warehouse_id' => test()->warehouse->id, 'product_id' => $selection->product_id]);
-    app(StockLedger::class)->move($item, null, StockBucket::Available, 20, StockMovementType::Adjustment);
+    $item = websiteTestOwnsSelection($selection, 20);
 
     return $selection;
 }

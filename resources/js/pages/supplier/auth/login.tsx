@@ -168,9 +168,7 @@ export default function SupplierLogin({ status }: { status?: string }) {
                                                     tabIndex={5}
                                                     className="text-xs font-semibold text-[var(--brand)] transition-opacity hover:opacity-70"
                                                 >
-                                                    {t(
-                                                        'supplier.auth.forgot',
-                                                    )}
+                                                    {t('supplier.auth.forgot')}
                                                 </Link>
                                             </div>
 
@@ -205,9 +203,7 @@ export default function SupplierLogin({ status }: { status?: string }) {
                                         tabIndex={6}
                                         className="font-semibold text-[var(--brand)] transition-opacity hover:opacity-70"
                                     >
-                                        {t(
-                                            'supplier.auth.register_title',
-                                        )}
+                                        {t('supplier.auth.register_title')}
                                     </Link>
                                 </p>
 
@@ -218,9 +214,7 @@ export default function SupplierLogin({ status }: { status?: string }) {
                                         href={clientLogin()}
                                         className="font-semibold text-slate-600 transition-opacity hover:text-[var(--brand)] hover:opacity-80"
                                     >
-                                        {t(
-                                            'supplier.auth.login_submit',
-                                        )}
+                                        {t('supplier.auth.login_submit')}
                                     </Link>
                                 </p>
                             </div>

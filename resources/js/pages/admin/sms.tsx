@@ -10,6 +10,7 @@ import ToggleSwitch from '@/components/toggle-switch';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
+import { updateStorefrontVerification } from '@/actions/App/Http/Controllers/Admin/SmsController';
 
 type ProviderRow = {
     name: string;
@@ -45,7 +46,12 @@ export type SmsEventRow = {
 };
 
 type Props = {
-    settings: { enabled: boolean; provider: string; can_send: boolean };
+    settings: {
+        enabled: boolean;
+        provider: string;
+        can_send: boolean;
+        storefront_verification_required: boolean;
+    };
     providers: ProviderRow[];
     messages: MessageRow[];
     events: SmsEventRow[];
@@ -207,6 +213,49 @@ export default function AdminSms({
                                 : t('sms.switch.disabled_notice')}
                         </p>
                     )}
+                </SectionCard>
+
+                <SectionCard
+                    title={t('sms.storefront_verification.title')}
+                    description={t('sms.storefront_verification.description')}
+                >
+                    <Form
+                        action={updateStorefrontVerification.url()}
+                        method="put"
+                        options={{ preserveScroll: true }}
+                        className="space-y-3"
+                    >
+                        {({ processing }) => (
+                            <>
+                                <input
+                                    type="hidden"
+                                    name="required"
+                                    value="0"
+                                />
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        name="required"
+                                        value="1"
+                                        defaultChecked={
+                                            settings.storefront_verification_required
+                                        }
+                                        disabled={!can.manage}
+                                    />
+                                    {t('sms.storefront_verification.label')}
+                                </label>
+                                {can.manage && (
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        disabled={processing}
+                                    >
+                                        {t('sms.storefront_verification.save')}
+                                    </Button>
+                                )}
+                            </>
+                        )}
+                    </Form>
                 </SectionCard>
 
                 <SectionCard

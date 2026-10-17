@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api\Storefront\V1;
 
-use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\Queries\PartnerStockAvailability;
 use App\Domain\Website\Api\StorefrontError;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Queries\StorefrontSelections;
@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
 class InventoryController extends StorefrontController
 {
     public function __construct(
-        protected StockAvailability $stock,
+        protected PartnerStockAvailability $stock,
         protected StorefrontSelections $selections,
     ) {}
 

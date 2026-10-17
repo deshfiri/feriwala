@@ -427,6 +427,30 @@ export type BrowseCard = {
     maximum_selling_price?: Money | null;
 };
 
+export type PartnerOwnership = {
+    units: {
+        sku: string;
+        variant: string | null;
+        purchased: number;
+        available: number;
+        reserved: number;
+        sold: number;
+        unavailable: number;
+    }[];
+    totals: {
+        purchased: number;
+        available: number;
+        reserved: number;
+        sold: number;
+        unavailable: number;
+    };
+    storefronts: {
+        id: string;
+        name: string;
+        state: 'not_selected' | 'selected' | 'published';
+    }[];
+};
+
 /**
  * One product on the Partner's unified Products page: once, with the terms of
  * each way the account may use it. A mode the account cannot use is `null`.
@@ -441,6 +465,8 @@ export type PartnerProductCard = {
     is_featured: boolean;
     /** Bought before — reordering is offered under My Products, not in this list. */
     purchased?: boolean;
+    /** My Products only: what the account owns of it, and where it is on sale (D34). */
+    ownership?: PartnerOwnership | null;
     variant_count: number;
     package_scope: 'all' | 'selected';
     image: { url: string; alt: string | null } | null;

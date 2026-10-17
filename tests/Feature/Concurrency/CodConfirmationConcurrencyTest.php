@@ -4,11 +4,8 @@ use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Enums\StockReservationStatus;
-use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
@@ -54,6 +51,8 @@ beforeEach(function () {
     $this->paymentsFrom = (int) DB::table('payments')->max('id');
     $this->reservationsFrom = (int) DB::table('stock_reservations')->max('id');
     $this->movementsFrom = (int) DB::table('stock_movements')->max('id');
+    $this->partnerMovementsFrom = (int) DB::table('partner_stock_movements')->max('id');
+    $this->usersFrom = (int) DB::table('users')->max('id');
     $this->deliveriesFrom = (int) DB::table('webhook_deliveries')->max('id');
     $this->customersFrom = (int) DB::table('website_customers')->max('id');
     $this->auditFrom = (int) DB::table('audit_logs')->max('id');
@@ -89,7 +88,7 @@ beforeEach(function () {
     $this->categoriesFrom = (int) DB::table('categories')->max('id');
     $this->product = websiteTestProduct();
 
-    WebsiteProduct::create([
+    $selection = WebsiteProduct::create([
         'website_id' => $this->website->id,
         'business_account_id' => $this->account->id,
         'product_id' => $this->product->id,
@@ -100,8 +99,8 @@ beforeEach(function () {
         'published_at' => now(),
     ]);
 
-    $this->item = StockItem::create(['warehouse_id' => $this->warehouse->id, 'product_id' => $this->product->id]);
-    app(StockLedger::class)->move($this->item, null, StockBucket::Available, 10, StockMovementType::Adjustment);
+    // What the shop sells is what its owner bought: a committed purchase, through the real credit.
+    $this->item = websiteTestOwnsSelection($selection, 10);
 });
 
 afterEach(function () {
@@ -113,9 +112,10 @@ afterEach(function () {
     // the cleanup and go straight back on.
     $guards = [
         'orders' => 'orders_never_deleted',
-        'order_items' => 'order_items_are_snapshots',
+        'order_items' => 'order_items_no_delete',
         'order_status_history' => 'order_status_history_no_delete',
         'stock_movements' => 'stock_movements_no_delete',
+        'partner_stock_movements' => 'partner_stock_movements_no_delete',
         'audit_logs' => 'audit_logs_no_delete',
     ];
 
@@ -131,6 +131,7 @@ afterEach(function () {
     DB::table('webhook_deliveries')->whereIn('id', $deliveries)->delete();
     DB::table('orders')->whereIn('id', $orders)->delete();
     DB::table('stock_movements')->where('id', '>', $this->movementsFrom)->delete();
+    DB::table('partner_stock_movements')->where('id', '>', $this->partnerMovementsFrom)->delete();
     DB::table('audit_logs')->where('id', '>', $this->auditFrom)->delete();
 
     foreach ($guards as $table => $trigger) {
@@ -141,7 +142,7 @@ afterEach(function () {
     DB::table('payment_allocations')->whereIn('payment_id', DB::table('payments')->where('id', '>', $this->paymentsFrom)->pluck('id'))->delete();
     DB::table('payments')->where('id', '>', $this->paymentsFrom)->delete();
     DB::table('website_customers')->where('id', '>', $this->customersFrom)->delete();
-    DB::table('stock_items')->where('id', $this->item->id)->delete();
+    DB::table('partner_stock_items')->where('business_account_id', $this->account->id)->delete();
     DB::table('website_products')->where('website_id', $this->website->id)->delete();
     DB::table('website_webhook_endpoints')->where('website_id', $this->website->id)->delete();
     DB::table('websites')->where('id', $this->website->id)->delete();
@@ -156,7 +157,7 @@ afterEach(function () {
     DB::table('business_accounts')->whereIn('id', $accountIds)->update(['current_user_package_id' => null]);
     DB::table('user_packages')->whereIn('business_account_id', $accountIds)->delete();
     DB::table('business_accounts')->whereIn('id', $accountIds)->delete();
-    DB::table('users')->whereIn('id', $ownerIds)->delete();
+    DB::table('users')->where('id', '>', $this->usersFrom)->delete();
 
     config()->set('database.default', 'pgsql');
     config()->set('cache.default', 'array');
@@ -283,9 +284,9 @@ it('confirms once when the same code arrives from several workers at one instant
     expect($reservations)->toHaveCount(1)
         ->and($reservations->first()->status)->toBe(StockReservationStatus::Committed->value)
         // One move of the units, not five.
-        ->and(DB::table('stock_movements')->where('id', '>', $this->movementsFrom)->where('to_bucket', StockBucket::Processing->value)->count())->toBe(1)
-        ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('processing'))->toBe(2)
-        ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(0);
+        ->and(DB::table('partner_stock_movements')->where('id', '>', $this->partnerMovementsFrom)->where('to_bucket', StockBucket::Processing->value)->count())->toBe(1)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('processing'))->toBe(2)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(0);
 
     expect(DB::table('order_status_history')->where('order_id', $order->id)->where('new_status', OrderStatus::Confirmed->value)->count())->toBe(1)
         ->and(DB::table('webhook_deliveries')->where('id', '>', $this->deliveriesFrom)->where('event_type', 'order.status_changed')->count())->toBe(1);
@@ -323,13 +324,13 @@ it('ends in exactly one state when a confirmation races the sweep that closes th
     if ($order->status === OrderStatus::Confirmed) {
         // Confirmed means the units moved on, and nothing gave them back.
         expect($reservation->status)->toBe(StockReservationStatus::Committed->value)
-            ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('processing'))->toBe(2)
-            ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('available'))->toBe(8);
+            ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('processing'))->toBe(2)
+            ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('available'))->toBe(8);
     } else {
         // Cancelled means the units came back, and nothing committed them.
         expect($reservation->status)->toBe(StockReservationStatus::Released->value)
-            ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('processing'))->toBe(0)
-            ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('available'))->toBe(10);
+            ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('processing'))->toBe(0)
+            ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('available'))->toBe(10);
     }
 
     // One outcome, once: never both entries, never two of either.
@@ -337,5 +338,5 @@ it('ends in exactly one state when a confirmation races the sweep that closes th
 
     expect($history->filter(fn (string $status) => $status === OrderStatus::Confirmed->value)->count()
         + $history->filter(fn (string $status) => $status === OrderStatus::Cancelled->value)->count())->toBe(1)
-        ->and((int) DB::table('stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(0);
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(0);
 });

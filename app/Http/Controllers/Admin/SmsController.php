@@ -11,6 +11,8 @@ use App\Domain\Notification\Enums\SmsStatus;
 use App\Domain\Notification\Models\SmsMessageRecord;
 use App\Domain\Notification\Policies\SmsSettingsPolicy;
 use App\Domain\Notification\SmsEventSwitch;
+use App\Domain\Website\Actions\ConfigureCheckoutVerificationPolicy;
+use App\Domain\Website\CheckoutVerification;
 use App\Http\Controllers\Controller;
 use App\Integrations\Sms\SmsProviderManager;
 use App\Models\User;
@@ -43,6 +45,7 @@ class SmsController extends Controller
         protected SmsProviderManager $providers,
         protected PaymentLogRedactor $redactor,
         protected SmsEventSwitch $events,
+        protected CheckoutVerification $storefrontVerification,
     ) {}
 
     public function index(Request $request): Response
@@ -56,6 +59,9 @@ class SmsController extends Controller
                 'enabled' => $this->providers->isEnabled(),
                 'provider' => $this->providers->active(),
                 'can_send' => $this->providers->canSend(),
+                // Whether every storefront must ask its cash-on-delivery customers
+                // for an SMS code, whatever each Partner prefers.
+                'storefront_verification_required' => $this->storefrontVerification->requiredByPlatform(),
             ],
             'providers' => $this->providers->catalogue(),
 
@@ -123,6 +129,27 @@ class SmsController extends Controller
             $enabled ? 'sms.event_switch.enabled' : 'sms.event_switch.disabled',
             ['event' => $event->describe()['title']],
         )]);
+
+        return back();
+    }
+
+    /**
+     * Require the order confirmation code of every storefront, or leave it to each
+     * Partner.
+     */
+    public function updateStorefrontVerification(Request $request, ConfigureCheckoutVerificationPolicy $configure): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(SmsSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            'required' => ['required', 'boolean'],
+        ]);
+
+        $configure->handle($actor, (bool) $validated['required']);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('sms.storefront_verification.saved')]);
 
         return back();
     }

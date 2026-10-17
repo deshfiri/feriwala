@@ -38,6 +38,7 @@ use RuntimeException;
  * @property int|null $warehouse_id
  * @property int|null $stock_movement_id
  * @property int|null $supplier_stock_movement_id
+ * @property int|null $partner_stock_movement_id
  * @property CarbonImmutable|null $restored_at
  * @property Money|null $refund_amount
  * @property string $currency_code
@@ -123,6 +124,8 @@ class OrderReturnItem extends Model
      */
     public function isRestored(): bool
     {
-        return $this->stock_movement_id !== null || $this->supplier_stock_movement_id !== null;
+        return $this->stock_movement_id !== null
+            || $this->supplier_stock_movement_id !== null
+            || $this->partner_stock_movement_id !== null;
     }
 }

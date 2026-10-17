@@ -29,8 +29,6 @@ use Illuminate\Testing\TestResponse;
  * of the window is announced to the storefront exactly once.
  */
 beforeEach(function () {
-    websiteTestEveryoneBought();
-
     Http::fake();
     CarbonImmutable::setTestNow('2026-10-12 12:00:00');
 
@@ -52,6 +50,7 @@ beforeEach(function () {
         'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
+    websiteTestOwnsSelection($this->selection, 100);
 
     websiteTestFee(FeeType::WebsiteDelivery, 6000);
 });

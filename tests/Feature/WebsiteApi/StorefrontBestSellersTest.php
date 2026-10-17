@@ -45,7 +45,7 @@ function bestSellerSelection(string $name, ?Website $website = null): WebsitePro
 {
     $website ??= test()->website;
 
-    return WebsiteProduct::create([
+    $selection = WebsiteProduct::create([
         'website_id' => $website->id,
         'business_account_id' => $website->business_account_id,
         'product_id' => websiteTestProduct(['name' => $name])->id,
@@ -55,6 +55,10 @@ function bestSellerSelection(string $name, ?Website $website = null): WebsitePro
         'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
+
+    websiteTestOwnsSelection($selection, 100);
+
+    return $selection;
 }
 
 /**
@@ -387,6 +391,7 @@ describe('isolation and freshness', function () {
             'price' => Money::fromDecimal('2600.00', Currency::BDT),
             'published_at' => now(),
         ]);
+        websiteTestOwnsSelection($sameProductElsewhere, 100);
 
         bestSellerOrder([[$theirs, 50], [$sameProductElsewhere, 40]], website: $other);
         bestSellerOrder([[$mine, 1]]);

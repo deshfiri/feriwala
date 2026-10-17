@@ -7,6 +7,7 @@ import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
+import WebsiteImageCard from '@/components/website-image-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,6 +43,7 @@ type Props = {
     credential_scopes?: CredentialScopeOption[];
     credential_presets?: CredentialPresetOption[];
     storefront_connection?: StorefrontConnection | null;
+    image_limits: { max_bytes: number; accepted: string[] };
 };
 
 const controlClass =
@@ -63,6 +65,7 @@ export default function AdminWebsiteShow({
     credential_scopes: credentialScopes = [],
     credential_presets: credentialPresets = [],
     storefront_connection: storefrontConnection = null,
+    image_limits: imageLimits,
 }: Props) {
     const { t, locale } = useTranslation();
 
@@ -102,6 +105,29 @@ export default function AdminWebsiteShow({
                         </span>
                     )}
                 </div>
+
+                {can.administer &&
+                    (['logo', 'banner'] as const).map((asset) => (
+                        <WebsiteImageCard
+                            key={asset}
+                            asset={asset}
+                            websiteName={website.name}
+                            url={
+                                asset === 'logo'
+                                    ? website.logo_url
+                                    : website.banner_url
+                            }
+                            limits={imageLimits}
+                            uploadForm={WebsiteController.updateImage.form({
+                                website: website.id,
+                                asset,
+                            })}
+                            removeForm={WebsiteController.destroyImage.form({
+                                website: website.id,
+                                asset,
+                            })}
+                        />
+                    ))}
 
                 <SectionCard title={t('website.show.charges')}>
                     {website.charges.length === 0 ? (

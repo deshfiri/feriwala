@@ -4,11 +4,10 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountRole;
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\FeeType;
+use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
-use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
+use App\Domain\Inventory\PartnerStock;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
 use App\Domain\Order\Actions\RequestOrderReturn;
@@ -71,8 +70,7 @@ beforeEach(function () {
         'published_at' => now(),
     ]);
 
-    $this->stock = StockItem::create(['warehouse_id' => $this->warehouse->id, 'product_id' => $this->selection->product_id]);
-    app(StockLedger::class)->move($this->stock, null, StockBucket::Available, 10, StockMovementType::Adjustment);
+    $this->stock = websiteTestOwnsSelection($this->selection, 10);
 
     $this->order = returnScreensDeliveredOrder();
 });
@@ -116,7 +114,7 @@ function returnScreensDeliveredOrder(): Order
         $order->moveTo($status, new StatusChange(reason: 'Moved by the test, as fulfilment will.'), OrderStatusChangeSource::System);
     }
 
-    app(StockLedger::class)->move(test()->stock, StockBucket::Processing, StockBucket::Sold, 2, StockMovementType::Adjustment);
+    app(PartnerStock::class)->move(test()->stock, StockBucket::Processing, StockBucket::Sold, 2, PartnerStockMovementType::Adjustment);
 
     return $order->refresh();
 }

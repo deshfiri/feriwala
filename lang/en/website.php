@@ -465,6 +465,12 @@ return [
     ],
 
     'settings' => [
+        'banner_link' => 'Banner link (optional)',
+        'banner_link_hint' => 'Where the banner goes when clicked: a page on your shop (starting with /) or an https:// address. Leave empty for a plain picture.',
+        'sms_title' => 'Order confirmation by SMS',
+        'sms_hint' => 'Cash-on-delivery customers confirm their order with a code sent to their phone.',
+        'sms_label' => 'Require an SMS code for customer orders',
+        'sms_locked' => 'Feriwala requires an SMS code for every storefront order, so this cannot be turned off.',
         'title' => 'Website settings',
         'subtitle' => 'Your shop’s name, look and contact details.',
         'information' => 'Information',
@@ -621,6 +627,9 @@ return [
         'image_too_large' => 'That image is too large.',
         'not_editable' => 'This website is closed and cannot be changed.',
         'product_not_eligible' => 'This product is not available to your account for Partner Selling.',
+        'nothing_to_sell' => 'You have no units of this product left to sell. Buy more wholesale first.',
+        'sms_verification_required_by_platform' => 'Feriwala requires an SMS code for every storefront order, so this cannot be turned off.',
+        'banner_link_invalid' => 'A banner can link to a page on your shop (starting with /) or to an https:// address.',
         'product_not_purchased' => 'Buy this product wholesale first. Only products you have bought can be put on your website.',
         'already_selected' => 'This website already sells that product.',
         'price_required' => 'Set a selling price before putting it on sale.',

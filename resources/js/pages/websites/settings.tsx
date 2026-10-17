@@ -1,10 +1,11 @@
-import { Form, Head, Link } from '@inertiajs/react';
+﻿import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
+import WebsiteImageCard from '@/components/website-image-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +20,7 @@ type Props = {
     website: WebsiteDetail;
     themes: { value: string; label: string }[];
     image_limits: { max_bytes: number; accepted: string[] };
+    sms_verification: { enabled: boolean; locked: boolean; effective: boolean };
 };
 
 const controlClass =
@@ -36,83 +38,9 @@ export default function WebsiteSettings({
     website,
     themes,
     image_limits: imageLimits,
+    sms_verification: smsVerification,
 }: Props) {
     const { t } = useTranslation();
-
-    const imageCard = (asset: 'logo' | 'banner', url: string | null) => (
-        <SectionCard
-            title={t(`website.settings.${asset}`)}
-            description={t('website.settings.image_hint', {
-                size: String(Math.round(imageLimits.max_bytes / 1024 / 1024)),
-            })}
-        >
-            {url && (
-                <img
-                    src={url}
-                    alt={t(`website.settings.${asset}_alt`, {
-                        website: website.name,
-                    })}
-                    className="border-border mb-4 max-h-32 rounded-lg border object-contain"
-                />
-            )}
-
-            <Form
-                {...WebsiteSettingsController.updateImage.form({
-                    website: website.id,
-                    asset,
-                })}
-                options={{ preserveScroll: true }}
-                className="space-y-3"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-2">
-                            <Label htmlFor={`website-${asset}`}>
-                                {t('website.settings.choose_file')}
-                            </Label>
-                            <Input
-                                id={`website-${asset}`}
-                                name="image"
-                                type="file"
-                                accept={imageLimits.accepted.join(',')}
-                                required
-                            />
-                            <InputError
-                                message={errors.image ?? errors.website}
-                            />
-                        </div>
-
-                        <Button type="submit" size="sm" disabled={processing}>
-                            {processing && <Spinner />}
-                            {t('website.settings.upload')}
-                        </Button>
-                    </>
-                )}
-            </Form>
-
-            {url && (
-                <Form
-                    {...WebsiteSettingsController.destroyImage.form({
-                        website: website.id,
-                        asset,
-                    })}
-                    options={{ preserveScroll: true }}
-                    className="mt-3"
-                >
-                    {({ processing }) => (
-                        <Button
-                            type="submit"
-                            size="sm"
-                            variant="outline"
-                            disabled={processing}
-                        >
-                            {t('website.settings.remove')}
-                        </Button>
-                    )}
-                </Form>
-            )}
-        </SectionCard>
-    );
 
     return (
         <>
@@ -131,6 +59,30 @@ export default function WebsiteSettings({
                         </Button>
                     }
                 />
+
+                {(['logo', 'banner'] as const).map((asset) => (
+                    <WebsiteImageCard
+                        key={asset}
+                        asset={asset}
+                        websiteName={website.name}
+                        url={
+                            asset === 'logo'
+                                ? website.logo_url
+                                : website.banner_url
+                        }
+                        limits={imageLimits}
+                        uploadForm={WebsiteSettingsController.updateImage.form({
+                            website: website.id,
+                            asset,
+                        })}
+                        removeForm={WebsiteSettingsController.destroyImage.form(
+                            {
+                                website: website.id,
+                                asset,
+                            },
+                        )}
+                    />
+                ))}
 
                 <SectionCard title={t('website.settings.information')}>
                     <Form
@@ -297,6 +249,27 @@ export default function WebsiteSettings({
                                     />
                                 </div>
 
+                                <div className="grid gap-2">
+                                    <Label htmlFor="website-banner-link">
+                                        {t('website.settings.banner_link')}
+                                    </Label>
+                                    <Input
+                                        id="website-banner-link"
+                                        name="banner_link_url"
+                                        maxLength={2048}
+                                        placeholder="/products  ·  https://"
+                                        defaultValue={
+                                            website.banner_link_url ?? ''
+                                        }
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('website.settings.banner_link_hint')}
+                                    </p>
+                                    <InputError
+                                        message={errors.banner_link_url}
+                                    />
+                                </div>
+
                                 <Button type="submit" disabled={processing}>
                                     {processing && <Spinner />}
                                     {t('website.settings.save')}
@@ -306,8 +279,57 @@ export default function WebsiteSettings({
                     </Form>
                 </SectionCard>
 
-                {imageCard('logo', website.logo_url)}
-                {imageCard('banner', website.banner_url)}
+                <SectionCard
+                    title={t('website.settings.sms_title')}
+                    description={t('website.settings.sms_hint')}
+                >
+                    <Form
+                        {...WebsiteSettingsController.updateSmsVerification.form(
+                            website.id,
+                        )}
+                        options={{ preserveScroll: true }}
+                        className="space-y-3"
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <input type="hidden" name="enabled" value="0" />
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        name="enabled"
+                                        value="1"
+                                        defaultChecked={
+                                            smsVerification.effective
+                                        }
+                                        disabled={smsVerification.locked}
+                                    />
+                                    {t('website.settings.sms_label')}
+                                </label>
+                                {smsVerification.locked && (
+                                    <p
+                                        className="text-muted-foreground text-xs"
+                                        data-test="sms-locked"
+                                    >
+                                        {t('website.settings.sms_locked')}
+                                    </p>
+                                )}
+                                <InputError
+                                    message={errors.sms_verification_enabled}
+                                />
+                                {!smsVerification.locked && (
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        disabled={processing}
+                                    >
+                                        {processing && <Spinner />}
+                                        {t('website.settings.save')}
+                                    </Button>
+                                )}
+                            </>
+                        )}
+                    </Form>
+                </SectionCard>
 
                 <SectionCard title={t('website.settings.products_title')}>
                     <p className="text-muted-foreground text-sm">

@@ -46,6 +46,7 @@ beforeEach(function () {
         'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
+    websiteTestOwnsSelection($this->selection, 100);
 
     $this->product = $this->selection->product;
 });

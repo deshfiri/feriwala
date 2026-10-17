@@ -54,7 +54,12 @@ const smsEvents: SmsEventRow[] = [
 function renderSmsPage(manage = true) {
     return render(
         <AdminSms
-            settings={{ enabled: true, provider: 'log', can_send: true }}
+            settings={{
+                enabled: true,
+                provider: 'log',
+                can_send: true,
+                storefront_verification_required: false,
+            }}
             providers={[
                 {
                     name: 'log',

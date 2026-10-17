@@ -47,4 +47,22 @@ return [
         'reorder' => 'Order again',
         'in_my_products' => 'Bought — see My Products',
     ],
+
+    'ownership' => [
+        'purchased' => 'Bought',
+        'available' => 'Available',
+        'reserved' => 'Held for orders',
+        'sold' => 'Sold',
+        'unavailable' => 'Returned / damaged',
+        'by_variation' => 'Stock by variation',
+        'storefronts' => 'On your storefronts',
+        'no_storefront' => 'You have no storefront yet. Request one to start selling.',
+        'publish' => 'Put on sale',
+        'unpublish' => 'Take off',
+        'state' => [
+            'not_selected' => 'Not on this storefront',
+            'selected' => 'Chosen, not on sale',
+            'published' => 'On sale',
+        ],
+    ],
 ];

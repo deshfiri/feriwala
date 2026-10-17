@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api\Storefront\V1;
 
-use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\Queries\PartnerStockAvailability;
 use App\Domain\Location\Queries\DeliveryAreas;
 use App\Domain\Order\Data\WebsiteOrderLine;
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
@@ -39,7 +39,7 @@ class CheckoutController extends StorefrontController
         protected PriceWebsiteOrder $pricing,
         protected WebsiteCheckoutRules $rules,
         protected WebsiteOrderReservability $reservability,
-        protected StockAvailability $stock,
+        protected PartnerStockAvailability $stock,
         protected DeliveryAreas $areas,
     ) {}
 

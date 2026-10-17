@@ -7,7 +7,7 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductMediaStore;
-use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\Queries\PartnerStockAvailability;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
 use App\Support\Money\Money;
@@ -41,7 +41,7 @@ class StorefrontProductPayload
 {
     public function __construct(
         protected ProductMediaStore $media,
-        protected StockAvailability $stock,
+        protected PartnerStockAvailability $stock,
     ) {}
 
     /**

@@ -3,12 +3,9 @@
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentStatus;
-use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Enums\StockReservationStatus;
-use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Inventory\Models\PartnerStockItem;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
 use App\Domain\Notification\Enums\SmsEvent;
 use App\Domain\Notification\SmsEventSwitch;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
@@ -128,10 +125,9 @@ function codTestSelection(Website $website): WebsiteProduct
     ]);
 }
 
-function codTestStock(WebsiteProduct $selection, int $units): StockItem
+function codTestStock(WebsiteProduct $selection, int $units): PartnerStockItem
 {
-    $item = StockItem::create(['warehouse_id' => test()->warehouse->id, 'product_id' => $selection->product_id]);
-    app(StockLedger::class)->move($item, null, StockBucket::Available, $units, StockMovementType::Adjustment);
+    $item = websiteTestOwnsSelection($selection, $units);
 
     return $item;
 }
@@ -212,7 +208,7 @@ describe('taking a cash-on-delivery order', function () {
             ->assertJsonPath('payment.redirect_url', null)
             ->assertJsonPath('confirmation.state', 'pending');
 
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         expect($order->status)->toBe(OrderStatus::CustomerVerificationPending)
             ->and($order->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Active)
@@ -237,7 +233,7 @@ describe('taking a cash-on-delivery order', function () {
             ->assertCreated()
             ->assertJsonPath('status', OrderStatus::CustomerVerificationPending->value);
 
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         // Nothing sent, and none of the order's codes spent while it was off.
         expect($this->sent)->toBeEmpty()
@@ -251,7 +247,7 @@ describe('taking a cash-on-delivery order', function () {
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'payment_method_unavailable');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
 
         // A shop may be switched on even where the platform default is off.
         $this->website->forceFill(['payment_config' => ['cod' => ['enabled' => true]]])->save();
@@ -267,7 +263,7 @@ describe('taking a cash-on-delivery order', function () {
             ->assertJsonPath('error.code', 'cod_limit_exceeded')
             ->assertJsonPath('error.details.maximum.amount', '5000.00');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('prices and stocks it exactly as any other order', function () {
@@ -286,14 +282,14 @@ describe('taking a cash-on-delivery order', function () {
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'insufficient_stock');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 });
 
 describe('the code that confirms it (§6.2)', function () {
     beforeEach(function () {
         codTestSubmit()->assertCreated();
-        $this->order = Order::query()->sole();
+        $this->order = websiteTestOrders()->sole();
     });
 
     it('is held hashed, never in the open, and confirms the order exactly once', function () {
@@ -428,7 +424,7 @@ describe('the code that confirms it (§6.2)', function () {
 describe('how many codes an order may have (§6.2)', function () {
     beforeEach(function () {
         codTestSubmit()->assertCreated();
-        $this->order = Order::query()->sole();
+        $this->order = websiteTestOrders()->sole();
     });
 
     it('stops sending codes once the order has had its share', function () {
@@ -558,7 +554,7 @@ describe('how many codes an order may have (§6.2)', function () {
 describe('what the shop is told (contract §7.1)', function () {
     beforeEach(function () {
         codTestSubmit()->assertCreated();
-        $this->order = Order::query()->sole();
+        $this->order = websiteTestOrders()->sole();
     });
 
     it('asks the shop to have the customer confirm, with the deadline and never the code', function () {
@@ -599,7 +595,7 @@ describe('what the shop is told (contract §7.1)', function () {
 describe('when the window closes', function () {
     it('cancels the order, gives the stock back once and refuses a later code', function () {
         codTestSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
         $code = codTestCode();
 
         $this->travelTo($order->payment->expires_at->addMinute());
@@ -625,7 +621,7 @@ describe('when the window closes', function () {
 
     it('refuses a confirmation whose stock deadline has passed, even before the sweep runs', function () {
         codTestSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
         $code = codTestCode();
 
         $this->travelTo($order->items()->sole()->stockReservation->expires_at->addMinute());

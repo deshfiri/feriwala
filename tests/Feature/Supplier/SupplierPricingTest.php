@@ -146,6 +146,7 @@ test('a partner website\'s storefront api never carries the supplier rate, margi
         'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
+    websiteTestOwnsSelection($selection, 100);
 
     foreach (['products', 'products/'.$selection->product->public_id] as $path) {
         $response = storefrontCall($credential, $secret, $path)->assertOk();

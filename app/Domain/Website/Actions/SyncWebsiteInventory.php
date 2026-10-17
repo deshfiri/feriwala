@@ -2,7 +2,7 @@
 
 namespace App\Domain\Website\Actions;
 
-use App\Domain\Inventory\Queries\StockAvailability;
+use App\Domain\Inventory\Queries\PartnerStockAvailability;
 use App\Domain\Website\Enums\WebhookEvent;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Models\Website;
@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Collection;
 class SyncWebsiteInventory
 {
     public function __construct(
-        protected StockAvailability $stock,
+        protected PartnerStockAvailability $stock,
         protected PublishWebsiteEvent $publish,
     ) {}
 

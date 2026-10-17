@@ -6,6 +6,7 @@ use App\Domain\Billing\Actions\IssueInvoice;
 use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Inventory\Actions\ReceivePartnerPurchase;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\StockEnforcement;
@@ -57,6 +58,7 @@ class ConfirmOrderPayment
 {
     public function __construct(
         protected StockReservations $reservations,
+        protected ReceivePartnerPurchase $partnerPurchases,
         protected IssueInvoice $invoices,
         protected CloseOrderedCart $carts,
         protected RecordPaymentLog $logs,
@@ -180,6 +182,10 @@ class ConfirmOrderPayment
             StatusChange::bySystem('The payment settled and the stock was committed.', 'orders.notes.paid'),
             OrderStatusChangeSource::PaymentGateway,
         );
+
+        // A wholesale purchase gives the Partner the units a storefront may
+        // sell (D34); a storefront order, which sells them, gives nothing.
+        $this->partnerPurchases->handle($locked);
 
         // Only now: an invoice is a record of a sale this order has become (P4-11).
         $this->invoices->handle($settled);

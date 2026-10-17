@@ -1,18 +1,20 @@
 <?php
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Catalog\Models\Category;
+use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Enums\StockReservationStatus;
+use App\Domain\Inventory\Models\PartnerStockItem;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
+use App\Domain\Inventory\PartnerStock;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Location\Enums\BdLocationType;
 use App\Domain\Location\Models\BdLocation;
@@ -90,7 +92,6 @@ beforeEach(function () {
     // 26 taka a kettle, 60 taka delivery: two kettles come to 5,260 taka.
     app(ManageWebhookEndpoint::class)->configure($this->website, $this->account->owner, 'https://shop.test/feriwala/webhooks');
 
-    $this->warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
     $this->selection = websiteOrderSelection($this->website, 260000);
     $this->stock = websiteOrderStock($this->selection, 20);
     websiteTestFee(FeeType::WebsiteDelivery, 6000);
@@ -120,12 +121,17 @@ function websiteOrderSelection(Website $website, int $priceMinor, array $product
     ]);
 }
 
-function websiteOrderStock(WebsiteProduct $selection, int $units): StockItem
+/**
+ * The units the selection's owner bought — a paid wholesale purchase, through the
+ * real credit — and the stock row they sit in (D34).
+ */
+function websiteOrderStock(WebsiteProduct $selection, int $units): PartnerStockItem
 {
-    $item = StockItem::create(['warehouse_id' => test()->warehouse->id, 'product_id' => $selection->product_id]);
-    app(StockLedger::class)->move($item, null, StockBucket::Available, $units, StockMovementType::Adjustment);
+    $account = BusinessAccount::query()->findOrFail($selection->business_account_id);
 
-    return $item;
+    websiteTestOwns($account, $selection->product, $units);
+
+    return app(PartnerStock::class)->itemFor($account, $selection->product_id, null);
 }
 
 /**
@@ -222,7 +228,7 @@ describe('taking the order', function () {
 
         expect($response->json('stock_reservation.expires_at'))->not->toBeNull();
 
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
         $line = $order->items()->sole();
         $payment = $order->payment;
 
@@ -275,7 +281,7 @@ describe('taking the order', function () {
         $response = websiteOrderSubmit();
         $response->assertCreated()->assertJsonPath('payment.redirect_url', null);
 
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         expect($order->status)->toBe(OrderStatus::PaymentPending);
 
@@ -306,7 +312,7 @@ describe('taking the order', function () {
             ->assertJsonPath('error.details.authoritative.grand_total.amount', '5260.00')
             ->assertJsonPath('error.details.submitted_grand_total.amount', '5259.99');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('refuses a money object naming both the flat-Taka amount and the legacy minor_units key', function () {
@@ -322,7 +328,7 @@ describe('taking the order', function () {
             'totals.grand_total.minor_units',
         ]);
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('refuses a price the storefront made up, and never sells at it', function () {
@@ -332,7 +338,7 @@ describe('taking the order', function () {
         ]);
 
         $response->assertStatus(422)->assertJsonPath('error.code', 'price_mismatch');
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('refuses a product this website does not sell, and one it has unpublished', function () {
@@ -344,7 +350,7 @@ describe('taking the order', function () {
 
         websiteOrderSubmit()->assertStatus(422)->assertJsonPath('error.code', 'product_unavailable');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('refuses more units than the stock holds, and says how many are left', function () {
@@ -356,7 +362,7 @@ describe('taking the order', function () {
             ->assertJsonPath('error.code', 'insufficient_stock')
             ->assertJsonPath('error.details.available', 20);
 
-        expect(Order::query()->count())->toBe(0)
+        expect(websiteTestOrders()->count())->toBe(0)
             ->and($this->stock->refresh()->reserved)->toBe(0);
     });
 
@@ -373,7 +379,7 @@ describe('taking the order', function () {
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'coupon_not_applicable');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('refuses a mobile number it cannot resolve, and a return address that is not the shop\'s', function () {
@@ -401,7 +407,7 @@ describe('taking the order', function () {
 
         websiteOrderSubmit(['payment' => ['method' => 'online', 'return_url' => 'https://shop.test/thanks']])->assertCreated();
 
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
         $home = 'https://'.$this->website->subdomain.'.'.config('website.storefront_domain').'/';
 
         $this->post(route('website-orders.payment.return', $order->public_id))
@@ -442,8 +448,8 @@ describe('never twice (contract §4.7, §17.3, P5-21)', function () {
 
         expect($second->getContent())->toBe($first->getContent())
             ->and($second->headers->get('Idempotent-Replay'))->toBe('true')
-            ->and(Order::query()->count())->toBe(1)
-            ->and(Payment::query()->count())->toBe(1)
+            ->and(websiteTestOrders()->count())->toBe(1)
+            ->and(Payment::query()->where('purpose', PaymentPurpose::WebsiteOrder)->count())->toBe(1)
             ->and(StorefrontRequest::query()->count())->toBe(1)
             // Nor a second of anything the first one wrote.
             ->and(Invoice::query()->count())->toBe(0)
@@ -462,7 +468,7 @@ describe('never twice (contract §4.7, §17.3, P5-21)', function () {
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'idempotency_key_reused');
 
-        expect(Order::query()->count())->toBe(1);
+        expect(websiteTestOrders()->count())->toBe(1);
     });
 
     it('refuses a second order for one storefront reference, even with a fresh key', function () {
@@ -472,7 +478,7 @@ describe('never twice (contract §4.7, §17.3, P5-21)', function () {
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'duplicate_storefront_order');
 
-        expect(Order::query()->count())->toBe(1);
+        expect(websiteTestOrders()->count())->toBe(1);
     });
 
     it('lets two websites use the same storefront reference', function () {
@@ -487,8 +493,8 @@ describe('never twice (contract §4.7, §17.3, P5-21)', function () {
 
         websiteOrderSubmit(body: $body, credential: $credential)->assertCreated();
 
-        expect(Order::query()->count())->toBe(2)
-            ->and(Order::query()->where('storefront_order_reference', 'SF-2026-000481')->count())->toBe(2);
+        expect(websiteTestOrders()->count())->toBe(2)
+            ->and(websiteTestOrders()->where('storefront_order_reference', 'SF-2026-000481')->count())->toBe(2);
     });
 
     it('needs an idempotency key at all', function () {
@@ -503,7 +509,7 @@ describe('never twice (contract §4.7, §17.3, P5-21)', function () {
 describe('reading back and cancelling (contract §5.3, §6.1.2)', function () {
     it('shows the order to its own website and nobody else', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         storefrontCall($this->credential, $this->secret, 'orders/'.$order->public_id)
             ->assertOk()
@@ -523,7 +529,7 @@ describe('reading back and cancelling (contract §5.3, §6.1.2)', function () {
 
     it('never shows a staff note or the reason an order was held', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         app(StockReservations::class)->release($order->items()->sole()->stockReservation, 'Taken for a test.');
         websiteOrderPay($order);
@@ -538,7 +544,7 @@ describe('reading back and cancelling (contract §5.3, §6.1.2)', function () {
 
     it('cancels an unpaid order at the customer\'s request and gives the stock back', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         storefrontCall($this->credential, $this->secret, 'orders/'.$order->public_id.'/cancellation', method: 'POST', overrides: [
             'headers' => ['Idempotency-Key' => (string) Str::uuid()],
@@ -554,7 +560,7 @@ describe('reading back and cancelling (contract §5.3, §6.1.2)', function () {
 
     it('refuses to cancel an order that has been paid', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         websiteOrderPay($order);
 
@@ -571,7 +577,7 @@ describe('what a settled payment does (P5-23, P6-15)', function () {
         Notification::fake();
 
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         websiteOrderPay($order);
 
@@ -599,7 +605,7 @@ describe('what a settled payment does (P5-23, P6-15)', function () {
 
     it('holds a paid order whose stock is gone, for a person to resolve', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         // Somebody released the stock while the payment was still open — the
         // override the contract allows (§6.1.2). The money then arrives.
@@ -618,7 +624,7 @@ describe('what a settled payment does (P5-23, P6-15)', function () {
 
     it('sends a payment that lands after the window to reconciliation, not to the order', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         $order->payment->forceFill(['expires_at' => now()->subMinute()])->save();
 
@@ -635,7 +641,7 @@ describe('what a settled payment does (P5-23, P6-15)', function () {
 describe('when nobody pays (§19.1, P5-23)', function () {
     it('gives the stock back when the window closes, and tells the shop', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         // The window shuts a margin before the stock is released, so a
         // settlement that started in time still finds its stock.
@@ -657,7 +663,7 @@ describe('when nobody pays (§19.1, P5-23)', function () {
 
     it('lets the storefront read the cancelled order back, with the reason in its own words', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
 
         $this->travelTo($order->payment->expires_at->addMinute());
         app(ExpireUnpaidOrders::class)->handle();
@@ -735,7 +741,7 @@ describe('the website\'s customers (contract §6.2)', function () {
 
     it('does not keep an order snapshot in step with a later customer edit', function () {
         websiteOrderSubmit()->assertCreated();
-        $order = Order::query()->sole();
+        $order = websiteTestOrders()->sole();
         $customer = WebsiteCustomer::query()->sole();
 
         storefrontCall($this->credential, $this->secret, 'customers/'.$customer->public_id, method: 'PATCH', body: (string) json_encode([
@@ -813,7 +819,7 @@ describe('the checkout quote (P2 H1–H3)', function () {
 
     it('writes nothing and holds no stock', function () {
         $before = [
-            'orders' => Order::query()->count(),
+            'orders' => websiteTestOrders()->count(),
             'payments' => Payment::query()->count(),
             'reservations' => StockReservation::query()->count(),
             'ledger' => LedgerEntry::query()->count(),
@@ -825,7 +831,7 @@ describe('the checkout quote (P2 H1–H3)', function () {
         websiteOrderQuote()->assertOk();
 
         expect([
-            'orders' => Order::query()->count(),
+            'orders' => websiteTestOrders()->count(),
             'payments' => Payment::query()->count(),
             'reservations' => StockReservation::query()->count(),
             'ledger' => LedgerEntry::query()->count(),
@@ -844,7 +850,7 @@ describe('the checkout quote (P2 H1–H3)', function () {
             ->assertJsonPath('error.code', 'price_mismatch')
             ->assertJsonPath('error.details.authoritative.grand_total.amount', '5460.00');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('is advisory across a flash deal: a window that closes after the quote is refused at placement', function () {
@@ -864,13 +870,13 @@ describe('the checkout quote (P2 H1–H3)', function () {
             ->assertJsonPath('error.code', 'price_mismatch')
             ->assertJsonPath('error.details.authoritative.grand_total.amount', '5260.00');
 
-        expect(Order::query()->count())->toBe(0);
+        expect(websiteTestOrders()->count())->toBe(0);
     });
 
     it('says when the stock is gone, and placement refuses the same cart', function () {
         $quote = websiteOrderQuote()->assertOk();
 
-        app(StockLedger::class)->move($this->stock->refresh(), StockBucket::Available, null, 19, StockMovementType::Adjustment);
+        app(PartnerStock::class)->move($this->stock->refresh(), StockBucket::Available, null, 19, PartnerStockMovementType::Adjustment);
 
         websiteOrderQuote()->assertOk()->assertJsonPath('data.items.0.availability.reservable', false);
 
@@ -879,14 +885,14 @@ describe('the checkout quote (P2 H1–H3)', function () {
             ->assertJsonPath('error.code', 'insufficient_stock');
     });
 
-    it('never calls stock spread across warehouses reservable, as placement would not hold it', function () {
-        app(StockLedger::class)->move($this->stock->refresh(), StockBucket::Available, null, 19, StockMovementType::Adjustment);
-        $second = Warehouse::create(['code' => 'CTG', 'name' => 'Chattogram']);
-        $other = StockItem::create(['warehouse_id' => $second->id, 'product_id' => $this->selection->product_id]);
-        app(StockLedger::class)->move($other, null, StockBucket::Available, 1, StockMovementType::Adjustment);
+    it('never counts another partner\'s units, or central stock, as the shop\'s own', function () {
+        app(PartnerStock::class)->move($this->stock->refresh(), StockBucket::Available, null, 19, PartnerStockMovementType::Adjustment);
+        websiteTestOwns(websiteTestAccount(), $this->selection->product, 500);
+        $warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
+        StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $this->selection->product_id, 'available' => 500]);
 
         $quote = websiteOrderQuote()->assertOk()
-            ->assertJsonPath('data.items.0.availability.quantity', 2)
+            ->assertJsonPath('data.items.0.availability.quantity', 1)
             ->assertJsonPath('data.items.0.availability.reservable', false);
 
         websiteOrderSubmit(body: websiteOrderBody(websiteOrderFromQuote($quote)))
@@ -978,7 +984,7 @@ describe('delivery areas (P2 H4)', function () {
 
         websiteOrderSubmit(['shipping_address' => ['area_id' => 'district:3:26']])->assertCreated();
 
-        expect(Order::query()->sole()->shipping_address['area_id'] ?? null)->toBe('district:3:26');
+        expect(websiteTestOrders()->sole()->shipping_address['area_id'] ?? null)->toBe('district:3:26');
 
         websiteOrderSubmit(['storefront_order_reference' => 'SF-2', 'shipping_address' => ['area_id' => 'nowhere']])
             ->assertStatus(422)

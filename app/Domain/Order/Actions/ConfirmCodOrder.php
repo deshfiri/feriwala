@@ -11,6 +11,7 @@ use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Website\CheckoutVerification;
 use App\Support\Concurrency\DistributedLock;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use App\Support\StatusHistory\StatusChange;
@@ -112,6 +113,55 @@ class ConfirmCodOrder
 
             return $locked;
         });
+    }
+
+    /**
+     * Confirm an order whose shop asks its customers for no SMS code
+     * ({@see CheckoutVerification}).
+     *
+     * The same confirmation a code would have made — the held stock is committed
+     * and the order moves to confirmed, once, under the same lock — but its
+     * history says honestly that nobody entered a code. The customer's number is
+     * never recorded as verified: nothing here proves it.
+     *
+     * @throws WebsiteOrderRefused
+     */
+    public function withoutCode(Order $order): Order
+    {
+        try {
+            return $this->lock->run(
+                key: 'cod-confirm:'.$order->id,
+                callback: fn () => $this->database->transaction(function () use ($order) {
+                    /** @var Order $locked */
+                    $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+                    if ($locked->status === OrderStatus::Confirmed) {
+                        return $locked;
+                    }
+
+                    if ($locked->status !== OrderStatus::CustomerVerificationPending) {
+                        throw WebsiteOrderRefused::notAwaitingConfirmation();
+                    }
+
+                    $this->commitStock($locked);
+
+                    $locked->moveTo(
+                        OrderStatus::Confirmed,
+                        new StatusChange(
+                            reason: 'The shop does not ask for an SMS code, so the order was confirmed as placed.',
+                            publicNote: 'orders.notes.cod_confirmed_without_code',
+                        ),
+                        OrderStatusChangeSource::Storefront,
+                    );
+
+                    return $locked;
+                }),
+                ttlSeconds: 30,
+                waitSeconds: 10,
+            );
+        } catch (LockTimeout) {
+            throw WebsiteOrderRefused::busy();
+        }
     }
 
     /**

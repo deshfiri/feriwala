@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $public_id
  * @property int|null $stock_item_id
  * @property int|null $supplier_offer_stock_id
+ * @property int|null $partner_stock_item_id
  * @property int $quantity
  * @property ReservationKind $kind
  * @property StockReservationStatus $status
@@ -41,6 +42,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable $updated_at
  * @property-read StockItem|null $item
  * @property-read SupplierOfferStock|null $supplierStock
+ * @property-read PartnerStockItem|null $partnerStock
  * @property-read User|null $overrider
  * @property-read BusinessAccount|null $account
  * @property-read StockAllocation|null $allocation
@@ -90,6 +92,22 @@ class StockReservation extends Model
     public function supplierStock(): BelongsTo
     {
         return $this->belongsTo(SupplierOfferStock::class, 'supplier_offer_stock_id');
+    }
+
+    /**
+     * The Partner's own stock this holds units of, when the order is a storefront
+     * order sold from what the Partner bought (D34).
+     *
+     * @return BelongsTo<PartnerStockItem, $this>
+     */
+    public function partnerStock(): BelongsTo
+    {
+        return $this->belongsTo(PartnerStockItem::class, 'partner_stock_item_id');
+    }
+
+    public function isPartnerSourced(): bool
+    {
+        return $this->partner_stock_item_id !== null;
     }
 
     public function isSupplierSourced(): bool

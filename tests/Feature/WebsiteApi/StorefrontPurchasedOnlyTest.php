@@ -44,8 +44,6 @@ function purchasedOnlySelection(Website $website): WebsiteProduct
 }
 
 it('lists and serves only the products the partner bought', function () {
-    websiteTestOnlyWhatWasBought();
-
     $bought = purchasedOnlySelection($this->website);
     $notBought = purchasedOnlySelection($this->website);
     websiteTestPurchase($this->account, $bought->product);
@@ -60,8 +58,6 @@ it('lists and serves only the products the partner bought', function () {
 });
 
 it('stops listing a product when its purchase is unpaid or cancelled', function () {
-    websiteTestOnlyWhatWasBought();
-
     $unpaid = purchasedOnlySelection($this->website);
     $cancelled = purchasedOnlySelection($this->website);
     websiteTestPurchase($this->account, $unpaid->product, ['paid_at' => null]);
@@ -71,8 +67,6 @@ it('stops listing a product when its purchase is unpaid or cancelled', function 
 });
 
 it('refuses to quote a product the partner has not bought', function () {
-    websiteTestOnlyWhatWasBought();
-
     $notBought = purchasedOnlySelection($this->website);
 
     storefrontCall($this->credential, $this->secret, 'checkout/quote', method: 'POST', body: (string) json_encode([

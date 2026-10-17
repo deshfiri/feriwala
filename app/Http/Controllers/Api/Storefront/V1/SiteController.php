@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Storefront\V1;
 
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
 use App\Domain\Order\WebsiteCheckoutRules;
+use App\Domain\Website\BannerLink;
+use App\Domain\Website\CheckoutVerification;
 use App\Domain\Website\Enums\DomainRoutingStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Models\Website;
@@ -32,6 +34,7 @@ class SiteController extends StorefrontController
     public function __construct(
         protected WebsiteImageStore $images,
         protected WebsiteCheckoutRules $checkout,
+        protected CheckoutVerification $verification,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -66,6 +69,11 @@ class SiteController extends StorefrontController
                     'secondary_color' => $website->secondary_color,
                     'logo_url' => $this->images->url($website->logo_path),
                     'banner_url' => $this->images->url($website->banner_path),
+                    // Where the banner image goes when clicked; null when it is a
+                    // plain picture. Only an address the ERP has already vetted.
+                    'banner_link_url' => $website->banner_link_url !== null && BannerLink::isAcceptable($website->banner_link_url)
+                        ? $website->banner_link_url
+                        : null,
                     'tagline' => $website->tagline,
                     'about' => $website->about,
                 ],
@@ -86,6 +94,9 @@ class SiteController extends StorefrontController
                         'maximum' => $codEnabled ? $this->checkout->codMaximum($website, $currency)?->jsonSerialize() : null,
                     ],
                     'guest_checkout' => true,
+                    // Whether a cash-on-delivery customer must confirm with an SMS
+                    // code: the platform's policy, else this shop's own choice.
+                    'sms_verification_required' => $this->verification->requiredFor($website),
                 ],
             ],
         ]);

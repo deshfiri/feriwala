@@ -56,6 +56,19 @@ class StockAvailability
      */
     public function forSkus(array $skus, ?BusinessAccount $account = null): array
     {
+        return $this->forUnits($this->unitsForSkus($skus), $account);
+    }
+
+    /**
+     * The stockable units behind the given SKUs: a product with no variations is
+     * itself a unit, otherwise each of its variations is. An unknown SKU, and the
+     * SKU of a product that has variations, are omitted.
+     *
+     * @param  array<array-key, mixed>  $skus  as a caller sent them; anything not a string is ignored
+     * @return array<int, array{sku: string, product_id: int, variant_id: int|null}>
+     */
+    public function unitsForSkus(array $skus): array
+    {
         $skus = array_values(array_unique(array_filter(array_map(
             fn (mixed $sku) => is_string($sku) ? mb_strtoupper(trim($sku)) : null,
             $skus,
@@ -86,11 +99,11 @@ class StockAvailability
                 ->select(['product_variants.sku', 'product_variants.product_id', 'product_variants.id as variant_id']))
             ->get();
 
-        return $this->forUnits($units->map(fn (object $unit) => [
+        return $units->map(fn (object $unit) => [
             'sku' => (string) $unit->sku,
             'product_id' => (int) $unit->product_id,
             'variant_id' => $unit->variant_id === null ? null : (int) $unit->variant_id,
-        ])->all(), $account);
+        ])->all();
     }
 
     /**

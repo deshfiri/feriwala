@@ -7,12 +7,11 @@ use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\RefundRequest;
+use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
-use App\Domain\Inventory\Models\StockItem;
-use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Inventory\Models\PartnerStockMovement;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\StockLedger;
+use App\Domain\Inventory\PartnerStock;
 use App\Domain\Order\Actions\CancelOrderReturn;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\DecideOrderReturn;
@@ -107,8 +106,7 @@ beforeEach(function () {
         'published_at' => now(),
     ]);
 
-    $this->stock = StockItem::create(['warehouse_id' => $this->warehouse->id, 'product_id' => $this->selection->product_id]);
-    app(StockLedger::class)->move($this->stock, null, StockBucket::Available, 20, StockMovementType::Adjustment);
+    $this->stock = websiteTestOwnsSelection($this->selection, 20);
 
     $this->manager = testPlatformStaff(PlatformRole::OrderManager);
 
@@ -163,7 +161,7 @@ function returnTestDeliveredOrder(string $method = 'online'): Order
         $order->moveTo($status, new StatusChange(reason: 'Moved by the test, as fulfilment will.'), OrderStatusChangeSource::System);
     }
 
-    app(StockLedger::class)->move(test()->stock, StockBucket::Processing, StockBucket::Sold, 3, StockMovementType::Adjustment);
+    app(PartnerStock::class)->move(test()->stock, StockBucket::Processing, StockBucket::Sold, 3, PartnerStockMovementType::Adjustment);
 
     return $order->refresh();
 }
@@ -382,11 +380,11 @@ describe('receiving the goods', function () {
         expect($this->return->refresh()->status)->toBe(ReturnStatus::Received)
             ->and($line->received_quantity)->toBe(2)
             ->and($line->disposition)->toBe(ReturnDisposition::Restock)
-            ->and($line->stock_movement_id)->not->toBeNull()
+            ->and($line->partner_stock_movement_id)->not->toBeNull()
             ->and($stock->sold)->toBe(1)
             ->and($stock->available)->toBe(19);
 
-        $movement = StockMovement::query()->findOrFail($line->stock_movement_id);
+        $movement = PartnerStockMovement::query()->findOrFail($line->partner_stock_movement_id);
 
         expect($movement->from_bucket)->toBe(StockBucket::Sold)
             ->and($movement->to_bucket)->toBe(StockBucket::Available)
@@ -427,7 +425,7 @@ describe('receiving the goods', function () {
 
     it('says so when the units were never recorded as sold', function () {
         // Undo the delivery's record, as if fulfilment had never written it.
-        app(StockLedger::class)->move($this->stock, StockBucket::Sold, StockBucket::Processing, 3, StockMovementType::Adjustment);
+        app(PartnerStock::class)->move($this->stock, StockBucket::Sold, StockBucket::Processing, 3, PartnerStockMovementType::Adjustment);
 
         expect(fn () => app(ReceiveReturnedItems::class)->handle($this->warehouseLead, $this->return, [
             new ReturnedLine(returnTestLine($this->return), 2, ReturnDisposition::Restock),

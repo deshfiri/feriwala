@@ -172,6 +172,7 @@ export type WebsiteDetail = WebsiteSummary & {
     secondary_color: string;
     logo_url: string | null;
     banner_url: string | null;
+    banner_link_url?: string | null;
     contact: {
         email: string | null;
         phone: string | null;

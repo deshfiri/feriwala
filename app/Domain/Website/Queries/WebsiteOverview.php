@@ -320,6 +320,7 @@ class WebsiteOverview
             // Addresses a browser can load, never storage paths.
             'logo_url' => $this->images->url($website->logo_path),
             'banner_url' => $this->images->url($website->banner_path),
+            'banner_link_url' => $website->banner_link_url,
             'contact' => [
                 'email' => $website->contact_email,
                 'phone' => $website->contact_phone,

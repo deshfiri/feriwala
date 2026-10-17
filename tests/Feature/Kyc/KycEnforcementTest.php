@@ -69,7 +69,7 @@ function enforcementTestRound(array $consequences): KycSubmission
 
 function enforcementTestSelection(WebsiteProductStatus $status = WebsiteProductStatus::Selected): WebsiteProduct
 {
-    return WebsiteProduct::create([
+    $selection = WebsiteProduct::create([
         'website_id' => test()->website->id,
         'business_account_id' => test()->account->id,
         'product_id' => test()->product->id,
@@ -79,6 +79,10 @@ function enforcementTestSelection(WebsiteProductStatus $status = WebsiteProductS
         'price' => Money::fromDecimal('1300.00', Currency::BDT),
         'published_at' => $status === WebsiteProductStatus::Published ? now() : null,
     ]);
+
+    websiteTestOwnsSelection($selection, 100);
+
+    return $selection;
 }
 
 function enforcementTestPlaceOrder(): array

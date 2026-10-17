@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { ImageOff, Package, Search } from 'lucide-react';
 import { useState } from 'react';
 import TablePagination from '@/components/data-table/table-pagination';
@@ -19,8 +19,14 @@ import {
     mine as myProducts,
     show as productShow,
 } from '@/routes/catalog';
+import { update as setOnStorefront } from '@/routes/catalog/mine/websites';
 import { show as wholesaleShow } from '@/routes/catalog/wholesale';
-import type { Paginator, PartnerProductCard, SelectOption } from '@/types';
+import type {
+    Paginator,
+    PartnerOwnership,
+    PartnerProductCard,
+    SelectOption,
+} from '@/types';
 
 type Props = {
     facility_allowed: boolean;
@@ -294,6 +300,154 @@ export default function PartnerProducts({
     );
 }
 
+/**
+ * What the account owns of a product it bought, and which of its storefronts sell
+ * it. The figures are the server's; the buttons only ask the server to publish or
+ * unpublish on one storefront — buying never puts a product on sale by itself.
+ */
+function OwnershipPanel({
+    ownership,
+    slug,
+}: {
+    ownership: PartnerOwnership;
+    slug: string;
+}) {
+    const { t } = useTranslation();
+    const [busy, setBusy] = useState<string | null>(null);
+    const totals = ownership.totals;
+
+    const set = (website: string, published: boolean) => {
+        setBusy(website);
+        router.put(
+            setOnStorefront({ product: slug, website }).url,
+            { published },
+            {
+                preserveScroll: true,
+                onFinish: () => setBusy(null),
+            },
+        );
+    };
+
+    return (
+        <div className="space-y-3 border-t pt-3" data-test="ownership-panel">
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                {(
+                    [
+                        ['purchased', totals.purchased],
+                        ['available', totals.available],
+                        ['reserved', totals.reserved],
+                        ['sold', totals.sold],
+                        ['unavailable', totals.unavailable],
+                    ] as const
+                ).map(([key, value]) => (
+                    <div key={key} className="flex justify-between gap-2">
+                        <dt className="text-muted-foreground">
+                            {t(`partner_products.ownership.${key}`)}
+                        </dt>
+                        <dd
+                            className="font-medium tabular-nums"
+                            data-test={`ownership-${key}`}
+                        >
+                            {value}
+                        </dd>
+                    </div>
+                ))}
+            </dl>
+
+            {ownership.units.length > 1 && (
+                <details className="text-xs">
+                    <summary className="text-muted-foreground cursor-pointer select-none">
+                        {t('partner_products.ownership.by_variation')}
+                    </summary>
+                    <table className="mt-2 w-full text-left">
+                        <thead className="text-muted-foreground">
+                            <tr>
+                                <th className="pr-2 font-normal">SKU</th>
+                                <th className="pr-2 text-right font-normal">
+                                    {t('partner_products.ownership.available')}
+                                </th>
+                                <th className="text-right font-normal">
+                                    {t('partner_products.ownership.purchased')}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {ownership.units.map((unit) => (
+                                <tr key={unit.sku}>
+                                    <td className="pr-2">
+                                        {unit.variant ?? unit.sku}
+                                    </td>
+                                    <td className="pr-2 text-right tabular-nums">
+                                        {unit.available}
+                                    </td>
+                                    <td className="text-right tabular-nums">
+                                        {unit.purchased}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </details>
+            )}
+
+            <div className="space-y-1.5">
+                <p className="text-muted-foreground text-xs font-medium">
+                    {t('partner_products.ownership.storefronts')}
+                </p>
+                {ownership.storefronts.length === 0 ? (
+                    <p className="text-muted-foreground text-xs">
+                        {t('partner_products.ownership.no_storefront')}
+                    </p>
+                ) : (
+                    <ul className="space-y-1.5">
+                        {ownership.storefronts.map((shop) => {
+                            const live = shop.state === 'published';
+
+                            return (
+                                <li
+                                    key={shop.id}
+                                    className="flex items-center justify-between gap-2"
+                                    data-test="ownership-storefront"
+                                >
+                                    <span className="min-w-0 space-y-0.5">
+                                        <span className="block truncate text-sm">
+                                            {shop.name}
+                                        </span>
+                                        <StatusPill
+                                            tone={
+                                                live
+                                                    ? 'success'
+                                                    : shop.state === 'selected'
+                                                      ? 'warning'
+                                                      : 'neutral'
+                                            }
+                                            label={t(
+                                                `partner_products.ownership.state.${shop.state}`,
+                                            )}
+                                        />
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        variant={live ? 'outline' : 'default'}
+                                        disabled={busy === shop.id}
+                                        onClick={() => set(shop.id, !live)}
+                                    >
+                                        {t(
+                                            live
+                                                ? 'partner_products.ownership.unpublish'
+                                                : 'partner_products.ownership.publish',
+                                        )}
+                                    </Button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function ProductTile({
     product,
     scope = 'all',
@@ -417,6 +571,13 @@ export function ProductTile({
                         </>
                     )}
                 </dl>
+
+                {scope === 'mine' && product.ownership && (
+                    <OwnershipPanel
+                        ownership={product.ownership}
+                        slug={product.slug}
+                    />
+                )}
 
                 <details className="text-muted-foreground group border-t pt-2 text-xs">
                     <summary className="focus-visible:ring-ring cursor-pointer rounded-sm select-none focus-visible:ring-2 focus-visible:outline-none">

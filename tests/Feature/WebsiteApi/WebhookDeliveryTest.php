@@ -65,7 +65,7 @@ beforeEach(function () {
  */
 function webhookTestSelection(Website $website): WebsiteProduct
 {
-    return WebsiteProduct::create([
+    $selection = WebsiteProduct::create([
         'website_id' => $website->id,
         'business_account_id' => $website->business_account_id,
         'product_id' => websiteTestProduct()->id,
@@ -75,6 +75,10 @@ function webhookTestSelection(Website $website): WebsiteProduct
         'price' => Money::fromDecimal('2600.00', Currency::BDT),
         'published_at' => now(),
     ]);
+
+    websiteTestOwnsSelection($selection, 100);
+
+    return $selection;
 }
 
 /**
@@ -500,7 +504,7 @@ describe('manual retry', function () {
 describe('synchronisation', function () {
     it('tells the storefront about stock only when it changed', function () {
         webhookTestEndpoint($this->website);
-        $selection = webhookTestSelection($this->website);
+        $selection = websiteTestSellOut(webhookTestSelection($this->website));
         $updatedAt = $selection->refresh()->updated_at->toIso8601String();
 
         // Nothing in stock: updated, and out of stock the first time.

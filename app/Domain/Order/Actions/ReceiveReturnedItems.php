@@ -8,11 +8,13 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Inventory\Data\MovementContext;
+use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Enums\StockMovementType;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Inventory\PartnerStock;
 use App\Domain\Inventory\StockLedger;
 use App\Domain\Order\Data\ReturnedLine;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
@@ -67,6 +69,7 @@ class ReceiveReturnedItems
 {
     public function __construct(
         protected StockLedger $ledger,
+        protected PartnerStock $partnerStock,
         protected SupplierStockLedger $supplierLedger,
         protected ReverseSupplierPayable $supplierPayables,
         protected AnnounceReturnStatus $announcements,
@@ -207,6 +210,15 @@ class ReceiveReturnedItems
 
         $orderItem = $item->orderItem;
 
+        if ($orderItem->stockReservation?->isPartnerSourced() === true) {
+            $item->forceFill([
+                'partner_stock_movement_id' => $this->restoreToPartner($item, $line, $actor),
+                'restored_at' => CarbonImmutable::now(),
+            ])->save();
+
+            return;
+        }
+
         if ($orderItem->isSupplierBacked()) {
             $movementId = $this->restoreToSupplier($item, $line, $actor);
 
@@ -261,6 +273,48 @@ class ReceiveReturnedItems
                     sourceType: 'order_return',
                     sourceId: $item->orderReturn->id,
                     // One restoration per returned line, whatever arrives twice.
+                    idempotencyKey: 'order-return-item:'.$item->public_id,
+                ),
+            );
+        } catch (InventoryRefused) {
+            throw ReturnRefused::nothingSoldToRestore($orderItem->sku);
+        }
+
+        return $movement->id;
+    }
+
+    /**
+     * The Partner-stock twin of {@see restore()}: a storefront line was sold from
+     * the Partner's own units, so its goods go back into that Partner's stock and
+     * no one else's (D34).
+     *
+     * The units leave `sold` — delivered goods — exactly as central stock's do:
+     * an order whose units were never recorded as sold is refused rather than
+     * having a source invented for it.
+     *
+     * @throws ReturnRefused
+     */
+    protected function restoreToPartner(OrderReturnItem $item, ReturnedLine $line, User $actor): int
+    {
+        $orderItem = $item->orderItem;
+        $stock = $orderItem->stockReservation?->partnerStock;
+
+        if ($stock === null) {
+            throw ReturnRefused::nothingSoldToRestore($orderItem->sku);
+        }
+
+        try {
+            $movement = $this->partnerStock->move(
+                $stock,
+                StockBucket::Sold,
+                $line->disposition->bucket(),
+                $line->quantity,
+                PartnerStockMovementType::ReturnReceived,
+                new MovementContext(
+                    reason: 'Returned on '.$item->orderReturn->reference.': '.$line->disposition->label().'.',
+                    actorId: $actor->id,
+                    sourceType: 'order_return',
+                    sourceId: $item->orderReturn->id,
                     idempotencyKey: 'order-return-item:'.$item->public_id,
                 ),
             );

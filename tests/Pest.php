@@ -23,16 +23,22 @@ use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
-use App\Domain\Catalog\PurchasedProducts;
+use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\ExternalStore\Actions\RecordExternalOrder;
 use App\Domain\ExternalStore\Enums\ExternalStoreStatus;
 use App\Domain\ExternalStore\Enums\StorePlatform;
 use App\Domain\ExternalStore\Models\ExternalOrder;
 use App\Domain\ExternalStore\Models\ExternalStore;
+use App\Domain\Inventory\Actions\ReceivePartnerPurchase;
+use App\Domain\Inventory\Enums\PartnerStockMovementType;
+use App\Domain\Inventory\Enums\StockBucket;
+use App\Domain\Inventory\Models\PartnerStockItem;
+use App\Domain\Inventory\PartnerStock;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Location\Enums\BdLocationType;
 use App\Domain\Location\Models\BdLocation;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
@@ -65,6 +71,7 @@ use App\Domain\Website\Api\RequestSignature;
 use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCredential;
+use App\Domain\Website\Models\WebsiteProduct;
 use App\Integrations\Store\Contracts\HostResolver;
 use App\Integrations\Store\Drivers\DfcommerceDriver;
 use App\Integrations\Store\Support\ExactJson;
@@ -95,17 +102,6 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
-
-/*
-| A website sells only what its owner bought — the products in "My products"
-| (PurchasedProducts). The suites below are about something else (orders,
-| returns, suppliers, the storefront API's mechanics) and publish products
-| without a purchase behind each one, so they run as an owner who has bought
-| everything. The suites that test the rule itself — StorefrontPurchasedOnlyTest,
-| WebsiteProductSelectionTest, PartnerProductsTest — use the real thing.
-*/
-pest()->beforeEach(fn () => websiteTestEveryoneBought())
-    ->in('Feature/WebsiteApi', 'Feature/Supplier', 'Feature/Orders', 'Feature/Concurrency');
 
 /*
 |--------------------------------------------------------------------------
@@ -437,66 +433,99 @@ function websiteTestProduct(array $attributes = []): Product
 }
 
 /**
- * Run as an owner who has bought every product, so a suite about something else
- * need not buy each product it publishes.
- */
-function websiteTestEveryoneBought(): void
-{
-    app()->instance(PurchasedProducts::class, new class extends PurchasedProducts
-    {
-        public function has(BusinessAccount $account, Product $product): bool
-        {
-            return true;
-        }
-
-        public function among(BusinessAccount $account, iterable $productIds): array
-        {
-            return collect($productIds)->mapWithKeys(fn (mixed $id) => [(int) $id => (int) $id])->all();
-        }
-
-        public function only(Builder $products, BusinessAccount $account): Builder
-        {
-            return $products;
-        }
-    });
-}
-
-/**
- * Back to the real rule: only what the account bought, from a paid wholesale order.
- */
-function websiteTestOnlyWhatWasBought(): void
-{
-    app()->instance(PurchasedProducts::class, new PurchasedProducts);
-}
-
-/**
  * The account has bought the product: a wholesale order with one line, paid unless
- * `$orderAttributes` says otherwise. A website only sells what its account bought.
+ * `$orderAttributes` says otherwise, for `$quantity` units of the exact variation.
+ *
+ * A paid, uncancelled purchase gives the account its units through the real
+ * {@see ReceivePartnerPurchase}, exactly as a settled payment does — nothing here
+ * writes a stock figure by hand. A website only sells what its account bought.
  *
  * @param  array<string, mixed>  $orderAttributes
  */
-function websiteTestPurchase(BusinessAccount $account, Product $product, array $orderAttributes = []): Order
-{
+function websiteTestPurchase(
+    BusinessAccount $account,
+    Product $product,
+    array $orderAttributes = [],
+    int $quantity = 1,
+    ?ProductVariant $variant = null,
+): Order {
     $order = Order::factory()->create([
         'business_account_id' => $account->id,
         'paid_at' => now(),
         ...$orderAttributes,
     ]);
-    $money = Money::fromDecimal('1500.00', Currency::BDT);
+    $unit = Money::fromDecimal('1500.00', Currency::BDT);
+    $line = $unit->multipliedBy($quantity);
 
     $order->items()->create([
         'line_number' => 1,
         'product_id' => $product->id,
-        'sku' => $product->sku,
+        'product_variant_id' => $variant?->id,
+        'sku' => $variant->sku ?? $product->sku,
         'product_name' => $product->name,
-        'quantity' => 1,
+        'quantity' => $quantity,
         'currency_code' => 'BDT',
-        'unit_price' => $money,
-        'line_subtotal' => $money,
-        'line_total' => $money,
+        'unit_price' => $unit,
+        'line_subtotal' => $line,
+        'line_total' => $line,
     ]);
 
+    app(ReceivePartnerPurchase::class)->handle($order->refresh());
+
     return $order;
+}
+
+/**
+ * The account owns `$quantity` more units of a product (or one variation of it):
+ * a paid wholesale purchase, so its storefront may sell them once it selects the
+ * product.
+ */
+function websiteTestOwns(BusinessAccount $account, Product $product, int $quantity = 100, ?ProductVariant $variant = null): void
+{
+    websiteTestPurchase($account, $product, [], $quantity, $variant);
+}
+
+/**
+ * The orders placed on websites — not the wholesale purchases that gave their
+ * owners the units, which are also orders of the same accounts.
+ *
+ * @return Builder<Order>
+ */
+function websiteTestOrders(): Builder
+{
+    return Order::query()->where('source', OrderSource::Website);
+}
+
+/**
+ * The units a selection's owner bought, so the selection has something to sell —
+ * a paid wholesale purchase through the real credit, and the stock row it
+ * created (D34).
+ */
+function websiteTestOwnsSelection(WebsiteProduct $selection, int $units): PartnerStockItem
+{
+    $account = BusinessAccount::query()->findOrFail($selection->business_account_id);
+
+    websiteTestOwns($account, $selection->product, $units);
+
+    return app(PartnerStock::class)->itemFor($account, $selection->product_id, null);
+}
+
+/**
+ * Nothing left to sell: every available unit of the selection's product is
+ * recorded as sold, so the owner still accounts for all of it but has none to
+ * offer.
+ */
+function websiteTestSellOut(WebsiteProduct $selection): WebsiteProduct
+{
+    $account = BusinessAccount::query()->findOrFail($selection->business_account_id);
+    $stock = app(PartnerStock::class);
+    $item = $stock->itemFor($account, $selection->product_id, null);
+
+    if ($item !== null && $item->available > 0) {
+        $stock->move($item, StockBucket::Available, StockBucket::Sold, $item->available, PartnerStockMovementType::Adjustment);
+    }
+
+    return $selection;
 }
 
 /**

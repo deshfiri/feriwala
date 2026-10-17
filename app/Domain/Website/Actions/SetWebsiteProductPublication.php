@@ -6,6 +6,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\ProductEligibility;
+use App\Domain\Inventory\Queries\PartnerStockAvailability;
 use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Package\Entitlements;
 use App\Domain\Package\Enums\PackageFeature;
@@ -23,14 +24,15 @@ use Illuminate\Database\DatabaseManager;
 /**
  * Putting a selected product on sale, and taking it off (§15, §8.1, P5-2, P5-3).
  *
- * Three things have to hold before a product goes on sale, and all three are
+ * Four things have to hold before a product goes on sale, and all three are
  * checked here rather than on the screen that offered the button:
  *
  *   1. it has a **price** somebody set — the database refuses a published row
  *      without one, and this says so in words first;
  *   2. the product is **still eligible** for this account on the dropshipping
  *      channel — a product withdrawn since it was chosen must not go live;
- *   3. the account has **not used up its publish limit** (§8.1).
+ *   3. the account has **not used up its publish limit** (§8.1);
+ *   4. the owner has **units left to sell** of it (D34).
  *
  * The limit is counted **under a lock, across the account's storefronts**, and
  * re-checked inside it. Two tabs publishing at once would otherwise both read
@@ -49,6 +51,7 @@ class SetWebsiteProductPublication
     public function __construct(
         protected Entitlements $entitlements,
         protected ProductEligibility $eligibility,
+        protected PartnerStockAvailability $stock,
         protected KycRestrictions $kycRestrictions,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
@@ -75,6 +78,12 @@ class SetWebsiteProductPublication
 
         if (! $this->eligibility->isEligible($selection->product, $website->businessAccount, SalesChannel::Dropshipping)) {
             throw WebsiteRefused::productNotEligible();
+        }
+
+        // Only what the owner still has to sell goes on sale (D34): a product
+        // whose every unit is sold, reserved or returned is nothing to publish.
+        if (collect($this->stock->forProduct($selection->product, $website->businessAccount))->sum('quantity') < 1) {
+            throw WebsiteRefused::nothingToSell();
         }
 
         /*
