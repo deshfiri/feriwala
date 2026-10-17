@@ -171,6 +171,13 @@ class ConfirmOrderPayment
             $reservation = $item->stockReservation;
 
             if ($reservation !== null && ($enforced || $reservation->status === StockReservationStatus::Active)) {
+                if ($reservation->isPartnerSourced()) {
+                    // The payment keeps the stock held; dispatch is what consumes it (D34).
+                    $this->reservations->holdUntilDispatch($reservation);
+
+                    continue;
+                }
+
                 $this->reservations->commit($reservation);
             }
         }

@@ -30,6 +30,8 @@ class RollUpOrderStatus
     {
         if ($order->delivery_status === OrderDeliveryStatus::Delivered
             && $order->canTransitionTo(OrderStatus::Delivered)) {
+            app(MarkPartnerStockSold::class)->handle($order);
+
             $order->moveTo(
                 OrderStatus::Delivered,
                 StatusChange::bySystem('The order reached Delivered on its delivery status.'),

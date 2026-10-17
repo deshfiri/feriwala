@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\StorageSettingsController;
+use App\Http\Controllers\Admin\StoreOrderController as AdminStoreOrderController;
 use App\Http\Controllers\Admin\SupplierAllocationController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\SupplierListingController;
@@ -104,6 +105,7 @@ use App\Http\Controllers\Erp\PaymentReturnController;
 use App\Http\Controllers\Erp\PayoutMethodController as ErpPayoutMethodController;
 use App\Http\Controllers\Erp\ReferralController;
 use App\Http\Controllers\Erp\StaffInvitationController;
+use App\Http\Controllers\Erp\StoreOrderController as ErpStoreOrderController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WebsiteCategoryController;
@@ -569,6 +571,10 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          * its websites, its connected stores, its wholesale purchases. Each
          * opens on the detail screen of its own kind.
          */
+        // A Partner's Store Orders: their storefronts' orders, read-only apart from cancelling a Pending one.
+        Route::get('store-orders', [ErpStoreOrderController::class, 'index'])->name('store-orders.index');
+        Route::get('store-orders/{order}', [ErpStoreOrderController::class, 'show'])->name('store-orders.show');
+        Route::post('store-orders/{order}/cancellation', [ErpStoreOrderController::class, 'cancel'])->name('store-orders.cancel');
         Route::get('orders', [BusinessOrderController::class, 'index'])->name('orders.index');
         Route::get('orders/export', [BusinessOrderController::class, 'export'])
             ->middleware('throttle:store-actions')
@@ -1430,6 +1436,11 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.index');
         Route::get('orders/{order}', [OrderController::class, 'show'])
             ->name('orders.show');
+        // Store Orders, platform-wide: one named action per step, never a chosen status.
+        Route::get('store-orders', [AdminStoreOrderController::class, 'index'])->name('store-orders.index');
+        Route::get('store-orders/{order}', [AdminStoreOrderController::class, 'show'])->name('store-orders.show');
+        Route::post('store-orders/{order}/actions/{action}', [AdminStoreOrderController::class, 'advance'])->name('store-orders.advance');
+        Route::post('store-orders/{order}/cancellation', [AdminStoreOrderController::class, 'cancel'])->name('store-orders.cancel');
         Route::post('orders/{order}/cancellation', [OrderController::class, 'cancel'])
             ->name('orders.cancellation.store');
 

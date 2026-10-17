@@ -208,6 +208,13 @@ class ConfirmCodOrder
             }
 
             try {
+                if ($reservation->isPartnerSourced()) {
+                    // Confirmation keeps the stock held; dispatch is what consumes it (D34).
+                    $this->reservations->holdUntilDispatch($reservation);
+
+                    continue;
+                }
+
                 $this->reservations->commit($reservation);
             } catch (InventoryRefused) {
                 throw WebsiteOrderRefused::confirmationExpired();

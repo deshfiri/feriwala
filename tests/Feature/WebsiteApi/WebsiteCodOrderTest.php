@@ -311,11 +311,11 @@ describe('the code that confirms it (§6.2)', function () {
         $this->order->refresh();
 
         expect($this->order->status)->toBe(OrderStatus::Confirmed)
-            // Confirming commits the stock and pays nothing (§28).
-            ->and($this->order->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Committed)
+            // Confirming keeps the stock held (dispatch consumes it) and pays nothing (§28).
+            ->and($this->order->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Active)
             ->and($this->order->payment->refresh()->status)->toBe(PaymentStatus::Draft)
             ->and($this->order->payment->invoice()->exists())->toBeFalse()
-            ->and($this->stock->refresh()->processing)->toBe(2);
+            ->and($this->stock->refresh()->reserved)->toBe(2);
 
         // One status entry, one webhook, whatever arrives afterwards.
         $again = codTestPost('orders/'.$this->order->public_id.'/confirmation', ['code' => $code]);

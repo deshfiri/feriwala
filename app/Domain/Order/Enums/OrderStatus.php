@@ -87,13 +87,13 @@ enum OrderStatus: string implements TransitionableState
             // Money has arrived, so the way out that is not fulfilment is a refund.
             self::Paid => [self::Processing, self::StockReserved, self::ReadyForFulfillment, self::OnHold, self::RefundPending],
 
-            self::Processing => [self::StockReserved, self::ReadyForFulfillment, self::OnHold, self::RefundPending, self::Cancelled],
-            self::StockReserved => [self::Processing, self::ReadyForFulfillment, self::OnHold, self::RefundPending, self::Cancelled],
-            self::ReadyForFulfillment => [self::Picking, self::OnHold, self::RefundPending, self::Cancelled],
+            self::Processing => [self::StockReserved, self::ReadyForFulfillment, self::Packing, self::OnHold, self::RefundPending, self::Cancelled],
+            self::StockReserved => [self::Processing, self::ReadyForFulfillment, self::Packing, self::OnHold, self::RefundPending, self::Cancelled],
+            self::ReadyForFulfillment => [self::Picking, self::Packing, self::OnHold, self::RefundPending, self::Cancelled],
 
             self::Picking => [self::Packing, self::ReadyForFulfillment, self::OnHold],
-            self::Packing => [self::ReadyForPickup, self::Picking, self::OnHold],
-            self::ReadyForPickup => [self::CourierAssigned, self::OnHold],
+            self::Packing => [self::ReadyForPickup, self::Picking, self::OnHold, self::RefundPending, self::Cancelled],
+            self::ReadyForPickup => [self::CourierAssigned, self::Shipped, self::OnHold, self::RefundPending, self::Cancelled],
             self::CourierAssigned => [self::Shipped, self::ReadyForPickup, self::OnHold],
 
             // Once it has left the warehouse there is no hold and no cancel, only where it ends up.

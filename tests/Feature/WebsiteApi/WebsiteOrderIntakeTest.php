@@ -573,7 +573,7 @@ describe('reading back and cancelling (contract §5.3, §6.1.2)', function () {
 });
 
 describe('what a settled payment does (P5-23, P6-15)', function () {
-    it('commits the stock, pays the order, issues the invoice and tells the shop', function () {
+    it('pays the order, keeps the stock held for dispatch, issues the invoice and tells the shop', function () {
         Notification::fake();
 
         websiteOrderSubmit()->assertCreated();
@@ -585,11 +585,11 @@ describe('what a settled payment does (P5-23, P6-15)', function () {
 
         expect($order->status)->toBe(OrderStatus::Paid)
             ->and($order->paid_at)->not->toBeNull()
-            ->and($order->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Committed)
+            ->and($order->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Active)
             ->and($order->payment->refresh()->status)->toBe(PaymentStatus::Paid)
             ->and($order->payment->invoice()->exists())->toBeTrue();
 
-        expect($this->stock->refresh()->reserved)->toBe(0);
+        expect($this->stock->refresh()->reserved)->toBe(2);
 
         Notification::assertSentTo($this->account->owner, WebsiteOrderPaid::class);
 

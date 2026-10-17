@@ -166,7 +166,7 @@ describe('the SMS code for cash-on-delivery orders', function () {
         expect(websiteTestOrders()->sole()->status)->toBe(OrderStatus::Confirmed);
     });
 
-    it('skips the step when the shop has turned it off: no text, no waiting, stock committed once', function () {
+    it('skips the step when the shop has turned it off: no text, no waiting, stock kept held for dispatch', function () {
         $this->website->forceFill(['sms_verification_enabled' => false])->save();
 
         $response = checkoutOptionsOrder()->assertCreated();
@@ -175,7 +175,7 @@ describe('the SMS code for cash-on-delivery orders', function () {
 
         expect($response->json('status'))->toBe(OrderStatus::Confirmed->value)
             ->and($order->status)->toBe(OrderStatus::Confirmed)
-            ->and($order->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Committed)
+            ->and($order->items()->sole()->stockReservation->status)->toBe(StockReservationStatus::Active)
             ->and($this->sent)->toBeEmpty()
             ->and(DB::table('order_status_history')->where('order_id', $order->id)->count())->toBe(2);
     });
@@ -192,7 +192,7 @@ describe('the SMS code for cash-on-delivery orders', function () {
 
         $stock = app(PartnerStock::class)->itemFor($this->account, $this->selection->product_id, null);
 
-        expect($stock->processing)->toBe(2)->and($stock->reserved)->toBe(0)->and($stock->available)->toBe(18);
+        expect($stock->processing)->toBe(0)->and($stock->reserved)->toBe(2)->and($stock->available)->toBe(18);
     });
 
     it('is the shop\'s own choice, one storefront at a time', function () {

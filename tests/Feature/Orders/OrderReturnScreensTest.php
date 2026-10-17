@@ -8,6 +8,7 @@ use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\PartnerStock;
+use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
 use App\Domain\Order\Actions\RequestOrderReturn;
@@ -106,6 +107,11 @@ function returnScreensDeliveredOrder(): Order
     $code = app(VerificationCodes::class)->issue(SendCodConfirmationCode::PURPOSE, $order->public_id);
     app(ConfirmCodOrder::class)->handle($order, $code);
     $order->refresh();
+
+    // Dispatch is what consumes the stock (D34): the units were held until here.
+    foreach ($order->items()->with('stockReservation')->get() as $dispatchedLine) {
+        app(StockReservations::class)->commit($dispatchedLine->stockReservation);
+    }
 
     foreach ([
         OrderStatus::ReadyForFulfillment, OrderStatus::Picking, OrderStatus::Packing,

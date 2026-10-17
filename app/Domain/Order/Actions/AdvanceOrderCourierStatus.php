@@ -7,7 +7,9 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Enums\OrderCourierStatus;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
+use App\Domain\Order\Enums\StoreOrderStep;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderCourierStatusChange;
 use App\Models\User;
@@ -42,6 +44,11 @@ class AdvanceOrderCourierStatus
         ?string $reason = null,
         OrderStatusChangeSource $source = OrderStatusChangeSource::Staff,
     ): OrderCourierStatusChange {
+        // A Store Order's courier and delivery start only once it is Dispatched.
+        if ($order->source === OrderSource::Website && ! StoreOrderStep::hasDispatched($order->status)) {
+            throw new InvalidArgumentException(__('store_orders.refused.not_yet_dispatched'));
+        }
+
         $reason = $reason === null ? null : trim($reason);
 
         if (in_array($to, self::REASON_REQUIRED, true) && ($reason === null || $reason === '')) {

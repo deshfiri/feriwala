@@ -337,6 +337,30 @@ class StockReservations
     }
 
     /**
+     * Keep an active Partner reservation held until the order is dispatched (D34).
+     *
+     * Payment settling or a customer confirming proves the order is real, so its
+     * short window no longer applies: the units stay reserved — never released by
+     * the expiry sweep, never consumed — until dispatch commits them or a
+     * cancellation releases them. Idempotent, and a no-op for any other source.
+     */
+    public function holdUntilDispatch(StockReservation $reservation): StockReservation
+    {
+        return $this->locks->run('inventory:reservation:'.$reservation->id, fn () => $this->database->transaction(function () use ($reservation) {
+            /** @var StockReservation $locked */
+            $locked = StockReservation::query()->lockForUpdate()->findOrFail($reservation->id);
+
+            if ($locked->isPartnerSourced() && $locked->status === StockReservationStatus::Active && $locked->expires_at->lessThan(now()->addYears(5))) {
+                $locked->forceFill(['expires_at' => now()->addYears(10)])->save();
+            }
+
+            $reservation->setRawAttributes($locked->getAttributes(), sync: true);
+
+            return $locked;
+        }));
+    }
+
+    /**
      * Give the units back before the reservation ran out.
      *
      * @throws InventoryRefused when the reservation already ended another way

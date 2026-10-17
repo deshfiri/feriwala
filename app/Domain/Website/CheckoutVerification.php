@@ -43,7 +43,8 @@ class CheckoutVerification
      */
     public function requiredFor(Website $website): bool
     {
-        return $this->requiredByPlatform() || $website->sms_verification_enabled;
+        // A website not yet read back from the database has no value: the default is on.
+        return $this->requiredByPlatform() || ($website->sms_verification_enabled ?? true);
     }
 
     /**

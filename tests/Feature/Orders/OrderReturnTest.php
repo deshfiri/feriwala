@@ -12,6 +12,7 @@ use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Models\PartnerStockMovement;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\PartnerStock;
+use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Actions\CancelOrderReturn;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\DecideOrderReturn;
@@ -152,6 +153,11 @@ function returnTestDeliveredOrder(string $method = 'online'): Order
     }
 
     $order->refresh();
+
+    // Dispatch is what consumes the stock (D34): the units were held until here.
+    foreach ($order->items()->with('stockReservation')->get() as $dispatchedLine) {
+        app(StockReservations::class)->commit($dispatchedLine->stockReservation);
+    }
 
     // What fulfilment will do: take it through the warehouse and hand it over.
     foreach ([

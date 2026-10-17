@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Order\Enums\OrderFulfillmentStatus;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderFulfillmentStatusChange;
@@ -45,6 +46,11 @@ class AdvanceOrderFulfilmentStatus
         ?string $reason = null,
         OrderStatusChangeSource $source = OrderStatusChangeSource::Staff,
     ): OrderFulfillmentStatusChange {
+        // A Store Order moves through its named workflow actions, never by choosing a status.
+        if ($order->source === OrderSource::Website) {
+            throw new InvalidArgumentException(__('store_orders.refused.use_actions'));
+        }
+
         $reason = $reason === null ? null : trim($reason);
 
         if (in_array($to, self::REASON_REQUIRED, true) && ($reason === null || $reason === '')) {

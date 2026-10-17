@@ -282,11 +282,11 @@ it('confirms once when the same code arrives from several workers at one instant
     $reservations = DB::table('stock_reservations')->where('id', '>', $this->reservationsFrom)->get();
 
     expect($reservations)->toHaveCount(1)
-        ->and($reservations->first()->status)->toBe(StockReservationStatus::Committed->value)
+        ->and($reservations->first()->status)->toBe(StockReservationStatus::Active->value)
         // One move of the units, not five.
-        ->and(DB::table('partner_stock_movements')->where('id', '>', $this->partnerMovementsFrom)->where('to_bucket', StockBucket::Processing->value)->count())->toBe(1)
-        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('processing'))->toBe(2)
-        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(0);
+        ->and(DB::table('partner_stock_movements')->where('id', '>', $this->partnerMovementsFrom)->where('to_bucket', StockBucket::Processing->value)->count())->toBe(0)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('processing'))->toBe(0)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(2);
 
     expect(DB::table('order_status_history')->where('order_id', $order->id)->where('new_status', OrderStatus::Confirmed->value)->count())->toBe(1)
         ->and(DB::table('webhook_deliveries')->where('id', '>', $this->deliveriesFrom)->where('event_type', 'order.status_changed')->count())->toBe(1);
@@ -323,8 +323,8 @@ it('ends in exactly one state when a confirmation races the sweep that closes th
 
     if ($order->status === OrderStatus::Confirmed) {
         // Confirmed means the units moved on, and nothing gave them back.
-        expect($reservation->status)->toBe(StockReservationStatus::Committed->value)
-            ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('processing'))->toBe(2)
+        expect($reservation->status)->toBe(StockReservationStatus::Active->value)
+            ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(2)
             ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('available'))->toBe(8);
     } else {
         // Cancelled means the units came back, and nothing committed them.
@@ -338,5 +338,5 @@ it('ends in exactly one state when a confirmation races the sweep that closes th
 
     expect($history->filter(fn (string $status) => $status === OrderStatus::Confirmed->value)->count()
         + $history->filter(fn (string $status) => $status === OrderStatus::Cancelled->value)->count())->toBe(1)
-        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(0);
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe($order->status === OrderStatus::Confirmed ? 2 : 0);
 });
