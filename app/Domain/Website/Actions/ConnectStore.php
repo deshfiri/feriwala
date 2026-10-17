@@ -11,6 +11,7 @@ use App\Domain\Website\LocalAddress;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCredential;
 use App\Domain\Website\Models\WebsiteDomain;
+use App\Domain\Website\Models\WebsiteWebhookEndpoint;
 use App\Domain\Website\StorefrontEnvironmentBlock;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -104,6 +105,81 @@ class ConnectStore
             webhookUrl: $webhook['url'] ?? null,
             erpBaseUrl: StorefrontEnvironmentBlock::origin((string) config('app.url')),
         );
+    }
+
+    /**
+     * Issue the store a new token. The old one keeps working for the rotation
+     * grace window, so a live storefront is not cut off while its `.env` is
+     * being changed.
+     *
+     * @throws WebsiteRefused when the store is not connected
+     */
+    public function rotate(Website $website, User $actor): ConnectedStore
+    {
+        $credential = $this->active($website);
+        $issued = $this->credentials->rotate($credential, $actor);
+        $origin = LocalAddress::originOf($website);
+
+        return new ConnectedStore(
+            credential: $issued->credential,
+            token: $issued->secret,
+            address: $origin !== null ? (string) $website->domain : $website->host(),
+            local: $origin !== null,
+            webhookSecret: null,
+            webhookUrl: null,
+            erpBaseUrl: StorefrontEnvironmentBlock::origin((string) config('app.url')),
+        );
+    }
+
+    /**
+     * End the connection: the store's credentials stop working at once and its
+     * webhook is switched off. The address stays recorded on the website.
+     *
+     * @throws WebsiteRefused when the store is not connected
+     */
+    public function disconnect(Website $website, User $actor, string $reason): void
+    {
+        $this->active($website);
+
+        $this->database->transaction(function () use ($website, $actor, $reason) {
+            WebsiteCredential::query()
+                ->where('website_id', $website->id)
+                ->whereNull('revoked_at')
+                ->get()
+                ->each(fn (WebsiteCredential $credential) => $this->credentials->revoke($credential, $actor, $reason));
+
+            WebsiteWebhookEndpoint::query()
+                ->where('website_id', $website->id)
+                ->where('is_active', true)
+                ->get()
+                ->each(fn (WebsiteWebhookEndpoint $endpoint) => $this->webhooks->disable($endpoint, $actor));
+        });
+
+        $this->audit->handle(new AuditEntry(
+            action: 'website.store_disconnected',
+            actorId: $actor->id,
+            auditableType: Website::class,
+            auditableId: $website->id,
+            after: ['reason' => $reason],
+            accountId: $website->business_account_id,
+            module: 'website',
+            isSensitive: true,
+        ));
+    }
+
+    /**
+     * The live credential, or a refusal when the store is not connected.
+     */
+    protected function active(Website $website): WebsiteCredential
+    {
+        /** @var WebsiteCredential|null $credential */
+        $credential = WebsiteCredential::query()
+            ->where('website_id', $website->id)
+            ->whereNull('revoked_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return $credential ?? throw WebsiteRefused::notConnected();
     }
 
     /**

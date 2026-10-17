@@ -1634,6 +1634,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         // One step: the website's address in, a store id and a token out.
         Route::post('websites/{website}/connection', [AdminWebsiteConnectionController::class, 'store'])
             ->name('websites.connection');
+        Route::post('websites/{website}/connection/rotation', [AdminWebsiteConnectionController::class, 'rotate'])
+            ->name('websites.connection.rotation');
+        Route::post('websites/{website}/connection/disconnection', [AdminWebsiteConnectionController::class, 'destroy'])
+            ->name('websites.connection.disconnection');
 
         Route::post('websites/{website}/credentials/{credential}/rotation', [AdminWebsiteCredentialController::class, 'rotate'])
             ->name('websites.credentials.rotate');

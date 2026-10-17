@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Website\Actions\ConnectStore;
+use App\Domain\Website\Data\ConnectedStore;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 /**
  * Connecting a partner's storefront in one step, from the admin dashboard, by
@@ -37,13 +40,10 @@ class WebsiteConnectionController extends Controller
             'term_months' => ['nullable', 'integer', 'min:1', 'max:120'],
         ]);
 
-        $actor = $request->user();
-        abort_if(! $actor instanceof User, 403);
-
         try {
             $connected = $this->connect->handle(
                 $website,
-                $actor,
+                $this->actor($request),
                 $validated['address'],
                 (int) ($validated['term_months'] ?? 12),
             );
@@ -51,6 +51,53 @@ class WebsiteConnectionController extends Controller
             throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
         }
 
+        return $this->once($connected, 201);
+    }
+
+    /**
+     * A new token for a store that is already connected.
+     */
+    public function rotate(Request $request, Website $website): JsonResponse
+    {
+        Gate::authorize('manageIntegration', $website);
+
+        try {
+            $connected = $this->connect->rotate($website, $this->actor($request));
+        } catch (WebsiteRefused $refused) {
+            throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+        }
+
+        return $this->once($connected, 200);
+    }
+
+    /**
+     * End the connection. A reason is required: a storefront going dark is
+     * something its owner will ask about.
+     */
+    public function destroy(Request $request, Website $website): RedirectResponse
+    {
+        Gate::authorize('manageIntegration', $website);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        try {
+            $this->connect->disconnect($website, $this->actor($request), $validated['reason']);
+        } catch (WebsiteRefused $refused) {
+            throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.connect.disconnected')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * The one response that carries the token.
+     */
+    protected function once(ConnectedStore $connected, int $status): JsonResponse
+    {
         return new JsonResponse([
             'store_id' => $connected->storeId(),
             'token' => $connected->token,
@@ -60,9 +107,18 @@ class WebsiteConnectionController extends Controller
             'webhook_secret' => $connected->webhookSecret,
             'erp_base_url' => $connected->erpBaseUrl,
             'env' => $connected->env(),
-        ], 201, [
+        ], $status, [
             'Cache-Control' => 'no-store, private',
             'Pragma' => 'no-cache',
         ]);
+    }
+
+    protected function actor(Request $request): User
+    {
+        $actor = $request->user();
+
+        abort_if(! $actor instanceof User, 403);
+
+        return $actor;
     }
 }

@@ -51,6 +51,12 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.already_connected'), 'address');
     }
 
+    /** There is no live store connection to rotate or end. */
+    public static function notConnected(): self
+    {
+        return new self(__('website.refused.not_connected'), 'address');
+    }
+
     /** The address is neither a domain nor a local address. */
     public static function addressInvalid(): self
     {

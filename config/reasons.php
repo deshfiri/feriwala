@@ -44,5 +44,8 @@ return [
         'admin.wallets.reversals.*',
         // Revoking a storefront's API credential cuts off a live storefront.
         'admin.websites.credentials.*',
+
+        // So does disconnecting its store, which revokes the same credentials.
+        'admin.websites.connection.disconnection',
     ],
 ];

@@ -570,6 +570,20 @@ return [
     ],
 
     'connect' => [
+        'state_connected' => 'Connected',
+        'state_not_connected' => 'Not connected',
+        'connected_hint' => 'This store is connected. Staff can issue a new token or disconnect it here.',
+        'last_used' => 'Last used',
+        'webhook' => 'Webhook',
+        'webhook_none' => 'None registered',
+        'rotate' => 'Issue a new token',
+        'rotate_confirm' => 'Issue a new token? The old one keeps working for a short while so the storefront can be updated.',
+        'disconnect_title' => 'Disconnect this store',
+        'disconnect_reason' => 'Why is it being disconnected?',
+        'disconnect_submit' => 'Disconnect',
+        'disconnected' => 'The store was disconnected.',
+        'advanced' => 'Advanced',
+        'advanced_hint' => 'credentials, scopes and webhook',
         'title' => 'Connect the store',
         'hint' => 'Give the storefront\'s address. You get a Store ID and a token; put them, with the ERP address, in the storefront\'s .env and it is connected.',
         'address' => 'Store address',
@@ -589,6 +603,7 @@ return [
     ],
 
     'refused' => [
+        'not_connected' => 'This store is not connected.',
         'already_connected' => 'This website already has a live store connection. Rotate its token, or revoke it first.',
         'address_invalid' => 'Enter the store\'s address as a domain such as shop.example.com.',
         'not_entitled' => 'Your package does not include a dedicated website.',

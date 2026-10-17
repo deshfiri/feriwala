@@ -139,27 +139,35 @@ export default function AdminWebsiteShow({
                 {can.manage_integration && storefrontConnection && (
                     <ConnectStore
                         websiteId={website.id}
-                        connected={credentials.some(
-                            (credential) => !credential.revoked_at,
-                        )}
-                    />
-                )}
-
-                {can.manage_integration && storefrontConnection && (
-                    <StorefrontCredentials
-                        websiteId={website.id}
+                        address={website.host}
                         credentials={credentials}
-                        scopes={credentialScopes}
-                        presets={credentialPresets}
-                        connection={storefrontConnection}
-                    />
-                )}
-
-                {can.manage_integration && storefrontConnection && (
-                    <StorefrontWebhook
-                        websiteId={website.id}
                         webhook={webhook}
                     />
+                )}
+
+                {can.manage_integration && storefrontConnection && (
+                    <details className="group rounded-xl border">
+                        <summary className="cursor-pointer px-5 py-3 text-sm font-medium">
+                            {t('website.connect.advanced')}
+                            <span className="text-muted-foreground ml-2 font-normal">
+                                {t('website.connect.advanced_hint')}
+                            </span>
+                        </summary>
+                        <div className="space-y-6 p-5 pt-2">
+                            <StorefrontCredentials
+                                websiteId={website.id}
+                                credentials={credentials}
+                                scopes={credentialScopes}
+                                presets={credentialPresets}
+                                connection={storefrontConnection}
+                            />
+
+                            <StorefrontWebhook
+                                websiteId={website.id}
+                                webhook={webhook}
+                            />
+                        </div>
+                    </details>
                 )}
 
                 {can.administer && (

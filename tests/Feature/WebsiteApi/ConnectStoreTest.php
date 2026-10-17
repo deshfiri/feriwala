@@ -130,3 +130,62 @@ it('records who connected the store and where', function () {
     expect($entry->actor_id)->toBe($this->admin->id)
         ->and($entry->after['address'])->toBe('shop.example.com');
 });
+
+it('issues a new token for a connected store and keeps the old one working for the grace window', function () {
+    $first = connectStore($this, $this->website, ['address' => 'shop.example.com'])->assertCreated();
+
+    $second = $this->actingAs($this->admin)
+        ->postJson(route('admin.websites.connection.rotation', $this->website->public_id))
+        ->assertOk()
+        ->assertHeader('Pragma', 'no-cache');
+
+    $credential = WebsiteCredential::query()->sole();
+
+    expect($second->json('store_id'))->toBe($first->json('store_id'))
+        ->and($second->json('token'))->not->toBe($first->json('token'))
+        ->and($second->json('env'))->toContain('STORE_TOKEN='.$second->json('token'))
+        ->and($credential->previous_secret_expires_at)->not->toBeNull();
+});
+
+it('refuses to rotate a store that is not connected', function () {
+    $this->actingAs($this->admin)
+        ->postJson(route('admin.websites.connection.rotation', $this->website->public_id))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('address');
+});
+
+it('disconnects a store: credentials revoked, webhook off, reason recorded', function () {
+    connectStore($this, $this->website, ['address' => 'shop.example.com'])->assertCreated();
+
+    $this->actingAs($this->admin)
+        ->post(route('admin.websites.connection.disconnection', $this->website->public_id), ['reason' => 'Moved to a new host'])
+        ->assertRedirect();
+
+    expect(WebsiteCredential::query()->sole()->revoked_at)->not->toBeNull()
+        ->and(AuditLog::query()->where('action', 'website.store_disconnected')->firstOrFail()->after['reason'])->toBe('Moved to a new host');
+
+    // And it can be connected again.
+    connectStore($this, $this->website, ['address' => 'shop.example.com'])->assertCreated();
+
+    expect(WebsiteCredential::query()->whereNull('revoked_at')->count())->toBe(1);
+});
+
+it('requires a reason to disconnect, and the partner cannot rotate or disconnect', function () {
+    connectStore($this, $this->website, ['address' => 'shop.example.com'])->assertCreated();
+
+    $this->actingAs($this->admin)
+        ->post(route('admin.websites.connection.disconnection', $this->website->public_id), ['reason' => ''])
+        ->assertRedirect();
+
+    $this->actingAs($this->account->owner)
+        ->postJson(route('admin.websites.connection.rotation', $this->website->public_id))
+        ->assertForbidden();
+
+    $this->actingAs($this->account->owner)
+        ->post(route('admin.websites.connection.disconnection', $this->website->public_id), ['reason' => 'Because I want to'])
+        ->assertForbidden();
+
+    // Without a reason nothing was disconnected; and the partner changed nothing.
+    expect(WebsiteCredential::query()->whereNull('revoked_at')->count())->toBe(1)
+        ->and(AuditLog::query()->where('action', 'website.store_disconnected')->count())->toBe(0);
+});
