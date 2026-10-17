@@ -56,18 +56,28 @@ class SetPreferredSupplierOffer
 
             $locked->forceFill(['is_preferred' => true])->save();
 
-            if ($locked->product_variant_id !== null) {
-                $locked->variant()->update(['wholesale_price' => $locked->platform_rate->toDecimal()]);
-            } else {
-                $locked->product()->update(['wholesale_price' => $locked->platform_rate->toDecimal()]);
-            }
+            // The preferred rate becomes the price, so it is a fixed one from
+            // here on: a stored percentage would no longer describe it, and the
+            // next save would silently calculate it away again.
+            $priced = fn () => $locked->product_variant_id !== null ? $locked->variant() : $locked->product();
+            $wasPercentage = $priced()->where('wholesale_pricing_method', 'percentage')->exists();
+
+            $priced()->update([
+                'wholesale_price' => $locked->platform_rate->toDecimal(),
+                'wholesale_pricing_method' => 'fixed',
+                'wholesale_markup_percentage' => null,
+            ]);
 
             $this->audit->handle(new AuditEntry(
                 action: 'supplier_offer.preferred_selected',
                 actorId: $decidedBy,
                 auditableType: SupplierOffer::class,
                 auditableId: $locked->id,
-                after: ['product_id' => $locked->product_id, 'product_variant_id' => $locked->product_variant_id],
+                after: [
+                    'product_id' => $locked->product_id,
+                    'product_variant_id' => $locked->product_variant_id,
+                    ...($wasPercentage ? ['wholesale_pricing_method' => 'fixed (was percentage)'] : []),
+                ],
                 module: PermissionModule::SupplierPricing->value,
             ));
 

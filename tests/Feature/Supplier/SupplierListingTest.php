@@ -486,6 +486,22 @@ test('only one offer per product may be preferred, and the preferred one sets th
         ->toThrow(QueryException::class);
 });
 
+test('a preferred offer\'s price makes a percentage-priced product fixed, so the markup cannot recalculate it away', function () {
+    $product = websiteTestProduct();
+    $product->forceFill(['wholesale_pricing_method' => 'percentage', 'wholesale_markup_percentage' => '20.00'])->save();
+    $offer = supplierTestOffer(product: $product, supplierRate: '1000.00', platformRate: '1300.00');
+
+    $this->actingAs(testPlatformStaff(PlatformRole::SupplierManager))
+        ->post(route('admin.supplier-offers.preferred.store', $offer))
+        ->assertSessionHasNoErrors();
+
+    $product->refresh();
+
+    expect($product->wholesale_price->toDecimal())->toBe('1300.00')
+        ->and($product->wholesale_pricing_method->value)->toBe('fixed')
+        ->and($product->wholesale_markup_percentage)->toBeNull();
+});
+
 test('a suspended offer cannot be made preferred and loses preference when suspended', function () {
     $offer = supplierTestOffer();
     $staff = testPlatformStaff(PlatformRole::SupplierManager);
