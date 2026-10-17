@@ -4,7 +4,8 @@
 /** @var list<array<string, mixed>> $categories */
 /** @var list<array{type: string, message: string}> $flash */
 $brand = $site['branding'] ?? [];
-$pageTitle = isset($title) && $title !== '' ? $title.' · '.($site['name'] ?? app_name()) : ($site['name'] ?? app_name());
+$shopName = (string) ($site['name'] ?? app_name());
+$pageTitle = isset($title) && $title !== '' && $title !== $shopName ? $title.' · '.$shopName : $shopName;
 $logo = safe_url($brand['logo_url'] ?? null);
 ?>
 <!doctype html>
