@@ -1,6 +1,39 @@
 <?php
 
+use App\Domain\Order\Enums\OrderCourierStatus;
+use App\Domain\Order\Enums\OrderDeliveryStatus;
+use App\Domain\Order\Enums\OrderFulfillmentStatus;
+use Illuminate\Support\Str;
+
 return [
+
+    'title' => 'Store Orders',
+    'partner_description' => 'Orders placed on your storefronts. You can follow every step; confirming, packing and dispatching are done by Feriwala.',
+    'admin_description' => 'Orders from every Partner storefront. Each can take only its next step.',
+    'search' => 'Search by order or storefront reference',
+    'timeline' => 'Progress',
+    'items' => 'Items',
+    'next_step' => 'Next step',
+    'payment' => 'Payment',
+    'payment_apart' => 'Payment is tracked separately from the order steps.',
+    'no_payment' => 'No payment',
+    'delivery' => 'Courier and delivery',
+    'courier' => 'Courier',
+    'fulfilment' => 'Fulfilment',
+    'delivery_status' => 'Delivery',
+    'cancellation' => 'Cancellation',
+    'cancel_title' => 'Cancel this order',
+    'cancel_reason' => 'Reason for cancelling',
+    'cancel' => 'Cancel order',
+    'cancelled_notice' => 'This order was cancelled. The steps above show how far it had got.',
+    'back' => 'Back to Store Orders',
+    'empty' => 'No Store Orders yet',
+    'empty_help' => 'Orders placed on a storefront appear here.',
+    'no_matches' => 'No orders match',
+    'no_matches_help' => 'Try removing a filter.',
+    'columns' => ['order' => 'Order', 'partner' => 'Partner', 'storefront' => 'Storefront', 'status' => 'Status', 'total' => 'Total', 'placed' => 'Placed'],
+    'filters' => ['partner' => 'All Partners', 'storefront' => 'All storefronts', 'status' => 'All steps', 'payment' => 'Any payment', 'from' => 'From date', 'to' => 'To date'],
+    'exceptions' => ['delivery_failed' => 'Delivery failed. The order has not been delivered.', 'returned_to_origin' => 'The parcel was returned to origin.', 'on_hold' => 'This order is on hold.', 'return' => 'A return is in progress for this order.'],
     'cancelled' => 'Cancelled',
     'by' => ['staff' => 'Feriwala staff', 'system' => 'System'],
     'courier' => ['courier_booked' => 'Courier Booked', 'picked_up' => 'Picked Up', 'in_transit' => 'In Transit', 'out_for_delivery' => 'Out for Delivery'],
@@ -40,4 +73,9 @@ return [
         'cancelled' => 'Your order was cancelled.',
         'cancelled_refund' => 'Your order was cancelled. Your payment will be refunded.',
     ],
+    'axes' => collect([
+        ...array_map(fn ($c) => $c->value, OrderFulfillmentStatus::cases()),
+        ...array_map(fn ($c) => $c->value, OrderCourierStatus::cases()),
+        ...array_map(fn ($c) => $c->value, OrderDeliveryStatus::cases()),
+    ])->unique()->mapWithKeys(fn ($value) => [$value => Str::headline($value)])->all(),
 ];

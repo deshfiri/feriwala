@@ -6,12 +6,15 @@ use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Order\Actions\AdvanceStoreOrder;
+use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
 use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Enums\StoreOrderAction;
 use App\Domain\Order\Models\Order;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Settings\Enums\SettingType;
@@ -24,6 +27,7 @@ use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
@@ -339,4 +343,69 @@ it('ends in exactly one state when a confirmation races the sweep that closes th
     expect($history->filter(fn (string $status) => $status === OrderStatus::Confirmed->value)->count()
         + $history->filter(fn (string $status) => $status === OrderStatus::Cancelled->value)->count())->toBe(1)
         ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe($order->status === OrderStatus::Confirmed ? 2 : 0);
+});
+
+/**
+ * A confirmed, packed order, ready for the dispatch workers to race for.
+ */
+function codRacePackedOrder(): Order
+{
+    [$order, $code] = codRaceOrder();
+
+    app(ConfirmCodOrder::class)->handle($order, $code);
+
+    $staff = User::query()->findOrFail(test()->account->owner_id);
+
+    foreach ([StoreOrderAction::StartProcessing, StoreOrderAction::StartPacking, StoreOrderAction::MarkPacked] as $action) {
+        app(AdvanceStoreOrder::class)->handle($order->refresh(), $action, $staff);
+    }
+
+    return $order->refresh();
+}
+
+it('consumes the held stock once when several workers dispatch the same order at one instant', function () {
+    $order = codRacePackedOrder();
+
+    codRaceFork(range(1, 5), function () use ($order) {
+        $staff = User::query()->findOrFail(test()->account->owner_id);
+
+        app(AdvanceStoreOrder::class)->handle(Order::query()->findOrFail($order->id), StoreOrderAction::Dispatch, $staff);
+    });
+
+    expect($order->refresh()->status)->toBe(OrderStatus::Shipped)
+        ->and(DB::table('stock_reservations')->where('id', '>', $this->reservationsFrom)->sole()->status)->toBe(StockReservationStatus::Committed->value)
+        // One commit, one move of the units — never five.
+        ->and(DB::table('partner_stock_movements')->where('id', '>', $this->partnerMovementsFrom)->where('type', 'reservation_committed')->count())->toBe(1)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('processing'))->toBe(2)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('reserved'))->toBe(0)
+        ->and((int) DB::table('partner_stock_items')->where('id', $this->item->id)->value('available'))->toBe(8)
+        ->and(DB::table('order_status_history')->where('order_id', $order->id)->where('new_status', OrderStatus::Shipped->value)->count())->toBe(1);
+});
+
+it('ends in exactly one state when a dispatch races a cancellation', function () {
+    $order = codRacePackedOrder();
+
+    codRaceFork(['dispatch', 'cancel'], function (string $job) use ($order) {
+        $staff = User::query()->findOrFail(test()->account->owner_id);
+        $fresh = Order::query()->findOrFail($order->id);
+
+        $job === 'dispatch'
+            ? app(AdvanceStoreOrder::class)->handle($fresh, StoreOrderAction::Dispatch, $staff)
+            : app(CancelStoreOrder::class)->handle($fresh, $staff, 'Customer called.');
+    });
+
+    $order->refresh();
+    $item = DB::table('partner_stock_items')->where('id', $this->item->id)->first();
+
+    expect($order->status)->toBeIn([OrderStatus::Shipped, OrderStatus::Cancelled])
+        ->and((int) $item->reserved)->toBe(0);
+
+    if ($order->status === OrderStatus::Shipped) {
+        expect((int) $item->processing)->toBe(2)->and((int) $item->available)->toBe(8);
+    } else {
+        expect((int) $item->processing)->toBe(0)->and((int) $item->available)->toBe(10);
+    }
+
+    // Never both, never twice.
+    expect(DB::table('partner_stock_movements')->where('id', '>', $this->partnerMovementsFrom)->whereIn('type', ['reservation_committed', 'reservation_released'])->count())->toBe(1);
 });

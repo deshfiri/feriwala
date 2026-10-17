@@ -76,6 +76,7 @@ class StoreOrderController extends Controller
                     'line_total' => $item->line_total->jsonSerialize(),
                 ])->all(),
             ],
+            'urls' => ['back' => route('store-orders.index'), 'cancel' => route('store-orders.cancel', $record->public_id), 'advance' => null],
             // The Partner reads the whole timeline; they get no next-action button.
             'timeline' => ['next_action' => null] + $timeline,
             'can' => [

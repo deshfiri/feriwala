@@ -107,7 +107,7 @@ class StoreOrderTimeline
             'label' => $label,
             'state' => $current ? 'current' : ($mark !== null ? 'done' : 'upcoming'),
             'at' => $mark['at'] ?? null,
-            'by' => $mark === null ? null : ($mark['by'] ?? __('store_orders.by.'.($mark['source'] === 'staff' ? 'staff' : 'system'))),
+            'by' => $mark === null ? null : ($mark['by'] ?? (string) __('store_orders.by.'.($mark['source'] === 'staff' ? 'staff' : 'system'))),
         ];
     }
 

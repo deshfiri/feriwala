@@ -1,3 +1,5 @@
+import { index as storeOrders } from '@/routes/store-orders';
+import { index as adminStoreOrders } from '@/routes/admin/store-orders';
 import { usePage } from '@inertiajs/react';
 import {
     Banknote,
@@ -214,6 +216,11 @@ export function useNavigation(): {
                                         title: t('nav.websites'),
                                         href: websites(),
                                         icon: Globe,
+                                    },
+                                    {
+                                        title: t('nav.store_orders'),
+                                        href: storeOrders(),
+                                        icon: ClipboardList,
                                     },
                                 ]
                               : []),
@@ -501,6 +508,10 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.orders'),
                                                 href: adminOrders(),
+                                            },
+                                            {
+                                                title: t('nav.store_orders'),
+                                                href: adminStoreOrders(),
                                             },
                                         ]
                                       : []),

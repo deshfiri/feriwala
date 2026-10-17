@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'store_orders' => 'স্টোর অর্ডার',
     'groups' => [
         'overview' => 'সংক্ষিপ্ত চিত্র',
         'products' => 'পণ্য',

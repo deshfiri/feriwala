@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'store_orders' => 'Store Orders',
     /*
      * Section headings for the sidebar (§33.2).
      *

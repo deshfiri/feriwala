@@ -94,6 +94,11 @@ class StoreOrderController extends Controller
                 ])->all(),
             ],
             'timeline' => $timeline,
+            'urls' => [
+                'back' => route('admin.store-orders.index'),
+                'cancel' => route('admin.store-orders.cancel', $record->public_id),
+                'advance' => route('admin.store-orders.advance', [$record->public_id, '__action__']),
+            ],
             'can' => [
                 'advance' => $mayMove && $timeline['next_action'] !== null,
                 'cancel' => $mayMove && ! $timeline['cancelled'] && $this->cancellable($record),

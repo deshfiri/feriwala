@@ -1,6 +1,39 @@
 <?php
 
+use App\Domain\Order\Enums\OrderCourierStatus;
+use App\Domain\Order\Enums\OrderDeliveryStatus;
+use App\Domain\Order\Enums\OrderFulfillmentStatus;
+use Illuminate\Support\Str;
+
 return [
+
+    'title' => 'স্টোর অর্ডার',
+    'partner_description' => 'আপনার স্টোরফ্রন্টে দেওয়া অর্ডার। প্রতিটি ধাপ দেখতে পারবেন; নিশ্চিত করা, প্যাক ও পাঠানো ফেরিওয়ালা করে।',
+    'admin_description' => 'প্রতিটি পার্টনারের স্টোরফ্রন্টের অর্ডার। প্রতিটি অর্ডার শুধু পরের ধাপে যেতে পারে।',
+    'search' => 'অর্ডার বা স্টোরফ্রন্ট রেফারেন্স দিয়ে খুঁজুন',
+    'timeline' => 'অগ্রগতি',
+    'items' => 'পণ্য',
+    'next_step' => 'পরের ধাপ',
+    'payment' => 'পেমেন্ট',
+    'payment_apart' => 'পেমেন্ট অর্ডারের ধাপ থেকে আলাদাভাবে দেখানো হয়।',
+    'no_payment' => 'পেমেন্ট নেই',
+    'delivery' => 'কুরিয়ার ও ডেলিভারি',
+    'courier' => 'কুরিয়ার',
+    'fulfilment' => 'ফুলফিলমেন্ট',
+    'delivery_status' => 'ডেলিভারি',
+    'cancellation' => 'বাতিলকরণ',
+    'cancel_title' => 'এই অর্ডার বাতিল করুন',
+    'cancel_reason' => 'বাতিলের কারণ',
+    'cancel' => 'অর্ডার বাতিল করুন',
+    'cancelled_notice' => 'এই অর্ডার বাতিল হয়েছে। ওপরের ধাপগুলো দেখায় এটি কতদূর গিয়েছিল।',
+    'back' => 'স্টোর অর্ডারে ফিরুন',
+    'empty' => 'এখনো কোনো স্টোর অর্ডার নেই',
+    'empty_help' => 'স্টোরফ্রন্টে দেওয়া অর্ডার এখানে দেখা যাবে।',
+    'no_matches' => 'কোনো অর্ডার মেলেনি',
+    'no_matches_help' => 'একটি ফিল্টার সরিয়ে দেখুন।',
+    'columns' => ['order' => 'অর্ডার', 'partner' => 'পার্টনার', 'storefront' => 'স্টোরফ্রন্ট', 'status' => 'অবস্থা', 'total' => 'মোট', 'placed' => 'অর্ডারের সময়'],
+    'filters' => ['partner' => 'সব পার্টনার', 'storefront' => 'সব স্টোরফ্রন্ট', 'status' => 'সব ধাপ', 'payment' => 'যেকোনো পেমেন্ট', 'from' => 'শুরুর তারিখ', 'to' => 'শেষ তারিখ'],
+    'exceptions' => ['delivery_failed' => 'ডেলিভারি ব্যর্থ হয়েছে। অর্ডার পৌঁছায়নি।', 'returned_to_origin' => 'পার্সেল উৎসে ফেরত গেছে।', 'on_hold' => 'এই অর্ডার স্থগিত আছে।', 'return' => 'এই অর্ডারের একটি ফেরত চলছে।'],
     'cancelled' => 'বাতিল',
     'by' => ['staff' => 'ফেরিওয়ালা স্টাফ', 'system' => 'সিস্টেম'],
     'courier' => ['courier_booked' => 'কুরিয়ার বুক হয়েছে', 'picked_up' => 'কুরিয়ার নিয়েছে', 'in_transit' => 'পথে আছে', 'out_for_delivery' => 'ডেলিভারির জন্য বের হয়েছে'],
@@ -40,4 +73,9 @@ return [
         'cancelled' => 'আপনার অর্ডার বাতিল হয়েছে।',
         'cancelled_refund' => 'আপনার অর্ডার বাতিল হয়েছে। আপনার পেমেন্ট ফেরত দেওয়া হবে।',
     ],
+    'axes' => collect([
+        ...array_map(fn ($c) => $c->value, OrderFulfillmentStatus::cases()),
+        ...array_map(fn ($c) => $c->value, OrderCourierStatus::cases()),
+        ...array_map(fn ($c) => $c->value, OrderDeliveryStatus::cases()),
+    ])->unique()->mapWithKeys(fn ($value) => [$value => Str::headline($value)])->all(),
 ];
