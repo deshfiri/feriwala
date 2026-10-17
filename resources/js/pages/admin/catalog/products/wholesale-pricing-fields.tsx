@@ -70,11 +70,15 @@ export default function WholesalePricingFields({
     const [markup, setMarkup] = useState(initial.markup);
     const [wholesale, setWholesale] = useState(initial.wholesale);
 
+    // The markup is calculated when its field loses focus, not on every
+    // keystroke; the base cost still recalculates as it is typed.
+    const [appliedMarkup, setAppliedMarkup] = useState(initial.markup);
+
     const percentage = method === 'percentage';
     const { preview, calculating } = useWholesalePricePreview(
         percentage,
         baseCost,
-        markup,
+        appliedMarkup,
     );
 
     // The latest calculated price becomes the editable one the moment the
@@ -82,7 +86,7 @@ export default function WholesalePricingFields({
     const calculated =
         preview?.wholesale_price ??
         (percentage &&
-        markup === initial.markup &&
+        appliedMarkup === initial.markup &&
         baseCost === initial.baseCost
             ? initial.saved
             : null);
@@ -172,6 +176,7 @@ export default function WholesalePricingFields({
                                 onChange={(event) =>
                                     setMarkup(event.target.value)
                                 }
+                                onBlur={() => setAppliedMarkup(markup)}
                                 className="pr-8 tabular-nums"
                             />
                             <span

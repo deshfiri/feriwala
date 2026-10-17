@@ -120,6 +120,12 @@ describe('WholesalePricingFields', () => {
         fireEvent.change(markup, { target: { value: '20' } });
         await settle();
 
+        // Typing alone calculates nothing; leaving the field does.
+        expect(submit).not.toHaveBeenCalled();
+
+        fireEvent.blur(markup);
+        await settle();
+
         // The price is no longer something to type, and nothing posts it.
         expect(
             document.querySelector('input[name="wholesale_price"]'),
@@ -148,12 +154,13 @@ describe('WholesalePricingFields', () => {
         renderFields();
 
         chooseMethod('percentage');
-        fireEvent.change(
-            document.querySelector(
-                'input[name="wholesale_markup_percentage"]',
-            ) as HTMLInputElement,
-            { target: { value: '20' } },
-        );
+
+        const markup = document.querySelector(
+            'input[name="wholesale_markup_percentage"]',
+        ) as HTMLInputElement;
+
+        fireEvent.change(markup, { target: { value: '20' } });
+        fireEvent.blur(markup);
         await settle();
 
         chooseMethod('fixed');
