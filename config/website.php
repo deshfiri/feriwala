@@ -29,6 +29,9 @@ return [
     | for outright). A production site never has it, because a customer must
     | never be sent to a plain-HTTP address or to somebody's own network.
     |
+    | The same switch lets a storefront on the same machine call the Storefront API
+    | over plain http, which the API otherwise refuses outright.
+    |
     */
 
     'allow_local_addresses' => (bool) env('WEBSITE_ALLOW_LOCAL_ADDRESSES', env('APP_ENV') === 'local'),

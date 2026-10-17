@@ -55,6 +55,15 @@ describe('a request that fails a check', function () {
             ->assertJsonPath('error.code', 'https_required');
     });
 
+    it('is accepted over plain HTTP only when local development is allowed', function () {
+        config(['website.allow_local_addresses' => true]);
+
+        storefrontCall($this->credential, $this->secret, 'connection', overrides: ['https' => false])->assertOk();
+
+        // A bad signature is still refused: only the transport rule is relaxed.
+        storefrontCall($this->credential, $this->secret, 'connection', overrides: ['https' => false, 'secret' => 'wrong'])->assertUnauthorized();
+    });
+
     it('is refused without an Authorization header', function () {
         storefrontCall($this->credential, $this->secret, 'connection', overrides: ['authorization' => null])
             ->assertUnauthorized()

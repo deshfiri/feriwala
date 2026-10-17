@@ -50,7 +50,11 @@ class AuthenticateStorefrontRequest
 
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->isSecure()) {
+        // HTTPS only, because a redirect would leak a signed request (§3.3) —
+        // except on a developer's own machine, where the ERP and the storefront
+        // both run over plain http (config website.allow_local_addresses, which
+        // follows APP_ENV=local and is never on in production).
+        if (! $request->isSecure() && ! config('website.allow_local_addresses')) {
             return StorefrontError::respond($request, 400, 'https_required', 'The storefront API is served over HTTPS only.');
         }
 
