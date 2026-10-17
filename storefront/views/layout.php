@@ -7,6 +7,10 @@ $brand = $site['branding'] ?? [];
 $shopName = (string) ($site['name'] ?? app_name());
 $pageTitle = isset($title) && $title !== '' && $title !== $shopName ? $title.' · '.$shopName : $shopName;
 $logo = safe_url($brand['logo_url'] ?? null);
+$primary = (string) ($brand['primary_color'] ?? '#1f2937');
+$secondary = (string) ($brand['secondary_color'] ?? '#c2410c');
+$initial = mb_strtoupper(mb_substr(trim($shopName) === '' ? '?' : trim($shopName), 0, 1));
+$other = ($locale ?? 'en') === 'bn' ? 'en' : 'bn';
 ?>
 <!doctype html>
 <html lang="<?= e($locale ?? 'en') ?>">
@@ -16,12 +20,12 @@ $logo = safe_url($brand['logo_url'] ?? null);
     <title><?= e($pageTitle) ?></title>
     <?php if (! empty($description)) { ?><meta name="description" content="<?= e($description) ?>"><?php } ?>
     <?php if (! empty($noindex)) { ?><meta name="robots" content="noindex, nofollow"><?php } ?>
-    <meta name="theme-color" content="<?= e($brand['primary_color'] ?? '#1f2937') ?>">
+    <meta name="theme-color" content="<?= e($primary) ?>">
     <?php if (! empty($image)) { ?>
         <meta property="og:image" content="<?= e(safe_url($image)) ?>">
         <meta property="og:title" content="<?= e($title ?? '') ?>">
     <?php } ?>
-    <style>:root{--brand:<?= e($brand['primary_color'] ?? '#1f2937') ?>;--accent:<?= e($brand['secondary_color'] ?? '#c2410c') ?>}</style>
+    <style>:root{--brand:<?= e($primary) ?>;--on-brand:<?= e(on_colour($primary)) ?>;--accent:<?= e($secondary) ?>;--on-accent:<?= e(on_colour($secondary)) ?>}</style>
     <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 </head>
 <body>
@@ -29,11 +33,12 @@ $logo = safe_url($brand['logo_url'] ?? null);
 
 <header class="site-header">
     <div class="container header-row">
-        <a class="brand" href="/" aria-label="<?= e($site['name'] ?? app_name()) ?>">
+        <a class="brand" href="/" aria-label="<?= e($shopName) ?>">
             <?php if ($logo !== '') { ?>
-                <img src="<?= e($logo) ?>" alt="" height="36">
+                <img class="brand-logo" src="<?= e($logo) ?>" alt="" width="160" height="40" data-fallback="brand-mark">
             <?php } ?>
-            <span><?= e($site['name'] ?? app_name()) ?></span>
+            <span class="brand-mark" aria-hidden="true"<?= $logo !== '' ? ' hidden' : '' ?>><?= e($initial) ?></span>
+            <span class="brand-name"><?= e($shopName) ?></span>
         </a>
 
         <form class="search" action="/search" method="get" role="search">
@@ -43,16 +48,33 @@ $logo = safe_url($brand['logo_url'] ?? null);
         </form>
 
         <nav class="header-actions" aria-label="<?= e(t('nav.account')) ?>">
-            <a href="/track"><?= e(t('nav.track')) ?></a>
-            <form action="/locale" method="post" class="locale">
+            <a class="hide-small" href="/track"><?= e(t('nav.track')) ?></a>
+            <form action="/locale" method="post" class="locale hide-small">
                 <?= csrf_field() ?>
-                <input type="hidden" name="locale" value="<?= ($locale ?? 'en') === 'bn' ? 'en' : 'bn' ?>">
-                <button type="submit" class="link" lang="<?= ($locale ?? 'en') === 'bn' ? 'en' : 'bn' ?>"><?= e(($locale ?? 'en') === 'bn' ? 'English' : 'বাংলা') ?></button>
+                <input type="hidden" name="locale" value="<?= e($other) ?>">
+                <button type="submit" class="link" lang="<?= e($other) ?>"><?= e($other === 'en' ? 'English' : 'বাংলা') ?></button>
             </form>
             <a class="cart-link" href="/cart">
-                <?= e(t('nav.cart')) ?>
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.76L20 8H6.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/></svg>
+                <span class="cart-text"><?= e(t('nav.cart')) ?></span>
                 <?php if (($cartCount ?? 0) > 0) { ?><span class="badge" aria-label="<?= e(t('nav.cart_items', ['n' => (string) $cartCount])) ?>"><?= e(num($cartCount)) ?></span><?php } ?>
             </a>
+            <details class="menu">
+                <summary aria-label="<?= e(t('nav.menu_open')) ?>">
+                    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    <span class="sr-only"><?= e(t('nav.menu')) ?></span>
+                </summary>
+                <div class="menu-panel">
+                    <a href="/track"><?= e(t('nav.track')) ?></a>
+                    <a href="/about"><?= e(t('page.about')) ?></a>
+                    <a href="/contact"><?= e(t('page.contact')) ?></a>
+                    <form action="/locale" method="post">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="locale" value="<?= e($other) ?>">
+                        <button type="submit" class="link" lang="<?= e($other) ?>"><?= e($other === 'en' ? 'English' : 'বাংলা') ?></button>
+                    </form>
+                </div>
+            </details>
         </nav>
     </div>
 
@@ -83,27 +105,32 @@ $logo = safe_url($brand['logo_url'] ?? null);
 <footer class="site-footer">
     <div class="container footer-grid">
         <div>
-            <strong><?= e($site['name'] ?? app_name()) ?></strong>
-            <?php if (! empty($brand['tagline'])) { ?><p><?= e($brand['tagline']) ?></p><?php } ?>
+            <strong><?= e($shopName) ?></strong>
+            <?php if (! empty($brand['tagline'])) { ?><p class="muted"><?= e($brand['tagline']) ?></p><?php } ?>
+        </div>
+        <div>
+            <strong><?= e(t('footer.shop')) ?></strong>
+            <ul>
+                <li><a href="/products"><?= e(t('nav.all')) ?></a></li>
+                <li><a href="/cart"><?= e(t('nav.cart')) ?></a></li>
+                <li><a href="/track"><?= e(t('nav.track')) ?></a></li>
+            </ul>
         </div>
         <div>
             <strong><?= e(t('footer.help')) ?></strong>
             <ul>
-                <li><a href="/track"><?= e(t('nav.track')) ?></a></li>
                 <li><a href="/about"><?= e(t('page.about')) ?></a></li>
                 <li><a href="/contact"><?= e(t('page.contact')) ?></a></li>
-            </ul>
-        </div>
-        <div>
-            <strong><?= e(t('page.contact')) ?></strong>
-            <ul>
                 <?php if (! empty($site['contact']['phone'])) { ?><li><?= e($site['contact']['phone']) ?></li><?php } ?>
                 <?php if (! empty($site['contact']['email'])) { ?><li><?= e($site['contact']['email']) ?></li><?php } ?>
                 <?php if (! empty($site['contact']['address'])) { ?><li><?= e($site['contact']['address']) ?></li><?php } ?>
             </ul>
         </div>
     </div>
-    <div class="container fine"><?= e(t('footer.rights', ['year' => gmdate('Y'), 'name' => (string) ($site['name'] ?? app_name())])) ?></div>
+    <div class="container fine footer-bottom">
+        <span><?= e(t('footer.rights', ['year' => gmdate('Y'), 'name' => $shopName])) ?></span>
+        <span><?= e(t('footer.powered')) ?></span>
+    </div>
 </footer>
 
 <script src="<?= e(asset('js/app.js')) ?>" defer></script>

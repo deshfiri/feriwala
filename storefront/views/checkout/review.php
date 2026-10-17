@@ -1,4 +1,5 @@
 <?php
+use Storefront\Http\View;
 use Storefront\Support\Money;
 
 /** @var array<string, mixed> $checkout */
@@ -18,6 +19,7 @@ foreach ((array) $quote['items'] as $line) {
 $canPlace = $stockProblems === [] && ! $codBlocked;
 ?>
 <div class="page-head"><h1><?= e(t('review.title')) ?></h1></div>
+<?= View::partial('steps', ['current' => 3]) ?>
 
 <?php if ($repriced) { ?>
     <div class="flash flash-warning" role="alert">

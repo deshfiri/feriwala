@@ -1,5 +1,6 @@
 <?php
 
+use Storefront\Http\View;
 use Storefront\Support\Money;
 
 /** @var list<array<string, mixed>> $items */
@@ -10,10 +11,13 @@ use Storefront\Support\Money;
 $blocked = $lineProblems !== [] || $problem === 'cart.not_accepting';
 ?>
 <div class="page-head"><h1><?= e(t('cart.title')) ?></h1></div>
+<?= View::partial('steps', ['current' => 1]) ?>
 
 <?php if ($items === []) { ?>
     <div class="empty">
-        <p><?= e(t('cart.empty')) ?></p>
+        <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true" focusable="false"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.76L20 8H6.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="20" r="1.3" fill="currentColor"/><circle cx="17" cy="20" r="1.3" fill="currentColor"/></svg>
+        <p><strong><?= e(t('cart.empty')) ?></strong></p>
+        <p class="muted"><?= e(t('cart.empty_hint')) ?></p>
         <a class="btn" href="/products"><?= e(t('cart.continue')) ?></a>
     </div>
 <?php } else { ?>
@@ -39,7 +43,7 @@ $blocked = $lineProblems !== [] || $problem === 'cart.not_accepting';
                                 <input type="hidden" name="sku" value="<?= e($line['sku']) ?>">
                                 <label class="sr-only" for="q-<?= e($line['sku']) ?>"><?= e(t('product.quantity')) ?></label>
                                 <input id="q-<?= e($line['sku']) ?>" name="quantity" type="number" min="1" max="1000" value="<?= e((string) $line['quantity']) ?>">
-                                <button type="submit" class="btn btn-quiet"><?= e(t('cart.update')) ?></button>
+                                <button type="submit" class="btn btn-quiet btn-small"><?= e(t('cart.update')) ?></button>
                             </form>
                             <form action="/cart/remove" method="post">
                                 <?= csrf_field() ?>

@@ -1,5 +1,6 @@
 <?php
 use Storefront\Controllers\CartController;
+use Storefront\Domain\Catalog;
 
 /** @var array<string, mixed> $product */
 $variants = array_values(array_filter((array) ($product['variants'] ?? []), 'is_array'));
@@ -21,6 +22,8 @@ foreach ($variants as $variant) {
 }
 $selected = $firstInStock ?? ($variants[0] ?? null);
 $anyStock = $firstInStock !== null;
+$selectedQty = (int) ($selected['availability']['quantity'] ?? 0);
+$low = Catalog::LOW_STOCK;
 $brand = is_array($product['brand'] ?? null) ? $product['brand'] : null;
 $categories = array_values(array_filter((array) ($product['categories'] ?? []), 'is_array'));
 ?>
@@ -33,7 +36,8 @@ $categories = array_values(array_filter((array) ($product['categories'] ?? []), 
 <div class="product">
     <div class="gallery">
         <?php if ($media !== []) { ?>
-            <img id="hero-image" class="hero-image" src="<?= e(safe_url($media[0]['url'])) ?>" alt="<?= e($media[0]['alt'] ?? $product['name'] ?? '') ?>" width="800" height="800">
+            <img id="hero-image" class="hero-image" src="<?= e(safe_url($media[0]['url'])) ?>" alt="<?= e($media[0]['alt'] ?? $product['name'] ?? '') ?>" width="800" height="800" data-fallback="hero-fallback">
+            <div id="hero-fallback" class="hero-image placeholder" role="img" aria-label="<?= e(t('ui.image_missing')) ?>" hidden><span><?= e(mb_substr((string) ($product['name'] ?? ''), 0, 1)) ?></span></div>
             <?php if (count($media) > 1) { ?>
                 <ul class="thumbs">
                     <?php foreach ($media as $index => $item) { ?>
@@ -46,7 +50,7 @@ $categories = array_values(array_filter((array) ($product['categories'] ?? []), 
                 </ul>
             <?php } ?>
         <?php } else { ?>
-            <div class="hero-image placeholder"><span><?= e(mb_substr((string) ($product['name'] ?? ''), 0, 1)) ?></span></div>
+            <div class="hero-image placeholder" role="img" aria-label="<?= e(t('ui.image_missing')) ?>"><span><?= e(mb_substr((string) ($product['name'] ?? ''), 0, 1)) ?></span></div>
         <?php } ?>
     </div>
 
@@ -86,7 +90,7 @@ $categories = array_values(array_filter((array) ($product['categories'] ?? []), 
                                     data-stock="<?= $in ? '1' : '0' ?>"
                                     data-qty="<?= e((string) (int) ($variant['availability']['quantity'] ?? 0)) ?>"
                                     <?= ($selected['sku'] ?? null) === ($variant['sku'] ?? null) ? 'selected' : '' ?>>
-                                <?= e($label) ?><?= $in ? '' : ' — '.e(t('product.sold_out')) ?>
+                                <?= e($label) ?><?= $in ? '' : ' — '.e(t('product.out_of_stock')) ?>
                             </option>
                         <?php } ?>
                     </select>
@@ -94,17 +98,24 @@ $categories = array_values(array_filter((array) ($product['categories'] ?? []), 
                     <input type="hidden" name="sku" value="<?= e($variants[0]['sku'] ?? '') ?>">
                 <?php } ?>
 
-                <p id="stock" class="stock <?= $anyStock ? 'in' : 'out' ?>" aria-live="polite" data-in="<?= e(t('product.in_stock')) ?>" data-out="<?= e(t('product.sold_out')) ?>">
-                    <?= e(t($anyStock ? 'product.in_stock' : 'product.sold_out')) ?>
+                <p id="stock" class="stock <?= ! $anyStock ? 'out' : ($selectedQty > 0 && $selectedQty <= $low ? 'low' : 'in') ?>" aria-live="polite"
+                   data-in="<?= e(t('product.in_stock')) ?>" data-out="<?= e(t('product.out_of_stock')) ?>" data-low="<?= e(t('product.low_stock', ['n' => ':n'])) ?>" data-threshold="<?= e((string) $low) ?>">
+                    <?php if (! $anyStock) { ?><?= e(t('product.out_of_stock')) ?>
+                    <?php } elseif ($selectedQty > 0 && $selectedQty <= $low) { ?><?= e(t('product.low_stock', ['n' => num((string) $selectedQty)])) ?>
+                    <?php } else { ?><?= e(t('product.in_stock')) ?><?php } ?>
                 </p>
 
                 <label for="quantity"><?= e(t('product.quantity')) ?></label>
-                <input id="quantity" name="quantity" type="number" inputmode="numeric" min="<?= e((string) $min) ?>" <?= $max > 0 ? 'max="'.e((string) $max).'"' : '' ?> value="<?= e((string) $min) ?>">
+                <div class="stepper" data-stepper>
+                    <button type="button" class="step" data-step="-1" aria-label="<?= e(t('product.qty_less')) ?>" hidden>−</button>
+                    <input id="quantity" name="quantity" type="number" inputmode="numeric" min="<?= e((string) $min) ?>" <?= $max > 0 ? 'max="'.e((string) $max).'"' : '' ?> data-max="<?= e((string) $max) ?>" value="<?= e((string) $min) ?>">
+                    <button type="button" class="step" data-step="1" aria-label="<?= e(t('product.qty_more')) ?>" hidden>+</button>
+                </div>
                 <?php if ($min > 1 || $max > 0) { ?>
                     <p class="muted small"><?= e(t('product.quantity_range', ['min' => (string) $min, 'max' => $max > 0 ? (string) $max : '∞'])) ?></p>
                 <?php } ?>
 
-                <button class="btn btn-accent btn-wide" type="submit" id="add" <?= $anyStock ? '' : 'disabled' ?>><?= e(t('product.add')) ?></button>
+                <button class="btn btn-accent btn-wide btn-large" type="submit" id="add" <?= $anyStock ? '' : 'disabled' ?>><?= e(t('product.add')) ?></button>
             </form>
         <?php } ?>
 

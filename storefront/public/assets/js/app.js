@@ -36,8 +36,39 @@
             }
 
             if (stock) {
-                stock.className = 'stock ' + (inStock ? 'in' : 'out');
-                stock.textContent = stock.getAttribute(inStock ? 'data-in' : 'data-out') || stock.textContent;
+                var left = parseInt(option.getAttribute('data-qty') || '0', 10);
+                var threshold = parseInt(
+                    stock.getAttribute('data-threshold') || '5',
+                    10,
+                );
+                var low = inStock && left > 0 && left <= threshold;
+
+                stock.className =
+                    'stock ' + (!inStock ? 'out' : low ? 'low' : 'in');
+                stock.textContent = !inStock
+                    ? stock.getAttribute('data-out') || stock.textContent
+                    : low
+                      ? (stock.getAttribute('data-low') || '').replace(
+                            ':n',
+                            String(left),
+                        )
+                      : stock.getAttribute('data-in') || stock.textContent;
+            }
+
+            if (qty) {
+                var cap = parseInt(qty.getAttribute('data-max') || '0', 10);
+                var available = parseInt(
+                    option.getAttribute('data-qty') || '0',
+                    10,
+                );
+                var ceiling = cap > 0 ? Math.min(cap, available) : available;
+
+                if (inStock && ceiling > 0) {
+                    qty.max = String(ceiling);
+                    if (parseInt(qty.value || '1', 10) > ceiling) {
+                        qty.value = String(ceiling);
+                    }
+                }
             }
 
             if (add) {
@@ -48,6 +79,52 @@
         picker.addEventListener('change', sync);
         sync();
     }
+
+    // Quantity − / + (the buttons are hidden until this runs, so without script the field just works).
+    document.querySelectorAll('[data-stepper]').forEach(function (stepper) {
+        var input = stepper.querySelector('input');
+
+        stepper.querySelectorAll('[data-step]').forEach(function (button) {
+            button.hidden = false;
+            button.addEventListener('click', function () {
+                var min = parseInt(input.min || '1', 10);
+                var max = parseInt(input.max || '0', 10);
+                var next =
+                    (parseInt(input.value || String(min), 10) || min) +
+                    parseInt(button.getAttribute('data-step'), 10);
+
+                next = Math.max(min, next);
+                input.value = String(max > 0 ? Math.min(max, next) : next);
+            });
+        });
+    });
+
+    // A picture that cannot be loaded is replaced by its fallback — never a broken-image icon.
+    var swapFallback = function (image) {
+        var id = image.getAttribute('data-fallback');
+        var fallback = id
+            ? document.getElementById(id) ||
+              image.parentNode.querySelector('.' + id)
+            : null;
+
+        if (!fallback) {
+            return;
+        }
+
+        image.hidden = true;
+        fallback.hidden = false;
+    };
+
+    document.querySelectorAll('img[data-fallback]').forEach(function (image) {
+        image.addEventListener('error', function () {
+            swapFallback(image);
+        });
+
+        // It may have failed before this script ran.
+        if (image.complete && image.naturalWidth === 0) {
+            swapFallback(image);
+        }
+    });
 
     // Gallery thumbnails swap the large image.
     var hero = document.getElementById('hero-image');
@@ -61,9 +138,11 @@
             event.preventDefault();
             hero.src = link.getAttribute('data-gallery');
             hero.alt = link.getAttribute('data-alt') || '';
-            document.querySelectorAll('[data-gallery]').forEach(function (other) {
-                other.removeAttribute('aria-current');
-            });
+            document
+                .querySelectorAll('[data-gallery]')
+                .forEach(function (other) {
+                    other.removeAttribute('aria-current');
+                });
             link.setAttribute('aria-current', 'true');
         });
     });
@@ -71,9 +150,15 @@
     // A second click must not send an order twice.
     document.querySelectorAll('form[data-once]').forEach(function (form) {
         form.addEventListener('submit', function () {
-            form.querySelectorAll('button[type="submit"]').forEach(function (button) {
-                button.disabled = true;
-            });
+            form.querySelectorAll('button[type="submit"]').forEach(
+                function (button) {
+                    button.setAttribute('aria-busy', 'true');
+                    // Disabled on the next tick: disabling inside the submit handler can cancel the submit in some browsers.
+                    window.setTimeout(function () {
+                        button.disabled = true;
+                    }, 0);
+                },
+            );
         });
     });
 
@@ -104,7 +189,11 @@
             list.forEach(function (area) {
                 var option = document.createElement('option');
                 option.value = area.id;
-                option.textContent = (area.name && (area.name[document.documentElement.lang] || area.name.en)) || area.id;
+                option.textContent =
+                    (area.name &&
+                        (area.name[document.documentElement.lang] ||
+                            area.name.en)) ||
+                    area.id;
                 select.appendChild(option);
             });
 
@@ -112,12 +201,23 @@
         };
 
         var load = function (parent, select) {
-            var url = '/api/areas' + (parent ? '?parent=' + encodeURIComponent(parent) : '');
+            var url =
+                '/api/areas' +
+                (parent ? '?parent=' + encodeURIComponent(parent) : '');
 
-            return fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
-                .then(function (response) { return response.ok ? response.json() : { data: [] }; })
-                .then(function (body) { fill(select, body.data || []); })
-                .catch(function () { /* the address field still works */ });
+            return fetch(url, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then(function (response) {
+                    return response.ok ? response.json() : { data: [] };
+                })
+                .then(function (body) {
+                    fill(select, body.data || []);
+                })
+                .catch(function () {
+                    /* the address field still works */
+                });
         };
 
         selects.forEach(function (select, level) {

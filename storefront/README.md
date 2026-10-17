@@ -31,7 +31,7 @@ plain HTTP, and its payment return URL must be `https://`).
 1. Point the web server's document root at **`storefront/public/`** — nothing else is served.
 2. Create a database and a user for it.
 3. **Connect the store in the ERP.** In the admin dashboard open the partner's website and use
-   *Connect the store*: give this storefront's address and it shows a **Store ID** and a **token**
+   _Connect the store_: give this storefront's address and it shows a **Store ID** and a **token**
    (once). Platform staff authorised to manage integrations can do this on the partner's behalf.
 4. `cp .env.example .env` and fill it in: the database, `APP_URL`, and the three connection lines
    the dashboard showed — `ERP_BASE_URL`, `STORE_ID`, `STORE_TOKEN`. That is the whole connection.

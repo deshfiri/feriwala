@@ -116,6 +116,31 @@ if (! function_exists('paragraphs')) {
     }
 }
 
+if (! function_exists('on_colour')) {
+    /**
+     * Black or white text, whichever reads better on a shop's chosen colour
+     * (WCAG relative luminance). A partner may pick a pale brand colour; a white
+     * button label on it would not be legible.
+     */
+    function on_colour(string $hex): string
+    {
+        if (preg_match('/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/', $hex, $m) !== 1) {
+            return '#ffffff';
+        }
+
+        $linear = static function (string $channel): float {
+            $value = hexdec($channel) / 255;
+
+            return $value <= 0.03928 ? $value / 12.92 : (($value + 0.055) / 1.055) ** 2.4;
+        };
+
+        $luminance = 0.2126 * $linear($m[1]) + 0.7152 * $linear($m[2]) + 0.0722 * $linear($m[3]);
+
+        // White wins on anything darker than mid-grey luminance.
+        return $luminance > 0.36 ? '#111111' : '#ffffff';
+    }
+}
+
 if (! function_exists('safe_url')) {
     /**
      * A URL from the ERP, allowed only when it is plain http(s). Anything else

@@ -230,6 +230,29 @@ final class Catalog
         return false;
     }
 
+    /** At or below this many units left, a product says how few remain. */
+    public const LOW_STOCK = 5;
+
+    /**
+     * How many units can be ordered across the product's variants, as the ERP
+     * reports them. A count to show, never one to decide with — the ERP checks
+     * again at the quote and at the order.
+     *
+     * @param  array<string, mixed>  $product
+     */
+    public static function unitsLeft(array $product): int
+    {
+        $total = 0;
+
+        foreach (is_array($product['variants'] ?? null) ? $product['variants'] : [] as $variant) {
+            if (is_array($variant) && ($variant['availability']['in_stock'] ?? false)) {
+                $total += max(0, (int) ($variant['availability']['quantity'] ?? 0));
+            }
+        }
+
+        return $total;
+    }
+
     /**
      * Compare two decimal strings exactly.
      */

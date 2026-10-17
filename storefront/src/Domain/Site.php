@@ -62,6 +62,7 @@ final class Site
                 'secondary_color' => self::colour($branding['secondary_color'] ?? null, '#c2410c'),
                 'logo_url' => is_string($branding['logo_url'] ?? null) ? $branding['logo_url'] : null,
                 'banner_url' => is_string($branding['banner_url'] ?? null) ? $branding['banner_url'] : null,
+                'banner_link' => self::bannerLink($branding['banner_link_url'] ?? null),
                 'tagline' => is_string($branding['tagline'] ?? null) ? $branding['tagline'] : null,
                 'about' => is_string($branding['about'] ?? null) ? $branding['about'] : null,
             ],
@@ -80,7 +81,45 @@ final class Site
                 'enabled' => (bool) ($cod['enabled'] ?? false),
                 'maximum' => is_array($cod['maximum'] ?? null) ? $cod['maximum'] : null,
             ],
+            // Whether a cash-on-delivery customer confirms with an SMS code. Only
+            // what the ERP said: when it is silent (an older ERP) the code is asked for.
+            'sms_verification_required' => (bool) ($checkout['sms_verification_required'] ?? true),
         ];
+    }
+
+    /**
+     * Where the banner goes when clicked, or null for a plain picture.
+     *
+     * The ERP only sends an address it has vetted; this checks again because a
+     * link ends up in an `href`. A page on this shop (`/products`) or an https
+     * address — plain http only on a developer machine. Anything else, including
+     * `javascript:`, protocol-relative `//host`, embedded credentials and control
+     * characters, is dropped and the banner is just a picture.
+     *
+     * @return array{url: string, external: bool}|null
+     */
+    public static function bannerLink(mixed $value): ?array
+    {
+        if (! is_string($value) || $value === '' || strlen($value) > 2048 || preg_match('/[\x00-\x20\x7f\\\\]/', $value) === 1) {
+            return null;
+        }
+
+        if (str_starts_with($value, '/')) {
+            return str_starts_with($value, '//') ? null : ['url' => $value, 'external' => false];
+        }
+
+        $parts = parse_url($value);
+
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host']) || isset($parts['user']) || isset($parts['pass'])) {
+            return null;
+        }
+
+        $scheme = strtolower($parts['scheme']);
+        $local = Env::get('APP_ENV', 'production') === 'local';
+
+        return $scheme === 'https' || ($scheme === 'http' && $local)
+            ? ['url' => $value, 'external' => true]
+            : null;
     }
 
     /**

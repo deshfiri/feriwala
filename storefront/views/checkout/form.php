@@ -1,4 +1,7 @@
 <?php
+
+use Storefront\Http\View;
+
 /** @var list<array<string, mixed>> $items */
 /** @var array<string, string> $errors */
 /** @var list<string> $methods */
@@ -12,8 +15,9 @@ $invalid = static fn (string $field): string => isset($errors[$field]) ? ' aria-
 $chosen = old('payment_method', (string) ($methods[0] ?? ''));
 ?>
 <div class="page-head"><h1><?= e(t('checkout.title')) ?></h1></div>
+<?= View::partial('steps', ['current' => 2]) ?>
 
-<form class="checkout" action="/checkout" method="post" novalidate>
+<form class="checkout" action="/checkout" method="post" novalidate data-once>
     <?= csrf_field() ?>
 
     <fieldset>
