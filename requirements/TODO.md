@@ -145,7 +145,7 @@ renamed, and entries are never deleted.
 - [~] **P0-26** `SensitiveActionGuard` + `SensitiveActionRequest`: graded controls — password confirmation for all sensitive actions, 2FA for money movement, second approver for releasing payment, mandatory reason (19 tests). _Middleware wiring and audit emission land with the first real sensitive action_ (§32.2)
 - [ ] **P0-27** Maker-checker / `approval_requests` scaffold for second-approver actions (§32.2)
 - [x] **P0-28** `PreventSearchIndexing` middleware, aliased `noindex`, applied per-route so the public site and storefronts stay indexable (§34.2) — 3 tests
-- [x] **P0-61** Roles & Permissions admin UI, closing the gap P0-20/21/22 left open: the 21 `PlatformRole` cases and 161-permission catalogue existed with no screen to browse them and no production code path that ever called Spatie's `assignRole`/`syncRoles`. `RolesController` (list all 21 with permission/holder counts; inspect one role's grants grouped by module and who holds it) and `StaffAccessController` (searchable platform-staff directory; one staff member's *effective* permissions plus a role-assignment form) are both read-only-by-design where the architecture is: `PlatformRole` is a pure PHP enum and the catalogue matrix is hand-declared, not data, so there is no safe way to create or clone a role without a code deploy — reported as an architectural limitation rather than worked around with a parallel, database-backed role system. `AssignPlatformRole` is the only code path that ever calls `syncRoles()`, guarded against self-change, granting/touching Super Admin without already holding it, and demoting the platform's last *active* Super Admin (a locked or suspended one doesn't count as available) — mirroring `ChangeIdentityAccess`'s existing "guard lives in the action, because `Gate::before` passes a Super Admin actor straight over the policy" pattern. The role-assignment write sits behind `RequirePassword` on top of every action/policy guard. 45 Pest tests (`AssignPlatformRoleTest`, `RolesScreensTest`, `StaffAccessTest`) plus 2 Vitest nav cases. **Live-browser verification complete** (isolated schema/Redis prefix, `~/feriwala-verification/rbac/`): all four screens render with zero console errors as System Administrator in EN/light, EN/dark and BN/light; Super Admin's role picker includes all 21 roles while System Administrator's excludes Super Admin; SMS Manager gets 403 on Roles/Staff Access and a Settings hub showing only its SMS card; a Client/Partner owner gets 403 on Roles/Staff Access and an empty Settings hub; a real end-to-end role reassignment through Fortify's actual password-confirmation redirect succeeded and was reflected immediately in both the staff list and the staff member's own page; 1440/820/390px all show zero horizontal overflow. **Not yet done:** the SaaS-shell responsive/accessibility closure pass the rest of this batch still owes (this entry covers only these four new screens, not a full-app audit).
+- [x] **P0-61** Roles & Permissions admin UI, closing the gap P0-20/21/22 left open: the 21 `PlatformRole` cases and 161-permission catalogue existed with no screen to browse them and no production code path that ever called Spatie's `assignRole`/`syncRoles`. `RolesController` (list all 21 with permission/holder counts; inspect one role's grants grouped by module and who holds it) and `StaffAccessController` (searchable platform-staff directory; one staff member's _effective_ permissions plus a role-assignment form) are both read-only-by-design where the architecture is: `PlatformRole` is a pure PHP enum and the catalogue matrix is hand-declared, not data, so there is no safe way to create or clone a role without a code deploy — reported as an architectural limitation rather than worked around with a parallel, database-backed role system. `AssignPlatformRole` is the only code path that ever calls `syncRoles()`, guarded against self-change, granting/touching Super Admin without already holding it, and demoting the platform's last _active_ Super Admin (a locked or suspended one doesn't count as available) — mirroring `ChangeIdentityAccess`'s existing "guard lives in the action, because `Gate::before` passes a Super Admin actor straight over the policy" pattern. The role-assignment write sits behind `RequirePassword` on top of every action/policy guard. 45 Pest tests (`AssignPlatformRoleTest`, `RolesScreensTest`, `StaffAccessTest`) plus 2 Vitest nav cases. **Live-browser verification complete** (isolated schema/Redis prefix, `~/feriwala-verification/rbac/`): all four screens render with zero console errors as System Administrator in EN/light, EN/dark and BN/light; Super Admin's role picker includes all 21 roles while System Administrator's excludes Super Admin; SMS Manager gets 403 on Roles/Staff Access and a Settings hub showing only its SMS card; a Client/Partner owner gets 403 on Roles/Staff Access and an empty Settings hub; a real end-to-end role reassignment through Fortify's actual password-confirmation redirect succeeded and was reflected immediately in both the staff list and the staff member's own page; 1440/820/390px all show zero horizontal overflow. **Not yet done:** the SaaS-shell responsive/accessibility closure pass the rest of this batch still owes (this entry covers only these four new screens, not a full-app audit).
 
 ## P0.D Settings & configuration
 
@@ -213,22 +213,22 @@ renamed, and entries are never deleted.
       deploy hands whoever is mid-attack a fresh budget. Locks already have a database of their own for the same
       reason (§38); this is the same argument one shelf down. Noted from P1-14
 - [~] **P0-60** Location Directory + Shared Address module: a bundled, idempotent Bangladesh
-      Division/District/Upazila/Union directory (`bd_locations`, `bd-locations:import`
-      validate/dry-run/import, never deletes a location — deactivates instead), and `shared_addresses`,
-      a self-scoped address book for a `BusinessAccount`'s business/operational addresses and a
-      Supplier's registered/pickup/return addresses, with Erp and Supplier screens and cached cascading
-      lookups. One active default per (owner, type), the type/owner-kind pairing, and the
-      division/district/upazila/union chain are enforced **in the database**, not only in the
-      application — a partial unique index, a same-row CHECK, and a trigger against `bd_locations`
-      respectively — proven under real `pcntl_fork()` concurrency
-      (`tests/Feature/Concurrency/SharedAddressConcurrencyTest.php`), not trusted at design time (D28).
-      **Not done, and not claimed as done:** `SharedAddress::toSnapshot()` is not wired into any Order,
-      Fulfilment or Courier consumer — nothing outside this module reads a `SharedAddress` yet.
-      `user_addresses` (Wholesale checkout's billing/shipping, and the still-unwired registration
-      present/permanent address) is left exactly as it was: no backfill, no compatibility adapter — a
-      name-based match from its free-text `city`/`district` to a `bd_locations` row was ruled out as a
-      guess rather than attempted (D28). A human-supervised backfill tool remains a possible future
-      task, not started.
+  Division/District/Upazila/Union directory (`bd_locations`, `bd-locations:import`
+  validate/dry-run/import, never deletes a location — deactivates instead), and `shared_addresses`,
+  a self-scoped address book for a `BusinessAccount`'s business/operational addresses and a
+  Supplier's registered/pickup/return addresses, with Erp and Supplier screens and cached cascading
+  lookups. One active default per (owner, type), the type/owner-kind pairing, and the
+  division/district/upazila/union chain are enforced **in the database**, not only in the
+  application — a partial unique index, a same-row CHECK, and a trigger against `bd_locations`
+  respectively — proven under real `pcntl_fork()` concurrency
+  (`tests/Feature/Concurrency/SharedAddressConcurrencyTest.php`), not trusted at design time (D28).
+  **Not done, and not claimed as done:** `SharedAddress::toSnapshot()` is not wired into any Order,
+  Fulfilment or Courier consumer — nothing outside this module reads a `SharedAddress` yet.
+  `user_addresses` (Wholesale checkout's billing/shipping, and the still-unwired registration
+  present/permanent address) is left exactly as it was: no backfill, no compatibility adapter — a
+  name-based match from its free-text `city`/`district` to a `bd_locations` row was ruled out as a
+  guess rather than attempted (D28). A human-supervised backfill tool remains a possible future
+  task, not started.
 
 ---
 

@@ -3,6 +3,7 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import BrandingHead from '@/components/branding-head';
+import ImpersonationBanner from '@/components/impersonation-banner';
 import NavigationSkeleton from '@/components/navigation-skeleton';
 import { useRealtimeUpdates } from '@/hooks/use-realtime-updates';
 import { useTranslation } from '@/hooks/use-translation';
@@ -31,6 +32,7 @@ export default function AppSidebarLayout({
                 variant="sidebar"
                 className="min-w-0 overflow-x-clip"
             >
+                <ImpersonationBanner />
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 <NavigationSkeleton mainId="main-content">
                     {children}

@@ -1,5 +1,14 @@
 import { Head } from '@inertiajs/react';
-import { Ban, RotateCcw, ShieldCheck } from 'lucide-react';
+import {
+    Ban,
+    BadgeCheck,
+    ExternalLink,
+    RotateCcw,
+    ShieldCheck,
+    Upload,
+} from 'lucide-react';
+import StaffKycUploadDialog from '@/components/kyc/staff-kyc-upload-dialog';
+import * as kycUpload from '@/routes/admin/accounts/kyc-upload';
 import { useState } from 'react';
 import ManagedAccountController from '@/actions/App/Http/Controllers/Admin/ManagedAccountController';
 import MoneyAmount from '@/components/money-amount';
@@ -29,6 +38,7 @@ import AccountTypeDialog, {
 import SignInAccessDialog, { type Person } from './sign-in-access-dialog';
 import WithdrawKycRequestDialog from './withdraw-kyc-request-dialog';
 import SuspensionDialog from './suspension-dialog';
+import CompleteAccountDialog from './complete-account-dialog';
 
 type Owner = {
     name: string;
@@ -83,6 +93,11 @@ type Props = {
         activated_at: string | null;
         owner: Owner | null;
     };
+    /**
+     * A signed, expiring link that opens this business's own dashboard as its
+     * owner, or null when this administrator may not (or there is no owner).
+     */
+    dashboard_url: string | null;
     account_type_options: AccountTypeOption[];
     status_history: {
         id: number;
@@ -130,6 +145,8 @@ type Props = {
         withdraw_kyc_request: boolean;
         suspend: boolean;
         reactivate: boolean;
+        complete_manually: boolean;
+        upload_kyc_document: boolean;
         verify_contact: boolean;
         manage_identity: boolean;
     };
@@ -151,6 +168,7 @@ type Props = {
  */
 export default function AdminAccountShow({
     business,
+    dashboard_url: dashboardUrl,
     account_type_options: accountTypeOptions,
     status_history: statusHistory,
     kyc_rounds: kycRounds,
@@ -176,6 +194,8 @@ export default function AdminAccountShow({
         null,
     );
     const [assigning, setAssigning] = useState(false);
+    const [completing, setCompleting] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [changingAccountType, setChangingAccountType] = useState(false);
     const [suspending, setSuspending] = useState<
         'suspend' | 'reactivate' | null
@@ -201,6 +221,40 @@ export default function AdminAccountShow({
                                 tone={business.status_tone}
                                 label={business.status_label}
                             />
+
+                            {/* Opens the owner's own dashboard in a new tab. A
+                                signed link, so it is a plain anchor. */}
+                            {dashboardUrl !== null && (
+                                <Button variant="outline" size="sm" asChild>
+                                    <a
+                                        href={dashboardUrl}
+                                        target="_blank"
+                                        rel="noopener"
+                                        title={t(
+                                            'account.dashboard_access.open_hint',
+                                        )}
+                                    >
+                                        <ExternalLink
+                                            aria-hidden="true"
+                                            className="size-4"
+                                        />
+                                        {t('account.dashboard_access.open')}
+                                    </a>
+                                </Button>
+                            )}
+
+                            {can.complete_manually && (
+                                <Button
+                                    size="sm"
+                                    onClick={() => setCompleting(true)}
+                                >
+                                    <BadgeCheck
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                    {t('account.complete_manually.action')}
+                                </Button>
+                            )}
 
                             {/* §5.3 both ways. Mutually exclusive by status,
                                 so only the one that can actually happen is
@@ -391,6 +445,21 @@ export default function AdminAccountShow({
                         title={t('account.detail.verification')}
                         description={t('account.detail.verification_help')}
                         contentClassName="p-0"
+                        actions={
+                            can.upload_kyc_document ? (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setUploading(true)}
+                                >
+                                    <Upload
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                    {t('kyc.upload_on_behalf.action')}
+                                </Button>
+                            ) : undefined
+                        }
                     >
                         {kycRounds.length === 0 ? (
                             <p className="text-muted-foreground px-5 py-4 text-sm">
@@ -810,6 +879,19 @@ export default function AdminAccountShow({
                     </SectionCard>
                 </SectionTabPanel>
             </PageContainer>
+
+            <StaffKycUploadDialog
+                targetsUrl={kycUpload.targets.url(business.id)}
+                storeForm={kycUpload.store.form(business.id)}
+                open={uploading}
+                onOpenChange={setUploading}
+            />
+
+            <CompleteAccountDialog
+                accountId={business.id}
+                open={completing}
+                onOpenChange={setCompleting}
+            />
 
             <SuspensionDialog
                 accountId={business.id}

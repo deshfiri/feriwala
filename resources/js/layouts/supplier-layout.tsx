@@ -20,6 +20,7 @@ import { usePage } from '@inertiajs/react';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import BrandingHead from '@/components/branding-head';
+import ImpersonationBanner from '@/components/impersonation-banner';
 import NavigationSkeleton from '@/components/navigation-skeleton';
 import { SupplierHeader } from '@/components/supplier/supplier-header';
 import { SupplierSidebar } from '@/components/supplier/supplier-sidebar';
@@ -223,6 +224,7 @@ export default function SupplierLayout({
                     variant="sidebar"
                     className="min-w-0"
                 >
+                    <ImpersonationBanner />
                     <SupplierHeader
                         breadcrumbs={breadcrumbs}
                         account={account}

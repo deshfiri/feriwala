@@ -38,6 +38,15 @@ return [
         'admin.suppliers.reactivation.*',
         'admin.accounts.verify-contact',
         'admin.suppliers.verify-contact',
+
+        // Verifies contacts, approves KYC and waives the activation payment in
+        // one decision: the reason is the only record of why.
+        'admin.accounts.complete-manually',
+
+        // Identity documents entered on an applicant's behalf: who supplied them
+        // and why is the whole of their provenance.
+        'admin.accounts.kyc-upload.store',
+        'admin.suppliers.kyc-upload.store',
         'admin.*.setup-link.*',
         'admin.payments.manual-settlement',
         'admin.wallets.adjustments.*',

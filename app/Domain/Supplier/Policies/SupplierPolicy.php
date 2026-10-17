@@ -50,6 +50,31 @@ class SupplierPolicy
     }
 
     /**
+     * Putting a KYC document on a Supplier's round on its behalf.
+     *
+     * Rides on `supplier.kyc.review`: whoever may judge the evidence may also
+     * supply it, which is what an administrator onboarding a Supplier over the
+     * phone is doing.
+     */
+    public function uploadKycDocument(User $user, Supplier $supplier): bool
+    {
+        return $user->can(PermissionCatalogue::name(PermissionModule::SupplierKyc, PermissionAction::Review));
+    }
+
+    /**
+     * Opening a Supplier's own portal as that Supplier.
+     *
+     * The same permission as opening a business's dashboard
+     * (`account.view_sensitive_data`): both show staff exactly what the account
+     * holder sees, payout and wallet figures included, so one grant governs
+     * both rather than a second near-duplicate verb appearing for Suppliers.
+     */
+    public function openDashboard(User $user, Supplier $supplier): bool
+    {
+        return $user->can(PermissionCatalogue::name(PermissionModule::Account, PermissionAction::ViewSensitiveData));
+    }
+
+    /**
      * Opening a Supplier account on a Supplier's behalf.
      */
     public function create(User $user): bool

@@ -61,6 +61,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $activation_hold_reason
  * @property CarbonImmutable|null $activation_held_at
  * @property int|null $activation_held_by
+ * @property CarbonImmutable|null $activation_payment_waived_at
+ * @property int|null $activation_payment_waived_by
+ * @property string|null $activation_payment_waiver_reason
  * @property string|null $withdrawal_minimum_override
  * @property string|null $withdrawal_maximum_override
  * @property Carbon|null $created_at
@@ -111,6 +114,7 @@ class BusinessAccount extends Model
             'activated_at' => 'immutable_datetime',
             'approval_pending_at' => 'immutable_datetime',
             'activation_held_at' => 'immutable_datetime',
+            'activation_payment_waived_at' => 'immutable_datetime',
         ];
     }
 
@@ -268,6 +272,15 @@ class BusinessAccount extends Model
      * Stops only the automatic route. A reviewer with the authority can still
      * activate a held account by hand, which is the point of holding it.
      */
+    /**
+     * Whether an administrator waived the activation payment by recorded
+     * decision, rather than the account paying it.
+     */
+    public function activationPaymentIsWaived(): bool
+    {
+        return $this->activation_payment_waived_at !== null;
+    }
+
     public function activationIsHeld(): bool
     {
         return $this->activation_held_at !== null;

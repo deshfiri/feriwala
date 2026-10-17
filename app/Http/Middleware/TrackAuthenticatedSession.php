@@ -55,6 +55,14 @@ class TrackAuthenticatedSession
          * until the controller has run, and its identifier is regenerated in
          * the same breath — so that one can only be recorded on the way out.
          */
+        // An administrator viewing a partner's dashboard (DashboardAccessController)
+        // is not the partner signing in. Recording it would list the
+        // administrator's device on the partner's security screen and send them a
+        // "new device" alert for a visit they did not make.
+        if ($request->hasSession() && $request->session()->has('impersonation.admin_id')) {
+            return $next($request);
+        }
+
         // Named `web`: this records Client/Partner and staff devices only, and
         // `auth:supplier` has already made `supplier` the default guard (D25).
         $before = $request->user('web');

@@ -556,4 +556,24 @@ return [
         'confirm' => 'I confirm these documents are genuine and belong to me or my business.',
         'submit_button' => 'Submit verification',
     ],
+
+    /*
+     * Staff uploading a document on an applicant's behalf.
+     */
+    'upload_on_behalf' => [
+        'action' => 'Upload document',
+        'title' => 'Upload a document on their behalf',
+        'description' => 'The file goes on the same KYC round the applicant would fill in, with the same format and size limits. It is marked as uploaded by staff and recorded against your name.',
+        'document' => 'Document',
+        'choose' => 'Choose a document…',
+        'loading' => 'Loading what this round asks for…',
+        'none' => 'This round has nothing that takes a file.',
+        'file' => 'File',
+        'reason' => 'Why you are uploading this for them',
+        'reason_help' => 'Kept in the audit log with the document. Required.',
+        'submit_after' => 'Also send the round for review once this is uploaded',
+        'submit' => 'Upload',
+        'cancel' => 'Cancel',
+        'done' => 'Document uploaded on their behalf.',
+    ],
 ];

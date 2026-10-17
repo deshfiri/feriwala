@@ -87,6 +87,12 @@ class ActivationRequirements
      */
     public function activationPaid(BusinessAccount $account): bool
     {
+        // Waived by an administrator's recorded decision. No payment exists
+        // and none is invented (see `CompleteAccountManually`).
+        if ($account->activationPaymentIsWaived()) {
+            return true;
+        }
+
         return Payment::query()
             ->where('business_account_id', $account->id)
             ->where('purpose', PaymentPurpose::Activation)

@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContentLibraryController;
+use App\Http\Controllers\Admin\DashboardAccessController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DeletionRequestController;
 use App\Http\Controllers\Admin\DeliverySettingsController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Admin\KycDocumentTypeController;
 use App\Http\Controllers\Admin\KycReverificationCancellationController;
 use App\Http\Controllers\Admin\KycReviewController;
 use App\Http\Controllers\Admin\KycUpdateRequestController;
+use App\Http\Controllers\Admin\KycUploadOnBehalfController;
 use App\Http\Controllers\Admin\ManagedAccountController;
 use App\Http\Controllers\Admin\ManagedSupplierController;
 use App\Http\Controllers\Admin\OrderController;
@@ -613,6 +615,15 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
  * changed is which question closes the panel: being barred from the platform,
  * rather than not having bought a package.
  */
+/*
+ * Ending a visit to a partner's or a Supplier's dashboard (see
+ * DashboardAccessController). Behind no permission, because while a partner is
+ * being viewed the session's identity is the partner; `stop` itself refuses
+ * anyone who is not in such a visit.
+ */
+Route::post('impersonation/stop', [DashboardAccessController::class, 'stop'])
+    ->name('impersonation.stop');
+
 Route::middleware(['auth', 'noindex', 'two-factor'])
     ->prefix('admin')
     ->name('admin.')
@@ -899,6 +910,30 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
 
         Route::get('accounts/{account}', [AccountController::class, 'show'])
             ->name('accounts.show');
+        Route::post('accounts/{account}/complete-manually', [AccountController::class, 'completeManually'])
+            ->name('accounts.complete-manually');
+
+        // Staff putting KYC documents on a round on the applicant's behalf.
+        Route::get('accounts/{account}/kyc-upload/targets', [KycUploadOnBehalfController::class, 'partnerTargets'])
+            ->name('accounts.kyc-upload.targets');
+        Route::post('accounts/{account}/kyc-upload', [KycUploadOnBehalfController::class, 'partnerStore'])
+            ->name('accounts.kyc-upload.store');
+        Route::get('suppliers/{supplier}/kyc-upload/targets', [KycUploadOnBehalfController::class, 'supplierTargets'])
+            ->name('suppliers.kyc-upload.targets');
+        Route::post('suppliers/{supplier}/kyc-upload', [KycUploadOnBehalfController::class, 'supplierStore'])
+            ->name('suppliers.kyc-upload.store');
+
+        /*
+         * Opening a business's or a Supplier's own dashboard as its holder.
+         * Signed, expiring and bound to the administrator it was made for; the
+         * way back, `impersonation.stop`, sits outside this group on purpose.
+         */
+        Route::get('accounts/{account}/open-dashboard', [DashboardAccessController::class, 'partner'])
+            ->middleware('signed')
+            ->name('accounts.open-dashboard');
+        Route::get('suppliers/{supplier}/open-dashboard', [DashboardAccessController::class, 'supplier'])
+            ->middleware('signed')
+            ->name('suppliers.open-dashboard');
 
         /*
          * Asking a trading business for fresh KYC (§7.2).

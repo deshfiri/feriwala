@@ -122,6 +122,11 @@ class SupplierController extends Controller
         $grouped = $batchRound === null ? null : $presenter->present($batchRound);
 
         return Inertia::render('admin/suppliers/show', [
+            // A signed, expiring link made for this administrator (see
+            // DashboardAccessController), or null when they may not use one.
+            'dashboard_url' => Gate::allows('openDashboard', $supplier)
+                ? DashboardAccessController::supplierLink($supplier, $reviewer)
+                : null,
             'batch' => $grouped === null || $batchRound === null ? null : [
                 ...$grouped,
                 'review' => [
@@ -165,6 +170,7 @@ class SupplierController extends Controller
                 'status_label' => $supplier->status->label(),
                 'status_tone' => $supplier->status->tone(),
                 'submitted_at' => $supplier->submitted_at?->toIso8601String(),
+                'can_upload_kyc_document' => Gate::allows('uploadKycDocument', $supplier),
                 'can_verify_contact' => Gate::allows('verify', $supplier),
                 'can_manage_setup' => Gate::allows('update', $supplier),
                 'can_decide' => Gate::allows('decide', Supplier::class),

@@ -237,6 +237,12 @@ class HandleInertiaRequests extends Middleware
              * never the password, payout detail or any confidential figure.
              */
             'supplierAccount' => fn () => $onSupplierPortal || $user === null ? $this->supplierAccount($request) : null,
+            /*
+             * Set only while an administrator is looking at a partner's or a
+             * Supplier's dashboard (see DashboardAccessController): the banner
+             * every layout shows, with the one way out.
+             */
+            'impersonation' => fn () => $this->impersonation($request, $onSupplierPortal, $user),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
             /*
@@ -283,6 +289,30 @@ class HandleInertiaRequests extends Middleware
                 default => null,
             },
         ];
+    }
+
+    /**
+     * @return array{kind: string, name: string}|null
+     */
+    protected function impersonation(Request $request, bool $onSupplierPortal, ?User $user): ?array
+    {
+        if (! $request->hasSession()) {
+            return null;
+        }
+
+        $session = $request->session();
+
+        if ($onSupplierPortal) {
+            $supplier = $request->user('supplier');
+
+            return $session->has('impersonation.supplier_by') && $supplier instanceof Supplier
+                ? ['kind' => 'supplier', 'name' => $supplier->business_name]
+                : null;
+        }
+
+        return $session->has('impersonation.admin_id') && $user !== null
+            ? ['kind' => 'partner', 'name' => $user->name]
+            : null;
     }
 
     /**

@@ -1,5 +1,8 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Eye, FileText } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Eye, FileText, Upload } from 'lucide-react';
+import { useState } from 'react';
+import StaffKycUploadDialog from '@/components/kyc/staff-kyc-upload-dialog';
+import * as kycUpload from '@/routes/admin/suppliers/kyc-upload';
 import ContactVerificationCard, {
     type ContactState,
 } from '@/components/contact-verification-card';
@@ -30,6 +33,11 @@ import { store as rejection } from '@/routes/admin/suppliers/rejection';
 import { store as suspension } from '@/routes/admin/suppliers/suspension';
 
 type Props = {
+    /**
+     * A signed, expiring link that opens this Supplier's own portal as the
+     * Supplier, or null when this administrator may not.
+     */
+    dashboard_url: string | null;
     supplier: {
         id: string;
         reference: string;
@@ -46,6 +54,7 @@ type Props = {
         can_decide: boolean;
         can_verify_contact: boolean;
         can_manage_setup: boolean;
+        can_upload_kyc_document: boolean;
         can_suspend: boolean;
         can_reactivate: boolean;
     };
@@ -94,6 +103,7 @@ const RAW_ROOT =
  * use it; the server refuses the request regardless.
  */
 export default function AdminSupplierShow({
+    dashboard_url: dashboardUrl,
     supplier,
     round,
     batch = null,
@@ -104,6 +114,7 @@ export default function AdminSupplierShow({
     status_history,
 }: Props) {
     const { t, locale } = useTranslation();
+    const [uploading, setUploading] = useState(false);
 
     const formatSize = (bytes: number) =>
         bytes < 1024
@@ -183,6 +194,24 @@ export default function AdminSupplierShow({
                                 tone={supplier.status_tone}
                                 label={supplier.status_label}
                             />
+                            {dashboardUrl !== null && (
+                                <Button size="sm" asChild>
+                                    <a
+                                        href={dashboardUrl}
+                                        target="_blank"
+                                        rel="noopener"
+                                        title={t(
+                                            'account.dashboard_access.open_hint',
+                                        )}
+                                    >
+                                        <ExternalLink
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {t('account.dashboard_access.open')}
+                                    </a>
+                                </Button>
+                            )}
                             <Button variant="outline" size="sm" asChild>
                                 <Link href={index()}>
                                     <ArrowLeft
@@ -485,6 +514,27 @@ export default function AdminSupplierShow({
                             </SectionCard>
                         )}
 
+                        {supplier.can_upload_kyc_document && (
+                            <SectionCard
+                                title={t('kyc.upload_on_behalf.action')}
+                                description={t(
+                                    'kyc.upload_on_behalf.description',
+                                )}
+                            >
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setUploading(true)}
+                                >
+                                    <Upload
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                    {t('kyc.upload_on_behalf.action')}
+                                </Button>
+                            </SectionCard>
+                        )}
+
                         <SectionCard
                             title={t('supplier.admin.suppliers.decision')}
                         >
@@ -601,6 +651,13 @@ export default function AdminSupplierShow({
                     </aside>
                 </div>
             </PageContainer>
+
+            <StaffKycUploadDialog
+                targetsUrl={kycUpload.targets.url(supplier.id)}
+                storeForm={kycUpload.store.form(supplier.id)}
+                open={uploading}
+                onOpenChange={setUploading}
+            />
         </>
     );
 }

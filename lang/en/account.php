@@ -110,4 +110,31 @@ return [
         'cancel' => 'Cancel',
         'withdrawing' => 'Withdrawing…',
     ],
+
+    /*
+     * Finishing onboarding by hand: contacts confirmed, KYC approved, the
+     * activation payment waived, account activated.
+     */
+    'complete_manually' => [
+        'action' => 'Complete & activate',
+        'title' => 'Complete this account and activate it',
+        'description' => 'Confirms the owner’s email and mobile, approves KYC, waives the activation payment and activates the account in one step.',
+        'what_happens' => 'Each of these is recorded against your name with the reason below. No payment is created: the waiver is recorded on the account instead.',
+        'reason' => 'Why this account is being completed by hand',
+        'reason_help' => 'Kept in the account history and the audit log. Required.',
+        'submit' => 'Complete & activate',
+        'cancel' => 'Cancel',
+        'working' => 'Completing…',
+        'done' => 'Account completed and activated.',
+    ],
+
+    /*
+     * Opening a partner's or a Supplier's own dashboard as its holder.
+     */
+    'dashboard_access' => [
+        'open' => 'Open dashboard',
+        'open_hint' => 'Opens in a new tab as this account holder.',
+        'banner' => 'You are viewing :name’s dashboard as an administrator.',
+        'return' => 'Return to admin',
+    ],
 ];

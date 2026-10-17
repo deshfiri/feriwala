@@ -169,6 +169,52 @@ class BusinessAccountPolicy
         return $user->can($this->permission(PermissionAction::Verify));
     }
 
+    /**
+     * Completing an account's onboarding by hand and activating it.
+     *
+     * It does three jobs that each have their own permission elsewhere:
+     * deciding an activation, confirming a contact on someone's behalf, and
+     * (by waiver) standing in for a payment. So it asks for the first two
+     * together rather than minting a looser third door to the same room.
+     */
+    public function completeManually(User $user, BusinessAccount $account): bool
+    {
+        return $this->approveActivation($user, $account)
+            && $this->verifyContact($user, $account);
+    }
+
+    /**
+     * Putting a KYC document on the business's round on its behalf.
+     *
+     * The KYC edit permission, and never one's own business: staff must not
+     * supply evidence for an account they belong to.
+     */
+    public function uploadKycDocument(User $user, BusinessAccount $account): bool
+    {
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can(PermissionCatalogue::name(PermissionModule::Kyc, PermissionAction::Edit));
+    }
+
+    /**
+     * Opening a business's own dashboard as its owner.
+     *
+     * This shows an administrator everything the owner sees, including what
+     * §7.2 keeps from the applicant's reviewer and the other way round, so it
+     * rides on the sensitive-data permission rather than on `view`. Never one's
+     * own business, which would be a way of acting as a member of it.
+     */
+    public function openDashboard(User $user, BusinessAccount $account): bool
+    {
+        if ($user->belongsToAccount($account)) {
+            return false;
+        }
+
+        return $user->can($this->permission(PermissionAction::ViewSensitiveData));
+    }
+
     protected function permission(PermissionAction $action): string
     {
         return PermissionCatalogue::name(PermissionModule::Account, $action);

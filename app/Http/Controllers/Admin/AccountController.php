@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Account\Actions\CompleteAccountManually;
 use App\Domain\Account\Actions\ReactivateAccount;
 use App\Domain\Account\Actions\SuspendAccount;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\AccountType;
+use App\Domain\Account\Exceptions\ActivationBlocked;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\AccountDirectory;
 use App\Domain\Account\Queries\AccountDossier;
@@ -112,7 +114,7 @@ class AccountController extends Controller
         ]);
     }
 
-    public function show(BusinessAccount $account): Response
+    public function show(Request $request, BusinessAccount $account): Response
     {
         // `viewDossier`, not `view`: this screen carries internal reasons and
         // reviewer notes, and `view` admits the account's own members (§7.2).
@@ -121,7 +123,18 @@ class AccountController extends Controller
         $subscription = $this->dossier->subscription($account);
         $blockers = $this->blockers($account);
 
+        /** @var User $viewer */
+        $viewer = $request->user();
+
         return Inertia::render('admin/accounts/show', [
+            /*
+             * A signed, expiring link made for this administrator (see
+             * DashboardAccessController), or null when they may not use one.
+             */
+            'dashboard_url' => Gate::allows('openDashboard', $account) && $account->owner !== null
+                ? DashboardAccessController::partnerLink($account, $viewer)
+                : null,
+
             /*
              * `business`, not `account`. `HandleInertiaRequests` shares an
              * `account` prop describing the *viewer's* own account, and a page
@@ -267,6 +280,14 @@ class AccountController extends Controller
 
                 // Confirming a contact by hand and managing the owner's
                 // password-setup link: each its own permission.
+                /*
+                 * Finishing onboarding by hand. Only while the account is still
+                 * on the funnel: an active, suspended or closed one has its own
+                 * actions, and offering this there would offer a refusal.
+                 */
+                'upload_kyc_document' => Gate::allows('uploadKycDocument', $account),
+                'complete_manually' => $this->isOnOnboardingFunnel($account)
+                    && Gate::allows('completeManually', $account),
                 'verify_contact' => Gate::allows('verifyContact', $account),
                 'manage_identity' => Gate::allows('manageIdentity', $account),
             ],
@@ -277,6 +298,48 @@ class AccountController extends Controller
 
             'blockers' => $blockers,
         ]);
+    }
+
+    /**
+     * Complete a business's onboarding by hand and activate it.
+     *
+     * Verifies the owner's contacts, approves KYC, waives the activation
+     * payment and activates, each as a recorded decision (see
+     * {@see CompleteAccountManually}). A reason is required.
+     */
+    public function completeManually(Request $request, BusinessAccount $account, CompleteAccountManually $action): RedirectResponse
+    {
+        Gate::authorize('completeManually', $account);
+
+        /** @var User $staff */
+        $staff = $request->user();
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+
+        try {
+            $action->handle($account, $staff, $validated['reason']);
+        } catch (ActivationBlocked $blocked) {
+            throw ValidationException::withMessages([
+                'reason' => $blocked->reasons ?: [$blocked->getMessage()],
+            ]);
+        } catch (InvalidArgumentException|IllegalStateTransition $refused) {
+            throw ValidationException::withMessages(['reason' => $refused->getMessage()]);
+        }
+
+        return back()->with('success', __('account.complete_manually.done'));
+    }
+
+    protected function isOnOnboardingFunnel(BusinessAccount $account): bool
+    {
+        return ! $account->isActivated()
+            && ! in_array($account->status, [
+                AccountStatus::Suspended,
+                AccountStatus::Closed,
+                AccountStatus::TemporarilyRestricted,
+                AccountStatus::TemporarilyDisabled,
+            ], true);
     }
 
     /**
