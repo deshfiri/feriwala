@@ -12,10 +12,6 @@ import WholesalePricingFields from './wholesale-pricing-fields';
 
 const submit = vi.hoisted(() => vi.fn());
 
-vi.mock('@inertiajs/react', () => ({
-    useHttp: () => ({ submit }),
-}));
-
 vi.mock('@/actions/App/Http/Controllers/Admin/ProductController', () => ({
     default: {
         pricePreview: () => ({ url: '/price-preview', method: 'post' }),
@@ -81,6 +77,15 @@ describe('WholesalePricingFields', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         submit.mockReset();
+        // The preview is a plain request; `submit` records it and supplies the
+        // server's answer.
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (_url: string, init: RequestInit) => ({
+                ok: true,
+                json: async () => submit(JSON.parse(String(init.body))),
+            })),
+        );
         submit.mockResolvedValue({
             base_cost: money('100.00'),
             wholesale_price: money('120.00'),
@@ -136,7 +141,34 @@ describe('WholesalePricingFields', () => {
                 'catalog.pricing.preview {"base":"৳100.00","percent":"20","result":"৳120.00"}',
             ),
         ).toBeInTheDocument();
+        // Exactly the typed values are sent, not stale ones.
         expect(submit).toHaveBeenCalledTimes(1);
+        expect(submit).toHaveBeenCalledWith({
+            base_cost: '100.00',
+            wholesale_markup_percentage: '20',
+        });
+    });
+
+    it('says so when the server refuses the calculation, instead of a bare dash', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => ({ ok: false, json: async () => ({}) })),
+        );
+        renderFields();
+
+        chooseMethod('percentage');
+
+        const markup = document.querySelector(
+            'input[name="wholesale_markup_percentage"]',
+        ) as HTMLInputElement;
+
+        fireEvent.change(markup, { target: { value: '20' } });
+        fireEvent.blur(markup);
+        await settle();
+
+        expect(
+            screen.getByText('catalog.pricing.preview_failed'),
+        ).toBeInTheDocument();
     });
 
     it('asks for the base cost before using percentage pricing', () => {

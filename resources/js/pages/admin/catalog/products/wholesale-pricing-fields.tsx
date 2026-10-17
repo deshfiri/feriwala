@@ -75,7 +75,7 @@ export default function WholesalePricingFields({
     const [appliedMarkup, setAppliedMarkup] = useState(initial.markup);
 
     const percentage = method === 'percentage';
-    const { preview, calculating } = useWholesalePricePreview(
+    const { preview, calculating, failed } = useWholesalePricePreview(
         percentage,
         baseCost,
         appliedMarkup,
@@ -211,7 +211,14 @@ export default function WholesalePricingFields({
                                 {calculated?.formatted ??
                                     (calculating
                                         ? t('catalog.pricing.calculating')
-                                        : '—')}
+                                        : failed
+                                          ? t('catalog.pricing.preview_failed')
+                                          : markup.trim() === ''
+                                            ? t('catalog.pricing.markup_prompt')
+                                            : markup.trim() !==
+                                                appliedMarkup.trim()
+                                              ? t('catalog.pricing.leave_field')
+                                              : '—')}
                             </span>
                             <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
                                 <Calculator

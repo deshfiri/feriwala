@@ -1,4 +1,3 @@
-import { useHttp } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import ProductController from '@/actions/App/Http/Controllers/Admin/ProductController';
 import type { Money } from '@/lib/money';
@@ -10,41 +9,43 @@ export type WholesalePricePreview = {
     markup_percentage: string;
 };
 
-type PreviewRequest = {
-    base_cost: string;
-    wholesale_markup_percentage: string;
-};
-
 const DEBOUNCE_MS = 250;
+
+const xsrfToken = (): string => {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+
+    return match ? decodeURIComponent(match[1]) : '';
+};
 
 /**
  * The wholesale price a base cost and markup give, asked of the server.
  *
  * The browser never does this arithmetic (§36.1, D26): this posts the two typed
  * strings to the same calculator the save uses, so what is shown is what will be
- * stored. While `enabled` is false, or an input is blank or refused, the preview
- * is simply null. A late answer to an older request is dropped, so typing
- * quickly cannot leave a stale figure on screen.
+ * stored. A plain request rather than a form hook, so the values sent are always
+ * exactly the ones passed in. While `enabled` is false, or an input is blank,
+ * the preview is null; a refused or failed request sets `failed` so the screen
+ * can say so instead of showing nothing. A late answer to an older request is
+ * dropped, so typing quickly cannot leave a stale figure on screen.
  */
 export default function useWholesalePricePreview(
     enabled: boolean,
     baseCost: string,
     markup: string,
-): { preview: WholesalePricePreview | null; calculating: boolean } {
+): {
+    preview: WholesalePricePreview | null;
+    calculating: boolean;
+    failed: boolean;
+} {
     const [preview, setPreview] = useState<WholesalePricePreview | null>(null);
     const [calculating, setCalculating] = useState(false);
+    const [failed, setFailed] = useState(false);
     const latest = useRef(0);
-
-    const { submit } = useHttp<PreviewRequest, WholesalePricePreview>(
-        () => ProductController.pricePreview(),
-        () => ({
-            base_cost: baseCost.trim(),
-            wholesale_markup_percentage: markup.trim(),
-        }),
-    );
 
     useEffect(() => {
         const request = ++latest.current;
+
+        setFailed(false);
 
         if (!enabled || baseCost.trim() === '' || markup.trim() === '') {
             setCalculating(false);
@@ -57,16 +58,40 @@ export default function useWholesalePricePreview(
 
         const timer = window.setTimeout(async () => {
             try {
-                const answer = await submit();
+                const response = await fetch(
+                    ProductController.pricePreview.url(),
+                    {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-XSRF-TOKEN': xsrfToken(),
+                        },
+                        body: JSON.stringify({
+                            base_cost: baseCost.trim(),
+                            wholesale_markup_percentage: markup.trim(),
+                        }),
+                    },
+                );
 
-                if (request === latest.current) {
-                    setPreview(answer);
+                if (request !== latest.current) {
+                    return;
                 }
+
+                if (!response.ok) {
+                    setPreview(null);
+                    setFailed(true);
+
+                    return;
+                }
+
+                setPreview((await response.json()) as WholesalePricePreview);
             } catch {
-                // A refused value (422) has no price to show; the field's own
-                // validation message says why once the form is submitted.
                 if (request === latest.current) {
                     setPreview(null);
+                    setFailed(true);
                 }
             } finally {
                 if (request === latest.current) {
@@ -76,9 +101,7 @@ export default function useWholesalePricePreview(
         }, DEBOUNCE_MS);
 
         return () => window.clearTimeout(timer);
-        // `submit` is recreated every render; the typed inputs are the trigger.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, baseCost, markup]);
 
-    return { preview, calculating };
+    return { preview, calculating, failed };
 }
