@@ -14,7 +14,7 @@ const submit = vi.hoisted(() => vi.fn());
 
 vi.mock('@/actions/App/Http/Controllers/Admin/ProductController', () => ({
     default: {
-        pricePreview: () => ({ url: '/price-preview', method: 'post' }),
+        pricePreview: { url: () => '/price-preview' },
     },
 }));
 
@@ -83,7 +83,7 @@ describe('WholesalePricingFields', () => {
             'fetch',
             vi.fn(async (_url: string, init: RequestInit) => ({
                 ok: true,
-                json: async () => submit(JSON.parse(String(init.body))),
+                json: async () => submit(JSON.parse(init.body as string)),
             })),
         );
         submit.mockResolvedValue({
