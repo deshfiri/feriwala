@@ -1234,30 +1234,123 @@ section {
 }
 
 /* --- reference layout: white page, 1280 container, compact header, accent section bars --- */
-:root { --bg: #ffffff; --surface-2: #f6f5f3; }
-@media (prefers-color-scheme: dark) { :root { --bg: #131211; --surface-2: #232220; } }
-.container { width: min(1280px, 100% - 2rem); }
-@media (min-width: 640px) { .container { width: min(1280px, 100% - 3rem); } }
-main { padding-block: 1.25rem 2rem; }
-section { margin-bottom: 2rem; }
-.search { flex: 1 1 420px; order: 2; }
-.header-actions { order: 3; margin-left: 0; }
-.site-footer a { text-decoration: none; }
-.site-footer a:hover { text-decoration: underline; }
-@media (max-width: 860px) { .search { order: 4; flex-basis: 100%; } .header-actions { margin-left: auto; } }
-.account-link { display: inline-grid; place-items: center; width: 44px; height: 44px; }
-.grid { grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); }
-.section-head { align-items: center; }
-.section-head h2 { margin: 0; display: flex; align-items: center; gap: .6rem; font-size: 1.3rem; }
-.section-head h2::before { content: ""; width: 5px; height: 1.3em; border-radius: 3px; background: var(--accent); }
-.section-head a { font-weight: 600; text-decoration: none; }
-.card { transition: border-color .15s; }
-.card:hover { box-shadow: none; border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
-.site-footer { background: var(--surface-2); margin-top: 1rem; }
-.to-top { margin-left: auto; font-size: .85rem; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: .3rem .9rem; color: var(--text) !important; background: var(--surface); }
-@media (max-width: 520px) {
-    .container { width: calc(100% - 2rem); }
-    .header-row { gap: .5rem; }
-    .brand-name { display: none; }
-    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+:root {
+    --bg: #ffffff;
+    --surface-2: #f6f5f3;
 }
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #131211;
+        --surface-2: #232220;
+    }
+}
+.container {
+    width: min(1280px, 100% - 2rem);
+}
+@media (min-width: 640px) {
+    .container {
+        width: min(1280px, 100% - 3rem);
+    }
+}
+main {
+    padding-block: 1.25rem 2rem;
+}
+section {
+    margin-bottom: 2rem;
+}
+.search {
+    flex: 1 1 420px;
+    order: 2;
+}
+.header-actions {
+    order: 3;
+    margin-left: 0;
+}
+.site-footer a {
+    text-decoration: none;
+}
+.site-footer a:hover {
+    text-decoration: underline;
+}
+@media (max-width: 860px) {
+    .search {
+        order: 4;
+        flex-basis: 100%;
+    }
+    .header-actions {
+        margin-left: auto;
+    }
+}
+.account-link {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+}
+.grid {
+    grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+}
+.section-head {
+    align-items: center;
+}
+.section-head h2 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.3rem;
+}
+.section-head h2::before {
+    content: '';
+    width: 5px;
+    height: 1.3em;
+    border-radius: 3px;
+    background: var(--accent);
+}
+.section-head a {
+    font-weight: 600;
+    text-decoration: none;
+}
+.card {
+    transition: border-color 0.15s;
+}
+.card:hover {
+    box-shadow: none;
+    border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
+}
+.site-footer {
+    background: var(--surface-2);
+    margin-top: 1rem;
+}
+.to-top {
+    margin-left: auto;
+    font-size: 0.85rem;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.3rem 0.9rem;
+    color: var(--text) !important;
+    background: var(--surface);
+}
+@media (max-width: 520px) {
+    .container {
+        width: calc(100% - 2rem);
+    }
+    .header-row {
+        gap: 0.5rem;
+    }
+    .brand-name {
+        display: none;
+    }
+    .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.7rem;
+    }
+}
+
+/* Banner: the whole picture stays the link. The focal point is a variable (centre by default) so a
+   shop-specific one can be set without touching the layout; phones get a taller frame so the
+   subject is cropped less. */
+.banner-image { object-position: var(--banner-focus, 50% 50%); }
+@media (max-width: 860px) { .banner-image { aspect-ratio: 2 / 1; } }
+@media (max-width: 520px) { .banner-image { aspect-ratio: 3 / 2; } }
