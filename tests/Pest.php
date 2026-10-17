@@ -23,6 +23,7 @@ use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\PurchasedProducts;
 use App\Domain\ExternalStore\Actions\RecordExternalOrder;
 use App\Domain\ExternalStore\Enums\ExternalStoreStatus;
 use App\Domain\ExternalStore\Enums\StorePlatform;
@@ -71,6 +72,7 @@ use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -93,6 +95,17 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+/*
+| A website sells only what its owner bought — the products in "My products"
+| (PurchasedProducts). The suites below are about something else (orders,
+| returns, suppliers, the storefront API's mechanics) and publish products
+| without a purchase behind each one, so they run as an owner who has bought
+| everything. The suites that test the rule itself — StorefrontPurchasedOnlyTest,
+| WebsiteProductSelectionTest, PartnerProductsTest — use the real thing.
+*/
+pest()->beforeEach(fn () => websiteTestEveryoneBought())
+    ->in('Feature/WebsiteApi', 'Feature/Supplier', 'Feature/Orders', 'Feature/Concurrency');
 
 /*
 |--------------------------------------------------------------------------
@@ -421,6 +434,39 @@ function websiteTestProduct(array $attributes = []): Product
         'account_scope' => AccountScope::AnyAccount,
         ...$attributes,
     ]);
+}
+
+/**
+ * Run as an owner who has bought every product, so a suite about something else
+ * need not buy each product it publishes.
+ */
+function websiteTestEveryoneBought(): void
+{
+    app()->instance(PurchasedProducts::class, new class extends PurchasedProducts
+    {
+        public function has(BusinessAccount $account, Product $product): bool
+        {
+            return true;
+        }
+
+        public function among(BusinessAccount $account, iterable $productIds): array
+        {
+            return collect($productIds)->mapWithKeys(fn (mixed $id) => [(int) $id => (int) $id])->all();
+        }
+
+        public function only(Builder $products, BusinessAccount $account): Builder
+        {
+            return $products;
+        }
+    });
+}
+
+/**
+ * Back to the real rule: only what the account bought, from a paid wholesale order.
+ */
+function websiteTestOnlyWhatWasBought(): void
+{
+    app()->instance(PurchasedProducts::class, new PurchasedProducts);
 }
 
 /**

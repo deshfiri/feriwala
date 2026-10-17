@@ -8,6 +8,7 @@ use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
+use App\Domain\Catalog\PurchasedProducts;
 use App\Domain\Order\Data\WebsiteOrderLine;
 use App\Domain\Order\Data\WebsiteOrderQuote;
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
@@ -45,6 +46,7 @@ class PriceWebsiteOrder
 {
     public function __construct(
         protected ProductEligibility $eligibility,
+        protected PurchasedProducts $purchased,
         protected FeeRuleResolver $fees,
         protected TaxEngine $tax,
         protected Entitlements $entitlements,
@@ -124,7 +126,9 @@ class PriceWebsiteOrder
         $price = $selection?->sellingPrice($at);
 
         if ($selection === null || $price === null || $price->currency !== $currency || ! $price->isPositive()
-            || ! $this->eligibility->isEligible($product, $website->businessAccount, SalesChannel::Dropshipping)) {
+            || ! $this->eligibility->isEligible($product, $website->businessAccount, SalesChannel::Dropshipping)
+            // Only what the owner bought is sold: the same answer the catalogue gives.
+            || ! $this->purchased->has($website->businessAccount, $product)) {
             throw WebsiteOrderRefused::productUnavailable($sku);
         }
 

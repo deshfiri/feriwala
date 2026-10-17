@@ -68,6 +68,8 @@ use Illuminate\Support\Str;
  */
 
 beforeEach(function () {
+    websiteTestEveryoneBought();
+
     $this->seed(RolesAndPermissionsSeeder::class);
 });
 

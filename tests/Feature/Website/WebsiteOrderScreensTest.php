@@ -44,6 +44,8 @@ use Inertia\Testing\AssertableInertia as Assert;
  * gateway's own identifiers.
  */
 beforeEach(function () {
+    websiteTestEveryoneBought();
+
     $settings = app(SettingsRepository::class);
     $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
     $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);

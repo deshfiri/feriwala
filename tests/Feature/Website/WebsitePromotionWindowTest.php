@@ -29,6 +29,8 @@ use Illuminate\Testing\TestResponse;
  * of the window is announced to the storefront exactly once.
  */
 beforeEach(function () {
+    websiteTestEveryoneBought();
+
     Http::fake();
     CarbonImmutable::setTestNow('2026-10-12 12:00:00');
 

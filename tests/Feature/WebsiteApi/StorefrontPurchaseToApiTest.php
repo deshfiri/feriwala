@@ -56,6 +56,8 @@ function purchaseToApiIssue(Website $website): array
 }
 
 it('takes a paid wholesale purchase to the right storefront through the signed API', function () {
+    websiteTestOnlyWhatWasBought();
+
     [$credential, $secret, $environment] = purchaseToApiIssue($this->website);
 
     // B: the three values the operator copies, exactly as the storefront reads them.
@@ -94,6 +96,8 @@ it('takes a paid wholesale purchase to the right storefront through the signed A
 });
 
 it('keeps one website\'s product and credential away from another website', function () {
+    websiteTestOnlyWhatWasBought();
+
     [$ours, $ourSecret] = purchaseToApiIssue($this->website);
 
     $otherAccount = websiteTestAccount(extra: [PackageFeature::DropshippingEnabled->value => '1', PackageFeature::ProductPublishLimit->value => null]);
