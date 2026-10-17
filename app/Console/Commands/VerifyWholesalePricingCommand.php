@@ -218,15 +218,15 @@ class VerifyWholesalePricingCommand extends Command
             return 'new null';
         }
 
-        if ($was !== null && $is !== null && bccomp($was, '0', 2) !== 0 && bccomp($is, '0', 2) === 0) {
+        if (! is_numeric($was) || ! is_numeric($is)) {
+            return 'price changed';
+        }
+
+        if (bccomp($was, '0', 2) !== 0 && bccomp($is, '0', 2) === 0) {
             return 'non-zero became zero';
         }
 
-        if ($was !== null && $is !== null && bccomp($was, $is, 12) === 0) {
-            return 'decimal scale changed';
-        }
-
-        return 'price changed';
+        return bccomp($was, $is, 12) === 0 ? 'decimal scale changed' : 'price changed';
     }
 
     /**
