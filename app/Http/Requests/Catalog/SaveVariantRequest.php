@@ -3,10 +3,12 @@
 namespace App\Http\Requests\Catalog;
 
 use App\Domain\Catalog\CentralProductFields;
+use App\Domain\Catalog\Enums\WholesalePricingMethod;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Catalog\Rules\MarkupPercentageRule;
 use App\Support\Money\DecimalAmount;
 use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
@@ -82,8 +84,18 @@ class SaveVariantRequest extends FormRequest
 
             // Blank means the product's own figure applies. Entered in Taka
             // and normalised to an exact decimal in variantAttributes() below.
-            'wholesale_price' => ['nullable', new DecimalAmountRule],
-            'base_cost' => ['nullable', new DecimalAmountRule],
+            'wholesale_price' => ['nullable', ...($this->usesPercentagePricing() ? [] : [new DecimalAmountRule])],
+
+            /*
+             * A percentage variation is worked out from its own base cost, never
+             * its product's, so that cost is required for it; a submitted
+             * `wholesale_price` is not read (see variantAttributes()).
+             */
+            'base_cost' => [$this->usesPercentagePricing() ? 'required' : 'nullable', new DecimalAmountRule],
+            'wholesale_pricing_method' => ['nullable', Rule::enum(WholesalePricingMethod::class)],
+            'wholesale_markup_percentage' => $this->usesPercentagePricing()
+                ? ['required', new MarkupPercentageRule]
+                : ['nullable'],
 
             'is_active' => ['boolean'],
 
@@ -115,7 +127,22 @@ class SaveVariantRequest extends FormRequest
      */
     public function messages(): array
     {
-        return CentralProductFields::messages($this->all());
+        return [
+            ...CentralProductFields::messages($this->all()),
+            ...($this->usesPercentagePricing() ? [
+                'base_cost.required' => __('catalog.pricing.base_cost_first'),
+                'wholesale_markup_percentage.required' => __('catalog.pricing.markup_required'),
+            ] : []),
+        ];
+    }
+
+    /**
+     * Whether this submission asks for a calculated wholesale price. Absent or
+     * blank is the default, a fixed override.
+     */
+    protected function usesPercentagePricing(): bool
+    {
+        return $this->input('wholesale_pricing_method') === WholesalePricingMethod::Percentage->value;
     }
 
     /**
@@ -127,6 +154,17 @@ class SaveVariantRequest extends FormRequest
     public function variantAttributes(): array
     {
         $validated = $this->validated();
+
+        $validated['wholesale_pricing_method'] = $this->usesPercentagePricing()
+            ? WholesalePricingMethod::Percentage->value
+            : WholesalePricingMethod::Fixed->value;
+
+        if ($this->usesPercentagePricing()) {
+            // Never trusted: ManageVariants calculates it from the variation's own base cost.
+            unset($validated['wholesale_price']);
+        } else {
+            $validated['wholesale_markup_percentage'] = null;
+        }
 
         foreach (['wholesale_price', 'base_cost'] as $field) {
             if (array_key_exists($field, $validated)) {
@@ -147,6 +185,8 @@ class SaveVariantRequest extends FormRequest
             'values' => 'combination',
             'wholesale_price' => 'wholesale price',
             'base_cost' => 'base cost',
+            'wholesale_pricing_method' => 'wholesale pricing method',
+            'wholesale_markup_percentage' => 'markup percentage',
         ];
     }
 }

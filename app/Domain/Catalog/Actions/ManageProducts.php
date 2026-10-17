@@ -8,6 +8,7 @@ use App\Domain\Catalog\Enums\ItemCondition;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
+use App\Domain\Catalog\Enums\WholesalePricingMethod;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
@@ -51,6 +52,7 @@ class ManageProducts
         protected DatabaseManager $database,
         protected GenerateProductIdentifiers $identifiers,
         protected ProductDeletionRule $deletionRule,
+        protected ResolveWholesalePricing $pricing,
     ) {}
 
     /**
@@ -436,11 +438,7 @@ class ManageProducts
                 : Brand::query()->where('public_id', $attributes['brand_id'])->value('id');
         }
 
-        foreach (['base_cost', 'wholesale_price'] as $figure) {
-            if (array_key_exists($figure, $attributes)) {
-                $fields[$figure] = Money::fromDecimal((string) $attributes[$figure], Currency::base());
-            }
-        }
+        $fields = [...$fields, ...$this->pricing($attributes, $product)];
 
         /*
          * Order quantities (§14). A blank minimum is one unit; a blank maximum
@@ -498,6 +496,60 @@ class ManageProducts
     }
 
     /**
+     * The cost and wholesale columns for this write.
+     *
+     * A percentage product's wholesale price is always calculated here from the
+     * base cost and markup — a `wholesale_price` in the request is not read. An
+     * update that leaves a field out keeps what the product already holds, so a
+     * percentage product recalculates whenever its base cost changes.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    protected function pricing(array $attributes, ?Product $product): array
+    {
+        $keys = ['base_cost', 'wholesale_price', 'wholesale_pricing_method', 'wholesale_markup_percentage'];
+
+        if (array_intersect_key($attributes, array_flip($keys)) === []) {
+            return [];
+        }
+
+        $money = fn (string $key, ?Money $current): ?Money => array_key_exists($key, $attributes) && filled($attributes[$key])
+            ? Money::fromDecimal((string) $attributes[$key], Currency::base())
+            : $current;
+
+        $method = array_key_exists('wholesale_pricing_method', $attributes)
+            ? WholesalePricingMethod::tryFrom((string) $attributes['wholesale_pricing_method']) ?? WholesalePricingMethod::Fixed
+            : ($product === null ? WholesalePricingMethod::Fixed : $product->wholesale_pricing_method);
+
+        $baseCost = $money('base_cost', $product?->base_cost);
+
+        $resolved = $this->pricing->handle(
+            $method,
+            $baseCost,
+            array_key_exists('wholesale_markup_percentage', $attributes)
+                ? (string) $attributes['wholesale_markup_percentage']
+                : $product?->wholesale_markup_percentage,
+            $money('wholesale_price', $product?->wholesale_price),
+        );
+
+        $fields = [
+            'wholesale_pricing_method' => $resolved['method'],
+            'wholesale_markup_percentage' => $resolved['markup'],
+        ];
+
+        if ($baseCost !== null) {
+            $fields['base_cost'] = $baseCost;
+        }
+
+        if ($resolved['price'] !== null) {
+            $fields['wholesale_price'] = $resolved['price'];
+        }
+
+        return $fields;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function snapshot(Product $product): array
@@ -511,6 +563,8 @@ class ManageProducts
             'brand_id' => $product->brand_id,
             'base_cost' => $product->base_cost->toDecimal(),
             'wholesale_price' => $product->wholesale_price->toDecimal(),
+            'wholesale_pricing_method' => $product->wholesale_pricing_method->value,
+            'wholesale_markup_percentage' => $product->wholesale_markup_percentage,
             'currency_code' => $product->currency_code,
             'min_order_quantity' => $product->min_order_quantity,
             'max_order_quantity' => $product->max_order_quantity,

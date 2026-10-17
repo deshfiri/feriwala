@@ -1268,6 +1268,10 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         // One change to many products, each checked and reported on its own (§11.2).
         Route::post('catalog/products/bulk', ProductBulkController::class)
             ->name('catalog.products.bulk');
+
+        // Server-side answer for the pricing form's live preview; writes nothing.
+        Route::post('catalog/products/price-preview', [ProductController::class, 'pricePreview'])
+            ->name('catalog.products.price-preview');
         Route::get('catalog/products/{product}/edit', [ProductController::class, 'edit'])
             ->name('catalog.products.edit');
         Route::patch('catalog/products/{product}', [ProductController::class, 'update'])
@@ -1432,15 +1436,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * Orders (§18.4, §18.5). Reading every order is `order.view`; cancelling
          * one nobody has paid for is `order.edit`, with a reason, audited.
          */
-        Route::get('orders', [OrderController::class, 'index'])
-            ->name('orders.index');
-        Route::get('orders/{order}', [OrderController::class, 'show'])
-            ->name('orders.show');
         // Store Orders, platform-wide: one named action per step, never a chosen status.
         Route::get('store-orders', [AdminStoreOrderController::class, 'index'])->name('store-orders.index');
         Route::get('store-orders/{order}', [AdminStoreOrderController::class, 'show'])->name('store-orders.show');
         Route::post('store-orders/{order}/actions/{action}', [AdminStoreOrderController::class, 'advance'])->name('store-orders.advance');
         Route::post('store-orders/{order}/cancellation', [AdminStoreOrderController::class, 'cancel'])->name('store-orders.cancel');
+        Route::get('orders', [OrderController::class, 'index'])
+            ->name('orders.index');
+        Route::get('orders/{order}', [OrderController::class, 'show'])
+            ->name('orders.show');
         Route::post('orders/{order}/cancellation', [OrderController::class, 'cancel'])
             ->name('orders.cancellation.store');
 

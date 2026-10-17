@@ -212,6 +212,9 @@ export type ProductDetail = {
     brand_id: string | null;
     base_cost: Money;
     wholesale_price: Money;
+    wholesale_pricing_method: WholesalePricingMethod;
+    /** The saved markup, e.g. "20.00"; null for a fixed price. */
+    wholesale_markup_percentage: string | null;
     meta_title: string | null;
     meta_description: string | null;
     meta_keywords: string | null;
@@ -269,8 +272,13 @@ export type VariantRow = {
     /** The price that applies, override or not, rendered by the server. */
     wholesale_price: Money;
     overrides_price: boolean;
+    wholesale_pricing_method: WholesalePricingMethod;
+    wholesale_markup_percentage: string | null;
     is_active: boolean;
 } & ProductLogisticsFields;
+
+/** How a wholesale price comes to be: typed, or base cost plus a markup. */
+export type WholesalePricingMethod = 'fixed' | 'percentage';
 
 /**
  * Quantity pricing for one scope: the whole product (variant_id null) or one

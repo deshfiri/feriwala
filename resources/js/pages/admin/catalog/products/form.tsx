@@ -49,6 +49,7 @@ import PriceTiersSection from './price-tiers-section';
 import ProductHeader from './product-header';
 import TrashReasonDialog from './trash-reason-dialog';
 import VariantsSection from './variants-section';
+import WholesalePricingFields from './wholesale-pricing-fields';
 
 type Props = {
     product: ProductDetail | null;
@@ -105,6 +106,8 @@ const FIELD_TAB: Record<string, string> = {
     account_ids: 'basic',
     wholesale_price: 'pricing',
     base_cost: 'pricing',
+    wholesale_pricing_method: 'pricing',
+    wholesale_markup_percentage: 'pricing',
     suggested_selling_price: 'pricing',
     minimum_selling_price: 'pricing',
     maximum_selling_price: 'pricing',
@@ -719,52 +722,34 @@ export default function ProductForm({
                                         )}
                                     >
                                         <div className="grid gap-4 sm:grid-cols-2">
-                                            <FormField
-                                                label={t(
-                                                    'catalog.products.fields.wholesale_price',
-                                                )}
-                                                description={t(
-                                                    'catalog.products.fields.wholesale_price_help',
-                                                )}
-                                                hint={
-                                                    product
-                                                        ? t(
-                                                              'catalog.products.fields.saved_as',
-                                                              {
-                                                                  amount: product
-                                                                      .wholesale_price
-                                                                      .formatted,
-                                                              },
-                                                          )
-                                                        : undefined
-                                                }
-                                                error={
-                                                    formErrors.wholesale_price
-                                                }
-                                                required
-                                            >
-                                                {(field) => (
-                                                    <MoneyField
-                                                        {...field}
-                                                        name="wholesale_price"
-                                                        defaultValue={
-                                                            product
-                                                                ?.wholesale_price
-                                                                .amount
-                                                        }
-                                                    />
-                                                )}
-                                            </FormField>
-
-                                            <FormField
-                                                label={t(
-                                                    'catalog.products.fields.base_cost',
-                                                )}
-                                                description={t(
-                                                    'catalog.products.fields.base_cost_help',
-                                                )}
-                                                hint={
-                                                    product
+                                            <WholesalePricingFields
+                                                scope="product"
+                                                initial={{
+                                                    method:
+                                                        product?.wholesale_pricing_method ??
+                                                        'fixed',
+                                                    baseCost:
+                                                        product?.base_cost
+                                                            .amount ?? '',
+                                                    markup:
+                                                        product?.wholesale_markup_percentage ??
+                                                        '',
+                                                    wholesale:
+                                                        product?.wholesale_price
+                                                            .amount ?? '',
+                                                    saved:
+                                                        product?.wholesale_price ??
+                                                        null,
+                                                }}
+                                                errors={formErrors}
+                                                labels={{
+                                                    baseCost: t(
+                                                        'catalog.products.fields.base_cost',
+                                                    ),
+                                                    baseCostHelp: t(
+                                                        'catalog.products.fields.base_cost_help',
+                                                    ),
+                                                    baseCostHint: product
                                                         ? t(
                                                               'catalog.products.fields.saved_as',
                                                               {
@@ -773,22 +758,25 @@ export default function ProductForm({
                                                                       .formatted,
                                                               },
                                                           )
-                                                        : undefined
-                                                }
-                                                error={formErrors.base_cost}
-                                                required
-                                            >
-                                                {(field) => (
-                                                    <MoneyField
-                                                        {...field}
-                                                        name="base_cost"
-                                                        defaultValue={
-                                                            product?.base_cost
-                                                                .amount
-                                                        }
-                                                    />
-                                                )}
-                                            </FormField>
+                                                        : undefined,
+                                                    wholesale: t(
+                                                        'catalog.products.fields.wholesale_price',
+                                                    ),
+                                                    wholesaleHelp: t(
+                                                        'catalog.products.fields.wholesale_price_help',
+                                                    ),
+                                                    wholesaleHint: product
+                                                        ? t(
+                                                              'catalog.products.fields.saved_as',
+                                                              {
+                                                                  amount: product
+                                                                      .wholesale_price
+                                                                      .formatted,
+                                                              },
+                                                          )
+                                                        : undefined,
+                                                }}
+                                            />
                                         </div>
                                     </SectionCard>
 

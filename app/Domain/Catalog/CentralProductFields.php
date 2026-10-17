@@ -41,7 +41,7 @@ final class CentralProductFields
      *
      * @var array<int, string>
      */
-    public const PRICING = ['wholesale_price', 'base_cost', 'tiers'];
+    public const PRICING = ['wholesale_price', 'base_cost', 'wholesale_pricing_method', 'wholesale_markup_percentage', 'tiers'];
 
     /**
      * Locked product information (§12).

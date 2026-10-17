@@ -13,6 +13,7 @@ use App\Domain\Catalog\Enums\ItemCondition;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Enums\SalesChannel;
+use App\Domain\Catalog\Enums\WholesalePricingMethod;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\ContentLibrary\Models\ContentLibraryItem;
 use App\Domain\Package\Models\Package;
@@ -46,6 +47,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $currency_code
  * @property Money $base_cost
  * @property Money $wholesale_price
+ * @property WholesalePricingMethod $wholesale_pricing_method
+ * @property string|null $wholesale_markup_percentage
  * @property int $min_order_quantity
  * @property int|null $max_order_quantity
  * @property Money|null $suggested_selling_price
@@ -132,6 +135,7 @@ class Product extends Model
         'currency_code' => 'BDT',
         'base_cost' => '0.00',
         'wholesale_price' => '0.00',
+        'wholesale_pricing_method' => 'fixed',
         'min_order_quantity' => 1,
         'status' => 'draft',
         'package_scope' => 'selected',
@@ -154,6 +158,8 @@ class Product extends Model
         return [
             'base_cost' => MoneyCast::class,
             'wholesale_price' => MoneyCast::class,
+            'wholesale_pricing_method' => WholesalePricingMethod::class,
+            'wholesale_markup_percentage' => 'decimal:2',
             'min_order_quantity' => 'integer',
             'max_order_quantity' => 'integer',
             'suggested_selling_price' => MoneyCast::class,

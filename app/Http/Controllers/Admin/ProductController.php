@@ -26,6 +26,8 @@ use App\Domain\Catalog\ProductBarcode;
 use App\Domain\Catalog\ProductDeletionRule;
 use App\Domain\Catalog\ProductMediaStore;
 use App\Domain\Catalog\ProductSeo;
+use App\Domain\Catalog\Rules\MarkupPercentageRule;
+use App\Domain\Catalog\WholesalePriceCalculator;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\ContentLibrary\ContentBlocks;
 use App\Domain\ContentLibrary\Models\ContentLibraryItem;
@@ -38,7 +40,10 @@ use App\Domain\Storage\ManagedStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\SaveProductRequest;
 use App\Models\User;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -227,6 +232,40 @@ class ProductController extends Controller
             'variants' => [],
             'attributes' => [],
             'variant_builder_max' => GenerateVariants::MAX_COMBINATIONS,
+        ]);
+    }
+
+    /**
+     * The wholesale price a base cost and markup percentage would give, for the
+     * form's live preview.
+     *
+     * The browser never does this sum (§36.1, D26): it asks, and shows what the
+     * same {@see WholesalePriceCalculator} that the save uses answers, so the
+     * preview cannot differ from the stored figure. Writes nothing. Used for
+     * products and variations alike.
+     */
+    public function pricePreview(Request $request, WholesalePriceCalculator $calculator): JsonResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(CatalogPolicy::canCreate($actor) || CatalogPolicy::canEdit($actor), 403);
+
+        $data = $request->validate([
+            'base_cost' => ['required', new DecimalAmountRule],
+            'wholesale_markup_percentage' => ['required', new MarkupPercentageRule],
+        ], [
+            'base_cost.required' => __('catalog.pricing.base_cost_first'),
+        ]);
+
+        $baseCost = DecimalAmount::parse($data['base_cost']);
+        $markup = WholesalePriceCalculator::normalizePercentage($data['wholesale_markup_percentage']);
+
+        return response()->json([
+            'base_cost' => $baseCost->jsonSerialize(),
+            'wholesale_price' => $calculator->wholesalePrice($baseCost, $markup)->jsonSerialize(),
+
+            // Trailing zeros dropped for reading: "20", "12.5".
+            'markup_percentage' => rtrim(rtrim($markup, '0'), '.'),
         ]);
     }
 
@@ -594,6 +633,8 @@ class ProductController extends Controller
             // .decimal string and the server converts back on submit (§36.1).
             'base_cost' => $product->base_cost->jsonSerialize(),
             'wholesale_price' => $product->wholesale_price->jsonSerialize(),
+            'wholesale_pricing_method' => $product->wholesale_pricing_method->value,
+            'wholesale_markup_percentage' => $product->wholesale_markup_percentage,
 
             'meta_title' => $product->meta_title,
             'meta_description' => $product->meta_description,
@@ -846,6 +887,8 @@ class ProductController extends Controller
             'base_cost_override' => $variant->base_cost?->jsonSerialize(),
             'wholesale_price' => $variant->effectiveWholesalePrice()->jsonSerialize(),
             'overrides_price' => $variant->wholesale_price !== null,
+            'wholesale_pricing_method' => $variant->wholesale_pricing_method->value,
+            'wholesale_markup_percentage' => $variant->wholesale_markup_percentage,
             'is_active' => $variant->is_active,
 
             // This variant's own override only (null = inherits the

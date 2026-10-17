@@ -5,6 +5,7 @@ namespace App\Domain\Catalog\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Catalog\Data\ProductLogistics;
+use App\Domain\Catalog\Enums\WholesalePricingMethod;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -30,6 +31,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property string $currency_code
  * @property Money|null $wholesale_price
  * @property Money|null $base_cost
+ * @property WholesalePricingMethod $wholesale_pricing_method
+ * @property string|null $wholesale_markup_percentage
  * @property int|null $net_weight_grams
  * @property int|null $shipping_weight_grams
  * @property string|null $length_cm
@@ -52,6 +55,16 @@ class ProductVariant extends Model
 {
     use HasPublicId;
 
+    /**
+     * The column default, held in memory too so a variant created in this
+     * request reads as fixed before it is reloaded.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'wholesale_pricing_method' => 'fixed',
+    ];
+
     protected $guarded = [];
 
     /**
@@ -71,6 +84,8 @@ class ProductVariant extends Model
         return [
             'wholesale_price' => MoneyCast::class,
             'base_cost' => MoneyCast::class,
+            'wholesale_pricing_method' => WholesalePricingMethod::class,
+            'wholesale_markup_percentage' => 'decimal:2',
             'net_weight_grams' => 'integer',
             'shipping_weight_grams' => 'integer',
             'length_cm' => 'decimal:2',

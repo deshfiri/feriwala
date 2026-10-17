@@ -4,7 +4,6 @@ import { useState } from 'react';
 import ProductVariantController from '@/actions/App/Http/Controllers/Admin/ProductVariantController';
 import AlertError from '@/components/alert-error';
 import FormField from '@/components/forms/form-field';
-import MoneyField from '@/components/forms/money-field';
 import MoneyAmount from '@/components/money-amount';
 import SectionCard from '@/components/section-card';
 import EmptyState from '@/components/states/empty-state';
@@ -21,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import LogisticsFields from './logistics-fields';
+import WholesalePricingFields from './wholesale-pricing-fields';
 import { index as attributesIndex } from '@/routes/admin/catalog/attributes';
 import type {
     AttributeOption,
@@ -82,6 +82,9 @@ export default function VariantsSection({
                 barcode: variant.barcode,
                 wholesale_price: variant.wholesale_price_override?.amount ?? '',
                 base_cost: variant.base_cost_override?.amount ?? '',
+                wholesale_pricing_method: variant.wholesale_pricing_method,
+                wholesale_markup_percentage:
+                    variant.wholesale_markup_percentage ?? '',
                 is_active: !variant.is_active,
             },
             { preserveScroll: true },
@@ -647,44 +650,41 @@ function VariantDialog({
                                     )}
                                 </FormField>
 
-                                <FormField
-                                    label={t(
-                                        'catalog.variants.wholesale_price',
-                                    )}
-                                    hint={t(
-                                        'catalog.variants.wholesale_price_help',
-                                    )}
-                                    error={errors.wholesale_price}
-                                >
-                                    {(field) => (
-                                        <MoneyField
-                                            {...field}
-                                            name="wholesale_price"
-                                            defaultValue={
-                                                variant
-                                                    ?.wholesale_price_override
-                                                    ?.amount
-                                            }
-                                        />
-                                    )}
-                                </FormField>
-
-                                <FormField
-                                    label={t('catalog.variants.base_cost')}
-                                    hint={t('catalog.variants.base_cost_help')}
-                                    error={errors.base_cost}
-                                >
-                                    {(field) => (
-                                        <MoneyField
-                                            {...field}
-                                            name="base_cost"
-                                            defaultValue={
-                                                variant?.base_cost_override
-                                                    ?.amount
-                                            }
-                                        />
-                                    )}
-                                </FormField>
+                                <WholesalePricingFields
+                                    scope="variant"
+                                    initial={{
+                                        method:
+                                            variant?.wholesale_pricing_method ??
+                                            'fixed',
+                                        baseCost:
+                                            variant?.base_cost_override
+                                                ?.amount ?? '',
+                                        markup:
+                                            variant?.wholesale_markup_percentage ??
+                                            '',
+                                        wholesale:
+                                            variant?.wholesale_price_override
+                                                ?.amount ?? '',
+                                        saved:
+                                            variant?.wholesale_price_override ??
+                                            null,
+                                    }}
+                                    errors={errors}
+                                    labels={{
+                                        baseCost: t(
+                                            'catalog.variants.base_cost',
+                                        ),
+                                        baseCostHint: t(
+                                            'catalog.variants.base_cost_help',
+                                        ),
+                                        wholesale: t(
+                                            'catalog.variants.wholesale_price',
+                                        ),
+                                        wholesaleHint: t(
+                                            'catalog.variants.wholesale_price_help',
+                                        ),
+                                    }}
+                                />
 
                                 <FormField
                                     label={t('catalog.variants.availability')}

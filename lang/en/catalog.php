@@ -580,6 +580,26 @@ return [
         'empty_help_read_only' => 'Attributes appear here once someone with catalogue authoring permission adds them.',
     ],
 
+    // Wholesale pricing method, on a product and on a variation.
+    'pricing' => [
+        'method' => 'Wholesale Pricing Method',
+        'method_help' => 'Fixed: you type the wholesale price. Percentage: it is the base cost plus a markup.',
+        'method_fixed' => 'Fixed Price',
+        'method_percentage' => 'Percentage Markup',
+        'markup' => 'Markup Percentage',
+        'markup_help' => 'Added on top of the base cost, e.g. 20 for 20%. Up to :max, two decimals at most.',
+        'calculated' => 'Calculated Wholesale Price',
+        'calculated_help' => 'Worked out by the server from the base cost and markup. Switch to Fixed Price to type it yourself.',
+        'calculated_badge' => 'Calculated',
+        'calculating' => 'Calculating…',
+        'preview' => ':base + :percent% = :result',
+        'preview_label' => 'Calculation',
+        'base_cost_first' => 'Enter the Base Cost before using percentage pricing.',
+        'markup_required' => 'Enter the markup percentage.',
+        'markup_invalid' => 'The markup percentage must be a number from 0 to :max with at most two decimals.',
+        'variant_base_cost_help' => 'A percentage price is calculated from this variation’s own base cost, not the product’s.',
+    ],
+
     'variants' => [
         'title' => 'Variations',
         'description' => 'One combination of attribute values each, with its own BPC. A combination cannot be changed once created — add a new variation and switch the old one off.',

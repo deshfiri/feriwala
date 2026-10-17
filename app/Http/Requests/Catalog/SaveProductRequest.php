@@ -4,6 +4,7 @@ namespace App\Http\Requests\Catalog;
 
 use App\Domain\Catalog\CentralProductFields;
 use App\Domain\Catalog\Enums\ItemCondition;
+use App\Domain\Catalog\Enums\WholesalePricingMethod;
 use App\Domain\Catalog\Models\Brand;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Catalog\Models\Product;
@@ -11,6 +12,7 @@ use App\Domain\Catalog\Models\ProductMedia;
 use App\Domain\Catalog\Models\ProductPriceTier;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\Policies\CatalogPolicy;
+use App\Domain\Catalog\Rules\MarkupPercentageRule;
 use App\Support\Money\DecimalAmount;
 use App\Support\Money\Money;
 use App\Support\Money\Rules\DecimalAmountRule;
@@ -26,7 +28,7 @@ class SaveProductRequest extends FormRequest
      *
      * @var array<int, string>
      */
-    public const OWNED = ['sku', 'barcode', 'wholesale_price', 'base_cost'];
+    public const OWNED = ['sku', 'barcode', 'wholesale_price', 'base_cost', 'wholesale_pricing_method', 'wholesale_markup_percentage'];
 
     /**
      * Refused before a single rule runs (§12).
@@ -128,7 +130,20 @@ class SaveProductRequest extends FormRequest
              * {@see \App\Support\Money\Money} in `productAttributes()` below.
              */
             'base_cost' => ['required', new DecimalAmountRule],
-            'wholesale_price' => ['required', new DecimalAmountRule],
+
+            /*
+             * Fixed is the default. A fixed price is typed and validated like
+             * any amount; a percentage price is calculated by the server from the
+             * base cost, so a `wholesale_price` sent alongside one is never read
+             * (see productAttributes()) and is not worth validating either.
+             */
+            'wholesale_pricing_method' => ['nullable', Rule::enum(WholesalePricingMethod::class)],
+            'wholesale_price' => $this->usesPercentagePricing()
+                ? ['nullable']
+                : ['required', new DecimalAmountRule],
+            'wholesale_markup_percentage' => $this->usesPercentagePricing()
+                ? ['required', new MarkupPercentageRule]
+                : ['nullable'],
 
             /*
              * What partner websites put in the page head (§34.3), bounded to
@@ -209,7 +224,26 @@ class SaveProductRequest extends FormRequest
      */
     public function messages(): array
     {
-        return CentralProductFields::messages($this->all());
+        return [
+            ...CentralProductFields::messages($this->all()),
+
+            // Only when the method needs it: a plain "required" stays the
+            // answer for a fixed-price product.
+            ...($this->usesPercentagePricing() ? [
+                'base_cost.required' => __('catalog.pricing.base_cost_first'),
+                'wholesale_markup_percentage.required' => __('catalog.pricing.markup_required'),
+            ] : []),
+        ];
+    }
+
+    /**
+     * Whether this submission asks for a calculated wholesale price. Anything
+     * else — absent, blank or unrecognised — is the default, a fixed price; an
+     * unrecognised value is refused by the enum rule on its own field.
+     */
+    protected function usesPercentagePricing(): bool
+    {
+        return $this->input('wholesale_pricing_method') === WholesalePricingMethod::Percentage->value;
     }
 
     /**
@@ -291,6 +325,17 @@ class SaveProductRequest extends FormRequest
     {
         $validated = $this->validated();
 
+        $validated['wholesale_pricing_method'] = $this->usesPercentagePricing()
+            ? WholesalePricingMethod::Percentage->value
+            : WholesalePricingMethod::Fixed->value;
+
+        if ($this->usesPercentagePricing()) {
+            // Never trusted: ManageProducts calculates it from the base cost.
+            unset($validated['wholesale_price']);
+        } else {
+            $validated['wholesale_markup_percentage'] = null;
+        }
+
         foreach (['base_cost', 'wholesale_price'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $validated[$field] = DecimalAmount::parse($validated[$field])->toDecimal();
@@ -317,6 +362,8 @@ class SaveProductRequest extends FormRequest
             'brand_id' => 'brand',
             'base_cost' => 'base cost',
             'wholesale_price' => 'wholesale price',
+            'wholesale_pricing_method' => 'wholesale pricing method',
+            'wholesale_markup_percentage' => 'markup percentage',
             'min_order_quantity' => 'minimum order quantity',
             'max_order_quantity' => 'maximum order quantity',
             'suggested_selling_price' => 'suggested selling price',

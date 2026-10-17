@@ -5,6 +5,7 @@ namespace App\Domain\Catalog\Actions;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Catalog\Enums\ProductStatus;
+use App\Domain\Catalog\Enums\WholesalePricingMethod;
 use App\Domain\Catalog\Exceptions\CatalogRefused;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
@@ -37,6 +38,7 @@ class ManageVariants
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected ResolveWholesalePricing $pricing,
     ) {}
 
     /**
@@ -104,7 +106,7 @@ class ManageVariants
 
             $before = $this->snapshot($variant);
 
-            $variant->fill($this->fields($attributes))->save();
+            $variant->fill($this->fields($attributes, $variant))->save();
 
             $this->record($actor, 'catalog.variant_updated', $variant, $before, $this->snapshot($variant));
 
@@ -203,10 +205,64 @@ class ManageVariants
     }
 
     /**
+     * The cost and wholesale columns for this write.
+     *
+     * Null still means the product's own figure applies, so the two cannot
+     * drift. A percentage variation is the exception: it is always worked out
+     * from its **own** base cost — never its product's — and a `wholesale_price`
+     * in the request is not read.
+     *
      * @param  array<string, mixed>  $attributes
      * @return array<string, mixed>
      */
-    protected function fields(array $attributes): array
+    protected function pricing(array $attributes, ?ProductVariant $variant): array
+    {
+        $keys = ['base_cost', 'wholesale_price', 'wholesale_pricing_method', 'wholesale_markup_percentage'];
+
+        if (array_intersect_key($attributes, array_flip($keys)) === []) {
+            return [];
+        }
+
+        $figure = fn (string $key, ?Money $current): ?Money => ! array_key_exists($key, $attributes)
+            ? $current
+            : (blank($attributes[$key]) ? null : Money::fromDecimal((string) $attributes[$key], Currency::base()));
+
+        $method = array_key_exists('wholesale_pricing_method', $attributes)
+            ? WholesalePricingMethod::tryFrom((string) $attributes['wholesale_pricing_method']) ?? WholesalePricingMethod::Fixed
+            : ($variant === null ? WholesalePricingMethod::Fixed : $variant->wholesale_pricing_method);
+
+        $baseCost = $figure('base_cost', $variant?->base_cost);
+
+        $resolved = $this->pricing->handle(
+            $method,
+            $baseCost,
+            array_key_exists('wholesale_markup_percentage', $attributes)
+                ? (string) $attributes['wholesale_markup_percentage']
+                : $variant?->wholesale_markup_percentage,
+            $figure('wholesale_price', $variant?->wholesale_price),
+        );
+
+        $fields = [
+            'wholesale_pricing_method' => $resolved['method'],
+            'wholesale_markup_percentage' => $resolved['markup'],
+        ];
+
+        if (array_key_exists('base_cost', $attributes)) {
+            $fields['base_cost'] = $baseCost;
+        }
+
+        if ($method->isPercentage() || array_key_exists('wholesale_price', $attributes)) {
+            $fields['wholesale_price'] = $resolved['price'];
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    protected function fields(array $attributes, ?ProductVariant $variant = null): array
     {
         $fields = [];
 
@@ -218,14 +274,7 @@ class ManageVariants
             $fields['barcode'] = blank($attributes['barcode']) ? null : $attributes['barcode'];
         }
 
-        // Null means the product's own figure applies, so the two cannot drift.
-        foreach (['wholesale_price', 'base_cost'] as $figure) {
-            if (array_key_exists($figure, $attributes)) {
-                $fields[$figure] = $attributes[$figure] === null || $attributes[$figure] === ''
-                    ? null
-                    : Money::fromDecimal((string) $attributes[$figure], Currency::base());
-            }
-        }
+        $fields = [...$fields, ...$this->pricing($attributes, $variant)];
 
         if (array_key_exists('is_active', $attributes)) {
             $fields['is_active'] = (bool) $attributes['is_active'];
@@ -271,6 +320,8 @@ class ManageVariants
             'combination_key' => $variant->combination_key,
             'wholesale_price' => $variant->wholesale_price?->toDecimal(),
             'base_cost' => $variant->base_cost?->toDecimal(),
+            'wholesale_pricing_method' => $variant->wholesale_pricing_method->value,
+            'wholesale_markup_percentage' => $variant->wholesale_markup_percentage,
             'is_active' => $variant->is_active,
             'net_weight_grams' => $variant->net_weight_grams,
             'shipping_weight_grams' => $variant->shipping_weight_grams,

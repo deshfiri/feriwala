@@ -9,11 +9,16 @@ import { cn } from '@/lib/utils';
  * Submits the decimal string exactly as typed — "500.25" — never a
  * minor-unit integer; the server is the only place that converts it,
  * through `App\Support\Money\DecimalAmount::parse()` (§36.1).
+ *
+ * Uncontrolled by default. Pass `value` and `onChange` to drive it from state,
+ * as the pricing fields do; the string is still only held, never computed on.
  */
 export default function MoneyField({
     id,
     name,
     defaultValue,
+    value,
+    onChange,
     'aria-describedby': ariaDescribedBy,
     'aria-invalid': ariaInvalid,
     'aria-required': ariaRequired,
@@ -23,6 +28,8 @@ export default function MoneyField({
     id: string;
     name: string;
     defaultValue?: string;
+    value?: string;
+    onChange?: (value: string) => void;
     'aria-describedby'?: string;
     'aria-invalid'?: boolean;
     'aria-required'?: boolean;
@@ -46,7 +53,12 @@ export default function MoneyField({
                 autoComplete="off"
                 pattern="^\d+(\.\d{1,2})?$"
                 placeholder="0.00"
-                defaultValue={defaultValue}
+                {...(value === undefined
+                    ? { defaultValue }
+                    : {
+                          value,
+                          onChange: (event) => onChange?.(event.target.value),
+                      })}
                 aria-describedby={ariaDescribedBy}
                 aria-invalid={ariaInvalid}
                 aria-required={ariaRequired}
