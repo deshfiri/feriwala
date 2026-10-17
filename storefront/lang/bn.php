@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     'nav.skip' => 'মূল অংশে যান',
     'nav.search' => 'খুঁজুন',
-    'nav.search_placeholder' => 'পণ্য খুঁজুন',
+    'nav.search_placeholder' => 'পণ্য, ব্র্যান্ড, ক্যাটাগরি খুঁজুন...',
     'nav.account' => 'শপ মেনু',
     'nav.track' => 'অর্ডার ট্র্যাক',
     'nav.cart' => 'কার্ট',
@@ -299,4 +299,5 @@ return [
     'footer.powered' => 'Banij-এর সহায়তায়',
     'ui.working' => 'অনুগ্রহ করে অপেক্ষা করুন…',
     'ui.image_missing' => 'ছবি পাওয়া যায়নি',
+    'footer.top' => 'উপরে যান',
 ];

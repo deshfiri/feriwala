@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     'nav.skip' => 'Skip to content',
     'nav.search' => 'Search',
-    'nav.search_placeholder' => 'Search products',
+    'nav.search_placeholder' => 'Search products, brands, categories...',
     'nav.account' => 'Shop menu',
     'nav.track' => 'Track order',
     'nav.cart' => 'Cart',
@@ -299,4 +299,5 @@ return [
     'footer.powered' => 'Powered by Banij',
     'ui.working' => 'Please wait…',
     'ui.image_missing' => 'Image unavailable',
+    'footer.top' => 'Back to top',
 ];

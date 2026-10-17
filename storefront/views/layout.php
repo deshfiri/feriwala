@@ -54,6 +54,9 @@ $other = ($locale ?? 'en') === 'bn' ? 'en' : 'bn';
                 <input type="hidden" name="locale" value="<?= e($other) ?>">
                 <button type="submit" class="link" lang="<?= e($other) ?>"><?= e($other === 'en' ? 'English' : 'বাংলা') ?></button>
             </form>
+            <a class="account-link hide-small" href="/track" aria-label="<?= e(t('nav.track')) ?>" title="<?= e(t('nav.track')) ?>">
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 20c.9-3.6 3.8-5.4 7.5-5.4s6.6 1.8 7.5 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </a>
             <a class="cart-link" href="/cart">
                 <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.76L20 8H6.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/></svg>
                 <span class="cart-text"><?= e(t('nav.cart')) ?></span>
@@ -130,6 +133,7 @@ $other = ($locale ?? 'en') === 'bn' ? 'en' : 'bn';
     <div class="container fine footer-bottom">
         <span><?= e(t('footer.rights', ['year' => gmdate('Y'), 'name' => $shopName])) ?></span>
         <span><?= e(t('footer.powered')) ?></span>
+        <a class="to-top" href="#main"><?= e(t('footer.top')) ?> ↑</a>
     </div>
 </footer>
 
