@@ -286,6 +286,7 @@ class AccountController extends Controller
                  * actions, and offering this there would offer a refusal.
                  */
                 'upload_kyc_document' => Gate::allows('uploadKycDocument', $account),
+                'verify_kyc_on_the_spot' => Gate::allows('verifyKycOnTheSpot', $account),
                 'complete_manually' => $this->isOnOnboardingFunnel($account)
                     && Gate::allows('completeManually', $account),
                 'verify_contact' => Gate::allows('verifyContact', $account),

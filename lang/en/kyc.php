@@ -575,5 +575,10 @@ return [
         'submit' => 'Upload',
         'cancel' => 'Cancel',
         'done' => 'Document uploaded on their behalf.',
+        'verified' => 'Document uploaded and KYC verified.',
+        'verify' => 'Verify on the spot',
+        'verify_help' => 'Sends the round and approves it now, with you recorded as the reviewer. Every required document must already be uploaded.',
+        'max_size' => 'Largest file this server takes: :limit.',
+        'too_large' => 'This file is larger than the server accepts (:limit). Use a smaller file.',
     ],
 ];

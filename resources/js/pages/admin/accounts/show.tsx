@@ -147,6 +147,7 @@ type Props = {
         reactivate: boolean;
         complete_manually: boolean;
         upload_kyc_document: boolean;
+        verify_kyc_on_the_spot: boolean;
         verify_contact: boolean;
         manage_identity: boolean;
     };
@@ -883,6 +884,7 @@ export default function AdminAccountShow({
             <StaffKycUploadDialog
                 targetsUrl={kycUpload.targets.url(business.id)}
                 storeForm={kycUpload.store.form(business.id)}
+                canVerify={can.verify_kyc_on_the_spot}
                 open={uploading}
                 onOpenChange={setUploading}
             />

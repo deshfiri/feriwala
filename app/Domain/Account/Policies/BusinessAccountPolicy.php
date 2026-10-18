@@ -199,6 +199,19 @@ class BusinessAccountPolicy
     }
 
     /**
+     * Uploading KYC documents *and* approving the round in the same act, from
+     * the original document in front of staff.
+     *
+     * Both halves are checked: it is an upload, so `kyc.edit`, and it is a
+     * decision, so `kyc.approve`. Nobody does it to their own account.
+     */
+    public function verifyKycOnTheSpot(User $user, BusinessAccount $account): bool
+    {
+        return $this->uploadKycDocument($user, $account)
+            && $user->can(PermissionCatalogue::name(PermissionModule::Kyc, PermissionAction::Approve));
+    }
+
+    /**
      * Opening a business's own dashboard as its owner.
      *
      * This shows an administrator everything the owner sees, including what

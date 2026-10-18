@@ -655,6 +655,7 @@ export default function AdminSupplierShow({
             <StaffKycUploadDialog
                 targetsUrl={kycUpload.targets.url(supplier.id)}
                 storeForm={kycUpload.store.form(supplier.id)}
+                canVerify={supplier.can_upload_kyc_document}
                 open={uploading}
                 onOpenChange={setUploading}
             />

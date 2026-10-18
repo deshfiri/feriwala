@@ -34,16 +34,21 @@ export default function StaffKycUploadDialog({
     storeForm,
     open,
     onOpenChange,
+    canVerify = false,
 }: {
     targetsUrl: string;
     /** The wayfinder `.form()` for the store route: `{ action, method }`. */
     storeForm: { action: string; method: 'post' };
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Whether this person may also approve the round as they upload. */
+    canVerify?: boolean;
 }) {
     const { t } = useTranslation();
     const [targets, setTargets] = useState<Target[] | null>(null);
     const [message, setMessage] = useState<string | null>(null);
+    const [maxKb, setMaxKb] = useState<number | null>(null);
+    const [tooLarge, setTooLarge] = useState(false);
 
     useEffect(() => {
         if (!open) {
@@ -54,6 +59,7 @@ export default function StaffKycUploadDialog({
 
         setTargets(null);
         setMessage(null);
+        setTooLarge(false);
 
         fetch(targetsUrl, {
             headers: { Accept: 'application/json' },
@@ -61,10 +67,17 @@ export default function StaffKycUploadDialog({
             signal: controller.signal,
         })
             .then((response) => response.json())
-            .then((body: { targets: Target[]; message?: string }) => {
-                setTargets(body.targets);
-                setMessage(body.message ?? null);
-            })
+            .then(
+                (body: {
+                    targets: Target[];
+                    message?: string;
+                    max_upload_kb?: number;
+                }) => {
+                    setTargets(body.targets);
+                    setMessage(body.message ?? null);
+                    setMaxKb(body.max_upload_kb ?? null);
+                },
+            )
             .catch(() => {
                 if (!controller.signal.aborted) {
                     setTargets([]);
@@ -131,7 +144,32 @@ export default function StaffKycUploadDialog({
 
                                 <FormField
                                     label={t('kyc.upload_on_behalf.file')}
-                                    error={errors.file}
+                                    description={
+                                        maxKb !== null
+                                            ? t(
+                                                  'kyc.upload_on_behalf.max_size',
+                                                  {
+                                                      limit:
+                                                          maxKb >= 1024
+                                                              ? `${Math.floor(maxKb / 1024)} MB`
+                                                              : `${maxKb} KB`,
+                                                  },
+                                              )
+                                            : undefined
+                                    }
+                                    error={
+                                        tooLarge && maxKb !== null
+                                            ? t(
+                                                  'kyc.upload_on_behalf.too_large',
+                                                  {
+                                                      limit:
+                                                          maxKb >= 1024
+                                                              ? `${Math.floor(maxKb / 1024)} MB`
+                                                              : `${maxKb} KB`,
+                                                  },
+                                              )
+                                            : errors.file
+                                    }
                                     required
                                 >
                                     {(field) => (
@@ -140,6 +178,14 @@ export default function StaffKycUploadDialog({
                                             type="file"
                                             name="file"
                                             required
+                                            onChange={(event) =>
+                                                setTooLarge(
+                                                    maxKb !== null &&
+                                                        (event.target.files?.[0]
+                                                            ?.size ?? 0) >
+                                                            maxKb * 1024,
+                                                )
+                                            }
                                         />
                                     )}
                                 </FormField>
@@ -173,7 +219,33 @@ export default function StaffKycUploadDialog({
                                     {t('kyc.upload_on_behalf.submit_after')}
                                 </label>
 
-                                <SubmitButton processing={processing}>
+                                {canVerify && (
+                                    <label className="flex items-start gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            name="verify"
+                                            value="1"
+                                            className="mt-1"
+                                        />
+                                        <span>
+                                            <span className="font-medium">
+                                                {t(
+                                                    'kyc.upload_on_behalf.verify',
+                                                )}
+                                            </span>
+                                            <span className="text-muted-foreground block text-xs">
+                                                {t(
+                                                    'kyc.upload_on_behalf.verify_help',
+                                                )}
+                                            </span>
+                                        </span>
+                                    </label>
+                                )}
+
+                                <SubmitButton
+                                    processing={processing}
+                                    disabled={processing || tooLarge}
+                                >
                                     {t('kyc.upload_on_behalf.submit')}
                                 </SubmitButton>
                             </>

@@ -1,12 +1,16 @@
 <?php
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Kyc\Enums\KycAudience;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycDocument;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -175,6 +179,118 @@ describe('for a partner', function () {
             ->and(KycSubmission::query()->first()->status)->toBe(KycStatus::Approved)
             ->and(KycSubmission::query()->first()->documents()->count())->toBe(1)
             ->and($account->refresh()->status)->toBe(AccountStatus::Active);
+    });
+});
+
+describe('size and verifying on the spot', function () {
+    it('tells the dialog the largest file this server will take', function () {
+        staffUploadType('nid');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $limit = $this->actingAs($this->superAdmin)
+            ->getJson(route('admin.accounts.kyc-upload.targets', $account->public_id))
+            ->assertOk()
+            ->json('max_upload_kb');
+
+        expect($limit)->toBeInt()->toBeGreaterThan(0)->toBeLessThanOrEqual(10240);
+    });
+
+    it('says the file is too big for the server instead of "failed to upload"', function () {
+        staffUploadType('nid');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        // What PHP hands over when the file is above upload_max_filesize.
+        $tooBig = new UploadedFile(UploadedFile::fake()->create('scan.pdf', 10)->getPathname(), 'scan.pdf', 'application/pdf', UPLOAD_ERR_INI_SIZE, true);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+                'target' => 'type:nid',
+                'file' => $tooBig,
+                'reason' => 'Applicant sent a large scan.',
+            ])
+            ->assertSessionHasErrors('file');
+
+        expect(session('errors')->first('file'))->toContain('larger than the server accepts')
+            ->and(KycDocument::query()->count())->toBe(0);
+    });
+
+    it('uploads, sends and approves the round in one act, as the reviewer', function () {
+        staffUploadType('nid');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+                'target' => 'type:nid',
+                'file' => staffUploadFile(),
+                'reason' => 'Original NID checked at the counter.',
+                'verify' => '1',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $round = KycSubmission::query()->where('business_account_id', $account->id)->sole();
+
+        expect($round->status)->toBe(KycStatus::Approved)
+            ->and($round->documents()->count())->toBe(1)
+            ->and($round->documents()->first()->uploaded_by_staff_id)->toBe($this->superAdmin->id)
+            ->and($round->reviewed_at)->not->toBeNull()
+            ->and(DB::table('kyc_reviews')->where('kyc_submission_id', $round->id)->where('reviewer_id', $this->superAdmin->id)->where('to_status', 'approved')->exists())->toBeTrue()
+            // On to the next step of the funnel — verified, not activated.
+            ->and($account->refresh()->status)->toBe(AccountStatus::PackageSelectionPending);
+    });
+
+    it('does not approve a round that is still missing a required document', function () {
+        staffUploadType('nid');
+        staffUploadType('trade_licence');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+                'target' => 'type:nid',
+                'file' => staffUploadFile(),
+                'reason' => 'Only the NID is here so far.',
+                'verify' => '1',
+            ])
+            ->assertSessionHasErrors('file');
+
+        $round = KycSubmission::query()->where('business_account_id', $account->id)->sole();
+
+        expect($round->status)->toBe(KycStatus::Draft)
+            ->and($round->documents()->count())->toBe(1);
+    });
+
+    it('needs the approval permission as well as the upload one', function () {
+        staffUploadType('nid');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+        $staff = testPlatformStaff(PlatformRole::ContentManager);
+        $staff->givePermissionTo(PermissionCatalogue::name(PermissionModule::Kyc, PermissionAction::Edit));
+
+        $this->actingAs($staff)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+                'target' => 'type:nid',
+                'file' => staffUploadFile(),
+                'reason' => 'Trying to verify without approval rights.',
+                'verify' => '1',
+            ])
+            ->assertForbidden();
+
+        expect(KycDocument::query()->count())->toBe(0);
+    });
+
+    it('verifies a Supplier on the spot', function () {
+        staffUploadType('trade_licence');
+        $supplier = Supplier::factory()->kycPending()->create();
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.suppliers.kyc-upload.store', $supplier->public_id), [
+                'target' => 'type:trade_licence',
+                'file' => staffUploadFile('licence.pdf'),
+                'reason' => 'Licence original checked in person.',
+                'verify' => '1',
+            ])
+            ->assertSessionHasNoErrors();
+
+        expect($supplier->refresh()->status)->toBe(SupplierStatus::Approved)
+            ->and(SupplierKycDocument::query()->count())->toBe(1);
     });
 });
 

@@ -6,14 +6,18 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Kyc\Batch\KycEvidenceRefused;
+use App\Domain\Kyc\Batch\KycReviewRefused;
 use App\Domain\Kyc\Batch\PartnerKycRound;
 use App\Domain\Kyc\Batch\RecordKycEvidence;
+use App\Domain\Kyc\Batch\RecordKycVerdict;
 use App\Domain\Kyc\Batch\SupplierKycRound;
+use App\Domain\Kyc\Data\KycDecision;
 use App\Domain\Kyc\Exceptions\KycIncomplete;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
+use App\Domain\Supplier\Actions\ApproveSupplierKyc;
 use App\Domain\Supplier\Actions\OpenSupplierKycRound;
 use App\Domain\Supplier\Actions\SubmitSupplierKyc;
 use App\Domain\Supplier\Models\Supplier;
@@ -43,7 +47,9 @@ use InvalidArgumentException;
  *
  * The upload does not decide anything. Sending the round for review is a
  * separate, explicit choice (`$submit`), and approving it stays with the
- * reviewer.
+ * reviewer — unless staff with the approval permission ask to verify on the
+ * spot (`$verify`), which sends, accepts and approves the round as that
+ * reviewer, recorded like any other review.
  *
  * A target is either `type:<key>` (a document of the round's flat list) or
  * `slot:<requirement>:<slot>` (a slot of a batch round).
@@ -59,6 +65,9 @@ class UploadKycDocumentOnBehalf
         protected SubmitKyc $submitPartner,
         protected SubmitSupplierKyc $submitSupplier,
         protected RecordAuditLog $audit,
+        protected RecordKycVerdict $verdicts,
+        protected ReviewKyc $reviewPartner,
+        protected ApproveSupplierKyc $approveSupplier,
     ) {}
 
     /**
@@ -89,7 +98,7 @@ class UploadKycDocumentOnBehalf
      * @throws InvalidArgumentException
      * @throws KycIncomplete
      */
-    public function forPartner(BusinessAccount $account, User $actor, string $target, UploadedFile $file, string $reason, bool $submit = false): KycDocument
+    public function forPartner(BusinessAccount $account, User $actor, string $target, UploadedFile $file, string $reason, bool $submit = false, bool $verify = false): KycDocument
     {
         $reason = $this->reason($reason);
         $submission = $this->partnerRound($account);
@@ -124,7 +133,9 @@ class UploadKycDocumentOnBehalf
 
         $this->record($actor, $submission, $document, $target, $reason, 'kyc', $account->id);
 
-        if ($submit) {
+        if ($verify) {
+            $this->verifyPartner($submission, $actor, $reason);
+        } elseif ($submit) {
             $this->submitPartner->handle($submission->refresh());
         }
 
@@ -134,7 +145,7 @@ class UploadKycDocumentOnBehalf
     /**
      * @throws InvalidArgumentException
      */
-    public function forSupplier(Supplier $supplier, User $actor, string $target, UploadedFile $file, string $reason, bool $submit = false): SupplierKycDocument
+    public function forSupplier(Supplier $supplier, User $actor, string $target, UploadedFile $file, string $reason, bool $submit = false, bool $verify = false): SupplierKycDocument
     {
         $reason = $this->reason($reason);
         $submission = $this->supplierRound($supplier);
@@ -165,11 +176,73 @@ class UploadKycDocumentOnBehalf
 
         $this->record($actor, $submission, $document, $target, $reason, 'supplier_kyc', null);
 
-        if ($submit) {
+        if ($verify) {
+            $this->verifySupplier($submission, $supplier, $actor, $reason);
+        } elseif ($submit) {
             $this->submitSupplier->handle($supplier);
         }
 
         return $document;
+    }
+
+    /**
+     * Staff who have the original in front of them confirm it on the spot: the
+     * round is sent, every piece of evidence is accepted by the member of staff,
+     * and the round is approved — each through the action a reviewer uses, so
+     * the review row, the per-document verdicts, the status moves and the audit
+     * trail all name who did it. Nothing is faked: a round still missing a
+     * required document stays unsent and says what is missing.
+     *
+     * @throws InvalidArgumentException
+     * @throws KycIncomplete
+     */
+    protected function verifyPartner(KycSubmission $submission, User $actor, string $reason): void
+    {
+        $this->submitPartner->handle($submission->refresh());
+
+        $submission->refresh();
+
+        try {
+            $round = new PartnerKycRound($submission, $this->partnerStore);
+
+            if ($round->definition() !== null) {
+                foreach ($round->evidence() as $item) {
+                    if (! $item->isAccepted()) {
+                        $this->verdicts->handle($round, $actor, $item->requirement, $item->slot, RecordKycVerdict::ACCEPTED);
+                    }
+                }
+            }
+
+            $this->reviewPartner->handle($submission->refresh(), KycDecision::approve($actor->id, 'Verified on the spot by staff: '.$reason));
+        } catch (KycReviewRefused $refused) {
+            throw new InvalidArgumentException($refused->getMessage());
+        }
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    protected function verifySupplier(SupplierKycSubmission $submission, Supplier $supplier, User $actor, string $reason): void
+    {
+        $this->submitSupplier->handle($supplier);
+
+        $submission->refresh();
+
+        try {
+            $round = new SupplierKycRound($submission, $this->supplierStore);
+
+            if ($round->definition() !== null) {
+                foreach ($round->evidence() as $item) {
+                    if (! $item->isAccepted()) {
+                        $this->verdicts->handle($round, $actor, $item->requirement, $item->slot, RecordKycVerdict::ACCEPTED);
+                    }
+                }
+            }
+
+            $this->approveSupplier->handle($submission->refresh(), $actor->id, 'Verified on the spot by staff: '.$reason);
+        } catch (KycReviewRefused $refused) {
+            throw new InvalidArgumentException($refused->getMessage());
+        }
     }
 
     /**
