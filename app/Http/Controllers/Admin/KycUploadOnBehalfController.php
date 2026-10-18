@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Actions\UploadKycDocumentOnBehalf;
 use App\Domain\Kyc\Exceptions\KycIncomplete;
+use App\Domain\Kyc\Exceptions\KycUploadRefused;
 use App\Domain\Supplier\Models\Supplier;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -49,29 +51,20 @@ class KycUploadOnBehalfController extends Controller
     {
         Gate::authorize('uploadKycDocument', $account);
 
-        $validated = $this->validated($request);
-        $verify = (bool) ($validated['verify'] ?? false);
+        $input = $this->validated($request);
 
-        if ($verify) {
+        if ($input['verify']) {
             // A decision as well as an upload: the approval permission too.
             Gate::authorize('verifyKycOnTheSpot', $account);
         }
 
         try {
-            $this->upload->forPartner(
-                $account,
-                $this->actor($request),
-                $validated['target'],
-                $request->file('file'),
-                $validated['reason'],
-                (bool) ($validated['submit'] ?? false),
-                $verify,
-            );
+            $this->upload->forPartnerMany($account, $this->actor($request), $input['files'], $input['reason'], $input['submit'], $input['verify'], $input['values']);
         } catch (InvalidArgumentException|KycIncomplete $refused) {
-            throw ValidationException::withMessages(['file' => $refused->getMessage()]);
+            throw $this->refusal($input, $refused);
         }
 
-        return back()->with('success', __($verify ? 'kyc.upload_on_behalf.verified' : 'kyc.upload_on_behalf.done'));
+        return back()->with('success', __($input['verify'] ? 'kyc.upload_on_behalf.verified' : 'kyc.upload_on_behalf.done'));
     }
 
     public function supplierTargets(Supplier $supplier): JsonResponse
@@ -89,48 +82,109 @@ class KycUploadOnBehalfController extends Controller
     {
         Gate::authorize('uploadKycDocument', $supplier);
 
-        $validated = $this->validated($request);
-        $verify = (bool) ($validated['verify'] ?? false);
+        $input = $this->validated($request);
 
         try {
-            $this->upload->forSupplier(
-                $supplier,
-                $this->actor($request),
-                $validated['target'],
-                $request->file('file'),
-                $validated['reason'],
-                (bool) ($validated['submit'] ?? false),
-                $verify,
-            );
+            $this->upload->forSupplierMany($supplier, $this->actor($request), $input['files'], $input['reason'], $input['submit'], $input['verify'], $input['values']);
         } catch (InvalidArgumentException $refused) {
-            throw ValidationException::withMessages(['file' => $refused->getMessage()]);
+            throw $this->refusal($input, $refused);
         }
 
-        return back()->with('success', __($verify ? 'kyc.upload_on_behalf.verified' : 'kyc.upload_on_behalf.done'));
+        return back()->with('success', __($input['verify'] ? 'kyc.upload_on_behalf.verified' : 'kyc.upload_on_behalf.done'));
     }
 
     /**
+     * What was sent, as one shape whether the dialog posted a single document
+     * (`target` + `file`) or the whole checklist (`files[<target>]`).
+     *
      * The size ceiling here is only the outer bound; the round's own limit for
-     * the chosen document is what the store enforces.
+     * each document is what the store enforces.
      *
      * A file larger than PHP is configured to accept never reaches the
      * validator as a file at all — it arrives as a failed upload — so that case
      * gets its own message naming the limit instead of "failed to upload".
      *
-     * @return array{target: string, reason: string, submit?: bool, verify?: bool}
+     * @return array{files: array<string, UploadedFile>, values: array<string, string>, reason: string, submit: bool, verify: bool, many: bool}
      */
     protected function validated(Request $request): array
     {
-        /** @var array{target: string, reason: string, submit?: bool, verify?: bool} */
-        return $request->validate([
-            'target' => ['required', 'string', 'max:200'],
-            'file' => ['required', 'file', 'max:'.self::CEILING_KB],
+        // The checklist form posts `files[<target>]`; a form where every file
+        // field was left empty posts none at all, which is still that form.
+        $many = ! $request->has('target');
+        $tooLarge = __('kyc.upload_on_behalf.too_large', ['limit' => $this->limitLabel()]);
+
+        $rules = [
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
             'submit' => ['nullable', 'boolean'],
             'verify' => ['nullable', 'boolean'],
-        ], [
-            'file.uploaded' => __('kyc.upload_on_behalf.too_large', ['limit' => $this->limitLabel()]),
-            'file.max' => __('kyc.upload_on_behalf.too_large', ['limit' => $this->limitLabel()]),
+        ];
+
+        $messages = [
+            'file.uploaded' => $tooLarge,
+            'file.max' => $tooLarge,
+            'files.*.uploaded' => $tooLarge,
+            'files.*.max' => $tooLarge,
+        ];
+
+        if ($many) {
+            $rules += [
+                'files' => ['array', 'max:40'],
+                'files.*' => ['nullable', 'file', 'max:'.self::CEILING_KB],
+                'values' => ['array', 'max:40'],
+                'values.*' => ['nullable', 'string', 'max:255'],
+            ];
+        } else {
+            $rules += [
+                'target' => ['required', 'string', 'max:200'],
+                'file' => ['required', 'file', 'max:'.self::CEILING_KB],
+            ];
+        }
+
+        $validated = $request->validate($rules, $messages);
+
+        /** @var array<string, UploadedFile> $files */
+        $files = $many
+            ? array_filter((array) $request->file('files'), fn (mixed $file) => $file instanceof UploadedFile)
+            : [(string) $validated['target'] => $request->file('file')];
+
+        // Typed values and declarations of a batch; a blank field is nothing given.
+        $values = $many
+            ? array_filter(
+                array_map(fn (mixed $value) => is_string($value) ? trim($value) : '', (array) ($validated['values'] ?? [])),
+                fn (string $value) => $value !== '',
+            )
+            : [];
+
+        if ($files === [] && $values === []) {
+            throw ValidationException::withMessages([
+                $many ? 'files' : 'file' => __('kyc.upload_on_behalf.choose_a_file'),
+            ]);
+        }
+
+        return [
+            'files' => $files,
+            'values' => $values,
+            'reason' => (string) $validated['reason'],
+            'submit' => (bool) ($validated['submit'] ?? false),
+            'verify' => (bool) ($validated['verify'] ?? false),
+            'many' => $many,
+        ];
+    }
+
+    /**
+     * A refusal, put beside the field it is about: one document of the checklist,
+     * the checklist as a whole, or the single file field of the older form.
+     *
+     * @param  array{many: bool}  $input
+     */
+    protected function refusal(array $input, InvalidArgumentException|KycIncomplete $refused): ValidationException
+    {
+        if (! $input['many']) {
+            return ValidationException::withMessages(['file' => $refused->getMessage()]);
+        }
+
+        return ValidationException::withMessages([
+            $refused instanceof KycUploadRefused ? 'files.'.$refused->target : 'files' => $refused->getMessage(),
         ]);
     }
 

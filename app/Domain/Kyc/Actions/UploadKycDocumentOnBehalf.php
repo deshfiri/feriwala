@@ -5,14 +5,18 @@ namespace App\Domain\Kyc\Actions;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Kyc\Batch\KycEvidenceItem;
 use App\Domain\Kyc\Batch\KycEvidenceRefused;
 use App\Domain\Kyc\Batch\KycReviewRefused;
+use App\Domain\Kyc\Batch\KycRoundDefinition;
 use App\Domain\Kyc\Batch\PartnerKycRound;
 use App\Domain\Kyc\Batch\RecordKycEvidence;
 use App\Domain\Kyc\Batch\RecordKycVerdict;
 use App\Domain\Kyc\Batch\SupplierKycRound;
 use App\Domain\Kyc\Data\KycDecision;
+use App\Domain\Kyc\Enums\KycCompletionRule;
 use App\Domain\Kyc\Exceptions\KycIncomplete;
+use App\Domain\Kyc\Exceptions\KycUploadRefused;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
@@ -75,7 +79,7 @@ class UploadKycDocumentOnBehalf
      * the applicant would see if there is none, which is the same thing their
      * own KYC screen does the first time they arrive.
      *
-     * @return array<int, array{value: string, label: string}>
+     * @return array<int, array{value: string, kind: string, option: string, label: string, group: string|null, group_rule: string|null, required: bool, uploaded: bool}>
      *
      * @throws InvalidArgumentException when the round cannot take uploads
      */
@@ -85,7 +89,7 @@ class UploadKycDocumentOnBehalf
     }
 
     /**
-     * @return array<int, array{value: string, label: string}>
+     * @return array<int, array{value: string, kind: string, option: string, label: string, group: string|null, group_rule: string|null, required: bool, uploaded: bool}>
      *
      * @throws InvalidArgumentException
      */
@@ -95,16 +99,150 @@ class UploadKycDocumentOnBehalf
     }
 
     /**
+     * One file, one target. The same as {@see forPartnerMany()} with a single entry.
+     *
      * @throws InvalidArgumentException
      * @throws KycIncomplete
      */
     public function forPartner(BusinessAccount $account, User $actor, string $target, UploadedFile $file, string $reason, bool $submit = false, bool $verify = false): KycDocument
     {
+        return $this->forPartnerMany($account, $actor, [$target => $file], $reason, $submit, $verify)[0];
+    }
+
+    /**
+     * Several documents of one round at once — everything a batch asks for in
+     * one sitting.
+     *
+     * Every target is checked against what the round offers before the first
+     * file is stored. They are then stored in order; a file the round refuses
+     * stops the rest and names its target ({@see KycUploadRefused}), and what
+     * was stored before it stays, because each is a real draft document. The
+     * round is sent and verified only once all of them are in.
+     *
+     * Typed values and declarations of a batch (a TIN, a tick) go the same way,
+     * in `$values`, and are recorded through the same evidence rules.
+     *
+     * @param  array<string, UploadedFile>  $files  target => file
+     * @param  array<string, string>  $values  target => typed value ("1" for a declaration)
+     * @return array<int, KycDocument>
+     *
+     * @throws InvalidArgumentException
+     * @throws KycIncomplete
+     */
+    public function forPartnerMany(BusinessAccount $account, User $actor, array $files, string $reason, bool $submit = false, bool $verify = false, array $values = []): array
+    {
         $reason = $this->reason($reason);
         $submission = $this->partnerRound($account);
 
-        $this->guardTarget($submission, $target);
+        foreach ([...array_keys($files), ...array_keys($values)] as $target) {
+            $this->guardTarget($submission, (string) $target);
+        }
 
+        $documents = [];
+
+        foreach ($files as $target => $file) {
+            $documents[] = $this->storeForPartner($submission, $actor, (string) $target, $file, $reason, $account->id);
+        }
+
+        foreach ($values as $target => $value) {
+            $this->storeValueForPartner($submission, $actor, (string) $target, $value, $reason, $account->id);
+        }
+
+        if ($verify) {
+            $this->verifyPartner($submission, $actor, $reason);
+        } elseif ($submit) {
+            $this->submitPartner->handle($submission->refresh());
+        }
+
+        return $documents;
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    public function forSupplier(Supplier $supplier, User $actor, string $target, UploadedFile $file, string $reason, bool $submit = false, bool $verify = false): SupplierKycDocument
+    {
+        return $this->forSupplierMany($supplier, $actor, [$target => $file], $reason, $submit, $verify)[0];
+    }
+
+    /**
+     * {@see forPartnerMany()} for a Supplier's round.
+     *
+     * @param  array<string, UploadedFile>  $files  target => file
+     * @param  array<string, string>  $values  target => typed value ("1" for a declaration)
+     * @return array<int, SupplierKycDocument>
+     *
+     * @throws InvalidArgumentException
+     */
+    public function forSupplierMany(Supplier $supplier, User $actor, array $files, string $reason, bool $submit = false, bool $verify = false, array $values = []): array
+    {
+        $reason = $this->reason($reason);
+        $submission = $this->supplierRound($supplier);
+
+        foreach ([...array_keys($files), ...array_keys($values)] as $target) {
+            $this->guardTarget($submission, (string) $target);
+        }
+
+        $documents = [];
+
+        foreach ($files as $target => $file) {
+            $documents[] = $this->storeForSupplier($submission, $actor, (string) $target, $file, $reason);
+        }
+
+        foreach ($values as $target => $value) {
+            $this->storeValueForSupplier($submission, $actor, (string) $target, $value, $reason);
+        }
+
+        if ($verify) {
+            $this->verifySupplier($submission, $supplier, $actor, $reason);
+        } elseif ($submit) {
+            $this->submitSupplier->handle($supplier);
+        }
+
+        return $documents;
+    }
+
+    /**
+     * A typed value or declaration of a batch round, recorded as the applicant's
+     * own would be. The audit entry names the slot and who and why, never the
+     * value: a TIN or a NID number does not belong in the audit log.
+     *
+     * @throws KycUploadRefused
+     */
+    protected function storeValueForPartner(KycSubmission $submission, User $actor, string $target, string $value, string $reason, int $accountId): void
+    {
+        [, $requirement, $slot] = $this->parseTarget($target);
+
+        try {
+            $this->evidence->value(new PartnerKycRound($submission, $this->partnerStore), $requirement, $slot, $value);
+        } catch (KycEvidenceRefused $refused) {
+            throw new KycUploadRefused($target, $refused->getMessage());
+        }
+
+        $this->recordValue($actor, $submission, $target, $reason, 'kyc', $accountId);
+    }
+
+    /**
+     * @throws KycUploadRefused
+     */
+    protected function storeValueForSupplier(SupplierKycSubmission $submission, User $actor, string $target, string $value, string $reason): void
+    {
+        [, $requirement, $slot] = $this->parseTarget($target);
+
+        try {
+            $this->evidence->value(new SupplierKycRound($submission, $this->supplierStore), $requirement, $slot, $value);
+        } catch (KycEvidenceRefused $refused) {
+            throw new KycUploadRefused($target, $refused->getMessage());
+        }
+
+        $this->recordValue($actor, $submission, $target, $reason, 'supplier_kyc', null);
+    }
+
+    /**
+     * @throws KycUploadRefused
+     */
+    protected function storeForPartner(KycSubmission $submission, User $actor, string $target, UploadedFile $file, string $reason, int $accountId): KycDocument
+    {
         [$kind, $requirement, $slot] = $this->parseTarget($target);
 
         try {
@@ -125,33 +263,22 @@ class UploadKycDocumentOnBehalf
 
                 $document = $submission->documents()->latest('id')->firstOrFail();
             }
-        } catch (KycEvidenceRefused $refused) {
-            throw new InvalidArgumentException($refused->getMessage());
+        } catch (KycEvidenceRefused|InvalidArgumentException $refused) {
+            throw new KycUploadRefused($target, $refused->getMessage());
         }
 
         $document->forceFill(['uploaded_by_staff_id' => $actor->id])->save();
 
-        $this->record($actor, $submission, $document, $target, $reason, 'kyc', $account->id);
-
-        if ($verify) {
-            $this->verifyPartner($submission, $actor, $reason);
-        } elseif ($submit) {
-            $this->submitPartner->handle($submission->refresh());
-        }
+        $this->record($actor, $submission, $document, $target, $reason, 'kyc', $accountId);
 
         return $document;
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws KycUploadRefused
      */
-    public function forSupplier(Supplier $supplier, User $actor, string $target, UploadedFile $file, string $reason, bool $submit = false, bool $verify = false): SupplierKycDocument
+    protected function storeForSupplier(SupplierKycSubmission $submission, User $actor, string $target, UploadedFile $file, string $reason): SupplierKycDocument
     {
-        $reason = $this->reason($reason);
-        $submission = $this->supplierRound($supplier);
-
-        $this->guardTarget($submission, $target);
-
         [$kind, $requirement, $slot] = $this->parseTarget($target);
 
         try {
@@ -168,19 +295,13 @@ class UploadKycDocumentOnBehalf
 
                 $document = $submission->documents()->latest('id')->firstOrFail();
             }
-        } catch (KycEvidenceRefused $refused) {
-            throw new InvalidArgumentException($refused->getMessage());
+        } catch (KycEvidenceRefused|InvalidArgumentException $refused) {
+            throw new KycUploadRefused($target, $refused->getMessage());
         }
 
         $document->forceFill(['uploaded_by_staff_id' => $actor->id])->save();
 
         $this->record($actor, $submission, $document, $target, $reason, 'supplier_kyc', null);
-
-        if ($verify) {
-            $this->verifySupplier($submission, $supplier, $actor, $reason);
-        } elseif ($submit) {
-            $this->submitSupplier->handle($supplier);
-        }
 
         return $document;
     }
@@ -279,7 +400,11 @@ class UploadKycDocumentOnBehalf
     }
 
     /**
-     * @return array<int, array{value: string, label: string}>
+     * Everything the round takes a file for, with what the screen needs to lay
+     * the whole checklist out: the group it belongs to, whether it is owed, and
+     * whether something is already there.
+     *
+     * @return array<int, array{value: string, kind: string, option: string, label: string, group: string|null, group_rule: string|null, required: bool, uploaded: bool}>
      */
     protected function targets(KycSubmission|SupplierKycSubmission $submission): array
     {
@@ -290,26 +415,51 @@ class UploadKycDocumentOnBehalf
         $definition = $round->definition();
 
         if ($definition === null) {
+            $present = $submission instanceof KycSubmission
+                ? $submission->documents()->with('documentType:id,key')->get()->map(fn ($document) => $document->documentType?->key)->filter()->all()
+                : $submission->documents()->pluck('document_type')->all();
+
             return $submission->requirements()
                 ->where('requires_file', true)
                 ->get()
-                ->map(fn ($requirement) => ['value' => 'type:'.$requirement->key, 'label' => $requirement->name])
+                ->map(fn ($requirement) => [
+                    'value' => 'type:'.$requirement->key,
+                    'kind' => 'file',
+                    'option' => $requirement->name,
+                    'label' => $requirement->name,
+                    'group' => null,
+                    'group_rule' => null,
+                    'required' => (bool) $requirement->is_required,
+                    'uploaded' => in_array($requirement->key, $present, true),
+                ])
                 ->values()
                 ->all();
         }
 
+        $evidence = $round->evidence();
         $targets = [];
 
         foreach ($definition->groups() as $group) {
             foreach ($group['requirements'] as $requirement) {
                 foreach ($requirement['slots'] as $slot) {
-                    if (! in_array($slot['evidence'], ['file', 'image', 'pdf'], true)) {
+                    if (! in_array($slot['evidence'], ['file', 'image', 'pdf', 'value', 'declaration'], true)) {
                         continue;
                     }
 
                     $targets[] = [
                         'value' => 'slot:'.$requirement['key'].':'.$slot['key'],
+                        'kind' => in_array($slot['evidence'], ['value', 'declaration'], true) ? $slot['evidence'] : 'file',
+                        'option' => $requirement['name'],
                         'label' => $requirement['name'].' — '.$slot['label'],
+                        'group' => KycRoundDefinition::localized($group, 'name'),
+                        'group_rule' => $group['rule'],
+
+                        // Owed outright only in a group that asks for all of it;
+                        // in an "any one" group the applicant chooses.
+                        'required' => $group['rule'] === KycCompletionRule::All->value
+                            && $requirement['required']
+                            && $slot['required'],
+                        'uploaded' => isset($evidence[KycEvidenceItem::keyFor($requirement['key'], $slot['key'])]),
                     ];
                 }
             }
@@ -350,6 +500,21 @@ class UploadKycDocumentOnBehalf
         }
 
         return $reason;
+    }
+
+    protected function recordValue(User $actor, Model $submission, string $target, string $reason, string $module, ?int $accountId): void
+    {
+        $this->audit->handle(new AuditEntry(
+            action: $module.'.value_recorded_on_behalf',
+            actorId: $actor->id,
+            auditableType: $submission::class,
+            auditableId: $submission->getKey(),
+            after: ['target' => $target],
+            reason: $reason,
+            accountId: $accountId,
+            module: $module,
+            isSensitive: true,
+        ));
     }
 
     protected function record(

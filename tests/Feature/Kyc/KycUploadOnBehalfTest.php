@@ -7,12 +7,14 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Kyc\Enums\KycAudience;
 use App\Domain\Kyc\Enums\KycStatus;
+use App\Domain\Kyc\Models\KycBatch;
 use App\Domain\Kyc\Models\KycDocument;
 use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierKycDocument;
+use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -291,6 +293,150 @@ describe('size and verifying on the spot', function () {
 
         expect($supplier->refresh()->status)->toBe(SupplierStatus::Approved)
             ->and(SupplierKycDocument::query()->count())->toBe(1);
+    });
+});
+
+/**
+ * A live template as the builder screens make it: an "any one" identity group
+ * (National ID front and back, or a passport) and an all-required business
+ * group holding a typed TIN.
+ */
+function staffUploadLiveBatch(User $admin): KycBatch
+{
+    $image = ['evidence' => 'image', 'required' => true, 'mimes' => ['image/jpeg', 'image/png'], 'max_kb' => 2048];
+
+    test()->actingAs($admin, 'web')->post(route('admin.kyc.batch-builder.store'), [
+        'name' => 'Standard ID', 'audience' => 'account', 'selfie_mode' => 'disabled', 'selfie_allows_upload' => 0,
+    ])->assertSessionHasNoErrors();
+
+    $batch = KycBatch::query()->latest('id')->firstOrFail();
+
+    test()->actingAs($admin, 'web')->put(route('admin.kyc.batch-builder.structure', $batch), ['groups' => [
+        ['name' => 'Identity', 'rule' => 'any', 'required' => true, 'requirements' => [
+            ['name' => 'National ID', 'required' => true, 'slots' => [
+                ['label' => 'Front side', ...$image],
+                ['label' => 'Back side', ...$image],
+            ]],
+            ['name' => 'Passport', 'required' => true, 'slots' => [['label' => 'Photo page', ...$image]]],
+        ]],
+        ['name' => 'Business', 'rule' => 'all', 'required' => true, 'requirements' => [
+            ['name' => 'TIN', 'required' => true, 'slots' => [
+                ['label' => 'TIN number', 'evidence' => 'value', 'required' => true, 'sensitive' => true],
+            ]],
+        ]],
+    ]])->assertSessionHasNoErrors();
+
+    test()->actingAs($admin, 'web')->patch(route('admin.kyc.batch-builder.active', $batch), ['is_active' => 1])->assertSessionHasNoErrors();
+    test()->actingAs($admin, 'web')->patch(route('admin.kyc.batch-builder.default', $batch), ['is_default' => 1])->assertSessionHasNoErrors();
+
+    return $batch->refresh();
+}
+
+describe('the whole checklist at once', function () {
+    it('lists every document of a flat round with what is owed and what is already there', function () {
+        staffUploadType('nid');
+        staffUploadType('trade_licence');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $targets = fn () => $this->actingAs($this->superAdmin)
+            ->getJson(route('admin.accounts.kyc-upload.targets', $account->public_id))
+            ->assertOk()
+            ->json('targets');
+
+        expect(collect($targets())->pluck('uploaded')->all())->toBe([false, false])
+            ->and(collect($targets())->pluck('kind')->unique()->all())->toBe(['file']);
+
+        $this->actingAs($this->superAdmin)->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+            'files' => ['type:nid' => staffUploadFile()],
+            'reason' => 'First of the two scans arrived.',
+        ])->assertSessionHasNoErrors();
+
+        expect(collect($targets())->firstWhere('value', 'type:nid')['uploaded'])->toBeTrue()
+            ->and(collect($targets())->firstWhere('value', 'type:trade_licence')['uploaded'])->toBeFalse();
+    });
+
+    it('takes several files in one request and verifies once they are all in', function () {
+        staffUploadType('nid');
+        staffUploadType('trade_licence');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+                'files' => ['type:nid' => staffUploadFile(), 'type:trade_licence' => staffUploadFile('licence.pdf')],
+                'reason' => 'Originals checked at the counter.',
+                'verify' => '1',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $round = KycSubmission::query()->where('business_account_id', $account->id)->sole();
+
+        expect($round->status)->toBe(KycStatus::Approved)
+            ->and($round->documents()->count())->toBe(2);
+    });
+
+    it('puts a refusal beside the document it is about and keeps what was stored before it', function () {
+        staffUploadType('nid');
+        staffUploadType('trade_licence');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+                'files' => [
+                    'type:nid' => staffUploadFile(),
+                    'type:trade_licence' => UploadedFile::fake()->create('virus.exe', 10, 'application/x-msdownload'),
+                ],
+                'reason' => 'One of these is the wrong format.',
+                'verify' => '1',
+            ])
+            ->assertSessionHasErrors('files.type:trade_licence');
+
+        $round = KycSubmission::query()->where('business_account_id', $account->id)->sole();
+
+        expect($round->status)->toBe(KycStatus::Draft)
+            ->and($round->documents()->count())->toBe(1);
+    });
+
+    it('refuses a form with nothing in it', function () {
+        staffUploadType('nid');
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), ['reason' => 'Nothing chosen at all.'])
+            ->assertSessionHasErrors('files');
+    });
+
+    it('shows a batch as its groups, including the typed value, and verifies it with files and values together', function () {
+        staffUploadLiveBatch($this->superAdmin);
+        $account = testBusinessAccount(AccountStatus::KycPending);
+
+        $targets = $this->actingAs($this->superAdmin)
+            ->getJson(route('admin.accounts.kyc-upload.targets', $account->public_id))
+            ->assertOk()
+            ->json('targets');
+
+        expect(collect($targets)->pluck('group')->unique()->values()->all())->toBe(['Identity', 'Business'])
+            ->and(collect($targets)->where('group', 'Identity')->pluck('group_rule')->unique()->all())->toBe(['any'])
+            ->and(collect($targets)->where('group', 'Identity')->pluck('required')->unique()->all())->toBe([false])
+            ->and(collect($targets)->firstWhere('kind', 'value'))->toMatchArray(['group' => 'Business', 'required' => true, 'uploaded' => false]);
+
+        $passport = collect($targets)->first(fn ($target) => str_contains($target['label'], 'Passport'))['value'];
+        $tin = collect($targets)->firstWhere('kind', 'value')['value'];
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('admin.accounts.kyc-upload.store', $account->public_id), [
+                'files' => [$passport => UploadedFile::fake()->image('passport.jpg')->size(100)],
+                'values' => [$tin => '123456789012'],
+                'reason' => 'Passport and TIN certificate seen in person.',
+                'verify' => '1',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $round = KycSubmission::query()->where('business_account_id', $account->id)->sole();
+
+        expect($round->status)->toBe(KycStatus::Approved)
+            ->and(DB::table('audit_logs')->where('action', 'kyc.value_recorded_on_behalf')->count())->toBe(1)
+            // The audit trail says a value was recorded, never what it was.
+            ->and(json_encode(DB::table('audit_logs')->where('action', 'kyc.value_recorded_on_behalf')->get()))->not->toContain('123456789012');
     });
 });
 
