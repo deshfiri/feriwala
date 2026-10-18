@@ -7,6 +7,8 @@ use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Website\Actions\ListWholeCatalogueOnWebsite;
+use App\Domain\Website\Models\Website;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
@@ -59,5 +61,20 @@ class ChangeAccountType
         });
 
         $account->refresh();
+
+        // A Non-Conditional account's shops list the whole catalogue by default:
+        // do it now rather than leave the owner waiting for the scheduled pass.
+        // After the response, because a large catalogue takes a moment.
+        if ($to === AccountType::NonConditional) {
+            dispatch(function () use ($account): void {
+                $listing = app(ListWholeCatalogueOnWebsite::class);
+
+                Website::query()
+                    ->open()
+                    ->forAccount($account)
+                    ->with('businessAccount')
+                    ->each(fn (Website $website) => $listing->handle($website));
+            })->afterResponse();
+        }
     }
 }

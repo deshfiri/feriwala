@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Account\Actions\ChangeAccountType;
 use App\Domain\Account\Enums\AccountType;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Website\Actions\ListWholeCatalogueOnWebsite;
@@ -80,6 +81,14 @@ describe('the default listing', function () {
 
         expect(wholeCatalogueSweep())->toBe(1)
             ->and(WebsiteProduct::query()->count())->toBe(2);
+    });
+
+    it('lists it as soon as the account is made Non-Conditional, without waiting for the sweep', function () {
+        app(ChangeAccountType::class)->handle($this->account->owner, $this->account, AccountType::NonConditional, 'Trusted reseller');
+        app()->terminate();
+
+        expect(WebsiteProduct::query()->sole()->auto_listed)->toBeTrue();
+        wholeCatalogueListing()->assertOk()->assertJsonCount(1, 'data');
     });
 
     it('leaves a Conditional account\'s shop alone', function () {
