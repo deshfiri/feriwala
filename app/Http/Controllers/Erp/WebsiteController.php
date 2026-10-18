@@ -19,6 +19,7 @@ use App\Domain\Website\Models\WebsiteCharge;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteHosting;
 use App\Domain\Website\Queries\WebsiteOverview;
+use App\Domain\Website\RequestedAddress;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
@@ -115,18 +116,38 @@ class WebsiteController extends Controller
                 'subdomain' => LocalAddress::label($local['host']),
             ];
         } else {
-            $validated = $request->validate([
+            $request->validate([
                 'name' => ['required', 'string', 'min:2', 'max:120'],
-                'subdomain' => [
-                    'required', 'string', 'min:3', 'max:63',
-
-                    // The shape a hostname label may take: letters, digits and
-                    // hyphens, never starting or ending with one.
-                    'regex:/^[a-z0-9]([a-z0-9-]{1,61})?[a-z0-9]$/',
-                    Rule::notIn((array) config('website.reserved_subdomains', [])),
-                    Rule::unique('websites', 'subdomain'),
-                ],
+                'subdomain' => ['required', 'string', 'max:253'],
             ]);
+
+            $address = RequestedAddress::normalize((string) $request->input('subdomain'));
+
+            if ($address === '') {
+                throw ValidationException::withMessages(['subdomain' => __('validation.required', ['attribute' => 'address'])]);
+            }
+
+            if (RequestedAddress::isPlainLabel($address)) {
+                // A plain label is the one Feriwala hosts: it must be free.
+                $validated = validator(
+                    ['name' => $request->input('name'), 'subdomain' => $address],
+                    [
+                        'name' => ['required', 'string', 'min:2', 'max:120'],
+                        'subdomain' => [
+                            Rule::notIn((array) config('website.reserved_subdomains', [])),
+                            Rule::unique('websites', 'subdomain'),
+                        ],
+                    ],
+                )->validate();
+            } else {
+                // Anything else — their own domain, a URL — is kept as asked
+                // for staff to arrange; it holds nothing until they do.
+                $requestedAddress = $address;
+                $validated = [
+                    'name' => (string) $request->input('name'),
+                    'subdomain' => RequestedAddress::label($address),
+                ];
+            }
         }
 
         try {
@@ -142,6 +163,8 @@ class WebsiteController extends Controller
 
         if ($local !== null) {
             $website->forceFill(['domain' => $local['host']])->save();
+        } elseif (isset($requestedAddress)) {
+            $website->forceFill(['requested_address' => $requestedAddress])->save();
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.requested')]);

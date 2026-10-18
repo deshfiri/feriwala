@@ -279,6 +279,8 @@ return [
     'nav.menu' => 'মেনু',
     'nav.menu_open' => 'মেনু খুলুন',
     'nav.language' => 'ভাষা',
+    'nav.theme_to_dark' => 'ডার্ক মোডে যান',
+    'nav.theme_to_light' => 'লাইট মোডে যান',
     'home.banner_label' => ':name — বিশেষ ব্যানার',
     'home.welcome' => ':name-এ স্বাগতম',
     'home.browse' => 'সব পণ্য দেখুন',

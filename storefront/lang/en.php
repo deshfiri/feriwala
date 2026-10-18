@@ -279,6 +279,8 @@ return [
     'nav.menu' => 'Menu',
     'nav.menu_open' => 'Open menu',
     'nav.language' => 'Language',
+    'nav.theme_to_dark' => 'Switch to dark mode',
+    'nav.theme_to_light' => 'Switch to light mode',
     'home.banner_label' => ':name — featured banner',
     'home.welcome' => 'Welcome to :name',
     'home.browse' => 'Browse all products',

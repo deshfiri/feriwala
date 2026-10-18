@@ -62,6 +62,30 @@ test('the home page shows the shop and its products, escaped', function () {
     contains('--brand:#112233', $body, 'branding becomes a stylesheet variable');
 });
 
+test('the header shows the shop name beside the mark only when there is no logo, and has no account button', function () {
+    shop([productBody()]);
+    $withoutLogo = html(Kernel::handle(makeRequest('GET', '/')));
+
+    contains('class="brand-name"', $withoutLogo);
+    lacks('account-link', $withoutLogo);
+
+    shop([productBody()], ['branding' => ['logo_url' => 'https://cdn.shop.test/logo.png']]);
+    $withLogo = html(Kernel::handle(makeRequest('GET', '/')));
+
+    contains('class="brand-logo"', $withLogo);
+    lacks('class="brand-name"', $withLogo);
+    lacks('account-link', $withLogo);
+});
+
+test('the header carries a light/dark switch, with its script loaded from the shop itself', function () {
+    shop([productBody()]);
+    $body = html(Kernel::handle(makeRequest('GET', '/')));
+
+    contains('data-theme-toggle', $body);
+    contains('js/theme.js', $body, 'the saved choice is applied before paint, without an inline script');
+    lacks('<script>', $body, 'the CSP allows scripts from the shop only');
+});
+
 test('a product page offers the variants and an add-to-cart form with a CSRF token', function () {
     shop([productBody()]);
 

@@ -129,6 +129,26 @@ describe('asking for a website', function () {
             ->assertSessionHasErrors('subdomain');
     });
 
+    it('accepts any kind of address: a domain, a URL, capitals, underscores', function () {
+        $account = websiteTestAccount(limit: 4);
+
+        foreach (['MyShop.com', 'https://www.my-shop.com.bd/about?x=1', 'my_shop', 'a'] as $address) {
+            $this->actingAs($account->owner)
+                ->post(route('websites.store'), ['name' => 'Shop '.$address, 'subdomain' => $address])
+                ->assertSessionHasNoErrors()
+                ->assertRedirect();
+        }
+
+        $websites = Website::query()->orderBy('id')->get();
+
+        expect($websites->pluck('requested_address')->all())->toBe(['myshop.com', 'www.my-shop.com.bd', 'my_shop', 'a'])
+            // Asking claims nothing: the domain is staff's to verify, and the
+            // platform keys on an ordinary generated label.
+            ->and($websites->pluck('domain')->filter()->all())->toBe([])
+            ->and($websites->pluck('subdomain')->every(fn (string $label) => preg_match('/^[a-z0-9][a-z0-9-]{2,62}$/', $label) === 1))->toBeTrue()
+            ->and($websites->pluck('subdomain')->unique()->count())->toBe(4);
+    });
+
     it('is not open to a staff member who does not speak for the business', function () {
         $account = websiteTestAccount();
 

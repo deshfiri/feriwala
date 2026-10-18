@@ -165,6 +165,7 @@ export type WebsiteStatusEntry = {
 export type WebsiteDetail = WebsiteSummary & {
     subdomain: string;
     domain: string | null;
+    requested_address: string | null;
     tagline: string | null;
     about: string | null;
     theme: string;

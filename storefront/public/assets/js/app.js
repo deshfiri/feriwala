@@ -126,6 +126,47 @@
         }
     });
 
+    // Light / dark switch. The page follows the system until the visitor chooses;
+    // the choice is remembered in this browser (theme.js applies it before paint).
+    var themeToggle = document.querySelector('[data-theme-toggle]');
+
+    if (themeToggle) {
+        var root = document.documentElement;
+        var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+        var isDark = function () {
+            var set = root.getAttribute('data-theme');
+
+            return set ? set === 'dark' : systemDark.matches;
+        };
+        var syncLabel = function () {
+            themeToggle.setAttribute(
+                'aria-label',
+                themeToggle.getAttribute(
+                    isDark() ? 'data-label-light' : 'data-label-dark',
+                ),
+            );
+        };
+
+        themeToggle.hidden = false;
+        syncLabel();
+
+        themeToggle.addEventListener('click', function () {
+            var next = isDark() ? 'light' : 'dark';
+
+            root.setAttribute('data-theme', next);
+
+            try {
+                window.localStorage.setItem('theme', next);
+            } catch (error) {
+                // Storage blocked: the choice lasts for this page view only.
+            }
+
+            syncLabel();
+        });
+
+        systemDark.addEventListener('change', syncLabel);
+    }
+
     // Gallery thumbnails swap the large image.
     var hero = document.getElementById('hero-image');
 

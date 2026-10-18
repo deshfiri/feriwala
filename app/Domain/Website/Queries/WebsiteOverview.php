@@ -312,6 +312,7 @@ class WebsiteOverview
 
             'subdomain' => $website->subdomain,
             'domain' => $website->domain,
+            'requested_address' => $website->requested_address,
             'tagline' => $website->tagline,
             'about' => $website->about,
             'theme' => $website->theme->value,

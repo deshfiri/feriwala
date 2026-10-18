@@ -27,8 +27,37 @@
     color-scheme: light dark;
 }
 
+/*
+ * Light and dark. With no saved choice the page follows the visitor's system;
+ * the header switch (theme.js / app.js) sets data-theme="light|dark" on <html>
+ * and that wins over the system either way. The dark values are written twice
+ * because a media query and an attribute selector cannot share one rule.
+ */
+:root[data-theme='light'] {
+    color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --bg: #131211;
+    --surface: #1c1b19;
+    --surface-2: #232220;
+    --text: #f5f3f0;
+    --muted: #aaa39b;
+    --line: #33302c;
+    --danger: #ff8a80;
+    --ok: #5fd68a;
+    --warn: #f2c14e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* The brand colour is chosen for a light page; on a dark one text links are lifted. */
+:root[data-theme='dark'] a:not(.btn):not(.banner-link) {
+    color: color-mix(in srgb, var(--brand) 45%, #fff);
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme='light']) {
         --bg: #131211;
         --surface: #1c1b19;
         --surface-2: #232220;
@@ -41,8 +70,7 @@
         --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     }
 
-    /* The brand colour is chosen for a light page; on a dark one text links are lifted. */
-    a:not(.btn):not(.banner-link) {
+    :root:not([data-theme='light']) a:not(.btn):not(.banner-link) {
         color: color-mix(in srgb, var(--brand) 45%, #fff);
     }
 }
@@ -1238,10 +1266,46 @@ section {
     --bg: #ffffff;
     --surface-2: #f6f5f3;
 }
+:root[data-theme='dark'] {
+    --bg: #131211;
+    --surface-2: #232220;
+}
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme='light']) {
         --bg: #131211;
         --surface-2: #232220;
+    }
+}
+
+.theme-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+}
+.theme-toggle[hidden] {
+    display: none;
+}
+.theme-toggle .icon-sun {
+    display: none;
+}
+:root[data-theme='dark'] .theme-toggle .icon-moon {
+    display: none;
+}
+:root[data-theme='dark'] .theme-toggle .icon-sun {
+    display: block;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .theme-toggle .icon-moon {
+        display: none;
+    }
+    :root:not([data-theme='light']) .theme-toggle .icon-sun {
+        display: block;
     }
 }
 .container {
@@ -1280,12 +1344,6 @@ section {
     .header-actions {
         margin-left: auto;
     }
-}
-.account-link {
-    display: inline-grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
 }
 .grid {
     grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));

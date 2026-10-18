@@ -3,6 +3,7 @@
 use App\Domain\Website\Actions\ManageWebsiteCredentials;
 use App\Domain\Website\Api\RequestSignature;
 use App\Domain\Website\Enums\CredentialScope;
+use App\Domain\Website\Enums\WebsiteConnectionHealth;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Models\ApiLog;
 use App\Domain\Website\Models\Website;
@@ -39,6 +40,22 @@ describe('a correctly signed request', function () {
             ->and($log->website_credential_id)->toBe($this->credential->id)
             ->and($log->status)->toBe(200)
             ->and($this->website->refresh()->api_connected_at)->not->toBeNull();
+    });
+
+    it('moves the connection health from not connected yet to healthy', function () {
+        $this->website->forceFill(['connection_health' => WebsiteConnectionHealth::Unknown])->save();
+
+        storefrontCall($this->credential, $this->secret, 'connection')->assertOk();
+
+        expect($this->website->refresh()->connection_health)->toBe(WebsiteConnectionHealth::Healthy);
+    });
+
+    it('leaves a failing connection health alone', function () {
+        $this->website->forceFill(['connection_health' => WebsiteConnectionHealth::Failing])->save();
+
+        storefrontCall($this->credential, $this->secret, 'connection')->assertOk();
+
+        expect($this->website->refresh()->connection_health)->toBe(WebsiteConnectionHealth::Failing);
     });
 
     it('answers the liveness check without a credential, and says nothing else', function () {

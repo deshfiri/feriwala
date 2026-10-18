@@ -49,15 +49,16 @@ describe('with local addresses allowed', function () {
         expect(Website::query()->orderBy('id')->pluck('domain')->all())->toBe(['127.0.0.1:8002', 'localhost:8003']);
     });
 
-    it('still takes an ordinary subdomain, strictly', function () {
+    it('still holds an ordinary subdomain to being free', function () {
         $account = websiteTestAccount();
+        Website::factory()->create(['subdomain' => 'taken-name']);
 
         $this->actingAs($account->owner)
             ->from(route('websites.create'))
-            ->post(route('websites.store'), ['name' => 'Plain', 'subdomain' => 'a'])
+            ->post(route('websites.store'), ['name' => 'Plain', 'subdomain' => 'taken-name'])
             ->assertSessionHasErrors('subdomain');
 
-        expect(Website::query()->count())->toBe(0);
+        expect(Website::query()->where('business_account_id', $account->id)->count())->toBe(0);
     });
 
     it('refuses the same address twice', function () {
@@ -87,16 +88,19 @@ describe('with local addresses allowed', function () {
 });
 
 describe('with local addresses not allowed (production)', function () {
-    it('keeps the strict subdomain rule and refuses a URL', function () {
+    it('never claims a local host as the domain: a URL is only kept as the address asked for', function () {
         config(['website.allow_local_addresses' => false]);
         $account = websiteTestAccount();
 
         $this->actingAs($account->owner)
-            ->from(route('websites.create'))
             ->post(route('websites.store'), ['name' => 'Nope', 'subdomain' => 'http://127.0.0.1:8001'])
-            ->assertSessionHasErrors('subdomain');
+            ->assertSessionHasNoErrors();
 
-        expect(Website::query()->count())->toBe(0);
+        $website = Website::query()->firstOrFail();
+
+        expect($website->domain)->toBeNull()
+            ->and($website->requested_address)->toBe('127.0.0.1:8001')
+            ->and($website->origin())->not->toContain('127.0.0.1');
     });
 
     it('never treats a stored host and port as a place to send a customer', function () {

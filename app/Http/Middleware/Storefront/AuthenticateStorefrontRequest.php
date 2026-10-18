@@ -4,6 +4,7 @@ namespace App\Http\Middleware\Storefront;
 
 use App\Domain\Website\Api\RequestSignature;
 use App\Domain\Website\Api\StorefrontError;
+use App\Domain\Website\Enums\WebsiteConnectionHealth;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCredential;
@@ -194,6 +195,17 @@ class AuthenticateStorefrontRequest
 
         if ($credential->website->api_connected_at === null) {
             Website::query()->whereKey($credential->website_id)->update(['api_connected_at' => $now]);
+        }
+
+        // A signed call is proof the storefront is talking to the API, so the
+        // "not connected yet" pill must not wait for a webhook delivery. Only
+        // Unknown is lifted: degraded and failing come from real delivery
+        // trouble and stay until deliveries recover.
+        if ($credential->website->connection_health === WebsiteConnectionHealth::Unknown) {
+            Website::query()
+                ->whereKey($credential->website_id)
+                ->where('connection_health', WebsiteConnectionHealth::Unknown->value)
+                ->update(['connection_health' => WebsiteConnectionHealth::Healthy->value]);
         }
     }
 }

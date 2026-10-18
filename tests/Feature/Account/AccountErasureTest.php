@@ -15,6 +15,8 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Supplier\Actions\OpenSupplierKycRound;
 use App\Domain\Supplier\Enums\SupplierStatus;
 use App\Domain\Supplier\Models\Supplier;
+use App\Domain\Website\Enums\WebsiteStatus;
+use App\Domain\Website\Models\Website;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -181,6 +183,24 @@ describe('erasing a partner', function () {
 
         expect($request->status)->toBe(DeletionRequestStatus::Approved)->and($request->decided_by)->toBe($this->admin->id);
         expect($user->fresh()->erased_at)->not->toBeNull();
+    });
+});
+
+describe('erasing a partner with a live storefront', function () {
+    it('approves the request and closes the storefront', function () {
+        ['user' => $user, 'account' => $account] = erasureTestPartner();
+        $website = Website::factory()->forAccount($account)->active()->create();
+        DB::table('website_webhook_endpoints')->insert(['public_id' => (string) Str::ulid(), 'website_id' => $website->id, 'url' => 'https://shop.example/hook', 'secret' => 's', 'secret_hint' => 'abcd', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()]);
+        $request = AccountDeletionRequest::create(['user_id' => $user->id, 'reason' => 'Closing the business.', 'requested_at' => now()]);
+
+        $this->actingAs($this->admin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->post(route('admin.deletions.approve', $request->public_id), ['reason' => 'Verified with the owner.', 'confirmation' => $user->email])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.deletions.index'));
+
+        expect($request->refresh()->status)->toBe(DeletionRequestStatus::Approved)
+            ->and($website->refresh()->status)->toBe(WebsiteStatus::Closed);
     });
 });
 

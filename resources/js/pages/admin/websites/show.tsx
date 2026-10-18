@@ -312,6 +312,14 @@ export default function AdminWebsiteShow({
                     title={t('website.show.domains')}
                     description={t('website.admin.domain_hint')}
                 >
+                    {website.requested_address && (
+                        <p className="text-muted-foreground mb-3 text-sm">
+                            {t('website.admin.requested_address')}:{' '}
+                            <span className="text-foreground font-mono">
+                                {website.requested_address}
+                            </span>
+                        </p>
+                    )}
                     <ul className="divide-border divide-y">
                         {website.domains.map((domain) => (
                             <li

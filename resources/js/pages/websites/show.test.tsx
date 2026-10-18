@@ -65,6 +65,7 @@ function website(overrides: Partial<WebsiteDetail> = {}): WebsiteDetail {
         created_at: '2026-09-16T10:00:00+06:00',
         subdomain: 'nasrin',
         domain: null,
+        requested_address: null,
         tagline: null,
         about: null,
         theme: 'classic',

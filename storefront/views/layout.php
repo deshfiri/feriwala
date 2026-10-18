@@ -27,6 +27,7 @@ $other = ($locale ?? 'en') === 'bn' ? 'en' : 'bn';
     <?php } ?>
     <style>:root{--brand:<?= e($primary) ?>;--on-brand:<?= e(on_colour($primary)) ?>;--accent:<?= e($secondary) ?>;--on-accent:<?= e(on_colour($secondary)) ?>}</style>
     <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
+    <script src="<?= e(asset('js/theme.js')) ?>"></script>
 </head>
 <body>
 <a class="skip" href="#main"><?= e(t('nav.skip')) ?></a>
@@ -38,7 +39,9 @@ $other = ($locale ?? 'en') === 'bn' ? 'en' : 'bn';
                 <img class="brand-logo" src="<?= e($logo) ?>" alt="" width="160" height="40" data-fallback="brand-mark">
             <?php } ?>
             <span class="brand-mark" aria-hidden="true"<?= $logo !== '' ? ' hidden' : '' ?>><?= e($initial) ?></span>
-            <span class="brand-name"><?= e($shopName) ?></span>
+            <?php if ($logo === '') { ?>
+                <span class="brand-name"><?= e($shopName) ?></span>
+            <?php } ?>
         </a>
 
         <form class="search" action="/search" method="get" role="search">
@@ -54,9 +57,10 @@ $other = ($locale ?? 'en') === 'bn' ? 'en' : 'bn';
                 <input type="hidden" name="locale" value="<?= e($other) ?>">
                 <button type="submit" class="link" lang="<?= e($other) ?>"><?= e($other === 'en' ? 'English' : 'বাংলা') ?></button>
             </form>
-            <a class="account-link hide-small" href="/track" aria-label="<?= e(t('nav.track')) ?>" title="<?= e(t('nav.track')) ?>">
-                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 20c.9-3.6 3.8-5.4 7.5-5.4s6.6 1.8 7.5 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </a>
+            <button type="button" class="theme-toggle" data-theme-toggle data-label-dark="<?= e(t('nav.theme_to_dark')) ?>" data-label-light="<?= e(t('nav.theme_to_light')) ?>" aria-label="<?= e(t('nav.theme_to_dark')) ?>" hidden>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
             <a class="cart-link" href="/cart">
                 <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.76L20 8H6.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/></svg>
                 <span class="cart-text"><?= e(t('nav.cart')) ?></span>
