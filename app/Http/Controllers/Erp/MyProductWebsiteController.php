@@ -13,6 +13,8 @@ use App\Domain\Website\Queries\WebsiteOverview;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Concurrency\Exceptions\LockTimeout;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -53,8 +55,11 @@ class MyProductWebsiteController extends Controller
 
         abort_if($found === null, 404);
 
+        // The price is the Partner's own, typed in Taka and checked against the
+        // administrator's range in the action; this is only its shape.
         $validated = $request->validate([
             'published' => ['required', 'boolean'],
+            'price' => ['nullable', new DecimalAmountRule],
         ]);
 
         $actor = $request->user();
@@ -63,7 +68,11 @@ class MyProductWebsiteController extends Controller
 
         $published = (bool) $validated['published'];
 
-        $this->attempt($record, fn () => $set->handle($record, $found, $actor, $published));
+        $price = $published
+            ? DecimalAmount::parseOrNull($validated['price'] ?? null)?->toDecimal()
+            : null;
+
+        $this->attempt($record, fn () => $set->handle($record, $found, $actor, $published, $price));
 
         Inertia::flash('toast', [
             'type' => 'success',

@@ -456,6 +456,15 @@ export type PartnerOwnership = {
         id: string;
         name: string;
         state: 'not_selected' | 'selected' | 'published';
+        /** The Partner's own selling price on this storefront, once set. */
+        price: Money | null;
+        /** The range the administrator lets this account price within. */
+        terms: {
+            allows_user_pricing: boolean;
+            minimum: Money | null;
+            maximum: Money | null;
+            suggested: Money | null;
+        } | null;
     }[];
 };
 

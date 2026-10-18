@@ -9,7 +9,10 @@ use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia as Assert;
 
 /**
  * Buying a product makes it eligible; the owner then chooses, storefront by
@@ -102,6 +105,106 @@ describe('what a purchase does and does not do', function () {
     });
 });
 
+function myProductsPublishAtPrice(Website $website, $product, string $price, bool $published = true): TestResponse
+{
+    return test()->actingAs(test()->account->owner)
+        ->put(route('catalog.mine.websites.update', [$product->slug, $website->public_id]), ['published' => $published, 'price' => $price]);
+}
+
+describe('the price the owner charges', function () {
+    // The product's own range: minimum 2000, maximum 4000, suggested 2500.
+    beforeEach(function () {
+        websiteTestPurchase($this->account, $this->product, quantity: 20);
+    });
+
+    it('puts it on sale at the price the owner typed, inside the range', function () {
+        myProductsPublishAtPrice($this->first, $this->product, '3150.50')->assertSessionHasNoErrors();
+
+        $selection = WebsiteProduct::query()->where('website_id', $this->first->id)->sole();
+
+        expect($selection->status)->toBe(WebsiteProductStatus::Published)
+            ->and($selection->price?->toDecimal())->toBe('3150.50');
+    });
+
+    it('accepts the limits themselves', function (string $price) {
+        myProductsPublishAtPrice($this->first, $this->product, $price)->assertSessionHasNoErrors();
+
+        expect(WebsiteProduct::query()->where('website_id', $this->first->id)->sole()->price?->toDecimal())->toBe($price);
+    })->with(['2000.00', '4000.00']);
+
+    it('starts from the suggested price when none is typed', function () {
+        myProductsPublish($this->first, $this->product, true)->assertSessionHasNoErrors();
+
+        expect(WebsiteProduct::query()->where('website_id', $this->first->id)->sole()->price?->toDecimal())->toBe('2500.00');
+    });
+
+    it('refuses a price below the minimum or above the maximum and puts nothing on sale', function (string $price) {
+        myProductsPublishAtPrice($this->first, $this->product, $price)->assertSessionHasErrors('website');
+
+        expect(WebsiteProduct::query()->where('status', WebsiteProductStatus::Published)->count())->toBe(0);
+        myProductsListing($this->firstApi)->assertOk()->assertJsonCount(0, 'data');
+    })->with(['1999.99', '4000.01', '0.00', '1']);
+
+    it('refuses a malformed price before anything happens', function (string $price) {
+        myProductsPublishAtPrice($this->first, $this->product, $price)->assertSessionHasErrors('price');
+
+        expect(WebsiteProduct::query()->count())->toBe(0);
+    })->with(['abc', '-5', '2500.555', '2,500']);
+
+    it('prices each storefront on its own', function () {
+        myProductsPublishAtPrice($this->first, $this->product, '2200.00')->assertSessionHasNoErrors();
+        myProductsPublishAtPrice($this->second, $this->product, '3900.00')->assertSessionHasNoErrors();
+
+        expect(WebsiteProduct::query()->where('website_id', $this->first->id)->sole()->price?->toDecimal())->toBe('2200.00')
+            ->and(WebsiteProduct::query()->where('website_id', $this->second->id)->sole()->price?->toDecimal())->toBe('3900.00');
+    });
+
+    it('changes the price of a product already on sale, keeping it on sale, and still holds the range', function () {
+        myProductsPublishAtPrice($this->first, $this->product, '2200.00')->assertSessionHasNoErrors();
+
+        myProductsPublishAtPrice($this->first, $this->product, '2800.00')->assertSessionHasNoErrors();
+        expect(WebsiteProduct::query()->sole()->price?->toDecimal())->toBe('2800.00')
+            ->and(WebsiteProduct::query()->sole()->status)->toBe(WebsiteProductStatus::Published);
+
+        myProductsPublishAtPrice($this->first, $this->product, '9000.00')->assertSessionHasErrors('website');
+        expect(WebsiteProduct::query()->sole()->price?->toDecimal())->toBe('2800.00');
+    });
+
+    it('checks the range as it is now, not as the page last showed it', function () {
+        $this->product->forceFill([
+            'minimum_selling_price' => Money::fromDecimal('3000.00', Currency::BDT),
+            'suggested_selling_price' => Money::fromDecimal('3200.00', Currency::BDT),
+        ])->save();
+
+        myProductsPublishAtPrice($this->first, $this->product, '2500.00')->assertSessionHasErrors('website');
+
+        expect(WebsiteProduct::query()->where('status', WebsiteProductStatus::Published)->count())->toBe(0);
+    });
+
+    it('sends the page each storefront’s own price and the allowed range', function () {
+        myProductsPublishAtPrice($this->first, $this->product, '2200.00');
+
+        $this->actingAs($this->account->owner)
+            ->get(route('catalog.mine'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('products.data.0.ownership.storefronts.0.price.amount', '2200.00')
+                ->where('products.data.0.ownership.storefronts.0.terms.minimum.amount', '2000.00')
+                ->where('products.data.0.ownership.storefronts.0.terms.maximum.amount', '4000.00')
+                ->where('products.data.0.ownership.storefronts.0.terms.suggested.amount', '2500.00')
+                ->where('products.data.0.ownership.storefronts.1.price', null));
+    });
+
+    it('does not let another partner price on these storefronts', function () {
+        $stranger = websiteTestAccount(extra: [PackageFeature::DropshippingEnabled->value => '1']);
+
+        $this->actingAs($stranger->owner)
+            ->put(route('catalog.mine.websites.update', [$this->product->slug, $this->first->public_id]), ['published' => true, 'price' => '2500.00'])
+            ->assertNotFound();
+
+        expect(WebsiteProduct::query()->count())->toBe(0);
+    });
+});
+
 describe('what the owner may and may not publish', function () {
     it('refuses a product that was never bought', function () {
         myProductsPublish($this->first, $this->product, true)->assertSessionHasErrors('website');
@@ -173,8 +276,12 @@ describe('the My Products screen', function () {
                 ->where('products.data.0.ownership.totals', [
                     'purchased' => 25, 'available' => 18, 'reserved' => 3, 'sold' => 4, 'unavailable' => 0,
                 ])
-                ->where('products.data.0.ownership.storefronts.0', ['id' => $this->first->public_id, 'name' => 'First shop', 'state' => 'published'])
-                ->where('products.data.0.ownership.storefronts.1', ['id' => $this->second->public_id, 'name' => 'Second shop', 'state' => 'not_selected']));
+                ->where('products.data.0.ownership.storefronts.0.id', $this->first->public_id)
+                ->where('products.data.0.ownership.storefronts.0.name', 'First shop')
+                ->where('products.data.0.ownership.storefronts.0.state', 'published')
+                ->where('products.data.0.ownership.storefronts.1.id', $this->second->public_id)
+                ->where('products.data.0.ownership.storefronts.1.name', 'Second shop')
+                ->where('products.data.0.ownership.storefronts.1.state', 'not_selected'));
     });
 
     it('never shows another partner\'s units or storefronts', function () {

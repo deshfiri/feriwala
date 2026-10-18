@@ -3,6 +3,7 @@
 namespace App\Domain\Website\Actions;
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
@@ -27,12 +28,20 @@ class SetPurchasedProductOnWebsite
     public function __construct(
         protected SelectProductForWebsite $select,
         protected SetWebsiteProductPublication $publication,
+        protected UpdateWebsiteProduct $update,
     ) {}
 
     /**
+     * `$price` is the selling price the Partner typed for this storefront, as an
+     * exact decimal Taka string. It goes through {@see UpdateWebsiteProduct}, the
+     * same check every price change gets — the administrator's minimum and
+     * maximum, any lock, the margin ceiling — so a price outside the range is
+     * refused here whatever the screen allowed. Left out, the price the
+     * selection already has (the suggested one, to begin with) stands.
+     *
      * @throws WebsiteRefused
      */
-    public function handle(Website $website, Product $product, User $actor, bool $published): ?WebsiteProduct
+    public function handle(Website $website, Product $product, User $actor, bool $published, ?string $price = null): ?WebsiteProduct
     {
         /** @var WebsiteProduct|null $selection */
         $selection = WebsiteProduct::query()
@@ -48,6 +57,15 @@ class SetPurchasedProductOnWebsite
 
         $selection->setRelation('website', $website);
         $selection->setRelation('product', $product);
+
+        if ($price !== null) {
+            $selection = $this->update->handle($selection, $actor, ['price' => $price]);
+        }
+
+        // Already on sale: only the price was being changed.
+        if ($selection->status === WebsiteProductStatus::Published) {
+            return $selection;
+        }
 
         return $this->publication->publish($selection, $actor);
     }

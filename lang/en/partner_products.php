@@ -59,6 +59,12 @@ return [
         'no_storefront' => 'You have no storefront yet. Request one to start selling.',
         'publish' => 'Put on sale',
         'unpublish' => 'Take off',
+        'your_price' => 'Your selling price',
+        'save_price' => 'Save price',
+        'range' => 'Allowed: :min to :max',
+        'no_range' => 'No limits set',
+        'suggested' => 'Suggested :amount',
+        'price_fixed' => 'The price on this product is set by Feriwala.',
         'state' => [
             'not_selected' => 'Not on this storefront',
             'selected' => 'Chosen, not on sale',

@@ -1,7 +1,8 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { ImageOff, Package, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import TablePagination from '@/components/data-table/table-pagination';
+import MoneyField from '@/components/forms/money-field';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -301,6 +302,142 @@ export default function PartnerProducts({
 }
 
 /**
+ * One storefront of a product the account bought: whether it is on sale there,
+ * the price the Partner charges, and the range the administrator allows.
+ *
+ * The suggested price fills the field to begin with. The range is shown so it
+ * can be read, never enforced here — the server checks every price against the
+ * current minimum and maximum and says no, and its answer is shown as it is.
+ */
+function StorefrontRow({
+    shop,
+    slug,
+}: {
+    shop: PartnerOwnership['storefronts'][number];
+    slug: string;
+}) {
+    const { t } = useTranslation();
+    const live = shop.state === 'published';
+    const terms = shop.terms;
+    const saved = shop.price?.amount ?? terms?.suggested?.amount ?? '';
+    const [price, setPrice] = useState(saved);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const priceId = useId();
+    const canSetPrice = terms?.allows_user_pricing ?? true;
+    const priceEdited = canSetPrice && live && price.trim() !== saved;
+
+    const send = (published: boolean) => {
+        setBusy(true);
+        setError(null);
+
+        router.put(
+            setOnStorefront({ product: slug, website: shop.id }).url,
+            published && canSetPrice ? { published, price } : { published },
+            {
+                preserveScroll: true,
+                onError: (errors) =>
+                    setError(errors.website ?? errors.price ?? null),
+                onFinish: () => setBusy(false),
+            },
+        );
+    };
+
+    return (
+        <li className="space-y-2" data-test="ownership-storefront">
+            <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 space-y-0.5">
+                    <span className="block truncate text-sm">{shop.name}</span>
+                    <StatusPill
+                        tone={
+                            live
+                                ? 'success'
+                                : shop.state === 'selected'
+                                  ? 'warning'
+                                  : 'neutral'
+                        }
+                        label={t(
+                            `partner_products.ownership.state.${shop.state}`,
+                        )}
+                    />
+                </span>
+                <Button
+                    size="sm"
+                    variant={live ? 'outline' : 'default'}
+                    disabled={busy}
+                    onClick={() => send(!live)}
+                >
+                    {t(
+                        live
+                            ? 'partner_products.ownership.unpublish'
+                            : 'partner_products.ownership.publish',
+                    )}
+                </Button>
+            </div>
+
+            {canSetPrice ? (
+                <div className="space-y-1">
+                    <label
+                        htmlFor={priceId}
+                        className="text-muted-foreground text-xs font-medium"
+                    >
+                        {t('partner_products.ownership.your_price')}
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                            <MoneyField
+                                id={priceId}
+                                name="price"
+                                value={price}
+                                onChange={setPrice}
+                                aria-describedby={`${priceId}-range`}
+                                aria-invalid={error ? true : undefined}
+                            />
+                        </div>
+                        {priceEdited && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => send(true)}
+                            >
+                                {t('partner_products.ownership.save_price')}
+                            </Button>
+                        )}
+                    </div>
+                    <p
+                        id={`${priceId}-range`}
+                        className="text-muted-foreground text-xs tabular-nums"
+                    >
+                        {terms?.minimum || terms?.maximum
+                            ? t('partner_products.ownership.range', {
+                                  min: terms?.minimum?.formatted ?? '—',
+                                  max: terms?.maximum?.formatted ?? '—',
+                              })
+                            : t('partner_products.ownership.no_range')}
+                        {terms?.suggested
+                            ? ` · ${t('partner_products.ownership.suggested', {
+                                  amount: terms.suggested.formatted,
+                              })}`
+                            : ''}
+                    </p>
+                </div>
+            ) : (
+                <p className="text-muted-foreground text-xs">
+                    {t('partner_products.ownership.price_fixed')}
+                </p>
+            )}
+
+            {error && (
+                <p role="alert" className="text-danger text-xs font-medium">
+                    {error}
+                </p>
+            )}
+        </li>
+    );
+}
+
+/**
  * What the account owns of a product it bought, and which of its storefronts sell
  * it. The figures are the server's; the buttons only ask the server to publish or
  * unpublish on one storefront — buying never puts a product on sale by itself.
@@ -313,20 +450,7 @@ function OwnershipPanel({
     slug: string;
 }) {
     const { t } = useTranslation();
-    const [busy, setBusy] = useState<string | null>(null);
     const totals = ownership.totals;
-
-    const set = (website: string, published: boolean) => {
-        setBusy(website);
-        router.put(
-            setOnStorefront({ product: slug, website }).url,
-            { published },
-            {
-                preserveScroll: true,
-                onFinish: () => setBusy(null),
-            },
-        );
-    };
 
     return (
         <div className="space-y-3 border-t pt-3" data-test="ownership-panel">
@@ -400,47 +524,13 @@ function OwnershipPanel({
                     </p>
                 ) : (
                     <ul className="space-y-1.5">
-                        {ownership.storefronts.map((shop) => {
-                            const live = shop.state === 'published';
-
-                            return (
-                                <li
-                                    key={shop.id}
-                                    className="flex items-center justify-between gap-2"
-                                    data-test="ownership-storefront"
-                                >
-                                    <span className="min-w-0 space-y-0.5">
-                                        <span className="block truncate text-sm">
-                                            {shop.name}
-                                        </span>
-                                        <StatusPill
-                                            tone={
-                                                live
-                                                    ? 'success'
-                                                    : shop.state === 'selected'
-                                                      ? 'warning'
-                                                      : 'neutral'
-                                            }
-                                            label={t(
-                                                `partner_products.ownership.state.${shop.state}`,
-                                            )}
-                                        />
-                                    </span>
-                                    <Button
-                                        size="sm"
-                                        variant={live ? 'outline' : 'default'}
-                                        disabled={busy === shop.id}
-                                        onClick={() => set(shop.id, !live)}
-                                    >
-                                        {t(
-                                            live
-                                                ? 'partner_products.ownership.unpublish'
-                                                : 'partner_products.ownership.publish',
-                                        )}
-                                    </Button>
-                                </li>
-                            );
-                        })}
+                        {ownership.storefronts.map((shop) => (
+                            <StorefrontRow
+                                key={shop.id}
+                                shop={shop}
+                                slug={slug}
+                            />
+                        ))}
                     </ul>
                 )}
             </div>

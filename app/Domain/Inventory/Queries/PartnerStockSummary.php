@@ -3,11 +3,14 @@
 namespace App\Domain\Inventory\Queries;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Inventory\Models\PartnerStockItem;
+use App\Domain\Package\Entitlements;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Domain\Website\Queries\ResolveWebsitePriceRule;
 use Illuminate\Support\Collection;
 
 /**
@@ -24,6 +27,11 @@ use Illuminate\Support\Collection;
  */
 class PartnerStockSummary
 {
+    public function __construct(
+        protected ResolveWebsitePriceRule $pricing,
+        protected Entitlements $entitlements,
+    ) {}
+
     /**
      * @param  iterable<int, int>  $productIds
      * @return array<int, array<string, mixed>> per product: its `units`, `totals` and `storefronts`
@@ -55,7 +63,14 @@ class PartnerStockSummary
         $selections = WebsiteProduct::query()
             ->where('business_account_id', $account->id)
             ->whereIn('product_id', $ids)
-            ->get(['id', 'public_id', 'website_id', 'product_id', 'status']);
+            ->get(['id', 'public_id', 'website_id', 'product_id', 'status', 'price', 'currency_code']);
+
+        // What the administrator lets this account charge for each product: the
+        // range a Partner may price within, the same terms every price save is
+        // checked against.
+        $package = $this->entitlements->activePackage($account)?->package;
+        $terms = Product::query()->whereIn('id', $ids)->get()
+            ->mapWithKeys(fn (Product $product) => [$product->id => $this->pricing->for($product, $package)->toArray()]);
 
         $answers = [];
 
@@ -84,7 +99,7 @@ class PartnerStockSummary
                     'sold' => (int) array_sum(array_column($units, 'sold')),
                     'unavailable' => (int) array_sum(array_column($units, 'unavailable')),
                 ],
-                'storefronts' => $websites->map(function (Website $website) use ($selections, $productId) {
+                'storefronts' => $websites->map(function (Website $website) use ($selections, $productId, $terms) {
                     /** @var WebsiteProduct|null $selection */
                     $selection = $selections->first(fn (WebsiteProduct $row) => $row->website_id === $website->id && $row->product_id === $productId);
 
@@ -96,6 +111,11 @@ class PartnerStockSummary
                             $selection->status === WebsiteProductStatus::Published => 'published',
                             default => 'selected',
                         },
+
+                        // The Partner's own price for this storefront, if set,
+                        // and the range it must stay within.
+                        'price' => $selection?->price?->jsonSerialize(),
+                        'terms' => $terms[$productId] ?? null,
                     ];
                 })->all(),
             ];
