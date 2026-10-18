@@ -15,6 +15,7 @@ use Storefront\Support\ApiCache;
 use Storefront\Support\Db;
 use Storefront\Support\Env;
 use Storefront\Support\I18n;
+use Storefront\Support\Migrator;
 
 final class SystemController
 {
@@ -83,6 +84,39 @@ final class SystemController
         }
 
         return Response::json(['status' => 'ok']);
+    }
+
+    /**
+     * Create or update the tables from the browser, for hosting with no shell
+     * (cPanel). Runs before any session or shop lookup, because neither works
+     * until the tables exist. Idempotent: each migration is applied once, and
+     * the SQL is only the files shipped in database/migrations. When
+     * MIGRATE_TOKEN is set it must be passed as ?token=; error detail is shown
+     * only to a caller who holds it (or with APP_DEBUG) and is always logged.
+     */
+    public static function migrate(Request $request): Response
+    {
+        $expected = (string) Env::get('MIGRATE_TOKEN', '');
+        $given = $request->string('token');
+
+        if ($expected !== '' && ! hash_equals($expected, $given)) {
+            return Response::text('Not found', 404);
+        }
+
+        $trusted = $expected !== '' || Env::bool('APP_DEBUG');
+
+        try {
+            $applied = Migrator::run(dirname(__DIR__, 2).'/database/migrations');
+        } catch (\Throwable $throwable) {
+            error_log('[storefront] migrate failed: '.$throwable->getMessage());
+
+            return Response::text(
+                'Migration failed.'.($trusted ? "\n".$throwable->getMessage() : ' Check the database settings in .env.'),
+                500,
+            );
+        }
+
+        return Response::text($applied === [] ? "Nothing to migrate. The database is up to date.\n" : "Migrated: ".implode(', ', $applied)."\n");
     }
 
     public static function robots(Request $request): Response

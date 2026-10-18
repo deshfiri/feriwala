@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Website\Actions\ManageWebsiteBranding;
+use App\Domain\Website\Actions\SetWebsiteCatalogueMode;
 use App\Domain\Website\Actions\SetWebsiteSmsVerification;
 use App\Domain\Website\BannerLink;
 use App\Domain\Website\CheckoutVerification;
@@ -70,7 +71,33 @@ class WebsiteSettingsController extends Controller
                 'locked' => $this->verification->lockedFor($record),
                 'effective' => $this->verification->requiredFor($record),
             ],
+            // Whether this shop lists the whole catalogue (a Non-Conditional
+            // account's default) or only what its owner chose.
+            'catalogue_mode' => [
+                'applicable' => $record->businessAccount->isNonConditional(),
+                'whole_catalogue' => $record->lists_whole_catalogue,
+            ],
         ]);
+    }
+
+    /**
+     * Whether this storefront lists the whole catalogue or only chosen products.
+     */
+    public function updateCatalogueMode(Request $request, string $website, SetWebsiteCatalogueMode $mode): RedirectResponse
+    {
+        $record = $this->websiteFor($request, $website);
+
+        Gate::authorize('manage', $record);
+
+        $validated = $request->validate([
+            'whole_catalogue' => ['required', 'boolean'],
+        ]);
+
+        $this->attempt(fn () => $mode->handle($record, $this->person($request), (bool) $validated['whole_catalogue']));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.catalogue_mode_saved')]);
+
+        return to_route('websites.settings.edit', $record->public_id);
     }
 
     /**

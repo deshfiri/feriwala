@@ -48,6 +48,7 @@ use LogicException;
  * @property Money $tax_included
  * @property Money $line_total
  * @property Money|null $resale_amount a Non-Conditional account's declared resale/COD amount for this line
+ * @property Money|null $product_cost what Feriwala is owed for a line filled from central stock for an account that never bought it
  * @property string|null $tax_code
  * @property int|null $tax_rate_basis_points
  * @property string|null $tax_mode
@@ -104,6 +105,7 @@ class OrderItem extends Model
             'tax_included' => MoneyCast::class,
             'line_total' => MoneyCast::class,
             'resale_amount' => MoneyCast::class,
+            'product_cost' => MoneyCast::class,
             'tax_rate_basis_points' => 'integer',
             'supplier_rate' => MoneyCast::class.':supplier_currency_code',
             'platform_rate' => MoneyCast::class.':supplier_currency_code',
@@ -112,6 +114,28 @@ class OrderItem extends Model
             'supplier_allocated_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Whether this line's product cost was left to be recovered from the
+     * proceeds of the sale: a Non-Conditional wholesale line, or a storefront
+     * line filled from central stock for an account that never bought it.
+     */
+    public function defersProductCost(): bool
+    {
+        return $this->product_cost !== null || $this->order->isNonConditional();
+    }
+
+    /**
+     * What is recovered from this line's proceeds before the reseller earns:
+     * the storefront line's product cost plus the tax collected on it, or a
+     * wholesale line's whole total.
+     */
+    public function recoverableAmount(): Money
+    {
+        return $this->product_cost === null
+            ? $this->line_total
+            : $this->product_cost->plus($this->tax)->plus($this->tax_included);
     }
 
     /**

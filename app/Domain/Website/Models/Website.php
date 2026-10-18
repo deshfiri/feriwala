@@ -55,6 +55,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $banner_path
  * @property string|null $banner_link_url
  * @property bool $sms_verification_enabled
+ * @property bool $lists_whole_catalogue whether a Non-Conditional account's shop lists the whole eligible catalogue rather than only chosen products
  * @property string $primary_color
  * @property string $secondary_color
  * @property WebsiteTheme $theme
@@ -107,6 +108,7 @@ class Website extends Model
             'required_deposit' => MoneyCast::class,
             'minimum_balance' => MoneyCast::class,
             'sms_verification_enabled' => 'boolean',
+            'lists_whole_catalogue' => 'boolean',
             'payment_config' => 'array',
             'shipping_config' => 'array',
             'api_connected_at' => 'immutable_datetime',

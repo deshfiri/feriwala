@@ -76,6 +76,10 @@ final class Kernel
 
     public static function handle(Request $request): Response
     {
+        if ($request->path === '/migrate' && $request->method === 'GET') {
+            return SystemController::migrate($request);
+        }
+
         $isWebhook = $request->path === '/webhooks/feriwala';
 
         // A webhook is signed, not cookie-bearing: no session is started for it.

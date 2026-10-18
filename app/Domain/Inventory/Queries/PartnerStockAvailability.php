@@ -18,6 +18,10 @@ use Illuminate\Support\Facades\DB;
  * already reserved, committed to an order, returned or damaged are not in it, and
  * another Partner's units, another Variation's and central stock never are.
  *
+ * The one exception is a Non-Conditional account, which sells without having
+ * bought: where it owns no available unit, the answer is central stock's
+ * ({@see StockAvailability}), the same figure that order will reserve from.
+ *
  * Advisory at browse time; the binding check is the reservation at order
  * placement, which is transactional ({@see PartnerStockReservations}).
  * Warehouse identity, reservation detail and every other Partner's stock stay in
@@ -81,11 +85,21 @@ class PartnerStockAvailability
             ->get(['product_id', 'product_variant_id', 'available', 'updated_at'])
             ->keyBy(fn (object $row) => $row->product_id.':'.($row->product_variant_id ?? ''));
 
+        // A Non-Conditional account owns nothing it has not bought: where its
+        // own units run out, the storefront sells from central stock instead.
+        $central = $account?->isNonConditional() === true ? $this->units->forUnits($units) : [];
+
         $answers = [];
 
         foreach ($units as $unit) {
             $row = $rows->get($unit['product_id'].':'.($unit['variant_id'] ?? ''));
             $quantity = $row === null ? 0 : (int) $row->available;
+
+            if ($quantity < 1 && isset($central[$unit['sku']])) {
+                $answers[$unit['sku']] = $central[$unit['sku']];
+
+                continue;
+            }
 
             $answers[$unit['sku']] = [
                 'sku' => $unit['sku'],
@@ -121,6 +135,12 @@ class PartnerStockAvailability
                     AND (psi.product_variant_id IS NULL OR pv.is_active)
             )
             SQL;
+
+        if ($account?->isNonConditional() === true) {
+            [$centralSql, $centralBindings] = $this->units->inStockSql($productColumn, null);
+
+            return ["({$sql} OR {$centralSql})", [$account->id, ...$centralBindings]];
+        }
 
         return [$sql, [$account->id ?? 0]];
     }

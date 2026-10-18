@@ -69,6 +69,10 @@ class UpdateWebsiteProduct
 
         if (array_key_exists('price', $attributes)) {
             $changes['price'] = $this->price($terms, $currency, $attributes['price'], 'price');
+
+            // Pricing it is choosing it: from here it is the owner's product,
+            // not one the shop lists by default.
+            $changes['auto_listed'] = false;
         }
 
         if (array_key_exists('promotional_price', $attributes)) {

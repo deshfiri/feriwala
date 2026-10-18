@@ -17,6 +17,7 @@ use App\Domain\Wallet\Actions\SweepWalletBalances;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
 use App\Domain\Website\Actions\AnnouncePromotionWindows;
 use App\Domain\Website\Actions\DispatchDueWebhookRetries;
+use App\Domain\Website\Actions\ListWholeCatalogueOnWebsite;
 use App\Domain\Website\Actions\PruneStorefrontRequests;
 use App\Domain\Website\Actions\RefreshWebsiteBestSellers;
 use App\Domain\Website\Actions\SweepWebsiteLifecycle;
@@ -371,6 +372,19 @@ Schedule::call(fn () => app(SyncWebsiteCatalogue::class)->sweep())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Re-announce storefront products that are out of date (§17.2)');
+
+/*
+ * A Non-Conditional account's storefront lists the whole eligible catalogue by
+ * default. Every ten minutes this lists what is new — a product added or made
+ * eligible since — and only ever adds: what the owner hid or chose is never
+ * touched. Idempotent, so a second server finds nothing left to do.
+ */
+Schedule::call(fn () => app(ListWholeCatalogueOnWebsite::class)->sweep())
+    ->name('website-whole-catalogue-listing')
+    ->everyTenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('List the whole eligible catalogue on Non-Conditional storefronts');
 
 /*
  * Best sellers (C3). Every fifteen minutes the 30-day sales summary is rebuilt

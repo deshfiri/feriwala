@@ -21,6 +21,8 @@ type Props = {
     themes: { value: string; label: string }[];
     image_limits: { max_bytes: number; accepted: string[] };
     sms_verification: { enabled: boolean; locked: boolean; effective: boolean };
+    /** Only a Non-Conditional account has a default listing to switch. */
+    catalogue_mode?: { applicable: boolean; whole_catalogue: boolean };
 };
 
 const controlClass =
@@ -39,6 +41,7 @@ export default function WebsiteSettings({
     themes,
     image_limits: imageLimits,
     sms_verification: smsVerification,
+    catalogue_mode: catalogueMode,
 }: Props) {
     const { t } = useTranslation();
 
@@ -330,6 +333,53 @@ export default function WebsiteSettings({
                         )}
                     </Form>
                 </SectionCard>
+
+                {catalogueMode?.applicable && (
+                    <SectionCard
+                        title={t('website.settings.catalogue_title')}
+                        description={t('website.settings.catalogue_hint')}
+                    >
+                        <Form
+                            {...WebsiteSettingsController.updateCatalogueMode.form(
+                                website.id,
+                            )}
+                            options={{ preserveScroll: true }}
+                            className="space-y-3"
+                        >
+                            {({ processing, errors }) => (
+                                <>
+                                    <input
+                                        type="hidden"
+                                        name="whole_catalogue"
+                                        value="0"
+                                    />
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            name="whole_catalogue"
+                                            value="1"
+                                            defaultChecked={
+                                                catalogueMode.whole_catalogue
+                                            }
+                                        />
+                                        {t('website.settings.catalogue_label')}
+                                    </label>
+                                    <InputError
+                                        message={errors.lists_whole_catalogue}
+                                    />
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        disabled={processing}
+                                    >
+                                        {processing && <Spinner />}
+                                        {t('website.settings.save')}
+                                    </Button>
+                                </>
+                            )}
+                        </Form>
+                    </SectionCard>
+                )}
 
                 <SectionCard title={t('website.settings.products_title')}>
                     <p className="text-muted-foreground text-sm">

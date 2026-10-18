@@ -60,8 +60,9 @@ class SelectProductForWebsite
             throw WebsiteRefused::productNotEligible();
         }
 
-        // A website sells what the account has bought, nothing else.
-        if (! $this->purchased->has($account, $product)) {
+        // A website sells what the account has bought — unless it is a
+        // Non-Conditional account, which sells from the catalogue directly.
+        if (! $this->purchased->maySell($account, $product)) {
             throw WebsiteRefused::productNotPurchased();
         }
 

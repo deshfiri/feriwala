@@ -38,8 +38,8 @@ class RecordCodCollection
             throw new InvalidArgumentException('The amount collected cannot be negative.');
         }
 
-        if (! $item->order->isNonConditional()) {
-            throw new InvalidArgumentException('Only a Non-Conditional order\'s line has a COD collection to confirm.');
+        if (! $item->defersProductCost()) {
+            throw new InvalidArgumentException('Only a line whose product cost is recovered from its proceeds has a COD collection to confirm.');
         }
 
         return $this->database->transaction(function () use ($actor, $item, $amountCollected) {

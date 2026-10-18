@@ -36,7 +36,9 @@ plain HTTP, and its payment return URL must be `https://`).
 4. `cp .env.example .env` and fill it in: the database, `APP_URL`, and the three connection lines
    the dashboard showed — `ERP_BASE_URL`, `STORE_ID`, `STORE_TOKEN`. That is the whole connection.
    (`WEBHOOK_SECRET` is optional; the dashboard shows it when it registered a webhook.)
-5. `php bin/migrate.php` — creates the tables; safe to run again.
+5. `php bin/migrate.php` — creates the tables; safe to run again. On cPanel or any host with no
+   shell, open `https://your-domain/migrate` instead (add `?token=…` when `MIGRATE_TOKEN` is set in
+   `.env`, which is recommended). It applies the same migrations and is equally safe to repeat.
 6. `php bin/doctor.php` — checks the database, the connection to the ERP, the website's status.
    Exit code 1 if something needs attention.
 7. Cron, hourly: `php /path/to/storefront/bin/prune.php` (expired sessions and cache, abandoned

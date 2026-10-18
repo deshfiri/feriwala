@@ -26,10 +26,12 @@ class SynchronizeOrderProceedsWithDelivery
 
     public function handle(Order $order, OrderDeliveryStatus $to): void
     {
-        if ($to !== OrderDeliveryStatus::Delivered || ! $order->isNonConditional()) {
+        if ($to !== OrderDeliveryStatus::Delivered) {
             return;
         }
 
-        $order->items->each(fn (OrderItem $item) => $this->eligibility->markDelivered($item));
+        $order->items
+            ->filter(fn (OrderItem $item) => $item->defersProductCost())
+            ->each(fn (OrderItem $item) => $this->eligibility->markDelivered($item));
     }
 }

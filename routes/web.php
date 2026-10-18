@@ -485,6 +485,8 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // Whether this storefront's cash-on-delivery customers confirm with an SMS code.
         Route::put('websites/{website}/settings/sms-verification', [WebsiteSettingsController::class, 'updateSmsVerification'])
             ->name('websites.settings.sms-verification.update');
+        Route::put('websites/{website}/settings/catalogue-mode', [WebsiteSettingsController::class, 'updateCatalogueMode'])
+            ->name('websites.settings.catalogue-mode.update');
         Route::post('websites/{website}/settings/{asset}', [WebsiteSettingsController::class, 'updateImage'])
             ->whereIn('asset', ['logo', 'banner'])
             ->name('websites.settings.image.update');

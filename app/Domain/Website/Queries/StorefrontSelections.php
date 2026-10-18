@@ -49,7 +49,7 @@ class StorefrontSelections
                 ->query($website->businessAccount, SalesChannel::Dropshipping)
                 ->select('products.id'))
             ->whereIn('website_products.product_id', $this->purchased
-                ->only(Product::query(), $website->businessAccount)
+                ->onlySellable(Product::query(), $website->businessAccount)
                 ->select('products.id'));
     }
 }

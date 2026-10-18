@@ -186,6 +186,12 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.sms_verification_required_by_platform'), 'sms_verification_enabled');
     }
 
+    /** Only a Non-Conditional account lists the catalogue by default; the rest choose. */
+    public static function catalogueModeNeedsNonConditional(): self
+    {
+        return new self(__('website.refused.catalogue_mode_needs_non_conditional'), 'lists_whole_catalogue');
+    }
+
     public static function bannerLinkInvalid(): self
     {
         return new self(__('website.refused.banner_link_invalid'), 'banner_link_url');

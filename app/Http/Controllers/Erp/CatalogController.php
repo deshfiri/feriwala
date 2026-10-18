@@ -553,8 +553,11 @@ class CatalogController extends Controller
              * is what makes the door reachable from where a partner is already
              * standing.
              */
-            'purchased' => $purchased = $this->purchased->has($account, $product),
-            'websites' => $partnerSelling && $purchased
+            'purchased' => $this->purchased->has($account, $product),
+
+            // A Non-Conditional account publishes without having bought it.
+            'can_publish' => $canPublish = $this->purchased->maySell($account, $product),
+            'websites' => $partnerSelling && $canPublish
                 ? $this->websitesFor($account, $product)
                 : [],
 

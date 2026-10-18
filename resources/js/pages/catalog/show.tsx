@@ -43,8 +43,10 @@ type Props = {
      * website.
      */
     websites?: { id: string; name: string; selected: boolean }[];
-    /** Whether this account has bought the product; only then can it go on a website. */
+    /** Whether this account has bought the product. */
     purchased?: boolean;
+    /** Whether it can go on a website: bought, or a Non-Conditional account. */
+    can_publish?: boolean;
     /** The product's public identifier, for choosing it for a storefront. */
     product_id?: string;
     /** Updates published for this product, newest first (new feature). */
@@ -69,7 +71,7 @@ export default function CatalogueProduct({
     product,
     related,
     websites = [],
-    purchased = false,
+    can_publish: canPublish = false,
     product_id: productId,
     content,
     library_content: libraryContent = [],
@@ -102,7 +104,7 @@ export default function CatalogueProduct({
                     description={`${product.category}${product.brand ? ` · ${product.brand}` : ''}`}
                 />
 
-                {modes.partner_selling && !purchased && (
+                {modes.partner_selling && !canPublish && (
                     <SectionCard
                         title={t('catalog.websites.title')}
                         description={t('catalog.websites.buy_first')}

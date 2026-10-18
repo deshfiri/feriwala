@@ -94,8 +94,10 @@ class EvaluateOrderProceedsEligibility
                 'order_item_id' => $item->id,
                 'business_account_id' => $item->order->business_account_id,
                 'currency_code' => $item->currency_code,
-                'resale_amount' => $item->resale_amount,
-                'recovered_amount' => $item->line_total,
+                // A storefront line declares no resale amount: it sold for what
+                // the customer was charged for it.
+                'resale_amount' => $item->resale_amount ?? $item->line_total,
+                'recovered_amount' => $item->recoverableAmount(),
                 'created_at' => now(),
             ]);
         }

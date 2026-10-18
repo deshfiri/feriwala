@@ -6,6 +6,7 @@ use App\Domain\Billing\Actions\RecordPaymentFromQuote;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Catalog\Models\ProductAttributeValue;
+use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
@@ -89,6 +90,7 @@ class PlaceWebsiteOrder
         protected DatabaseManager $database,
         protected DistributedLock $lock,
         protected ReservationWindows $windows,
+        protected WholesalePriceResolver $wholesalePrices,
     ) {}
 
     /**
@@ -233,7 +235,7 @@ class PlaceWebsiteOrder
 
         $reservations = $this->reserve($order, $website, $quote, $submission->reservationKind());
 
-        $this->writeLines($order, $quote, $reservations);
+        $this->writeLines($order, $quote, $reservations, $website->businessAccount->isNonConditional());
 
         /*
          * A cash-on-delivery payment names no gateway: the money is collected
@@ -314,9 +316,11 @@ class PlaceWebsiteOrder
 
     /**
      * Hold every line's stock for the website's owner, in product order — from
-     * the units that owner bought and nothing else (D34). Central warehouse stock
-     * and Supplier offers are never drawn on for a storefront order, and a line
-     * the owner has too few of refuses the order: stock always blocks here.
+     * the units that owner bought (D34). Supplier offers are never drawn on for a
+     * storefront order, and a line the owner has too few of refuses the order:
+     * stock always blocks here. The one exception is a Non-Conditional account,
+     * which sells without having bought: a line it owns too few of is filled
+     * from central stock instead.
      *
      * @return array<int, StockReservation> keyed by the line's position
      *
@@ -338,15 +342,34 @@ class PlaceWebsiteOrder
         foreach ($positions as $position) {
             $line = $lines[$position];
 
+            $reference = $order->reference.'-L'.($position + 1);
+
             try {
-                $reservations[$position] = $this->reservations->reserveFromPartner(
-                    $website->businessAccount,
-                    $line->product,
-                    $line->variant,
-                    $line->quantity,
-                    $kind,
-                    $order->reference.'-L'.($position + 1),
-                );
+                try {
+                    $reservations[$position] = $this->reservations->reserveFromPartner(
+                        $website->businessAccount,
+                        $line->product,
+                        $line->variant,
+                        $line->quantity,
+                        $kind,
+                        $reference,
+                    );
+                } catch (InventoryRefused $refused) {
+                    // A Non-Conditional account sells what it never bought: the
+                    // line is filled from central stock, and Feriwala recovers
+                    // its cost from the sale's proceeds.
+                    if (! $website->businessAccount->isNonConditional()) {
+                        throw $refused;
+                    }
+
+                    $reservations[$position] = $this->reservations->reserve(
+                        $line->product,
+                        $line->variant,
+                        $line->quantity,
+                        $kind,
+                        $reference,
+                    );
+                }
             } catch (InventoryRefused) {
                 throw WebsiteOrderRefused::insufficientStock($line->sku, $line->quantity, $this->available($line, $website));
             } catch (LockTimeout) {
@@ -372,15 +395,20 @@ class PlaceWebsiteOrder
      * Snapshot every line as it sold: what, how many, at what price, its tax at
      * the rate in force, the website selection it came from, and the stock held.
      *
+     * A Non-Conditional account's line filled from central stock also snapshots
+     * what Feriwala is owed for it: the wholesale price that account would have
+     * paid, at this quantity.
+     *
      * @param  array<int, StockReservation>  $reservations
      * @return Collection<int, OrderItem>
      */
-    protected function writeLines(Order $order, WebsiteOrderQuote $quote, array $reservations): Collection
+    protected function writeLines(Order $order, WebsiteOrderQuote $quote, array $reservations, bool $nonConditional): Collection
     {
         $items = collect();
 
         foreach ($quote->lines as $position => $line) {
             $taxed = ! $line->tax->isZero();
+            $fromCentral = $nonConditional && ! $reservations[$position]->isPartnerSourced();
 
             $items->push($order->items()->create([
                 'line_number' => $position + 1,
@@ -401,6 +429,9 @@ class PlaceWebsiteOrder
                 'tax' => $line->addedTax(),
                 'tax_included' => $line->includedTax(),
                 'line_total' => $line->total(),
+                'product_cost' => $fromCentral
+                    ? $this->wholesalePrices->unitPrice($line->product, $line->variant, $line->quantity)->multipliedBy($line->quantity)
+                    : null,
                 'tax_code' => $taxed ? $line->tax->code : null,
                 'tax_rate_basis_points' => $taxed ? $line->tax->rateBasisPoints : null,
                 'tax_mode' => $taxed ? $line->tax->mode->value : null,

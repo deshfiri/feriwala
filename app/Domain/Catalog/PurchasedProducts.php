@@ -33,6 +33,29 @@ class PurchasedProducts
     }
 
     /**
+     * Whether the account may put this product on a website: a Non-Conditional
+     * account sells straight from the catalogue and Feriwala recovers the
+     * product cost from the order's collected proceeds; a Conditional account
+     * must have bought it first.
+     */
+    public function maySell(BusinessAccount $account, Product $product): bool
+    {
+        return $account->isNonConditional() || $this->has($account, $product);
+    }
+
+    /**
+     * Restrict a product query to what the account may sell on a website: all
+     * of it for a Non-Conditional account, only what it bought otherwise.
+     *
+     * @param  Builder<Product>  $products
+     * @return Builder<Product>
+     */
+    public function onlySellable(Builder $products, BusinessAccount $account): Builder
+    {
+        return $account->isNonConditional() ? $products : $this->only($products, $account);
+    }
+
+    /**
      * Which of these products the account has bought.
      *
      * @param  iterable<int, int>  $productIds

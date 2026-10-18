@@ -127,8 +127,8 @@ class PriceWebsiteOrder
 
         if ($selection === null || $price === null || $price->currency !== $currency || ! $price->isPositive()
             || ! $this->eligibility->isEligible($product, $website->businessAccount, SalesChannel::Dropshipping)
-            // Only what the owner bought is sold: the same answer the catalogue gives.
-            || ! $this->purchased->has($website->businessAccount, $product)) {
+            // Only what the owner may sell: the same answer the catalogue gives.
+            || ! $this->purchased->maySell($website->businessAccount, $product)) {
             throw WebsiteOrderRefused::productUnavailable($sku);
         }
 
