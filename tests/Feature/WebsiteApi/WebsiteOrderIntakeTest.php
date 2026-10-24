@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentPurpose;
@@ -898,6 +899,17 @@ describe('the checkout quote (P2 H1–H3)', function () {
         websiteOrderSubmit(body: websiteOrderBody(websiteOrderFromQuote($quote)))
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'insufficient_stock');
+    });
+
+    it('lets a Non-Conditional shop reserve from central stock, as placement does', function () {
+        app(PartnerStock::class)->move($this->stock->refresh(), StockBucket::Available, null, 19, PartnerStockMovementType::Adjustment);
+        $this->website->businessAccount->forceFill(['account_type' => AccountType::NonConditional])->save();
+        $warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
+        StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => $this->selection->product_id, 'available' => 500]);
+
+        websiteOrderQuote()->assertOk()
+            ->assertJsonPath('data.items.0.availability.in_stock', true)
+            ->assertJsonPath('data.items.0.availability.reservable', true);
     });
 
     it('answers cash on delivery the way placement does', function () {
