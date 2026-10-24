@@ -42,7 +42,7 @@ return [
     'mine_empty_help' => 'Products appear here once a wholesale order for them is paid. Only these can be put on your website.',
 
     'actions' => [
-        'order' => 'Order wholesale',
+        'order' => 'Order now',
         'view' => 'View product',
         'reorder' => 'Order again',
         'in_my_products' => 'Bought — see My Products',
