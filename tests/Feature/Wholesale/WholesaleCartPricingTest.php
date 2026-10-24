@@ -50,11 +50,11 @@ beforeEach(function () {
     $this->kitchen = Category::create(['name' => 'Kitchen']);
     $this->dhaka = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
 
-    $this->kettle = wholesalePricingProduct('FW-KT', 'Electric kettle', ['min_order_quantity' => 6]);
+    $this->kettle = wholesaleCartPricingProduct('FW-KT', 'Electric kettle', ['min_order_quantity' => 6]);
     ProductPriceTier::create(['product_id' => $this->kettle->id, 'min_quantity' => 24, 'currency_code' => 'BDT', 'unit_price' => Money::fromDecimal('1800.00', Currency::BDT)]);
     wholesalePricingStock($this->kettle, null, 100);
 
-    $this->shirt = wholesalePricingProduct('FW-SH', 'Polo shirt', ['wholesale_price' => Money::fromDecimal('1000.00', Currency::BDT)]);
+    $this->shirt = wholesaleCartPricingProduct('FW-SH', 'Polo shirt', ['wholesale_price' => Money::fromDecimal('1000.00', Currency::BDT)]);
     $this->medium = ProductVariant::create([
         'product_id' => $this->shirt->id,
         'sku' => 'FW-SH-M',
@@ -66,13 +66,13 @@ beforeEach(function () {
     ProductPriceTier::create(['product_id' => $this->shirt->id, 'product_variant_id' => $this->medium->id, 'min_quantity' => 10, 'currency_code' => 'BDT', 'unit_price' => Money::fromDecimal('850.00', Currency::BDT)]);
     wholesalePricingStock($this->shirt, $this->medium, 30);
 
-    $this->cup = wholesalePricingProduct('FW-CUP', 'Tea cup', ['wholesale_price' => Money::fromDecimal('150.00', Currency::BDT)]);
+    $this->cup = wholesaleCartPricingProduct('FW-CUP', 'Tea cup', ['wholesale_price' => Money::fromDecimal('150.00', Currency::BDT)]);
     wholesalePricingStock($this->cup, null, 50);
 
-    $this->lid = wholesalePricingProduct('FW-LID', 'Pot lid', ['wholesale_price' => Money::fromDecimal('300.00', Currency::BDT)]);
+    $this->lid = wholesaleCartPricingProduct('FW-LID', 'Pot lid', ['wholesale_price' => Money::fromDecimal('300.00', Currency::BDT)]);
     wholesalePricingStock($this->lid, null, 50);
 
-    $this->pot = wholesalePricingProduct('FW-POT', 'Steel pot', ['wholesale_price' => Money::fromDecimal('1200.00', Currency::BDT)]);
+    $this->pot = wholesaleCartPricingProduct('FW-POT', 'Steel pot', ['wholesale_price' => Money::fromDecimal('1200.00', Currency::BDT)]);
     app(StockAllocations::class)->allocate(wholesalePricingStock($this->pot, null, 5), $this->karim, 5);
 });
 
@@ -110,7 +110,7 @@ function wholesalePricingAccount(Package $package): BusinessAccount
 /**
  * @param  array<string, mixed>  $attributes
  */
-function wholesalePricingProduct(string $sku, string $name, array $attributes = []): Product
+function wholesaleCartPricingProduct(string $sku, string $name, array $attributes = []): Product
 {
     return Product::create([
         'name' => $name,
