@@ -4,6 +4,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Actions\VerifyLedgerIntegrity;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
@@ -223,11 +224,14 @@ it('captures a reservation exactly once', function () {
      * Two workers capture the same reservation. Capturing twice would debit the
      * money twice for one charge and leave the reserved bucket below zero.
      */
+    // Withdrawable money: a reservation is a withdrawal's claim, and platform
+    // credit can never be claimed by one.
     walletRaceService()->credit(
         walletRaceWallet(),
         LedgerTransactionType::TopUpCredit,
         Money::fromDecimal('200.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
+        BalanceType::Withdrawable,
     );
 
     $claim = walletRaceService()->reserve(
@@ -270,4 +274,93 @@ it('leaves a ledger that still adds up after a race', function () {
 
     expect(app(VerifyLedgerIntegrity::class)->problemsFor(walletRaceWallet()))->toBe([])
         ->and(walletRaceWallet()->total->toDecimal())->toBe('150.00');
+});
+
+it('cannot spend the same platform credit twice when mixed spends race', function () {
+    /*
+     * ৳300 of platform credit and ৳500 withdrawable, three workers each spending
+     * ৳400. Whoever is first takes the platform credit and ৳100 more; the second
+     * takes the rest; the third finds nothing. Without the row lock, two workers
+     * would both read ৳300 of platform credit and both spend it — one kind of
+     * money paying two charges.
+     */
+    walletRaceService()->credit(walletRaceWallet(), LedgerTransactionType::TopUpCredit, Money::fromDecimal('300.00', Currency::BDT), new PostingContext(source: 'test', description: 'Top-up'));
+    walletRaceService()->credit(walletRaceWallet(), LedgerTransactionType::SalesCredit, Money::fromDecimal('500.00', Currency::BDT), new PostingContext(source: 'test', description: 'Earned'));
+
+    walletRace(3, function (int $worker) {
+        walletRaceService()->debit(
+            walletRaceWallet(),
+            LedgerTransactionType::ServiceFeeDebit,
+            Money::fromDecimal('400.00', Currency::BDT),
+            new PostingContext(source: 'test', description: 'Charge '.$worker, idempotencyKey: 'race:mixed:'.$worker),
+        );
+    });
+
+    $wallet = walletRaceWallet();
+
+    expect($wallet->total->toDecimal())->toBe('0.00')
+        ->and($wallet->platformCredit()->toDecimal())->toBe('0.00')
+        ->and($wallet->withdrawableHolding()->toDecimal())->toBe('0.00')
+        // Two credits, then one spend of both kinds (two entries) and one of one.
+        ->and(walletRaceEntries())->toBe(5)
+        ->and(app(VerifyLedgerIntegrity::class)->problemsFor($wallet))->toBe([]);
+});
+
+it('converts platform credit once when two workers race to convert all of it', function () {
+    /*
+     * Two administrators converting the same ৳500 at the same moment, each with
+     * a key of their own. Without the lock both read ৳500 of platform credit and
+     * both convert it: ৳500 of platform credit becoming ৳1,000 of withdrawable.
+     */
+    walletRaceService()->credit(walletRaceWallet(), LedgerTransactionType::TopUpCredit, Money::fromDecimal('500.00', Currency::BDT), new PostingContext(source: 'test', description: 'Top-up'));
+
+    $actor = $this->account->owner_id;
+
+    walletRace(2, function (int $worker) use ($actor) {
+        walletRaceService()->convertToWithdrawable(
+            walletRaceWallet(),
+            Money::fromDecimal('500.00', Currency::BDT),
+            new PostingContext(
+                source: 'test',
+                description: 'Convert',
+                idempotencyKey: 'race:convert:'.$worker,
+                reason: 'The partner earned it as a reward.',
+                actorId: $actor,
+            ),
+        );
+    });
+
+    $wallet = walletRaceWallet();
+
+    expect($wallet->total->toDecimal())->toBe('500.00')
+        ->and($wallet->platformCredit()->toDecimal())->toBe('0.00')
+        ->and($wallet->withdrawableHolding()->toDecimal())->toBe('500.00')
+        ->and(LedgerEntry::query()->where('wallet_id', $wallet->id)->where('type', LedgerTransactionType::BalanceConversionDebit)->count())->toBe(1)
+        ->and(app(VerifyLedgerIntegrity::class)->problemsFor($wallet))->toBe([]);
+});
+
+it('converts once when the same conversion is sent by several workers', function () {
+    walletRaceService()->credit(walletRaceWallet(), LedgerTransactionType::TopUpCredit, Money::fromDecimal('500.00', Currency::BDT), new PostingContext(source: 'test', description: 'Top-up'));
+
+    $actor = $this->account->owner_id;
+
+    walletRace(4, function () use ($actor) {
+        walletRaceService()->convertToWithdrawable(
+            walletRaceWallet(),
+            Money::fromDecimal('200.00', Currency::BDT),
+            new PostingContext(
+                source: 'test',
+                description: 'Convert',
+                idempotencyKey: 'race:convert:same',
+                reason: 'The partner earned it as a reward.',
+                actorId: $actor,
+            ),
+        );
+    });
+
+    $wallet = walletRaceWallet();
+
+    expect($wallet->platformCredit()->toDecimal())->toBe('300.00')
+        ->and($wallet->withdrawableHolding()->toDecimal())->toBe('200.00')
+        ->and(LedgerEntry::query()->where('wallet_id', $wallet->id)->where('type', LedgerTransactionType::BalanceConversionDebit)->count())->toBe(1);
 });

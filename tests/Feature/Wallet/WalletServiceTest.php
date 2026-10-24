@@ -3,6 +3,7 @@
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Enums\WalletTransactionStatus;
@@ -36,6 +37,7 @@ function serviceWallet(string $openingCredit = '0.00'): Wallet
             LedgerTransactionType::TopUpCredit,
             $amount,
             new PostingContext(source: 'test', description: 'Opening top-up'),
+            BalanceType::Withdrawable,
         );
 
         $wallet->refresh();
@@ -364,6 +366,7 @@ describe('what a correction has to carry', function () {
                 'actorId' => $staff->id,
                 'direction' => LedgerDirection::Credit,
             ]),
+            BalanceType::Withdrawable,
         );
 
         expect($transaction->reason)->toBe('Goodwill after a courier failure')

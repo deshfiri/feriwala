@@ -53,6 +53,47 @@ enum LedgerTransactionType: string
     case ReferralRewardReversal = 'referral_reward_reversal';
     case ManualAdjustment = 'manual_adjustment';
 
+    /*
+     * Converting platform credit into withdrawable money. The two halves of one
+     * decision, each its own entry, sharing a conversion reference. The total
+     * does not change: one kind of money becomes the other.
+     */
+    case BalanceConversionDebit = 'balance_conversion_debit';
+    case BalanceConversionCredit = 'balance_conversion_credit';
+
+    /**
+     * The kind of money a credit of this type brings in, where that is not a
+     * decision somebody has to make (D-new).
+     *
+     * Money a customer paid into the wallet, and rewards, are platform credit:
+     * spendable inside Banij and never withdrawable. Money the account or the
+     * Supplier **earned** is withdrawable. The corrections return null, because
+     * a person is deciding — and a decision about money that can leave the
+     * platform is not one to default.
+     *
+     * Lives here, in the domain, so no screen or request can pick the type of a
+     * credit it was not entitled to choose.
+     */
+    public function creditBalanceType(): ?BalanceType
+    {
+        return match ($this) {
+            self::DepositCredit,
+            self::TopUpCredit,
+            self::ReferralRewardCredit,
+            self::JoiningRewardCredit,
+            self::PromotionalCredit => BalanceType::PlatformCredit,
+
+            self::SalesCredit,
+            self::CommissionCredit,
+            self::CodCollectionCredit => BalanceType::Withdrawable,
+
+            self::BalanceConversionCredit => BalanceType::Withdrawable,
+            self::BalanceConversionDebit => BalanceType::PlatformCredit,
+
+            default => null,
+        };
+    }
+
     /**
      * Which way this type moves money, or null when only the caller knows.
      *
@@ -74,8 +115,10 @@ enum LedgerTransactionType: string
             self::ReferralRewardCredit,
             self::JoiningRewardCredit,
             self::CodCollectionCredit,
-            self::PromotionalCredit => LedgerDirection::Credit,
+            self::PromotionalCredit,
+            self::BalanceConversionCredit => LedgerDirection::Credit,
 
+            self::BalanceConversionDebit,
             self::RegistrationFeeDebit,
             self::PackageFeeDebit,
             self::WebsiteSetupDebit,
@@ -120,7 +163,15 @@ enum LedgerTransactionType: string
      */
     public function requiresReason(): bool
     {
-        return $this->isCorrection();
+        return $this->isCorrection() || $this->isConversion();
+    }
+
+    /**
+     * Whether this is one half of converting platform credit to withdrawable.
+     */
+    public function isConversion(): bool
+    {
+        return $this === self::BalanceConversionDebit || $this === self::BalanceConversionCredit;
     }
 
     /**
@@ -131,7 +182,7 @@ enum LedgerTransactionType: string
      */
     public function requiresActor(): bool
     {
-        return $this === self::ManualAdjustment;
+        return $this === self::ManualAdjustment || $this->isConversion();
     }
 
     public function label(): string
@@ -163,6 +214,8 @@ enum LedgerTransactionType: string
             self::CommissionReversal => 'Commission reversal',
             self::ReferralRewardReversal => 'Partner Network reward reversal',
             self::ManualAdjustment => 'Manual adjustment',
+            self::BalanceConversionDebit => 'Converted from platform credit',
+            self::BalanceConversionCredit => 'Converted to withdrawable',
         };
     }
 }

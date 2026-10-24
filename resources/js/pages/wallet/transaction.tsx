@@ -147,6 +147,8 @@ export default function WalletTransactionDetail({
                                         </div>
                                         <div className="text-muted-foreground text-xs">
                                             {when(entry.at)}
+                                            {' · '}
+                                            {entry.balance_type_label}
                                         </div>
                                     </div>
 

@@ -5,6 +5,7 @@ use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Wallet\Actions\CorrectLedgerEntry;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Exceptions\WalletOperationRefused;
@@ -142,6 +143,7 @@ describe('a manual adjustment', function () {
             LedgerDirection::Credit,
             'Goodwill after a courier failure.',
             'Approved verbally by finance.',
+            BalanceType::Withdrawable,
         );
 
         expect($wallet->refresh()->total->toDecimal())->toBe('1025.00')
@@ -178,6 +180,7 @@ describe('a manual adjustment', function () {
             Money::fromDecimal('25.00', Currency::BDT),
             LedgerDirection::Credit,
             'Goodwill.',
+            balanceType: BalanceType::Withdrawable,
         );
 
         $entry = AuditLog::query()->where('action', 'wallet.manual_adjustment')->firstOrFail();
@@ -197,6 +200,7 @@ describe('a manual adjustment', function () {
             LedgerDirection::Credit,
             'Goodwill.',
             'Customer complained loudly on social media.',
+            BalanceType::Withdrawable,
         );
 
         expect(json_encode($transaction))->not->toContain('social media');

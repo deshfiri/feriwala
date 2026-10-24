@@ -6,6 +6,7 @@ use App\Domain\Wallet\Actions\CaptureDepositObligation;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
 use App\Domain\Wallet\DepositGuard;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Exceptions\WalletOperationRefused;
 use App\Domain\Wallet\Models\DepositRule;
@@ -49,6 +50,7 @@ function obligationWallet(string $credit = '0.00'): Wallet
             LedgerTransactionType::TopUpCredit,
             $amount,
             new PostingContext(source: 'test', description: 'Opening'),
+            BalanceType::Withdrawable,
         );
     }
 

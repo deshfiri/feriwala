@@ -46,6 +46,32 @@ class SupplierWalletOperationRefused extends RuntimeException
         return new self(sprintf('A %s must record who made it.', mb_strtolower($type->label())));
     }
 
+    /**
+     * A credit nothing maps to a kind of money has to be told which: whether
+     * money can leave the platform is a decision, never a default.
+     */
+    public static function balanceTypeRequired(SupplierLedgerEntryType $type): self
+    {
+        return new self(sprintf(
+            'A %s must say whether the money is platform credit or withdrawable.',
+            mb_strtolower($type->label()),
+        ));
+    }
+
+    public static function insufficientPlatformCredit(Money $requested, Money $available): self
+    {
+        return new self(sprintf(
+            'There is %s of platform credit available to convert and %s was requested.',
+            $available->format(),
+            $requested->format(),
+        ));
+    }
+
+    public static function notPermitted(): self
+    {
+        return new self('You are not permitted to do this.');
+    }
+
     public static function directionRequired(SupplierLedgerEntryType $type): self
     {
         return new self(sprintf(

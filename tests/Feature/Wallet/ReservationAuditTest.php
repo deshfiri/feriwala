@@ -3,6 +3,7 @@
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Enums\WalletTransactionStatus;
 use App\Domain\Wallet\Exceptions\WalletOperationRefused;
@@ -40,6 +41,7 @@ beforeEach(function () {
         LedgerTransactionType::TopUpCredit,
         Money::fromDecimal('1000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
+        BalanceType::Withdrawable,
     );
 
     $this->wallet->refresh();

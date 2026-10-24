@@ -11,8 +11,19 @@ const translations = {
             no_wallet_title: 'No wallet yet',
             no_wallet_description: 'A wallet opens once a payable settles.',
             total: 'Total balance',
-            available: 'Available balance',
+            usable: 'Available balance',
+            usable_help: 'Available to use inside Banij.',
+            available: 'Withdrawable balance',
+            available_help: 'Available to withdraw.',
+            details_title: 'Balance details',
+            details_description: 'What sits behind the figures above.',
+            platform_credit: 'Platform credit',
+            platform_credit_help: 'Cannot be withdrawn.',
+            withdrawable_part: 'Withdrawable',
+            withdrawable_part_help: 'Can be withdrawn.',
             reserved: 'Reserved for withdrawal',
+            reserved_help: 'Set aside for a withdrawal.',
+            recovery_help: 'Owed back to Banij.',
             recovery: 'Outstanding recovery',
             recovery_warning: 'Held against future settlements until cleared.',
             payable_totals: 'Payables',
@@ -81,6 +92,9 @@ describe('supplier wallet dashboard', () => {
                     currency: 'BDT',
                     total: money('1500.00'),
                     available: money('0.00'),
+                    platform_credit: money('0.00'),
+                    withdrawable: money('1500.00'),
+                    available_for_withdrawal: money('0.00'),
                     reserved: money('1500.00'),
                     recovery: money('1500.00'),
                     has_outstanding_recovery: true,
@@ -107,6 +121,9 @@ describe('supplier wallet dashboard', () => {
                     currency: 'BDT',
                     total: money('2000.00'),
                     available: money('2000.00'),
+                    platform_credit: money('0.00'),
+                    withdrawable: money('2000.00'),
+                    available_for_withdrawal: money('2000.00'),
                     reserved: money('0.00'),
                     recovery: money('0.00'),
                     has_outstanding_recovery: false,
@@ -125,5 +142,37 @@ describe('supplier wallet dashboard', () => {
                 'Held against future settlements until cleared.',
             ),
         ).not.toBeInTheDocument();
+    });
+
+    it("tells platform credit apart from what can be withdrawn, from the server's own figures", () => {
+        render(
+            <SupplierWalletIndex
+                wallet={{
+                    id: 'wlt_1',
+                    currency: 'BDT',
+                    total: money('1000.00'),
+                    available: money('1000.00'),
+                    platform_credit: money('300.00'),
+                    withdrawable: money('700.00'),
+                    available_for_withdrawal: money('700.00'),
+                    reserved: money('0.00'),
+                    recovery: money('0.00'),
+                    has_outstanding_recovery: false,
+                }}
+                payable_totals={{
+                    pending: money('0.00'),
+                    eligible: money('0.00'),
+                    settled: money('0.00'),
+                }}
+                recent_entries={[]}
+            />,
+        );
+
+        // Both kinds are listed, each with the figure the server worked out —
+        // nothing here adds or subtracts them.
+        expect(screen.getByText('Platform credit')).toBeInTheDocument();
+        expect(screen.getByText('৳300.00')).toBeInTheDocument();
+        expect(screen.getByText('Withdrawable balance')).toBeInTheDocument();
+        expect(screen.getAllByText('৳700.00').length).toBeGreaterThan(0);
     });
 });

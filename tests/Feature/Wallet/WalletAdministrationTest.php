@@ -6,6 +6,7 @@ use App\Domain\Audit\Models\AuditLog;
 use App\Domain\Wallet\Actions\CorrectLedgerEntry;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\LedgerEntry;
@@ -42,6 +43,7 @@ function adminCredit(Wallet $wallet, string $amount, string $description = 'Top-
         LedgerTransactionType::TopUpCredit,
         Money::fromDecimal($amount, Currency::BDT),
         new PostingContext(source: 'test', description: $description),
+        BalanceType::Withdrawable,
     );
 }
 
@@ -132,6 +134,7 @@ describe('the staff note (§23.2)', function () {
             LedgerDirection::Credit,
             'Goodwill after a courier failure.',
             'Customer complained loudly on social media.',
+            BalanceType::Withdrawable,
         );
 
         $this->actingAs(testPlatformStaff(PlatformRole::SuperAdmin))
@@ -160,6 +163,7 @@ describe('the staff note (§23.2)', function () {
             LedgerDirection::Credit,
             'Goodwill.',
             'Customer complained loudly on social media.',
+            BalanceType::Withdrawable,
         );
 
         $response = $this->actingAs($this->manager)
@@ -179,6 +183,7 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
             ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
                 'amount' => '25.00',
                 'direction' => 'credit',
+                'balance_type' => 'platform_credit',
                 'reason' => 'Goodwill after a courier failure.',
             ])
             ->assertRedirect();
@@ -186,9 +191,42 @@ describe('a manual adjustment (§23.1, §32.2)', function () {
         $entry = LedgerEntry::query()->where('wallet_id', $this->wallet->id)->firstOrFail();
 
         expect($this->wallet->refresh()->total->toDecimal())->toBe('25.00')
+            ->and($this->wallet->platformCredit()->toDecimal())->toBe('25.00')
+            ->and($this->wallet->withdrawableHolding()->toDecimal())->toBe('0.00')
+            ->and($entry->balance_type)->toBe(BalanceType::PlatformCredit)
             ->and($entry->type)->toBe(LedgerTransactionType::ManualAdjustment)
             ->and($entry->created_by)->toBe($this->manager->id)
             ->and(AuditLog::query()->where('action', 'wallet.manual_adjustment')->exists())->toBeTrue();
+    });
+
+    it('refuses a credit that does not say what kind of money it is', function () {
+        // Whether money can leave the platform is never left to a default.
+        adminConfirmed($this->manager)
+            ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
+                'amount' => '25.00',
+                'direction' => 'credit',
+                'reason' => 'Goodwill after a courier failure.',
+            ])
+            ->assertSessionHasErrors('balance_type');
+
+        expect(LedgerEntry::query()->count())->toBe(0);
+    });
+
+    it('posts a withdrawable credit as withdrawable, and records the type on the audit trail', function () {
+        adminConfirmed($this->manager)
+            ->post(route('admin.wallets.adjustments.store', $this->wallet->public_id), [
+                'amount' => '40.00',
+                'direction' => 'credit',
+                'balance_type' => 'withdrawable',
+                'reason' => 'Goodwill after a courier failure.',
+            ])
+            ->assertRedirect();
+
+        $audit = AuditLog::query()->where('action', 'wallet.manual_adjustment')->firstOrFail();
+
+        expect($this->wallet->refresh()->withdrawableHolding()->toDecimal())->toBe('40.00')
+            ->and($this->wallet->platformCredit()->toDecimal())->toBe('0.00')
+            ->and($audit->after['balance_type'])->toBe('withdrawable');
     });
 
     it('refuses without a reason', function () {

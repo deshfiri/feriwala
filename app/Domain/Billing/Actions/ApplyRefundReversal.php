@@ -7,8 +7,10 @@ use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Wallet\Actions\CreditSettledPayment;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\Wallet;
+use App\Domain\Wallet\Models\WalletTransaction;
 use App\Domain\Wallet\WalletService;
 use App\Support\Money\Money;
 use Illuminate\Log\LogManager;
@@ -74,7 +76,12 @@ class ApplyRefundReversal
             return;
         }
 
-        $available = $wallet->usableBalance();
+        // Only the kind of money the payment brought in can be taken back, so
+        // only that kind counts: a top-up spent as platform credit cannot be
+        // refunded out of money the account earned.
+        $available = $this->kindFor($payment) === BalanceType::PlatformCredit
+            ? $wallet->platformCreditAvailable()
+            : $this->smaller($wallet->withdrawableFree(), $wallet->usableBalance());
 
         if ($amount->greaterThan($available)) {
             throw RefundRefused::walletCannotCover($amount, $available);
@@ -119,6 +126,12 @@ class ApplyRefundReversal
                     idempotencyKey: 'refund:'.$refund->public_id,
                     paymentId: $payment->id,
                 ),
+
+                // Out of the kind of money the payment brought in, and nothing
+                // else: a gateway top-up or deposit is platform credit, so its
+                // refund is taken from platform credit and never from money
+                // the account can withdraw.
+                $this->kindFor($payment),
             );
         } catch (Throwable $throwable) {
             /*
@@ -145,6 +158,25 @@ class ApplyRefundReversal
         }
 
         $refund->forceFill(['wallet_transaction_id' => $transaction->id])->save();
+    }
+
+    /**
+     * The kind of money this payment was credited as: what its own wallet
+     * posting says, and platform credit where there is none to read — the kind
+     * every gateway payment is credited as now. A payment credited before typed
+     * balances existed was credited as withdrawable money, and says so.
+     */
+    protected function kindFor(Payment $payment): BalanceType
+    {
+        return WalletTransaction::query()
+            ->where('idempotency_key', 'payment:'.$payment->reference)
+            ->first()
+            ?->dominantBalanceType() ?? BalanceType::PlatformCredit;
+    }
+
+    protected function smaller(Money $a, Money $b): Money
+    {
+        return $a->lessThan($b) ? $a : $b;
     }
 
     protected function walletFor(Payment $payment): ?Wallet

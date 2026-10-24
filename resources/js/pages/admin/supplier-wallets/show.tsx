@@ -1,5 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft, Receipt } from 'lucide-react';
+import { useState } from 'react';
+import SupplierWalletAdjustmentController from '@/actions/App/Http/Controllers/Admin/SupplierWalletAdjustmentController';
 import DataTable from '@/components/data-table/data-table';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -9,6 +11,8 @@ import EmptyState from '@/components/states/empty-state';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
+import AdjustWalletDialog from '@/pages/admin/wallets/adjust-wallet-dialog';
+import ConvertBalanceDialog from '@/pages/admin/wallets/convert-balance-dialog';
 import { index } from '@/routes/admin/supplier-wallets';
 import type { Column, Paginator } from '@/types';
 
@@ -18,7 +22,10 @@ type Wallet = {
     supplier_reference: string;
     currency: string;
     total: Money;
+    platform_credit: Money;
+    withdrawable: Money;
     available: Money;
+    available_for_withdrawal: Money;
     reserved: Money;
     recovery: Money;
     has_outstanding_recovery: boolean;
@@ -28,6 +35,7 @@ type Row = {
     id: string;
     reference: string;
     type_label: string;
+    balance_type_label: string;
     is_credit: boolean;
     amount: Money;
     balance_after: Money;
@@ -42,12 +50,16 @@ type Row = {
 
 export default function AdminSupplierWalletShow({
     wallet,
+    can,
     entries,
 }: {
     wallet: Wallet;
+    can: { adjust: boolean; convert: boolean };
     entries: Paginator<Row>;
 }) {
     const { t, locale } = useTranslation();
+    const [adjusting, setAdjusting] = useState(false);
+    const [converting, setConverting] = useState(false);
 
     const columns: Column<Row>[] = [
         {
@@ -79,6 +91,12 @@ export default function AdminSupplierWalletShow({
                     showSign
                 />
             ),
+        },
+        {
+            key: 'balance_type',
+            header: t('supplier.admin.wallets.columns.balance_type'),
+            priority: 'secondary',
+            cell: (row) => row.balance_type_label,
         },
         {
             key: 'balance_after',
@@ -119,17 +137,72 @@ export default function AdminSupplierWalletShow({
                     })}
                     description={wallet.supplier_reference}
                     actions={
-                        <Button variant="outline" size="sm" asChild>
-                            <Link href={index()}>
-                                <ArrowLeft
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                                {t('supplier.admin.wallets.back')}
-                            </Link>
-                        </Button>
+                        <>
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={index()}>
+                                    <ArrowLeft
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                    {t('supplier.admin.wallets.back')}
+                                </Link>
+                            </Button>
+
+                            {can.convert && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConverting(true)}
+                                >
+                                    {t('wallet.admin.convert.action')}
+                                </Button>
+                            )}
+
+                            {can.adjust && (
+                                <Button
+                                    size="sm"
+                                    onClick={() => setAdjusting(true)}
+                                >
+                                    {t('wallet.admin.adjust.action')}
+                                </Button>
+                            )}
+                        </>
                     }
                 />
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <SectionCard
+                        title={t(
+                            'supplier.admin.wallets.columns.platform_credit',
+                        )}
+                    >
+                        <MoneyAmount
+                            amount={wallet.platform_credit}
+                            size="large"
+                        />
+                    </SectionCard>
+                    <SectionCard
+                        title={t(
+                            'supplier.admin.wallets.columns.withdrawable_part',
+                        )}
+                    >
+                        <MoneyAmount
+                            amount={wallet.withdrawable}
+                            size="large"
+                        />
+                    </SectionCard>
+                    <SectionCard
+                        title={t(
+                            'supplier.admin.wallets.columns.withdrawable_balance',
+                        )}
+                    >
+                        <MoneyAmount
+                            amount={wallet.available_for_withdrawal}
+                            size="large"
+                            direction="credit"
+                        />
+                    </SectionCard>
+                </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <SectionCard
@@ -193,6 +266,29 @@ export default function AdminSupplierWalletShow({
                     />
                 </SectionCard>
             </PageContainer>
+
+            {can.adjust && (
+                <AdjustWalletDialog
+                    form={SupplierWalletAdjustmentController.adjust.form(
+                        wallet.id,
+                    )}
+                    account={wallet.supplier}
+                    open={adjusting}
+                    onOpenChange={setAdjusting}
+                    withIdempotencyKey
+                />
+            )}
+
+            {can.convert && (
+                <ConvertBalanceDialog
+                    form={SupplierWalletAdjustmentController.convert.form(
+                        wallet.id,
+                    )}
+                    platformCredit={wallet.platform_credit}
+                    open={converting}
+                    onOpenChange={setConverting}
+                />
+            )}
         </>
     );
 }

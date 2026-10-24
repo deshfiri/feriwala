@@ -5,6 +5,7 @@ namespace App\Domain\Wallet\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\WalletBalanceState;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -31,6 +32,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $business_account_id
  * @property string $currency_code
  * @property Money $total
+ * @property Money $platform_credit the part of `total` that can be spent in the platform but never withdrawn
+ * @property Money $reserved_platform_credit the part of `reserved` that came from platform credit
+ * @property Money $hold_platform_credit the part of `hold` that came from platform credit
  * @property Money $required_deposit
  * @property Money $minimum_balance
  * @property Money $reserved
@@ -60,6 +64,9 @@ class Wallet extends Model
     {
         return [
             'total' => MoneyCast::class,
+            'platform_credit' => MoneyCast::class,
+            'reserved_platform_credit' => MoneyCast::class,
+            'hold_platform_credit' => MoneyCast::class,
             'required_deposit' => MoneyCast::class,
             'minimum_balance' => MoneyCast::class,
             'deposit_usable_for_charges' => 'boolean',
@@ -170,14 +177,150 @@ class Wallet extends Model
      */
     public function availableForWithdrawal(): Money
     {
+        // The same deductions as ever — reserved, held and pending money, the
+        // minimum balance, the required deposit — but taken from the
+        // withdrawable money only. Reserved and held money keep the kind they
+        // were claimed from; pending money, the minimum balance and the deposit
+        // are not typed, so each is assumed to be withdrawable money until
+        // shown otherwise. Nothing becomes withdrawable merely because it is not
+        // platform credit, and a wallet with no platform credit comes out
+        // exactly as it did before typed balances.
         return $this->floored(
-            $this->total
-                ->minus($this->reserved)
-                ->minus($this->hold)
+            $this->withdrawableFree()
                 ->minus($this->pending)
                 ->minus($this->minimum_balance)
                 ->minus($this->required_deposit)
         );
+    }
+
+    /*
+     * The two kinds of money, and where each sits (D-new).
+     *
+     * `total` is everything. `platform_credit` is the stored part of it that is
+     * spendable in Banij and never withdrawable; the rest is withdrawable money.
+     * The two kinds are *holdings* — who owns what — and not availability: what
+     * may actually be spent or withdrawn is the holding less every claim against
+     * it, worked out below. Reserved and held money keep the kind they were taken
+     * from, and pending money, the minimum balance and the required deposit stand
+     * against the total as before, so none of them ever becomes withdrawable.
+     */
+
+    /**
+     * Platform credit held: spendable in Banij, never withdrawable.
+     *
+     * Never more than the wallet holds, so a total that fell without it (a test
+     * that sets one directly, a repair) cannot make the typed split exceed it.
+     */
+    public function platformCredit(): Money
+    {
+        return $this->platform_credit->greaterThan($this->total) ? $this->total : $this->platform_credit;
+    }
+
+    /**
+     * Withdrawable money held: everything that is not platform credit.
+     *
+     * A holding, not an availability — it still includes whatever is reserved,
+     * held or pending. Derived, so it cannot disagree with `total`, and every
+     * balance that predates typed balances is withdrawable by construction.
+     */
+    public function withdrawableHolding(): Money
+    {
+        return $this->total->minus($this->platformCredit());
+    }
+
+    /** The part of the reserved bucket that came from platform credit. */
+    public function reservedPlatformCredit(): Money
+    {
+        return $this->smaller($this->reserved_platform_credit, $this->reserved);
+    }
+
+    /** The part of the reserved bucket that came from withdrawable money. */
+    public function reservedWithdrawable(): Money
+    {
+        return $this->reserved->minus($this->reservedPlatformCredit());
+    }
+
+    /** The part of the hold bucket that came from platform credit. */
+    public function heldPlatformCredit(): Money
+    {
+        return $this->smaller($this->hold_platform_credit, $this->hold);
+    }
+
+    /** The part of the hold bucket that came from withdrawable money. */
+    public function heldWithdrawable(): Money
+    {
+        return $this->hold->minus($this->heldPlatformCredit());
+    }
+
+    /**
+     * Platform credit that no reservation or hold has claimed.
+     */
+    public function platformCreditFree(): Money
+    {
+        return $this->floored(
+            $this->platformCredit()->minus($this->reservedPlatformCredit())->minus($this->heldPlatformCredit())
+        );
+    }
+
+    /**
+     * Withdrawable money that no reservation or hold has claimed.
+     */
+    public function withdrawableFree(): Money
+    {
+        return $this->floored(
+            $this->withdrawableHolding()->minus($this->reservedWithdrawable())->minus($this->heldWithdrawable())
+        );
+    }
+
+    /**
+     * Platform credit that can be spent right now: unclaimed, and within what
+     * the wallet as a whole may spend (pending money, the minimum balance and a
+     * locked deposit stand against the whole).
+     */
+    public function platformCreditAvailable(): Money
+    {
+        return $this->smaller($this->platformCreditFree(), $this->usableBalance());
+    }
+
+    /**
+     * Split an amount between the two kinds of money.
+     *
+     * Left open, platform credit goes first and withdrawable money pays only the
+     * rest (D-new). With `$only`, the whole amount comes from that one kind or
+     * the call fails — never from the other: a claim, a reversal or a correction
+     * that names a kind must not quietly turn one kind into the other.
+     *
+     * Only what no claim has taken is available to either kind.
+     *
+     * @return array{0: Money, 1: Money} platform credit part, withdrawable part
+     *
+     * @throws \LogicException when the kind(s) allowed cannot cover the amount
+     */
+    public function allocateSpend(Money $amount, ?BalanceType $only = null): array
+    {
+        $platformFree = $this->platformCreditFree();
+        $withdrawableFree = $this->withdrawableFree();
+        $zero = Money::zero($this->currency());
+
+        if ($only === BalanceType::PlatformCredit) {
+            [$platform, $withdrawable] = [$amount, $zero];
+        } elseif ($only === BalanceType::Withdrawable) {
+            [$platform, $withdrawable] = [$zero, $amount];
+        } else {
+            $platform = $this->smaller($amount, $platformFree);
+            $withdrawable = $amount->minus($platform);
+        }
+
+        if ($platform->greaterThan($platformFree) || $withdrawable->greaterThan($withdrawableFree)) {
+            throw new \LogicException('The kind(s) of money allowed cannot cover this amount.');
+        }
+
+        return [$platform, $withdrawable];
+    }
+
+    protected function smaller(Money $a, Money $b): Money
+    {
+        return $a->lessThan($b) ? $a : $b;
     }
 
     /**
@@ -254,6 +397,18 @@ class Wallet extends Model
             'currency' => $this->currency_code,
             'total' => $this->total->jsonSerialize(),
             'usable' => $this->usableBalance()->jsonSerialize(),
+
+            // The two kinds of money (D-new), as what can be done with each now:
+            // platform credit can be spent in Banij and never withdrawn; the
+            // withdrawable figure is exactly what may be withdrawn.
+            'platform_credit' => $this->platformCreditAvailable()->jsonSerialize(),
+            'withdrawable' => $this->availableForWithdrawal()->jsonSerialize(),
+
+            // Where each kind sits, before any claim against it: holdings.
+            'platform_credit_held' => $this->platformCredit()->jsonSerialize(),
+            'withdrawable_held' => $this->withdrawableHolding()->jsonSerialize(),
+            'reserved_platform_credit' => $this->reservedPlatformCredit()->jsonSerialize(),
+            'reserved_withdrawable' => $this->reservedWithdrawable()->jsonSerialize(),
             'available_for_withdrawal' => $this->availableForWithdrawal()->jsonSerialize(),
             'required_deposit' => $this->required_deposit->jsonSerialize(),
 

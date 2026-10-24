@@ -135,7 +135,7 @@ function accountWithdrawalRacePayoutMethod(): PayoutMethod
 it('reserves only what is available when two withdrawal requests compete for the same balance', function () {
     app(WalletService::class)->credit(
         accountWithdrawalRaceWallet(),
-        LedgerTransactionType::TopUpCredit,
+        LedgerTransactionType::SalesCredit,
         Money::fromDecimal('1000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );
@@ -164,7 +164,7 @@ it('reserves only what is available when two withdrawal requests compete for the
 it('never double-decides a withdrawal when approval races rejection', function () {
     app(WalletService::class)->credit(
         accountWithdrawalRaceWallet(),
-        LedgerTransactionType::TopUpCredit,
+        LedgerTransactionType::SalesCredit,
         Money::fromDecimal('1000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );
@@ -211,7 +211,7 @@ it('never double-decides a withdrawal when approval races rejection', function (
 it('never lets a top-up credit and a withdrawal reservation together overdraw the wallet', function () {
     app(WalletService::class)->credit(
         accountWithdrawalRaceWallet(),
-        LedgerTransactionType::TopUpCredit,
+        LedgerTransactionType::SalesCredit,
         Money::fromDecimal('1000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
     );

@@ -34,7 +34,7 @@ beforeEach(function () {
     $this->wallet = app(OpenWallet::class)->handle(testBusinessAccount(AccountStatus::Active));
     app(WalletService::class)->credit(
         $this->wallet,
-        LedgerTransactionType::TopUpCredit,
+        LedgerTransactionType::SalesCredit,
         Money::fromDecimal('1000.00', Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening top-up'),
     );

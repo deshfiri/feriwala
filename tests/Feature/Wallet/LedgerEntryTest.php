@@ -190,7 +190,12 @@ describe('the transaction types', function () {
         // Listed in full including the ones whose module is not built yet: a
         // ledger migrated every time a module lands is a ledger whose history
         // gets renumbered.
-        expect(LedgerTransactionType::cases())->toHaveCount(26);
+        $named = collect(LedgerTransactionType::cases())
+            ->reject(fn (LedgerTransactionType $type) => $type->isConversion());
+
+        // The two halves of a balance conversion are the platform's own, not
+        // part of §23.1's list.
+        expect($named)->toHaveCount(26);
     });
 
     it('gives every type a label somebody could read', function () {

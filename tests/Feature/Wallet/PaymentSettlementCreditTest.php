@@ -10,6 +10,7 @@ use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Wallet\Actions\CreditSettledPayment;
 use App\Domain\Wallet\Actions\OpenWallet;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
@@ -92,6 +93,25 @@ describe('a settled top-up', function () {
             ->and($entry->payment_id)->toBe($payment->id)
             ->and($entry->balance_before->toDecimal())->toBe('0.00')
             ->and($entry->balance_after->toDecimal())->toBe('6000.00');
+    });
+
+    it('becomes platform credit: spendable inside Banij, never withdrawable', function () {
+        // Money a customer paid in through a gateway is not something the
+        // platform owes back as a payout — the type is decided here, in the
+        // domain, never by whatever screen asked for the top-up.
+        $payment = walletPayment(PaymentPurpose::WalletTopUp);
+        walletGatewayConfirms($payment);
+
+        walletSettle($payment);
+
+        $entry = LedgerEntry::query()->where('wallet_id', $this->wallet->id)->firstOrFail();
+        $wallet = $this->wallet->refresh();
+
+        expect($entry->balance_type)->toBe(BalanceType::PlatformCredit)
+            ->and($wallet->platformCredit()->toDecimal())->toBe('6000.00')
+            ->and($wallet->withdrawableHolding()->toDecimal())->toBe('0.00')
+            ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('0.00')
+            ->and($wallet->usableBalance()->toDecimal())->toBe('6000.00');
     });
 
     it('posts a deposit as a deposit, not as a top-up', function () {

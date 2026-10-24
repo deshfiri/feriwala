@@ -18,6 +18,12 @@ return [
         'usable_help' => 'Available to use for orders and fees.',
         'withdrawable' => 'Withdrawable Balance',
         'withdrawable_help' => 'Available to withdraw to your bank or mobile wallet.',
+        // The two kinds of money inside the total. Platform credit is spent
+        // inside Banij and never withdrawn; the rest can be withdrawn.
+        'platform_credit' => 'Platform credit',
+        'platform_credit_help' => 'Can be spent inside Banij on products, orders and fees. It cannot be withdrawn.',
+        'withdrawable_part' => 'Withdrawable',
+        'withdrawable_part_help' => 'Can be withdrawn, and can also be spent inside Banij.',
         'required_deposit' => 'Required deposit',
         'required_deposit_help' => 'Held against your trading, not spent.',
         'minimum_balance' => 'Minimum balance',
@@ -120,6 +126,7 @@ return [
     'top_up' => [
         'title' => 'Top up your wallet',
         'description' => 'Add money to your wallet. Your account keeps what it is required to hold; the rest is yours to spend.',
+        'platform_credit_note' => 'Money you top up is platform credit: you can spend it inside Banij on products, orders and fees, but it cannot be withdrawn.',
         'amount' => 'Amount (BDT)',
         'minimum' => 'The least you can top up is :amount.',
         'suggested' => 'Adding :amount brings you back to the balance your account is required to hold.',
@@ -217,12 +224,31 @@ return [
             'direction' => 'Direction',
             'credit' => 'Credit — add to the wallet',
             'debit' => 'Debit — take from the wallet',
+            'balance_type' => 'Kind of money',
+            'balance_type_placeholder' => 'Choose the kind of money',
+            'balance_type_debit_help' => 'Optional. Left empty, platform credit is taken first and then withdrawable money. If you choose a kind, only that kind is taken and the debit is refused when there is not enough of it.',
+            'balance_type_platform_credit' => 'Platform credit — spendable inside Banij only',
+            'balance_type_withdrawable' => 'Withdrawable — can be withdrawn',
+            'withdrawable_warning' => 'Withdrawable money can leave the platform. Only choose this when the amount is meant to be paid out.',
+            'platform_credit_help' => 'Platform credit stays inside Banij and can never be withdrawn.',
             'reason' => 'Reason',
             'reason_help' => 'Recorded in the audit log with your name. Ten characters at least.',
             'internal_note' => 'Internal note (optional)',
             'internal_note_help' => 'Staff only. Never shown to the account holder.',
             'confirm' => 'I understand this posts a permanent ledger entry',
             'submit' => 'Post the adjustment',
+        ],
+
+        'convert' => [
+            'action' => 'Convert platform credit',
+            'title' => 'Convert platform credit to withdrawable',
+            'description' => 'Platform credit can only be spent inside Banij. Converting it makes it withdrawable, so it can leave the platform. This cannot be undone.',
+            'available' => 'Platform credit available to convert',
+            'amount' => 'Amount to convert (BDT)',
+            'reason' => 'Reason',
+            'reason_help' => 'Recorded in the audit log with your name. Ten characters at least.',
+            'confirm' => 'I understand this makes the amount withdrawable and cannot be undone',
+            'submit' => 'Convert to withdrawable',
         ],
 
         'reverse' => [
@@ -248,6 +274,8 @@ return [
         ],
 
         'adjusted' => 'Adjustment :reference posted.',
+        'converted' => 'Platform credit converted to withdrawable money.',
+        'supplier_adjusted' => 'Supplier wallet adjustment posted.',
         'reversed' => 'Reversal :reference posted.',
         'nothing_to_reverse' => 'Nothing has been posted for this movement, so there is nothing to reverse.',
     ],

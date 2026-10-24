@@ -5,6 +5,7 @@ namespace App\Domain\Supplier\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Supplier\Actions\SupplierWalletService;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Models\Wallet;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -40,7 +41,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $supplier_id
  * @property string $currency_code
  * @property Money $total
+ * @property Money $platform_credit the part of `total` that can be spent in the platform but never withdrawn
  * @property Money $reserved
+ * @property Money $reserved_platform_credit the part of `reserved` that came from platform credit
  * @property Money $recovery
  * @property CarbonImmutable $created_at
  * @property-read Supplier $supplier
@@ -58,6 +61,8 @@ class SupplierWallet extends Model
     {
         return [
             'total' => MoneyCast::class,
+            'platform_credit' => MoneyCast::class,
+            'reserved_platform_credit' => MoneyCast::class,
             'reserved' => MoneyCast::class,
             'recovery' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
@@ -114,6 +119,120 @@ class SupplierWallet extends Model
         return $this->recovery->isPositive();
     }
 
+    /*
+     * The two kinds of money, and where each sits (D-new) — the same rules as an
+     * account wallet's. `platform_credit` is the stored part of `total` that is
+     * spendable in Banij and never withdrawable; the rest is withdrawable money.
+     * Both are *holdings*. What may be spent or withdrawn is the holding less
+     * what a reservation has claimed from it and, for a withdrawal, less any
+     * outstanding recovery — so nothing becomes withdrawable merely because it is
+     * not platform credit.
+     */
+
+    /**
+     * Platform credit held: spendable inside Banij, never withdrawable.
+     *
+     * Never more than the wallet holds, so a total that fell without it cannot
+     * make the typed split exceed it.
+     */
+    public function platformCredit(): Money
+    {
+        return $this->platform_credit->greaterThan($this->total) ? $this->total : $this->platform_credit;
+    }
+
+    /**
+     * Withdrawable money held: everything that is not platform credit — derived,
+     * never stored, so every balance that predates typed balances is
+     * withdrawable by construction. A holding, not an availability.
+     */
+    public function withdrawableHolding(): Money
+    {
+        return $this->total->minus($this->platformCredit());
+    }
+
+    /** The part of the reserved bucket that came from platform credit. */
+    public function reservedPlatformCredit(): Money
+    {
+        return $this->smaller($this->reserved_platform_credit, $this->reserved);
+    }
+
+    /** The part of the reserved bucket that came from withdrawable money. */
+    public function reservedWithdrawable(): Money
+    {
+        return $this->reserved->minus($this->reservedPlatformCredit());
+    }
+
+    /** Platform credit that no reservation has claimed. */
+    public function platformCreditFree(): Money
+    {
+        return $this->floored($this->platformCredit()->minus($this->reservedPlatformCredit()));
+    }
+
+    /** Withdrawable money that no reservation has claimed. */
+    public function withdrawableFree(): Money
+    {
+        return $this->floored($this->withdrawableHolding()->minus($this->reservedWithdrawable()));
+    }
+
+    /**
+     * Platform credit that can be spent right now: unclaimed, and within what
+     * the wallet as a whole may spend (an outstanding recovery stands against it).
+     */
+    public function platformCreditAvailable(): Money
+    {
+        return $this->smaller($this->platformCreditFree(), $this->availableBalance());
+    }
+
+    /**
+     * What a withdrawal may claim right now: withdrawable money that no
+     * reservation holds, less the outstanding recovery that is owed back to
+     * Banij, and never more than the wallet could spend.
+     */
+    public function availableForWithdrawal(): Money
+    {
+        return $this->smaller(
+            $this->floored($this->withdrawableFree()->minus($this->recovery)),
+            $this->availableBalance(),
+        );
+    }
+
+    /**
+     * Split an amount between the two kinds of money. Left open, platform
+     * credit goes first and withdrawable money pays only the rest; with `$only`
+     * the whole amount comes from that one kind or the call fails — never from
+     * the other.
+     *
+     * @return array{0: Money, 1: Money} platform credit part, withdrawable part
+     *
+     * @throws \LogicException when the kind(s) allowed cannot cover the amount
+     */
+    public function allocateSpend(Money $amount, ?BalanceType $only = null): array
+    {
+        $platformFree = $this->platformCreditFree();
+        $withdrawableFree = $this->withdrawableFree();
+        $zero = Money::zero($this->currency());
+
+        if ($only === BalanceType::PlatformCredit) {
+            [$platform, $withdrawable] = [$amount, $zero];
+        } elseif ($only === BalanceType::Withdrawable) {
+            [$platform, $withdrawable] = [$zero, $amount];
+        } else {
+            $platform = $this->smaller($amount, $platformFree);
+            $withdrawable = $amount->minus($platform);
+        }
+
+        if ($platform->greaterThan($platformFree) || $withdrawable->greaterThan($withdrawableFree)) {
+            throw new \LogicException('The kind(s) of money allowed cannot cover this amount.');
+        }
+
+        return [$platform, $withdrawable];
+    }
+
+    protected function smaller(Money $a, Money $b): Money
+    {
+        return $a->lessThan($b) ? $a : $b;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -122,9 +241,18 @@ class SupplierWallet extends Model
         return [
             'currency' => $this->currency_code,
             'total' => $this->total->jsonSerialize(),
+
+            // What can be done with each kind now; the holdings follow.
+            'platform_credit' => $this->platformCreditAvailable()->jsonSerialize(),
+            'withdrawable' => $this->availableForWithdrawal()->jsonSerialize(),
+            'platform_credit_held' => $this->platformCredit()->jsonSerialize(),
+            'withdrawable_held' => $this->withdrawableHolding()->jsonSerialize(),
+            'reserved_platform_credit' => $this->reservedPlatformCredit()->jsonSerialize(),
+            'reserved_withdrawable' => $this->reservedWithdrawable()->jsonSerialize(),
             'reserved' => $this->reserved->jsonSerialize(),
             'recovery' => $this->recovery->jsonSerialize(),
             'available' => $this->availableBalance()->jsonSerialize(),
+            'available_for_withdrawal' => $this->availableForWithdrawal()->jsonSerialize(),
             'has_outstanding_recovery' => $this->hasOutstandingRecovery(),
         ];
     }

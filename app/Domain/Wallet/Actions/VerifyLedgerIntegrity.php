@@ -2,6 +2,8 @@
 
 namespace App\Domain\Wallet\Actions;
 
+use App\Domain\Wallet\Enums\BalanceType;
+use App\Domain\Wallet\Enums\WalletTransactionStatus;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
 use App\Support\Money\Money;
@@ -108,6 +110,50 @@ class VerifyLedgerIntegrity
                 'stored' => $wallet->total->toDecimal(),
                 'derived' => $derived->toDecimal(),
             ];
+        }
+
+        // The platform-credit part against its own entries. Withdrawable is the
+        // rest of the total, so once the total and this agree, both kinds do.
+        $platform = DB::table('ledger_entries')
+            ->where('wallet_id', $wallet->id)
+            ->where('balance_type', BalanceType::PlatformCredit->value)
+            ->selectRaw('coalesce(sum(credit), 0) - coalesce(sum(debit), 0) as net')
+            ->value('net');
+
+        $net = (string) $platform;
+        assert(is_numeric($net));
+
+        $derivedPlatform = Money::fromDecimal(bcadd($net, '0', 2), $wallet->currency());
+
+        if (! $derivedPlatform->equals($wallet->platform_credit)) {
+            $problems[] = [
+                'wallet' => $wallet->public_id,
+                'problem' => 'platform_credit_mismatch',
+                'stored' => $wallet->platform_credit->toDecimal(),
+                'derived' => $derivedPlatform->toDecimal(),
+            ];
+        }
+
+        // The platform-credit part of what is reserved or held against the open
+        // claims behind it: each claim remembers its own split, and the wallet's
+        // typed counters must be exactly their sum.
+        foreach ([
+            [WalletTransactionStatus::Pending, 'reserved_platform_credit', 'reserved'],
+            [WalletTransactionStatus::OnHold, 'hold_platform_credit', 'hold'],
+        ] as [$status, $column, $bucket]) {
+            $claimed = (string) DB::table('wallet_transactions')
+                ->where('wallet_id', $wallet->id)
+                ->where('status', $status->value)
+                ->sum('platform_credit_amount');
+
+            if (! Money::fromDecimal(bcadd($claimed, '0', 2), $wallet->currency())->equals($wallet->{$column})) {
+                $problems[] = [
+                    'wallet' => $wallet->public_id,
+                    'problem' => $column.'_mismatch',
+                    'stored' => $wallet->{$column}->toDecimal(),
+                    'derived' => bcadd($claimed, '0', 2),
+                ];
+            }
         }
 
         $previous = null;

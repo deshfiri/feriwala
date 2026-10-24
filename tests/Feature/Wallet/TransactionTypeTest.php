@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 
@@ -11,11 +12,12 @@ use App\Domain\Wallet\Enums\LedgerTransactionType;
  */
 
 it('knows the direction of every trading type', function () {
-    // Twenty-two of the twenty-six are one-directional by nature.
+    // Twenty-two of the twenty-six are one-directional by nature, and so is
+    // each half of a balance conversion.
     $directed = collect(LedgerTransactionType::cases())
         ->reject(fn (LedgerTransactionType $type) => $type->isCorrection());
 
-    expect($directed)->toHaveCount(22);
+    expect($directed)->toHaveCount(24);
 
     foreach ($directed as $type) {
         expect($type->direction())->not->toBeNull();
@@ -69,9 +71,41 @@ it('lets a correction go either way', function () {
 
 it('makes every correction carry a reason', function () {
     // A figure that changed for no recorded reason is the first thing an
-    // auditor asks about.
+    // auditor asks about. Turning platform credit into withdrawable money is a
+    // decision of the same weight, so it says why as well.
     foreach (LedgerTransactionType::cases() as $type) {
-        expect($type->requiresReason())->toBe($type->isCorrection());
+        expect($type->requiresReason())->toBe($type->isCorrection() || $type->isConversion());
+    }
+});
+
+it('maps what a customer pays in and what is rewarded to platform credit, and what is earned to withdrawable', function () {
+    foreach ([
+        LedgerTransactionType::DepositCredit,
+        LedgerTransactionType::TopUpCredit,
+        LedgerTransactionType::ReferralRewardCredit,
+        LedgerTransactionType::JoiningRewardCredit,
+        LedgerTransactionType::PromotionalCredit,
+    ] as $type) {
+        expect($type->creditBalanceType())->toBe(BalanceType::PlatformCredit);
+    }
+
+    foreach ([
+        LedgerTransactionType::SalesCredit,
+        LedgerTransactionType::CommissionCredit,
+        LedgerTransactionType::CodCollectionCredit,
+    ] as $type) {
+        expect($type->creditBalanceType())->toBe(BalanceType::Withdrawable);
+    }
+});
+
+it('never defaults the kind of money for a credit a person decides', function () {
+    foreach ([
+        LedgerTransactionType::ManualAdjustment,
+        LedgerTransactionType::ReturnAdjustment,
+        LedgerTransactionType::CommissionReversal,
+        LedgerTransactionType::ReferralRewardReversal,
+    ] as $type) {
+        expect($type->creditBalanceType())->toBeNull();
     }
 });
 

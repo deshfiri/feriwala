@@ -13,8 +13,9 @@ describe('the specification', function () {
         // rather than riding on `account.reject`, Settle manually added for
         // marking a payment paid by hand, and Activate and Assign added for KYC
         // batches (D30) — switching a template live and choosing it for a round
-        // are decisions of their own.
-        expect(PermissionAction::cases())->toHaveCount(27);
+        // are decisions of their own, and Convert balance added for turning
+        // platform credit into withdrawable money.
+        expect(PermissionAction::cases())->toHaveCount(28);
     });
 
     it('defines exactly the twenty-one administrative roles in §32.1', function () {
@@ -215,6 +216,7 @@ describe('sensitive actions', function () {
         expect(PermissionAction::ReleasePayment->isSensitive())->toBeTrue()
             ->and(PermissionAction::AdjustWallet->isSensitive())->toBeTrue()
             ->and(PermissionAction::ReverseTransaction->isSensitive())->toBeTrue()
+            ->and(PermissionAction::ConvertBalance->isSensitive())->toBeTrue()
             ->and(PermissionAction::ViewKycDocuments->isSensitive())->toBeTrue()
             ->and(PermissionAction::ManageBackups->isSensitive())->toBeTrue();
     });

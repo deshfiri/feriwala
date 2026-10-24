@@ -84,6 +84,17 @@ class WalletPolicy
     }
 
     /**
+     * Whether this person may turn platform credit into withdrawable money.
+     *
+     * Its own permission: this is the decision that money which could only be
+     * spent inside Banij may now leave it.
+     */
+    public static function canConvertBalance(User $user): bool
+    {
+        return $user->can(self::wallet(PermissionAction::ConvertBalance));
+    }
+
+    /**
      * Whether this person may read the staff-only notes on an entry.
      *
      * The note is why an administrator did something, written for other

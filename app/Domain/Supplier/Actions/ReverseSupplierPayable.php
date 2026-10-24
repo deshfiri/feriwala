@@ -10,11 +10,13 @@ use App\Domain\Order\Models\OrderReturnItem;
 use App\Domain\Supplier\Data\SupplierPostingContext;
 use App\Domain\Supplier\Enums\PayableChangeSource;
 use App\Domain\Supplier\Enums\PayableStatus;
+use App\Domain\Supplier\Models\SupplierLedgerEntry;
 use App\Domain\Supplier\Models\SupplierPayable;
 use App\Domain\Supplier\Models\SupplierPayableReversal;
 use App\Domain\Supplier\SupplierWalletService;
 use App\Notifications\Supplier\SupplierPayableReversalSettled;
 use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use App\Support\StatusHistory\StatusChange;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -89,10 +91,12 @@ class ReverseSupplierPayable
                 if ($wasSettled) {
                     $wallet = $this->openWallet->handle($locked->supplier, Currency::from($locked->currency_code));
 
+                    $walletKey = 'supplier-payable-reversal-wallet:'.$returnItem->public_id;
+
                     $entry = $this->wallets->debitForReversal($wallet, $amount, new SupplierPostingContext(
                         source: 'payable_reversal',
                         description: "Reversal for payable {$locked->reference}",
-                        idempotencyKey: 'supplier-payable-reversal-wallet:'.$returnItem->public_id,
+                        idempotencyKey: $walletKey,
                         reason: $reason,
                         supplierPayableId: $locked->id,
                         supplierPayableReversalId: $reversal->id,
@@ -100,11 +104,19 @@ class ReverseSupplierPayable
 
                     $reversal->forceFill(['settlement_reversal_reference' => $entry->reference])->save();
 
+                    // One entry per kind of money the debit took, so the whole
+                    // command is read, not only its first entry.
+                    $entries = SupplierLedgerEntry::query()->forCommand($walletKey)->get();
+                    $debited = $entries->reduce(
+                        fn (Money $sum, SupplierLedgerEntry $each) => $sum->plus($each->debit),
+                        Money::zero($amount->currency),
+                    );
+
                     $locked->supplier->notify(
                         (new SupplierPayableReversalSettled(
                             $reversal,
-                            debited: $entry->debit,
-                            recorded: $entry->recovery_after->minus($entry->recovery_before),
+                            debited: $debited,
+                            recorded: ($entries->last() ?? $entry)->recovery_after->minus(($entries->first() ?? $entry)->recovery_before),
                         ))->locale($locked->supplier->locale)
                     );
                 }

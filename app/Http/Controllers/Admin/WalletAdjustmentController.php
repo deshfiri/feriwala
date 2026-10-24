@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Wallet\Actions\CorrectLedgerEntry;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Exceptions\WalletOperationRefused;
 use App\Domain\Wallet\Models\Wallet;
@@ -65,6 +66,15 @@ class WalletAdjustmentController extends Controller
             'amount' => ['required', new DecimalAmountRule($currency)],
             'direction' => ['required', Rule::enum(LedgerDirection::class)],
 
+            // Required for a credit: whether the money can leave the platform is
+            // the one thing about a manual top-up nobody may leave to a default.
+            // A debit may name the kind to take first.
+            'balance_type' => [
+                Rule::requiredIf(fn () => $request->input('direction') === LedgerDirection::Credit->value),
+                'nullable',
+                Rule::enum(BalanceType::class),
+            ],
+
             // Not `nullable`. A balance that changed for no recorded reason is
             // the first thing an auditor asks about (§32.2).
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
@@ -81,6 +91,7 @@ class WalletAdjustmentController extends Controller
                 direction: LedgerDirection::from($validated['direction']),
                 reason: $validated['reason'],
                 internalNote: $validated['internal_note'] ?? null,
+                balanceType: isset($validated['balance_type']) ? BalanceType::from($validated['balance_type']) : null,
             );
         } catch (WalletOperationRefused $refused) {
             // A refusal is an answer to what was asked — most often "there is
@@ -113,9 +124,7 @@ class WalletAdjustmentController extends Controller
             ->with('ledgerEntries')
             ->firstOrFail();
 
-        $entry = $movement->ledgerEntries->last();
-
-        if ($entry === null) {
+        if ($movement->ledgerEntries->isEmpty()) {
             /*
              * A hold or a reservation that has not been captured moved no
              * value, so there is nothing to reverse — releasing it is the
@@ -125,13 +134,15 @@ class WalletAdjustmentController extends Controller
         }
 
         try {
-            $reversal = $this->corrections->reverse($entry, $actor, $validated['reason']);
+            // Every entry the transaction wrote: a spend that used both kinds
+            // of money wrote one for each, and each goes back to its own kind.
+            $reversals = $this->corrections->reverseTransaction($movement, $actor, $validated['reason']);
         } catch (WalletOperationRefused $refused) {
             return back()->withErrors(['reason' => $refused->getMessage()]);
         }
 
         return back()->with('success', __('wallet.admin.reversed', [
-            'reference' => $reversal->reference,
+            'reference' => $reversals[0]->reference,
         ]));
     }
 

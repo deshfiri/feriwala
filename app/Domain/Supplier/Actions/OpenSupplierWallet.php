@@ -40,6 +40,8 @@ class OpenSupplierWallet
                 'supplier_id' => $supplier->id,
                 'currency_code' => $currency->value,
                 'total' => $zero,
+                'platform_credit' => $zero,
+                'reserved_platform_credit' => $zero,
                 'reserved' => $zero,
                 'recovery' => $zero,
             ]);

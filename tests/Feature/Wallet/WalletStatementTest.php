@@ -5,6 +5,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Wallet\Actions\CorrectLedgerEntry;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\Wallet;
@@ -38,6 +39,7 @@ function statementCredit(Wallet $wallet, string $amount, string $description = '
         LedgerTransactionType::TopUpCredit,
         Money::fromDecimal($amount, Currency::BDT),
         new PostingContext(source: 'test', description: $description),
+        BalanceType::Withdrawable,
     );
 }
 
@@ -177,6 +179,7 @@ describe('what a member may never see', function () {
             LedgerDirection::Credit,
             'Goodwill after a courier failure.',
             'Customer complained loudly on social media.',
+            BalanceType::Withdrawable,
         );
 
         $response = $this->actingAs($this->owner)->get(route('wallet.show'));
@@ -294,6 +297,7 @@ describe('the export (§33.7)', function () {
             LedgerDirection::Credit,
             'Goodwill.',
             'Customer complained loudly on social media.',
+            BalanceType::Withdrawable,
         );
 
         $csv = $this->actingAs($this->owner)

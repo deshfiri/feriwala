@@ -34,13 +34,17 @@ export default function WalletBalanceCards({
         { key: 'withdrawable', amount: balances.available_for_withdrawal },
     ];
 
+    // What the total is made of, then what stands against it. Platform credit
+    // can be spent inside Banij and never withdrawn; withdrawable can be both.
     const details = [
-        { key: 'required_deposit', amount: balances.required_deposit },
-        // §24.2 lists this beside the deposit, not instead of it.
-        { key: 'minimum_balance', amount: balances.minimum_balance },
+        { key: 'platform_credit', amount: balances.platform_credit },
+        { key: 'withdrawable_part', amount: balances.withdrawable },
         { key: 'reserved', amount: balances.reserved },
         { key: 'pending', amount: balances.pending },
         { key: 'hold', amount: balances.hold },
+        { key: 'required_deposit', amount: balances.required_deposit },
+        // §24.2 lists this beside the deposit, not instead of it.
+        { key: 'minimum_balance', amount: balances.minimum_balance },
         { key: 'cod_receivable', amount: balances.cod_receivable },
     ];
 

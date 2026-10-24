@@ -112,6 +112,7 @@ class PermissionCatalogue
 
             Module::Wallet->value => [
                 Action::View, Action::AdjustWallet, Action::ReverseTransaction,
+                Action::ConvertBalance,
                 Action::Approve, Action::Export, Action::ManageSettings,
             ],
 

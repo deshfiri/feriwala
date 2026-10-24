@@ -27,6 +27,15 @@ enum PermissionAction: string
     case ReleasePayment = 'release_payment';
     case AdjustWallet = 'adjust_wallet';
     case ReverseTransaction = 'reverse_transaction';
+
+    /**
+     * Turning a wallet's platform credit into withdrawable money (D-new).
+     *
+     * Its own verb, not `adjust_wallet`: an adjustment decides a balance should
+     * change, and this decides that money which could only ever be spent inside
+     * the platform may now leave it. Who may do that is worth granting on its own.
+     */
+    case ConvertBalance = 'convert_balance';
     case ManageSettings = 'manage_settings';
     case ViewSensitiveData = 'view_sensitive_data';
     case ViewKycDocuments = 'view_kyc_documents';
@@ -89,6 +98,7 @@ enum PermissionAction: string
             self::ReleasePayment => 'Release payment',
             self::AdjustWallet => 'Adjust wallet',
             self::ReverseTransaction => 'Reverse transaction',
+            self::ConvertBalance => 'Convert balance',
             self::ManageSettings => 'Manage settings',
             self::ViewSensitiveData => 'View sensitive data',
             self::ViewKycDocuments => 'View KYC documents',
@@ -120,6 +130,7 @@ enum PermissionAction: string
             self::ReleasePayment,
             self::AdjustWallet,
             self::ReverseTransaction,
+            self::ConvertBalance,
             self::ViewSensitiveData,
             self::ViewKycDocuments,
             self::ManageBackups,

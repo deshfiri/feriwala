@@ -20,6 +20,12 @@ export interface WalletBalances {
     total: Money;
     usable: Money;
     available_for_withdrawal: Money;
+    /**
+     * The two kinds of money inside the total (D-new). Platform credit is spent
+     * inside Banij and never withdrawn; withdrawable is the rest.
+     */
+    platform_credit: Money;
+    withdrawable: Money;
     required_deposit: Money;
     /**
      * §24.2's reserved minimum balance — a different promise from the deposit.
@@ -90,6 +96,9 @@ export interface WalletMovement {
 export interface WalletLedgerEntry {
     id?: string;
     reference: string;
+    /** Which kind of money this entry moved; a spend of both writes one each. */
+    balance_type: 'platform_credit' | 'withdrawable';
+    balance_type_label: string;
     debit: Money;
     credit: Money;
     balance_before: Money;

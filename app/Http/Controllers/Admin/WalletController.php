@@ -103,6 +103,7 @@ class WalletController extends Controller
 
             'can' => [
                 'adjust' => WalletPolicy::canAdjust($actor),
+                'convert' => WalletPolicy::canConvertBalance($actor),
                 'reverse' => WalletPolicy::canReverse($actor),
                 'export' => WalletPolicy::canExport($actor, $record),
                 'view_sensitive' => $sensitive,
@@ -136,6 +137,8 @@ class WalletController extends Controller
                     ->map(fn ($entry) => [
                         'id' => $entry->public_id,
                         'reference' => $entry->reference,
+                        'balance_type' => $entry->balance_type->value,
+                        'balance_type_label' => $entry->balance_type->label(),
                         'debit' => $entry->debit->jsonSerialize(),
                         'credit' => $entry->credit->jsonSerialize(),
                         'balance_before' => $entry->balance_before->jsonSerialize(),

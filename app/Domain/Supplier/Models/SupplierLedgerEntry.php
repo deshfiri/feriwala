@@ -6,11 +6,13 @@ use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasReference;
 use App\Domain\Supplier\Enums\SupplierLedgerEntryType;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -31,6 +33,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $supplier_wallet_id
  * @property int $supplier_id
  * @property SupplierLedgerEntryType $type
+ * @property BalanceType $balance_type which kind of money this entry moved; history is withdrawable
+ * @property string|null $conversion_reference shared by the two entries of one platform-credit conversion
  * @property string $source
  * @property int|null $supplier_payable_id
  * @property int|null $supplier_payable_reversal_id
@@ -59,7 +63,7 @@ class SupplierLedgerEntry extends Model
 
     /** The columns a Supplier's own statement may ever see. */
     public const MEMBER_VISIBLE = [
-        'id', 'public_id', 'reference', 'supplier_wallet_id', 'type', 'source',
+        'id', 'public_id', 'reference', 'supplier_wallet_id', 'type', 'balance_type', 'source',
         'debit', 'credit', 'currency_code', 'balance_after',
         'description', 'created_at', 'corrects_ledger_entry_id',
     ];
@@ -95,6 +99,7 @@ class SupplierLedgerEntry extends Model
     {
         return [
             'type' => SupplierLedgerEntryType::class,
+            'balance_type' => BalanceType::class,
             'debit' => MoneyCast::class,
             'credit' => MoneyCast::class,
             'balance_before' => MoneyCast::class,
@@ -166,6 +171,23 @@ class SupplierLedgerEntry extends Model
     public function corrects(): BelongsTo
     {
         return $this->belongsTo(self::class, 'corrects_ledger_entry_id');
+    }
+
+    /**
+     * Every entry one command wrote: the one, or — for a spend that used both
+     * kinds of money — one per kind, whose keys carry the command's own as a
+     * prefix.
+     *
+     * @param  Builder<SupplierLedgerEntry>  $query
+     * @return Builder<SupplierLedgerEntry>
+     */
+    public function scopeForCommand(Builder $query, string $idempotencyKey): Builder
+    {
+        return $query
+            ->where(fn (Builder $keys) => $keys
+                ->where('idempotency_key', $idempotencyKey)
+                ->orWhere('idempotency_key', 'like', $idempotencyKey.':%'))
+            ->orderBy('id');
     }
 
     public function isCredit(): bool

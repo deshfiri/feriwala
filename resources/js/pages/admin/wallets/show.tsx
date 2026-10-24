@@ -12,7 +12,10 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { download, index, show } from '@/routes/admin/wallets';
 import { show as movement } from '@/routes/admin/wallets/transactions';
+import WalletAdjustmentController from '@/actions/App/Http/Controllers/Admin/WalletAdjustmentController';
+import WalletConversionController from '@/actions/App/Http/Controllers/Admin/WalletConversionController';
 import AdjustWalletDialog from '@/pages/admin/wallets/adjust-wallet-dialog';
+import ConvertBalanceDialog from '@/pages/admin/wallets/convert-balance-dialog';
 import type { Money } from '@/lib/money';
 import type { Paginator } from '@/types';
 import type {
@@ -51,6 +54,7 @@ type Props = {
     restrictions: WalletRestrictionRow[];
     can: {
         adjust: boolean;
+        convert: boolean;
         reverse: boolean;
         export: boolean;
         view_sensitive: boolean;
@@ -80,6 +84,7 @@ export default function AdminWalletShow({
 }: Props) {
     const { t, locale } = useTranslation();
     const [adjusting, setAdjusting] = useState(false);
+    const [converting, setConverting] = useState(false);
 
     const when = (value: string | null) =>
         value === null
@@ -112,6 +117,16 @@ export default function AdminWalletShow({
                                     {t('wallet.admin.back')}
                                 </Link>
                             </Button>
+
+                            {can.convert && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConverting(true)}
+                                >
+                                    {t('wallet.admin.convert.action')}
+                                </Button>
+                            )}
 
                             {can.adjust && (
                                 <Button
@@ -257,10 +272,19 @@ export default function AdminWalletShow({
 
             {can.adjust && (
                 <AdjustWalletDialog
-                    walletId={wallet.id}
+                    form={WalletAdjustmentController.store.form(wallet.id)}
                     account={wallet.account}
                     open={adjusting}
                     onOpenChange={setAdjusting}
+                />
+            )}
+
+            {can.convert && (
+                <ConvertBalanceDialog
+                    form={WalletConversionController.store.form(wallet.id)}
+                    platformCredit={balances.platform_credit}
+                    open={converting}
+                    onOpenChange={setConverting}
                 />
             )}
         </>

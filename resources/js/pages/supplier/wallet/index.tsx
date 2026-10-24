@@ -15,6 +15,10 @@ type WalletSummary = {
     currency: string;
     total: Money;
     available: Money;
+    /** The two kinds of money in the total: platform credit is never withdrawn. */
+    platform_credit: Money;
+    withdrawable: Money;
+    available_for_withdrawal: Money;
     reserved: Money;
     recovery: Money;
     has_outstanding_recovery: boolean;
@@ -67,45 +71,87 @@ export default function SupplierWalletIndex({
                     />
                 ) : (
                     <>
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             <SectionCard title={t('supplier.wallet.total')}>
                                 <MoneyAmount
                                     amount={wallet.total}
                                     size="large"
                                 />
                             </SectionCard>
-                            <SectionCard title={t('supplier.wallet.available')}>
+                            <SectionCard
+                                title={t('supplier.wallet.usable')}
+                                description={t('supplier.wallet.usable_help')}
+                            >
                                 <MoneyAmount
                                     amount={wallet.available}
-                                    size="large"
-                                    direction="credit"
-                                />
-                            </SectionCard>
-                            <SectionCard title={t('supplier.wallet.reserved')}>
-                                <MoneyAmount
-                                    amount={wallet.reserved}
                                     size="large"
                                 />
                             </SectionCard>
                             <SectionCard
-                                title={t('supplier.wallet.recovery')}
-                                tone={
-                                    wallet.has_outstanding_recovery
-                                        ? 'destructive'
-                                        : undefined
-                                }
+                                title={t('supplier.wallet.available')}
+                                description={t(
+                                    'supplier.wallet.available_help',
+                                )}
                             >
                                 <MoneyAmount
-                                    amount={wallet.recovery}
+                                    amount={wallet.available_for_withdrawal}
                                     size="large"
-                                    direction={
-                                        wallet.has_outstanding_recovery
-                                            ? 'debit'
-                                            : 'neutral'
-                                    }
+                                    direction="credit"
                                 />
                             </SectionCard>
                         </div>
+
+                        <SectionCard
+                            title={t('supplier.wallet.details_title')}
+                            description={t(
+                                'supplier.wallet.details_description',
+                            )}
+                            headingLevel="h2"
+                        >
+                            <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                                {[
+                                    {
+                                        key: 'platform_credit',
+                                        amount: wallet.platform_credit,
+                                    },
+                                    {
+                                        key: 'withdrawable_part',
+                                        amount: wallet.withdrawable,
+                                    },
+                                    {
+                                        key: 'reserved',
+                                        amount: wallet.reserved,
+                                    },
+                                    {
+                                        key: 'recovery',
+                                        amount: wallet.recovery,
+                                    },
+                                ].map((bucket) => (
+                                    <div
+                                        key={bucket.key}
+                                        className="flex items-baseline justify-between gap-3"
+                                        title={t(
+                                            `supplier.wallet.${bucket.key}_help`,
+                                        )}
+                                    >
+                                        <dt className="text-muted-foreground text-sm">
+                                            {t(`supplier.wallet.${bucket.key}`)}
+                                        </dt>
+                                        <dd>
+                                            <MoneyAmount
+                                                amount={bucket.amount}
+                                                direction={
+                                                    bucket.key === 'recovery' &&
+                                                    wallet.has_outstanding_recovery
+                                                        ? 'debit'
+                                                        : 'neutral'
+                                                }
+                                            />
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </SectionCard>
 
                         {wallet.has_outstanding_recovery && (
                             <p

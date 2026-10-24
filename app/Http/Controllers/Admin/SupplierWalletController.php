@@ -8,7 +8,9 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Supplier\Models\SupplierLedgerEntry;
 use App\Domain\Supplier\Models\SupplierWallet;
 use App\Domain\Supplier\SupplierWalletService;
+use App\Domain\Wallet\Policies\WalletPolicy;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -43,6 +45,8 @@ class SupplierWalletController extends Controller
                 'supplier_id' => $wallet->supplier->public_id,
                 'currency' => $wallet->currency_code,
                 'total' => $wallet->total->jsonSerialize(),
+                'platform_credit' => $wallet->platformCreditAvailable()->jsonSerialize(),
+                'withdrawable' => $wallet->availableForWithdrawal()->jsonSerialize(),
                 'available' => $wallet->availableBalance()->jsonSerialize(),
                 'reserved' => $wallet->reserved->jsonSerialize(),
                 'recovery' => $wallet->recovery->jsonSerialize(),
@@ -67,6 +71,8 @@ class SupplierWalletController extends Controller
                 'reference' => $entry->reference,
                 'type' => $entry->type->value,
                 'type_label' => $entry->type->label(),
+                'balance_type' => $entry->balance_type->value,
+                'balance_type_label' => $entry->balance_type->label(),
                 'is_credit' => $entry->isCredit(),
                 'amount' => $entry->amount()->jsonSerialize(),
                 'balance_after' => $entry->balance_after->jsonSerialize(),
@@ -87,10 +93,17 @@ class SupplierWalletController extends Controller
                 'supplier_id' => $wallet->supplier->public_id,
                 'currency' => $wallet->currency_code,
                 'total' => $wallet->total->jsonSerialize(),
+                'platform_credit' => $wallet->platformCreditAvailable()->jsonSerialize(),
+                'withdrawable' => $wallet->availableForWithdrawal()->jsonSerialize(),
                 'available' => $wallet->availableBalance()->jsonSerialize(),
+                'available_for_withdrawal' => $wallet->availableForWithdrawal()->jsonSerialize(),
                 'reserved' => $wallet->reserved->jsonSerialize(),
                 'recovery' => $wallet->recovery->jsonSerialize(),
                 'has_outstanding_recovery' => $wallet->hasOutstandingRecovery(),
+            ],
+            'can' => [
+                'adjust' => $request->user() instanceof User && WalletPolicy::canAdjust($request->user()),
+                'convert' => $request->user() instanceof User && WalletPolicy::canConvertBalance($request->user()),
             ],
             'entries' => $entries,
         ]);

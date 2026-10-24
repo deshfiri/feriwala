@@ -50,6 +50,9 @@ class OpenWallet
                  * legible is one a caller will eventually read too early.
                  */
                 'total' => $zero,
+                'platform_credit' => $zero,
+                'reserved_platform_credit' => $zero,
+                'hold_platform_credit' => $zero,
                 'required_deposit' => $zero,
                 'minimum_balance' => $zero,
                 'reserved' => $zero,

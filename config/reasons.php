@@ -51,6 +51,10 @@ return [
         'admin.payments.manual-settlement',
         'admin.wallets.adjustments.*',
         'admin.wallets.reversals.*',
+        // Money moved by hand, or made withdrawable, on a wallet or a Supplier's.
+        'admin.wallets.conversions.*',
+        'admin.supplier-wallets.adjustments.*',
+        'admin.supplier-wallets.conversions.*',
         // Revoking a storefront's API credential cuts off a live storefront.
         'admin.websites.credentials.*',
 

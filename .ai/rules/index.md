@@ -13,4 +13,5 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Domain/Notification/**                                                                        | .ai/rules/notification.md   |
 | tests/**                                                                                          | .ai/rules/tests.md          |
 | resources/js/pages/**, resources/js/layouts/**, resources/js/components/**, resources/css/app.css | .ai/rules/ui-surfaces.md    |
+| app/Domain/Wallet/**                                                                              | .ai/rules/wallet.md         |
 | app/Domain/Withdrawal/**                                                                          | .ai/rules/withdrawal.md     |

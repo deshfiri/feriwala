@@ -40,7 +40,7 @@ function accountWithdrawalTestWallet(string $openingCredit = '1000.00'): Wallet
     if ($amount->isPositive()) {
         app(WalletService::class)->credit(
             $wallet,
-            LedgerTransactionType::TopUpCredit,
+            LedgerTransactionType::SalesCredit,
             $amount,
             new PostingContext(source: 'test', description: 'Opening top-up'),
         );
@@ -86,6 +86,62 @@ it('reserves the amount and leaves the ledger untouched', function () {
         // exists for it yet, only for the opening top-up.
         ->and(LedgerEntry::query()->where('wallet_id', $wallet->id)->count())->toBe(1)
         ->and($withdrawal->payout_snapshot['masked_number'])->toBe($method->maskedNumber());
+});
+
+it('never lets platform credit be withdrawn, however much of it there is', function () {
+    $wallet = accountWithdrawalTestWallet('0.00');
+    $account = $wallet->businessAccount;
+    $method = accountWithdrawalTestMethod($account->id);
+
+    // Topped up through a gateway: spendable inside Banij, never withdrawable.
+    app(WalletService::class)->credit(
+        $wallet,
+        LedgerTransactionType::TopUpCredit,
+        Money::fromDecimal('5000.00', Currency::BDT),
+        new PostingContext(source: 'test', description: 'Gateway top-up'),
+    );
+
+    $wallet->refresh();
+
+    expect($wallet->usableBalance()->toDecimal())->toBe('5000.00')
+        ->and($wallet->availableForWithdrawal()->toDecimal())->toBe('0.00');
+
+    expect(fn () => app(RequestAccountWithdrawal::class)->handle(
+        $account, $wallet, $method, Money::fromDecimal('100.00', Currency::BDT), 'request-test:platform-credit',
+    ))->toThrow(AccountWithdrawalRefused::class);
+
+    expect(AccountWithdrawal::query()->count())->toBe(0)
+        ->and($wallet->refresh()->reserved->toDecimal())->toBe('0.00');
+});
+
+it('lets only the withdrawable part of a mixed wallet be withdrawn', function () {
+    $wallet = accountWithdrawalTestWallet('600.00');
+    $account = $wallet->businessAccount;
+    $method = accountWithdrawalTestMethod($account->id);
+
+    app(WalletService::class)->credit(
+        $wallet->refresh(),
+        LedgerTransactionType::TopUpCredit,
+        Money::fromDecimal('5000.00', Currency::BDT),
+        new PostingContext(source: 'test', description: 'Gateway top-up'),
+    );
+
+    $wallet->refresh();
+
+    expect($wallet->availableForWithdrawal()->toDecimal())->toBe('600.00');
+
+    // ৳5,600 is in the wallet, but only ৳600 of it can be withdrawn.
+    expect(fn () => app(RequestAccountWithdrawal::class)->handle(
+        $account, $wallet, $method, Money::fromDecimal('601.00', Currency::BDT), 'request-test:over-withdrawable',
+    ))->toThrow(AccountWithdrawalRefused::class);
+
+    $withdrawal = app(RequestAccountWithdrawal::class)->handle(
+        $account, $wallet->refresh(), $method, Money::fromDecimal('600.00', Currency::BDT), 'request-test:withdrawable-part',
+    );
+
+    expect($withdrawal->amount->toDecimal())->toBe('600.00')
+        ->and($wallet->refresh()->availableForWithdrawal()->toDecimal())->toBe('0.00')
+        ->and($wallet->platformCredit()->toDecimal())->toBe('5000.00');
 });
 
 it('is idempotent on a retried submission', function () {

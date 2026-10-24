@@ -115,6 +115,8 @@ class WalletController extends Controller
                 'entries' => $record->ledgerEntries
                     ->map(fn ($entry) => [
                         'reference' => $entry->reference,
+                        'balance_type' => $entry->balance_type->value,
+                        'balance_type_label' => $entry->balance_type->label(),
                         'debit' => $entry->debit->jsonSerialize(),
                         'credit' => $entry->credit->jsonSerialize(),
                         'balance_before' => $entry->balance_before->jsonSerialize(),

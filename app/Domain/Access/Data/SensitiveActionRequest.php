@@ -57,6 +57,7 @@ class SensitiveActionRequest
             PermissionAction::ReleasePayment,
             PermissionAction::AdjustWallet,
             PermissionAction::ReverseTransaction,
+            PermissionAction::ConvertBalance,
             PermissionAction::SettleManually,
             PermissionAction::ManageBackups,
             PermissionAction::ManageIntegrations,

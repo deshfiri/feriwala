@@ -76,6 +76,13 @@ class WalletController extends Controller
             'currency' => $wallet->currency_code,
             'total' => $wallet->total->jsonSerialize(),
             'available' => $wallet->availableBalance()->jsonSerialize(),
+
+            // The two kinds of money, as what can be done with each now:
+            // platform credit can be spent inside Banij and never withdrawn;
+            // the withdrawable figure is exactly what may be withdrawn.
+            'platform_credit' => $wallet->platformCreditAvailable()->jsonSerialize(),
+            'withdrawable' => $wallet->availableForWithdrawal()->jsonSerialize(),
+            'available_for_withdrawal' => $wallet->availableForWithdrawal()->jsonSerialize(),
             'reserved' => $wallet->reserved->jsonSerialize(),
             'recovery' => $wallet->recovery->jsonSerialize(),
             'has_outstanding_recovery' => $wallet->hasOutstandingRecovery(),
@@ -113,6 +120,8 @@ class WalletController extends Controller
             'reference' => $entry->reference,
             'type' => $entry->type->value,
             'type_label' => $entry->type->label(),
+            'balance_type' => $entry->balance_type->value,
+            'balance_type_label' => $entry->balance_type->label(),
             'is_credit' => $entry->isCredit(),
             'amount' => $entry->amount()->jsonSerialize(),
             'balance_after' => $entry->balance_after->jsonSerialize(),

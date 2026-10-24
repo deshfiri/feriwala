@@ -2,6 +2,7 @@
 
 namespace App\Domain\Wallet\Exceptions;
 
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Support\Money\Money;
 use RuntimeException;
@@ -75,6 +76,48 @@ class WalletOperationRefused extends RuntimeException
             'A %s can go either way, so the direction has to be stated.',
             mb_strtolower($type->label()),
         ));
+    }
+
+    /**
+     * A credit that nothing maps to a kind of money has to be told which.
+     *
+     * Manual top-ups and corrections are staff decisions, so the choice between
+     * platform credit and withdrawable money is theirs and never defaulted.
+     */
+    public static function balanceTypeRequired(LedgerTransactionType $type): self
+    {
+        return new self(sprintf(
+            'A %s must say whether the money is platform credit or withdrawable.',
+            mb_strtolower($type->label()),
+        ));
+    }
+
+    public static function insufficientPlatformCredit(Money $requested, Money $available): self
+    {
+        return new self(sprintf(
+            'There is %s of platform credit available to convert and %s was requested.',
+            $available->format(),
+            $requested->format(),
+        ));
+    }
+
+    /**
+     * The one kind of money a claim, a reversal or a correction named does not
+     * cover it. Never met out of the other kind.
+     */
+    public static function insufficientOfKind(BalanceType $kind, Money $requested, Money $available): self
+    {
+        return new self(sprintf(
+            'There is %s of %s available and %s was requested. The other kind of money is not used in its place.',
+            $available->format(),
+            mb_strtolower($kind->label()),
+            $requested->format(),
+        ));
+    }
+
+    public static function notPermitted(): self
+    {
+        return new self('You are not permitted to do this.');
     }
 
     public static function alreadySettled(string $reference): self

@@ -110,7 +110,8 @@ class WithdrawalController extends Controller
             ]);
 
         return Inertia::render('supplier/withdrawals/create', [
-            'available_balance' => $wallet->availableBalance()->jsonSerialize(),
+            // Only withdrawable money can be withdrawn: platform credit never.
+            'available_balance' => $wallet->availableForWithdrawal()->jsonSerialize(),
             'minimum' => $limits->minimumFor($supplier, $currency)->jsonSerialize(),
             'maximum' => $limits->maximumFor($supplier, $currency)?->jsonSerialize(),
             'currency' => $currency->value,

@@ -73,10 +73,12 @@ use App\Http\Controllers\Admin\SupplierListingLotReviewController;
 use App\Http\Controllers\Admin\SupplierOfferController;
 use App\Http\Controllers\Admin\SupplierPayableController;
 use App\Http\Controllers\Admin\SupplierStockController;
+use App\Http\Controllers\Admin\SupplierWalletAdjustmentController;
 use App\Http\Controllers\Admin\SupplierWalletController;
 use App\Http\Controllers\Admin\SupplierWithdrawalController;
 use App\Http\Controllers\Admin\WalletAdjustmentController;
 use App\Http\Controllers\Admin\WalletController as AdminWalletController;
+use App\Http\Controllers\Admin\WalletConversionController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\WebsiteConnectionController as AdminWebsiteConnectionController;
@@ -1201,6 +1203,20 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('wallets/{wallet}/transactions/{transaction}/reversal', [WalletAdjustmentController::class, 'reverse'])
             ->middleware(RequirePassword::class)
             ->name('wallets.reversals.store');
+
+        // Platform credit into withdrawable money (D-new): its own permission.
+        Route::post('wallets/{wallet}/conversions', [WalletConversionController::class, 'store'])
+            ->middleware(RequirePassword::class)
+            ->name('wallets.conversions.store');
+
+        // The same two jobs on a Supplier's wallet: a manual top-up (or taking
+        // money back), and converting platform credit to withdrawable money.
+        Route::post('supplier-wallets/{wallet}/adjustments', [SupplierWalletAdjustmentController::class, 'adjust'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-wallets.adjustments.store');
+        Route::post('supplier-wallets/{wallet}/conversions', [SupplierWalletAdjustmentController::class, 'convert'])
+            ->middleware(RequirePassword::class)
+            ->name('supplier-wallets.conversions.store');
 
         // Client/Partner withdrawals (§27).
         Route::get('account-withdrawals', [AccountWithdrawalController::class, 'index'])->name('account-withdrawals.index');

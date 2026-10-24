@@ -2,6 +2,7 @@
 
 namespace App\Domain\Supplier\Enums;
 
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 
@@ -48,13 +49,41 @@ enum SupplierLedgerEntryType: string
      */
     case DeliverySuccessFeeDebit = 'delivery_success_fee_debit';
 
+    /*
+     * Converting platform credit into withdrawable money: the two halves of
+     * one decision, each its own entry, sharing a conversion reference. The
+     * total does not change.
+     */
+    case BalanceConversionDebit = 'balance_conversion_debit';
+    case BalanceConversionCredit = 'balance_conversion_credit';
+
     public function direction(): ?LedgerDirection
     {
         return match ($this) {
-            self::SettlementCredit => LedgerDirection::Credit,
-            self::PayableReversalDebit, self::WithdrawalPaidDebit, self::DeliverySuccessFeeDebit => LedgerDirection::Debit,
+            self::SettlementCredit, self::BalanceConversionCredit => LedgerDirection::Credit,
+            self::PayableReversalDebit, self::WithdrawalPaidDebit, self::DeliverySuccessFeeDebit, self::BalanceConversionDebit => LedgerDirection::Debit,
             self::WithdrawalReserved, self::WithdrawalReservationReleased, self::ManualAdjustment => null,
         };
+    }
+
+    /**
+     * The kind of money a credit of this type brings in, where nobody has to
+     * choose (D-new): what a Supplier earned is withdrawable. A manual
+     * adjustment returns null — whether money can leave the platform is a
+     * decision, never a default.
+     */
+    public function creditBalanceType(): ?BalanceType
+    {
+        return match ($this) {
+            self::SettlementCredit, self::BalanceConversionCredit => BalanceType::Withdrawable,
+            self::BalanceConversionDebit => BalanceType::PlatformCredit,
+            default => null,
+        };
+    }
+
+    public function isConversion(): bool
+    {
+        return $this === self::BalanceConversionDebit || $this === self::BalanceConversionCredit;
     }
 
     /**
@@ -67,7 +96,8 @@ enum SupplierLedgerEntryType: string
     public function requiresReason(): bool
     {
         return match ($this) {
-            self::PayableReversalDebit, self::WithdrawalReservationReleased, self::ManualAdjustment => true,
+            self::PayableReversalDebit, self::WithdrawalReservationReleased, self::ManualAdjustment,
+            self::BalanceConversionDebit, self::BalanceConversionCredit => true,
             // Explains itself through the payable and order it points at.
             self::SettlementCredit, self::WithdrawalReserved, self::WithdrawalPaidDebit, self::DeliverySuccessFeeDebit => false,
         };
@@ -75,7 +105,7 @@ enum SupplierLedgerEntryType: string
 
     public function requiresActor(): bool
     {
-        return $this === self::ManualAdjustment;
+        return $this === self::ManualAdjustment || $this->isConversion();
     }
 
     public function label(): string
@@ -88,6 +118,8 @@ enum SupplierLedgerEntryType: string
             self::WithdrawalPaidDebit => 'Withdrawal paid',
             self::ManualAdjustment => 'Manual adjustment',
             self::DeliverySuccessFeeDebit => 'Delivery success fee',
+            self::BalanceConversionDebit => 'Converted from platform credit',
+            self::BalanceConversionCredit => 'Converted to withdrawable',
         };
     }
 }

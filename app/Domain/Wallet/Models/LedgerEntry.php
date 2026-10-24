@@ -7,6 +7,7 @@ use App\Concerns\HasPublicId;
 use App\Concerns\HasReference;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Enums\WalletTransactionStatus;
 use App\Models\User;
@@ -39,6 +40,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $business_account_id
  * @property int|null $user_id
  * @property LedgerTransactionType $type
+ * @property BalanceType $balance_type which kind of money this entry moved; history is withdrawable
+ * @property string|null $conversion_reference shared by the two entries of one platform-credit conversion
  * @property string $source
  * @property int|null $payment_id
  * @property int|null $user_package_id
@@ -69,7 +72,7 @@ class LedgerEntry extends Model
     /** The columns an account member's own statement may ever see. */
     public const MEMBER_VISIBLE = [
         'id', 'public_id', 'reference', 'wallet_id', 'business_account_id',
-        'type', 'source', 'debit', 'credit', 'currency_code',
+        'type', 'balance_type', 'source', 'debit', 'credit', 'currency_code',
         'balance_after', 'status', 'description', 'created_at',
         'corrects_ledger_entry_id',
     ];
@@ -109,6 +112,7 @@ class LedgerEntry extends Model
     {
         return [
             'type' => LedgerTransactionType::class,
+            'balance_type' => BalanceType::class,
             'status' => WalletTransactionStatus::class,
             'debit' => MoneyCast::class,
             'credit' => MoneyCast::class,

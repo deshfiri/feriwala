@@ -80,6 +80,13 @@ export default function WalletTopUp({
                     </div>
                 )}
 
+                <p
+                    className="bg-muted border-border text-muted-foreground rounded-md border px-3 py-2.5 text-sm"
+                    role="note"
+                >
+                    {t('wallet.top_up.platform_credit_note')}
+                </p>
+
                 <SectionCard title={t('wallet.top_up.title')}>
                     <Form
                         {...WalletTopUpController.store.form()}

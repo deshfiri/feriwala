@@ -4,6 +4,7 @@ use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Wallet\Actions\CaptureDepositObligation;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\DepositRefundability;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Models\DepositRule;
@@ -50,6 +51,7 @@ function refundabilityWallet(array $terms = [], string $credit = '5000.00'): Wal
         LedgerTransactionType::TopUpCredit,
         Money::fromDecimal($credit, Currency::BDT),
         new PostingContext(source: 'test', description: 'Opening'),
+        BalanceType::Withdrawable,
     );
 
     app(CaptureDepositObligation::class)->handle(test()->account);

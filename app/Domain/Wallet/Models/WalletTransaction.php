@@ -8,6 +8,7 @@ use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Enums\WalletTransactionStatus;
@@ -39,6 +40,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property LedgerDirection $direction
  * @property string $source
  * @property Money $amount
+ * @property Money $platform_credit_amount how much of the posting was platform credit; the rest was withdrawable
+ * @property string|null $conversion_reference
  * @property string $currency_code
  * @property WalletTransactionStatus $status
  * @property int|null $payment_id
@@ -74,6 +77,7 @@ class WalletTransaction extends Model
             'direction' => LedgerDirection::class,
             'status' => WalletTransactionStatus::class,
             'amount' => MoneyCast::class,
+            'platform_credit_amount' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -144,5 +148,22 @@ class WalletTransaction extends Model
     public function isCredit(): bool
     {
         return $this->direction->isCredit();
+    }
+
+    /**
+     * The kind of money this posting mostly moved.
+     *
+     * The kind a reversal or a refund of this posting must go back into, or be
+     * taken back out of: platform credit when it moved any, otherwise
+     * withdrawable money. A credit is always one kind, so for a credit this is
+     * exact. A spend that used both kinds is described exactly by its ledger
+     * entries — one per kind — and is reversed entry by entry, never through
+     * this.
+     */
+    public function dominantBalanceType(): BalanceType
+    {
+        return $this->platform_credit_amount->isPositive()
+            ? BalanceType::PlatformCredit
+            : BalanceType::Withdrawable;
     }
 }

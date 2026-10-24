@@ -15,6 +15,7 @@ use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Exceptions\WalletOperationRefused;
 use App\Domain\Wallet\Models\LedgerEntry;
+use App\Domain\Wallet\Models\WalletTransaction;
 use App\Domain\Wallet\WalletService;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -97,6 +98,9 @@ class ReverseReferralCommission
                             ->where('wallet_transaction_id', $locked->wallet_transaction_id)
                             ->value('id'),
                     ),
+
+                    // Taken back from the kind of money the reward was paid as.
+                    WalletTransaction::query()->find($locked->wallet_transaction_id)?->dominantBalanceType(),
                 );
             } catch (WalletOperationRefused) {
                 if ($before === CommissionStatus::Paid) {
