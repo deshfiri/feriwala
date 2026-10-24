@@ -1,6 +1,12 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { ArrowLeft, ImageOff, Paperclip, ShoppingBasket } from 'lucide-react';
-import { useState } from 'react';
+import {
+    ArrowLeft,
+    ImageOff,
+    Paperclip,
+    ShoppingBasket,
+    Zap,
+} from 'lucide-react';
+import { useRef, useState } from 'react';
 import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
 import BlockView from '@/components/content-library/block-view';
@@ -595,11 +601,14 @@ function WholesaleTerms({ product }: { product: BrowseDetail }) {
 }
 
 /**
- * Put this product in the wholesale cart (§14, P4-4).
+ * Order this product wholesale (§14, P4-4).
  *
  * Sends only which product, which variation and how many. The server checks the
  * quantity rules and stock again and prices the line itself; the numbers shown
  * here are guidance, not what is charged.
+ *
+ * "Order now" puts the line in the cart and carries straight on to checkout,
+ * where the payment method is chosen; "Add to cart" keeps shopping.
  */
 function AddToCart({
     product,
@@ -612,14 +621,26 @@ function AddToCart({
 }) {
     const { t } = useTranslation();
     const min = product.min_order_quantity ?? 1;
+    const max = product.max_order_quantity;
     const hasVariants = product.variants.length > 0;
+    const orderNow = useRef<HTMLInputElement>(null);
+    const unavailable = stockEnforced && !product.in_stock;
+
+    const choose = (intent: '0' | '1') => () => {
+        if (orderNow.current) {
+            orderNow.current.value = intent;
+        }
+    };
 
     return (
-        <SectionCard title={t('wholesale.cart.add')}>
+        <SectionCard
+            title={t('wholesale.order.title')}
+            description={t('wholesale.order.help')}
+        >
             <Form
                 {...WholesaleCartController.store.form()}
                 options={{ preserveScroll: true }}
-                className="space-y-3"
+                className="space-y-5"
             >
                 {({ errors, processing }) => (
                     <>
@@ -628,61 +649,98 @@ function AddToCart({
                             name="product"
                             value={product.slug}
                         />
+                        <input
+                            ref={orderNow}
+                            type="hidden"
+                            name="order_now"
+                            defaultValue="0"
+                        />
 
-                        {hasVariants && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="cart-variant">
-                                    {t('wholesale.cart.variation')}
-                                </Label>
-                                <select
-                                    id="cart-variant"
-                                    name="variant"
-                                    required
-                                    defaultValue=""
-                                    className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
-                                >
-                                    <option value="" disabled>
-                                        {t('wholesale.cart.choose_variation')}
-                                    </option>
-                                    {product.variants.map((variant) => (
-                                        <option
-                                            key={variant.sku}
-                                            value={variant.sku}
+                        <fieldset className="space-y-3">
+                            <legend className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+                                {t('wholesale.order.what')}
+                            </legend>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {hasVariants && (
+                                    <div className="grid gap-2 sm:col-span-2">
+                                        <Label htmlFor="cart-variant">
+                                            {t('wholesale.cart.variation')}
+                                        </Label>
+                                        <select
+                                            id="cart-variant"
+                                            name="variant"
+                                            required
+                                            defaultValue=""
+                                            className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
                                         >
-                                            {variant.label || variant.sku}
-                                            {variant.in_stock
-                                                ? ''
-                                                : ` — ${t('catalog.browse.out_of_stock')}`}
-                                        </option>
-                                    ))}
-                                </select>
-                                <InputError message={errors.variant} />
-                            </div>
-                        )}
+                                            <option value="" disabled>
+                                                {t(
+                                                    'wholesale.cart.choose_variation',
+                                                )}
+                                            </option>
+                                            {product.variants.map((variant) => (
+                                                <option
+                                                    key={variant.sku}
+                                                    value={variant.sku}
+                                                >
+                                                    {variant.label ||
+                                                        variant.sku}
+                                                    {variant.in_stock
+                                                        ? ''
+                                                        : ` — ${t('catalog.browse.out_of_stock')}`}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError message={errors.variant} />
+                                    </div>
+                                )}
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="cart-quantity">
-                                {t('wholesale.cart.add_quantity')}
-                            </Label>
-                            <Input
-                                id="cart-quantity"
-                                name="quantity"
-                                type="number"
-                                inputMode="numeric"
-                                min={min}
-                                max={product.max_order_quantity ?? undefined}
-                                step={1}
-                                defaultValue={min}
-                                required
-                                className="sm:w-40"
-                            />
-                            <InputError
-                                message={errors.quantity ?? errors.product}
-                            />
-                        </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="cart-quantity">
+                                        {t('wholesale.cart.add_quantity')}
+                                    </Label>
+                                    <Input
+                                        id="cart-quantity"
+                                        name="quantity"
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={min}
+                                        max={max ?? undefined}
+                                        step={1}
+                                        defaultValue={min}
+                                        required
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        {max
+                                            ? t(
+                                                  'wholesale.order.quantity_range',
+                                                  {
+                                                      min,
+                                                      max,
+                                                  },
+                                              )
+                                            : t(
+                                                  'wholesale.order.quantity_min',
+                                                  {
+                                                      min,
+                                                  },
+                                              )}
+                                    </p>
+                                    <InputError
+                                        message={
+                                            errors.quantity ?? errors.product
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        </fieldset>
 
                         {nonConditional && (
-                            <div className="grid gap-2">
+                            <fieldset className="bg-muted/40 space-y-2 rounded-lg border p-3">
+                                <legend className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+                                    {t('wholesale.order.resale')}
+                                </legend>
                                 <MoneyInput
                                     id="cart-resale-amount"
                                     name="resale_amount"
@@ -706,33 +764,48 @@ function AddToCart({
                                             t('wholesale.cart.no_maximum'),
                                     })}
                                 </p>
-                            </div>
+                            </fieldset>
                         )}
 
-                        <div className="flex flex-wrap items-center gap-3">
-                            <Button
-                                type="submit"
-                                disabled={
-                                    processing ||
-                                    (stockEnforced && !product.in_stock)
-                                }
-                            >
-                                {processing ? (
-                                    <Spinner />
-                                ) : (
+                        <div className="space-y-2 border-t pt-4">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <Button
+                                    type="submit"
+                                    onClick={choose('1')}
+                                    disabled={processing || unavailable}
+                                >
+                                    {processing ? (
+                                        <Spinner />
+                                    ) : (
+                                        <Zap
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    )}
+                                    {t('wholesale.order.now')}
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    variant="outline"
+                                    onClick={choose('0')}
+                                    disabled={processing || unavailable}
+                                >
                                     <ShoppingBasket
                                         className="size-4"
                                         aria-hidden="true"
                                     />
-                                )}
-                                {t('wholesale.cart.add')}
-                            </Button>
-                            <Link
-                                href={cartShow()}
-                                className="text-sm underline-offset-4 hover:underline"
-                            >
-                                {t('wholesale.cart.view_cart')}
-                            </Link>
+                                    {t('wholesale.cart.add')}
+                                </Button>
+                                <Link
+                                    href={cartShow()}
+                                    className="text-sm underline-offset-4 hover:underline"
+                                >
+                                    {t('wholesale.cart.view_cart')}
+                                </Link>
+                            </div>
+                            <p className="text-muted-foreground text-xs">
+                                {t('wholesale.order.now_hint')}
+                            </p>
                         </div>
                     </>
                 )}

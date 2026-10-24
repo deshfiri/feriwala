@@ -1,6 +1,17 @@
 <?php
 
 return [
+    'order' => [
+        'title' => 'Order this product',
+        'help' => 'Buy in bulk for yourself, receive the goods, and resell them wherever you sell.',
+        'what' => 'What you are buying',
+        'resale' => 'Your resale price',
+        'now' => 'Order now',
+        'now_hint' => 'Order now goes straight to checkout, where you choose how to pay. Add to cart keeps the item for later.',
+        'quantity_min' => 'Minimum :min',
+        'quantity_range' => 'Between :min and :max',
+    ],
+
     'cart' => [
         'title' => 'Wholesale cart',
         'description' => 'What you intend to buy. Prices, stock and quantity rules are checked again every time this page opens.',

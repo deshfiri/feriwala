@@ -83,6 +83,7 @@ class WholesaleCartController extends Controller
             'variant' => ['nullable', 'string', 'max:64'],
             'quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'resale_amount' => ['nullable', new DecimalAmountRule],
+            'order_now' => ['nullable', 'boolean'],
         ]);
 
         // Only a product this account may buy wholesale is found at all; anything
@@ -106,6 +107,13 @@ class WholesaleCartController extends Controller
         $this->set($request, $account, fn () => $this->setLine->handle($this->person($request), $account, $product, $variant, (int) $validated['quantity'], $resaleAmount));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('wholesale.cart.added', ['name' => $product->name])]);
+
+        // "Order now": the line is in the cart exactly as "Add to cart" leaves it,
+        // and the person carries straight on to checkout, where every figure is
+        // priced and confirmed again.
+        if ($request->boolean('order_now')) {
+            return to_route('wholesale.checkout.show');
+        }
 
         return back();
     }

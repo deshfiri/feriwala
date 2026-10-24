@@ -163,6 +163,33 @@ function wholesaleCartLinesOf(BusinessAccount $account, ?User $user = null): Col
         ->get();
 }
 
+describe('order now', function () {
+    it('puts the line in the cart and carries on to checkout', function () {
+        $owner = $this->karim->owner;
+
+        wholesaleCartAdd($owner, ['product' => $this->kettle->slug, 'quantity' => 10, 'order_now' => '1'])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('wholesale.checkout.show'));
+
+        expect(wholesaleCartLinesOf($this->karim)->sole()->quantity)->toBe(10);
+    });
+
+    it('stays on the product when the line is only added to the cart', function () {
+        wholesaleCartAdd($this->karim->owner, ['product' => $this->kettle->slug, 'quantity' => 10, 'order_now' => '0'])
+            ->assertSessionHasNoErrors()
+            ->assertRedirectContains('/');
+
+        expect(wholesaleCartLinesOf($this->karim))->toHaveCount(1);
+    });
+
+    it('does not reach checkout for a line the account may not buy', function () {
+        wholesaleCartAdd($this->karim->owner, ['product' => 'no-such-product', 'quantity' => 1, 'order_now' => '1'])
+            ->assertNotFound();
+
+        expect(wholesaleCartLinesOf($this->karim))->toBeEmpty();
+    });
+});
+
 describe('setting a line', function () {
     it('sets the quantity rather than adding to it, so a repeated request leaves the same cart', function () {
         $owner = $this->karim->owner;
