@@ -87,7 +87,9 @@ class PartnerStockAvailability
 
         // A Non-Conditional account owns nothing it has not bought: where its
         // own units run out, the storefront sells from central stock instead.
-        $central = $account?->isNonConditional() === true ? $this->units->forUnits($units) : [];
+        // It counts what is allocated to this account too — the figure the ERP
+        // catalogue shows it — so both sides say the same thing.
+        $central = $account?->isNonConditional() === true ? $this->units->forUnits($units, $account) : [];
 
         $answers = [];
 
@@ -137,7 +139,7 @@ class PartnerStockAvailability
             SQL;
 
         if ($account?->isNonConditional() === true) {
-            [$centralSql, $centralBindings] = $this->units->inStockSql($productColumn, null);
+            [$centralSql, $centralBindings] = $this->units->inStockSql($productColumn, $account);
 
             return ["({$sql} OR {$centralSql})", [$account->id, ...$centralBindings]];
         }

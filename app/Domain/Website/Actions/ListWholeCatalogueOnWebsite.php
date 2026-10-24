@@ -136,7 +136,21 @@ class ListWholeCatalogueOnWebsite
      */
     protected function relist(Website $website): int
     {
-        return WebsiteProduct::query()
+        // A product the owner picked but never published would otherwise stay
+        // off the shop for good: the pass below skips every product that has a
+        // row. It stays the owner's own (`auto_listed` unchanged), so a switch
+        // to "selected only" keeps it.
+        $chosen = WebsiteProduct::query()
+            ->where('website_id', $website->id)
+            ->where('status', WebsiteProductStatus::Selected->value)
+            ->whereNotNull('price')
+            ->update([
+                'status' => WebsiteProductStatus::Published->value,
+                'published_at' => CarbonImmutable::now(),
+                'sync_status' => WebsiteSyncStatus::Pending->value,
+            ]);
+
+        return $chosen + WebsiteProduct::query()
             ->where('website_id', $website->id)
             ->where('auto_listed', true)
             ->where('status', WebsiteProductStatus::Unpublished->value)

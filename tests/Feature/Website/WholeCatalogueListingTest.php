@@ -8,6 +8,8 @@ use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Illuminate\Testing\TestResponse;
 
 /**
@@ -88,6 +90,28 @@ describe('the default listing', function () {
         app()->terminate();
 
         expect(WebsiteProduct::query()->sole()->auto_listed)->toBeTrue();
+        wholeCatalogueListing()->assertOk()->assertJsonCount(1, 'data');
+    });
+
+    it('puts on sale a product the owner picked but never published, and keeps it the owner\'s own', function () {
+        wholeCatalogueNonConditional();
+        WebsiteProduct::create([
+            'website_id' => $this->website->id,
+            'business_account_id' => $this->account->id,
+            'product_id' => $this->product->id,
+            'status' => WebsiteProductStatus::Selected,
+            'currency_code' => $this->website->currency_code,
+            'price' => Money::fromDecimal('1250.00', Currency::BDT),
+        ]);
+
+        wholeCatalogueSweep();
+
+        $row = WebsiteProduct::query()->sole();
+
+        expect($row->status)->toBe(WebsiteProductStatus::Published)
+            ->and($row->auto_listed)->toBeFalse()
+            ->and($row->price?->toDecimal())->toBe('1250.00');
+
         wholeCatalogueListing()->assertOk()->assertJsonCount(1, 'data');
     });
 

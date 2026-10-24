@@ -69,6 +69,11 @@ class WebsiteOrderRefused extends RuntimeException
         ]);
     }
 
+    public static function priceOutsideRules(string $sku): self
+    {
+        return new self(422, 'price_outside_rules', 'That product is not on sale at its current price on this website.', ['sku' => $sku]);
+    }
+
     public static function paymentUnverified(): self
     {
         return new self(422, 'payment_unverified', 'A payment cannot be claimed by the storefront. Feriwala opens the payment and confirms it with the gateway.');

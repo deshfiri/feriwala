@@ -2,6 +2,7 @@
 
 namespace App\Domain\Order\Actions;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
@@ -25,10 +26,12 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Queries\PriceWebsiteOrder;
 use App\Domain\Order\WebsiteCheckoutRules;
+use App\Domain\Package\Entitlements;
 use App\Domain\Website\Actions\RecordWebsiteCustomer;
 use App\Domain\Website\CheckoutVerification;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
+use App\Domain\Website\Queries\ResolveWebsitePriceRule;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Concurrency\DistributedLock;
@@ -91,6 +94,8 @@ class PlaceWebsiteOrder
         protected DistributedLock $lock,
         protected ReservationWindows $windows,
         protected WholesalePriceResolver $wholesalePrices,
+        protected ResolveWebsitePriceRule $priceRules,
+        protected Entitlements $entitlements,
     ) {}
 
     /**
@@ -233,9 +238,15 @@ class PlaceWebsiteOrder
 
         $payment->payable()->associate($order);
 
+        $nonConditional = $account->isNonConditional();
+
+        if ($nonConditional) {
+            $this->assertPricedWithinRules($account, $quote);
+        }
+
         $reservations = $this->reserve($order, $website, $quote, $submission->reservationKind());
 
-        $this->writeLines($order, $quote, $reservations, $website->businessAccount->isNonConditional());
+        $this->writeLines($order, $quote, $reservations, $nonConditional);
 
         /*
          * A cash-on-delivery payment names no gateway: the money is collected
@@ -315,6 +326,46 @@ class PlaceWebsiteOrder
     }
 
     /**
+     * A Non-Conditional store's selling price must still be one the platform's
+     * pricing rules allow: a price below the minimum, above the maximum or the
+     * margin ceiling is refused here whatever it was when the product was
+     * listed, because a partner's profit is measured from it.
+     *
+     * The platform's own suggested price is always acceptable.
+     *
+     * @throws WebsiteOrderRefused
+     */
+    protected function assertPricedWithinRules(BusinessAccount $account, WebsiteOrderQuote $quote): void
+    {
+        $package = $this->entitlements->activePackage($account)?->package;
+
+        foreach ($quote->lines as $line) {
+            $terms = $this->priceRules->for($line->product, $package);
+
+            if ($terms->suggested?->equals($line->unitPrice) === true) {
+                continue;
+            }
+
+            if ($terms->refusalFor($line->unitPrice) !== null) {
+                throw WebsiteOrderRefused::priceOutsideRules($line->sku);
+            }
+        }
+    }
+
+    /**
+     * The suggested selling price of a line, times its quantity, as the
+     * platform keeps it from a Non-Conditional sale — null when the product has
+     * none, in which case the line settles on its product cost as it always did.
+     */
+    protected function platformRetainedFor(Order $order, WebsiteOrderLine $line): ?Money
+    {
+        $package = $this->entitlements->activePackage($order->businessAccount)?->package;
+        $suggested = $this->priceRules->for($line->product, $package)->suggested;
+
+        return $suggested?->isPositive() === true ? $suggested->multipliedBy($line->quantity) : null;
+    }
+
+    /**
      * Hold every line's stock for the website's owner, in product order — from
      * the units that owner bought (D34). Supplier offers are never drawn on for a
      * storefront order, and a line the owner has too few of refuses the order:
@@ -368,6 +419,7 @@ class PlaceWebsiteOrder
                         $line->quantity,
                         $kind,
                         $reference,
+                        $website->businessAccount,
                     );
                 }
             } catch (InventoryRefused) {
@@ -432,6 +484,10 @@ class PlaceWebsiteOrder
                 'product_cost' => $fromCentral
                     ? $this->wholesalePrices->unitPrice($line->product, $line->variant, $line->quantity)->multipliedBy($line->quantity)
                     : null,
+
+                // What the platform keeps, frozen now: the partner's profit is
+                // measured from this and never from the product's base cost.
+                'platform_retained_amount' => $fromCentral ? $this->platformRetainedFor($order, $line) : null,
                 'tax_code' => $taxed ? $line->tax->code : null,
                 'tax_rate_basis_points' => $taxed ? $line->tax->rateBasisPoints : null,
                 'tax_mode' => $taxed ? $line->tax->mode->value : null,

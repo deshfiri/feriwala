@@ -72,6 +72,7 @@ class ReceiveReturnedItems
         protected PartnerStock $partnerStock,
         protected SupplierStockLedger $supplierLedger,
         protected ReverseSupplierPayable $supplierPayables,
+        protected ReverseOrderProceedsSettlement $proceeds,
         protected AnnounceReturnStatus $announcements,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
@@ -207,6 +208,10 @@ class ReceiveReturnedItems
             // Nothing arrived for this line. Recorded, with nothing to move.
             return;
         }
+
+        // A profit already credited on the returned units is taken back, out of
+        // the kind of money it was credited as. Never fails the return itself.
+        $this->proceeds->forReturn($item);
 
         $orderItem = $item->orderItem;
 

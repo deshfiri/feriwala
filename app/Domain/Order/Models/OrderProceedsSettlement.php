@@ -29,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property Money|null $cod_amount_collected
  * @property CarbonImmutable|null $eligible_at
  * @property Money|null $reseller_earning
+ * @property Money $reversed_amount how much of the credited earning returns have taken back
  * @property bool $flagged_for_review
  * @property int|null $wallet_transaction_id
  * @property CarbonImmutable $created_at
@@ -62,6 +63,7 @@ class OrderProceedsSettlement extends Model
             'recovered_amount' => MoneyCast::class,
             'cod_amount_collected' => MoneyCast::class,
             'reseller_earning' => MoneyCast::class,
+            'reversed_amount' => MoneyCast::class,
             'flagged_for_review' => 'boolean',
             'delivered_at' => 'immutable_datetime',
             'cod_collected_at' => 'immutable_datetime',
