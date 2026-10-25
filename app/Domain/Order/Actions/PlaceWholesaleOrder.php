@@ -25,6 +25,7 @@ use App\Domain\Supplier\Actions\AccrueSupplierPayable;
 use App\Domain\Supplier\Actions\AllocateSupplierOrderLine;
 use App\Domain\Supplier\Data\SupplierAllocation;
 use App\Domain\Supplier\Exceptions\SupplierAllocationRefused;
+use App\Domain\Wallet\WalletPaymentMethod;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Data\CheckoutLineCharge;
 use App\Domain\Wholesale\Data\CheckoutQuote;
@@ -210,7 +211,9 @@ class PlaceWholesaleOrder
             throw OrderRefused::checkoutChanged();
         }
 
-        if (! in_array($cart->payment_method, $this->gateways->availableFor($quote->total->currency), true)) {
+        $payWithWallet = WalletPaymentMethod::is($cart->payment_method);
+
+        if (! $payWithWallet && ! in_array($cart->payment_method, $this->gateways->availableFor($quote->total->currency), true)) {
             throw OrderRefused::paymentMethodUnavailable();
         }
 
@@ -218,9 +221,14 @@ class PlaceWholesaleOrder
             throw OrderRefused::nothingToPay();
         }
 
-        $deliveryOnly = $account->isNonConditional();
+        $nonConditional = $account->isNonConditional();
 
-        if ($deliveryOnly) {
+        // A Non-Conditional account owes only the delivery charge now — unless it
+        // pays from the wallet, which is buying the goods outright: the whole total
+        // is charged and nothing is left to recover from the COD amount.
+        $deliveryOnly = $nonConditional && ! $payWithWallet;
+
+        if ($nonConditional) {
             foreach ($quote->lineCharges as $charge) {
                 if ($charge->line->item->resale_amount === null) {
                     // Most likely the line was added before the account's
@@ -242,6 +250,13 @@ class PlaceWholesaleOrder
                     ? 'A Non-Conditional wholesale payment must come to the delivery charge alone.'
                     : 'A wholesale payment must come to the checkout total.'
             );
+        }
+
+        // Refused before an order is placed and stock held for a payment the
+        // wallet could not make. The payment itself re-checks under the wallet's
+        // lock; this only keeps an unpayable order from being created.
+        if ($payWithWallet && ! WalletPaymentMethod::canCover($account, $paymentQuote->total())) {
+            throw OrderRefused::walletInsufficient();
         }
 
         $payment = $this->payments->handle(
@@ -268,9 +283,12 @@ class PlaceWholesaleOrder
         $payment->forceFill([
             'gateway' => $cart->payment_method,
             // Stamped now and never recalculated, as every checkout does (§26.4).
-            'gateway_mode' => $this->gateways->driver($cart->payment_method)->isSandbox()
-                ? GatewayCredentials::SANDBOX
-                : GatewayCredentials::LIVE,
+            // The wallet is no gateway and has no mode.
+            'gateway_mode' => $payWithWallet
+                ? null
+                : ($this->gateways->driver($cart->payment_method)->isSandbox()
+                    ? GatewayCredentials::SANDBOX
+                    : GatewayCredentials::LIVE),
             'expires_at' => $this->paymentDeadline($reservations),
         ])->save();
 

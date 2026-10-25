@@ -354,6 +354,8 @@ return [
     'refused' => [
         'checkout_not_confirmed' => 'Confirm the order summary before paying.',
         'nothing_to_pay' => 'There is nothing to pay for this order.',
+        'wallet_insufficient' => 'Your wallet does not have enough to pay this order. Add money to the wallet or choose another payment method.',
+        'wallet_unavailable' => 'This order cannot be paid from the wallet right now. Choose another payment method.',
         'already_paid_elsewhere' => 'This order was already paid through its first payment method, so the method cannot be changed. We are confirming it.',
         'stock_unavailable' => 'Some of the stock in your order is no longer available. Review your cart and confirm again.',
         'awaiting_payment' => 'This cart already has an order waiting for payment. Pay for it or cancel it first.',
@@ -656,6 +658,7 @@ return [
         'title' => 'Pay and place order',
         'body' => 'The stock is held for you while you pay. You pay :total through :gateway.',
         'non_conditional_note' => 'This is the delivery charge only. The product cost is recovered from the amount collected at delivery, not charged now.',
+        'wallet_full_note' => 'Paying from the wallet buys these goods outright: the whole order total is charged now, and nothing is recovered from the amount collected at delivery.',
         'note' => 'Note for this order (optional)',
         'submit' => 'Pay :total',
         'submitting' => 'Placing your order…',

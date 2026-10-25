@@ -36,17 +36,13 @@ import type {
     WholesaleOrderDetail,
 } from '@/types/orders';
 import type { CheckoutAddress } from '@/types/wholesale';
-import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
-
-type PaymentMethodOption = {
-    name: string;
-    label: string;
-    fx?: GatewayFx | null;
-};
+import PaymentMethodOption, {
+    type PaymentMethodChoice,
+} from '@/components/payment-method-option';
 
 type Props = {
     order: WholesaleOrderDetail;
-    payment_methods?: PaymentMethodOption[];
+    payment_methods?: PaymentMethodChoice[];
 };
 
 /** Once an order is in any of these, it has left the warehouse. */
@@ -433,16 +429,17 @@ function OrderActions({
     order,
     can,
     methods,
-}: Props & { can: WholesaleOrderAbilities; methods: PaymentMethodOption[] }) {
+}: Props & { can: WholesaleOrderAbilities; methods: PaymentMethodChoice[] }) {
     const { t } = useTranslation();
     const currentGateway = order.payment?.gateway;
+    const usable = methods.filter((option) => option.sufficient !== false);
     const [method, setMethod] = useState(
-        methods.find(
+        usable.find(
             (option) =>
                 option.label === currentGateway ||
                 option.name === currentGateway,
         )?.name ??
-            methods[0]?.name ??
+            usable[0]?.name ??
             '',
     );
     const cancelForm = useForm({});
@@ -462,7 +459,7 @@ function OrderActions({
                     <Form {...WholesaleOrderController.pay.form(order.id)}>
                         {({ errors, processing }) => (
                             <div className="space-y-4">
-                                {methods.length > 1 && (
+                                {methods.length > 0 && (
                                     <fieldset className="space-y-2">
                                         <legend className="mb-1 text-sm font-medium">
                                             {t('orders.actions.method')}
@@ -471,36 +468,16 @@ function OrderActions({
                                             {t('orders.actions.method_help')}
                                         </p>
                                         {methods.map((option) => (
-                                            <label
+                                            <PaymentMethodOption
                                                 key={option.name}
-                                                className={cn(
-                                                    'flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition-colors',
+                                                option={option}
+                                                selected={
                                                     method === option.name
-                                                        ? 'border-brand bg-brand-subtle'
-                                                        : 'border-input hover:bg-muted',
-                                                )}
-                                            >
-                                                <input
-                                                    type="radio"
-                                                    name="payment_method"
-                                                    value={option.name}
-                                                    checked={
-                                                        method === option.name
-                                                    }
-                                                    onChange={() =>
-                                                        setMethod(option.name)
-                                                    }
-                                                    className="accent-brand"
-                                                />
-                                                <span className="min-w-0">
-                                                    <span className="font-medium">
-                                                        {option.label}
-                                                    </span>
-                                                    <GatewayFxNote
-                                                        fx={option.fx}
-                                                    />
-                                                </span>
-                                            </label>
+                                                }
+                                                onSelect={() =>
+                                                    setMethod(option.name)
+                                                }
+                                            />
                                         ))}
                                         <InputError
                                             message={errors.payment_method}
@@ -511,7 +488,7 @@ function OrderActions({
                                     type="submit"
                                     size="lg"
                                     className="w-full"
-                                    disabled={processing}
+                                    disabled={processing || method === ''}
                                 >
                                     {processing ? (
                                         <Spinner />

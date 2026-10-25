@@ -123,6 +123,16 @@ return [
         'withdrawable_after_liabilities' => 'Withdrawable once liabilities are settled',
     ],
 
+    'pay' => [
+        'method' => 'Wallet',
+        'available' => 'Available to spend: :amount',
+        'insufficient' => 'Not enough in your wallet for this payment.',
+        'no_wallet' => 'Your wallet is not open yet.',
+        'paid' => 'Paid from your wallet.',
+        'description' => 'Wholesale order :order',
+        'refund_description' => 'Refund for wholesale order :order',
+    ],
+
     'top_up' => [
         'title' => 'Top up your wallet',
         'description' => 'Add money to your wallet. Your account keeps what it is required to hold; the rest is yours to spend.',

@@ -143,6 +143,11 @@ class OrderItem extends Model
      */
     public function recoverableAmount(): Money
     {
+        // Paid for in full at checkout: nothing is recovered from the proceeds.
+        if ($this->order->productCostWasPaid()) {
+            return Money::zero($this->line_total->currency);
+        }
+
         $kept = $this->platform_retained_amount ?? $this->product_cost;
 
         return $kept === null

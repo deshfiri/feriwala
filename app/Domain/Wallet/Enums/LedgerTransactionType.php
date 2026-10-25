@@ -62,6 +62,17 @@ enum LedgerTransactionType: string
     case BalanceConversionCredit = 'balance_conversion_credit';
 
     /**
+     * An order paid out of the wallet, and the money coming back when it is
+     * refunded. The platform's own, like the conversions: §23.1 predates paying
+     * an order from the wallet.
+     *
+     * The refund credit has no default kind — it goes back as the kind that was
+     * spent, which only the payment it answers knows.
+     */
+    case WholesaleOrderDebit = 'wholesale_order_debit';
+    case OrderRefundCredit = 'order_refund_credit';
+
+    /**
      * The kind of money a credit of this type brings in, where that is not a
      * decision somebody has to make (D-new).
      *
@@ -116,9 +127,11 @@ enum LedgerTransactionType: string
             self::JoiningRewardCredit,
             self::CodCollectionCredit,
             self::PromotionalCredit,
-            self::BalanceConversionCredit => LedgerDirection::Credit,
+            self::BalanceConversionCredit,
+            self::OrderRefundCredit => LedgerDirection::Credit,
 
             self::BalanceConversionDebit,
+            self::WholesaleOrderDebit,
             self::RegistrationFeeDebit,
             self::PackageFeeDebit,
             self::WebsiteSetupDebit,
@@ -216,6 +229,8 @@ enum LedgerTransactionType: string
             self::ManualAdjustment => 'Manual adjustment',
             self::BalanceConversionDebit => 'Converted from platform credit',
             self::BalanceConversionCredit => 'Converted to withdrawable',
+            self::WholesaleOrderDebit => 'Wholesale order',
+            self::OrderRefundCredit => 'Order refund',
         };
     }
 }

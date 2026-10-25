@@ -191,10 +191,11 @@ describe('the transaction types', function () {
         // ledger migrated every time a module lands is a ledger whose history
         // gets renumbered.
         $named = collect(LedgerTransactionType::cases())
-            ->reject(fn (LedgerTransactionType $type) => $type->isConversion());
+            ->reject(fn (LedgerTransactionType $type) => $type->isConversion()
+                || in_array($type, [LedgerTransactionType::WholesaleOrderDebit, LedgerTransactionType::OrderRefundCredit], true));
 
-        // The two halves of a balance conversion are the platform's own, not
-        // part of §23.1's list.
+        // The two halves of a balance conversion and the two of paying an order
+        // from the wallet are the platform's own, not part of §23.1's list.
         expect($named)->toHaveCount(26);
     });
 

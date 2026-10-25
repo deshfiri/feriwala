@@ -17,6 +17,7 @@ use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Billing\PaymentLogRedactor;
 use App\Domain\Billing\Queries\RefundableAmount;
 use App\Domain\Referral\Actions\ReverseQualifyingEvent;
+use App\Domain\Wallet\WalletPaymentMethod;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\RefundIntent;
 use App\Integrations\Payment\Data\RefundResult;
@@ -66,6 +67,7 @@ class ProcessRefund
         protected DatabaseManager $database,
         protected LogManager $log,
         protected ReverseQualifyingEvent $referralReversal,
+        protected RefundPaymentToWallet $walletRefunds,
     ) {}
 
     /**
@@ -134,7 +136,10 @@ class ProcessRefund
                 throw RefundRefused::noGateway();
             }
 
-            $driver = $this->gateways->driver($gateway);
+            // A payment taken from the wallet goes back to the wallet: nothing to
+            // ask of a provider, so no driver and no gateway capability.
+            $viaWallet = WalletPaymentMethod::is($gateway);
+            $driver = $viaWallet ? null : $this->gateways->driver($gateway);
 
             /*
              * What is left, read inside the lock. Approved refunds count, so
@@ -154,7 +159,7 @@ class ProcessRefund
                 ? GatewayCapability::RefundFull
                 : GatewayCapability::RefundPartial;
 
-            if (! $driver->supports($capability)) {
+            if ($driver !== null && ! $driver->supports($capability)) {
                 throw RefundRefused::unsupported($gateway, $capability);
             }
 
@@ -192,6 +197,14 @@ class ProcessRefund
     {
         /** @var Payment $payment */
         $payment = $request->payment()->firstOrFail();
+
+        if (WalletPaymentMethod::is($request->gateway)) {
+            $result = $this->walletRefunds->handle($payment, $request);
+
+            $this->record($payment, $request, $result->outcome->value, $result->raw);
+
+            return $this->apply($payment, $request, $result);
+        }
 
         $driver = $this->gateways->driver((string) $request->gateway);
 

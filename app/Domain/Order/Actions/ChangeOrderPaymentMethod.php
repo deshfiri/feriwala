@@ -10,6 +10,7 @@ use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Wallet\WalletPaymentMethod;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\Gateways\GatewayCredentials;
@@ -100,7 +101,15 @@ class ChangeOrderPaymentMethod
             return null;
         }
 
-        if (! in_array($gateway, $this->gateways->availableFor($payment->amount->currency), true)) {
+        $toWallet = WalletPaymentMethod::is($gateway);
+
+        if ($toWallet) {
+            $account = $order->businessAccount()->firstOrFail();
+
+            if (! WalletPaymentMethod::canCover($account, $payment->amount)) {
+                throw OrderRefused::walletInsufficient();
+            }
+        } elseif (! in_array($gateway, $this->gateways->availableFor($payment->amount->currency), true)) {
             throw OrderRefused::paymentMethodUnavailable();
         }
 
@@ -110,12 +119,13 @@ class ChangeOrderPaymentMethod
             return $alreadyPaid;
         }
 
-        $driver = $this->gateways->driver($gateway);
-
         $payment->forceFill([
             'gateway' => $gateway,
-            // Stamped for the gateway the payment will now be taken through.
-            'gateway_mode' => $driver->isSandbox() ? GatewayCredentials::SANDBOX : GatewayCredentials::LIVE,
+            // Stamped for the gateway the payment will now be taken through; the
+            // wallet is no gateway and has no mode.
+            'gateway_mode' => $toWallet
+                ? null
+                : ($this->gateways->driver($gateway)->isSandbox() ? GatewayCredentials::SANDBOX : GatewayCredentials::LIVE),
             // Belonged to the previous gateway's attempt.
             'gateway_reference' => null,
             'gateway_session_reference' => null,

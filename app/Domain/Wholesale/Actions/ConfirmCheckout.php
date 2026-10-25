@@ -3,6 +3,7 @@
 namespace App\Domain\Wholesale\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Wallet\WalletPaymentMethod;
 use App\Domain\Wholesale\Exceptions\CheckoutRefused;
 use App\Domain\Wholesale\Models\Cart;
 use App\Domain\Wholesale\Queries\PriceCheckout;
@@ -58,7 +59,13 @@ class ConfirmCheckout
                 throw CheckoutRefused::addressesMissing();
             }
 
-            if (! in_array($paymentMethod, $this->gateways->availableFor($quote->total->currency), true)) {
+            if (WalletPaymentMethod::is($paymentMethod)) {
+                // The wallet buys the goods outright, so it is charged the whole
+                // total even for a Non-Conditional account.
+                if (! WalletPaymentMethod::canCover($account, $quote->total)) {
+                    throw CheckoutRefused::walletInsufficient();
+                }
+            } elseif (! in_array($paymentMethod, $this->gateways->availableFor($quote->total->currency), true)) {
                 throw CheckoutRefused::paymentMethodUnavailable();
             }
 

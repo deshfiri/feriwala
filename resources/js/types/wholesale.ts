@@ -117,6 +117,10 @@ export type CheckoutPaymentMethod = {
     label: string;
     /** Set when the gateway is charged in another currency at the administrator's rate. */
     fx?: GatewayFx | null;
+    /** The wallet's spendable balance; gateways carry none. */
+    balance?: Money | null;
+    /** False for a wallet that cannot cover the payment. */
+    sufficient?: boolean;
 };
 
 /**

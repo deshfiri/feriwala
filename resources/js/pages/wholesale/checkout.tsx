@@ -28,7 +28,7 @@ import { show as cartShow } from '@/routes/wholesale/cart';
 import { show } from '@/routes/wholesale/checkout';
 import { show as orderShow } from '@/routes/wholesale/orders';
 import type { CheckoutSummary } from '@/types/wholesale';
-import GatewayFxNote from '@/components/gateway-fx-note';
+import PaymentMethodOption from '@/components/payment-method-option';
 
 type Props = {
     checkout: CheckoutSummary;
@@ -429,10 +429,13 @@ function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
     const confirmation = checkout.confirmation;
     const methods = checkout.payment_methods;
     const previous = confirmation?.payment_method.name;
+    const usableMethods = methods.filter(
+        (option) => option.sufficient !== false,
+    );
     const [method, setMethod] = useState(
-        methods.some((option) => option.name === previous)
+        usableMethods.some((option) => option.name === previous)
             ? (previous ?? '')
-            : (methods[0]?.name ?? ''),
+            : (usableMethods[0]?.name ?? ''),
     );
 
     if (confirmation?.status === 'confirmed') {
@@ -514,33 +517,15 @@ function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
                             </legend>
 
                             {methods.map((option) => (
-                                <label
+                                <PaymentMethodOption
                                     key={option.name}
-                                    className={cn(
-                                        'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm',
-                                        method === option.name
-                                            ? 'border-brand bg-brand-subtle'
-                                            : 'border-input hover:bg-muted',
-                                    )}
-                                >
-                                    <input
-                                        type="radio"
-                                        name="payment_method"
-                                        value={option.name}
-                                        checked={method === option.name}
-                                        onChange={() => setMethod(option.name)}
-                                        className="accent-brand"
-                                    />
-                                    <span className="min-w-0">
-                                        <span className="font-medium">
-                                            {option.label}
-                                        </span>
-                                        <GatewayFxNote fx={option.fx} />
-                                    </span>
-                                </label>
+                                    option={option}
+                                    selected={method === option.name}
+                                    onSelect={() => setMethod(option.name)}
+                                />
                             ))}
 
-                            {methods.length === 0 && (
+                            {usableMethods.length === 0 && (
                                 <p className="text-danger text-sm">
                                     {t('wholesale.checkout.payment.none')}
                                 </p>
@@ -561,7 +546,7 @@ function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
                             className="w-full"
                             disabled={
                                 processing ||
-                                methods.length === 0 ||
+                                method === '' ||
                                 !checkout.ready_to_confirm
                             }
                         >
@@ -590,7 +575,10 @@ function PayPanel({ checkout }: { checkout: CheckoutSummary }) {
     const { t } = useTranslation();
     // What is actually charged now — the delivery charge alone for a
     // Non-Conditional account, the confirmed total otherwise (D-new).
-    const total = checkout.non_conditional
+    // The wallet buys the goods outright, so it is charged the whole total.
+    const viaWallet = checkout.confirmation?.payment_method.name === 'wallet';
+    const deliveryOnly = checkout.non_conditional && !viaWallet;
+    const total = deliveryOnly
         ? checkout.amount_due_now.formatted
         : (checkout.confirmation?.total.formatted ?? '');
     const gateway = checkout.confirmation?.payment_method.label ?? '';
@@ -615,7 +603,11 @@ function PayPanel({ checkout }: { checkout: CheckoutSummary }) {
 
                         {checkout.non_conditional && (
                             <p className="text-muted-foreground text-xs">
-                                {t('orders.pay.non_conditional_note')}
+                                {t(
+                                    viaWallet
+                                        ? 'orders.pay.wallet_full_note'
+                                        : 'orders.pay.non_conditional_note',
+                                )}
                             </p>
                         )}
 

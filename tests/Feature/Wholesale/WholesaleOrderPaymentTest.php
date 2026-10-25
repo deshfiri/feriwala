@@ -1,19 +1,24 @@
 <?php
 
+use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\AddressType;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Actions\ProcessRefund;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\CouponScope;
 use App\Domain\Billing\Enums\DiscountType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Enums\RedemptionStatus;
+use App\Domain\Billing\Enums\RefundStatus;
+use App\Domain\Billing\Exceptions\RefundRefused;
 use App\Domain\Billing\Models\Coupon;
 use App\Domain\Billing\Models\CouponRedemption;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Catalog\Enums\PackageScope;
 use App\Domain\Catalog\Enums\ProductStatus;
 use App\Domain\Catalog\Models\Category;
@@ -45,9 +50,16 @@ use App\Domain\Package\Models\UserPackage;
 use App\Domain\Settings\Enums\SettingType;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Supplier\SupplierStockReservations;
+use App\Domain\Wallet\Actions\OpenWallet;
+use App\Domain\Wallet\Data\PostingContext;
+use App\Domain\Wallet\Enums\LedgerTransactionType;
+use App\Domain\Wallet\Models\LedgerEntry;
+use App\Domain\Wallet\Models\Wallet;
+use App\Domain\Wallet\WalletService;
 use App\Domain\Wholesale\Actions\ConfirmCheckout;
 use App\Domain\Wholesale\Actions\OpenCart;
 use App\Domain\Wholesale\Actions\SaveCheckoutAddress;
+use App\Domain\Wholesale\Exceptions\CheckoutRefused;
 use App\Domain\Wholesale\Models\Cart;
 use App\Domain\Wholesale\Queries\PriceCheckout;
 use App\Support\Concurrency\DistributedLock;
@@ -1025,7 +1037,7 @@ describe('changing the payment method (urgent: a failed gateway must not trap th
         $this->get(route('wholesale.orders.show', $order->public_id))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('can.pay', true)
-                ->where('payment_methods', fn ($methods) => collect($methods)->pluck('name')->sort()->values()->all() === ['amarpay', 'sslcommerz']));
+                ->where('payment_methods', fn ($methods) => collect($methods)->pluck('name')->sort()->values()->all() === ['amarpay', 'sslcommerz', 'wallet']));
     });
 
     it('moves the same payment to the chosen gateway, keeping its amount and reference', function () {
@@ -1086,5 +1098,210 @@ describe('changing the payment method (urgent: a failed gateway must not trap th
             ->assertNotFound();
 
         expect($order->refresh()->payment->gateway)->toBe('sslcommerz');
+    });
+});
+
+/**
+ * Money in Karim's wallet: platform credit and withdrawable, each as a kind.
+ */
+function wholesaleOrderWalletFunded(string $platform, string $withdrawable): Wallet
+{
+    $wallet = app(OpenWallet::class)->handle(test()->karim);
+    $service = app(WalletService::class);
+
+    foreach ([
+        [LedgerTransactionType::TopUpCredit, $platform, 'platform'],
+        [LedgerTransactionType::SalesCredit, $withdrawable, 'withdrawable'],
+    ] as [$type, $amount, $key]) {
+        if (bccomp($amount, '0', 2) > 0) {
+            $service->credit($wallet, $type, Money::fromDecimal($amount, Currency::BDT), new PostingContext(source: 'test', description: 'Funding', idempotencyKey: 'fund:'.$key.':'.$wallet->id));
+        }
+    }
+
+    return $wallet->refresh();
+}
+
+/**
+ * Confirm Karim's checkout to be paid from the wallet, and place the order.
+ */
+function wholesaleOrderPlaceFromWallet(): TestResponse
+{
+    app(ConfirmCheckout::class)->handle(test()->karim->owner, test()->karim, 'wallet', wholesaleOrderFingerprint());
+
+    return wholesaleOrderPlace();
+}
+
+describe('paying from the wallet', function () {
+    it('pays the order from platform credit first, then withdrawable money, and settles it like a gateway payment', function () {
+        $wallet = wholesaleOrderWalletFunded('5000.00', '16000.00');
+
+        wholesaleOrderPlaceFromWallet()->assertSessionHasNoErrors()->assertRedirect();
+
+        $order = Order::query()->where('business_account_id', $this->karim->id)->sole();
+        $payment = $order->payment;
+        $wallet->refresh();
+
+        expect($payment->gateway)->toBe('wallet')
+            ->and($payment->gateway_mode)->toBeNull()
+            ->and($payment->status)->toBe(PaymentStatus::Paid)
+            ->and($payment->settled_amount?->toDecimal())->toBe('20000.00')
+            ->and($order->status)->toBe(OrderStatus::Paid)
+            ->and($order->items()->sole()->stockReservation?->status)->toBe(StockReservationStatus::Committed)
+            ->and(Invoice::query()->where('payment_id', $payment->id)->exists())->toBeTrue()
+            ->and($wallet->total->toDecimal())->toBe('1000.00')
+            ->and($wallet->platform_credit->toDecimal())->toBe('0.00');
+
+        // One debit per kind of money spent, each addressed to the payment.
+        $entries = LedgerEntry::query()->where('payment_id', $payment->id)->get();
+
+        expect($entries)->toHaveCount(2)
+            ->and($entries->map(fn (LedgerEntry $entry) => $entry->balance_type->value.':'.$entry->amount()->toDecimal())->sort()->values()->all())
+            ->toBe(['platform_credit:5000.00', 'withdrawable:15000.00']);
+    });
+
+    it('pays entirely from platform credit when that covers it, leaving withdrawable money alone', function () {
+        $wallet = wholesaleOrderWalletFunded('25000.00', '3000.00');
+
+        wholesaleOrderPlaceFromWallet()->assertSessionHasNoErrors();
+
+        $wallet->refresh();
+
+        expect($wallet->total->toDecimal())->toBe('8000.00')
+            ->and($wallet->platform_credit->toDecimal())->toBe('5000.00');
+    });
+
+    it('refuses the order, places nothing and holds no stock when the wallet cannot cover it', function () {
+        $wallet = wholesaleOrderWalletFunded('0.00', '19999.99');
+
+        app(ConfirmCheckout::class)->handle($this->karim->owner, $this->karim, 'wallet', wholesaleOrderFingerprint());
+    })->throws(CheckoutRefused::class);
+
+    it('does not take a payment placed for the wallet when the money went elsewhere before it was paid', function () {
+        $wallet = wholesaleOrderWalletFunded('20000.00', '0.00');
+        app(ConfirmCheckout::class)->handle($this->karim->owner, $this->karim, 'wallet', wholesaleOrderFingerprint());
+
+        // The balance is spent between confirming and placing.
+        app(WalletService::class)->debit($wallet, LedgerTransactionType::ServiceFeeDebit, Money::fromDecimal('15000.00', Currency::BDT), new PostingContext(source: 'test', description: 'Spent elsewhere', idempotencyKey: 'elsewhere'));
+
+        wholesaleOrderPlace()->assertSessionHasErrors('payment_method');
+
+        expect(Order::query()->count())->toBe(0)
+            ->and(StockReservation::query()->count())->toBe(0)
+            ->and($wallet->refresh()->total->toDecimal())->toBe('5000.00');
+    });
+
+    it('charges the wallet once however many times the payment is asked for', function () {
+        $wallet = wholesaleOrderWalletFunded('30000.00', '0.00');
+
+        wholesaleOrderPlaceFromWallet()->assertSessionHasNoErrors();
+
+        $order = Order::query()->sole();
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id))->assertSessionHasNoErrors();
+        $this->post(route('wholesale.orders.payment.store', $order->public_id))->assertSessionHasNoErrors();
+        wholesaleOrderPlace();
+
+        expect($wallet->refresh()->total->toDecimal())->toBe('10000.00')
+            ->and(LedgerEntry::query()->where('payment_id', $order->payment_id)->count())->toBe(1)
+            ->and(Order::query()->count())->toBe(1)
+            ->and(Invoice::query()->count())->toBe(1);
+    });
+
+    it('settles a payment of nothing without touching the wallet, so an order is never left unpaid over a zero charge', function () {
+        $wallet = wholesaleOrderWalletFunded('500.00', '0.00');
+        $order = wholesaleOrderPlaced();
+
+        // A Non-Conditional order with no delivery charge owes nothing now.
+        $order->payment?->forceFill(['amount' => Money::zero(Currency::BDT)])->save();
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id))->assertSessionHasNoErrors();
+
+        $order->refresh();
+
+        expect($order->payment->status)->toBe(PaymentStatus::Paid)
+            ->and($order->status)->toBe(OrderStatus::Paid)
+            ->and($wallet->refresh()->total->toDecimal())->toBe('500.00')
+            ->and(LedgerEntry::query()->where('payment_id', $order->payment_id)->count())->toBe(0);
+    });
+
+    it('lets an order placed for a gateway be paid from the wallet instead', function () {
+        $wallet = wholesaleOrderWalletFunded('20000.00', '0.00');
+        $order = wholesaleOrderPlaced();
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id), ['payment_method' => 'wallet'])
+            ->assertSessionHasNoErrors();
+
+        $order->refresh();
+
+        expect($order->payment->gateway)->toBe('wallet')
+            ->and($order->payment->status)->toBe(PaymentStatus::Paid)
+            ->and($order->status)->toBe(OrderStatus::Paid)
+            ->and($wallet->refresh()->total->toDecimal())->toBe('0.00');
+    });
+
+    it('refuses to switch to a wallet that cannot cover the order, leaving it payable by gateway', function () {
+        wholesaleOrderWalletFunded('100.00', '0.00');
+        $order = wholesaleOrderPlaced();
+
+        $this->post(route('wholesale.orders.payment.store', $order->public_id), ['payment_method' => 'wallet'])
+            ->assertSessionHasErrors('payment_method');
+
+        expect($order->refresh()->payment->gateway)->toBe('sslcommerz')
+            ->and($order->status)->toBe(OrderStatus::PaymentPending);
+    });
+
+    it('offers the wallet on checkout with its balance, greyed out when it falls short', function () {
+        wholesaleOrderWalletFunded('150.00', '0.00');
+
+        $this->get(route('wholesale.checkout.show'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('checkout.payment_methods', function ($methods) {
+                    $wallet = collect($methods)->firstWhere('name', 'wallet');
+
+                    return $wallet !== null
+                        && $wallet['sufficient'] === false
+                        && $wallet['balance']['amount'] === '150.00';
+                }));
+    });
+
+    it('never reaches another account\'s wallet', function () {
+        $karimWallet = wholesaleOrderWalletFunded('0.00', '0.00');
+        $rahimWallet = app(OpenWallet::class)->handle($this->rahim);
+        app(WalletService::class)->credit($rahimWallet, LedgerTransactionType::TopUpCredit, Money::fromDecimal('50000.00', Currency::BDT), new PostingContext(source: 'test', description: 'Rahim', idempotencyKey: 'rahim'));
+
+        app(ConfirmCheckout::class)->handle($this->karim->owner, $this->karim, 'wallet', wholesaleOrderFingerprint());
+    })->throws(CheckoutRefused::class);
+
+    it('returns a refund to the wallet as the kind of money that was spent', function () {
+        $wallet = wholesaleOrderWalletFunded('5000.00', '16000.00');
+        wholesaleOrderPlaceFromWallet()->assertSessionHasNoErrors();
+
+        $payment = Order::query()->sole()->payment;
+        $manager = testPlatformStaff(PlatformRole::PaymentManager);
+
+        foreach (['6000.00', '14000.00'] as $index => $amount) {
+            $refund = RefundRequest::factory()->status(RefundStatus::Approved)->create([
+                'payment_id' => $payment->id,
+                'business_account_id' => $this->karim->id,
+                'allocation_type' => AllocationType::WholesaleGoods,
+                'currency_code' => 'BDT',
+                'amount' => Money::fromDecimal($amount, Currency::BDT),
+            ]);
+
+            $processed = app(ProcessRefund::class)->handle(request: $refund, actor: $manager, passwordConfirmed: true, twoFactorEnabled: true);
+
+            expect($processed->status)->toBe(RefundStatus::Processed);
+
+            // A request already processed is refused, and posts nothing more.
+            expect(fn () => app(ProcessRefund::class)->handle(request: $processed, actor: $manager, passwordConfirmed: true, twoFactorEnabled: true))
+                ->toThrow(RefundRefused::class);
+        }
+
+        $wallet->refresh();
+
+        // 5,000 of platform credit was spent and 15,000 of withdrawable: all of it comes back as it left.
+        expect($wallet->total->toDecimal())->toBe('21000.00')
+            ->and($wallet->platform_credit->toDecimal())->toBe('5000.00')
+            ->and(LedgerEntry::query()->where('payment_id', $payment->id)->where('type', LedgerTransactionType::OrderRefundCredit)->count())->toBe(3);
     });
 });

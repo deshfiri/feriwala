@@ -66,6 +66,18 @@ class OrderRefused extends RuntimeException
         return new self(__('wholesale.refused.payment_method_unavailable'), 'payment_method');
     }
 
+    /** The wallet holds less than the order's payment. */
+    public static function walletInsufficient(): self
+    {
+        return new self(__('orders.refused.wallet_insufficient'), 'payment_method');
+    }
+
+    /** No wallet to pay from, or one that cannot be spent right now. */
+    public static function walletUnavailable(): self
+    {
+        return new self(__('orders.refused.wallet_unavailable'), 'payment_method');
+    }
+
     /** The old gateway confirmed the money; switching would risk taking it twice. */
     public static function alreadyPaidElsewhere(): self
     {

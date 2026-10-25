@@ -168,7 +168,16 @@ describe('payment method and summary', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('wholesale/checkout')
-                ->where('checkout.payment_methods', [['name' => 'sslcommerz', 'label' => 'SSLCommerz']])
+                // The gateway on offer, then the wallet — always shown, and here
+                // unusable because this account has no wallet to spend from.
+                ->where('checkout.payment_methods', fn ($methods) => collect($methods)->map(fn ($method) => [
+                    'name' => $method['name'],
+                    'sufficient' => $method['sufficient'],
+                    'balance' => $method['balance'],
+                ])->all() === [
+                    ['name' => 'sslcommerz', 'sufficient' => true, 'balance' => null],
+                    ['name' => 'wallet', 'sufficient' => false, 'balance' => null],
+                ])
                 ->where('checkout.fingerprint', wholesaleConfirmFingerprint())
                 ->where('checkout.confirmation', null)
                 ->where('checkout.ready_to_confirm', true)
@@ -215,9 +224,15 @@ describe('confirming', function () {
         expect(wholesaleConfirmCart()->confirmed_at)->toBeNull();
     })->with([
         'a gateway that is switched off' => ['bkash'],
-        'the wallet' => ['wallet'],
         'no gateway at all' => ['cash-in-hand'],
     ]);
+
+    it('refuses the wallet when the account has nothing to pay from it', function () {
+        wholesaleConfirmPost(['payment_method' => 'wallet'])
+            ->assertSessionHasErrors(['payment_method' => __('orders.refused.wallet_insufficient')]);
+
+        expect(wholesaleConfirmCart()->confirmed_at)->toBeNull();
+    });
 
     it('requires a payment method and the summary fingerprint', function () {
         wholesaleConfirmPost(['payment_method' => ''])->assertSessionHasErrors('payment_method');

@@ -248,6 +248,35 @@ describe('placing the order', function () {
             ->and($line->line_total->toDecimal())->toBe('20000.00');
     });
 
+    it('charges a Non-Conditional account the whole total when it pays from the wallet, and recovers nothing at delivery', function () {
+        FeeRule::create([
+            'fee_type' => FeeType::WholesaleDelivery,
+            'currency_code' => 'BDT',
+            'amount' => Money::fromDecimal('120.00', Currency::BDT),
+            'effective_from' => now()->subDay(),
+            'is_active' => true,
+        ]);
+
+        $account = ncoAccount($this->package, ['account_type' => AccountType::NonConditional->value]);
+        $wallet = websiteTestWallet($account, '25000.00');
+        ncoAddToCart($account, ['product' => $this->kettle->slug, 'quantity' => 2, 'resale_amount' => '12000.00'])->assertSessionHasNoErrors();
+        ncoAddressAndConfirm($account);
+
+        app(ConfirmCheckout::class)->handle($account->owner, $account, 'wallet', ncoFingerprint($account));
+
+        ncoPlaceOrder($account)->assertSessionHasNoErrors();
+
+        $order = Order::query()->where('business_account_id', $account->id)->sole();
+        $line = $order->items()->sole();
+
+        expect($order->payment->amount->toDecimal())->toBe('20120.00')
+            ->and($order->payment->gateway)->toBe('wallet')
+            ->and($order->payment->status->value)->toBe('paid')
+            ->and($wallet->refresh()->total->toDecimal())->toBe('4880.00')
+            ->and($order->productCostWasPaid())->toBeTrue()
+            ->and($line->recoverableAmount()->toDecimal())->toBe('0.00');
+    });
+
     it('charges a Conditional account the full product and delivery cost, exactly as before', function () {
         $account = ncoAccount($this->package);
         ncoAddToCart($account, ['product' => $this->kettle->slug, 'quantity' => 2])->assertSessionHasNoErrors();

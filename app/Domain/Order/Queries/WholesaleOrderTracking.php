@@ -10,6 +10,7 @@ use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderStatusChange;
+use App\Domain\Wallet\WalletPaymentMethod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -198,6 +199,10 @@ class WholesaleOrderTracking
     {
         if ($gateway === null) {
             return null;
+        }
+
+        if (WalletPaymentMethod::is($gateway)) {
+            return WalletPaymentMethod::label();
         }
 
         $label = config("payment.gateways.{$gateway}.label");

@@ -13,6 +13,7 @@ use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Order\Actions\PlaceWholesaleOrder;
 use App\Domain\Order\Enums\IntendedResaleChannel;
+use App\Domain\Wallet\WalletPaymentMethod;
 use App\Domain\Wholesale\Actions\ApplyCheckoutCoupon;
 use App\Domain\Wholesale\Actions\ConfirmCheckout;
 use App\Domain\Wholesale\Actions\OpenCart;
@@ -74,6 +75,13 @@ class WholesaleCheckoutController extends Controller
         $fingerprint = $quote->fingerprint();
         $pending = $orders->awaitingPaymentFor($cart);
         $nonConditional = $account->isNonConditional();
+        $due = $nonConditional ? $quote->delivery : $quote->total;
+
+        // The wallet is always on offer — greyed out, with its balance, when it
+        // cannot cover this order — and counts as a standing choice only while it can.
+        // The wallet is charged the whole total, even for a Non-Conditional account.
+        $wallet = WalletPaymentMethod::offer($account, $quote->total);
+        $standing = $wallet['sufficient'] ? [...$methods, WalletPaymentMethod::NAME] : $methods;
         $book = $this->addressBook($account->id, $quote->billingAddress, $addresses, $useAddress);
 
         return Inertia::render('wholesale/checkout', [
@@ -84,16 +92,17 @@ class WholesaleCheckoutController extends Controller
                 // for a Non-Conditional account, the full total otherwise
                 // (D-new). `total` below stays the order's real value.
                 'amount_due_now' => ($nonConditional ? $quote->delivery : $quote->total)->jsonSerialize(),
-                'payment_methods' => array_map(fn (string $name) => [
-                    'name' => $name,
-                    'label' => $this->gatewayLabel($name),
-                    'fx' => $this->gateways->conversionNotice(
-                        $name,
-                        $quote->total->currency,
-                        $nonConditional ? $quote->delivery : $quote->total,
-                    ),
-                ], $methods),
-                'confirmation' => $this->confirmation($cart, $fingerprint, $methods),
+                'payment_methods' => [
+                    ...array_map(fn (string $name) => [
+                        'name' => $name,
+                        'label' => $this->gatewayLabel($name),
+                        'fx' => $this->gateways->conversionNotice($name, $quote->total->currency, $due),
+                        'balance' => null,
+                        'sufficient' => true,
+                    ], $methods),
+                    $wallet,
+                ],
+                'confirmation' => $this->confirmation($cart, $fingerprint, $standing),
                 'lines' => array_map(fn (CartLineQuote $line) => $this->line($line), $quote->cart->lines),
                 'subtotal' => $quote->cart->subtotal->jsonSerialize(),
                 'coupon' => $cart->coupon_code === null ? null : [
@@ -346,6 +355,10 @@ class WholesaleCheckoutController extends Controller
 
     protected function gatewayLabel(string $name): string
     {
+        if (WalletPaymentMethod::is($name)) {
+            return WalletPaymentMethod::label();
+        }
+
         $label = config("payment.gateways.{$name}.label");
 
         return is_string($label) && $label !== '' ? $label : $name;

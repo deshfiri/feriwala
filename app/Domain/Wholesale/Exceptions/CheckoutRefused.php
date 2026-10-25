@@ -41,6 +41,12 @@ class CheckoutRefused extends RuntimeException
         return new self(__('wholesale.refused.payment_method_unavailable'), 'payment_method');
     }
 
+    /** The wallet holds less than what this order charges today. */
+    public static function walletInsufficient(): self
+    {
+        return new self(__('orders.refused.wallet_insufficient'), 'payment_method');
+    }
+
     /**
      * What the person agreed to is no longer what the server prices now.
      */

@@ -295,6 +295,24 @@ class Order extends Model
     }
 
     /**
+     * Whether a Non-Conditional wholesale order was paid for in full when it was
+     * placed — the wallet charged the whole total, not only the delivery charge.
+     *
+     * Such an order has nothing left to recover from its COD amount: the
+     * reseller bought the goods, so the whole amount collected is theirs.
+     */
+    public function productCostWasPaid(): bool
+    {
+        $payment = $this->payment;
+
+        return $this->source === OrderSource::ErpWholesale
+            && $this->isNonConditional()
+            && $payment !== null
+            && $payment->amount->currency === $this->total->currency
+            && ! $payment->amount->lessThan($this->total);
+    }
+
+    /**
      * Move the order along the transition map and record why, in one transaction.
      *
      * The caller has already decided the move is allowed for this order and

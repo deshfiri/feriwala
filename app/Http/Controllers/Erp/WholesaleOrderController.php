@@ -9,6 +9,7 @@ use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Order\Actions\CancelUnpaidOrder;
 use App\Domain\Order\Actions\ChangeOrderPaymentMethod;
 use App\Domain\Order\Actions\InitiateOrderPayment;
+use App\Domain\Order\Actions\PayOrderFromWallet;
 use App\Domain\Order\Actions\PlaceWholesaleOrder;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderStatus;
@@ -16,6 +17,7 @@ use App\Domain\Order\Enums\UnpaidOrderCancellation;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\WholesaleOrderTracking;
+use App\Domain\Wallet\WalletPaymentMethod;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\GatewayNavigation;
@@ -92,6 +94,7 @@ class WholesaleOrderController extends Controller
         Request $request,
         PlaceWholesaleOrder $place,
         InitiateOrderPayment $initiate,
+        PayOrderFromWallet $wallet,
     ): SymfonyResponse {
         $account = $this->businessAccountFor($request);
 
@@ -115,14 +118,23 @@ class WholesaleOrderController extends Controller
             throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
         }
 
+        if ($this->settlesWithoutGateway($order)) {
+            return $this->payFromWallet($request, $order, $wallet);
+        }
+
         return $this->sendToGateway($request, $order, $initiate);
     }
 
     /**
      * Continue to payment for an order still waiting for it.
      */
-    public function pay(Request $request, string $order, InitiateOrderPayment $initiate, ChangeOrderPaymentMethod $change): SymfonyResponse
-    {
+    public function pay(
+        Request $request,
+        string $order,
+        InitiateOrderPayment $initiate,
+        ChangeOrderPaymentMethod $change,
+        PayOrderFromWallet $wallet,
+    ): SymfonyResponse {
         $account = $this->businessAccountFor($request);
         $record = $this->orderFor($request, $order);
 
@@ -145,7 +157,53 @@ class WholesaleOrderController extends Controller
             $record = $record->refresh();
         }
 
+        if ($this->settlesWithoutGateway($record)) {
+            return $this->payFromWallet($request, $record, $wallet, refuseLoudly: true);
+        }
+
         return $this->sendToGateway($request, $record, $initiate, refuseLoudly: true);
+    }
+
+    /**
+     * Whether no gateway is involved: the order is paid from the wallet, or its
+     * payment is for nothing at all (a Non-Conditional order with no delivery
+     * charge), which no gateway can take and nothing needs to.
+     */
+    protected function settlesWithoutGateway(Order $order): bool
+    {
+        $payment = $order->payment;
+
+        return $payment !== null
+            && (WalletPaymentMethod::is($payment->gateway) || ! $payment->amount->isPositive());
+    }
+
+    /**
+     * Pay the order out of the account's wallet and show it, paid.
+     *
+     * No gateway is involved, so nothing here leaves the site. An order that
+     * could not be paid stays placed and payable while its window is open.
+     */
+    protected function payFromWallet(
+        Request $request,
+        Order $order,
+        PayOrderFromWallet $wallet,
+        bool $refuseLoudly = false,
+    ): RedirectResponse {
+        try {
+            $wallet->handle($order, $this->person($request));
+
+            Inertia::flash('toast', ['type' => 'success', 'message' => __('wallet.pay.paid')]);
+        } catch (OrderRefused $refused) {
+            if ($refuseLoudly) {
+                throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+            }
+
+            Inertia::flash('toast', ['type' => 'error', 'message' => $refused->getMessage()]);
+        } catch (LockTimeout) {
+            throw ValidationException::withMessages(['order' => __('orders.refused.busy')]);
+        }
+
+        return to_route('wholesale.orders.show', $order->public_id);
     }
 
     /**
@@ -201,7 +259,7 @@ class WholesaleOrderController extends Controller
     }
 
     /**
-     * @return list<array{name: string, label: string, fx: array<string, mixed>|null}>
+     * @return list<array{name: string, label: string, fx: array<string, mixed>|null, balance: array<string, mixed>|null, sufficient: bool}>
      */
     protected function methodsFor(Order $order): array
     {
@@ -211,15 +269,19 @@ class WholesaleOrderController extends Controller
             return [];
         }
 
-        return array_values(array_map(function (string $name) use ($amount): array {
+        $gateways = array_map(function (string $name) use ($amount): array {
             $label = config("payment.gateways.{$name}.label");
 
             return [
                 'name' => $name,
                 'label' => is_string($label) && $label !== '' ? $label : $name,
                 'fx' => $this->gateways->conversionNotice($name, $amount->currency, $amount),
+                'balance' => null,
+                'sufficient' => true,
             ];
-        }, $this->gateways->availableFor($amount->currency)));
+        }, $this->gateways->availableFor($amount->currency));
+
+        return [...$gateways, WalletPaymentMethod::offer($order->businessAccount, $amount)];
     }
 
     protected function canPay(Order $order): bool
