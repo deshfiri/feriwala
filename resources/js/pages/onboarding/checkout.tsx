@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { Money } from '@/lib/money';
+import GatewayName from '@/components/gateway-name';
 import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
 
 type QuoteLine = {
@@ -291,9 +292,10 @@ export default function Checkout({
                                             className="accent-brand"
                                         />
                                         <span className="min-w-0">
-                                            <span className="font-medium">
-                                                {option.label}
-                                            </span>
+                                            <GatewayName
+                                                name={option.name}
+                                                label={option.label}
+                                            />
                                             <GatewayFxNote fx={option.fx} />
                                         </span>
                                     </label>

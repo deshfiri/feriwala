@@ -1,4 +1,5 @@
 import GatewayFxNote, { type GatewayFx } from '@/components/gateway-fx-note';
+import GatewayName from '@/components/gateway-name';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { Money } from '@/lib/money';
@@ -55,7 +56,7 @@ export default function PaymentMethodOption({
                 className="accent-brand"
             />
             <span className="min-w-0">
-                <span className="font-medium">{option.label}</span>
+                <GatewayName name={option.name} label={option.label} />
                 <GatewayFxNote fx={option.fx} />
                 {isWallet && option.balance && (
                     <span className="text-muted-foreground block text-xs">

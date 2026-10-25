@@ -1,5 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
+import GatewayName from '@/components/gateway-name';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import MoneyInput from '@/components/money-input';
@@ -45,6 +47,10 @@ export default function WalletTopUp({
     gateways,
 }: Props) {
     const { t } = useTranslation();
+    const [gatewayValue, setGatewayValue] = useState(gateways[0]?.value ?? '');
+    const selectedGateway = gateways.find(
+        (gateway) => gateway.value === gatewayValue,
+    );
 
     return (
         <>
@@ -119,6 +125,10 @@ export default function WalletTopUp({
                                         id="top-up-gateway"
                                         name="gateway"
                                         required
+                                        value={gatewayValue}
+                                        onChange={(event) =>
+                                            setGatewayValue(event.target.value)
+                                        }
                                         className={controlClass}
                                     >
                                         {gateways.map((gateway) => (
@@ -131,6 +141,13 @@ export default function WalletTopUp({
                                         ))}
                                     </select>
 
+                                    {selectedGateway && (
+                                        <GatewayName
+                                            name={selectedGateway.value}
+                                            label={selectedGateway.label}
+                                        />
+                                    )}
+
                                     {gateways
                                         .filter((gateway) => gateway.fx)
                                         .map((gateway) => (
@@ -138,9 +155,11 @@ export default function WalletTopUp({
                                                 key={gateway.value}
                                                 className="text-xs"
                                             >
-                                                <span className="font-medium">
-                                                    {gateway.label}
-                                                </span>
+                                                <GatewayName
+                                                    name={gateway.value}
+                                                    label={gateway.label}
+                                                    className="h-5"
+                                                />
                                                 <GatewayFxNote
                                                     fx={gateway.fx}
                                                 />
