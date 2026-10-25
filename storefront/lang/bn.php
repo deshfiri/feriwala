@@ -131,6 +131,7 @@ return [
     'checkout.error.address' => 'আপনার ঠিকানা লিখুন।',
     'checkout.error.city' => 'শহর বা এলাকার নাম লিখুন।',
     'checkout.error.payment_method' => 'কীভাবে পেমেন্ট করবেন তা বেছে নিন।',
+    'checkout.error.gateway' => 'একটি পেমেন্ট অপশন বেছে নিন।',
 
     'payment.online' => 'অনলাইনে পেমেন্ট',
     'payment.online_help' => 'কার্ড বা মোবাইল ব্যাংকিংয়ে এখনই পেমেন্ট করুন। নিরাপদ পেমেন্ট পাতায় নেওয়া হবে।',

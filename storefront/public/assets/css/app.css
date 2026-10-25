@@ -1412,3 +1412,17 @@ section {
 .banner-image { object-position: var(--banner-focus, 50% 50%); }
 @media (max-width: 860px) { .banner-image { aspect-ratio: 2 / 1; } }
 @media (max-width: 520px) { .banner-image { aspect-ratio: 3 / 2; } }
+
+.gateways {
+    margin-inline-start: 1.75rem;
+    display: grid;
+    gap: 0.5rem;
+}
+.gateways[hidden] {
+    display: none;
+}
+.gateway-logo {
+    height: 1.75rem;
+    width: auto;
+    object-fit: contain;
+}

@@ -211,6 +211,25 @@
         });
     });
 
+    // Gateway choices belong to "Pay online": shown only while it is selected.
+    var gatewayBox = document.querySelector('[data-gateways]');
+
+    if (gatewayBox) {
+        var syncGateways = function () {
+            var online = document.querySelector(
+                'input[name="payment_method"][value="online"]',
+            );
+            gatewayBox.hidden = !(online && online.checked);
+        };
+
+        document
+            .querySelectorAll('input[name="payment_method"]')
+            .forEach(function (radio) {
+                radio.addEventListener('change', syncGateways);
+            });
+        syncGateways();
+    }
+
     // Delivery area: division → district → upazila, each fetched from our own
     // endpoint (which holds the credentials). Optional: without it the customer
     // just types the address.

@@ -77,6 +77,7 @@ final class Site
                 is_array($checkout['payment_methods'] ?? null) ? $checkout['payment_methods'] : [],
                 'is_string',
             )),
+            'gateways' => self::gateways($checkout['gateways'] ?? null),
             'cod' => [
                 'enabled' => (bool) ($cod['enabled'] ?? false),
                 'maximum' => is_array($cod['maximum'] ?? null) ? $cod['maximum'] : null,
@@ -85,6 +86,28 @@ final class Site
             // what the ERP said: when it is silent (an older ERP) the code is asked for.
             'sms_verification_required' => (bool) ($checkout['sms_verification_required'] ?? true),
         ];
+    }
+
+    /**
+     * The gateways the ERP has switched on, as `name` and `label`. An older ERP
+     * says nothing, and the customer is then not asked to choose.
+     *
+     * @return list<array{name: string, label: string}>
+     */
+    public static function gateways(mixed $value): array
+    {
+        $gateways = [];
+
+        foreach (is_array($value) ? $value : [] as $gateway) {
+            if (is_array($gateway) && is_string($gateway['name'] ?? null) && preg_match('/^[a-z0-9_]{1,40}$/', $gateway['name']) === 1) {
+                $gateways[] = [
+                    'name' => $gateway['name'],
+                    'label' => is_string($gateway['label'] ?? null) && $gateway['label'] !== '' ? $gateway['label'] : $gateway['name'],
+                ];
+            }
+        }
+
+        return $gateways;
     }
 
     /**

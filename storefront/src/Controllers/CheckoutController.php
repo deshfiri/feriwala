@@ -31,6 +31,7 @@ final class CheckoutController
             'items' => $cart->items(),
             'errors' => Session::get('_errors', []),
             'methods' => (array) Site::get()['payment_methods'],
+            'gateways' => (array) Site::get()['gateways'],
         ]);
     }
 
@@ -49,7 +50,11 @@ final class CheckoutController
             return Response::redirect('/cart');
         }
 
-        $checked = Checkout::validate($request->post, (array) $site['payment_methods']);
+        $checked = Checkout::validate(
+            $request->post,
+            (array) $site['payment_methods'],
+            array_column((array) $site['gateways'], 'name'),
+        );
 
         if ($checked['errors'] !== []) {
             Session::flashInput($checked['data']);

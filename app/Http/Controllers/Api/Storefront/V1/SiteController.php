@@ -89,6 +89,8 @@ class SiteController extends StorefrontController
                 'currency' => $currency->value,
                 'checkout' => [
                     'payment_methods' => $methods,
+                    // Additive (v1): the gateways behind "online", for the customer to pick.
+                    'gateways' => $this->checkout->gatewayChoices($currency),
                     'cod' => [
                         'enabled' => $codEnabled,
                         'maximum' => $codEnabled ? $this->checkout->codMaximum($website, $currency)?->jsonSerialize() : null,

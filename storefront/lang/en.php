@@ -131,6 +131,7 @@ return [
     'checkout.error.address' => 'Please enter your address.',
     'checkout.error.city' => 'Please enter your city or town.',
     'checkout.error.payment_method' => 'Please choose how you want to pay.',
+    'checkout.error.gateway' => 'Please choose a payment option.',
 
     'payment.online' => 'Pay online',
     'payment.online_help' => 'Pay now by card or mobile banking. You are taken to a secure payment page.',

@@ -118,6 +118,26 @@ test('validates what a customer typed, in words per field', function () {
     same(['name', 'phone', 'email', 'line1', 'city', 'payment_method'], array_keys($bad['errors']));
 });
 
+test('an online payment must name a gateway the ERP offered', function () {
+    $base = ['name' => 'Nusrat Jahan', 'phone' => '01712345678', 'line1' => 'House 1', 'city' => 'Dhaka'];
+
+    $none = Checkout::validate($base + ['payment_method' => 'online', 'gateway' => ''], ['online', 'cod'], ['eps', 'bkash']);
+    same(['payment_method'], array_keys($none['errors']));
+
+    $unknown = Checkout::validate($base + ['payment_method' => 'online', 'gateway' => 'bitcoin'], ['online', 'cod'], ['eps', 'bkash']);
+    same(['payment_method'], array_keys($unknown['errors']));
+
+    $chosen = Checkout::validate($base + ['payment_method' => 'online', 'gateway' => 'eps'], ['online', 'cod'], ['eps', 'bkash']);
+    same([], $chosen['errors']);
+    same('eps', $chosen['data']['gateway']);
+
+    $lone = Checkout::validate($base + ['payment_method' => 'online'], ['online'], ['eps']);
+    same('eps', $lone['data']['gateway']);
+
+    $cod = Checkout::validate($base + ['payment_method' => 'cod', 'gateway' => 'eps'], ['online', 'cod'], ['eps', 'bkash']);
+    same('', $cod['data']['gateway']);
+});
+
 test('numbers the order and stores a draft with the cart’s lines', function () {
     [, $checkout] = checkoutFixture();
 

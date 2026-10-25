@@ -64,6 +64,13 @@ $canPlace = $stockProblems === [] && ! $codBlocked;
 
         <section class="panel" aria-labelledby="pay">
             <h2 id="pay"><?= e(t('checkout.payment')) ?></h2>
+            <?php if (! empty($checkout['gateway'])) { ?>
+                <?php $gatewayLabel = (string) ($checkout['gateway']); ?>
+                <?php foreach ((array) \Storefront\Domain\Site::get()['gateways'] as $offered) { ?>
+                    <?php if ($offered['name'] === $checkout['gateway']) { $gatewayLabel = $offered['label']; } ?>
+                <?php } ?>
+                <p><?= View::partial('gateway', ['gateway' => ['name' => (string) $checkout['gateway'], 'label' => $gatewayLabel]]) ?></p>
+            <?php } ?>
             <p><strong><?= e(t('payment.'.$checkout['payment_method'])) ?></strong><br><span class="muted"><?= e(t('payment.'.$checkout['payment_method'].'_help')) ?></span></p>
             <?php if ($codBlocked) { ?>
                 <p class="error" role="alert"><?= e(t('review.cod_blocked')) ?></p>

@@ -33,9 +33,10 @@ final class Checkout
      *
      * @param  array<string, mixed>  $input
      * @param  list<string>  $methods  what the shop takes
+     * @param  list<string>  $gateways  names of the gateways behind "online"; empty when the ERP names none
      * @return array{errors: array<string, string>, data: array<string, string>}
      */
-    public static function validate(array $input, array $methods): array
+    public static function validate(array $input, array $methods, array $gateways = []): array
     {
         $get = static fn (string $key, int $max = 255): string => mb_substr(trim((string) (is_scalar($input[$key] ?? null) ? $input[$key] : '')), 0, $max);
 
@@ -51,7 +52,16 @@ final class Checkout
             'area_id' => $get('area_id', 80),
             'note' => $get('note', 1000),
             'payment_method' => $get('payment_method', 20),
+            'gateway' => $get('gateway', 40),
         ];
+
+        // Only an online payment goes through a gateway; the one chosen must be
+        // one the ERP offered, and a lone gateway needs no choosing.
+        if ($data['payment_method'] !== 'online' || $gateways === []) {
+            $data['gateway'] = '';
+        } elseif ($data['gateway'] === '' && count($gateways) === 1) {
+            $data['gateway'] = $gateways[0];
+        }
 
         $errors = [];
 
@@ -79,6 +89,8 @@ final class Checkout
 
         if (! in_array($data['payment_method'], $methods, true)) {
             $errors['payment_method'] = 'checkout.error.payment_method';
+        } elseif ($data['payment_method'] === 'online' && $gateways !== [] && ! in_array($data['gateway'], $gateways, true)) {
+            $errors['payment_method'] = 'checkout.error.gateway';
         }
 
         return ['errors' => $errors, 'data' => $data];
@@ -123,8 +135,8 @@ final class Checkout
 
         Db::exec(
             'INSERT INTO checkouts (token, cart_id, idempotency_key, status, customer_json, shipping_json, items_json,
-                                    payment_method, customer_note, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                    payment_method, gateway, customer_note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $token,
                 $cart->id(),
@@ -134,7 +146,8 @@ final class Checkout
                 self::json($shipping),
                 self::json($items),
                 $data['payment_method'],
-                $data['note'] !== '' ? $data['note'] : null,
+                ($data['gateway'] ?? '') !== '' ? $data['gateway'] : null,
+                $data['note'] !== ''? $data['note'] : null,
                 $now,
                 $now,
             ],
@@ -286,6 +299,10 @@ final class Checkout
 
         if ($returnUrl !== null && $payment['method'] === 'online') {
             $payment['return_url'] = $returnUrl;
+        }
+
+        if ($payment['method'] === 'online' && is_string($checkout['gateway'] ?? null) && $checkout['gateway'] !== '') {
+            $payment['gateway'] = $checkout['gateway'];
         }
 
         $body = [

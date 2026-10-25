@@ -4,6 +4,7 @@ use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteDomain;
+use App\Integrations\Payment\PaymentGatewayManager;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -41,6 +42,29 @@ describe('GET /site', function () {
             ->assertJsonPath('data.currency', 'BDT')
             ->assertJsonPath('data.locale.available', ['en', 'bn'])
             ->assertJsonPath('data.checkout.guest_checkout', true);
+    });
+
+    it('lists the gateways the ERP has switched on, so checkout can offer them', function () {
+        $this->mock(PaymentGatewayManager::class)
+            ->shouldReceive('availableFor')->andReturn(['eps', 'bkash']);
+
+        $checkout = storefrontCall($this->credential, $this->secret, 'site')
+            ->assertOk()
+            ->json('data.checkout');
+
+        expect($checkout['payment_methods'])->toContain('online')
+            ->and(array_column($checkout['gateways'], 'name'))->toBe(['eps', 'bkash'])
+            ->and($checkout['gateways'][0])->toHaveKeys(['name', 'label']);
+    });
+
+    it('lists no gateway when none is switched on', function () {
+        $this->mock(PaymentGatewayManager::class)
+            ->shouldReceive('availableFor')->andReturn([]);
+
+        $checkout = storefrontCall($this->credential, $this->secret, 'site')->assertOk()->json('data.checkout');
+
+        expect($checkout['gateways'])->toBe([])
+            ->and($checkout['payment_methods'])->not->toContain('online');
     });
 
     it('carries no secret and nothing about the owner\'s account', function () {

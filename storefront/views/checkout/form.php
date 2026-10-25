@@ -5,6 +5,7 @@ use Storefront\Http\View;
 /** @var list<array<string, mixed>> $items */
 /** @var array<string, string> $errors */
 /** @var list<string> $methods */
+/** @var list<array{name: string, label: string}> $gateways */
 /** @var array<string, mixed> $site */
 $error = static function (string $field) use ($errors): string {
     return isset($errors[$field])
@@ -89,6 +90,17 @@ $chosen = old('payment_method', (string) ($methods[0] ?? ''));
                     <span class="muted small"><?= e(t('payment.'.$method.'_help')) ?></span>
                 </span>
             </label>
+            <?php if ($method === 'online' && count($gateways) > 1) { ?>
+                <div class="gateways" data-gateways<?= $chosen === 'online' ? '' : ' hidden' ?>>
+                    <?php $chosenGateway = old('gateway', (string) $gateways[0]['name']); ?>
+                    <?php foreach ($gateways as $gateway) { ?>
+                        <label class="choice">
+                            <input type="radio" name="gateway" value="<?= e($gateway['name']) ?>" <?= $chosenGateway === $gateway['name'] ? 'checked' : '' ?>>
+                            <span><?= View::partial('gateway', ['gateway' => $gateway]) ?></span>
+                        </label>
+                    <?php } ?>
+                </div>
+            <?php } ?>
         <?php } ?>
         <?= $error('payment_method') ?>
     </fieldset>

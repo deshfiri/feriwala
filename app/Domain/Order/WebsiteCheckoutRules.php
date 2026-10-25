@@ -149,6 +149,20 @@ class WebsiteCheckoutRules
     }
 
     /**
+     * The gateways switched on in the ERP that can take `$currency`, for a
+     * customer to choose between.
+     *
+     * @return list<array{name: string, label: string}>
+     */
+    public function gatewayChoices(Currency $currency): array
+    {
+        return array_map(fn (string $name): array => [
+            'name' => $name,
+            'label' => (string) config("payment.gateways.{$name}.label", $name),
+        ], $this->gateways->availableFor($currency));
+    }
+
+    /**
      * The gateway an online order is paid through: the one asked for, if it is
      * switched on, and otherwise the first that is.
      *
