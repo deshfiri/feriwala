@@ -26,19 +26,21 @@ final class CheckoutController
             return Response::redirect('/cart');
         }
 
+        $site = Site::get(fresh: true);
+
         return View::render('checkout/form', [
             'title' => t('checkout.title'),
             'items' => $cart->items(),
             'errors' => Session::get('_errors', []),
-            'methods' => (array) Site::get()['payment_methods'],
-            'gateways' => (array) Site::get()['gateways'],
+            'methods' => (array) $site['payment_methods'],
+            'gateways' => (array) $site['gateways'],
         ]);
     }
 
     public static function submit(Request $request): Response
     {
         $cart = CartController::cart($request);
-        $site = Site::get();
+        $site = Site::get(fresh: true);
 
         if ($cart->isEmpty()) {
             return Response::redirect('/cart');
@@ -205,9 +207,25 @@ final class CheckoutController
             return Kernel::unavailable($exception);
         }
 
+        if ($exception->is('payment_method_unavailable')) {
+            return self::backToPaymentChoice($exception);
+        }
+
         Session::flash('error', t(self::messageKey($exception)));
 
         return Response::redirect('/cart');
+    }
+
+    /**
+     * The ERP no longer offers what the customer chose: forget the stale options
+     * and send them back to the form, which now shows what is actually available.
+     */
+    private static function backToPaymentChoice(ErpException $exception): Response
+    {
+        Site::get(fresh: true);
+        Session::flash('error', t(self::messageKey($exception)));
+
+        return Response::redirect('/checkout');
     }
 
     private static function refuseAtPlacement(ErpException $exception, string $token): Response
@@ -222,6 +240,10 @@ final class CheckoutController
             Session::put('_errors', ['phone' => 'checkout.error.phone']);
 
             return Response::redirect('/checkout');
+        }
+
+        if ($exception->is('payment_method_unavailable')) {
+            return self::backToPaymentChoice($exception);
         }
 
         Session::flash('error', t(self::messageKey($exception)));

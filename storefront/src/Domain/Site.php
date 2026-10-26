@@ -23,8 +23,14 @@ final class Site
     /**
      * @return array<string, mixed>
      */
-    public static function get(): array
+    public static function get(bool $fresh = false): array
     {
+        // Checkout must not be built from a copy that may predate a gateway being
+        // switched on or off: `$fresh` drops the cached site first.
+        if ($fresh) {
+            ApiCache::forgetKey('site');
+        }
+
         try {
             $payload = ApiCache::remember('site', self::TAG, Env::int('CACHE_TTL_SITE', 300), function (): array {
                 $response = App::erp()->get('/site');
