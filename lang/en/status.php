@@ -179,6 +179,13 @@ return [
         'received' => 'Received',
         'refunded' => 'Refunded',
         'cancelled' => 'Cancelled',
+        'waiting_for_parcel' => 'Waiting for parcel',
+        'parcel_received' => 'Parcel received',
+        'under_inspection' => 'Under inspection',
+        'inspection_approved' => 'Inspection approved',
+        'inspection_rejected' => 'Inspection rejected',
+        'settlement_pending' => 'Refund or adjustment pending',
+        'completed' => 'Completed',
     ],
 
     'payable' => [

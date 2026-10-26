@@ -8,6 +8,13 @@ return [
         'received' => 'ফেরত পাঠানো পণ্য পৌঁছেছে এবং যাচাই করা হয়েছে।',
         'refunded' => 'এই ফেরতের রিফান্ড নিষ্পত্তি হয়েছে।',
         'cancelled' => 'ফেরতের অনুরোধ প্রত্যাহার করা হয়েছে।',
+        'waiting_for_parcel' => 'পার্সেল পৌঁছানোর অপেক্ষায়।',
+        'parcel_received' => 'পার্সেল পৌঁছেছে।',
+        'under_inspection' => 'ফেরত আসা পণ্য যাচাই করা হচ্ছে।',
+        'inspection_approved' => 'ফেরত আসা পণ্য যাচাই করে গ্রহণ করা হয়েছে।',
+        'inspection_rejected' => 'ফেরত আসা পণ্য যাচাই করে গ্রহণ করা হয়নি।',
+        'settlement_pending' => 'রিফান্ড ও চার্জ নিষ্পত্তি করা হচ্ছে।',
+        'completed' => 'এই কেস সম্পন্ন হয়েছে।',
     ],
 
     'refund_notes' => [
@@ -22,6 +29,13 @@ return [
         'received' => 'গ্রহণ করা হয়েছে',
         'refunded' => 'রিফান্ড হয়েছে',
         'cancelled' => 'প্রত্যাহার করা হয়েছে',
+        'waiting_for_parcel' => 'পার্সেলের অপেক্ষায়',
+        'parcel_received' => 'পার্সেল পৌঁছেছে',
+        'under_inspection' => 'যাচাই চলছে',
+        'inspection_approved' => 'যাচাই অনুমোদিত',
+        'inspection_rejected' => 'যাচাই প্রত্যাখ্যাত',
+        'settlement_pending' => 'রিফান্ড বা সমন্বয় অপেক্ষমাণ',
+        'completed' => 'সম্পন্ন',
     ],
 
     'reasons' => [

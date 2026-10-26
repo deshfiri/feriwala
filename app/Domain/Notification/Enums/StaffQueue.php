@@ -189,7 +189,12 @@ enum StaffQueue: string
             self::SupplierStockUpdate => [StockUpdateStatus::Pending],
             self::AccountWithdrawal => [AccountWithdrawalStatus::Requested, AccountWithdrawalStatus::UnderReview],
             self::SupplierWithdrawal => [SupplierWithdrawalStatus::Requested, SupplierWithdrawalStatus::UnderReview],
-            self::OrderReturn => [ReturnStatus::Requested],
+            // Waiting on a person at every stage a person has to act: decide it, inspect
+            // the parcel, finish the inspection, settle what was approved (D35).
+            self::OrderReturn => [
+                ReturnStatus::Requested, ReturnStatus::ParcelReceived,
+                ReturnStatus::UnderInspection, ReturnStatus::InspectionApproved,
+            ],
             self::RefundRequest => [RefundStatus::Requested],
             self::WebsiteRequest => [WebsiteStatus::SetupPending],
             self::AccountDeletion, self::SupplierDeletion => [DeletionRequestStatus::Pending],

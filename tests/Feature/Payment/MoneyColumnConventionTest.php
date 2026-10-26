@@ -44,7 +44,11 @@ const MONEY_COLUMN_INVENTORY = [
     'order_item_allocations' => ['unit_cost', 'platform_rate', 'expected_margin'],
     'order_items' => ['unit_price', 'line_subtotal', 'discount', 'tax', 'tax_included', 'line_total', 'supplier_rate', 'platform_rate', 'platform_margin', 'platform_retained_amount'],
     'order_return_items' => ['refund_amount'],
-    'order_returns' => ['refund_amount'],
+    'order_returns' => [
+        'refund_amount', 'original_delivery_charge', 'return_charge',
+        'exchange_delivery_charge', 'other_adjustments',
+    ],
+    'order_return_charges' => ['amount'],
     'orders' => ['subtotal', 'discount', 'delivery', 'tax', 'tax_included', 'cod_fee', 'total'],
     'package_charges' => ['amount'],
     'packages' => ['fee', 'registration_fee', 'renewal_fee', 'required_deposit', 'minimum_balance'],

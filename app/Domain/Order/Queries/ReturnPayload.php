@@ -2,6 +2,7 @@
 
 namespace App\Domain\Order\Queries;
 
+use App\Domain\Order\Enums\ReturnRefundState;
 use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderReturnItem;
 use App\Domain\Order\Models\OrderReturnStatusChange;
@@ -27,16 +28,18 @@ class ReturnPayload
     {
         $return->loadMissing(['items.orderItem', 'statusHistory']);
 
+        // A storefront knows the six statuses of the frozen contract (§6.3); the
+        // stages a case adds beyond them are shown as the one they sit inside.
+        $refunded = $return->refund_state === ReturnRefundState::Completed;
+
         return [
             'id' => $return->public_id,
             'reference' => $return->reference,
-            'status' => $return->status->value,
+            'status' => $return->status->contractValue($refunded),
             'reason' => $return->reason->value,
             'customer_note' => $return->customer_note,
             'requested_at' => $return->requested_at->toIso8601String(),
-            'decision_note' => in_array($return->status->value, ['approved', 'rejected', 'received', 'refunded'], true)
-                ? $return->decision_note
-                : null,
+            'decision_note' => $return->decided_at !== null ? $return->decision_note : null,
             'lines' => $return->items->map(fn (OrderReturnItem $item) => [
                 'id' => $item->public_id,
                 'sku' => $item->orderItem->sku,
@@ -53,7 +56,7 @@ class ReturnPayload
             'timeline' => $return->statusHistory
                 ->filter(fn (OrderReturnStatusChange $change) => $change->public_note !== null)
                 ->map(fn (OrderReturnStatusChange $change) => [
-                    'status' => $change->new_status->value,
+                    'status' => $change->new_status->contractValue($refunded),
                     'at' => $change->changed_at->toIso8601String(),
                     'note' => (string) __($change->public_note, [], $locale),
                 ])

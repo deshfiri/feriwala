@@ -242,6 +242,7 @@ describe('reversal after settlement', function () {
             reason: ReturnReason::NotAsDescribed,
             lines: [['sku' => $sku, 'quantity' => 1]],
         ), OrderStatusChangeSource::Storefront);
+        $return = legacyReturnFlow($return);
 
         app(DecideOrderReturn::class)->approve($this->manager, $return, [], 'Confirmed by the test.');
 
@@ -283,6 +284,7 @@ describe('reversal after settlement', function () {
             reason: ReturnReason::NotAsDescribed,
             lines: [['sku' => $sku, 'quantity' => 2]],
         ), OrderStatusChangeSource::Storefront);
+        $return = legacyReturnFlow($return);
 
         app(DecideOrderReturn::class)->approve($this->manager, $return, [], 'Confirmed.');
 

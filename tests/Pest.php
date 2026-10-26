@@ -40,6 +40,7 @@ use App\Domain\Location\Enums\BdLocationType;
 use App\Domain\Location\Models\BdLocation;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Package\Models\Package;
@@ -338,6 +339,18 @@ function testAccountWithPackageFeatures(array $features, ?AccountStatus $status 
     $account->forceFill(['current_user_package_id' => $userPackage->id])->save();
 
     return $account->refresh();
+}
+
+/**
+ * Make a return one of those placed before the case workflow (D35), so a test of
+ * the three-step flow they still follow (requested, approved, received, refunded)
+ * keeps testing it. The case workflow has its own tests.
+ */
+function legacyReturnFlow(OrderReturn $return): OrderReturn
+{
+    $return->forceFill(['workflow_version' => 1])->save();
+
+    return $return->refresh();
 }
 
 /**

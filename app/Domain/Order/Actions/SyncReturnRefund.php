@@ -35,6 +35,7 @@ class SyncReturnRefund
 {
     public function __construct(
         protected AnnounceReturnStatus $announcements,
+        protected CompleteReturnCase $completion,
     ) {}
 
     public function handle(RefundRequest $refund): void
@@ -66,7 +67,12 @@ class SyncReturnRefund
             },
         ]);
 
-        if ($state === ReturnRefundState::Completed && $return->status === ReturnStatus::Received) {
+        if ($state === ReturnRefundState::Completed && $return->status === ReturnStatus::SettlementPending) {
+            // A case: the money went back, so the settlement is done and it completes.
+            $return->forceFill(['refunded_at' => $refund->processed_at ?? CarbonImmutable::now()])->save();
+
+            $this->completion->handle($return->refresh(), $refund->decided_by, OrderStatusChangeSource::PaymentGateway);
+        } elseif ($state === ReturnRefundState::Completed && $return->status === ReturnStatus::Received) {
             $return->forceFill(['refunded_at' => $refund->processed_at ?? CarbonImmutable::now()]);
 
             $return->moveTo(

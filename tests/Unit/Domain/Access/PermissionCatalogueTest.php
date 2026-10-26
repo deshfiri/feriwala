@@ -6,7 +6,7 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
 
 describe('the specification', function () {
-    it('defines exactly the twenty-seven permission verbs in §32.2', function () {
+    it('defines exactly the thirty-three permission verbs in §32.2', function () {
         // Twenty from the original list, View settings added by D24, Suspend
         // and Review added by D25 for the Supplier account domain, Reactivate
         // added when suspending a *trading* business became its own permission
@@ -14,8 +14,11 @@ describe('the specification', function () {
         // marking a payment paid by hand, and Activate and Assign added for KYC
         // batches (D30) — switching a template live and choosing it for a round
         // are decisions of their own, and Convert balance added for turning
-        // platform credit into withdrawable money.
-        expect(PermissionAction::cases())->toHaveCount(28);
+        // platform credit into withdrawable money, and Receive, Inspect, Refund,
+        // Assign liability and Dispatch added for return, exchange and damage
+        // cases (D35) — each a job of its own, so no one person need be trusted
+        // with the whole chain.
+        expect(PermissionAction::cases())->toHaveCount(33);
     });
 
     it('defines exactly the twenty-one administrative roles in §32.1', function () {

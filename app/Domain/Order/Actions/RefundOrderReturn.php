@@ -21,6 +21,7 @@ use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderReturnItem;
 use App\Domain\Order\Queries\ReturnRefundAmount;
 use App\Models\User;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\DatabaseManager;
@@ -28,7 +29,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
  * Start the money going back for goods that have come back (§26.3, §28, D17,
- * P6-12).
+ * P6-12, D35).
  *
  * **Never moves money itself, and never touches a wallet or the ledger.** A
  * return's refund is a refund like any other: this opens the request, for the
@@ -38,6 +39,12 @@ use Illuminate\Database\UniqueConstraintViolationException;
  * claimed before it is sent, idempotent on its own key, reversed in the ledger
  * only once the provider confirms. What happens to that request comes back to
  * the return through {@see SyncReturnRefund}.
+ *
+ * Two doors lead here. A return placed before the case workflow is refunded by
+ * calling {@see handle()} once it is received. A case is refunded by
+ * {@see StartReturnSettlement}, which opens it inside its own transaction —
+ * after inspection has approved the goods — through {@see openFor()}, with any
+ * adjustments staff approved added to what the goods are worth.
  *
  * **Cash on delivery is never refunded to a gateway.** The money was handed to
  * whoever delivered the parcel; it never came through a gateway and cannot go
@@ -90,6 +97,40 @@ class RefundOrderReturn
             return $refunded;
         }
 
+        $this->auditStarted($actor, $refunded);
+
+        return $refunded;
+    }
+
+    /**
+     * Open the refund for a case, inside the caller's transaction and under the
+     * caller's lock on it.
+     *
+     * The caller has already decided the case may be settled; this works out
+     * what the goods that arrived are worth, adds the adjustments staff
+     * approved, and opens the request — or marks it for a person to settle.
+     *
+     * @param  bool  $started  set when this call is the one that opened the refund
+     *
+     * @throws ReturnRefused
+     */
+    public function openFor(User $actor, OrderReturn $locked, bool &$started, ?Money $extra = null): OrderReturn
+    {
+        $locked->loadMissing(['items.orderItem', 'order.payment']);
+
+        // Already under way, or already settled: the first call's answer stands.
+        if (in_array($locked->refund_state, [ReturnRefundState::Pending, ReturnRefundState::Completed, ReturnRefundState::ManualReview], true)) {
+            return $locked;
+        }
+
+        return $this->open($actor, $locked, $started, $extra);
+    }
+
+    /**
+     * The audit entry for a refund this call opened.
+     */
+    public function auditStarted(User $actor, OrderReturn $refunded): void
+    {
         $this->audit->handle(new AuditEntry(
             action: 'order_return.refund_started',
             actorId: $actor->id,
@@ -105,8 +146,6 @@ class RefundOrderReturn
             accountId: $refunded->business_account_id,
             module: PermissionModule::Order->value,
         ));
-
-        return $refunded;
     }
 
     /**
@@ -125,10 +164,19 @@ class RefundOrderReturn
             return $locked;
         }
 
-        if ($locked->status !== ReturnStatus::Received) {
+        // A case is refunded when it is settled, after inspection — not from here.
+        if ($locked->usesCaseWorkflow() || $locked->status !== ReturnStatus::Received) {
             throw ReturnRefused::notInThatState();
         }
 
+        return $this->open($actor, $locked, $started);
+    }
+
+    /**
+     * @throws ReturnRefused
+     */
+    protected function open(User $actor, OrderReturn $locked, bool &$started, ?Money $extra = null): OrderReturn
+    {
         $started = true;
 
         $amounts = $this->amounts->for($locked);
@@ -143,12 +191,20 @@ class RefundOrderReturn
 
         $total = $amounts['total'];
 
+        if ($extra !== null) {
+            $total = $total->plus($extra);
+        }
+
         $locked->forceFill([
             'refund_amount' => $total,
             'currency_code' => $total->currency->value,
         ]);
 
         $payment = $locked->order->payment;
+
+        if ($payment !== null && $total->greaterThan($payment->amount)) {
+            throw ReturnRefused::refundExceedsPayment();
+        }
 
         if ($locked->isCashOnDelivery() || $payment === null || ! $this->settled($payment)) {
             // Kept as a translation key, so staff read why in their own language.

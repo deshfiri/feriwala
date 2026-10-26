@@ -57,7 +57,7 @@ class DecideOrderReturn
      */
     public function approve(User $actor, OrderReturn $return, array $quantities, string $reason): OrderReturn
     {
-        $this->authorize($actor, PermissionAction::Approve);
+        $this->authorize($actor, $return, PermissionAction::Approve);
 
         return $this->decide($actor, $return, ReturnStatus::Approved, $reason, $quantities);
     }
@@ -70,7 +70,7 @@ class DecideOrderReturn
      */
     public function reject(User $actor, OrderReturn $return, string $reason): OrderReturn
     {
-        $this->authorize($actor, PermissionAction::Reject);
+        $this->authorize($actor, $return, PermissionAction::Reject);
 
         return $this->decide($actor, $return, ReturnStatus::Rejected, $reason, []);
     }
@@ -116,6 +116,20 @@ class DecideOrderReturn
                 ),
                 OrderStatusChangeSource::Staff,
             );
+
+            // A case that is approved is then waiting for its parcel: two stages,
+            // each written to the history, so the progression is never skipped.
+            if ($to === ReturnStatus::Approved && $locked->usesCaseWorkflow()) {
+                $locked->moveTo(
+                    ReturnStatus::WaitingForParcel,
+                    new StatusChange(
+                        actorId: $actor->id,
+                        reason: 'Waiting for the parcel to arrive.',
+                        publicNote: 'returns.notes.waiting_for_parcel',
+                    ),
+                    OrderStatusChangeSource::Staff,
+                );
+            }
 
             $this->announcements->handle($locked->refresh()->load('items'));
 
@@ -195,9 +209,15 @@ class DecideOrderReturn
     /**
      * @throws AuthorizationException
      */
-    protected function authorize(User $actor, PermissionAction $action): void
+    protected function authorize(User $actor, OrderReturn $return, PermissionAction $action): void
     {
-        if (! $actor->can(PermissionCatalogue::name(PermissionModule::Order, $action))) {
+        // A case is decided with `return.review`; a return placed before the case
+        // workflow keeps the order permissions it was always decided under.
+        $permission = $return->usesCaseWorkflow()
+            ? PermissionCatalogue::name(PermissionModule::ReturnCase, PermissionAction::Review)
+            : PermissionCatalogue::name(PermissionModule::Order, $action);
+
+        if (! $actor->can($permission)) {
             throw new AuthorizationException('This account may not decide returns.');
         }
     }

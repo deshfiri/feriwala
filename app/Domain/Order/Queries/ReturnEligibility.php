@@ -117,6 +117,8 @@ class ReturnEligibility
             ->whereHas('orderReturn', fn (Builder $query) => $query->whereNotIn('status', [
                 ReturnStatus::Rejected->value,
                 ReturnStatus::Cancelled->value,
+                // Goods the inspection refused give their claim back: they may be asked for again.
+                ReturnStatus::InspectionRejected->value,
             ]))
             ->selectRaw('coalesce(sum(coalesce(approved_quantity, quantity)), 0) as claimed')
             ->value('claimed');

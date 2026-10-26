@@ -7,24 +7,13 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
-use App\Domain\Inventory\Data\MovementContext;
-use App\Domain\Inventory\Enums\PartnerStockMovementType;
-use App\Domain\Inventory\Enums\StockBucket;
-use App\Domain\Inventory\Enums\StockMovementType;
-use App\Domain\Inventory\Exceptions\InventoryRefused;
-use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
-use App\Domain\Inventory\PartnerStock;
-use App\Domain\Inventory\StockLedger;
 use App\Domain\Order\Data\ReturnedLine;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnStatus;
 use App\Domain\Order\Exceptions\ReturnRefused;
 use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\OrderReturnItem;
-use App\Domain\Supplier\Actions\ReverseSupplierPayable;
-use App\Domain\Supplier\Models\SupplierOfferStock;
-use App\Domain\Supplier\SupplierStockLedger;
 use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
@@ -35,44 +24,27 @@ use Illuminate\Database\DatabaseManager;
  * The goods arrived: count them, judge them, put them where they belong
  * (§19, §19.1, §20, P6-12).
  *
+ * **For a return placed before the case workflow (D35) only.** A version 2 case
+ * is received, inspected and only then restocked — stock never moves before a
+ * person has approved the goods — through {@see ReceiveReturnParcel},
+ * {@see StartReturnInspection} and {@see FinalizeReturnInspection}. This is the
+ * original single step, kept for the returns still in flight under it.
+ *
  * Three things happen here, and the order matters. What actually came back is
  * counted per line — never more than was approved. Each line is given a
  * **disposition** by the person holding the goods: back on sale, damaged, or
- * held for inspection. Only then does stock move, and it moves through the
- * stock ledger like every other change, so the movement carries who, why and
- * what the figures were before and after.
- *
- * **Once, and only once.** The movement that restored a line is written onto
- * that line, and the column is unique: a second receipt of the same line has
- * nowhere to put its movement, so restoring twice is impossible rather than
- * unlikely. The ledger's own idempotency key says the same thing from the
- * other side.
- *
- * Restoring takes the units out of **sold** stock, because that is where
- * delivered goods are (§19). An order whose units were never recorded as sold
- * — because fulfilment has not recorded the delivery (§20, P6-17) — is refused
- * in those words rather than having a source invented for it.
+ * held for inspection. Only then does stock move, and it moves through
+ * {@see RestoreReturnedStock}, like every other change, so the movement carries
+ * who, why and what the figures were before and after.
  *
  * Putting goods back on sale is an inventory change as much as a returns
  * decision, so it asks for both: `order.edit` to move the return along, and
  * `inventory.edit` to change what is in stock.
- *
- * **A Supplier-backed line restores into Supplier stock, not the warehouse**
- * (D25, P13-22): its order item names the offer it was allocated to, so its
- * units go back through {@see SupplierStockLedger} instead, and the return
- * item's `supplier_stock_movement_id` — never both columns — is what makes
- * that restoration recorded exactly once. The same quantity also reverses the
- * line's Supplier payable, through {@see ReverseSupplierPayable}, in the same
- * transaction.
  */
 class ReceiveReturnedItems
 {
     public function __construct(
-        protected StockLedger $ledger,
-        protected PartnerStock $partnerStock,
-        protected SupplierStockLedger $supplierLedger,
-        protected ReverseSupplierPayable $supplierPayables,
-        protected ReverseOrderProceedsSettlement $proceeds,
+        protected RestoreReturnedStock $stock,
         protected AnnounceReturnStatus $announcements,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
@@ -93,14 +65,15 @@ class ReceiveReturnedItems
             $locked = OrderReturn::query()->lockForUpdate()->findOrFail($return->id);
             $locked->load('items.orderItem');
 
-            if ($locked->status !== ReturnStatus::Approved) {
+            // The case workflow has its own, slower road to restocking.
+            if ($locked->usesCaseWorkflow() || $locked->status !== ReturnStatus::Approved) {
                 throw ReturnRefused::notInThatState();
             }
 
             $arrivals = $this->arrivals($locked, $lines);
 
             foreach ($arrivals as [$item, $line]) {
-                $this->receive($item, $line, $warehouse, $actor);
+                $this->stock->handle($item, $line, $warehouse, $actor);
             }
 
             $locked->forceFill([
@@ -184,184 +157,6 @@ class ReceiveReturnedItems
         }
 
         return $arrivals;
-    }
-
-    /**
-     * Take one line's goods in and put them where the inspector said.
-     *
-     * @throws ReturnRefused
-     */
-    protected function receive(OrderReturnItem $item, ReturnedLine $line, Warehouse $warehouse, User $actor): void
-    {
-        if ($item->isRestored()) {
-            // Already taken in under another request; its movement stands.
-            return;
-        }
-
-        $item->forceFill([
-            'received_quantity' => $line->quantity,
-            'disposition' => $line->disposition,
-            'warehouse_id' => $warehouse->id,
-        ])->save();
-
-        if ($line->quantity === 0) {
-            // Nothing arrived for this line. Recorded, with nothing to move.
-            return;
-        }
-
-        // A profit already credited on the returned units is taken back, out of
-        // the kind of money it was credited as. Never fails the return itself.
-        $this->proceeds->forReturn($item);
-
-        $orderItem = $item->orderItem;
-
-        if ($orderItem->stockReservation?->isPartnerSourced() === true) {
-            $item->forceFill([
-                'partner_stock_movement_id' => $this->restoreToPartner($item, $line, $actor),
-                'restored_at' => CarbonImmutable::now(),
-            ])->save();
-
-            return;
-        }
-
-        if ($orderItem->isSupplierBacked()) {
-            $movementId = $this->restoreToSupplier($item, $line, $actor);
-
-            $item->forceFill([
-                'supplier_stock_movement_id' => $movementId,
-                'restored_at' => CarbonImmutable::now(),
-            ])->save();
-
-            $this->supplierPayables->handle(
-                $item,
-                $line->quantity,
-                'Returned on '.$item->orderReturn->reference.': '.$line->disposition->label().'.',
-            );
-
-            return;
-        }
-
-        $movement = $this->restore($item, $line, $warehouse, $actor);
-
-        $item->forceFill([
-            'stock_movement_id' => $movement,
-            'restored_at' => CarbonImmutable::now(),
-        ])->save();
-    }
-
-    /**
-     * Move the units out of sold stock and into what they now are.
-     *
-     * @throws ReturnRefused
-     */
-    protected function restore(OrderReturnItem $item, ReturnedLine $line, Warehouse $warehouse, User $actor): int
-    {
-        $orderItem = $item->orderItem;
-
-        /** @var StockItem $stock */
-        $stock = StockItem::query()->firstOrCreate([
-            'warehouse_id' => $warehouse->id,
-            'product_id' => $orderItem->product_id,
-            'product_variant_id' => $orderItem->product_variant_id,
-        ]);
-
-        try {
-            $movement = $this->ledger->move(
-                $stock,
-                StockBucket::Sold,
-                $line->disposition->bucket(),
-                $line->quantity,
-                StockMovementType::Adjustment,
-                new MovementContext(
-                    reason: 'Returned on '.$item->orderReturn->reference.': '.$line->disposition->label().'.',
-                    actorId: $actor->id,
-                    sourceType: 'order_return',
-                    sourceId: $item->orderReturn->id,
-                    // One restoration per returned line, whatever arrives twice.
-                    idempotencyKey: 'order-return-item:'.$item->public_id,
-                ),
-            );
-        } catch (InventoryRefused) {
-            throw ReturnRefused::nothingSoldToRestore($orderItem->sku);
-        }
-
-        return $movement->id;
-    }
-
-    /**
-     * The Partner-stock twin of {@see restore()}: a storefront line was sold from
-     * the Partner's own units, so its goods go back into that Partner's stock and
-     * no one else's (D34).
-     *
-     * The units leave `sold` — delivered goods — exactly as central stock's do:
-     * an order whose units were never recorded as sold is refused rather than
-     * having a source invented for it.
-     *
-     * @throws ReturnRefused
-     */
-    protected function restoreToPartner(OrderReturnItem $item, ReturnedLine $line, User $actor): int
-    {
-        $orderItem = $item->orderItem;
-        $stock = $orderItem->stockReservation?->partnerStock;
-
-        if ($stock === null) {
-            throw ReturnRefused::nothingSoldToRestore($orderItem->sku);
-        }
-
-        try {
-            $movement = $this->partnerStock->move(
-                $stock,
-                StockBucket::Sold,
-                $line->disposition->bucket(),
-                $line->quantity,
-                PartnerStockMovementType::ReturnReceived,
-                new MovementContext(
-                    reason: 'Returned on '.$item->orderReturn->reference.': '.$line->disposition->label().'.',
-                    actorId: $actor->id,
-                    sourceType: 'order_return',
-                    sourceId: $item->orderReturn->id,
-                    idempotencyKey: 'order-return-item:'.$item->public_id,
-                ),
-            );
-        } catch (InventoryRefused) {
-            throw ReturnRefused::nothingSoldToRestore($orderItem->sku);
-        }
-
-        return $movement->id;
-    }
-
-    /**
-     * The Supplier-stock twin of {@see restore()}: the same "sold" bucket
-     * discipline, on the offer's own stock rather than a warehouse (D25,
-     * P13-22).
-     *
-     * @throws ReturnRefused
-     */
-    protected function restoreToSupplier(OrderReturnItem $item, ReturnedLine $line, User $actor): int
-    {
-        $orderItem = $item->orderItem;
-
-        /** @var SupplierOfferStock $stock */
-        $stock = SupplierOfferStock::query()->firstOrCreate(
-            ['supplier_offer_id' => $orderItem->supplier_offer_id],
-            ['quantity' => 0],
-        );
-
-        try {
-            $movement = $this->supplierLedger->move(
-                $stock,
-                StockBucket::Sold,
-                $line->disposition->bucket(),
-                $line->quantity,
-                'return_received',
-                reason: 'Returned on '.$item->orderReturn->reference.': '.$line->disposition->label().'.',
-                idempotencyKey: 'order-return-item:'.$item->public_id,
-            );
-        } catch (InventoryRefused) {
-            throw ReturnRefused::nothingSoldToRestore($orderItem->sku);
-        }
-
-        return $movement->id;
     }
 
     /**

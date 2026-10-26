@@ -39,6 +39,7 @@ class SettleReturnRefundManually
 
     public function __construct(
         protected SensitiveActionGuard $guard,
+        protected CompleteReturnCase $completion,
         protected AnnounceReturnStatus $announcements,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
@@ -74,7 +75,9 @@ class SettleReturnRefundManually
                 return $locked;
             }
 
-            if ($locked->refund_state !== ReturnRefundState::ManualReview || $locked->status !== ReturnStatus::Received) {
+            $awaiting = $locked->usesCaseWorkflow() ? ReturnStatus::SettlementPending : ReturnStatus::Received;
+
+            if ($locked->refund_state !== ReturnRefundState::ManualReview || $locked->status !== $awaiting) {
                 throw ReturnRefused::notAwaitingManualRefund();
             }
 
@@ -84,16 +87,23 @@ class SettleReturnRefundManually
                 'refunded_at' => CarbonImmutable::now(),
             ]);
 
-            $locked->moveTo(
-                ReturnStatus::Refunded,
-                new StatusChange(
-                    actorId: $actor->id,
-                    reason: 'Refund settled by hand.',
-                    internalNote: $how,
-                    publicNote: 'returns.notes.refunded',
-                ),
-                OrderStatusChangeSource::Staff,
-            );
+            if ($locked->usesCaseWorkflow()) {
+                // A case: the money is settled, so it completes.
+                $locked->save();
+
+                $this->completion->handle($locked->refresh(), $actor->id, OrderStatusChangeSource::Staff);
+            } else {
+                $locked->moveTo(
+                    ReturnStatus::Refunded,
+                    new StatusChange(
+                        actorId: $actor->id,
+                        reason: 'Refund settled by hand.',
+                        internalNote: $how,
+                        publicNote: 'returns.notes.refunded',
+                    ),
+                    OrderStatusChangeSource::Staff,
+                );
+            }
 
             $this->announcements->handle($locked->refresh()->load('items'));
             $recorded = true;

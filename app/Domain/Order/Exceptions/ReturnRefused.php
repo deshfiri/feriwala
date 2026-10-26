@@ -117,4 +117,53 @@ class ReturnRefused extends RuntimeException
     {
         return new self(409, 'return_busy', 'This return is being processed by another request. Retry shortly.');
     }
+
+    /**
+     * A Partner's request is attributed to the Partner until staff, who have seen
+     * the evidence and the goods, decide otherwise. It is never theirs to waive.
+     */
+    public static function partnerCannotDeclareBanijResponsible(): self
+    {
+        return new self(403, 'responsibility_is_staffs_to_decide', 'Only Banij staff can decide that Banij is responsible.');
+    }
+
+    public static function responsibilityNeedsAReason(): self
+    {
+        return new self(422, 'responsibility_needs_a_reason', 'Changing who is responsible is recorded with the reason for it.');
+    }
+
+    public static function exchangeNotAvailable(): self
+    {
+        return new self(422, 'exchange_not_available', 'Exchanges are not available yet.');
+    }
+
+    public static function wrongWorkflow(): self
+    {
+        return new self(409, 'return_uses_the_earlier_flow', 'This return was placed before the case workflow and is finished the way it started.');
+    }
+
+    public static function parcelNotReceived(): self
+    {
+        return new self(409, 'parcel_not_received', 'The parcel has not been marked as received yet.');
+    }
+
+    public static function inspectionNotFinished(): self
+    {
+        return new self(409, 'inspection_not_finished', 'Inspection has to be completed and approved before this can be done.');
+    }
+
+    public static function inspectionNeedsEveryLine(): self
+    {
+        return new self(422, 'inspection_needs_every_line', 'Every line of the case is counted and given a disposition at inspection.');
+    }
+
+    public static function needsAWarehouse(): self
+    {
+        return new self(422, 'inspection_needs_a_warehouse', 'Choose the warehouse the goods were received into.');
+    }
+
+    public static function refundExceedsPayment(): self
+    {
+        return new self(422, 'refund_exceeds_payment', 'The refund would be more than the customer paid.');
+    }
 }

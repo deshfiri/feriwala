@@ -133,7 +133,7 @@ function returnScreensAsk(Order $order): OrderReturn
         customerNote: 'The stitching is undone.',
     ), OrderStatusChangeSource::Storefront);
 
-    return $return;
+    return legacyReturnFlow($return);
 }
 
 describe('the partner\'s website order', function () {

@@ -58,7 +58,11 @@ class RefreshWebsiteBestSellers
     ];
 
     /** Returns whose received quantities are subtracted. */
-    public const COUNTED_RETURNS = [ReturnStatus::Received, ReturnStatus::Refunded];
+    public const COUNTED_RETURNS = [
+        ReturnStatus::Received, ReturnStatus::Refunded,
+        // A case counts once its goods were inspected and approved (D35).
+        ReturnStatus::InspectionApproved, ReturnStatus::SettlementPending, ReturnStatus::Completed,
+    ];
 
     /**
      * @return int how many selections now have sales

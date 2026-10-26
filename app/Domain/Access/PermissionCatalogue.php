@@ -305,6 +305,28 @@ class PermissionCatalogue
             Module::ProductSupplier->value => [
                 Action::View, Action::Create, Action::Edit,
             ],
+
+            /*
+             * Return, exchange and damage cases (D35). One verb per job, so no
+             * single person has to be trusted with the whole chain: opening a
+             * case on a Partner's behalf, deciding it, receiving the parcel,
+             * judging the goods, and posting the money are each granted apart.
+             */
+            Module::ReturnCase->value => [
+                Action::View, Action::Create, Action::Review,
+                Action::Receive, Action::Inspect, Action::Refund, Action::Export,
+            ],
+
+            // `create` opens one for a Partner, `review` decides it.
+            Module::Exchange->value => [
+                Action::View, Action::Create, Action::Review,
+            ],
+
+            // `inspect` judges the damage and values it, `assign_liability`
+            // decides who bears it, `dispatch` sends the item to its owner.
+            Module::Damage->value => [
+                Action::View, Action::Inspect, Action::AssignLiability, Action::Dispatch,
+            ],
         ];
     }
 

@@ -144,6 +144,7 @@ afterEach(function () {
         'order_returns' => 'order_returns_no_delete',
         'order_return_items' => 'order_return_items_no_delete',
         'order_return_status_history' => 'order_return_status_history_no_delete',
+        'order_return_responsibility_changes' => 'order_return_responsibility_changes_no_delete',
         'refund_requests' => 'refund_requests_no_delete',
     ];
 
@@ -152,6 +153,7 @@ afterEach(function () {
     }
 
     DB::table('order_return_status_history')->whereIn('order_return_id', $returns)->delete();
+    DB::table('order_return_responsibility_changes')->whereIn('order_return_id', $returns)->delete();
     DB::table('order_return_items')->whereIn('order_return_id', $returns)->delete();
     DB::table('order_returns')->whereIn('id', $returns)->delete();
     DB::table('refund_requests')->where('id', '>', $this->watermarks['refund_requests'])->delete();
@@ -263,6 +265,7 @@ function returnRaceApprovedReturn(): OrderReturn
         reason: ReturnReason::NotAsDescribed,
         lines: [['sku' => test()->product->sku, 'quantity' => 2]],
     ), OrderStatusChangeSource::Storefront);
+    $return = legacyReturnFlow($return);
 
     app(DecideOrderReturn::class)->approve(test()->staff, $return, [], 'Both are as the customer describes them.');
 

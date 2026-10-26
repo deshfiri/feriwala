@@ -10,12 +10,16 @@ use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
+use App\Domain\Order\Enums\ReturnCaseType;
+use App\Domain\Order\Enums\ReturnInitiator;
+use App\Domain\Order\Enums\ReturnParty;
 use App\Domain\Order\Enums\ReturnReason;
 use App\Domain\Order\Enums\ReturnRefundState;
 use App\Domain\Order\Enums\ReturnStatus;
 use App\Domain\Website\Models\Website;
 use App\Support\Money\Money;
 use App\Support\References\ReferencePrefix;
+use App\Support\StateMachine\TransitionableState;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -49,13 +53,28 @@ use RuntimeException;
  * @property string|null $customer_note
  * @property array<array-key, mixed>|null $evidence
  * @property string|null $decision_note
+ * @property int $workflow_version 1 for a return placed before D35, 2 for the case workflow
+ * @property ReturnCaseType $case_type
+ * @property ReturnInitiator|null $initiated_by_type
+ * @property ReturnParty|null $on_behalf_of
+ * @property ReturnParty|null $responsible_party
  * @property int|null $requested_by
  * @property int|null $decided_by
  * @property int|null $received_by
+ * @property int|null $inspected_by
+ * @property string|null $inspection_outcome
+ * @property string|null $inspection_note
+ * @property Money|null $original_delivery_charge
+ * @property Money|null $return_charge
+ * @property Money|null $exchange_delivery_charge
+ * @property Money|null $other_adjustments
+ * @property string|null $adjustment_note
  * @property CarbonImmutable $requested_at
  * @property CarbonImmutable|null $decided_at
  * @property CarbonImmutable|null $received_at
+ * @property CarbonImmutable|null $inspected_at
  * @property CarbonImmutable|null $refunded_at
+ * @property CarbonImmutable|null $completed_at
  * @property CarbonImmutable|null $cancelled_at
  * @property ReturnRefundState $refund_state
  * @property int|null $refund_request_id
@@ -69,6 +88,8 @@ use RuntimeException;
  * @property-read RefundRequest|null $refundRequest
  * @property-read Collection<int, OrderReturnItem> $items
  * @property-read Collection<int, OrderReturnStatusChange> $statusHistory
+ * @property-read Collection<int, ReturnCharge> $charges
+ * @property-read Collection<int, ReturnResponsibilityChange> $responsibilityChanges
  */
 class OrderReturn extends Model
 {
@@ -100,12 +121,23 @@ class OrderReturn extends Model
             'status' => ReturnStatus::class,
             'reason' => ReturnReason::class,
             'refund_state' => ReturnRefundState::class,
+            'workflow_version' => 'integer',
+            'case_type' => ReturnCaseType::class,
+            'initiated_by_type' => ReturnInitiator::class,
+            'on_behalf_of' => ReturnParty::class,
+            'responsible_party' => ReturnParty::class,
             'evidence' => 'array',
             'refund_amount' => MoneyCast::class,
+            'original_delivery_charge' => MoneyCast::class,
+            'return_charge' => MoneyCast::class,
+            'exchange_delivery_charge' => MoneyCast::class,
+            'other_adjustments' => MoneyCast::class,
             'requested_at' => 'immutable_datetime',
             'decided_at' => 'immutable_datetime',
             'received_at' => 'immutable_datetime',
+            'inspected_at' => 'immutable_datetime',
             'refunded_at' => 'immutable_datetime',
+            'completed_at' => 'immutable_datetime',
             'cancelled_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -163,6 +195,52 @@ class OrderReturn extends Model
     public function statusHistory(): HasMany
     {
         return $this->hasMany(OrderReturnStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<ReturnCharge, $this>
+     */
+    public function charges(): HasMany
+    {
+        return $this->hasMany(ReturnCharge::class)->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<ReturnResponsibilityChange, $this>
+     */
+    public function responsibilityChanges(): HasMany
+    {
+        return $this->hasMany(ReturnResponsibilityChange::class)->orderBy('id');
+    }
+
+    /**
+     * Whether this return follows the case workflow (D35) rather than the
+     * three-step flow it was placed under before.
+     */
+    public function usesCaseWorkflow(): bool
+    {
+        return (int) ($this->getAttribute('workflow_version') ?? 1) >= 2;
+    }
+
+    public function isExchange(): bool
+    {
+        return $this->case_type === ReturnCaseType::Exchange;
+    }
+
+    /**
+     * The version-aware map: a return placed before D35 keeps the moves it had,
+     * and a case follows the full progression. The status enum alone cannot
+     * tell them apart.
+     */
+    public function canTransitionTo(TransitionableState $to, ?string $attribute = null): bool
+    {
+        $current = $this->currentState($attribute);
+
+        if ($current === $to || ! $current instanceof ReturnStatus) {
+            return false;
+        }
+
+        return in_array($to, $current->transitionsFor((int) ($this->getAttribute('workflow_version') ?? 1)), true);
     }
 
     /**

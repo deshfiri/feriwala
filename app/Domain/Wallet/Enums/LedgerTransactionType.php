@@ -73,6 +73,21 @@ enum LedgerTransactionType: string
     case OrderRefundCredit = 'order_refund_credit';
 
     /**
+     * What a return, exchange or damage case costs a Partner (D35): half the
+     * original delivery for a parcel coming back, the one new delivery an
+     * exchange sends, the approved loss on a damaged item, and delivering a
+     * damaged item to the Partner who asked for it.
+     *
+     * Debits only. When one is put right it is answered by a
+     * {@see self::ReturnAdjustment} credit that points at the entry it reverses,
+     * back into the kinds of money the debit spent.
+     */
+    case ReturnChargeDebit = 'return_charge_debit';
+    case ExchangeDeliveryDebit = 'exchange_delivery_debit';
+    case DamageLossDebit = 'damage_loss_debit';
+    case DamageDeliveryDebit = 'damage_delivery_debit';
+
+    /**
      * The kind of money a credit of this type brings in, where that is not a
      * decision somebody has to make (D-new).
      *
@@ -145,6 +160,10 @@ enum LedgerTransactionType: string
             self::PlatformFeeDebit,
             self::ServiceFeeDebit,
             self::WithdrawalDebit,
+            self::ReturnChargeDebit,
+            self::ExchangeDeliveryDebit,
+            self::DamageLossDebit,
+            self::DamageDeliveryDebit,
             self::RefundDebit => LedgerDirection::Debit,
 
             // A correction goes whichever way the thing it corrects went.
@@ -231,6 +250,10 @@ enum LedgerTransactionType: string
             self::BalanceConversionCredit => 'Converted to withdrawable',
             self::WholesaleOrderDebit => 'Wholesale order',
             self::OrderRefundCredit => 'Order refund',
+            self::ReturnChargeDebit => 'Return charge',
+            self::ExchangeDeliveryDebit => 'Exchange delivery charge',
+            self::DamageLossDebit => 'Damage loss',
+            self::DamageDeliveryDebit => 'Damaged-item delivery charge',
         };
     }
 }

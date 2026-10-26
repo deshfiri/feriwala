@@ -508,6 +508,7 @@ describe('payable lifecycle', function () {
                 reason: ReturnReason::NotAsDescribed,
                 lines: [['sku' => $sku, 'quantity' => 1]],
             ), OrderStatusChangeSource::Storefront);
+            $return = legacyReturnFlow($return);
 
             app(DecideOrderReturn::class)->approve($this->manager, $return, [], 'As described by the customer.');
 

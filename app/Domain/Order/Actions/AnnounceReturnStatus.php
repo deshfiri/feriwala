@@ -51,7 +51,9 @@ class AnnounceReturnStatus
             'return' => [
                 'id' => $return->public_id,
                 'reference' => $return->reference,
-                'status' => $return->status->value,
+                // The frozen contract's six statuses; a case's finer stages are
+                // internal, and show a storefront the one they sit inside.
+                'status' => $return->status->contractValue($return->refund_state === ReturnRefundState::Completed),
                 'reason' => $return->reason->value,
                 'refund_state' => $return->refund_state->value,
                 'refund_amount' => $return->refund_amount?->jsonSerialize(),

@@ -196,7 +196,12 @@ function returnTestAsk(Order $order, int $quantity = 2, ?string $key = null): Or
         idempotencyKey: $key,
     ), OrderStatusChangeSource::Storefront);
 
-    return $return;
+    // These tests cover the three-step flow a return placed before the case
+    // workflow (D35) still follows, so the return is made one of those. The case
+    // workflow itself is covered by ReturnCaseWorkflowTest.
+    $return->forceFill(['workflow_version' => 1])->save();
+
+    return $return->refresh();
 }
 
 function returnTestLine(OrderReturn $return): string

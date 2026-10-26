@@ -186,6 +186,16 @@ enum PlatformRole: string
                 Module::KycBatch->value => [Action::View],
                 Module::Catalog->value => [...$manage, Action::ManageSettings],
                 Module::Order->value => [...$manage, ...$review],
+
+                // The whole of a case except the money and the liability (D35):
+                // those are the Finance Manager's, so the person who accepts the
+                // goods is not the person who decides what is paid for them.
+                Module::ReturnCase->value => [
+                    Action::View, Action::Create, Action::Review,
+                    Action::Receive, Action::Inspect, Action::Export,
+                ],
+                Module::Exchange->value => [Action::View, Action::Create, Action::Review],
+                Module::Damage->value => [Action::View, Action::Inspect],
                 Module::Inventory->value => $read,
                 Module::Website->value => $manage,
                 Module::Report->value => $read,
@@ -267,6 +277,10 @@ enum PlatformRole: string
                 Module::Catalog->value => [Action::View],
                 Module::Fulfillment->value => [Action::View],
 
+                // Judging and moving the goods that came back (D35) — never the money.
+                Module::ReturnCase->value => [Action::View, Action::Inspect],
+                Module::Damage->value => [Action::View, Action::Inspect, Action::Dispatch],
+
                 // Read-only: seeing what a Supplier can currently supply,
                 // never editing it (D25) — that stays with SupplierManager.
                 Module::SupplierStock->value => [Action::View],
@@ -274,6 +288,12 @@ enum PlatformRole: string
 
             self::OrderManager => [
                 Module::Order->value => [...$manage, ...$review, Action::Archive, Action::ManageSettings],
+                Module::ReturnCase->value => [
+                    Action::View, Action::Create, Action::Review,
+                    Action::Receive, Action::Inspect, Action::Export,
+                ],
+                Module::Exchange->value => [Action::View, Action::Create, Action::Review],
+                Module::Damage->value => [Action::View, Action::Inspect],
                 Module::Inventory->value => [Action::View],
                 Module::Fulfillment->value => [Action::View, Action::Create],
                 Module::Courier->value => [Action::View],
@@ -282,6 +302,10 @@ enum PlatformRole: string
             self::FulfillmentManager => [
                 Module::Fulfillment->value => [Action::View, Action::Create, Action::Edit, Action::Approve, Action::Export],
                 Module::Order->value => [Action::View, Action::Edit],
+
+                // The warehouse side of a case (D35): the parcel, the goods, the damaged item.
+                Module::ReturnCase->value => [Action::View, Action::Receive, Action::Inspect],
+                Module::Damage->value => [Action::View, Action::Inspect, Action::Dispatch],
                 Module::Inventory->value => [Action::View],
                 Module::Courier->value => [Action::View, Action::Create],
             ],
@@ -297,6 +321,10 @@ enum PlatformRole: string
             // payout is a separate role so the person who books an amount is not
             // the person who pays it out.
             self::FinanceManager => [
+                // The money of a case (D35): charges, refunds and who bears a loss.
+                Module::ReturnCase->value => [Action::View, Action::Refund, Action::Export],
+                Module::Exchange->value => [Action::View],
+                Module::Damage->value => [Action::View, Action::AssignLiability],
                 Module::Ledger->value => [Action::View, Action::Export, Action::ViewSensitiveData],
                 Module::Payment->value => [Action::View, Action::Verify, Action::Export, ...$review],
                 Module::Wallet->value => [Action::View, Action::Export, Action::Approve],

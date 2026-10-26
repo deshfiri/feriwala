@@ -72,6 +72,15 @@ enum PermissionModule: string
     /** Which Suppliers actually have which Product (Product supplier assignments). */
     case ProductSupplier = 'product_supplier';
 
+    /**
+     * The return, exchange and damage cases (D35). Platform staff only: a Partner
+     * sees their own cases through the account policy, never through these, and the
+     * ordered `Gate::before` refuses them to any business identity.
+     */
+    case ReturnCase = 'return';
+    case Exchange = 'exchange';
+    case Damage = 'damage';
+
     public function label(): string
     {
         return match ($this) {
@@ -114,6 +123,9 @@ enum PermissionModule: string
             self::SourcingGroup => 'Product sourcing groups',
             self::ContentLibrary => 'Content library',
             self::ProductSupplier => 'Product suppliers',
+            self::ReturnCase => 'Returns',
+            self::Exchange => 'Exchanges',
+            self::Damage => 'Damages',
         };
     }
 }

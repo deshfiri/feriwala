@@ -169,6 +169,13 @@ return [
         'received' => 'গ্রহণ করা হয়েছে',
         'refunded' => 'অর্থ ফেরত দেওয়া হয়েছে',
         'cancelled' => 'বাতিল',
+        'waiting_for_parcel' => 'পার্সেলের অপেক্ষায়',
+        'parcel_received' => 'পার্সেল পৌঁছেছে',
+        'under_inspection' => 'যাচাই চলছে',
+        'inspection_approved' => 'যাচাই অনুমোদিত',
+        'inspection_rejected' => 'যাচাই প্রত্যাখ্যাত',
+        'settlement_pending' => 'রিফান্ড বা সমন্বয় অপেক্ষমাণ',
+        'completed' => 'সম্পন্ন',
     ],
 
     'payable' => [

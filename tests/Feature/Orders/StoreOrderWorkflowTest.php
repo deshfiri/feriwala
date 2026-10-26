@@ -355,6 +355,7 @@ describe('returns after dispatch', function () {
                 reason: ReturnReason::NotAsDescribed,
                 lines: [['sku' => $this->selection->product->sku, 'quantity' => 2]],
             ), OrderStatusChangeSource::Storefront);
+            $return = legacyReturnFlow($return);
             app(DecideOrderReturn::class)->approve($this->staff, $return, [], 'As described by the customer.');
 
             return $return->refresh();

@@ -81,6 +81,29 @@ enum PermissionAction: string
     /** Choosing which template a KYC round is opened against (D30). */
     case Assign = 'assign';
 
+    /**
+     * Marking a parcel as having arrived (D35). Its own verb: confirming that goods
+     * physically reached the warehouse is a different job, and a different person's,
+     * from deciding whether they are fit to restock.
+     */
+    case Receive = 'receive';
+
+    /** Judging goods that came back — counting them and deciding where each unit goes (D35). */
+    case Inspect = 'inspect';
+
+    /**
+     * Posting the money a case settles: the refund, the charges and the loss (D35).
+     * Apart from `inspect` so the person who decides the goods are fine is not the
+     * person who decides what is paid for them.
+     */
+    case Refund = 'refund';
+
+    /** Deciding who bears a damage loss, and for how much (D35). */
+    case AssignLiability = 'assign_liability';
+
+    /** Sending a damaged item out of stock to the Partner who owns it (D35). */
+    case Dispatch = 'dispatch';
+
     public function label(): string
     {
         return match ($this) {
@@ -112,6 +135,11 @@ enum PermissionAction: string
             self::SettleManually => 'Settle manually',
             self::Activate => 'Activate',
             self::Assign => 'Assign',
+            self::Receive => 'Receive',
+            self::Inspect => 'Inspect',
+            self::Refund => 'Refund',
+            self::AssignLiability => 'Assign liability',
+            self::Dispatch => 'Dispatch',
         };
     }
 

@@ -27,7 +27,9 @@ use App\Domain\Kyc\Policies\KycDocumentPolicy;
 use App\Domain\Kyc\Policies\KycDocumentTypePolicy;
 use App\Domain\Kyc\Policies\KycSubmissionPolicy;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Policies\OrderPolicy;
+use App\Domain\Order\Policies\ReturnCasePolicy;
 use App\Domain\Package\Models\Package;
 use App\Domain\Package\Policies\PackagePolicy;
 use App\Domain\Payout\Models\PayoutMethod;
@@ -109,6 +111,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // An order is seen by the account that placed it and by staff who may
         // see orders (§18.4, §18.5).
         Gate::policy(Order::class, OrderPolicy::class);
+
+        // A return, exchange or damage case is seen by the Partner whose order it
+        // is and by staff holding the case permissions (D35).
+        Gate::policy(OrderReturn::class, ReturnCasePolicy::class);
 
         // A dedicated website is run by the account that owns it and
         // administered by staff who may administer websites (§16.3).
@@ -217,6 +223,16 @@ class AuthorizationServiceProvider extends ServiceProvider
              *     partner handed it must not read another business's sales.
              */
             if (OrderPolicy::isOrderAdministrationAbility($ability) && CatalogPolicy::isBusinessIdentity($user)) {
+                return false;
+            }
+
+            /*
+             * 1b-ii. Return, exchange and damage case administration (D35),
+             *     refused the same way. A Partner reads their own cases through
+             *     the case policy's account scoping; `return.view` would be
+             *     every Partner's returns.
+             */
+            if (ReturnCasePolicy::isCaseAdministrationAbility($ability) && CatalogPolicy::isBusinessIdentity($user)) {
                 return false;
             }
 

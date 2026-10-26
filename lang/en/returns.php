@@ -14,6 +14,13 @@ return [
         'received' => 'The returned items arrived and were checked.',
         'refunded' => 'The refund for this return has been settled.',
         'cancelled' => 'The return was withdrawn.',
+        'waiting_for_parcel' => 'Waiting for the parcel to arrive.',
+        'parcel_received' => 'The parcel arrived.',
+        'under_inspection' => 'The returned items are being inspected.',
+        'inspection_approved' => 'The returned items were inspected and accepted.',
+        'inspection_rejected' => 'The returned items were inspected and not accepted.',
+        'settlement_pending' => 'The refund and any charges are being settled.',
+        'completed' => 'This case is complete.',
     ],
 
     // Why a refund is settled by a person rather than sent to a gateway.
@@ -29,6 +36,13 @@ return [
         'received' => 'Received',
         'refunded' => 'Refunded',
         'cancelled' => 'Withdrawn',
+        'waiting_for_parcel' => 'Waiting for parcel',
+        'parcel_received' => 'Parcel received',
+        'under_inspection' => 'Under inspection',
+        'inspection_approved' => 'Inspection approved',
+        'inspection_rejected' => 'Inspection rejected',
+        'settlement_pending' => 'Refund or adjustment pending',
+        'completed' => 'Completed',
     ],
 
     'reasons' => [
