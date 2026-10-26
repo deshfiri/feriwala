@@ -165,16 +165,22 @@ class WholesaleOrderController extends Controller
     }
 
     /**
-     * Whether no gateway is involved: the order is paid from the wallet, or its
-     * payment is for nothing at all (a Non-Conditional order with no delivery
-     * charge), which no gateway can take and nothing needs to.
+     * Whether no gateway is involved: the order is paid from the wallet, or — for
+     * an order placed under the earlier delivery-only rule — its payment is for
+     * nothing at all (a Non-Conditional order with no delivery charge), which no
+     * gateway can take and nothing needs to.
+     *
+     * An order paid in full (D34) never settles on a zero amount: a free delivery
+     * charge is not a paid order, and a payment of nothing on one is refused
+     * downstream rather than marked paid.
      */
     protected function settlesWithoutGateway(Order $order): bool
     {
         $payment = $order->payment;
 
         return $payment !== null
-            && (WalletPaymentMethod::is($payment->gateway) || ! $payment->amount->isPositive());
+            && (WalletPaymentMethod::is($payment->gateway)
+                || (! $order->usesFullPaymentModel() && ! $payment->amount->isPositive()));
     }
 
     /**

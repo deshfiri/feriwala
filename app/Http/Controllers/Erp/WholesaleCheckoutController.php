@@ -74,12 +74,10 @@ class WholesaleCheckoutController extends Controller
         $methods = $this->gateways->availableFor($quote->total->currency);
         $fingerprint = $quote->fingerprint();
         $pending = $orders->awaitingPaymentFor($cart);
-        $nonConditional = $account->isNonConditional();
-        $due = $nonConditional ? $quote->delivery : $quote->total;
 
         // The wallet is always on offer — greyed out, with its balance, when it
         // cannot cover this order — and counts as a standing choice only while it can.
-        // The wallet is charged the whole total, even for a Non-Conditional account.
+        // Every order is paid in full, so the wallet is charged the whole total (D34).
         $wallet = WalletPaymentMethod::offer($account, $quote->total);
         $standing = $wallet['sufficient'] ? [...$methods, WalletPaymentMethod::NAME] : $methods;
         $book = $this->addressBook($account->id, $quote->billingAddress, $addresses, $useAddress);
@@ -87,16 +85,11 @@ class WholesaleCheckoutController extends Controller
         return Inertia::render('wholesale/checkout', [
             'checkout' => [
                 'fingerprint' => $fingerprint,
-                'non_conditional' => $nonConditional,
-                // What is actually charged today — the delivery charge alone
-                // for a Non-Conditional account, the full total otherwise
-                // (D-new). `total` below stays the order's real value.
-                'amount_due_now' => ($nonConditional ? $quote->delivery : $quote->total)->jsonSerialize(),
                 'payment_methods' => [
                     ...array_map(fn (string $name) => [
                         'name' => $name,
                         'label' => $this->gatewayLabel($name),
-                        'fx' => $this->gateways->conversionNotice($name, $quote->total->currency, $due),
+                        'fx' => $this->gateways->conversionNotice($name, $quote->total->currency, $quote->total),
                         'balance' => null,
                         'sufficient' => true,
                     ], $methods),

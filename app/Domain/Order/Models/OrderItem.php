@@ -125,9 +125,11 @@ class OrderItem extends Model
      */
     public function defersProductCost(): bool
     {
+        // A wholesale order paid in full (D34) bought its goods outright, whatever
+        // the account's type: there is no COD amount to recover them from.
         return $this->platform_retained_amount !== null
             || $this->product_cost !== null
-            || $this->order->isNonConditional();
+            || ($this->order->isNonConditional() && ! $this->order->usesFullPaymentModel());
     }
 
     /**

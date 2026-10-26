@@ -657,8 +657,6 @@ return [
     'pay' => [
         'title' => 'Pay and place order',
         'body' => 'The stock is held for you while you pay. You pay :total through :gateway.',
-        'non_conditional_note' => 'This is the delivery charge only. The product cost is recovered from the amount collected at delivery, not charged now.',
-        'wallet_full_note' => 'Paying from the wallet buys these goods outright: the whole order total is charged now, and nothing is recovered from the amount collected at delivery.',
         'note' => 'Note for this order (optional)',
         'submit' => 'Pay :total',
         'submitting' => 'Placing your order…',

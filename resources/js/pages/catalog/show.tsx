@@ -12,7 +12,6 @@ import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/Website
 import BlockView from '@/components/content-library/block-view';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
-import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -39,7 +38,6 @@ type Props = {
     channel: SalesChannelName | 'all';
     /** The ways this account can use the product; both for a unified page. */
     modes: { wholesale: boolean; partner_selling: boolean };
-    account_type: 'conditional' | 'non_conditional';
     product: BrowseDetail;
     /** Only the recommendations this account may itself open on this channel. */
     related: PartnerProductCard[];
@@ -73,7 +71,6 @@ type Props = {
  */
 export default function CatalogueProduct({
     modes,
-    account_type: accountType,
     product,
     related,
     websites = [],
@@ -320,9 +317,6 @@ export default function CatalogueProduct({
                                 <WholesaleTerms product={product} />
                                 <AddToCart
                                     product={product}
-                                    nonConditional={
-                                        accountType === 'non_conditional'
-                                    }
                                     stockEnforced={stockEnforced}
                                 />
                             </>
@@ -612,11 +606,9 @@ function WholesaleTerms({ product }: { product: BrowseDetail }) {
  */
 function AddToCart({
     product,
-    nonConditional,
     stockEnforced,
 }: {
     product: BrowseDetail;
-    nonConditional: boolean;
     stockEnforced: boolean;
 }) {
     const { t } = useTranslation();
@@ -735,37 +727,6 @@ function AddToCart({
                                 </div>
                             </div>
                         </fieldset>
-
-                        {nonConditional && (
-                            <fieldset className="bg-muted/40 space-y-2 rounded-lg border p-3">
-                                <legend className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-                                    {t('wholesale.order.resale')}
-                                </legend>
-                                <MoneyInput
-                                    id="cart-resale-amount"
-                                    name="resale_amount"
-                                    label={t('wholesale.cart.resale_amount')}
-                                    defaultValue={
-                                        product.suggested_selling_price?.amount
-                                    }
-                                    required
-                                    error={errors.resale_amount}
-                                />
-                                <p className="text-muted-foreground text-xs">
-                                    {t('wholesale.cart.resale_guidance', {
-                                        minimum:
-                                            (
-                                                product.minimum_selling_price ??
-                                                product.wholesale_price
-                                            )?.formatted ?? '—',
-                                        maximum:
-                                            product.maximum_selling_price
-                                                ?.formatted ??
-                                            t('wholesale.cart.no_maximum'),
-                                    })}
-                                </p>
-                            </fieldset>
-                        )}
 
                         <div className="space-y-2 border-t pt-4">
                             <div className="flex flex-wrap items-center gap-3">

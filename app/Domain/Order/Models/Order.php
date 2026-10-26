@@ -20,6 +20,7 @@ use App\Domain\Order\Enums\OrderNotificationStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
+use App\Domain\Order\Enums\WholesalePaymentModel;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Wholesale\Models\Cart;
@@ -80,6 +81,7 @@ use LogicException;
  * @property OrderDeliveryStatus $delivery_status
  * @property string|null $customer_note
  * @property IntendedResaleChannel|null $intended_resale_channel
+ * @property WholesalePaymentModel|null $wholesale_payment_model null on an order placed under the earlier delivery-only rule
  * @property CarbonImmutable $placed_at
  * @property CarbonImmutable|null $paid_at
  * @property CarbonImmutable|null $cancelled_at
@@ -116,6 +118,7 @@ class Order extends Model
             'source' => OrderSource::class,
             'status' => OrderStatus::class,
             'account_type' => AccountType::class,
+            'wholesale_payment_model' => WholesalePaymentModel::class,
             'fulfillment_status' => OrderFulfillmentStatus::class,
             'courier_status' => OrderCourierStatus::class,
             'delivery_status' => OrderDeliveryStatus::class,
@@ -285,13 +288,25 @@ class Order extends Model
     }
 
     /**
-     * Whether this order's product cost was deferred to delivery (D-new):
-     * only the delivery charge was collected upfront, from a Non-Conditional
-     * account at the time it was placed.
+     * Whether the placing account was Non-Conditional when the order was placed.
+     *
+     * Says nothing about how the order was charged: an order placed after D34 is
+     * paid in full whatever the account's type, so ask
+     * {@see usesFullPaymentModel()} before treating the product cost as deferred.
      */
     public function isNonConditional(): bool
     {
         return $this->account_type === AccountType::NonConditional;
+    }
+
+    /**
+     * Whether this wholesale order was charged the whole total when it was
+     * placed (D34). False for an order from before that, which is handled by
+     * what it stored and never inferred from the account's current type.
+     */
+    public function usesFullPaymentModel(): bool
+    {
+        return $this->wholesale_payment_model === WholesalePaymentModel::Full;
     }
 
     /**

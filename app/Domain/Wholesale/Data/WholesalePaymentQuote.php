@@ -29,42 +29,35 @@ readonly class WholesalePaymentQuote implements PaymentQuote
     ) {}
 
     /**
-     * @param  bool  $deliveryOnly  A Non-Conditional account's order (D-new):
-     *                              the product cost, its discount and its tax are
-     *                              not collected now — only the delivery charge
-     *                              is. Banij recovers the product cost later, from
-     *                              the COD amount collected at delivery.
+     * The whole checkout, as the payment it becomes (D34). Every new ERP wholesale
+     * order is paid in full; the delivery-only payment an earlier rule allowed a
+     * Non-Conditional account is not made here any more, and the payments already
+     * recorded under it are never rebuilt.
      */
-    public static function fromCheckout(CheckoutQuote $checkout, bool $deliveryOnly = false): self
+    public static function fromCheckout(CheckoutQuote $checkout): self
     {
         $currency = $checkout->total->currency;
         $lines = [];
 
-        if (! $deliveryOnly) {
-            foreach ($checkout->lineCharges as $charge) {
-                $item = $charge->line->item;
-                $sku = $item->variant !== null ? $item->variant->sku : $item->product->sku;
+        foreach ($checkout->lineCharges as $charge) {
+            $item = $charge->line->item;
+            $sku = $item->variant !== null ? $item->variant->sku : $item->product->sku;
 
-                $lines[] = new QuoteLine(
-                    AllocationType::WholesaleGoods,
-                    $charge->line->lineTotal ?? Money::zero($currency),
-                    sprintf('%s (%s) × %d', $item->product->name, $sku, $item->quantity),
-                );
-            }
+            $lines[] = new QuoteLine(
+                AllocationType::WholesaleGoods,
+                $charge->line->lineTotal ?? Money::zero($currency),
+                sprintf('%s (%s) × %d', $item->product->name, $sku, $item->quantity),
+            );
+        }
 
-            if ($checkout->discount->isPositive()) {
-                $code = $checkout->coupon?->coupon?->code;
+        if ($checkout->discount->isPositive()) {
+            $code = $checkout->coupon?->coupon?->code;
 
-                $lines[] = new QuoteLine(AllocationType::Discount, $checkout->discount, $code === null ? null : 'Coupon '.$code);
-            }
+            $lines[] = new QuoteLine(AllocationType::Discount, $checkout->discount, $code === null ? null : 'Coupon '.$code);
         }
 
         if ($checkout->delivery->isPositive()) {
             $lines[] = new QuoteLine(AllocationType::DeliveryCharge, $checkout->delivery);
-        }
-
-        if ($deliveryOnly) {
-            return new self($lines, $currency, TaxBreakdown::empty($currency));
         }
 
         $added = $checkout->tax->addedTotal();

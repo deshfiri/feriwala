@@ -1207,19 +1207,23 @@ describe('paying from the wallet', function () {
             ->and(Invoice::query()->count())->toBe(1);
     });
 
-    it('settles a payment of nothing without touching the wallet, so an order is never left unpaid over a zero charge', function () {
+    it('never settles an order paid in full on a payment of nothing, and never touches the wallet (D34)', function () {
         $wallet = wholesaleOrderWalletFunded('500.00', '0.00');
         $order = wholesaleOrderPlaced();
 
-        // A Non-Conditional order with no delivery charge owes nothing now.
+        // Corrupted to owe nothing: a zero delivery charge is not a paid order, so
+        // an order placed after D34 is refused rather than marked paid. The
+        // delivery-only orders from before it still settle this way — see
+        // NonConditionalOrderTest.
         $order->payment?->forceFill(['amount' => Money::zero(Currency::BDT)])->save();
 
-        $this->post(route('wholesale.orders.payment.store', $order->public_id))->assertSessionHasNoErrors();
+        $this->post(route('wholesale.orders.payment.store', $order->public_id));
 
         $order->refresh();
 
-        expect($order->payment->status)->toBe(PaymentStatus::Paid)
-            ->and($order->status)->toBe(OrderStatus::Paid)
+        expect($order->usesFullPaymentModel())->toBeTrue()
+            ->and($order->payment->status->isSettled())->toBeFalse()
+            ->and($order->status)->toBe(OrderStatus::PaymentPending)
             ->and($wallet->refresh()->total->toDecimal())->toBe('500.00')
             ->and(LedgerEntry::query()->where('payment_id', $order->payment_id)->count())->toBe(0);
     });

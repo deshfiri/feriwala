@@ -156,10 +156,10 @@ class WebsiteCheckoutRules
      */
     public function gatewayChoices(Currency $currency): array
     {
-        return array_map(fn (string $name): array => [
+        return array_values(array_map(fn (string $name): array => [
             'name' => $name,
             'label' => (string) config("payment.gateways.{$name}.label", $name),
-        ], $this->gateways->availableFor($currency));
+        ], $this->gateways->availableFor($currency)));
     }
 
     /**

@@ -137,6 +137,25 @@ describe('wholesale checkout payment', () => {
         expect(container.querySelector('[name="total"]')).toBeNull();
     });
 
+    it('states one amount to pay, the whole total, with no "due now" part and no resale amount (D34)', () => {
+        const { container } = render(
+            <WholesaleCheckout
+                checkout={checkout({ delivery: money('0.00') })}
+            />,
+        );
+
+        expect(
+            screen.queryByText('wholesale.checkout.due_now'),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByText('wholesale.checkout.due_now_help'),
+        ).not.toBeInTheDocument();
+        expect(container.querySelector('[name="resale_amount"]')).toBeNull();
+        expect(
+            screen.getByRole('button', { name: /orders\.pay\.submit/ }),
+        ).toBeInTheDocument();
+    });
+
     it('offers the resale channel as optional, defaulting to none', () => {
         render(<WholesaleCheckout checkout={checkout()} />);
 

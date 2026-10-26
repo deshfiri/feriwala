@@ -1217,3 +1217,45 @@ document-type catalogue and `KycAudience` already were.
 - **Previews.** KYC files are encrypted by the application before they reach storage, so a storage
   temporary URL would hand out ciphertext. Previews stay on the authorised streaming path
   (permission checked, access recorded, no-store); no raw path or permanent URL exists.
+
+## D34 — ERP wholesale is always paid in full; storefront selling is the Non-Conditional route (2026-10-26) 🔒
+
+**Instructed by the Project Owner on 2026-10-26.** This replaces the earlier "D-new" rule — cited in
+code comments but never recorded in this file — under which a Non-Conditional Partner's ERP
+wholesale order was charged the delivery charge only, with the product cost recovered later from
+the COD amount collected at delivery.
+
+**The rule.** The ERP wholesale checkout is only for a Partner buying Products for themself or
+their own stock. For every new order, Conditional or Non-Conditional:
+
+- The full server-calculated payable amount is paid, through an enabled gateway (EPS, SSLCommerz,
+  SurjoPay, AmarPay, bKash, Nagad, Stripe, PayPal) or, where the wallet is on offer, from the wallet
+  for the whole total. There is no delivery-only wallet behaviour.
+- A zero delivery charge never makes an order paid. A payment of nothing on a new order is refused,
+  not settled. A client-submitted total is never trusted.
+- No `resale_amount` is asked for, accepted or kept: the cart and checkout no longer carry one, and
+  there is no "buying for myself / dropship for a customer" choice. One wholesale checkout.
+- Gateway verification, payment ownership, exact amount and currency matching, idempotency and
+  reconciliation are unchanged.
+
+**Non-Conditional selling happens only through the Partner's published Storefront Products.** For
+those orders (D12, D32 unchanged):
+
+- The Partner pays no Product cost upfront. "Free to the Partner" means no upfront purchase is
+  needed; it does not mean the Product has no financial value.
+- The Store customer pays by the Store's configured method, including COD where enabled. The order
+  belongs to that exact Store and Partner.
+- Banij retains the snapshotted suggested selling price. Partner profit is the Store selling price
+  minus that snapshot, credited as withdrawable only after successful delivery and confirmed
+  collection. Cancellation, return, refund and chargeback use the existing idempotent reversals.
+- Storefront availability uses the approved platform supply source; a Non-Conditional Storefront
+  order does not require Partner-owned stock. A completed ERP wholesale purchase may credit
+  Partner-owned stock under the existing Partner stock rules. The two are never mixed.
+
+**Existing orders are not rewritten.** `orders.wholesale_payment_model` is stamped `full` on every
+order placed after this change and is column-locked by trigger. Orders placed before it have no
+value and are deliberately not backfilled: they keep their original snapshots (account type, line
+`resale_amount`, payment amount) and settlement behaviour, identified by what they stored and never
+by the Partner's current account type. A pending legacy order with a zero payment still settles
+without a gateway, as it always did; `OrderItem::defersProductCost()` is true for a legacy
+Non-Conditional line and false for a `full` order.

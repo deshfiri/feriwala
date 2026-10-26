@@ -539,7 +539,6 @@ class CatalogController extends Controller
         return Inertia::render('catalog/show', [
             'channel' => $channel === null ? 'all' : $channel->value,
             'modes' => ['wholesale' => $wholesale, 'partner_selling' => $partnerSelling],
-            'account_type' => $account->account_type->value,
             'product' => $detail,
             'related' => $related,
             'stock_enforced' => $this->enforcement->enforced(),

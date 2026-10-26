@@ -18,6 +18,7 @@ use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
+use App\Domain\Order\Enums\WholesalePaymentModel;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
@@ -221,35 +222,13 @@ class PlaceWholesaleOrder
             throw OrderRefused::nothingToPay();
         }
 
-        $nonConditional = $account->isNonConditional();
+        // ERP wholesale is a Partner buying for themself or their own stock (D34):
+        // every account, Conditional or not, pays the whole server-calculated
+        // total. A zero delivery charge changes nothing about that.
+        $paymentQuote = WholesalePaymentQuote::fromCheckout($quote);
 
-        // A Non-Conditional account owes only the delivery charge now — unless it
-        // pays from the wallet, which is buying the goods outright: the whole total
-        // is charged and nothing is left to recover from the COD amount.
-        $deliveryOnly = $nonConditional && ! $payWithWallet;
-
-        if ($nonConditional) {
-            foreach ($quote->lineCharges as $charge) {
-                if ($charge->line->item->resale_amount === null) {
-                    // Most likely the line was added before the account's
-                    // type last changed to Non-Conditional — re-pricing alone
-                    // cannot fix a missing declaration, so the cart is sent
-                    // back rather than the order being placed without one.
-                    throw OrderRefused::resaleAmountRequired();
-                }
-            }
-        }
-
-        $paymentQuote = WholesalePaymentQuote::fromCheckout($quote, $deliveryOnly);
-
-        $expectedTotal = $deliveryOnly ? $quote->delivery : $quote->total;
-
-        if (! $paymentQuote->total()->equals($expectedTotal)) {
-            throw new LogicException(
-                $deliveryOnly
-                    ? 'A Non-Conditional wholesale payment must come to the delivery charge alone.'
-                    : 'A wholesale payment must come to the checkout total.'
-            );
+        if (! $paymentQuote->total()->equals($quote->total)) {
+            throw new LogicException('A wholesale payment must come to the checkout total.');
         }
 
         // Refused before an order is placed and stock held for a payment the
@@ -343,6 +322,7 @@ class PlaceWholesaleOrder
             'status' => OrderStatus::PaymentPending,
             'business_account_id' => $account->id,
             'account_type' => $account->account_type,
+            'wholesale_payment_model' => WholesalePaymentModel::Full,
             'placed_by' => $user->id,
             'cart_id' => $cart->id,
             'payment_id' => $payment->id,
@@ -481,7 +461,8 @@ class PlaceWholesaleOrder
             'tax' => $added,
             'tax_included' => $inclusive ? $charge->tax->tax : Money::zero($currency),
             'line_total' => $subtotal->minus($discount)->plus($added),
-            'resale_amount' => $item->resale_amount,
+            // No resale amount: a wholesale order is a purchase, not a dropship (D34).
+            'resale_amount' => null,
             'tax_code' => $taxed ? $charge->tax->code : null,
             'tax_rate_basis_points' => $taxed ? $charge->tax->rateBasisPoints : null,
             'tax_mode' => $taxed ? $charge->tax->mode->value : null,

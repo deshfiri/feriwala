@@ -94,6 +94,12 @@ class PayOrderFromWallet
             // method to choose and nothing to take.
             $owed = $payment->amount->isPositive();
 
+            // An order paid in full (D34) always owes its whole total; a payment of
+            // nothing on one is a fault, never a reason to mark it paid.
+            if (! $owed && $order->usesFullPaymentModel()) {
+                throw OrderRefused::nothingToPay();
+            }
+
             if ($owed && ! WalletPaymentMethod::is($payment->gateway)) {
                 throw OrderRefused::paymentMethodUnavailable();
             }
