@@ -105,11 +105,6 @@ class ReverseReturnCharge
         $platform = $original->platform_credit_amount;
         $withdrawable = $charge->amount->minus($platform);
 
-        $correctsEntry = LedgerEntry::query()
-            ->where('wallet_transaction_id', $original->id)
-            ->orderBy('id')
-            ->value('id');
-
         $first = null;
 
         foreach ([[BalanceType::PlatformCredit, $platform], [BalanceType::Withdrawable, $withdrawable]] as [$kind, $part]) {
@@ -117,6 +112,13 @@ class ReverseReturnCharge
             if (! $part->isPositive()) {
                 continue;
             }
+
+            // Each part answers the entry that took that kind of money.
+            $correctsEntry = LedgerEntry::query()
+                ->where('wallet_transaction_id', $original->id)
+                ->where('balance_type', $kind->value)
+                ->orderBy('id')
+                ->value('id');
 
             $credit = $this->wallet->credit(
                 $original->wallet,

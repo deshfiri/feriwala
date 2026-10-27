@@ -329,4 +329,57 @@ return [
         'active' => 'On the storefront',
         'suspended' => 'Suspended',
     ],
+
+    'damage' => [
+        'reported' => 'Reported',
+        'awaiting_receipt' => 'Waiting for the item',
+        'received' => 'Received',
+        'under_inspection' => 'Under inspection',
+        'liability_review' => 'Liability review',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'financial_posting_pending' => 'Waiting to be posted',
+        'finalized' => 'Finalized',
+        'dispatch_requested' => 'Delivery requested',
+        'dispatched' => 'Dispatched',
+        'received_by_partner' => 'Received by Partner',
+    ],
+
+    'damage_source' => [
+        'return_inspection' => 'Found on a returned item',
+        'delivered_report' => 'Reported on a delivered item',
+    ],
+
+    'damage_condition' => [
+        'broken' => 'Broken',
+        'torn' => 'Torn',
+        'stained' => 'Stained',
+        'defective' => 'Defective',
+        'missing_parts' => 'Missing parts',
+        'water_damaged' => 'Water damaged',
+        'crushed' => 'Crushed',
+        'other' => 'Other',
+    ],
+
+    'damage_cause' => [
+        'packing' => 'Packing',
+        'warehouse_handling' => 'Warehouse handling',
+        'courier_transit' => 'Courier transit',
+        'partner_handling' => 'Partner handling',
+        'customer_misuse' => 'Customer misuse',
+        'manufacturing_defect' => 'Manufacturing defect',
+        'unknown' => 'Unknown',
+    ],
+
+    'damage_valuation' => [
+        'suggested_price' => 'Suggested selling price when sold',
+        'platform_retained' => 'Platform share when sold',
+        'none' => 'No recorded value',
+    ],
+
+    'damage_dispatch' => [
+        'requested' => 'Requested',
+        'dispatched' => 'Dispatched',
+        'received_by_partner' => 'Received',
+    ],
 ];

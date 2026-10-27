@@ -322,10 +322,12 @@ class PermissionCatalogue
                 Action::View, Action::Create, Action::Review,
             ],
 
-            // `inspect` judges the damage and values it, `assign_liability`
-            // decides who bears it, `dispatch` sends the item to its owner.
+            // `inspect` judges the damage, `assign_liability` decides who bears it
+            // and for how much, `finalize` posts the loss, `dispatch` sends the item
+            // to its owner. `view_self` and `request_delivery` are a Partner's own.
             Module::Damage->value => [
-                Action::View, Action::Inspect, Action::AssignLiability, Action::Dispatch,
+                Action::View, Action::Inspect, Action::AssignLiability, Action::Finalize, Action::Dispatch,
+                Action::ViewSelf, Action::RequestDelivery,
             ],
         ];
     }

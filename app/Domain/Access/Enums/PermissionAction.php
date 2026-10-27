@@ -104,6 +104,22 @@ enum PermissionAction: string
     /** Sending a damaged item out of stock to the Partner who owns it (D35). */
     case Dispatch = 'dispatch';
 
+    /**
+     * Posting an approved damage loss (D35). Apart from `assign_liability` so the
+     * person who decides who bears a loss is not the person who posts it.
+     */
+    case Finalize = 'finalize';
+
+    /**
+     * A Partner reading their own damaged items (D35). Named here so the verb is
+     * in the catalogue; a Partner is a business identity and is authorized by
+     * ownership of the case, not by holding this permission.
+     */
+    case ViewSelf = 'view_self';
+
+    /** A Partner asking for their own damaged item to be delivered, and paying for it (D35). Authorized as `view_self` is. */
+    case RequestDelivery = 'request_delivery';
+
     public function label(): string
     {
         return match ($this) {
@@ -140,6 +156,9 @@ enum PermissionAction: string
             self::Refund => 'Refund',
             self::AssignLiability => 'Assign liability',
             self::Dispatch => 'Dispatch',
+            self::Finalize => 'Finalize',
+            self::ViewSelf => 'View own',
+            self::RequestDelivery => 'Request delivery',
         };
     }
 

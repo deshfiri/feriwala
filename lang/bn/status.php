@@ -313,4 +313,57 @@ return [
         'active' => 'স্টোরফ্রন্টে চালু',
         'suspended' => 'স্থগিত',
     ],
+
+    'damage' => [
+        'reported' => 'জানানো হয়েছে',
+        'awaiting_receipt' => 'পণ্যের অপেক্ষায়',
+        'received' => 'গৃহীত',
+        'under_inspection' => 'যাচাই চলছে',
+        'liability_review' => 'দায় পর্যালোচনা',
+        'approved' => 'অনুমোদিত',
+        'rejected' => 'প্রত্যাখ্যাত',
+        'financial_posting_pending' => 'হিসাবে তোলার অপেক্ষায়',
+        'finalized' => 'চূড়ান্ত',
+        'dispatch_requested' => 'ডেলিভারির অনুরোধ করা হয়েছে',
+        'dispatched' => 'পাঠানো হয়েছে',
+        'received_by_partner' => 'পার্টনার বুঝে পেয়েছেন',
+    ],
+
+    'damage_source' => [
+        'return_inspection' => 'ফেরত আসা পণ্যে পাওয়া গেছে',
+        'delivered_report' => 'ডেলিভারি হওয়া পণ্যে জানানো হয়েছে',
+    ],
+
+    'damage_condition' => [
+        'broken' => 'ভাঙা',
+        'torn' => 'ছেঁড়া',
+        'stained' => 'দাগ লাগা',
+        'defective' => 'ত্রুটিপূর্ণ',
+        'missing_parts' => 'অংশ নেই',
+        'water_damaged' => 'পানিতে নষ্ট',
+        'crushed' => 'চাপা পড়া',
+        'other' => 'অন্যান্য',
+    ],
+
+    'damage_cause' => [
+        'packing' => 'প্যাকিং',
+        'warehouse_handling' => 'গুদামে হ্যান্ডলিং',
+        'courier_transit' => 'কুরিয়ারে পরিবহন',
+        'partner_handling' => 'পার্টনারের হ্যান্ডলিং',
+        'customer_misuse' => 'ক্রেতার অব্যবহার',
+        'manufacturing_defect' => 'উৎপাদনজনিত ত্রুটি',
+        'unknown' => 'অজানা',
+    ],
+
+    'damage_valuation' => [
+        'suggested_price' => 'বিক্রির সময়ের প্রস্তাবিত বিক্রয়মূল্য',
+        'platform_retained' => 'বিক্রির সময়ের প্ল্যাটফর্মের অংশ',
+        'none' => 'কোনো মূল্য নথিভুক্ত নেই',
+    ],
+
+    'damage_dispatch' => [
+        'requested' => 'অনুরোধ করা হয়েছে',
+        'dispatched' => 'পাঠানো হয়েছে',
+        'received_by_partner' => 'পাওয়া গেছে',
+    ],
 ];

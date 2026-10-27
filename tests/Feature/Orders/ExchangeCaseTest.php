@@ -489,6 +489,71 @@ describe('releasing the replacement', function () {
     });
 });
 
+describe('the exchange line\'s stock hold, at the database', function () {
+    /**
+     * Whether the database refuses `$change`, inside its own savepoint.
+     */
+    function exDatabaseRefuses(Closure $change): bool
+    {
+        try {
+            DB::transaction($change);
+        } catch (QueryException) {
+            return true;
+        }
+
+        return false;
+    }
+
+    it('cannot be changed, cleared or swapped once it is set', function () {
+        $case = exAsk(exDeliveredOrder());
+        exAdvance($case, ReturnStatus::InspectionApproved);
+
+        $line = $case->refresh()->exchangeOrder->items()->sole();
+        $original = $line->stock_reservation_id;
+        $spare = DB::table('stock_reservations')->where('id', '<>', $original)->value('id');
+
+        expect($original)->not->toBeNull()
+            ->and(exDatabaseRefuses(fn () => DB::table('order_items')->where('id', $line->id)->update(['stock_reservation_id' => null])))->toBeTrue()
+            ->and(exDatabaseRefuses(fn () => DB::table('order_items')->where('id', $line->id)->update(['stock_reservation_id' => $spare])))->toBeTrue()
+            ->and(DB::table('order_items')->where('id', $line->id)->value('stock_reservation_id'))->toBe($original);
+    });
+
+    it('cannot be filled with a reservation made for another line, quantity or order', function () {
+        $first = exAsk(exDeliveredOrder(), 1);
+        $second = exAsk($first->order, 1);
+        exAdvance($first, ReturnStatus::InspectionApproved);
+
+        $firstLine = $first->refresh()->exchangeOrder->items()->sole();
+        $secondLine = $second->refresh()->exchangeOrder->items()->sole();
+
+        // The first line's reservation belongs to the first line alone.
+        expect(exDatabaseRefuses(fn () => DB::table('order_items')->where('id', $secondLine->id)->update(['stock_reservation_id' => $firstLine->stock_reservation_id])))->toBeTrue();
+
+        // A reservation for a different quantity is not this line's.
+        $wrongSize = DB::table('stock_reservations')->where('id', $firstLine->stock_reservation_id)->first();
+        $foreign = DB::table('stock_reservations')->insertGetId([
+            'public_id' => (string) Str::ulid(), 'partner_stock_item_id' => $wrongSize->partner_stock_item_id,
+            'stock_item_id' => $wrongSize->stock_item_id, 'quantity' => 7, 'kind' => 'cod', 'status' => 'active',
+            'reference' => $secondLine->order->reference.'-L'.$secondLine->line_number,
+            'expires_at' => now()->addDay(), 'business_account_id' => $wrongSize->business_account_id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        expect(exDatabaseRefuses(fn () => DB::table('order_items')->where('id', $secondLine->id)->update(['stock_reservation_id' => $foreign])))->toBeTrue()
+            ->and(DB::table('order_items')->where('id', $secondLine->id)->value('stock_reservation_id'))->toBeNull();
+    });
+
+    it('is never available to an ordinary order\'s line', function () {
+        $order = exDeliveredOrder();
+        $line = $order->items()->sole();
+        $spare = DB::table('stock_reservations')->where('id', '<>', $line->stock_reservation_id)->value('id');
+
+        expect(exDatabaseRefuses(fn () => DB::table('order_items')->where('id', $line->id)->update(['stock_reservation_id' => $spare])))->toBeTrue()
+            ->and(exDatabaseRefuses(fn () => DB::table('order_items')->where('id', $line->id)->update(['stock_reservation_id' => null])))->toBeTrue()
+            ->and(exDatabaseRefuses(fn () => DB::table('order_items')->where('id', $line->id)->update(['quantity' => 1])))->toBeTrue();
+    });
+});
+
 describe('what an exchange costs', function () {
     it('charges Banij the return charge and the new delivery, once each, when Banij is responsible', function () {
         $wallet = websiteTestWallet($this->account, '500.00');

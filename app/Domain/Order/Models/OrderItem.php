@@ -51,6 +51,7 @@ use LogicException;
  * @property Money|null $resale_amount a Non-Conditional account's declared resale/COD amount for this line
  * @property Money|null $product_cost what Feriwala is owed for a line filled from central stock for an account that never bought it
  * @property Money|null $platform_retained_amount the suggested selling price times the quantity, frozen at placement: what the platform keeps from that line, and the base the partner's profit is measured from
+ * @property Money|null $suggested_unit_price the platform's suggested selling price per unit when the line was placed, frozen with it: what a damaged unit of it is worth at most (D35)
  * @property string|null $tax_code
  * @property int|null $tax_rate_basis_points
  * @property string|null $tax_mode
@@ -109,6 +110,7 @@ class OrderItem extends Model
             'resale_amount' => MoneyCast::class,
             'product_cost' => MoneyCast::class,
             'platform_retained_amount' => MoneyCast::class,
+            'suggested_unit_price' => MoneyCast::class,
             'tax_rate_basis_points' => 'integer',
             'supplier_rate' => MoneyCast::class.':supplier_currency_code',
             'platform_rate' => MoneyCast::class.':supplier_currency_code',

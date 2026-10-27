@@ -366,6 +366,18 @@ class PlaceWebsiteOrder
     }
 
     /**
+     * The platform's suggested selling price for one unit of a line, frozen with
+     * it — null when the product has none (D35: what a damaged unit is worth at most).
+     */
+    protected function suggestedUnitPriceFor(Order $order, WebsiteOrderLine $line): ?Money
+    {
+        $package = $this->entitlements->activePackage($order->businessAccount)?->package;
+        $suggested = $this->priceRules->for($line->product, $package)->suggested;
+
+        return $suggested?->isPositive() === true ? $suggested : null;
+    }
+
+    /**
      * Hold every line's stock for the website's owner, in product order — from
      * the units that owner bought (D34). Supplier offers are never drawn on for a
      * storefront order, and a line the owner has too few of refuses the order:
@@ -488,6 +500,10 @@ class PlaceWebsiteOrder
                 // What the platform keeps, frozen now: the partner's profit is
                 // measured from this and never from the product's base cost.
                 'platform_retained_amount' => $fromCentral ? $this->platformRetainedFor($order, $line) : null,
+
+                // What a damaged unit of this line is worth at most (D35): frozen
+                // for every storefront line, whoever supplied it.
+                'suggested_unit_price' => $this->suggestedUnitPriceFor($order, $line),
                 'tax_code' => $taxed ? $line->tax->code : null,
                 'tax_rate_basis_points' => $taxed ? $line->tax->rateBasisPoints : null,
                 'tax_mode' => $taxed ? $line->tax->mode->value : null,

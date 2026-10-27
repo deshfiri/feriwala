@@ -14,7 +14,9 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Queries\PriceExchange;
+use App\Domain\Package\Entitlements;
 use App\Domain\Website\Models\Website;
+use App\Domain\Website\Queries\ResolveWebsitePriceRule;
 use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\StatusHistory\StatusChange;
@@ -52,6 +54,8 @@ class CreateExchangeOrder
 {
     public function __construct(
         protected PriceExchange $pricing,
+        protected ResolveWebsitePriceRule $priceRules,
+        protected Entitlements $entitlements,
     ) {}
 
     /**
@@ -155,7 +159,25 @@ class CreateExchangeOrder
             'tax_rate_basis_points' => $line->taxRateBasisPoints,
             'tax_mode' => $line->taxMode,
             'replaces_order_item_id' => $line->replaces->id,
+            'suggested_unit_price' => $this->suggestedUnitPriceFor($order, $line),
         ]);
+    }
+
+    /**
+     * What a damaged unit of this line is worth at most (D35): the same product
+     * keeps the figure frozen when it was first sold, and a different product is
+     * frozen at the platform's suggested price for it now.
+     */
+    protected function suggestedUnitPriceFor(Order $order, ExchangeLine $line): ?Money
+    {
+        if ($line->product->id === $line->replaces->product_id) {
+            return $line->replaces->suggested_unit_price;
+        }
+
+        $package = $this->entitlements->activePackage($order->businessAccount)?->package;
+        $suggested = $this->priceRules->for($line->product, $package)->suggested;
+
+        return $suggested?->isPositive() === true ? $suggested : null;
     }
 
     /**

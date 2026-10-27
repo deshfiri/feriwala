@@ -15,6 +15,8 @@ use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Courier\Policies\ShipmentPolicy;
+use App\Domain\Damage\Models\OrderDamage;
+use App\Domain\Damage\Policies\DamagePolicy;
 use App\Domain\ExternalStore\Models\ExternalStore;
 use App\Domain\ExternalStore\Policies\ExternalStorePolicy;
 use App\Domain\Inventory\Policies\InventoryPolicy;
@@ -115,6 +117,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // A return, exchange or damage case is seen by the Partner whose order it
         // is and by staff holding the case permissions (D35).
         Gate::policy(OrderReturn::class, ReturnCasePolicy::class);
+
+        // A damage case: the Partner whose order it is reads it as their own and
+        // asks for the item to be delivered; staff act through `damage.*` (D35).
+        Gate::policy(OrderDamage::class, DamagePolicy::class);
 
         // A dedicated website is run by the account that owns it and
         // administered by staff who may administer websites (§16.3).

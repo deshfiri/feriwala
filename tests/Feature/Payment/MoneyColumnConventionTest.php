@@ -42,7 +42,10 @@ const MONEY_COLUMN_INVENTORY = [
     'invoices' => ['subtotal', 'total'],
     'ledger_entries' => ['debit', 'credit', 'balance_before', 'balance_after', 'pending', 'reserved', 'available', 'hold'],
     'order_item_allocations' => ['unit_cost', 'platform_rate', 'expected_margin'],
-    'order_items' => ['unit_price', 'line_subtotal', 'discount', 'tax', 'tax_included', 'line_total', 'supplier_rate', 'platform_rate', 'platform_margin', 'platform_retained_amount'],
+    'order_items' => ['unit_price', 'line_subtotal', 'discount', 'tax', 'tax_included', 'line_total', 'supplier_rate', 'platform_rate', 'platform_margin', 'platform_retained_amount', 'suggested_unit_price'],
+    'order_damage_charges' => ['amount'],
+    'order_damage_dispatches' => ['delivery_charge'],
+    'order_damages' => ['valuation_unit_price', 'max_recoverable_value', 'approved_loss_amount'],
     'order_return_items' => ['refund_amount'],
     'order_returns' => [
         'refund_amount', 'original_delivery_charge', 'return_charge',

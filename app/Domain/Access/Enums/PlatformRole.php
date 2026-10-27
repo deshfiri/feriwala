@@ -324,7 +324,7 @@ enum PlatformRole: string
                 // The money of a case (D35): charges, refunds and who bears a loss.
                 Module::ReturnCase->value => [Action::View, Action::Refund, Action::Export],
                 Module::Exchange->value => [Action::View],
-                Module::Damage->value => [Action::View, Action::AssignLiability],
+                Module::Damage->value => [Action::View, Action::AssignLiability, Action::Finalize],
                 Module::Ledger->value => [Action::View, Action::Export, Action::ViewSensitiveData],
                 Module::Payment->value => [Action::View, Action::Verify, Action::Export, ...$review],
                 Module::Wallet->value => [Action::View, Action::Export, Action::Approve],

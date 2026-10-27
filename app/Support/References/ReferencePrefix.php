@@ -22,6 +22,7 @@ enum ReferencePrefix: string
     case Fulfillment = 'FFL';
     case Shipment = 'SHP';
     case GoodsReturn = 'RET';
+    case Damage = 'DMG';
     case Supplier = 'SUP';
     case SupplierListing = 'SPL';
     case SupplierListingLot = 'SLL';
@@ -44,6 +45,7 @@ enum ReferencePrefix: string
             self::Fulfillment => 'Fulfillment',
             self::Shipment => 'Shipment',
             self::GoodsReturn => 'Return',
+            self::Damage => 'Damage',
             self::Supplier => 'Supplier',
             self::SupplierListing => 'Supplier listing',
             self::SupplierListingLot => 'Supplier listing lot',
