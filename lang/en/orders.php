@@ -339,6 +339,9 @@ return [
         'cod_placed' => 'Order placed on the website. Waiting for you to confirm it with the code we sent.',
         'cod_confirmed' => 'Order confirmed. You will pay when it is delivered.',
         'cod_confirmed_without_code' => 'Order confirmed. You will pay when it is delivered.',
+        'exchange_created' => 'Replacement order created for the exchange. It waits for the returned items to be checked.',
+        'exchange_confirmed' => 'The returned items were accepted, so the replacement is on its way to being sent.',
+        'exchange_cancelled' => 'The replacement was cancelled because the exchange did not go ahead.',
     ],
 
     'actions' => [

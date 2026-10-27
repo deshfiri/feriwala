@@ -111,10 +111,12 @@ class RefundOrderReturn
      * approved, and opens the request — or marks it for a person to settle.
      *
      * @param  bool  $started  set when this call is the one that opened the refund
+     * @param  Money|null  $extra  an adjustment staff approved, added to what the goods are worth
+     * @param  Money|null  $exact  the whole refund, for an exchange: the goods were replaced, not refunded, so only the difference in price goes back
      *
      * @throws ReturnRefused
      */
-    public function openFor(User $actor, OrderReturn $locked, bool &$started, ?Money $extra = null): OrderReturn
+    public function openFor(User $actor, OrderReturn $locked, bool &$started, ?Money $extra = null, ?Money $exact = null): OrderReturn
     {
         $locked->loadMissing(['items.orderItem', 'order.payment']);
 
@@ -123,7 +125,7 @@ class RefundOrderReturn
             return $locked;
         }
 
-        return $this->open($actor, $locked, $started, $extra);
+        return $this->open($actor, $locked, $started, $extra, $exact);
     }
 
     /**
@@ -175,21 +177,24 @@ class RefundOrderReturn
     /**
      * @throws ReturnRefused
      */
-    protected function open(User $actor, OrderReturn $locked, bool &$started, ?Money $extra = null): OrderReturn
+    protected function open(User $actor, OrderReturn $locked, bool &$started, ?Money $extra = null, ?Money $exact = null): OrderReturn
     {
         $started = true;
 
         $amounts = $this->amounts->for($locked);
 
-        foreach ($locked->items as $item) {
-            $line = $amounts['lines'][$item->id];
-            $item->forceFill([
-                'refund_amount' => $line,
-                'currency_code' => $line->currency->value,
-            ])->save();
+        // An exchange refunds no goods, so no line carries a refund of its own.
+        if ($exact === null) {
+            foreach ($locked->items as $item) {
+                $line = $amounts['lines'][$item->id];
+                $item->forceFill([
+                    'refund_amount' => $line,
+                    'currency_code' => $line->currency->value,
+                ])->save();
+            }
         }
 
-        $total = $amounts['total'];
+        $total = $exact ?? $amounts['total'];
 
         if ($extra !== null) {
             $total = $total->plus($extra);

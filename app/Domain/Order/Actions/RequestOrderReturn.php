@@ -7,6 +7,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Order\Data\ReturnSubmission;
+use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnCaseType;
 use App\Domain\Order\Enums\ReturnInitiator;
@@ -63,6 +64,8 @@ class RequestOrderReturn
     public function __construct(
         protected ReturnEligibility $eligibility,
         protected ReturnChargeCalculator $charges,
+        protected AllocateExchangeNumber $numbers,
+        protected CreateExchangeOrder $exchanges,
         protected AnnounceReturnStatus $announcements,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
@@ -165,11 +168,20 @@ class RequestOrderReturn
 
             $this->eligibility->check($locked);
 
-            if ($submission->caseType === ReturnCaseType::Exchange) {
-                throw ReturnRefused::exchangeNotAvailable();
-            }
-
             $lines = $this->resolve($locked, $submission);
+
+            // An exchange is of goods that arrived, and takes the next number of its
+            // original order under a lock on that order — inside this transaction, so
+            // the number is held until the case that uses it is written.
+            $exchange = null;
+
+            if ($submission->caseType === ReturnCaseType::Exchange) {
+                if (! in_array($locked->status, [OrderStatus::Delivered, OrderStatus::Completed], true)) {
+                    throw ReturnRefused::exchangeNeedsDeliveredOrder();
+                }
+
+                $exchange = $this->numbers->handle($locked);
+            }
 
             $return = OrderReturn::create([
                 'order_id' => $locked->id,
@@ -178,6 +190,10 @@ class RequestOrderReturn
                 'source' => $source,
                 'workflow_version' => 2,
                 'case_type' => $submission->caseType,
+                'original_order_id' => $exchange['root']->id ?? null,
+                'exchange_sequence' => $exchange['sequence'] ?? null,
+                'exchange_number' => $exchange['number'] ?? null,
+                'previous_exchange_id' => ($exchange['previous'] ?? null)?->id,
                 'initiated_by_type' => $initiator,
                 'on_behalf_of' => $onBehalfOf,
                 'responsible_party' => $responsible,
@@ -220,6 +236,11 @@ class RequestOrderReturn
                 ),
                 $source,
             );
+
+            // One exchange request makes one case and one replacement order, or neither.
+            if ($exchange !== null) {
+                $this->exchanges->handle($return, $locked, $exchange['root'], array_values($lines), $submission, $source, $actor);
+            }
 
             $this->announcements->handle($return->refresh()->load('items'));
 

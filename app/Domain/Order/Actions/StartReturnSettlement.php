@@ -13,7 +13,6 @@ use App\Domain\Order\Enums\ReturnRefundState;
 use App\Domain\Order\Enums\ReturnStatus;
 use App\Domain\Order\Exceptions\ReturnRefused;
 use App\Domain\Order\Models\OrderReturn;
-use App\Domain\Order\Models\ReturnCharge;
 use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\StatusHistory\StatusChange;
@@ -142,9 +141,17 @@ class StartReturnSettlement
             $locked->forceFill(['other_adjustments' => $extra, 'adjustment_note' => $adjustmentNote]);
         }
 
-        // An exchange sends goods instead of money: its goods are not refunded.
+        // An exchange sends goods instead of money: its goods are replaced, not
+        // refunded. Only a replacement that cost less than the goods that came back
+        // gives money back, and then exactly the difference.
         if ($locked->isExchange()) {
-            $locked->forceFill(['refund_state' => ReturnRefundState::NotRequired])->save();
+            $owed = $locked->exchange_refund_due;
+
+            if ($owed !== null && $owed->isPositive()) {
+                $this->refunds->openFor($actor, $locked, $started, exact: $owed);
+            } else {
+                $locked->forceFill(['refund_state' => ReturnRefundState::NotRequired])->save();
+            }
         } else {
             $this->refunds->openFor($actor, $locked, $started, $extra);
         }
@@ -170,20 +177,36 @@ class StartReturnSettlement
      * What the case costs, posted to whoever bears it: once each, under keys of
      * their own.
      */
-    protected function postCharges(User $actor, OrderReturn $locked): ?ReturnCharge
+    protected function postCharges(User $actor, OrderReturn $locked): void
     {
         $revision = max(0, $locked->responsibilityChanges->count() - 1);
+        $bearer = $locked->responsible_party ?? throw ReturnRefused::wrongWorkflow();
 
-        $charge = $locked->return_charge === null ? null : $this->charges->handle(
-            case: $locked,
-            kind: ReturnChargeKind::ReturnCharge,
-            amount: $locked->return_charge,
-            bearer: $locked->responsible_party ?? throw ReturnRefused::wrongWorkflow(),
-            reason: 'Return charge: half of the original delivery charge, for the parcel coming back.',
-            actor: $actor,
-            revision: $revision,
-        );
+        // The parcel coming back: half of the original delivery. The original
+        // delivery itself is history and is never charged again.
+        if ($locked->return_charge !== null) {
+            $this->charges->handle(
+                case: $locked,
+                kind: ReturnChargeKind::ReturnCharge,
+                amount: $locked->return_charge,
+                bearer: $bearer,
+                reason: 'Return charge: half of the original delivery charge, for the parcel coming back.',
+                actor: $actor,
+                revision: $revision,
+            );
+        }
 
-        return $charge;
+        // An exchange also sends one new delivery, charged once, on its own key.
+        if ($locked->isExchange() && $locked->exchange_delivery_charge !== null) {
+            $this->charges->handle(
+                case: $locked,
+                kind: ReturnChargeKind::ExchangeDelivery,
+                amount: $locked->exchange_delivery_charge,
+                bearer: $bearer,
+                reason: 'Exchange delivery: the one new delivery the replacement is sent by.',
+                actor: $actor,
+                revision: $revision,
+            );
+        }
     }
 }

@@ -55,6 +55,17 @@ class ReturnRefundAmount
         return ['total' => $total, 'lines' => $lines];
     }
 
+    /**
+     * What some units of one order line were worth to the customer: their prorated
+     * share of the line's total, which already carries its discount and tax,
+     * floored to the poisha. The same figure a refund of them would be, so an
+     * exchange values the goods it takes back exactly as a refund would.
+     */
+    public function valueOf(OrderItem $line, int $units): Money
+    {
+        return $this->worth($line, max(0, $units));
+    }
+
     public function forLine(OrderReturnItem $item): Money
     {
         $orderItem = $item->orderItem;

@@ -47,6 +47,7 @@ const MONEY_COLUMN_INVENTORY = [
     'order_returns' => [
         'refund_amount', 'original_delivery_charge', 'return_charge',
         'exchange_delivery_charge', 'other_adjustments',
+        'exchange_additional_due', 'exchange_refund_due',
     ],
     'order_return_charges' => ['amount'],
     'orders' => ['subtotal', 'discount', 'delivery', 'tax', 'tax_included', 'cod_fee', 'total'],

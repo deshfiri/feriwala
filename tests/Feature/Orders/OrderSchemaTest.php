@@ -101,7 +101,10 @@ it('types every source §18.1 names', function (OrderSource $source) {
     });
 
     expect($order->refresh()->source)->toBe($source);
-})->with(OrderSource::cases());
+})->with(array_filter(OrderSource::cases(), fn (OrderSource $source) => $source !== OrderSource::Exchange));
+
+// An exchange order exists only with the original order and the return case that asked
+// for it, so it is made through the workflow: see ExchangeCaseTest.
 
 /**
  * The columns a website order is complete with: its shop, its customer and the

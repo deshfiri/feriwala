@@ -32,6 +32,13 @@ enum OrderSource: string
     /** A channel connected later. */
     case ExternalChannel = 'external';
 
+    /**
+     * The replacement order an exchange sends (D35). Not a sale: it has no payment
+     * of its own and never creates a second sale, profit or payable for goods that
+     * were already sold. It runs through fulfilment and the courier like any order.
+     */
+    case Exchange = 'exchange';
+
     public function label(): string
     {
         return match ($this) {
@@ -41,6 +48,7 @@ enum OrderSource: string
             self::Api => 'API',
             self::AdminEntry => 'Admin entry',
             self::ExternalChannel => 'External channel',
+            self::Exchange => 'Exchange replacement',
         };
     }
 }

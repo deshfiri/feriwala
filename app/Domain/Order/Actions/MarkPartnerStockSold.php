@@ -26,7 +26,9 @@ class MarkPartnerStockSold
 
     public function handle(Order $order): void
     {
-        if ($order->source !== OrderSource::Website) {
+        // A storefront order, or the replacement an exchange sends (D35): both are
+        // filled from, and consume, the Partner's own units.
+        if (! in_array($order->source, [OrderSource::Website, OrderSource::Exchange], true)) {
             return;
         }
 

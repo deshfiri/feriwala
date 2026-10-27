@@ -132,9 +132,25 @@ class ReturnRefused extends RuntimeException
         return new self(422, 'responsibility_needs_a_reason', 'Changing who is responsible is recorded with the reason for it.');
     }
 
-    public static function exchangeNotAvailable(): self
+    /** An exchange is for goods that arrived: only a delivered order can be exchanged. */
+    public static function exchangeNeedsDeliveredOrder(): self
     {
-        return new self(422, 'exchange_not_available', 'Exchanges are not available yet.');
+        return new self(409, 'exchange_needs_a_delivered_order', 'Only a delivered order can be exchanged.');
+    }
+
+    public static function replacementUnavailable(string $sku): self
+    {
+        return new self(422, 'replacement_unavailable', sprintf('BPC %s cannot be sent as a replacement: it is not one this shop sells.', $sku), ['sku' => $sku]);
+    }
+
+    public static function replacementOutOfStock(string $sku): self
+    {
+        return new self(409, 'replacement_out_of_stock', sprintf('There is not enough stock of BPC %s to send the replacement.', $sku), ['sku' => $sku]);
+    }
+
+    public static function nothingToCollect(): self
+    {
+        return new self(409, 'nothing_to_collect', 'This exchange has no extra amount waiting to be collected.');
     }
 
     public static function wrongWorkflow(): self

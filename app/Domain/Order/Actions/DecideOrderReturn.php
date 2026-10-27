@@ -41,6 +41,7 @@ class DecideOrderReturn
 {
     public function __construct(
         protected AnnounceReturnStatus $announcements,
+        protected CancelExchangeOrder $cancelExchange,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
@@ -116,6 +117,11 @@ class DecideOrderReturn
                 ),
                 OrderStatusChangeSource::Staff,
             );
+
+            // A refused exchange sends nothing.
+            if ($to === ReturnStatus::Rejected && $locked->isExchange()) {
+                $this->cancelExchange->handle($locked, $reason, $actor);
+            }
 
             // A case that is approved is then waiting for its parcel: two stages,
             // each written to the history, so the progression is never skipped.

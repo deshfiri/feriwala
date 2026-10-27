@@ -81,6 +81,8 @@ use LogicException;
  * @property OrderDeliveryStatus $delivery_status
  * @property string|null $customer_note
  * @property IntendedResaleChannel|null $intended_resale_channel
+ * @property int|null $original_order_id the order an exchange order replaces goods of (D35)
+ * @property int|null $exchange_return_id the case that asked for this exchange order (D35)
  * @property WholesalePaymentModel|null $wholesale_payment_model null on an order placed under the earlier delivery-only rule
  * @property CarbonImmutable $placed_at
  * @property CarbonImmutable|null $paid_at
@@ -285,6 +287,31 @@ class Order extends Model
         return $this->source === OrderSource::Website
             && $this->payment_id !== null
             && ($this->payment?->gateway === null);
+    }
+
+    /**
+     * Whether this is the replacement order an exchange sends (D35): not a sale,
+     * so no profit, payable or commission follows from it.
+     */
+    public function isExchange(): bool
+    {
+        return $this->source === OrderSource::Exchange;
+    }
+
+    /**
+     * @return BelongsTo<Order, $this>
+     */
+    public function originalOrder(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'original_order_id');
+    }
+
+    /**
+     * @return BelongsTo<OrderReturn, $this>
+     */
+    public function exchangeCase(): BelongsTo
+    {
+        return $this->belongsTo(OrderReturn::class, 'exchange_return_id');
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Enums\AllocationStatus;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Supplier\Models\Supplier;
 use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Supplier\Models\SupplierPayable;
@@ -125,6 +126,12 @@ class OrderItem extends Model
      */
     public function defersProductCost(): bool
     {
+        // An exchange line (D35) replaces goods that were already sold: nothing is
+        // recovered from it, and no second profit follows from it.
+        if ($this->order->isExchange()) {
+            return false;
+        }
+
         // A wholesale order paid in full (D34) bought its goods outright, whatever
         // the account's type: there is no COD amount to recover them from.
         return $this->platform_retained_amount !== null
@@ -232,7 +239,17 @@ class OrderItem extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('An order line is a snapshot of what was bought and cannot be changed.'));
+        static::updating(function (OrderItem $item): void {
+            // The one exception: an exchange line has no stock held until the
+            // returned goods are approved, so its empty reservation may be filled.
+            $fillsExchangeReservation = array_keys($item->getDirty()) === ['stock_reservation_id']
+                && $item->getOriginal('stock_reservation_id') === null
+                && $item->order()->value('source') === OrderSource::Exchange;
+
+            if (! $fillsExchangeReservation) {
+                throw new LogicException('An order line is a snapshot of what was bought and cannot be changed.');
+            }
+        });
         static::deleting(fn () => throw new LogicException('An order line is a snapshot of what was bought and cannot be removed.'));
     }
 

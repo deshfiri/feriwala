@@ -28,6 +28,7 @@ class CancelOrderReturn
 {
     public function __construct(
         protected AnnounceReturnStatus $announcements,
+        protected CancelExchangeOrder $cancelExchange,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
     ) {}
@@ -63,6 +64,11 @@ class CancelOrderReturn
                 ),
                 $source,
             );
+
+            // A withdrawn exchange sends nothing.
+            if ($locked->isExchange()) {
+                $this->cancelExchange->handle($locked, $reason ?? 'The exchange was withdrawn.', $actor, $source);
+            }
 
             $this->announcements->handle($locked->refresh()->load('items'));
 

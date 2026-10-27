@@ -69,6 +69,14 @@ use RuntimeException;
  * @property Money|null $exchange_delivery_charge
  * @property Money|null $other_adjustments
  * @property string|null $adjustment_note
+ * @property int|null $original_order_id the order an exchange is of (the root, never an exchange order)
+ * @property int|null $exchange_sequence 1 for the first exchange of that order, then 2, 3, …
+ * @property string|null $exchange_number EX-{original number}, then -2, -3, …
+ * @property int|null $exchange_order_id
+ * @property int|null $previous_exchange_id
+ * @property Money|null $exchange_additional_due what the customer owes for a dearer replacement
+ * @property Money|null $exchange_refund_due what the customer is owed for a cheaper one
+ * @property string|null $exchange_difference_state
  * @property CarbonImmutable $requested_at
  * @property CarbonImmutable|null $decided_at
  * @property CarbonImmutable|null $received_at
@@ -132,6 +140,8 @@ class OrderReturn extends Model
             'return_charge' => MoneyCast::class,
             'exchange_delivery_charge' => MoneyCast::class,
             'other_adjustments' => MoneyCast::class,
+            'exchange_additional_due' => MoneyCast::class,
+            'exchange_refund_due' => MoneyCast::class,
             'requested_at' => 'immutable_datetime',
             'decided_at' => 'immutable_datetime',
             'received_at' => 'immutable_datetime',
@@ -195,6 +205,38 @@ class OrderReturn extends Model
     public function statusHistory(): HasMany
     {
         return $this->hasMany(OrderReturnStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * The replacement order this exchange sent.
+     *
+     * @return BelongsTo<Order, $this>
+     */
+    public function exchangeOrder(): BelongsTo
+    {
+        return $this->belongsTo(Order::class, 'exchange_order_id');
+    }
+
+    /**
+     * The order an exchange is of: always the original, even for a second
+     * exchange of the replacement.
+     *
+     * @return BelongsTo<Order, $this>
+     */
+    public function originalOrder(): BelongsTo
+    {
+        return $this->belongsTo(Order::class, 'original_order_id');
+    }
+
+    /**
+     * The exchange this one follows, when the goods being exchanged were
+     * themselves the replacement of an earlier exchange.
+     *
+     * @return BelongsTo<OrderReturn, $this>
+     */
+    public function previousExchange(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'previous_exchange_id');
     }
 
     /**

@@ -45,6 +45,8 @@ class FinalizeReturnInspection
 
     public function __construct(
         protected RestoreReturnedStock $stock,
+        protected ConfirmExchangeOrder $confirmExchange,
+        protected CancelExchangeOrder $cancelExchange,
         protected AnnounceReturnStatus $announcements,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
@@ -97,6 +99,14 @@ class FinalizeReturnInspection
                 ),
                 OrderStatusChangeSource::Staff,
             );
+
+            // An exchange's replacement is released only now, with the goods back on
+            // the shelf: it may be filled from the very unit that came back, and if
+            // there is not enough the whole approval is refused rather than made over
+            // a replacement nobody can send.
+            if ($locked->isExchange()) {
+                $this->confirmExchange->handle($locked, $actor);
+            }
 
             $this->announcements->handle($locked->refresh()->load('items'));
 
@@ -166,6 +176,11 @@ class FinalizeReturnInspection
                 ),
                 OrderStatusChangeSource::Staff,
             );
+
+            // The goods were refused, so the replacement is not sent.
+            if ($locked->isExchange()) {
+                $this->cancelExchange->handle($locked, $reason, $actor);
+            }
 
             $this->announcements->handle($locked->refresh()->load('items'));
 

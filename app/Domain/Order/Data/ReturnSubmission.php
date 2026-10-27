@@ -26,7 +26,7 @@ final class ReturnSubmission
     /**
      * @param  array<int, array{sku: string, quantity: int}>  $lines  what is coming back
      * @param  array<int, string>|null  $evidence  references the asker supplied, never files
-     * @param  array<int, array{sku: string, product: string|null, variant: string|null}>  $replacements  an exchange's replacement per line (an absent entry means the same unit)
+     * @param  array<string, string>  $replacements  an exchange's replacement, by the SKU it replaces (an absent entry means the same unit)
      */
     public function __construct(
         public readonly ReturnReason $reason,
