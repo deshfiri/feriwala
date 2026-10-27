@@ -18,6 +18,7 @@ import {
     Network,
     Package,
     PackageCheck,
+    PackageX,
     Palette,
     Settings,
     Receipt,
@@ -27,6 +28,7 @@ import {
     ShieldCheck,
     ShoppingBag,
     Truck,
+    Undo2,
     UserRound,
     Users,
     Wallet as WalletIcon,
@@ -74,7 +76,9 @@ import { index as packageCatalogue } from '@/routes/admin/packages';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as referralCommissions } from '@/routes/admin/referral-commissions';
 import { index as referralSettings } from '@/routes/admin/referral-settings';
-import { index as adminReturns } from '@/routes/admin/returns';
+import { index as adminCases } from '@/routes/admin/cases';
+import { index as partnerCases } from '@/routes/cases';
+import { index as myDamages } from '@/routes/damages';
 import { index as roles } from '@/routes/admin/roles';
 import { index as shipments } from '@/routes/admin/shipments';
 import { index as smsSettings } from '@/routes/admin/sms';
@@ -139,6 +143,14 @@ export function useNavigation(): {
     const permissions = page.props.permissions ?? {};
     const account = page.props.account;
 
+    // The one Returns, Exchanges & Damages workspace is for whoever may see any
+    // of the three kinds of case (D35).
+    const canWorkCases = Boolean(
+        permissions['return.view'] ||
+        permissions['exchange.view'] ||
+        permissions['damage.view'],
+    );
+
     const active = account?.status === 'active';
     const buys = Boolean(
         account?.allowsWholesale || account?.allowsDropshipping,
@@ -167,6 +179,17 @@ export function useNavigation(): {
                                         title: t('nav.my_products'),
                                         href: myProducts(),
                                         icon: Package,
+                                    },
+                                ]
+                              : []),
+                          // The damaged items this Partner bears the loss for (D35).
+                          ...(account.viewsOrders &&
+                          (account.allowsWebsites || account.hasWebsites)
+                              ? [
+                                    {
+                                        title: t('nav.my_damages'),
+                                        href: myDamages(),
+                                        icon: PackageX,
                                     },
                                 ]
                               : []),
@@ -221,6 +244,17 @@ export function useNavigation(): {
                                         title: t('nav.store_orders'),
                                         href: storeOrders(),
                                         icon: ClipboardList,
+                                    },
+                                ]
+                              : []),
+                          // Returns and exchanges the Partner asked for (D35).
+                          ...(account.viewsOrders &&
+                          (account.allowsWebsites || account.hasWebsites)
+                              ? [
+                                    {
+                                        title: t('nav.returns_exchanges'),
+                                        href: partnerCases(),
+                                        icon: Undo2,
                                     },
                                 ]
                               : []),
@@ -492,15 +526,13 @@ export function useNavigation(): {
                       ]
                     : []),
 
-                ...(permissions['order.view'] ||
-                permissions['payment.approve'] ||
-                permissions['payment.reverse_transaction']
+                ...(permissions['order.view'] || canWorkCases
                     ? [
                           {
                               title: 'Orders',
                               href: permissions['order.view']
                                   ? adminOrders()
-                                  : adminReturns(),
+                                  : adminCases(),
                               icon: ClipboardList,
                               items: [
                                   ...(permissions['order.view']
@@ -515,13 +547,13 @@ export function useNavigation(): {
                                             },
                                         ]
                                       : []),
-                                  ...(permissions['order.view'] ||
-                                  permissions['payment.approve'] ||
-                                  permissions['payment.reverse_transaction']
+                                  // One entry for returns, exchanges and damages (D35):
+                                  // the queue itself shows only the kinds this person may see.
+                                  ...(canWorkCases
                                       ? [
                                             {
-                                                title: t('nav.returns'),
-                                                href: adminReturns(),
+                                                title: t('nav.cases'),
+                                                href: adminCases(),
                                             },
                                         ]
                                       : []),

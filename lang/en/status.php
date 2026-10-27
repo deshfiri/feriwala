@@ -382,4 +382,11 @@ return [
         'dispatched' => 'Dispatched',
         'received_by_partner' => 'Received',
     ],
+
+    'case_evidence_purpose' => [
+        'request' => 'With the request',
+        'receipt' => 'At receipt',
+        'inspection' => 'At inspection',
+        'responsibility_review' => 'At responsibility review',
+    ],
 ];

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Cases\Queries\PartnerCasePayload;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\StoreOrderStep;
 use App\Domain\Order\Exceptions\StoreOrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Queries\ReturnEligibility;
 use App\Domain\Order\Queries\StoreOrderIndex;
 use App\Domain\Order\Queries\StoreOrderTimeline;
 use App\Domain\Website\Models\Website;
@@ -15,6 +17,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -35,6 +38,8 @@ class StoreOrderController extends Controller
         protected StoreOrderIndex $index,
         protected StoreOrderTimeline $timeline,
         protected CancelStoreOrder $cancel,
+        protected PartnerCasePayload $cases,
+        protected ReturnEligibility $eligibility,
     ) {}
 
     public function index(Request $request): Response
@@ -76,12 +81,20 @@ class StoreOrderController extends Controller
                     'line_total' => $item->line_total->jsonSerialize(),
                 ])->all(),
             ],
-            'urls' => ['back' => route('store-orders.index'), 'cancel' => route('store-orders.cancel', $record->public_id), 'advance' => null],
+            'urls' => [
+                'back' => route('store-orders.index'),
+                'cancel' => route('store-orders.cancel', $record->public_id),
+                'advance' => null,
+                'request_case' => route('cases.create', $record->public_id),
+            ],
             // The Partner reads the whole timeline; they get no next-action button.
             'timeline' => ['next_action' => null] + $timeline,
+            // Every return and exchange asked for on this order (D35).
+            'cases' => $this->cases->forOrder($record),
             'can' => [
                 'advance' => false,
                 'cancel' => StoreOrderStep::for($record->status) === StoreOrderStep::Pending && ! $timeline['cancelled'],
+                'request_case' => $this->mayRequestCase($request, $record),
             ],
         ]);
     }
@@ -107,7 +120,23 @@ class StoreOrderController extends Controller
     }
 
     /**
+     * Whether this person may ask for a return or an exchange on this order: it
+     * can still come back, and they may manage the store it came through.
+     */
+    protected function mayRequestCase(Request $request, Order $order): bool
+    {
+        $user = $request->user();
+        $website = $order->website_id === null ? null : Website::query()->find($order->website_id);
+
+        return $user instanceof User
+            && $website !== null
+            && $this->eligibility->for($order)['eligible']
+            && Gate::forUser($user)->allows('manage', $website);
+    }
+
+    /**
      * The order, if it is a Store Order of this Partner's account — a 404 otherwise.
+     * A replacement order an exchange sent is one of them: it was sent from the same store.
      */
     protected function own(Request $request, string $publicId): Order
     {
@@ -116,7 +145,7 @@ class StoreOrderController extends Controller
         /** @var Order|null $order */
         $order = Order::query()
             ->where('public_id', $publicId)
-            ->where('source', OrderSource::Website->value)
+            ->whereIn('source', [OrderSource::Website->value, OrderSource::Exchange->value])
             ->where('business_account_id', $account->id)
             ->first();
 

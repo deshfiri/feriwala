@@ -6,8 +6,8 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Damage\Enums\DamageStatus;
 use App\Domain\Damage\Models\OrderDamage;
 use App\Domain\Order\Enums\ReturnParty;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
  * A Partner's own damaged items — `My Products > My Damages` (D35).
@@ -38,7 +38,7 @@ class MyDamages
                     DamageStatus::Dispatched, DamageStatus::ReceivedByPartner,
                 ],
             ))
-            ->with(['order:id,reference', 'dispositions', 'dispatch', 'statusHistory'])
+            ->with(['order:id,public_id,reference', 'dispositions', 'dispatch', 'statusHistory'])
             ->orderByDesc('id');
     }
 

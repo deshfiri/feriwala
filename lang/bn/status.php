@@ -366,4 +366,11 @@ return [
         'dispatched' => 'পাঠানো হয়েছে',
         'received_by_partner' => 'পাওয়া গেছে',
     ],
+
+    'case_evidence_purpose' => [
+        'request' => 'অনুরোধের সঙ্গে',
+        'receipt' => 'গ্রহণের সময়',
+        'inspection' => 'যাচাইয়ের সময়',
+        'responsibility_review' => 'দায় পর্যালোচনার সময়',
+    ],
 ];

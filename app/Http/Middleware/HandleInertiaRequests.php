@@ -115,6 +115,13 @@ class HandleInertiaRequests extends Middleware
         [PermissionModule::Payment, PermissionAction::Approve],
         [PermissionModule::Payment, PermissionAction::ReverseTransaction],
 
+        // The Returns, Exchanges & Damages workspace (D35): its one nav entry shows
+        // for whoever may see any of the three kinds of case, and each kind's
+        // own permission says which of them is in its queue.
+        [PermissionModule::ReturnCase, PermissionAction::View],
+        [PermissionModule::Exchange, PermissionAction::View],
+        [PermissionModule::Damage, PermissionAction::View],
+
         // Whether customers hear about their own payments is its own decision,
         // and its own permission (§30).
         [PermissionModule::Sms, PermissionAction::View],

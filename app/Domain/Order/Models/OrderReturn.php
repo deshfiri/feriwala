@@ -9,6 +9,7 @@ use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\RefundRequest;
+use App\Domain\Cases\Models\CaseEvidence;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnCaseType;
 use App\Domain\Order\Enums\ReturnInitiator;
@@ -245,6 +246,16 @@ class OrderReturn extends Model
     public function charges(): HasMany
     {
         return $this->hasMany(ReturnCharge::class)->orderBy('id');
+    }
+
+    /**
+     * The files of evidence on this case, oldest first (D35).
+     *
+     * @return HasMany<CaseEvidence, $this>
+     */
+    public function evidenceFiles(): HasMany
+    {
+        return $this->hasMany(CaseEvidence::class, 'order_return_id')->orderBy('id');
     }
 
     /**

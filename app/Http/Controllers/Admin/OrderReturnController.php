@@ -111,11 +111,18 @@ class OrderReturnController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $return): Response
+    public function show(Request $request, string $return): Response|RedirectResponse
     {
         $actor = $this->reader($request);
 
         $record = $this->find($return);
+
+        // A case placed under the case workflow is worked in the unified workspace;
+        // this page stays for the returns placed before it.
+        if ($record->usesCaseWorkflow()) {
+            return redirect()->route('admin.cases.returns.show', $record->public_id);
+        }
+
         $record->load([
             // `source` too: whether the money came on delivery is read from it.
             'order:id,public_id,reference,source,currency_code,payment_id',

@@ -8,6 +8,7 @@ use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Cases\Models\CaseEvidence;
 use App\Domain\Damage\Enums\DamageCause;
 use App\Domain\Damage\Enums\DamageCondition;
 use App\Domain\Damage\Enums\DamageSource;
@@ -231,6 +232,16 @@ class OrderDamage extends Model
     public function dispositions(): HasMany
     {
         return $this->hasMany(OrderDamageDisposition::class)->orderBy('id');
+    }
+
+    /**
+     * The files of evidence on this case, oldest first (D35).
+     *
+     * @return HasMany<CaseEvidence, $this>
+     */
+    public function evidenceFiles(): HasMany
+    {
+        return $this->hasMany(CaseEvidence::class, 'order_damage_id')->orderBy('id');
     }
 
     /**

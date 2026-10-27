@@ -2,6 +2,9 @@
 
 return [
     'store_orders' => 'স্টোর অর্ডার',
+    'cases' => 'ফেরত, বদল ও ক্ষতি',
+    'returns_exchanges' => 'ফেরত ও বদল',
+    'my_damages' => 'আমার ক্ষতিগ্রস্ত পণ্য',
     'groups' => [
         'overview' => 'সংক্ষিপ্ত চিত্র',
         'products' => 'পণ্য',

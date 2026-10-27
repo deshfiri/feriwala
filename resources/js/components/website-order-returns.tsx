@@ -1,51 +1,43 @@
-import { Form } from '@inertiajs/react';
-import { useState } from 'react';
-import FormField from '@/components/forms/form-field';
+import { Form, Link } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { returnRefundTone, returnStatusTone } from '@/lib/order-return';
 import WebsiteOrderController from '@/actions/App/Http/Controllers/Erp/WebsiteOrderController';
+import { create as createCase } from '@/routes/cases';
 import type {
     WebsiteOrderReturn,
     WebsiteOrderReturnable,
 } from '@/types/website-order';
 
-const controlClass =
-    'border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
-
 /**
- * Returns on one of a partner's website orders (§18.2, P6-12).
+ * Returns on one of a partner's website orders (§18.2, P6-12, D35).
  *
  * What can still come back and until when, every return asked for with where
- * it stands and where the money is, and — for the owner — asking for one on
- * the customer's behalf or withdrawing one before goods arrive. Everything
- * shown is decided on the server; this only displays it and sends requests.
+ * it stands and where the money is, and — for the owner — withdrawing one before
+ * goods arrive. Asking for a return or an exchange is its own page, where the
+ * estimate and the evidence belong. Everything shown is decided on the server;
+ * this only displays it and sends requests.
  */
 export default function WebsiteOrderReturns({
     websiteId,
     orderId,
     returnable,
     returns,
-    reasons,
     canRequest,
 }: {
     websiteId: string;
     orderId: string;
     returnable: WebsiteOrderReturnable;
     returns: WebsiteOrderReturn[];
-    reasons: string[];
+    reasons?: string[];
     canRequest: boolean;
 }) {
     const { t, locale } = useTranslation();
-    const [asking, setAsking] = useState(false);
-    // One key per form opened: a double submit is the same request, once.
-    const [key, setKey] = useState(() => crypto.randomUUID());
 
     const when = (value: string) => new Date(value).toLocaleString(locale);
 
@@ -68,7 +60,6 @@ export default function WebsiteOrderReturns({
                         {t('website.orders.returns.none')}
                     </p>
                 )}
-
                 {returns.map((item) => (
                     <article
                         key={item.id}
@@ -192,146 +183,13 @@ export default function WebsiteOrderReturns({
                         )}
                     </article>
                 ))}
-
-                {canRequest &&
-                    (asking ? (
-                        <Form
-                            {...WebsiteOrderController.requestReturn.form([
-                                websiteId,
-                                orderId,
-                            ])}
-                            options={{ preserveScroll: true }}
-                            onSuccess={() => {
-                                setAsking(false);
-                                setKey(crypto.randomUUID());
-                            }}
-                            className="border-border space-y-3 rounded-lg border p-3"
-                        >
-                            {({ processing, errors }) => (
-                                <>
-                                    <input
-                                        type="hidden"
-                                        name="idempotency_key"
-                                        value={key}
-                                    />
-
-                                    <FormField
-                                        label={t(
-                                            'website.orders.returns.reason',
-                                        )}
-                                        error={errors.reason}
-                                        required
-                                    >
-                                        {(field) => (
-                                            <select
-                                                {...field}
-                                                name="reason"
-                                                className={controlClass}
-                                                defaultValue=""
-                                                required
-                                            >
-                                                <option value="" disabled>
-                                                    {t(
-                                                        'website.orders.returns.choose_reason',
-                                                    )}
-                                                </option>
-                                                {reasons.map((reason) => (
-                                                    <option
-                                                        key={reason}
-                                                        value={reason}
-                                                    >
-                                                        {t(
-                                                            `returns.reasons.${reason}`,
-                                                        )}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-                                    </FormField>
-
-                                    <fieldset className="space-y-2">
-                                        <legend className="text-sm font-medium">
-                                            {t('website.orders.returns.what')}
-                                        </legend>
-                                        {returnable.lines.map((line) => (
-                                            <FormField
-                                                key={line.id}
-                                                label={`${line.name} (${line.sku})`}
-                                                hint={t(
-                                                    'website.orders.returns.up_to',
-                                                    {
-                                                        count: String(
-                                                            line.returnable,
-                                                        ),
-                                                    },
-                                                )}
-                                            >
-                                                {(field) => (
-                                                    <Input
-                                                        {...field}
-                                                        type="number"
-                                                        inputMode="numeric"
-                                                        name={`lines[${line.sku}]`}
-                                                        min={0}
-                                                        max={line.returnable}
-                                                        defaultValue={0}
-                                                        disabled={
-                                                            line.returnable ===
-                                                            0
-                                                        }
-                                                        className="w-28"
-                                                    />
-                                                )}
-                                            </FormField>
-                                        ))}
-                                        <InputError message={errors.lines} />
-                                    </fieldset>
-
-                                    <FormField
-                                        label={t('website.orders.returns.note')}
-                                        error={errors.note}
-                                    >
-                                        {(field) => (
-                                            <textarea
-                                                {...field}
-                                                name="note"
-                                                rows={3}
-                                                maxLength={2000}
-                                                className={controlClass}
-                                            />
-                                        )}
-                                    </FormField>
-
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button
-                                            type="submit"
-                                            size="sm"
-                                            disabled={processing}
-                                        >
-                                            {processing && <Spinner />}
-                                            {t('website.orders.returns.submit')}
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => setAsking(false)}
-                                        >
-                                            {t('website.orders.keep')}
-                                        </Button>
-                                    </div>
-                                </>
-                            )}
-                        </Form>
-                    ) : (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setAsking(true)}
-                        >
-                            {t('website.orders.returns.ask')}
-                        </Button>
-                    ))}
+                {canRequest && (
+                    <Button asChild size="sm" variant="outline">
+                        <Link href={createCase(orderId)}>
+                            {t('cases.partner.request')}
+                        </Link>
+                    </Button>
+                )}
             </div>
         </SectionCard>
     );

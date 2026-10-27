@@ -10,8 +10,10 @@ use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\BrandingController;
+use App\Http\Controllers\Admin\CaseController as AdminCaseController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContentLibraryController;
+use App\Http\Controllers\Admin\DamageCaseActionController;
 use App\Http\Controllers\Admin\DashboardAccessController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DeletionRequestController;
@@ -56,6 +58,7 @@ use App\Http\Controllers\Admin\ReferralChainController;
 use App\Http\Controllers\Admin\ReferralCommissionController;
 use App\Http\Controllers\Admin\ReferralSettingsController;
 use App\Http\Controllers\Admin\ReservationController;
+use App\Http\Controllers\Admin\ReturnCaseActionController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
@@ -88,13 +91,16 @@ use App\Http\Controllers\Admin\WebsitePricingController;
 use App\Http\Controllers\Admin\WebsiteWebhookController as AdminWebsiteWebhookController;
 use App\Http\Controllers\Admin\WithdrawalLimitsController;
 use App\Http\Controllers\BankLookupController;
+use App\Http\Controllers\CaseEvidenceController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Erp\AccountWithdrawalController as ErpAccountWithdrawalController;
 use App\Http\Controllers\Erp\AddressController;
 use App\Http\Controllers\Erp\AllocatedStockController;
+use App\Http\Controllers\Erp\CaseController as ErpCaseController;
 use App\Http\Controllers\Erp\CatalogController as BusinessCatalogController;
 use App\Http\Controllers\Erp\CheckoutController;
 use App\Http\Controllers\Erp\CustomerController as BusinessCustomerController;
+use App\Http\Controllers\Erp\DamageController as ErpDamageController;
 use App\Http\Controllers\Erp\ExternalStoreController;
 use App\Http\Controllers\Erp\KycController;
 use App\Http\Controllers\Erp\KycDocumentController;
@@ -176,6 +182,22 @@ Route::middleware(['auth', 'noindex'])->group(function () {
         ->name('notifications.read-all');
     Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
         ->name('notifications.read');
+
+    /*
+     * Evidence on return, exchange and damage cases (D35). Open to every signed-in
+     * person and decided by the evidence policy, because both a Partner and staff
+     * open it. A file is never at a URL of its own: it is reached through a signed,
+     * short-lived link to this route, and opening it checks the person's right to
+     * the case again. Attaching and taking back a draft are a Partner's.
+     */
+    Route::post('cases/evidence', [CaseEvidenceController::class, 'store'])
+        ->middleware('throttle:store-actions')
+        ->name('cases.evidence.store');
+    Route::delete('cases/evidence/{evidence}', [CaseEvidenceController::class, 'destroy'])
+        ->name('cases.evidence.destroy');
+    Route::get('cases/evidence/{evidence}', [CaseEvidenceController::class, 'show'])
+        ->middleware('signed')
+        ->name('cases.evidence.show');
 
     Route::get('staff/invitation/{token}', [StaffInvitationController::class, 'show'])
         ->name('staff.invitation.show');
@@ -581,6 +603,29 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::get('store-orders', [ErpStoreOrderController::class, 'index'])->name('store-orders.index');
         Route::get('store-orders/{order}', [ErpStoreOrderController::class, 'show'])->name('store-orders.show');
         Route::post('store-orders/{order}/cancellation', [ErpStoreOrderController::class, 'cancel'])->name('store-orders.cancel');
+
+        /*
+         * Returns & Exchanges, and My Damages (D35). Self-scoped from the account:
+         * another Partner's order, case or damaged item is a 404.
+         */
+        Route::get('cases', [ErpCaseController::class, 'index'])->name('cases.index');
+        Route::get('cases/request/{order}', [ErpCaseController::class, 'create'])->name('cases.create');
+        Route::post('cases/request/{order}/estimate', [ErpCaseController::class, 'estimate'])
+            ->middleware('throttle:store-actions')
+            ->name('cases.estimate');
+        Route::post('cases/request/{order}', [ErpCaseController::class, 'store'])
+            ->middleware('throttle:store-actions')
+            ->name('cases.store');
+        Route::get('cases/{case}', [ErpCaseController::class, 'show'])->name('cases.show');
+        Route::post('cases/{case}/cancellation', [ErpCaseController::class, 'cancel'])->name('cases.cancel');
+
+        Route::get('my-damages', [ErpDamageController::class, 'index'])->name('damages.index');
+        Route::get('my-damages/{damage}', [ErpDamageController::class, 'show'])->name('damages.show');
+        Route::post('my-damages/{damage}/delivery', [ErpDamageController::class, 'requestDelivery'])
+            ->middleware('throttle:store-actions')
+            ->name('damages.delivery.store');
+        Route::post('my-damages/{damage}/receipt', [ErpDamageController::class, 'confirmReceipt'])->name('damages.receipt.store');
+
         Route::get('orders', [BusinessOrderController::class, 'index'])->name('orders.index');
         Route::get('orders/export', [BusinessOrderController::class, 'export'])
             ->middleware('throttle:store-actions')
@@ -1615,7 +1660,46 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          * settled by hand sits behind a freshly confirmed password, as sending
          * one does.
          */
-        Route::get('returns', [OrderReturnController::class, 'index'])
+        /*
+         * Returns, exchanges and damages in one workspace (D35). Each step is one
+         * route, which runs one action; the action checks the permission and the
+         * stage again, so the buttons the screen offers are never the boundary.
+         */
+        Route::get('cases', [AdminCaseController::class, 'index'])->name('cases.index');
+        Route::get('cases/returns/{return}', [AdminCaseController::class, 'showReturn'])->name('cases.returns.show');
+        Route::get('cases/damages/{damage}', [AdminCaseController::class, 'showDamage'])->name('cases.damages.show');
+
+        Route::prefix('cases/returns/{return}')->name('cases.returns.')->group(function () {
+            Route::post('approval', [ReturnCaseActionController::class, 'approve'])->name('approval');
+            Route::post('rejection', [ReturnCaseActionController::class, 'reject'])->name('rejection');
+            Route::post('parcel', [ReturnCaseActionController::class, 'receiveParcel'])->name('parcel');
+            Route::post('inspection-start', [ReturnCaseActionController::class, 'startInspection'])->name('inspection-start');
+            Route::post('inspection-approval', [ReturnCaseActionController::class, 'approveInspection'])->name('inspection-approval');
+            Route::post('inspection-rejection', [ReturnCaseActionController::class, 'rejectInspection'])->name('inspection-rejection');
+            Route::post('responsibility', [ReturnCaseActionController::class, 'changeResponsibility'])->name('responsibility');
+            Route::post('settlement', [ReturnCaseActionController::class, 'settle'])->name('settlement');
+            Route::post('collection', [ReturnCaseActionController::class, 'recordCollection'])->name('collection');
+            Route::post('damages', [ReturnCaseActionController::class, 'openDamage'])->name('damages.store');
+            Route::post('evidence', [ReturnCaseActionController::class, 'addEvidence'])->name('evidence.store');
+        });
+
+        Route::prefix('cases/damages/{damage}')->name('cases.damages.')->group(function () {
+            Route::post('parcel', [DamageCaseActionController::class, 'receiveParcel'])->name('parcel');
+            Route::post('inspection-start', [DamageCaseActionController::class, 'startInspection'])->name('inspection-start');
+            Route::post('inspection', [DamageCaseActionController::class, 'recordInspection'])->name('inspection');
+            Route::post('rejection', [DamageCaseActionController::class, 'reject'])->name('rejection');
+            Route::post('liability', [DamageCaseActionController::class, 'assignLiability'])->name('liability');
+            Route::post('finalization', [DamageCaseActionController::class, 'finalize'])->name('finalization');
+            Route::post('responsibility', [DamageCaseActionController::class, 'changeResponsibility'])->name('responsibility');
+            Route::post('dispatch', [DamageCaseActionController::class, 'dispatch'])->name('dispatch');
+            Route::post('receipt', [DamageCaseActionController::class, 'confirmReceipt'])->name('receipt');
+            Route::post('outstanding/{charge}', [DamageCaseActionController::class, 'settleOutstanding'])->name('outstanding');
+            Route::post('evidence', [DamageCaseActionController::class, 'addEvidence'])->name('evidence.store');
+        });
+
+        // The old returns desk: its queue is now the unified one. A return placed
+        // before the case workflow still opens on the page it always had.
+        Route::get('returns', fn () => redirect()->route('admin.cases.index', ['type' => 'return']))
             ->name('returns.index');
         Route::get('returns/{return}', [OrderReturnController::class, 'show'])
             ->name('returns.show');

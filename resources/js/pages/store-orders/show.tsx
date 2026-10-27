@@ -13,7 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
+import { show as showCase } from '@/routes/cases';
 import type { StoreOrderRow } from '@/components/store-order-list';
+import type { PartnerCaseRow } from '@/types/cases';
 
 export type StoreOrderDetail = StoreOrderRow & {
     customer_phone: string | null;
@@ -31,9 +33,16 @@ export type StoreOrderDetail = StoreOrderRow & {
 type Props = {
     order: StoreOrderDetail;
     timeline: StoreOrderTimelineData;
-    can: { advance: boolean; cancel: boolean };
+    can: { advance: boolean; cancel: boolean; request_case?: boolean };
     /** Where the page's links and forms go; `advance` is absent for a Partner, who has no such button. */
-    urls: { back: string; cancel: string; advance: string | null };
+    urls: {
+        back: string;
+        cancel: string;
+        advance: string | null;
+        request_case?: string;
+    };
+    /** The returns and exchanges asked for on this order: a Partner's own, never the platform's view. */
+    cases?: PartnerCaseRow[];
 };
 
 /**
@@ -43,7 +52,13 @@ type Props = {
  * The Partner sees all of it and can cancel only while the order is Pending.
  * Neither side ever picks a status from a list.
  */
-export default function StoreOrderShow({ order, timeline, can, urls }: Props) {
+export default function StoreOrderShow({
+    order,
+    timeline,
+    can,
+    urls,
+    cases,
+}: Props) {
     const { t } = useTranslation();
     const cancelForm = useForm({ reason: '' });
     const actionForm = useForm({ note: '' });
@@ -114,6 +129,61 @@ export default function StoreOrderShow({ order, timeline, can, urls }: Props) {
                                 ))}
                             </ul>
                         </SectionCard>
+
+                        {cases !== undefined &&
+                            (cases.length > 0 || can.request_case) && (
+                                <SectionCard
+                                    title={t('cases.partner.on_order')}
+                                    actions={
+                                        can.request_case &&
+                                        urls.request_case ? (
+                                            <Button asChild size="sm">
+                                                <Link href={urls.request_case}>
+                                                    {t('cases.partner.request')}
+                                                </Link>
+                                            </Button>
+                                        ) : undefined
+                                    }
+                                >
+                                    {cases.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm">
+                                            {t('cases.partner.none_on_order')}
+                                        </p>
+                                    ) : (
+                                        <ul className="divide-y">
+                                            {cases.map((item) => (
+                                                <li
+                                                    key={item.id}
+                                                    className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <Link
+                                                            href={showCase(
+                                                                item.id,
+                                                            )}
+                                                            className="font-mono font-medium underline-offset-4 hover:underline"
+                                                        >
+                                                            {item.reference}
+                                                        </Link>
+                                                        <div className="text-muted-foreground text-xs">
+                                                            {item.kind_label}
+                                                            {item.exchange_order
+                                                                ? ` → ${item.exchange_order.reference}`
+                                                                : ''}
+                                                        </div>
+                                                    </div>
+                                                    <StatusPill
+                                                        tone={item.status_tone}
+                                                        label={
+                                                            item.status_label
+                                                        }
+                                                    />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </SectionCard>
+                            )}
                     </div>
 
                     <div className="space-y-4">

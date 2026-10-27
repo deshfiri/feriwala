@@ -799,3 +799,96 @@ describe('the overview dashboard link', () => {
         expect(hrefs).not.toContain('/dashboard');
     });
 });
+
+/**
+ * Returns, exchanges and damages (D35): one entry for staff who may see any kind
+ * of case, and the Partner's own two doors, each only where it opens onto
+ * something they may read.
+ */
+describe('returns, exchanges and damages navigation', () => {
+    let root: Root;
+
+    const renderFor = (props: Record<string, unknown>) => {
+        page.props = { translations: {}, ...props };
+        act(() => root.render(<Harness />));
+    };
+
+    const partner = (over: Record<string, unknown> = {}) => ({
+        status: 'active',
+        allowsWholesale: false,
+        allowsDropshipping: true,
+        allowsWebsites: true,
+        hasWebsites: false,
+        viewsOrders: true,
+        managesStaff: false,
+        ...over,
+    });
+
+    beforeEach(() => {
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        root = createRoot(document.createElement('div'));
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        titles = [];
+        sidebarTitles = [];
+    });
+
+    it('gives staff who may see any one kind of case the single entry, and no Partner doors', () => {
+        for (const permission of [
+            'return.view',
+            'exchange.view',
+            'damage.view',
+        ]) {
+            act(() => root.unmount());
+            root = createRoot(document.createElement('div'));
+            renderFor({ permissions: { [permission]: true }, account: null });
+
+            // It sits under Orders, so it is read from the whole tree, not the top level.
+            expect(titles).toContain('nav.cases');
+            expect(titles).not.toContain('nav.returns_exchanges');
+            expect(titles).not.toContain('nav.my_damages');
+        }
+    });
+
+    it('offers it to no staff member without one of the three', () => {
+        // That a Partner is never shared these permissions is the server's guarantee,
+        // and is tested there (PartnerCaseScreensTest).
+        renderFor({ permissions: { 'order.view': true }, account: null });
+        expect(titles).not.toContain('nav.cases');
+    });
+
+    it('gives a Partner who may read orders on their stores Returns & Exchanges and My Damages', () => {
+        renderFor({ permissions: {}, account: partner() });
+
+        expect(sidebarTitles).toContain('nav.returns_exchanges');
+        expect(sidebarTitles).toContain('nav.my_damages');
+        expect(titles).not.toContain('nav.cases');
+    });
+
+    it('keeps both doors from a Partner who may not read orders, or who has no stores to have cases on', () => {
+        renderFor({
+            permissions: {},
+            account: partner({ viewsOrders: false }),
+        });
+        expect(sidebarTitles).not.toContain('nav.returns_exchanges');
+        expect(sidebarTitles).not.toContain('nav.my_damages');
+
+        act(() => root.unmount());
+        root = createRoot(document.createElement('div'));
+
+        renderFor({
+            permissions: {},
+            account: partner({ allowsWebsites: false, hasWebsites: false }),
+        });
+        expect(sidebarTitles).not.toContain('nav.returns_exchanges');
+        expect(sidebarTitles).not.toContain('nav.my_damages');
+    });
+
+    it('is searchable from the command palette wherever it is in the sidebar', () => {
+        renderFor({ permissions: { 'damage.view': true }, account: null });
+
+        expect(titles).toContain('nav.cases');
+    });
+});

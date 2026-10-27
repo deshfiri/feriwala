@@ -89,6 +89,9 @@ use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
+// Fixtures for the return, exchange and damage screens: shared by several test files.
+require_once __DIR__.'/Support/CaseFixtures.php';
+
 /*
 |--------------------------------------------------------------------------
 | Test Case

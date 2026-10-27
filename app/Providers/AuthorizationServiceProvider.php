@@ -11,6 +11,8 @@ use App\Domain\Account\Policies\BusinessAccountPolicy;
 use App\Domain\Account\Policies\UserPolicy;
 use App\Domain\Address\Models\SharedAddress;
 use App\Domain\Address\Policies\SharedAddressPolicy;
+use App\Domain\Cases\Models\CaseEvidence;
+use App\Domain\Cases\Policies\CaseEvidencePolicy;
 use App\Domain\Catalog\Policies\CatalogModelPolicy;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Courier\Models\Shipment;
@@ -121,6 +123,10 @@ class AuthorizationServiceProvider extends ServiceProvider
         // A damage case: the Partner whose order it is reads it as their own and
         // asks for the item to be delivered; staff act through `damage.*` (D35).
         Gate::policy(OrderDamage::class, DamagePolicy::class);
+
+        // Case evidence: its uploader's while a draft, then the account's whose
+        // case it is and the staff who may see that kind of case (D35).
+        Gate::policy(CaseEvidence::class, CaseEvidencePolicy::class);
 
         // A dedicated website is run by the account that owns it and
         // administered by staff who may administer websites (§16.3).

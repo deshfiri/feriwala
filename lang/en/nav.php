@@ -2,6 +2,9 @@
 
 return [
     'store_orders' => 'Store Orders',
+    'cases' => 'Returns, Exchanges & Damages',
+    'returns_exchanges' => 'Returns & Exchanges',
+    'my_damages' => 'My Damages',
     /*
      * Section headings for the sidebar (§33.2).
      *

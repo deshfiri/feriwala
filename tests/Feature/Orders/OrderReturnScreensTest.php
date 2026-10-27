@@ -252,13 +252,20 @@ describe('the staff returns desk', function () {
     it('lists and shows returns to staff who read orders, and to nobody else', function () {
         $manager = testPlatformStaff(PlatformRole::OrderManager);
 
+        // The queue is now the unified one (D35); the old address leads there, and a return
+        // placed before the case workflow is still listed in it, marked as such.
         $this->actingAs($manager)
             ->get(route('admin.returns.index'))
+            ->assertRedirect(route('admin.cases.index', ['type' => 'return']));
+
+        $this->actingAs($manager)
+            ->get(route('admin.cases.index', ['type' => 'return']))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('admin/returns/index')
-                ->has('returns.data', 1)
-                ->where('returns.data.0.reference', $this->return->reference));
+                ->component('admin/cases/index')
+                ->has('cases.data', 1)
+                ->where('cases.data.0.reference', $this->return->reference)
+                ->where('cases.data.0.legacy', true));
 
         $this->actingAs($manager)
             ->get(route('admin.returns.show', $this->return->public_id))
@@ -276,8 +283,8 @@ describe('the staff returns desk', function () {
             ->assertInertia(fn (Assert $page) => $page->where('can.approve', false));
 
         // Owning the shop is never a way onto the desk.
-        $this->actingAs($this->account->owner)->get(route('admin.returns.index'))->assertForbidden();
-        $this->actingAs(testPlatformStaff(PlatformRole::KycManager))->get(route('admin.returns.index'))->assertForbidden();
+        $this->actingAs($this->account->owner)->get(route('admin.cases.index'))->assertForbidden();
+        $this->actingAs(testPlatformStaff(PlatformRole::KycManager))->get(route('admin.cases.index'))->assertForbidden();
     });
 
     it('refuses a step to somebody without its right before reading what they sent', function () {

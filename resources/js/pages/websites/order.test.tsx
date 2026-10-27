@@ -316,14 +316,11 @@ describe('one website order', function () {
             screen.getByText('The stitching is undone.'),
         ).toBeInTheDocument();
 
-        screen
-            .getByRole('button', { name: 'website.orders.returns.ask' })
-            .click();
-
-        // The quantity offered is the server's figure, never more.
-        const quantity = await screen.findByRole('spinbutton');
-
-        expect(quantity).toHaveAttribute('max', '1');
+        // Asking is its own page (D35): the estimate and the evidence belong there,
+        // and the quantities offered are the server's figures, never more.
+        expect(
+            screen.getByRole('link', { name: 'cases.partner.request' }),
+        ).toHaveAttribute('href', expect.stringMatching(/^\/cases\/request\//));
 
         unmount();
         render(
@@ -336,9 +333,7 @@ describe('one website order', function () {
         );
 
         expect(
-            screen.queryByRole('button', {
-                name: 'website.orders.returns.ask',
-            }),
+            screen.queryByRole('link', { name: 'cases.partner.request' }),
         ).not.toBeInTheDocument();
         expect(
             screen.getByText(
