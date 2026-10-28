@@ -1,6 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
-import { useState } from 'react';
 import FormField from '@/components/forms/form-field';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -14,7 +13,6 @@ import { index } from '@/routes/admin/websites';
 
 type Props = {
     accounts: { id: string; name: string }[];
-    storefront_domain: string;
 };
 
 const controlClass =
@@ -27,12 +25,8 @@ const controlClass =
  * does when the partner asks for themselves; this form only says whose it is,
  * what it is called and where it lives.
  */
-export default function AdminWebsiteCreate({
-    accounts,
-    storefront_domain: storefrontDomain,
-}: Props) {
+export default function AdminWebsiteCreate({ accounts }: Props) {
     const { t } = useTranslation();
-    const [subdomain, setSubdomain] = useState('');
 
     return (
         <>
@@ -106,25 +100,19 @@ export default function AdminWebsiteCreate({
                                 </FormField>
 
                                 <FormField
-                                    label={t('website.admin.subdomain')}
+                                    label={t('website.admin.domain')}
                                     description={t(
-                                        'website.admin.subdomain_hint',
+                                        'website.admin.domain_field_hint',
                                     )}
-                                    hint={`${subdomain || 'myshop'}.${storefrontDomain}`}
-                                    error={errors.subdomain}
+                                    error={errors.domain}
                                     required
                                 >
                                     {(field) => (
                                         <Input
                                             {...field}
-                                            name="subdomain"
-                                            value={subdomain}
-                                            onChange={(event) =>
-                                                setSubdomain(
-                                                    event.target.value.toLowerCase(),
-                                                )
-                                            }
-                                            maxLength={63}
+                                            name="domain"
+                                            placeholder="myshop.com"
+                                            maxLength={253}
                                             required
                                         />
                                     )}

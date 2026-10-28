@@ -57,8 +57,10 @@ class WebsiteOverview
     {
         $now = CarbonImmutable::now();
 
+        // A closed website is a deleted one, and is not the partner's to see.
         return Website::query()
             ->forAccount($account)
+            ->open()
             ->with(['domains', 'hostings'])
             ->withCount(['charges as outstanding_charges_count' => fn (Builder $query) => $query
                 ->where('status', WebsiteChargeStatus::Due->value)])
@@ -185,7 +187,10 @@ class WebsiteOverview
     public function allocationCard(WebsiteAllocation $allocation, ?CarbonImmutable $now = null): array
     {
         $now ??= CarbonImmutable::now();
-        $website = $allocation->website;
+
+        // A slot whose website was closed is free again: the card shows it
+        // waiting for a new website, not the one that was deleted.
+        $website = $allocation->website?->status->isTerminal() ? null : $allocation->website;
         $status = PackageWebsiteStatus::for($website, $allocation, $now);
 
         $registeredDomain = $website?->domains
@@ -476,6 +481,7 @@ class WebsiteOverview
         /** @var Website|null $website */
         $website = Website::query()
             ->forAccount($account)
+            ->open()
             ->where('public_id', $publicId)
             ->first();
 

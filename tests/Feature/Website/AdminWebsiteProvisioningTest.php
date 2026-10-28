@@ -28,11 +28,11 @@ describe('creating a website for a partner', function () {
             ->post(route('admin.websites.store'), [
                 'account' => $this->account->public_id,
                 'name' => 'Nasrin Fashion',
-                'subdomain' => 'nasrin-fashion',
+                'domain' => 'nasrinfashion.com',
             ])
             ->assertSessionHasNoErrors();
 
-        $website = Website::query()->where('subdomain', 'nasrin-fashion')->firstOrFail();
+        $website = Website::query()->where('domain', 'nasrinfashion.com')->firstOrFail();
 
         expect($website->business_account_id)->toBe($this->account->id)
             ->and($website->status)->toBe(WebsiteStatus::SetupPending)
@@ -48,24 +48,41 @@ describe('creating a website for a partner', function () {
             ->post(route('admin.websites.store'), [
                 'account' => $this->account->public_id,
                 'name' => 'One too many',
-                'subdomain' => 'one-too-many',
+                'domain' => 'one-too-many.com',
             ])
             ->assertSessionHasErrors('package');
 
-        expect(Website::query()->where('subdomain', 'one-too-many')->exists())->toBeFalse();
+        expect(Website::query()->where('domain', 'one-too-many.com')->exists())->toBeFalse();
     });
 
-    it('refuses an address somebody already holds', function () {
-        Website::factory()->create(['subdomain' => 'taken-name']);
-
+    it('takes the address as typed, normalising only what the column needs', function () {
         $this->actingAs($this->staff)
-            ->from(route('admin.websites.create'))
             ->post(route('admin.websites.store'), [
                 'account' => $this->account->public_id,
-                'name' => 'Taken',
-                'subdomain' => 'taken-name',
+                'name' => 'Anything Goes',
+                'domain' => 'HTTPS://Www.Anything-Goes.example/shop?x=1',
             ])
-            ->assertSessionHasErrors('subdomain');
+            ->assertSessionHasNoErrors();
+
+        expect(Website::query()->where('name', 'Anything Goes')->firstOrFail()->domain)
+            ->toBe('www.anything-goes.example');
+    });
+
+    it('still creates the website when another one already holds the domain', function () {
+        Website::factory()->create(['domain' => 'taken.example']);
+
+        $this->actingAs($this->staff)
+            ->post(route('admin.websites.store'), [
+                'account' => $this->account->public_id,
+                'name' => 'Second Claim',
+                'domain' => 'taken.example',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $website = Website::query()->where('name', 'Second Claim')->firstOrFail();
+
+        expect($website->domain)->toBeNull()
+            ->and($website->requested_address)->toBe('taken.example');
     });
 
     it('offers the form to staff and refuses it to a partner', function () {
@@ -81,11 +98,11 @@ describe('creating a website for a partner', function () {
             ->post(route('admin.websites.store'), [
                 'account' => $this->account->public_id,
                 'name' => 'Sneaky',
-                'subdomain' => 'sneaky',
+                'domain' => 'sneaky.example',
             ])
             ->assertForbidden();
 
-        expect(Website::query()->where('subdomain', 'sneaky')->exists())->toBeFalse();
+        expect(Website::query()->where('domain', 'sneaky.example')->exists())->toBeFalse();
     });
 });
 
@@ -110,11 +127,11 @@ describe('deleting a website', function () {
             ->post(route('admin.websites.store'), [
                 'account' => $this->account->public_id,
                 'name' => 'Replacement',
-                'subdomain' => 'replacement',
+                'domain' => 'replacement.example',
             ])
             ->assertSessionHasNoErrors();
 
-        expect(Website::query()->where('subdomain', 'replacement')->exists())->toBeTrue();
+        expect(Website::query()->where('domain', 'replacement.example')->exists())->toBeTrue();
     });
 
     it('drops a closed website from the list unless it is asked for', function () {
@@ -133,6 +150,55 @@ describe('deleting a website', function () {
 
         expect($names())->not->toContain('Gone Shop')
             ->and($names(['status' => WebsiteStatus::Closed->value]))->toContain('Gone Shop');
+    });
+
+    it('lets go of its domain, so the same one can go on the next website', function () {
+        $this->actingAs($this->staff)->post(route('admin.websites.store'), [
+            'account' => $this->account->public_id,
+            'name' => 'First Build',
+            'domain' => 'reuse.example',
+        ]);
+
+        $first = Website::query()->where('domain', 'reuse.example')->firstOrFail();
+
+        $this->actingAs($this->staff)->delete(route('admin.websites.destroy', $first->public_id), [
+            'reason' => 'Rebuilding this partner\'s shop',
+        ]);
+
+        expect($first->refresh()->domain)->toBeNull()
+            ->and($first->requested_address)->toBe('reuse.example');
+
+        $this->actingAs($this->staff)->post(route('admin.websites.store'), [
+            'account' => $this->account->public_id,
+            'name' => 'Second Build',
+            'domain' => 'reuse.example',
+        ]);
+
+        expect(Website::query()->where('name', 'Second Build')->firstOrFail()->domain)->toBe('reuse.example');
+    });
+
+    it('takes it off the partner\'s panel as well', function () {
+        $website = Website::factory()->forAccount($this->account)->active()->create(['name' => 'Gone From Panel']);
+
+        $this->actingAs($this->account->owner)
+            ->get(route('websites.show', $website->public_id))
+            ->assertOk();
+
+        $this->actingAs($this->staff)->delete(route('admin.websites.destroy', $website->public_id), [
+            'reason' => 'Deleted by the platform for this partner',
+        ]);
+
+        $props = $this->actingAs($this->account->owner)
+            ->get(route('websites.index'))
+            ->assertOk()
+            ->viewData('page')['props'];
+
+        expect(collect($props['websites'])->pluck('name')->all())->not->toContain('Gone From Panel')
+            ->and(collect($props['allocations'])->pluck('website')->filter()->all())->toBe([]);
+
+        $this->actingAs($this->account->owner)
+            ->get(route('websites.show', $website->public_id))
+            ->assertNotFound();
     });
 
     it('needs a reason', function () {

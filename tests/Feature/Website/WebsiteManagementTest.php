@@ -176,18 +176,17 @@ describe('what a partner may change', function () {
             ->assertForbidden();
     });
 
-    it('will not repaint a closed shop', function () {
+    it('will not repaint a closed shop, which is no longer the partner\'s to find', function () {
         $this->website->forceFill(['status' => WebsiteStatus::Closed, 'closed_at' => now()])->save();
 
         $this->actingAs($this->account->owner)
-            ->from(route('websites.settings.edit', $this->website->public_id))
             ->put(route('websites.settings.update', $this->website->public_id), [
                 'name' => 'Reopened',
                 'theme' => WebsiteTheme::Classic->value,
                 'primary_color' => '#111111',
                 'secondary_color' => '#f97316',
             ])
-            ->assertSessionHasErrors('website');
+            ->assertNotFound();
 
         expect($this->website->refresh()->name)->not->toBe('Reopened');
     });

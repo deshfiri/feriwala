@@ -26,9 +26,11 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -98,7 +100,6 @@ class WebsiteController extends Controller
                 ])
                 ->values()
                 ->all(),
-            'storefront_domain' => config('website.storefront_domain'),
         ]);
     }
 
@@ -116,23 +117,33 @@ class WebsiteController extends Controller
 
         $validated = $request->validate([
             'account' => ['required', 'string', Rule::exists('business_accounts', 'public_id')],
-            'name' => ['required', 'string', 'min:2', 'max:120'],
-            'subdomain' => [
-                'required', 'string', 'regex:'.RequestedAddress::LABEL_PATTERN,
-                Rule::notIn((array) config('website.reserved_subdomains', [])),
-                Rule::unique('websites', 'subdomain'),
-            ],
+            'name' => ['required', 'string', 'max:120'],
+            // Whatever staff type, taken as it is: no shape, reserved-name or
+            // uniqueness check. It is only normalised so the column accepts it.
+            'domain' => ['required', 'string', 'max:253'],
         ]);
 
         /** @var BusinessAccount $account */
         $account = BusinessAccount::query()->where('public_id', $validated['account'])->firstOrFail();
 
+        $domain = RequestedAddress::normalize($validated['domain']);
+
         $website = $this->attemptRouting(fn () => $requestWebsite->handle(
             $account,
             $this->person($request),
             $validated['name'],
-            $validated['subdomain'],
+            RequestedAddress::label($domain),
         ));
+
+        try {
+            // Its own savepoint: PostgreSQL aborts the whole transaction on a
+            // failed statement, and the duplicate is the one failure expected.
+            DB::transaction(fn () => $website->forceFill(['domain' => $domain])->save());
+        } catch (UniqueConstraintViolationException) {
+            // Another website already holds this domain. The website still
+            // exists; the address is kept for staff to sort out.
+            $website->forceFill(['domain' => null, 'requested_address' => $domain])->save();
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.created_for_partner')]);
 

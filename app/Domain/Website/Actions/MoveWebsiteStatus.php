@@ -5,6 +5,7 @@ namespace App\Domain\Website\Actions;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Website\Enums\WebhookEvent;
+use App\Domain\Website\Enums\WebsiteServiceStatus;
 use App\Domain\Website\Enums\WebsiteStatus;
 use App\Domain\Website\Enums\WebsiteStatusChangeSource;
 use App\Domain\Website\Exceptions\WebsiteRefused;
@@ -70,6 +71,10 @@ class MoveWebsiteStatus
             // it started.
             $previous = $locked->status;
 
+            if ($to === WebsiteStatus::Closed) {
+                $attributes = [...$attributes, ...$this->releaseAddress($locked)];
+            }
+
             if ($attributes !== []) {
                 $locked->forceFill($attributes);
             }
@@ -105,6 +110,31 @@ class MoveWebsiteStatus
         $this->announce($moved, $previous, $to);
 
         return $website;
+    }
+
+    /**
+     * Let go of the domain a closed website held, so it can be used again.
+     *
+     * A registration and a website's domain are each unique, and a closed
+     * website answers nothing — so holding on to the name would only stop the
+     * partner, or staff on their behalf, from putting it on the next website.
+     * The registrations are cancelled rather than removed, and the address
+     * stays on the closed website as the one it had asked for.
+     *
+     * @return array<string, mixed> columns to set with the move
+     */
+    protected function releaseAddress(Website $website): array
+    {
+        $website->domains()
+            ->where(fn ($query) => $query
+                ->whereIn('status', [WebsiteServiceStatus::Pending->value, WebsiteServiceStatus::Active->value])
+                ->orWhere('routing_status', '!=', 'unverified'))
+            ->update(['status' => WebsiteServiceStatus::Cancelled->value, 'routing_status' => 'unverified']);
+
+        return [
+            'requested_address' => $website->requested_address ?? $website->domain,
+            'domain' => null,
+        ];
     }
 
     /**
