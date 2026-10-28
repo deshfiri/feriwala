@@ -2,6 +2,8 @@
 
 namespace App\Domain\Order\Enums;
 
+use App\Support\Status\HasTranslatedLabel;
+
 /**
  * Who opened a case (D35).
  *
@@ -12,6 +14,8 @@ namespace App\Domain\Order\Enums;
  */
 enum ReturnInitiator: string
 {
+    use HasTranslatedLabel;
+
     /** From the Partner Panel. Never allowed to declare Banij responsible. */
     case Partner = 'partner';
 
@@ -21,12 +25,8 @@ enum ReturnInitiator: string
     /** A customer of the Partner's storefront, through the storefront API. */
     case Customer = 'customer';
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::Partner => 'Partner',
-            self::Staff => 'Staff',
-            self::Customer => 'Customer (storefront)',
-        };
+        return 'return_initiator';
     }
 }

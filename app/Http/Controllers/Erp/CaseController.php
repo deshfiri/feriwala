@@ -26,6 +26,7 @@ use App\Domain\Order\Queries\ReturnEligibility;
 use App\Domain\Website\Enums\WebsiteProductStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Http\Controllers\Concerns\RunsCaseActions;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -58,6 +59,7 @@ use Inertia\Response;
 class CaseController extends Controller
 {
     use ResolvesBusinessAccount;
+    use RunsCaseActions;
 
     public const PER_PAGE = 20;
 
@@ -163,7 +165,7 @@ class CaseController extends Controller
                 array_filter($validated['replacements'] ?? [], fn ($sku) => is_string($sku) && $sku !== ''),
             );
         } catch (ReturnRefused $refused) {
-            return response()->json(['message' => $refused->getMessage(), 'code' => $refused->errorCode], $refused->status);
+            return response()->json(['message' => $this->refusal($refused), 'code' => $refused->errorCode], $refused->status);
         }
 
         return response()->json($estimate);
@@ -218,7 +220,7 @@ class CaseController extends Controller
                 return $opened;
             });
         } catch (ReturnRefused|CaseEvidenceRefused $refused) {
-            throw ValidationException::withMessages(['lines' => $refused->getMessage()]);
+            throw ValidationException::withMessages(['lines' => $this->refusal($refused)]);
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('cases.partner.flash.requested')]);
@@ -239,7 +241,7 @@ class CaseController extends Controller
         try {
             $this->cancellations->handle($record, OrderStatusChangeSource::Account, $actor, 'Withdrawn by the Partner.');
         } catch (ReturnRefused $refused) {
-            throw ValidationException::withMessages(['case' => $refused->getMessage()]);
+            throw ValidationException::withMessages(['case' => $this->refusal($refused)]);
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('cases.partner.flash.withdrawn')]);

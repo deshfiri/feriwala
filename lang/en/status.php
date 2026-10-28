@@ -389,4 +389,58 @@ return [
         'inspection' => 'At inspection',
         'responsibility_review' => 'At responsibility review',
     ],
+
+    'return_case_type' => [
+        'return' => 'Return',
+        'exchange' => 'Exchange',
+    ],
+
+    'return_charge_kind' => [
+        'return_charge' => 'Return charge',
+        'exchange_delivery' => 'Exchange delivery',
+        'damage_loss' => 'Damage loss',
+        'damage_delivery' => 'Damaged-item delivery',
+    ],
+
+    'return_charge_status' => [
+        'recorded' => 'Recorded (Banij)',
+        'posted' => 'Posted',
+        'outstanding' => 'Outstanding',
+        'settled' => 'Settled',
+        'reversed' => 'Reversed',
+    ],
+
+    'return_disposition' => [
+        'restock' => 'Back on sale',
+        'damaged' => 'Damaged',
+        'quarantine' => 'Held for inspection',
+    ],
+
+    'return_initiator' => [
+        'partner' => 'Partner',
+        'staff' => 'Staff',
+        'customer' => 'Customer (storefront)',
+    ],
+
+    'return_party' => [
+        'partner' => 'Partner',
+        'banij' => 'Banij',
+    ],
+
+    'return_reason' => [
+        'damaged' => 'Arrived damaged',
+        'wrong_item' => 'Wrong item sent',
+        'not_as_described' => 'Not as described',
+        'missing_parts' => 'Parts missing',
+        'changed_mind' => 'Changed their mind',
+        'other' => 'Something else',
+    ],
+
+    'return_refund_state' => [
+        'not_required' => 'No refund',
+        'pending' => 'Refund pending',
+        'completed' => 'Refunded',
+        'failed' => 'Refund failed',
+        'manual_review' => 'Needs manual settlement',
+    ],
 ];

@@ -56,7 +56,17 @@ class NotifyStaffOfSubmission
      */
     public function recipients(StaffQueue $queue): Collection
     {
-        return User::permission($queue->permission())->get()
+        return $this->holdersOf($queue->permission());
+    }
+
+    /**
+     * Platform staff holding `$permission`, plus Super Admins — never a business identity.
+     *
+     * @return Collection<int, User>
+     */
+    public function holdersOf(string $permission): Collection
+    {
+        return User::permission($permission)->get()
             ->merge(User::role(PlatformRole::SuperAdmin->value)->get())
             ->unique('id')
             ->filter(fn (User $user) => $user->hasPlatformAccess() && ! CatalogPolicy::isBusinessIdentity($user))

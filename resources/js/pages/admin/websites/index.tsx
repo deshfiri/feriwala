@@ -8,12 +8,14 @@ import StatusPill from '@/components/status-pill';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { websiteHealthTone, websiteStatusTone } from '@/lib/website';
-import { index, show } from '@/routes/admin/websites';
+import { Button } from '@/components/ui/button';
+import { create, index, show } from '@/routes/admin/websites';
 import type { Column, Paginator } from '@/types';
 import type { WebsiteSummary } from '@/types/website';
 
 type Props = {
     websites: Paginator<WebsiteSummary>;
+    can: { provision: boolean };
     filters: { search: string | null; status: string | null };
     statuses: { value: string; label: string }[];
 };
@@ -28,7 +30,12 @@ const selectClass =
  * the usual reason a build has not started and the usual thing a support call
  * is about.
  */
-export default function AdminWebsites({ websites, filters, statuses }: Props) {
+export default function AdminWebsites({
+    websites,
+    can,
+    filters,
+    statuses,
+}: Props) {
     const { t, locale } = useTranslation();
     const { setFilter } = useTableQuery({ only: ['websites', 'filters'] });
 
@@ -106,6 +113,15 @@ export default function AdminWebsites({ websites, filters, statuses }: Props) {
                 <PageHeader
                     title={t('website.admin_title')}
                     description={t('website.admin_subtitle')}
+                    actions={
+                        can.provision && (
+                            <Button asChild>
+                                <Link href={create()}>
+                                    {t('website.admin.new_website')}
+                                </Link>
+                            </Button>
+                        )
+                    }
                 />
 
                 <DataTable

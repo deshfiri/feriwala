@@ -33,6 +33,7 @@ class CaseEvidenceRefused extends RuntimeException
     {
         return new self(422, 'evidence_too_large', sprintf('Each file can be at most %d MB.', max(1, intdiv($maxBytes, 1024 * 1024))), [
             'max_bytes' => $maxBytes,
+            'mb' => max(1, intdiv($maxBytes, 1024 * 1024)),
         ]);
     }
 

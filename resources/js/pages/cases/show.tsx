@@ -1,7 +1,8 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import CaseTimeline from '@/components/cases/case-timeline';
 import EvidenceGallery from '@/components/cases/evidence-gallery';
 import FinancialsPanel from '@/components/cases/financials-panel';
+import LinkedRef from '@/components/cases/linked-ref';
 import InputError from '@/components/input-error';
 import LineThumb from '@/components/line-thumb';
 import MoneyAmount from '@/components/money-amount';
@@ -213,33 +214,30 @@ export default function PartnerCase({
                             <ul className="space-y-2 text-sm">
                                 <li>
                                     {t('cases.facts.original_order')}:{' '}
-                                    <Link
-                                        href={c.order_url}
-                                        className="font-mono underline-offset-4 hover:underline"
-                                    >
-                                        {c.order.reference}
-                                    </Link>
+                                    <LinkedRef item={c.links.order} />
                                 </li>
-                                {c.exchange_order && c.exchange_order_url && (
+                                {c.links.exchange_order && (
                                     <li>
                                         {t('cases.facts.exchange_order')}:{' '}
-                                        <Link
-                                            href={c.exchange_order_url}
-                                            className="font-mono underline-offset-4 hover:underline"
-                                        >
-                                            {c.exchange_order.reference}
-                                        </Link>
-                                        {c.exchange_order_status
-                                            ? ` (${c.exchange_order_status})`
-                                            : ''}
+                                        <LinkedRef
+                                            item={c.links.exchange_order}
+                                        />
                                     </li>
                                 )}
-                                {c.previous_exchange && (
+                                {c.links.previous_exchange && (
                                     <li>
                                         {t('cases.facts.previous_exchange')}:{' '}
-                                        <span className="font-mono">
-                                            {c.previous_exchange}
-                                        </span>
+                                        <LinkedRef
+                                            item={c.links.previous_exchange}
+                                        />
+                                    </li>
+                                )}
+                                {c.links.next_exchange && (
+                                    <li>
+                                        {t('cases.facts.next_exchange')}:{' '}
+                                        <LinkedRef
+                                            item={c.links.next_exchange}
+                                        />
                                     </li>
                                 )}
                             </ul>

@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Enums;
 
 use App\Domain\Inventory\Enums\StockBucket;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * What was done with goods that came back (§19.1, P6-12).
@@ -16,6 +17,8 @@ use App\Domain\Inventory\Enums\StockBucket;
  */
 enum ReturnDisposition: string
 {
+    use HasTranslatedLabel;
+
     /** Fit to sell again: back on the shelf. */
     case Restock = 'restock';
 
@@ -40,20 +43,16 @@ enum ReturnDisposition: string
         };
     }
 
-    public function label(): string
-    {
-        return match ($this) {
-            self::Restock => 'Back on sale',
-            self::Damaged => 'Damaged',
-            self::Quarantine => 'Held for inspection',
-        };
-    }
-
     /**
      * Whether these units become sellable again.
      */
     public function isSellable(): bool
     {
         return $this === self::Restock;
+    }
+
+    protected static function statusLabelGroup(): string
+    {
+        return 'return_disposition';
     }
 }

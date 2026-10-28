@@ -39,7 +39,11 @@ class DiscardDraftEvidence
             $file = $evidence->file;
 
             $evidence->delete();
-            $this->files->handle($file);
+
+            // A draft always has its file (only an erased, sent record has none).
+            if ($file !== null) {
+                $this->files->handle($file);
+            }
         });
     }
 }

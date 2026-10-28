@@ -10,6 +10,7 @@ use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Cases\Models\CaseEvidence;
+use App\Domain\Notification\Actions\AnnounceCaseEvent;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnCaseType;
 use App\Domain\Order\Enums\ReturnInitiator;
@@ -307,6 +308,9 @@ class OrderReturn extends Model
     {
         /** @var OrderReturnStatusChange $entry */
         $entry = $this->transitionWithHistory($to, $change, ['source' => $source]);
+
+        // Whoever has to act next, and the Partner, are told once this commits (D35).
+        app(AnnounceCaseEvent::class)->returnMoved($this, $to, $source);
 
         return $entry;
     }

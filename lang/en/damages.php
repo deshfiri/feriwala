@@ -80,4 +80,42 @@ return [
         'dispatched' => 'On its way',
         'delivered' => 'Delivered',
     ],
+
+    'report' => [
+        'action' => 'Report a damaged item',
+        'title' => 'Report a damaged item',
+        'description' => 'For order :order. Tell us what is wrong; our team decides who bears the loss after seeing the item.',
+        'what' => 'Which item?',
+        'window' => 'You can report damage until :time.',
+        'item' => 'Item',
+        'quantity' => 'How many units are damaged',
+        'up_to' => 'Up to :count can still be reported',
+        'why' => 'What happened?',
+        'condition' => 'What is wrong',
+        'choose_condition' => 'Choose what is wrong',
+        'describe' => 'Describe the damage',
+        'describe_help' => 'At least :count characters.',
+        'where' => 'Where is the item?',
+        'locations' => [
+            'send_back' => 'I will send it back to Banij',
+            'stays_with_customer' => 'It stays with the customer',
+        ],
+        'locations_help' => [
+            'send_back' => 'We will wait for the parcel and inspect it when it arrives.',
+            'stays_with_customer' => 'No parcel is expected. We decide from your description and photos, and no stock is moved.',
+        ],
+        'confirm_text' => 'This is a report, not a decision. Our team looks at the item or the evidence and then decides who bears the loss. You cannot decide that yourself.',
+        'submit' => 'Report damage',
+        'cannot_report' => 'Damage cannot be reported on this order',
+        'supplier_backed' => 'This item is supplied by a Supplier. Damage on Supplier-supplied items cannot be reported here yet; please contact support.',
+        'refusals' => [
+            'order_not_delivered' => 'Damage can only be reported on an order that has been delivered.',
+            'damage_window_closed' => 'The time to report damage on this order has passed.',
+            'nothing_reportable' => 'Everything on this order has already been reported.',
+            'supplier_backed' => 'The items on this order are supplied by a Supplier, which cannot be reported here yet.',
+        ],
+        'flash' => [
+            'reported' => 'Your damage report was sent. We will tell you what happens next.',
+        ],
+    ],
 ];

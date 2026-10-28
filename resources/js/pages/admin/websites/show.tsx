@@ -308,6 +308,58 @@ export default function AdminWebsiteShow({
                     </SectionCard>
                 )}
 
+                {can.administer &&
+                    transitions.some((option) => option.value === 'closed') && (
+                        <SectionCard
+                            tone="destructive"
+                            title={t('website.admin.delete_title')}
+                            description={t('website.admin.delete_hint')}
+                        >
+                            <Form
+                                {...WebsiteController.destroy.form(website.id)}
+                                onBefore={() =>
+                                    window.confirm(
+                                        t('website.admin.delete_confirm'),
+                                    )
+                                }
+                                className="space-y-4"
+                            >
+                                {({ processing, errors }) => (
+                                    <>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="website-delete-reason">
+                                                {t(
+                                                    'website.admin.delete_reason',
+                                                )}
+                                            </Label>
+                                            <textarea
+                                                id="website-delete-reason"
+                                                name="reason"
+                                                rows={2}
+                                                required
+                                                minLength={10}
+                                                maxLength={500}
+                                                className={controlClass}
+                                            />
+                                            <InputError
+                                                message={errors.reason}
+                                            />
+                                        </div>
+
+                                        <Button
+                                            type="submit"
+                                            variant="destructive"
+                                            disabled={processing}
+                                        >
+                                            {processing && <Spinner />}
+                                            {t('website.admin.delete_submit')}
+                                        </Button>
+                                    </>
+                                )}
+                            </Form>
+                        </SectionCard>
+                    )}
+
                 <SectionCard
                     title={t('website.show.domains')}
                     description={t('website.admin.domain_hint')}

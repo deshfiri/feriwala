@@ -267,7 +267,11 @@ class EraseAccount
 
         // Details of the account's customers, inside orders that must stay.
         $run->blank('orders', fn (Builder $q) => $q->whereIn('business_account_id', $accountIds), ['customer', 'billing_address', 'shipping_address', 'customer_note']);
-        $run->blank('order_returns', fn (Builder $q) => $q->whereIn('business_account_id', $accountIds), ['customer_note']);
+        $run->blank('order_returns', fn (Builder $q) => $q->whereIn('business_account_id', $accountIds), ['customer_note', 'evidence']);
+
+        // Returns, exchanges and damages (D35): the case, its stock and its ledger links stay whole; what a
+        // Partner or their customer wrote and every evidence file go.
+        $this->caseSteps($accountIds, $run);
         $run->collectFiles('shipments', fn (Builder $q) => $q->whereIn('order_id', $orders()), 'label_path', null, 'local');
         $run->blank('shipments', fn (Builder $q) => $q->whereIn('order_id', $orders()), ['label_path']);
         $run->blank('payment_logs', fn (Builder $q) => $q->whereIn('business_account_id', $accountIds), ['ip_address']);
@@ -306,6 +310,65 @@ class EraseAccount
                 'tombstone_reference' => $tomb,
             ], essential: true);
         }
+    }
+
+    /**
+     * What a return, exchange or damage holds about the people behind it (D35).
+     *
+     * **Kept**, because the books and the stock rest on it: the cases, their status
+     * history, charges, ledger links, inspections, stock movements and the audit trail
+     * — the database forbids changing the append-only ones, and they are reported as
+     * retained rather than forced. Staff reasons and notes on a decision are kept too:
+     * they are the business's record of why money moved.
+     *
+     * **Removed or replaced**: the customer's note, the Partner's description of a
+     * damage, legacy evidence references and every evidence file — draft evidence is
+     * deleted outright; submitted evidence is history the database will not delete, so
+     * its file is removed from storage and its stored-file row, and its name and note
+     * are redacted, in one statement that the database guard allows exactly once
+     * (`2026_11_18_100000`): the row stays, with its case, purpose, uploader and
+     * dates, saying only that evidence of some kind was added.
+     *
+     * **Retained, and reported as such**: the address snapshot on a damaged item's
+     * delivery. It is the record of where goods were sent, and a database guard locks
+     * it once written; it is attempted, refused, and listed in the result rather than
+     * forced.
+     *
+     * @param  array<int, int>  $accountIds
+     */
+    protected function caseSteps(array $accountIds, ErasureRun $run): void
+    {
+        $mine = fn (Builder $q) => $q->whereIn('business_account_id', $accountIds);
+        $evidence = fn (string $status) => DB::table('case_evidence')->whereIn('business_account_id', $accountIds ?: [0])->where('status', $status)->whereNotNull('stored_file_id')->pluck('stored_file_id')->all();
+        $draftFileIds = $evidence('draft');
+        $sentFileIds = $evidence('submitted');
+        $draftFiles = fn (Builder $q) => $q->whereIn('id', $draftFileIds ?: [0]);
+        $sentFiles = fn (Builder $q) => $q->whereIn('id', $sentFileIds ?: [0]);
+
+        // Files first: once the rows are gone nothing says where they were.
+        $run->collectFiles('stored_files', $draftFiles);
+        $run->collectFiles('stored_files', $sentFiles);
+
+        // An unsent draft is simply deleted, with its stored file; sent evidence is history that stays
+        // attached to its case, so only its content and descriptive text go.
+        $run->purge('case_evidence', fn (Builder $q) => $mine($q)->where('status', 'draft'));
+        $run->purge('stored_files', $draftFiles, ['path']);
+
+        // Sent evidence: one statement redacts its name and note and detaches its file, which is exactly
+        // — and only — what the database guard allows, once. A retry finds nothing left to do.
+        $run->update('case_evidence', fn (Builder $q) => $mine($q)->where('status', 'submitted')->whereNotNull('stored_file_id'), [
+            'display_name' => '[redacted]',
+            'note' => DB::raw("CASE WHEN note IS NULL THEN NULL ELSE '[redacted]' END"),
+            'stored_file_id' => null,
+            'file_erased_at' => now(),
+        ], label: 'case_evidence');
+        $run->purge('stored_files', fn (Builder $q) => $sentFiles($q)->where('purpose', 'case-evidence'));
+
+        $run->blank('order_damages', $mine, ['description']);
+        $run->update('order_damages', $mine, ['evidence' => DB::raw("'[]'::jsonb")], label: 'order_damages.evidence');
+        $run->blank('order_damage_dispatches', fn (Builder $q) => $q->whereIn('order_damage_id', DB::table('order_damages')->select('id')->whereIn('business_account_id', $accountIds ?: [0])), ['address_snapshot']);
+
+        $run->note('Returns, exchanges and damages were kept with their history, charges and ledger links; the customer\'s and Partner\'s own words and every evidence file were removed or replaced. Delivery addresses on damaged-item dispatches are locked by the database and were retained.');
     }
 
     protected function supplierSteps(Supplier $supplier, ErasureRun $run, ?User $actor): void

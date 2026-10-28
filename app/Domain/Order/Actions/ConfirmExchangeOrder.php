@@ -5,6 +5,7 @@ namespace App\Domain\Order\Actions;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\StockReservations;
+use App\Domain\Notification\Actions\AnnounceCaseEvent;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Exceptions\ReturnRefused;
@@ -81,6 +82,9 @@ class ConfirmExchangeOrder
             ),
             OrderStatusChangeSource::Staff,
         );
+
+        // The replacement exists and is on its way into fulfilment: the Partner is told (D35).
+        app(AnnounceCaseEvent::class)->exchangeOrder($case, 'exchange_order_created');
 
         return $order;
     }

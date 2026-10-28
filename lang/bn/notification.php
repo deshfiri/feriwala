@@ -194,6 +194,86 @@ return [
             'title' => 'নতুন ফেরতের অনুরোধ',
             'description' => 'একটি ফেরত সিদ্ধান্তের অপেক্ষায় আছে।',
         ],
+        'queue.exchange_case' => [
+            'title' => 'নতুন বদলের অনুরোধ',
+            'description' => 'একটি বদল সিদ্ধান্তের অপেক্ষায় আছে।',
+        ],
+        'queue.damage_case' => [
+            'title' => 'নতুন ক্ষতির খবর',
+            'description' => 'একজন পার্টনার একটি ক্ষতিগ্রস্ত পণ্যের কথা জানিয়েছেন।',
+        ],
+        'case.step.inspect' => [
+            'title' => 'যাচাই দরকার',
+            'description' => 'পণ্য পৌঁছেছে এবং যাচাইয়ের অপেক্ষায় আছে।',
+        ],
+        'case.step.assign_liability' => [
+            'title' => 'দায় পর্যালোচনা দরকার',
+            'description' => 'যাচাই শেষ: ক্ষতির দায় কার তা ঠিক করতে হবে।',
+        ],
+        'case.step.finalize' => [
+            'title' => 'ক্ষতি পোস্ট করার জন্য প্রস্তুত',
+            'description' => 'ক্ষতির পরিমাণ ঠিক হয়েছে এবং পোস্ট হওয়ার অপেক্ষায় আছে।',
+        ],
+        'case.step.dispatch' => [
+            'title' => 'ক্ষতিগ্রস্ত পণ্যের ডেলিভারির অনুরোধ',
+            'description' => 'একজন পার্টনার আটকে রাখা পণ্য তাঁর কাছে পাঠাতে বলেছেন।',
+        ],
+        'case.outcome.request_cancelled_by_staff' => [
+            'title' => 'আপনার অনুরোধ বাতিল করা হয়েছে',
+            'description' => 'আমাদের দল এই অনুরোধ বাতিল করেছে। এখন কী অবস্থা দেখতে খুলুন।',
+        ],
+        'case.outcome.parcel_received' => [
+            'title' => 'আমরা আপনার পার্সেল পেয়েছি',
+            'description' => 'এরপর এটি যাচাই করা হবে।',
+        ],
+        'case.outcome.inspection_completed' => [
+            'title' => 'যাচাই শেষ হয়েছে',
+            'description' => 'আমরা পণ্য দেখা শেষ করেছি। ফলাফল দেখতে অনুরোধটি খুলুন।',
+        ],
+        'case.outcome.responsibility_finalized' => [
+            'title' => 'খরচ কার তা ঠিক হয়েছে',
+            'description' => 'সিদ্ধান্ত দেখতে অনুরোধটি খুলুন।',
+        ],
+        'case.outcome.responsibility_corrected' => [
+            'title' => 'খরচ কার তা সংশোধন করা হয়েছে',
+            'description' => 'প্রভাবিত অঙ্ক ঠিক করা হয়েছে। কীভাবে তা দেখতে অনুরোধটি খুলুন।',
+        ],
+        'case.outcome.charge_posted' => [
+            'title' => 'আপনার ওয়ালেটে একটি চার্জ পোস্ট হয়েছে',
+            'description' => 'অনুরোধের পাতায় ওয়ালেট এন্ট্রিটি দেখুন।',
+        ],
+        'case.outcome.refund_posted' => [
+            'title' => 'রিফান্ড পোস্ট হয়েছে',
+            'description' => 'এই অনুরোধের রিফান্ড সম্পন্ন হয়েছে।',
+        ],
+        'case.outcome.exchange_order_created' => [
+            'title' => 'আপনার বদলি অর্ডার তৈরি হয়েছে',
+            'description' => 'বদলি পণ্য এখন প্রস্তুত করা হচ্ছে।',
+        ],
+        'case.outcome.exchange_dispatched' => [
+            'title' => 'আপনার বদলি পণ্য পাঠানো হয়েছে',
+            'description' => 'এটি কুরিয়ারের হাতে দেওয়া হয়েছে।',
+        ],
+        'case.outcome.damage_finalized' => [
+            'title' => 'ক্ষতির বিষয়টি চূড়ান্ত হয়েছে',
+            'description' => 'আপনার পণ্যের ক্ষতির সিদ্ধান্ত হয়ে পোস্ট হয়েছে।',
+        ],
+        'case.outcome.delivery_accepted' => [
+            'title' => 'আপনার ডেলিভারির অনুরোধ গ্রহণ করা হয়েছে',
+            'description' => 'আপনার বেছে নেওয়া ঠিকানায় আমরা পণ্যটি পাঠাব।',
+        ],
+        'case.outcome.damage_dispatched' => [
+            'title' => 'আপনার ক্ষতিগ্রস্ত পণ্য পাঠানো হয়েছে',
+            'description' => 'এটি আপনার কাছে আসছে।',
+        ],
+        'case.outcome.damage_received' => [
+            'title' => 'আপনার ক্ষতিগ্রস্ত পণ্য পৌঁছেছে বলে চিহ্নিত হয়েছে',
+            'description' => 'আমাদের দল নিশ্চিত করেছে যে এটি আপনার কাছে পৌঁছেছে।',
+        ],
+        'case.outcome.request_rejected' => [
+            'title' => 'আপনার ক্ষতির খবর গ্রহণ করা হয়নি',
+            'description' => 'এখন কী অবস্থা দেখতে খুলুন।',
+        ],
         'queue.refund_request' => [
             'title' => 'নতুন রিফান্ডের অনুরোধ',
             'description' => 'একটি রিফান্ড সিদ্ধান্তের অপেক্ষায় আছে।',

@@ -383,7 +383,12 @@ class EpsGateway extends Gateway implements TestsConnection
 
         if ($response->status() === 401) {
             $response = $this->dispatch(
-                $method, $path, $hashed, $reference, $body, $query,
+                $method,
+                $path,
+                $hashed,
+                $reference,
+                $body,
+                $query,
                 $this->token(forceRefresh: true, rejected: $token),
             );
         }
@@ -486,12 +491,12 @@ class EpsGateway extends Gateway implements TestsConnection
             throw GatewayUnavailable::forGateway(
                 $this->name(),
                 $response->failed() || $this->text($body['errormessage'] ?? null) !== null
-                    ? $this->failureText(
-                        $response->status(),
-                        $this->text($body['errorcode'] ?? null),
-                        $this->text($body['errormessage'] ?? null),
-                    )
-                    : 'could not obtain an access token',
+                ? $this->failureText(
+                    $response->status(),
+                    $this->text($body['errorcode'] ?? null),
+                    $this->text($body['errormessage'] ?? null),
+                )
+                : 'could not obtain an access token',
             );
         }
 
@@ -666,8 +671,8 @@ class EpsGateway extends Gateway implements TestsConnection
         throw GatewayUnavailable::forGateway(
             $this->name(),
             $denied
-                ? 'EPS denied this merchant account access to the payment API. Ask EPS to enable API access for this merchant user.'
-                : 'EPS redirected the request (HTTP '.$response->status().') instead of answering it.',
+            ? 'EPS denied this merchant account access to the payment API. Ask EPS to enable API access for this merchant user.'
+            : 'EPS redirected the request (HTTP '.$response->status().') instead of answering it.',
         );
     }
 

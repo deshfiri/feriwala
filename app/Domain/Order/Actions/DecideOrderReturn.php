@@ -154,6 +154,8 @@ class DecideOrderReturn
             array_filter([
                 'website' => $decided->website?->public_id,
                 'order' => $decided->order->public_id,
+                // A case under the case workflow is followed on the Partner's own case page.
+                'case' => $decided->usesCaseWorkflow() ? $decided->public_id : null,
             ]),
         );
 

@@ -71,9 +71,11 @@ export type EvidenceFile = {
     is_image: boolean;
     size_bytes: number;
     draft: boolean;
+    /** The file was removed by an account erasure: the record stays, with nothing to open. */
+    erased?: boolean;
     uploaded_at: string;
-    preview_url: string;
-    download_url: string;
+    preview_url: string | null;
+    download_url: string | null;
 };
 
 export type LegacyEvidence = {
@@ -155,6 +157,26 @@ export type CaseItem = {
     condition_label?: string;
 };
 
+/** A reference to another record, with an address only where this reader may open it. */
+export type LinkRef = {
+    reference: string;
+    url: string | null;
+    status_label?: string | null;
+};
+
+export type CaseLinks = {
+    order: LinkRef;
+    exchange_order: LinkRef | null;
+    previous_exchange: LinkRef | null;
+    next_exchange: LinkRef | null;
+};
+
+/** Where an Exchange Order came from: the case that sent it and the Order it replaces goods of. */
+export type ExchangeOrigin = {
+    case: LinkRef;
+    original_order: LinkRef | null;
+};
+
 export type AdminCase = {
     kind: CaseKind;
     id: string;
@@ -173,14 +195,10 @@ export type AdminCase = {
     decided_at?: string | null;
     received_at: string | null;
     inspected_at: string | null;
-    order: { id: string; reference: string; url: string };
-    exchange_order?: {
-        reference: string;
-        status_label: string;
-        number: string | null;
-        url: string | null;
-    } | null;
-    previous_exchange?: string | null;
+    order: LinkRef & { id: string };
+    exchange_order?: (LinkRef & { number: string | null }) | null;
+    previous_exchange?: LinkRef | null;
+    next_exchange?: LinkRef | null;
     return?: { reference: string; url: string } | null;
     partner: string;
     store: string | null;
@@ -274,10 +292,7 @@ export type PartnerCaseDetail = {
         created_at: string;
         next_step: { key: string; label: string; action_needed: boolean };
         can_cancel: boolean;
-        previous_exchange: string | null;
-        order_url: string;
-        exchange_order_url: string | null;
-        exchange_order_status: string | null;
+        links: CaseLinks;
         legacy: boolean;
     };
     items: {

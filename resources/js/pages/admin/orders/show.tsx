@@ -3,7 +3,9 @@ import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import OrderController from '@/actions/App/Http/Controllers/Admin/OrderController';
 import InputError from '@/components/input-error';
+import ExchangeOriginNotice from '@/components/cases/exchange-origin';
 import MoneyAmount from '@/components/money-amount';
+import type { ExchangeOrigin } from '@/types/cases';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -189,6 +191,7 @@ type Props = {
         manage_shipments: boolean;
         record_cod_collection: boolean;
     };
+    exchange_origin?: ExchangeOrigin | null;
 };
 
 const controlClass =
@@ -202,7 +205,7 @@ const controlClass =
  * in words. The one action is cancelling an order nobody has paid for, with a
  * reason; resolving a held order is said plainly to be done elsewhere.
  */
-export default function AdminOrder({ order, can }: Props) {
+export default function AdminOrder({ order, can, exchange_origin }: Props) {
     const { t, locale } = useTranslation();
     const [cancelling, setCancelling] = useState(false);
     const [allocating, setAllocating] = useState<AllocationLine | null>(null);
@@ -247,6 +250,8 @@ export default function AdminOrder({ order, can }: Props) {
                         </div>
                     }
                 />
+
+                <ExchangeOriginNotice origin={exchange_origin} />
 
                 {order.hold_reason && (
                     <Notice

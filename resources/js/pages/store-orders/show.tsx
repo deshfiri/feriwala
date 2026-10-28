@@ -15,7 +15,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import { show as showCase } from '@/routes/cases';
 import type { StoreOrderRow } from '@/components/store-order-list';
-import type { PartnerCaseRow } from '@/types/cases';
+import type { ExchangeOrigin, PartnerCaseRow } from '@/types/cases';
+import ExchangeOriginNotice from '@/components/cases/exchange-origin';
 
 export type StoreOrderDetail = StoreOrderRow & {
     customer_phone: string | null;
@@ -33,16 +34,24 @@ export type StoreOrderDetail = StoreOrderRow & {
 type Props = {
     order: StoreOrderDetail;
     timeline: StoreOrderTimelineData;
-    can: { advance: boolean; cancel: boolean; request_case?: boolean };
+    can: {
+        advance: boolean;
+        cancel: boolean;
+        request_case?: boolean;
+        report_damage?: boolean;
+    };
     /** Where the page's links and forms go; `advance` is absent for a Partner, who has no such button. */
     urls: {
         back: string;
         cancel: string;
         advance: string | null;
         request_case?: string;
+        report_damage?: string;
     };
     /** The returns and exchanges asked for on this order: a Partner's own, never the platform's view. */
     cases?: PartnerCaseRow[];
+    /** For an Exchange Order: the exchange that sent it and the Order it replaces goods of. */
+    exchange_origin?: ExchangeOrigin | null;
 };
 
 /**
@@ -58,6 +67,7 @@ export default function StoreOrderShow({
     can,
     urls,
     cases,
+    exchange_origin,
 }: Props) {
     const { t } = useTranslation();
     const cancelForm = useForm({ reason: '' });
@@ -102,6 +112,8 @@ export default function StoreOrderShow({
                     }
                 />
 
+                <ExchangeOriginNotice origin={exchange_origin} />
+
                 <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
                     <div className="space-y-4">
                         <SectionCard title={t('store_orders.timeline')}>
@@ -131,18 +143,46 @@ export default function StoreOrderShow({
                         </SectionCard>
 
                         {cases !== undefined &&
-                            (cases.length > 0 || can.request_case) && (
+                            (cases.length > 0 ||
+                                can.request_case ||
+                                can.report_damage) && (
                                 <SectionCard
                                     title={t('cases.partner.on_order')}
                                     actions={
-                                        can.request_case &&
-                                        urls.request_case ? (
-                                            <Button asChild size="sm">
-                                                <Link href={urls.request_case}>
-                                                    {t('cases.partner.request')}
-                                                </Link>
-                                            </Button>
-                                        ) : undefined
+                                        <div className="flex flex-wrap gap-2">
+                                            {can.request_case &&
+                                                urls.request_case && (
+                                                    <Button asChild size="sm">
+                                                        <Link
+                                                            href={
+                                                                urls.request_case
+                                                            }
+                                                        >
+                                                            {t(
+                                                                'cases.partner.request',
+                                                            )}
+                                                        </Link>
+                                                    </Button>
+                                                )}
+                                            {can.report_damage &&
+                                                urls.report_damage && (
+                                                    <Button
+                                                        asChild
+                                                        size="sm"
+                                                        variant="outline"
+                                                    >
+                                                        <Link
+                                                            href={
+                                                                urls.report_damage
+                                                            }
+                                                        >
+                                                            {t(
+                                                                'damages.report.action',
+                                                            )}
+                                                        </Link>
+                                                    </Button>
+                                                )}
+                                        </div>
                                     }
                                 >
                                     {cases.length === 0 ? (

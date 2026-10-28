@@ -2,6 +2,8 @@
 
 namespace App\Domain\Order\Enums;
 
+use App\Support\Status\HasTranslatedLabel;
+
 /**
  * Where a charge stands (D35).
  *
@@ -11,6 +13,8 @@ namespace App\Domain\Order\Enums;
  */
 enum ReturnChargeStatus: string
 {
+    use HasTranslatedLabel;
+
     /** Borne by Banij: accounting only, no wallet involved. */
     case Recorded = 'recorded';
 
@@ -25,17 +29,6 @@ enum ReturnChargeStatus: string
 
     /** Answered by a reversal row; what it cost no longer stands. */
     case Reversed = 'reversed';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::Recorded => 'Recorded (Banij)',
-            self::Posted => 'Posted',
-            self::Outstanding => 'Outstanding',
-            self::Settled => 'Settled',
-            self::Reversed => 'Reversed',
-        };
-    }
 
     public function tone(): string
     {
@@ -52,5 +45,10 @@ enum ReturnChargeStatus: string
     public function stands(): bool
     {
         return $this !== self::Reversed;
+    }
+
+    protected static function statusLabelGroup(): string
+    {
+        return 'return_charge_status';
     }
 }

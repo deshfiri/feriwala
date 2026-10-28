@@ -247,7 +247,12 @@ class RequestOrderReturn
             return $return;
         });
 
-        StaffQueue::OrderReturn->announce($created);
+        // Told to whoever may see that kind of case (D35): returns and exchanges are separate permissions.
+        if ($created->isExchange()) {
+            StaffQueue::ExchangeCase->announce($created);
+        } else {
+            StaffQueue::OrderReturn->announce($created);
+        }
 
         return $created;
     }

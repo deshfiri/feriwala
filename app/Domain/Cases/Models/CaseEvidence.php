@@ -29,7 +29,8 @@ use RuntimeException;
  *
  * @property int $id
  * @property string $public_id
- * @property int $stored_file_id
+ * @property int|null $stored_file_id null once an account erasure removed the file
+ * @property CarbonImmutable|null $file_erased_at
  * @property int $business_account_id
  * @property int $order_id
  * @property int|null $order_return_id
@@ -42,7 +43,7 @@ use RuntimeException;
  * @property string $status
  * @property CarbonImmutable $uploaded_at
  * @property CarbonImmutable|null $submitted_at
- * @property-read StoredFile $file
+ * @property-read StoredFile|null $file
  * @property-read BusinessAccount $businessAccount
  * @property-read Order $order
  * @property-read OrderReturn|null $orderReturn
@@ -83,6 +84,7 @@ class CaseEvidence extends Model
             'purpose' => EvidencePurpose::class,
             'uploaded_at' => 'immutable_datetime',
             'submitted_at' => 'immutable_datetime',
+            'file_erased_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -139,5 +141,14 @@ class CaseEvidence extends Model
     public function isDraft(): bool
     {
         return $this->status === self::DRAFT;
+    }
+
+    /**
+     * Whether the file was removed by an account erasure: the record stays as history,
+     * its content, original name and note do not.
+     */
+    public function isErased(): bool
+    {
+        return $this->stored_file_id === null;
     }
 }

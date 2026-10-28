@@ -24,7 +24,6 @@ use App\Domain\Order\Models\OrderReturnStatusChange;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -56,8 +55,6 @@ use Inertia\Response;
  */
 class OrderReturnController extends Controller
 {
-    public const PER_PAGE = 25;
-
     public function __construct(
         protected DecideOrderReturn $decisions,
         protected ReceiveReturnedItems $receipts,
@@ -65,51 +62,6 @@ class OrderReturnController extends Controller
         protected SettleReturnRefundManually $settlements,
         protected DecideRefund $refundDecisions,
     ) {}
-
-    public function index(Request $request): Response
-    {
-        $this->reader($request);
-
-        $status = ReturnStatus::tryFrom($request->string('status')->toString());
-        $search = trim($request->string('search')->toString());
-        $search = $search === '' ? null : mb_substr($search, 0, 120);
-
-        $returns = OrderReturn::query()
-            ->with(['order:id,reference,public_id', 'businessAccount:id,name', 'website:id,name'])
-            ->withSum('items as quantity', 'quantity')
-            ->when($status !== null, fn (Builder $query) => $query->where('status', $status))
-            ->when($search !== null, fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
-                ->where('reference', 'ilike', "%{$search}%")
-                ->orWhereHas('order', fn (Builder $order) => $order->where('reference', 'ilike', "%{$search}%"))
-                ->orWhereHas('businessAccount', fn (Builder $account) => $account->where('name', 'ilike', "%{$search}%"))))
-            // What somebody has to act on first: waiting for a decision, then goods on the way, then money.
-            ->orderByRaw("CASE status WHEN 'requested' THEN 0 WHEN 'approved' THEN 1 WHEN 'received' THEN 2 ELSE 3 END")
-            ->orderByDesc('requested_at')
-            ->orderByDesc('id')
-            ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (OrderReturn $return) => [
-                'id' => $return->public_id,
-                'reference' => $return->reference,
-                'order' => $return->order->reference,
-                'account' => $return->businessAccount->name,
-                'website' => $return->website?->name,
-                'status' => $return->status->value,
-                'status_tone' => $return->status->tone(),
-                'refund_state' => $return->refund_state->value,
-                'refund_tone' => $return->refund_state->tone(),
-                'needs_attention' => $return->refund_state->needsAttention(),
-                'reason' => $return->reason->value,
-                'quantity' => (int) $return->getAttribute('quantity'),
-                'requested_at' => $return->requested_at->toIso8601String(),
-            ]);
-
-        return Inertia::render('admin/returns/index', [
-            'returns' => $returns,
-            'filters' => ['search' => $search, 'status' => $status?->value],
-            'statuses' => array_map(fn (ReturnStatus $status) => $status->value, ReturnStatus::cases()),
-        ]);
-    }
 
     public function show(Request $request, string $return): Response|RedirectResponse
     {

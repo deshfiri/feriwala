@@ -8,22 +8,38 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Address\Enums\AddressOwnerType;
 use App\Domain\Address\Enums\AddressStatus;
 use App\Domain\Address\Models\SharedAddress;
+use App\Domain\Cases\Actions\AttachDraftEvidence;
+use App\Domain\Cases\Actions\StoreCaseEvidence;
+use App\Domain\Cases\Exceptions\CaseEvidenceRefused;
+use App\Domain\Cases\Models\CaseEvidence;
 use App\Domain\Cases\Queries\CaseFinancials;
 use App\Domain\Cases\Queries\CaseTimeline;
 use App\Domain\Cases\Queries\EvidencePayload;
 use App\Domain\Cases\Queries\ProductImage;
 use App\Domain\Damage\Actions\ConfirmDamageReceivedByPartner;
+use App\Domain\Damage\Actions\ReportDamage;
 use App\Domain\Damage\Actions\RequestDamageDelivery;
+use App\Domain\Damage\Data\DamageReport;
+use App\Domain\Damage\Enums\DamageCondition;
+use App\Domain\Damage\Exceptions\DamageRefused;
 use App\Domain\Damage\Models\OrderDamage;
 use App\Domain\Damage\Queries\DamageDeliveryQuote;
 use App\Domain\Damage\Queries\DamagePayload;
+use App\Domain\Damage\Queries\DamageReportEligibility;
 use App\Domain\Damage\Queries\MyDamages;
+use App\Domain\Order\Enums\OrderSource;
+use App\Domain\Order\Models\Order;
+use App\Domain\Website\Models\Website;
 use App\Http\Controllers\Concerns\RunsCaseActions;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -57,6 +73,11 @@ class DamageController extends Controller
         protected DamageDeliveryQuote $quotes,
         protected RequestDamageDelivery $deliveries,
         protected ConfirmDamageReceivedByPartner $receipts,
+        protected DamageReportEligibility $eligibility,
+        protected ReportDamage $reports,
+        protected AttachDraftEvidence $attachments,
+        protected StoreCaseEvidence $uploads,
+        protected DatabaseManager $database,
     ) {}
 
     public function index(Request $request): Response
@@ -106,6 +127,88 @@ class DamageController extends Controller
             ],
             'can_confirm_receipt' => $mayRequest && $record->status->value === 'dispatched',
         ]);
+    }
+
+    /**
+     * The form for reporting a damaged item from one delivered Store Order.
+     */
+    public function create(Request $request, string $order): Response
+    {
+        $account = $this->reader($request);
+        $record = $this->orderFor($account->id, $order);
+        $report = $this->eligibility->for($record);
+
+        return Inertia::render('damages/create', [
+            'order' => [
+                'id' => $record->public_id,
+                'reference' => $record->reference,
+                'url' => route('store-orders.show', $record->public_id),
+            ],
+            'eligibility' => $report,
+            'conditions' => array_map(fn (DamageCondition $condition) => ['value' => $condition->value, 'label' => $condition->label()], DamageCondition::cases()),
+            'minimum_description' => ReportDamage::MINIMUM_DESCRIPTION,
+            'drafts' => $this->drafts($this->actor($request), $record),
+            'evidence_limits' => [
+                'max_bytes' => $this->uploads->maxBytes(),
+                'max_per_case' => $this->uploads->maxPerCase(),
+                'mime_types' => array_keys((array) config('case_evidence.mime_types')),
+            ],
+            'can_report' => $report['eligible'] && $this->mayManage($request, $record),
+        ]);
+    }
+
+    /**
+     * One report, once: the affected item, how many, what is wrong, whether it comes
+     * back, and the attachments — sent with a key, so a double click is the same report.
+     * The Partner never says who is responsible; staff decide after seeing the goods.
+     */
+    public function store(Request $request, string $order): RedirectResponse
+    {
+        $account = $this->reader($request);
+        $record = $this->orderFor($account->id, $order);
+        $actor = $this->actor($request);
+
+        abort_unless($this->mayManage($request, $record), 403);
+
+        $validated = $request->validate([
+            'item' => ['required', 'string', 'max:40'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'condition' => ['required', Rule::enum(DamageCondition::class)],
+            'description' => ['required', 'string', 'min:'.ReportDamage::MINIMUM_DESCRIPTION, 'max:2000'],
+            'item_location' => ['required', Rule::in(['send_back', 'stays_with_customer'])],
+            'evidence' => ['nullable', 'array', 'max:'.$this->uploads->maxPerCase()],
+            'evidence.*' => ['string', 'max:40'],
+            'confirmed' => ['accepted'],
+            'idempotency_key' => ['required', 'string', 'max:64'],
+        ]);
+
+        try {
+            $damage = $this->database->transaction(function () use ($actor, $record, $validated) {
+                $opened = $this->reports->fromDelivered($actor, $record, $validated['item'], new DamageReport(
+                    quantity: (int) $validated['quantity'],
+                    condition: DamageCondition::from($validated['condition']),
+                    description: $validated['description'],
+                    // An item that stays with the customer has no parcel, no receipt and no delivery.
+                    parcelExpected: $validated['item_location'] === 'send_back',
+                    idempotencyKey: 'account:'.$validated['idempotency_key'],
+                ));
+
+                // A retry of the same report finds it and attaches nothing more.
+                if ($opened->wasRecentlyCreated) {
+                    $this->attachments->handle($actor, $opened, $validated['evidence'] ?? []);
+                }
+
+                return $opened;
+            });
+        } catch (DamageRefused|CaseEvidenceRefused $refused) {
+            throw ValidationException::withMessages(['quantity' => $this->refusal($refused)]);
+        } catch (AuthorizationException) {
+            abort(403);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('damages.report.flash.reported')]);
+
+        return to_route('damages.show', $damage->public_id);
     }
 
     public function requestDelivery(Request $request, string $damage): RedirectResponse
@@ -185,6 +288,50 @@ class DamageController extends Controller
                 'label' => trim($address->contact_name.' · '.$address->detailed_address.($address->postcode ? ' '.$address->postcode : '')),
                 'is_default' => $address->is_default,
             ])
+            ->all());
+    }
+
+    /**
+     * An order of this account, from one of its own stores — a 404 otherwise.
+     */
+    protected function orderFor(int $accountId, string $publicId): Order
+    {
+        /** @var Order|null $order */
+        $order = Order::query()
+            ->where('public_id', $publicId)
+            ->where('business_account_id', $accountId)
+            ->whereIn('source', [OrderSource::Website->value, OrderSource::Exchange->value])
+            ->first();
+
+        abort_if($order === null, 404);
+
+        return $order;
+    }
+
+    /**
+     * Whether this person manages the store the order came through, as for any store action.
+     */
+    protected function mayManage(Request $request, Order $order): bool
+    {
+        $website = $order->website_id === null ? null : Website::query()->find($order->website_id);
+
+        return $website !== null && Gate::forUser($request->user())->allows('manage', $website);
+    }
+
+    /**
+     * The Partner's own unsent attachments for an order, to show again if the form is reopened.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function drafts(User $actor, Order $order): array
+    {
+        return array_values(CaseEvidence::query()
+            ->where('uploader_id', $actor->id)
+            ->where('order_id', $order->id)
+            ->where('status', CaseEvidence::DRAFT)
+            ->with('file')
+            ->get()
+            ->map(fn (CaseEvidence $file) => $this->evidence->for($file))
             ->all());
     }
 

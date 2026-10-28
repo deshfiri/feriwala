@@ -7,6 +7,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Notification\Actions\AnnounceCaseEvent;
 use App\Domain\Order\Enums\ReturnParty;
 use App\Domain\Order\Exceptions\ReturnRefused;
 use App\Domain\Order\Models\OrderReturn;
@@ -134,6 +135,9 @@ class ChangeReturnResponsibility
                 accountId: $changed->business_account_id,
                 module: PermissionModule::ReturnCase->value,
             ));
+
+            // The Partner is told once per correction (the revision is part of the notification's id).
+            app(AnnounceCaseEvent::class)->responsibilityCorrected($changed, max(0, $changed->responsibilityChanges()->count() - 1));
         }
 
         return $changed;

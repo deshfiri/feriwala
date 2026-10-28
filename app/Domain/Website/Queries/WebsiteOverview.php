@@ -260,7 +260,13 @@ class WebsiteOverview
             ->with('businessAccount:id,public_id,name')
             ->withCount(['charges as outstanding_charges_count' => fn (Builder $query) => $query
                 ->where('status', WebsiteChargeStatus::Due->value)])
-            ->when($status !== null && $status !== '', fn (Builder $query) => $query->where('status', $status))
+            // Closed websites are the "deleted" ones: out of the list unless
+            // somebody asks for them by status.
+            ->when(
+                $status !== null && $status !== '',
+                fn (Builder $query) => $query->where('status', $status),
+                fn (Builder $query) => $query->open(),
+            )
             ->when($search !== '', fn (Builder $query) => $query
                 ->where(fn (Builder $inner) => $inner
                     ->where('name', 'ilike', '%'.$search.'%')

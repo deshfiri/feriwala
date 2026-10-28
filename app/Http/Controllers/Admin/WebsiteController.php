@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Website\Actions\ManageWebsiteBranding;
 use App\Domain\Website\Actions\ManageWebsiteDomainRouting;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
 use App\Domain\Website\Actions\ProvisionWebsiteService;
+use App\Domain\Website\Actions\RequestWebsite;
 use App\Domain\Website\Enums\CredentialPreset;
 use App\Domain\Website\Enums\CredentialScope;
 use App\Domain\Website\Enums\WebsiteStatus;
@@ -16,6 +18,7 @@ use App\Domain\Website\Models\WebsiteCredential;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteWebhookEndpoint;
 use App\Domain\Website\Queries\WebsiteOverview;
+use App\Domain\Website\RequestedAddress;
 use App\Domain\Website\StorefrontEnvironmentBlock;
 use App\Domain\Website\WebsiteAddresses;
 use App\Domain\Website\WebsiteImageStore;
@@ -69,11 +72,101 @@ class WebsiteController extends Controller
             // The whole paginator, so the table has its range and page size.
             'websites' => $websites->through(fn (Website $website) => $this->overview->summary($website)),
             'filters' => $filters,
+            'can' => ['provision' => $request->user()?->can('provision', Website::class) ?? false],
             'statuses' => array_map(fn (WebsiteStatus $status) => [
                 'value' => $status->value,
                 'label' => __('website.statuses.'.$status->value),
             ], WebsiteStatus::cases()),
         ]);
+    }
+
+    /**
+     * The form for standing a website up on a partner's behalf.
+     */
+    public function create(): Response
+    {
+        Gate::authorize('provision', Website::class);
+
+        return Inertia::render('admin/websites/create', [
+            'accounts' => BusinessAccount::query()
+                ->orderBy('name')
+                ->get(['id', 'public_id', 'name', 'status'])
+                ->filter(fn (BusinessAccount $account) => $account->canTransact())
+                ->map(fn (BusinessAccount $account) => [
+                    'id' => $account->public_id,
+                    'name' => $account->name,
+                ])
+                ->values()
+                ->all(),
+            'storefront_domain' => config('website.storefront_domain'),
+        ]);
+    }
+
+    /**
+     * Stand a website up for a partner.
+     *
+     * The same action the partner's own request runs, so the package's website
+     * limit, its slot and the setup, domain and hosting charges are exactly what
+     * they would have been had the partner asked: staff create the website, they
+     * do not waive what it costs. A partner at their limit closes one first.
+     */
+    public function store(Request $request, RequestWebsite $requestWebsite): RedirectResponse
+    {
+        Gate::authorize('provision', Website::class);
+
+        $validated = $request->validate([
+            'account' => ['required', 'string', Rule::exists('business_accounts', 'public_id')],
+            'name' => ['required', 'string', 'min:2', 'max:120'],
+            'subdomain' => [
+                'required', 'string', 'regex:'.RequestedAddress::LABEL_PATTERN,
+                Rule::notIn((array) config('website.reserved_subdomains', [])),
+                Rule::unique('websites', 'subdomain'),
+            ],
+        ]);
+
+        /** @var BusinessAccount $account */
+        $account = BusinessAccount::query()->where('public_id', $validated['account'])->firstOrFail();
+
+        $website = $this->attemptRouting(fn () => $requestWebsite->handle(
+            $account,
+            $this->person($request),
+            $validated['name'],
+            $validated['subdomain'],
+        ));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.created_for_partner')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Delete a website: close it, for good.
+     *
+     * Its charges, orders, credentials and status history are financial and
+     * audit records that are never removed, and the database refuses to drop a
+     * website they point at. Closing is the end of its life — the storefront
+     * stops answering, the credentials stop working, and the package slot it
+     * held is free for the partner's next website.
+     */
+    public function destroy(Request $request, Website $website, MoveWebsiteStatus $move): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:'.self::MINIMUM_REASON, 'max:500'],
+        ]);
+
+        $this->attemptRouting(fn () => $move->handle(
+            $website,
+            WebsiteStatus::Closed,
+            WebsiteStatusChangeSource::Staff,
+            new StatusChange(actorId: $this->person($request)->id, reason: $validated['reason']),
+            ['closed_at' => CarbonImmutable::now()],
+        ));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.deleted')]);
+
+        return to_route('admin.websites.index');
     }
 
     public function show(Request $request, Website $website): Response

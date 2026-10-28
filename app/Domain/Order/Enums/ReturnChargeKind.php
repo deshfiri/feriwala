@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Enums;
 
 use App\Domain\Wallet\Enums\LedgerTransactionType;
+use App\Support\Status\HasTranslatedLabel;
 
 /**
  * What a case's money is for (D35).
@@ -13,6 +14,8 @@ use App\Domain\Wallet\Enums\LedgerTransactionType;
  */
 enum ReturnChargeKind: string
 {
+    use HasTranslatedLabel;
+
     /** Half of the original delivery charge, for the parcel coming back. */
     case ReturnCharge = 'return_charge';
 
@@ -35,13 +38,8 @@ enum ReturnChargeKind: string
         };
     }
 
-    public function label(): string
+    protected static function statusLabelGroup(): string
     {
-        return match ($this) {
-            self::ReturnCharge => 'Return charge',
-            self::ExchangeDelivery => 'Exchange delivery',
-            self::DamageLoss => 'Damage loss',
-            self::DamageDelivery => 'Damaged-item delivery',
-        };
+        return 'return_charge_kind';
     }
 }

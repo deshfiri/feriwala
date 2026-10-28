@@ -14,6 +14,7 @@ use App\Domain\Damage\Enums\DamageStatus;
 use App\Domain\Damage\Exceptions\DamageRefused;
 use App\Domain\Damage\Models\OrderDamage;
 use App\Domain\Damage\Queries\DamageValuation;
+use App\Domain\Notification\Enums\StaffQueue;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnDisposition;
@@ -123,6 +124,12 @@ class ReportDamage
         }
 
         $this->auditOpened($actor, $damage);
+
+        // A Partner's report is news to the staff who may inspect; staff reporting it themselves is not.
+        // Said once any surrounding transaction (a report with attachments) has committed.
+        if ($initiator !== ReturnInitiator::Staff) {
+            $this->database->afterCommit(fn () => StaffQueue::DamageCase->announce($damage));
+        }
 
         return $damage->refresh();
     }

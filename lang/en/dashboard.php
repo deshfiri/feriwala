@@ -52,6 +52,8 @@ return [
             'account_withdrawals' => 'Partner withdrawals awaiting a decision',
             'supplier_withdrawals' => 'Supplier withdrawals awaiting a decision',
             'returns' => 'Returns awaiting a decision',
+            'exchanges' => 'Exchanges awaiting a decision',
+            'damages' => 'Damages awaiting action',
             'refunds' => 'Refunds awaiting a decision',
             'website_requests' => 'Website requests awaiting setup',
             'account_deletions' => 'Account deletion requests awaiting a decision',

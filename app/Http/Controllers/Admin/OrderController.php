@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
@@ -94,6 +95,7 @@ class OrderController extends Controller
         protected AdvanceOrderDeliveryStatus $advanceDelivery,
         protected AdvanceOrderCourierStatus $advanceCourier,
         protected CourierManager $courier,
+        protected CaseLinks $caseLinks,
     ) {}
 
     public function index(Request $request): Response
@@ -356,6 +358,8 @@ class OrderController extends Controller
                 'manage_shipments' => $canManageShipments,
                 'record_cod_collection' => $canRecordCodCollection,
             ],
+            // For an Exchange Order: the case that sent it and the Order it replaces goods of.
+            'exchange_origin' => $this->caseLinks->exchangeOriginForStaff($actor, $record),
         ]);
     }
 

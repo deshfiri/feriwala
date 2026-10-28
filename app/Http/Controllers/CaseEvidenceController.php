@@ -9,6 +9,7 @@ use App\Domain\Cases\Models\CaseEvidence;
 use App\Domain\Cases\Queries\EvidencePayload;
 use App\Domain\Order\Models\Order;
 use App\Domain\Storage\ManagedStorage;
+use App\Http\Controllers\Concerns\RunsCaseActions;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class CaseEvidenceController extends Controller
 {
+    use RunsCaseActions;
+
     public function __construct(
         protected StoreCaseEvidence $uploads,
         protected DiscardDraftEvidence $discards,
@@ -63,7 +66,7 @@ class CaseEvidenceController extends Controller
         try {
             $evidence = $this->uploads->draft($actor, $order, $request->file('file'), $validated['note'] ?? null);
         } catch (CaseEvidenceRefused $refused) {
-            return response()->json(['message' => $refused->getMessage(), 'code' => $refused->errorCode], $refused->status);
+            return response()->json(['message' => $this->refusal($refused), 'code' => $refused->errorCode], $refused->status);
         }
 
         return response()->json($this->payload->for($evidence), 201);
@@ -82,7 +85,7 @@ class CaseEvidenceController extends Controller
         try {
             $this->discards->handle($actor, $record);
         } catch (CaseEvidenceRefused $refused) {
-            return response()->json(['message' => $refused->getMessage(), 'code' => $refused->errorCode], $refused->status);
+            return response()->json(['message' => $this->refusal($refused), 'code' => $refused->errorCode], $refused->status);
         }
 
         return response()->json(['removed' => true]);
@@ -99,6 +102,10 @@ class CaseEvidenceController extends Controller
         Gate::forUser($actor)->authorize('view', $record);
 
         $file = $record->file;
+
+        // Erased with its account: the record is history, there is nothing to open.
+        abort_if($file === null, 404);
+
         $contents = $this->storage->diskForFile($file)->get($file->path);
 
         abort_if($contents === null, 404);

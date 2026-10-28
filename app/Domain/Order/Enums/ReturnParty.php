@@ -2,6 +2,8 @@
 
 namespace App\Domain\Order\Enums;
 
+use App\Support\Status\HasTranslatedLabel;
+
 /**
  * Who a case, a charge or a loss is attributed to (D35).
  *
@@ -11,16 +13,10 @@ namespace App\Domain\Order\Enums;
  */
 enum ReturnParty: string
 {
+    use HasTranslatedLabel;
+
     case Partner = 'partner';
     case Banij = 'banij';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::Partner => 'Partner',
-            self::Banij => 'Banij',
-        };
-    }
 
     public function isPartner(): bool
     {
@@ -33,5 +29,10 @@ enum ReturnParty: string
     public static function values(): array
     {
         return array_map(fn (self $party) => $party->value, self::cases());
+    }
+
+    protected static function statusLabelGroup(): string
+    {
+        return 'return_party';
     }
 }

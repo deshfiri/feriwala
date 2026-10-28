@@ -51,7 +51,26 @@ class AdminCasePayload
         protected ProductImage $images,
         protected ReturnRefundAmount $refundAmounts,
         protected DamagePayload $damagePayload,
+        protected CaseLinks $links,
     ) {}
+
+    /**
+     * The original Order, the Exchange Order and the exchanges before and after, each
+     * with an address only where this person may open it.
+     *
+     * @return array<string, mixed>
+     */
+    protected function linksFor(User $viewer, OrderReturn $case): array
+    {
+        $links = $this->links->forStaff($viewer, $case);
+
+        return [
+            'order' => ['id' => $case->order->public_id, ...$links['order']],
+            'exchange_order' => $links['exchange_order'] === null ? null : [...$links['exchange_order'], 'number' => $case->exchange_number],
+            'previous_exchange' => $links['previous_exchange'],
+            'next_exchange' => $links['next_exchange'],
+        ];
+    }
 
     /**
      * @return array<string, mixed>
@@ -114,14 +133,7 @@ class AdminCasePayload
                 'decided_at' => $case->decided_at?->toIso8601String(),
                 'received_at' => $case->received_at?->toIso8601String(),
                 'inspected_at' => $case->inspected_at?->toIso8601String(),
-                'order' => $this->order($case->order),
-                'exchange_order' => $case->exchangeOrder === null ? null : [
-                    'reference' => $case->exchangeOrder->reference,
-                    'status_label' => $case->exchangeOrder->status->label(),
-                    'number' => $case->exchange_number,
-                    'url' => null,
-                ],
-                'previous_exchange' => $case->previousExchange === null ? null : $case->previousExchange->exchange_number,
+                ...$this->linksFor($viewer, $case),
                 'partner' => $case->businessAccount->name,
                 'store' => $case->website?->name,
                 'cash_on_delivery' => $case->isCashOnDelivery(),
@@ -197,7 +209,7 @@ class AdminCasePayload
                 'created_at' => $damage->reported_at->toIso8601String(),
                 'received_at' => $damage->received_at?->toIso8601String(),
                 'inspected_at' => $damage->inspected_at?->toIso8601String(),
-                'order' => $this->order($damage->order),
+                'order' => $this->order($viewer, $damage->order),
                 'return' => $damage->orderReturn === null ? null : [
                     'reference' => $damage->orderReturn->reference,
                     'url' => route('admin.cases.returns.show', $damage->orderReturn->public_id),
@@ -295,14 +307,15 @@ class AdminCasePayload
     }
 
     /**
-     * @return array{id: string, reference: string, url: string}
+     * @return array{id: string, reference: string, url: string|null}
      */
-    protected function order(Order $order): array
+    protected function order(User $viewer, Order $order): array
     {
         return [
             'id' => $order->public_id,
             'reference' => $order->reference,
-            'url' => route('admin.orders.show', $order->public_id),
+            // Only to someone who may open Orders: a reference is never a dead link.
+            'url' => $viewer->can('viewAny', Order::class) ? route('admin.orders.show', $order->public_id) : null,
         ];
     }
 

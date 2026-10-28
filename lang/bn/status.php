@@ -373,4 +373,58 @@ return [
         'inspection' => 'যাচাইয়ের সময়',
         'responsibility_review' => 'দায় পর্যালোচনার সময়',
     ],
+
+    'return_case_type' => [
+        'return' => 'ফেরত',
+        'exchange' => 'বদল',
+    ],
+
+    'return_charge_kind' => [
+        'return_charge' => 'ফেরত চার্জ',
+        'exchange_delivery' => 'বদলের ডেলিভারি',
+        'damage_loss' => 'ক্ষতির খরচ',
+        'damage_delivery' => 'ক্ষতিগ্রস্ত পণ্যের ডেলিভারি',
+    ],
+
+    'return_charge_status' => [
+        'recorded' => 'নথিভুক্ত (বণিজ)',
+        'posted' => 'পোস্ট করা হয়েছে',
+        'outstanding' => 'বকেয়া',
+        'settled' => 'নিষ্পত্তি হয়েছে',
+        'reversed' => 'বিপরীত করা হয়েছে',
+    ],
+
+    'return_disposition' => [
+        'restock' => 'আবার বিক্রির জন্য',
+        'damaged' => 'ক্ষতিগ্রস্ত',
+        'quarantine' => 'যাচাইয়ের জন্য আলাদা রাখা',
+    ],
+
+    'return_initiator' => [
+        'partner' => 'পার্টনার',
+        'staff' => 'কর্মী',
+        'customer' => 'ক্রেতা (স্টোরফ্রন্ট)',
+    ],
+
+    'return_party' => [
+        'partner' => 'পার্টনার',
+        'banij' => 'বণিজ',
+    ],
+
+    'return_reason' => [
+        'damaged' => 'ক্ষতিগ্রস্ত অবস্থায় পৌঁছেছে',
+        'wrong_item' => 'ভুল পণ্য পাঠানো হয়েছে',
+        'not_as_described' => 'বর্ণনার সঙ্গে মেলে না',
+        'missing_parts' => 'অংশ নেই',
+        'changed_mind' => 'ক্রেতা মত বদলেছেন',
+        'other' => 'অন্য কারণ',
+    ],
+
+    'return_refund_state' => [
+        'not_required' => 'রিফান্ড নেই',
+        'pending' => 'রিফান্ড অপেক্ষমাণ',
+        'completed' => 'রিফান্ড হয়েছে',
+        'failed' => 'রিফান্ড ব্যর্থ',
+        'manual_review' => 'হাতে নিষ্পত্তি দরকার',
+    ],
 ];

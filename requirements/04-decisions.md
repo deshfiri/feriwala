@@ -1259,3 +1259,204 @@ value and are deliberately not backfilled: they keep their original snapshots (a
 by the Partner's current account type. A pending legacy order with a zero payment still settles
 without a gateway, as it always did; `OrderItem::defersProductCost()` is true for a legacy
 Non-Conditional line and false for a `full` order.
+
+## D35 — Returns, exchanges and damages: one case workflow (2026-11-16 to 2026-11-18) 🔒
+
+**Instructed by the Project Owner, built in five units.** This records what is implemented and what
+is deliberately not. Where this file says _final policy_, the rule is in force and tested; where it
+says _not supported_, the system refuses it or says so on screen rather than pretending.
+
+### The case workflow
+
+A **case** is a return, an exchange or a damage. Returns and exchanges share `order_returns`
+(`case_type` = `return` | `exchange`, `workflow_version` = 2); a damage is its own record
+(`order_damages`). Returns placed before this workflow have `workflow_version` = 1, are listed in
+the unified queue marked as earlier, and still finish on the old screen with their old rules; nothing
+about them was rewritten.
+
+**Return and exchange statuses** (every move goes through `transitionTo()` / `moveTo()` and writes a
+history row; there is no way to pick a status):
+
+`requested → approved → waiting_for_parcel → parcel_received → under_inspection →
+inspection_approved → settlement_pending → completed`, with three early exits: `rejected` (refusing
+the request), `inspection_rejected` (refusing the goods) and `cancelled` (before goods are back).
+Approving writes `approved` and `waiting_for_parcel` as two history rows so no stage is skipped.
+
+**Damage statuses:** `reported → (awaiting_receipt | received | under_inspection) → received →
+under_inspection → liability_review → approved → financial_posting_pending → finalized →
+dispatch_requested → dispatched → received_by_partner`, with `rejected` from any stage before the
+decision. An inspection that finds nothing damaged ends the case with no loss.
+
+**Nothing moves before inspection.** No stock, refund, charge or ledger entry is made for a case
+until a person has inspected the goods and approved them (a damage: until it is inspected and its
+responsibility decided). A request, an approval and a parcel arriving are only statuses.
+
+### Who may do what
+
+Staff permissions are `return.*`, `exchange.*` and `damage.*`: `view`, `review` (approve, reject, and
+change who bears a return), `receive`, `inspect`, `refund` (settle), and for damages `assign_liability`,
+`finalize`, `dispatch`. An exchange has only `view`, `create` and `review`; its parcel, inspection
+and settlement are the return's permissions. Each step is a different permission on purpose: the
+person who decides who bears a loss cannot post it unless they also hold the right to post.
+
+A Partner is never given these. The ordered `Gate::before` refuses every `return.`, `exchange.` and
+`damage.` ability to a business identity; a Partner reaches cases through **their own account** — a
+query scope, not a permission — and needs the right to read orders to read a case and the right to
+manage the store to ask for one. Another Partner's case, damage, Order or evidence is a 404.
+
+A Partner can ask for a return or exchange, report a damaged item, withdraw an unactioned request,
+add evidence to their own request, ask for a held damaged item to be delivered, and mark it received.
+A Partner **cannot** say who is responsible, send an amount, change a status, or finalize anything.
+
+### Charge responsibility
+
+| Charge                           | When it is made                                                | Partner bears                                                | Banij bears                              |
+| -------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
+| **Original delivery**            | History. Never charged again.                                  | —                                                            | —                                        |
+| **Return charge**                | At settlement, after inspection approved                       | Half the original delivery charge, debited from the wallet   | Recorded in Banij accounting only        |
+| **Exchange delivery**            | At settlement of an exchange                                   | One new delivery (the delivery-charge service's figure)      | Recorded in Banij accounting only        |
+| **Damage loss**                  | When a damage is finalized                                     | Up to snapshotted suggested selling price × damaged quantity | Recorded in Banij accounting only        |
+| **Damaged-item delivery**        | When the Partner asks for the item to be sent to them          | Always the Partner's: it is requested by them                | Never                                    |
+
+A case **begins as the Partner's** responsibility. It can never begin as Banij's: only staff, with a
+reason, can say Banij is responsible, and every change writes a responsibility-history row that is
+never rewritten. Changing it after a charge was posted reverses that charge and posts it again to the
+new party — one compensating pair per charge under a key of its own revision; nothing already written
+is edited, and a completed case's attribution may still be corrected the same way.
+
+The **return charge** is half the order's frozen delivery charge, rounded half away from zero to the
+poisha (so ৳75.00 gives ৳37.50), computed with bcmath from a locked column. A free delivery has no
+return charge. It is snapshotted when the case is opened, so what a Partner is shown at the start is
+what is charged at the end — and it is an estimate until staff finally decide who bears it.
+
+**Damage valuation** is `snapshotted suggested selling price × damaged quantity`, read from the order
+line (never the Partner's own store price, never today's price), allocated unit by unit with
+`Money::allocate()` where only a whole-line share was frozen. A line with no frozen figure has a
+maximum of nothing and can only be written off, with a reason. Staff may approve any loss from zero up
+to that maximum; the server refuses more.
+
+### Refund trigger
+
+A refund is opened **only** by settlement, after inspection approved the goods and a person with
+`return.refund` settles the case. It is worked out from the order's immutable line snapshots plus any
+adjustment staff approve with a reason, never from a figure a screen sent, and goes through the
+existing refund machinery (D17): gateway orders follow its approval workflow; a cash-on-delivery order
+is settled by hand and says so. What a customer is owed is the Partner's commercial matter; what Banij
+records is the Partner's liability. A cheaper exchange replacement is refunded; a dearer one's extra
+amount is collected by the Partner and **recorded** (who, how), never taken by the system.
+
+### Exchange Orders
+
+An exchange is a return that also sends a replacement. The replacement is an ordinary Order
+(`source = exchange`) created at the request in `pending_confirmation` — **no stock is held** — and
+released to fulfilment (stock reserved and committed from the Partner's own units first, central stock
+only for a Non-Conditional account) only as inspection approves the returned goods, in the same
+transaction, so an approval is refused if the replacement cannot be sent. A refused or cancelled
+exchange sends nothing. One Order detail serves every source: an Exchange Order shows which case sent
+it and which Order it replaces goods of. Admin and Partner screens link original Order, case,
+Exchange Order and the previous and next exchange, each only where the reader may open it.
+
+**EX display numbers:** `EX-{original order number}` for the first exchange of an original order, then
+`-2`, `-3`, … counting **every** exchange ever asked for against that original, refused and cancelled
+ones too, because a number that was shown is never reused. The original is always the root: an
+exchange of a replacement is still `EX-ORD-…-2` and remembers the case it follows. Allocated under a
+row lock on the original, with unique indexes on `(original_order_id, exchange_sequence)` and on the
+number as the guarantee underneath; the internal id is never the number.
+
+### Customer-retained products
+
+A damage reported on a delivered item is either **sent back** (a parcel is expected, staff receive it
+into a warehouse, and inspect it) or **stays with the customer** (`parcel_expected = false`). A
+retained item has no parcel, no receipt, no warehouse and no delivery action; its only disposition is
+_damaged_ and **no stock is moved**. Units held by Banij as damaged are never sellable, whatever
+happens to them afterwards: held, on the way to the Partner or with the Partner, they are described
+that way and never as back on sale.
+
+### My Damages and damaged-item delivery
+
+`My Products › My Damages` lists what the Partner **bears** once decided, and their own reports while
+they are looked at (or if refused). A damage Banij bears is not in it at all; the Partner is told it
+was covered. Once the loss is posted a Partner may ask for the held units to be delivered to one of
+**their own saved addresses** (copied as it stood). The delivery charge is the delivery-charge
+service's figure for the item's own logistics and the damaged quantity — the request carries only the
+address — and is debited at once; a wallet that cannot cover it **refuses the request** (a Partner
+cannot run up a debt by asking for their own goods). One dispatch per damage by unique index.
+
+### Evidence
+
+Evidence is a row over the shared `stored_files` (private visibility, MIME judged from the file's own
+bytes, JPG/JPEG/PNG/WebP/PDF, configurable size and count limits): a Partner uploads **drafts** while
+writing a request and may remove them until it is sent; staff add evidence to a case that exists, at
+receipt, inspection or responsibility review, under the matching permission. Sent evidence is history
+— never deleted, never moved to another case. Every open is policy-checked and goes through a signed,
+short-lived address with no-store headers; no path or credential ever reaches a screen; audit rows
+carry the case reference and purpose only. Draft evidence can only be removed by its uploader.
+
+### Typed wallet behaviour and ledger reversal
+
+A Partner debit is made through `WalletService`, which spends **platform credit first and withdrawable
+money after**, remembers the exact split, writes its immutable ledger entry in the same transaction
+and refuses to overdraw. A case **never forces a balance negative**: a loss or charge the wallet
+cannot cover is an **outstanding liability**, shown as owed and collected when the money is there. A
+reversal returns exactly the kinds of money the debit took — platform credit is not turned into
+withdrawable money by being refunded — through a new credit that points at the entry it answers. The
+original entry, its transaction and the charge row are never edited. A Banij-borne charge or one that
+was only owed moved nothing in a wallet and is reversed in the accounting alone.
+
+### Idempotency and concurrency
+
+Every financial effect has a key naming the case, the kind and the attribution revision, unique on the
+charge row, the wallet transaction and the ledger entry; a retry finds the first and two identical
+requests racing are settled by the index. Cases and orders are read under `lockForUpdate` while
+quantities are counted, so two requests cannot each see the last unit as free; a request's own
+idempotency key makes a double click one case; exchange numbers are allocated under a lock on the
+original; a damage has one live case per returned line and one dispatch. Every step re-checks its
+permission and its stage itself — a screen's buttons are a convenience, never the boundary.
+
+### Notifications
+
+In-app only (database channel; the existing Reverb hook makes the bell move live), wording rendered
+in the reader's language, a **deterministic id** per recipient so a retried job or a case reaching a
+stage twice writes one row, sent **after the surrounding transaction commits**, and a failure to
+notify is reported and never undoes the step.
+
+_Staff_ are told when something arrives or a step is waiting, and only staff holding the permission to
+act (plus Super Admins; never a business identity): a return (`return.view`), an exchange
+(`exchange.view`) or a Partner-reported damage (`damage.view`) is asked for; the parcel arrives
+(`return.inspect` / `damage.inspect`); responsibility needs deciding (`damage.assign_liability`); a
+loss is ready to post (`damage.finalize`); a held item's delivery was requested (`damage.dispatch`); a
+refund needs approval (the existing refund queue). _The Partner_ — the account's owner — is told:
+request approved or refused, cancelled by staff, parcel received, inspection finished, who bears it
+decided or corrected, a charge or refund posted, the replacement created and sent, a damage
+finalized, the delivery accepted, the item sent and marked received. A notification carries an
+outcome, a kind, a reference and a public id — never a customer's detail, an evidence name or path, or
+a staff note — and its link is worked out for the reader when they open the bell and is plain text
+unless they can open it.
+
+### Account erasure
+
+Erasing a Partner keeps every case, its status history, charges, ledger links, stock movements and the
+audit trail, and removes what identified the people behind them: the customer's note, legacy
+evidence references, the Partner's description of a damage, every evidence **file** (drafts are
+deleted outright; sent evidence keeps its row but loses its file, original name and note).
+Sent evidence stays immutable; migration `2026_11_18_100000` adds one **narrow, one-way** database
+guard in place of the old column lock: `display_name` may only become the fixed value `[redacted]`,
+`note` may only become null or `[redacted]` (never appear where there was none), neither can change
+again once redacted, and the stored file may be detached **once** — `stored_file_id` to null in the
+same statement that stamps `file_erased_at`. The case, account, order, purpose, uploader, upload time
+and submission stay locked, and sent evidence is still never deleted. **Retained and reported:** the
+address snapshot on a damaged-item dispatch (locked by a database guard as the record of where goods
+went) and staff reasons on decisions. A Supplier's erasure never touches a Partner's case data.
+
+### Not supported (so the system refuses or says so)
+
+- **Supplier-supplied items.** Damage or return stock movement for a line allocated to a Supplier is
+  not supported. The report action refuses it, the Partner form lists the line with the reason and no
+  way to report it, and staff see a warning. Nothing is half-done.
+- A damaged-item delivery request is accepted or refused **at once** by the wallet check; there is no
+  staff step that rejects one afterwards.
+- Notifications go to the account **owner** only, and are in-app only: no email, SMS or push.
+- Evidence **sent** cannot be removed by anyone; a mistaken upload is answered with a new file and a
+  note, not a deletion.
+- The extra amount a dearer replacement costs is recorded, never collected by the system.
+- A refund through a gateway is bounded by that gateway's own refund machinery (D17), unchanged.

@@ -11,6 +11,7 @@ use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Notification\Actions\AnnounceCaseEvent;
 use App\Domain\Order\Actions\AnnounceWebsiteOrderStatus;
 use App\Domain\Order\Enums\IntendedResaleChannel;
 use App\Domain\Order\Enums\OrderCourierStatus;
@@ -379,6 +380,15 @@ class Order extends Model
 
         if ($this->source === OrderSource::Website) {
             app(AnnounceWebsiteOrderStatus::class)->handle($this, $entry);
+        }
+
+        // The replacement of an exchange has been sent: the Partner whose case it is is told (D35).
+        if ($this->source === OrderSource::Exchange && $to === OrderStatus::Shipped) {
+            $sentBy = OrderReturn::query()->where('exchange_order_id', $this->id)->first();
+
+            if ($sentBy !== null) {
+                app(AnnounceCaseEvent::class)->exchangeOrder($sentBy, 'exchange_dispatched');
+            }
         }
 
         return $entry;

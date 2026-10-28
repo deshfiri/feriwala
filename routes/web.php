@@ -620,6 +620,10 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::post('cases/{case}/cancellation', [ErpCaseController::class, 'cancel'])->name('cases.cancel');
 
         Route::get('my-damages', [ErpDamageController::class, 'index'])->name('damages.index');
+        Route::get('my-damages/report/{order}', [ErpDamageController::class, 'create'])->name('damages.create');
+        Route::post('my-damages/report/{order}', [ErpDamageController::class, 'store'])
+            ->middleware('throttle:store-actions')
+            ->name('damages.store');
         Route::get('my-damages/{damage}', [ErpDamageController::class, 'show'])->name('damages.show');
         Route::post('my-damages/{damage}/delivery', [ErpDamageController::class, 'requestDelivery'])
             ->middleware('throttle:store-actions')
@@ -1760,8 +1764,17 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
          */
         Route::get('websites', [AdminWebsiteController::class, 'index'])
             ->name('websites.index');
+        // Staff stand a website up for a partner, and end one — a closed website
+        // is the only kind of "deleted" there is: its charges, orders and history
+        // are records that must outlive it.
+        Route::get('websites/create', [AdminWebsiteController::class, 'create'])
+            ->name('websites.create');
+        Route::post('websites', [AdminWebsiteController::class, 'store'])
+            ->name('websites.store');
         Route::get('websites/{website}', [AdminWebsiteController::class, 'show'])
             ->name('websites.show');
+        Route::delete('websites/{website}', [AdminWebsiteController::class, 'destroy'])
+            ->name('websites.destroy');
         Route::post('websites/{website}/status', [AdminWebsiteController::class, 'updateStatus'])
             ->name('websites.status.store');
         // Staff may set a partner's logo and banner too (`website.edit`).

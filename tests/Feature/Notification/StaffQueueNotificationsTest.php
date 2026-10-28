@@ -82,7 +82,10 @@ it('maps every queue to the permission that opens the screen it links to', funct
             'supplier_stock_update' => 'supplier_stock.view',
             'account_withdrawal' => 'withdrawal.view',
             'supplier_withdrawal' => 'withdrawal.view',
-            'order_return' => 'order.view',
+            // Returns, exchanges and damages are each told to whoever may see that kind (D35).
+            'order_return' => 'return.view',
+            'exchange_case' => 'exchange.view',
+            'damage_case' => 'damage.view',
             'refund_request' => 'payment.view',
             'website_request' => 'website.view',
             // A request to be erased is shown only to someone who may erase.
@@ -172,7 +175,9 @@ it('links each queue to its own review screen', function () {
             'supplier_stock_update' => route('admin.supplier-stock.index'),
             'account_withdrawal' => route('admin.account-withdrawals.index'),
             'supplier_withdrawal' => route('admin.supplier-withdrawals.index'),
-            'order_return' => route('admin.returns.index'),
+            'order_return' => route('admin.cases.index', ['type' => 'return']),
+            'exchange_case' => route('admin.cases.index', ['type' => 'exchange']),
+            'damage_case' => route('admin.cases.index', ['type' => 'damage']),
             'refund_request' => route('admin.payments.index'),
             'website_request' => route('admin.websites.index'),
             'account_deletion' => route('admin.deletions.index'),
@@ -210,6 +215,8 @@ it('has every submit and request action announce its queue', function (string $f
     'partner withdrawal' => ['app/Domain/Withdrawal/Actions/RequestAccountWithdrawal.php', StaffQueue::AccountWithdrawal],
     'supplier withdrawal' => ['app/Domain/Supplier/Actions/RequestSupplierWithdrawal.php', StaffQueue::SupplierWithdrawal],
     'return request' => ['app/Domain/Order/Actions/RequestOrderReturn.php', StaffQueue::OrderReturn],
+    'exchange request' => ['app/Domain/Order/Actions/RequestOrderReturn.php', StaffQueue::ExchangeCase],
+    'damage report' => ['app/Domain/Damage/Actions/ReportDamage.php', StaffQueue::DamageCase],
     'refund request' => ['app/Domain/Billing/Actions/RequestRefund.php', StaffQueue::RefundRequest],
     'website request' => ['app/Domain/Website/Actions/RequestWebsite.php', StaffQueue::WebsiteRequest],
 ]);

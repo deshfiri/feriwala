@@ -22,9 +22,12 @@ class EvidencePayload
     {
         $evidence->loadMissing(['file', 'uploader:id,name']);
 
-        $mime = $evidence->file->mime_type;
         $minutes = max(1, (int) config('case_evidence.link_minutes'));
         $expires = now()->addMinutes($minutes);
+        $file = $evidence->file;
+
+        // An erased file keeps its place in the history and offers nothing to open.
+        $mime = $file === null ? 'application/octet-stream' : $file->mime_type;
 
         return [
             'id' => $evidence->public_id,
@@ -35,11 +38,12 @@ class EvidencePayload
             'note' => $evidence->note,
             'mime_type' => $mime,
             'is_image' => str_starts_with($mime, 'image/'),
-            'size_bytes' => $evidence->file->size_bytes,
+            'size_bytes' => $file === null ? 0 : $file->size_bytes,
             'draft' => $evidence->isDraft(),
+            'erased' => $file === null,
             'uploaded_at' => $evidence->uploaded_at->toIso8601String(),
-            'preview_url' => URL::temporarySignedRoute('cases.evidence.show', $expires, ['evidence' => $evidence->public_id]),
-            'download_url' => URL::temporarySignedRoute('cases.evidence.show', $expires, ['evidence' => $evidence->public_id, 'download' => 1]),
+            'preview_url' => $file === null ? null : URL::temporarySignedRoute('cases.evidence.show', $expires, ['evidence' => $evidence->public_id]),
+            'download_url' => $file === null ? null : URL::temporarySignedRoute('cases.evidence.show', $expires, ['evidence' => $evidence->public_id, 'download' => 1]),
         ];
     }
 

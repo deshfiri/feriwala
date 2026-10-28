@@ -2,8 +2,13 @@
 
 namespace App\Domain\Notification\Queries;
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
+use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Damage\Queries\MyDamages;
 use App\Domain\Notification\Data\HeaderNotification;
 use App\Domain\Notification\Enums\StaffQueue;
+use App\Domain\Order\Models\OrderReturn;
 use App\Models\User;
 use Illuminate\Notifications\DatabaseNotification;
 
@@ -52,7 +57,7 @@ class RecentNotifications
             ->orderBy('id')
             ->limit(self::LIMIT)
             ->get()
-            ->map(fn (DatabaseNotification $notification) => $this->present($notification))
+            ->map(fn (DatabaseNotification $notification) => $this->present($notification, $user))
             ->all();
     }
 
@@ -67,7 +72,7 @@ class RecentNotifications
         return $user->unreadNotifications()->count();
     }
 
-    protected function present(DatabaseNotification $notification): HeaderNotification
+    protected function present(DatabaseNotification $notification, ?User $user = null): HeaderNotification
     {
         /** @var array<string, mixed> $data */
         $data = $notification->data;
@@ -77,7 +82,7 @@ class RecentNotifications
             id: $notification->id,
             title: $this->line($event, 'title') ?? $event,
             description: $this->description($event, $data),
-            href: $this->href($event, $data),
+            href: $this->href($event, $data, $user),
             createdAt: $notification->created_at?->diffForHumans(),
             createdAtIso: $notification->created_at?->toIso8601String(),
             readAt: $notification->read_at?->toIso8601String(),
@@ -152,7 +157,7 @@ class RecentNotifications
      *
      * @param  array<string, mixed>  $data
      */
-    protected function href(string $event, array $data = []): ?string
+    protected function href(string $event, array $data = [], ?User $user = null): ?string
     {
         return match ($event) {
             // Straight to the stock in question, where it can be adjusted (§19).
@@ -177,9 +182,11 @@ class RecentNotifications
             'identity.password_changed' => route('security.edit'),
 
             'decision.return.approved',
-            'decision.return.rejected' => is_string($data['website'] ?? null) && is_string($data['order'] ?? null)
-                ? route('websites.orders.show', [$data['website'], $data['order']])
-                : null,
+            'decision.return.rejected' => is_string($data['case'] ?? null) && $user !== null
+                ? $this->caseHref('case.outcome.decision', ['kind' => 'return', 'case' => $data['case']], $user)
+                : (is_string($data['website'] ?? null) && is_string($data['order'] ?? null)
+                    ? route('websites.orders.show', [$data['website'], $data['order']])
+                    : null),
 
             // A staff member who raised the refund goes to the platform's
             // payments screen; an account's own user to their own receipt.
@@ -190,7 +197,60 @@ class RecentNotifications
                     ? route('subscription.receipts.show', $data['payment'])
                     : null),
 
-            default => StaffQueue::fromEvent($event)?->route(),
+            default => StaffQueue::fromEvent($event)?->route() ?? $this->caseHref($event, $data, $user),
         };
+    }
+
+    /**
+     * Where a return, exchange or damage notification opens (D35).
+     *
+     * Worked out for the person reading, when they read it, and only to a page
+     * they can open: staff are sent to the workspace only while they still hold
+     * the permission, and a Partner only to their own case — a damage is on their
+     * My Damages only while they bear it. Anything else is plain text, never a link
+     * that ends in a refusal.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function caseHref(string $event, array $data, ?User $user): ?string
+    {
+        $caseId = $data['case'] ?? null;
+        $kind = $data['kind'] ?? null;
+
+        if ($user === null || ! is_string($caseId) || ! in_array($kind, ['return', 'exchange', 'damage'], true)) {
+            return null;
+        }
+
+        if (str_starts_with($event, 'case.step.')) {
+            $module = match ($kind) {
+                'damage' => PermissionModule::Damage,
+                'exchange' => PermissionModule::Exchange,
+                default => PermissionModule::ReturnCase,
+            };
+
+            if (! $user->can(PermissionCatalogue::name($module, PermissionAction::View))) {
+                return null;
+            }
+
+            return $kind === 'damage' ? route('admin.cases.damages.show', $caseId) : route('admin.cases.returns.show', $caseId);
+        }
+
+        if (! str_starts_with($event, 'case.outcome.')) {
+            return null;
+        }
+
+        $account = $user->businessAccount;
+
+        if ($account === null) {
+            return null;
+        }
+
+        if ($kind === 'damage') {
+            return app(MyDamages::class)->find($account, $caseId) === null ? null : route('damages.show', $caseId);
+        }
+
+        return OrderReturn::query()->where('public_id', $caseId)->where('business_account_id', $account->id)->exists()
+            ? route('cases.show', $caseId)
+            : null;
     }
 }

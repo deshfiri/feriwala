@@ -216,6 +216,86 @@ return [
             'title' => 'New return request',
             'description' => 'A return is waiting for a decision.',
         ],
+        'queue.exchange_case' => [
+            'title' => 'New exchange request',
+            'description' => 'An exchange is waiting for a decision.',
+        ],
+        'queue.damage_case' => [
+            'title' => 'New damage reported',
+            'description' => 'A Partner has reported a damaged item.',
+        ],
+        'case.step.inspect' => [
+            'title' => 'Inspection required',
+            'description' => 'The goods have arrived and are waiting to be inspected.',
+        ],
+        'case.step.assign_liability' => [
+            'title' => 'Responsibility review required',
+            'description' => 'Inspection is finished: who bears the loss has to be decided.',
+        ],
+        'case.step.finalize' => [
+            'title' => 'Damage ready to be posted',
+            'description' => 'The loss has been decided and is waiting to be posted.',
+        ],
+        'case.step.dispatch' => [
+            'title' => 'Damaged-item delivery requested',
+            'description' => 'A Partner has asked for a held item to be delivered to them.',
+        ],
+        'case.outcome.request_cancelled_by_staff' => [
+            'title' => 'Your request was cancelled',
+            'description' => 'Our team cancelled this request. Open it to see where it stands.',
+        ],
+        'case.outcome.parcel_received' => [
+            'title' => 'We received your parcel',
+            'description' => 'It will be inspected next.',
+        ],
+        'case.outcome.inspection_completed' => [
+            'title' => 'Inspection is finished',
+            'description' => 'We have finished checking the goods. Open the request to see the outcome.',
+        ],
+        'case.outcome.responsibility_finalized' => [
+            'title' => 'Who bears the cost has been decided',
+            'description' => 'Open the request to see the decision.',
+        ],
+        'case.outcome.responsibility_corrected' => [
+            'title' => 'Who bears the cost was corrected',
+            'description' => 'Any amount affected has been put right. Open the request to see how.',
+        ],
+        'case.outcome.charge_posted' => [
+            'title' => 'A charge was posted to your wallet',
+            'description' => 'See the wallet entry on the request.',
+        ],
+        'case.outcome.refund_posted' => [
+            'title' => 'A refund was posted',
+            'description' => 'The refund for this request has been completed.',
+        ],
+        'case.outcome.exchange_order_created' => [
+            'title' => 'Your replacement order was created',
+            'description' => 'The replacement is now being prepared.',
+        ],
+        'case.outcome.exchange_dispatched' => [
+            'title' => 'Your replacement was sent',
+            'description' => 'It has been handed to the courier.',
+        ],
+        'case.outcome.damage_finalized' => [
+            'title' => 'A damage was finalized',
+            'description' => 'The damage on your item has been decided and posted.',
+        ],
+        'case.outcome.delivery_accepted' => [
+            'title' => 'Your delivery request was accepted',
+            'description' => 'We will send the item to the address you chose.',
+        ],
+        'case.outcome.damage_dispatched' => [
+            'title' => 'Your damaged item was sent',
+            'description' => 'It is on its way to you.',
+        ],
+        'case.outcome.damage_received' => [
+            'title' => 'Your damaged item was marked received',
+            'description' => 'Our team confirmed it reached you.',
+        ],
+        'case.outcome.request_rejected' => [
+            'title' => 'Your damage report was not accepted',
+            'description' => 'Open it to see where it stands.',
+        ],
         'queue.refund_request' => [
             'title' => 'New refund request',
             'description' => 'A refund is waiting for a decision.',

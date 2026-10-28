@@ -43,78 +43,101 @@ export default function EvidenceGallery({
         <div className="space-y-4">
             {files.length > 0 && (
                 <ul className="grid gap-3 sm:grid-cols-2">
-                    {files.map((file) => (
-                        <li
-                            key={file.id}
-                            className="border-border flex min-w-0 gap-3 rounded-lg border p-3"
-                        >
-                            <a
-                                href={file.preview_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={t('cases.evidence.open', {
-                                    name: file.name,
-                                })}
-                                className="bg-muted text-muted-foreground flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border"
+                    {files.map((file) =>
+                        file.erased ? (
+                            <li
+                                key={file.id}
+                                className="border-border text-muted-foreground flex min-w-0 items-center gap-3 rounded-lg border border-dashed p-3 text-sm"
                             >
-                                {file.is_image ? (
-                                    <img
-                                        src={file.preview_url}
-                                        alt={file.name}
-                                        loading="lazy"
-                                        className="size-full object-cover"
-                                    />
-                                ) : (
-                                    <FileText
-                                        aria-hidden="true"
-                                        className="size-6"
-                                    />
-                                )}
-                            </a>
-                            <div className="min-w-0 flex-1 space-y-1 text-sm">
-                                <div className="truncate font-medium">
-                                    {file.name}
+                                <FileText
+                                    aria-hidden="true"
+                                    className="size-6 shrink-0"
+                                />
+                                <div className="min-w-0">
+                                    <div>{t('cases.evidence.erased')}</div>
+                                    <div className="text-xs">
+                                        {file.purpose_label} ·{' '}
+                                        {new Date(
+                                            file.uploaded_at,
+                                        ).toLocaleDateString(locale)}
+                                    </div>
                                 </div>
-                                <div className="text-muted-foreground text-xs">
-                                    {file.purpose_label} ·{' '}
-                                    {t(`cases.actors.${file.uploaded_by}`)} ·{' '}
-                                    {size(file.size_bytes)} ·{' '}
-                                    {new Date(
-                                        file.uploaded_at,
-                                    ).toLocaleDateString(locale)}
-                                </div>
-                                {file.note && (
-                                    <p className="text-xs break-words">
-                                        {file.note}
-                                    </p>
-                                )}
-                                <div className="flex flex-wrap gap-3 text-xs">
-                                    <a
-                                        href={file.preview_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
-                                    >
-                                        <ExternalLink
-                                            aria-hidden="true"
-                                            className="size-3"
+                            </li>
+                        ) : (
+                            <li
+                                key={file.id}
+                                className="border-border flex min-w-0 gap-3 rounded-lg border p-3"
+                            >
+                                <a
+                                    href={file.preview_url ?? undefined}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={t('cases.evidence.open', {
+                                        name: file.name,
+                                    })}
+                                    className="bg-muted text-muted-foreground flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border"
+                                >
+                                    {file.is_image ? (
+                                        <img
+                                            src={file.preview_url ?? undefined}
+                                            alt={file.name}
+                                            loading="lazy"
+                                            className="size-full object-cover"
                                         />
-                                        {t('cases.evidence.view')}
-                                    </a>
-                                    <a
-                                        href={file.download_url}
-                                        className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
-                                    >
-                                        <Download
+                                    ) : (
+                                        <FileText
                                             aria-hidden="true"
-                                            className="size-3"
+                                            className="size-6"
                                         />
-                                        {t('cases.evidence.download')}
-                                    </a>
+                                    )}
+                                </a>
+                                <div className="min-w-0 flex-1 space-y-1 text-sm">
+                                    <div className="truncate font-medium">
+                                        {file.name}
+                                    </div>
+                                    <div className="text-muted-foreground text-xs">
+                                        {file.purpose_label} ·{' '}
+                                        {t(`cases.actors.${file.uploaded_by}`)}{' '}
+                                        · {size(file.size_bytes)} ·{' '}
+                                        {new Date(
+                                            file.uploaded_at,
+                                        ).toLocaleDateString(locale)}
+                                    </div>
+                                    {file.note && (
+                                        <p className="text-xs break-words">
+                                            {file.note}
+                                        </p>
+                                    )}
+                                    <div className="flex flex-wrap gap-3 text-xs">
+                                        <a
+                                            href={file.preview_url ?? undefined}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                                        >
+                                            <ExternalLink
+                                                aria-hidden="true"
+                                                className="size-3"
+                                            />
+                                            {t('cases.evidence.view')}
+                                        </a>
+                                        <a
+                                            href={
+                                                file.download_url ?? undefined
+                                            }
+                                            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                                        >
+                                            <Download
+                                                aria-hidden="true"
+                                                className="size-3"
+                                            />
+                                            {t('cases.evidence.download')}
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
-                        </li>
-                    ))}
+                            </li>
+                        ),
+                    )}
                 </ul>
             )}
 

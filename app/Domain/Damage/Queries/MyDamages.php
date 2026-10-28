@@ -5,6 +5,7 @@ namespace App\Domain\Damage\Queries;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Damage\Enums\DamageStatus;
 use App\Domain\Damage\Models\OrderDamage;
+use App\Domain\Order\Enums\ReturnInitiator;
 use App\Domain\Order\Enums\ReturnParty;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -28,16 +29,26 @@ class MyDamages
      */
     public function query(BusinessAccount $account): Builder
     {
+        $values = fn (array $statuses) => array_map(fn (DamageStatus $status) => $status->value, $statuses);
+
         return OrderDamage::query()
             ->where('business_account_id', $account->id)
-            ->where('responsible_party', ReturnParty::Partner->value)
-            ->whereIn('status', array_map(
-                fn (DamageStatus $status) => $status->value,
-                [
-                    DamageStatus::FinancialPostingPending, DamageStatus::Finalized, DamageStatus::DispatchRequested,
-                    DamageStatus::Dispatched, DamageStatus::ReceivedByPartner,
-                ],
-            ))
+            ->where(fn (Builder $either) => $either
+                // What the Partner bears, once the loss has been decided…
+                ->where(fn (Builder $bears) => $bears
+                    ->where('responsible_party', ReturnParty::Partner->value)
+                    ->whereIn('status', $values([
+                        DamageStatus::FinancialPostingPending, DamageStatus::Finalized, DamageStatus::DispatchRequested,
+                        DamageStatus::Dispatched, DamageStatus::ReceivedByPartner,
+                    ])))
+                // …and the Partner's own reports while they are being looked at, or if they were refused.
+                // A damage that turns out to be Banij's is not here at all.
+                ->orWhere(fn (Builder $reported) => $reported
+                    ->where('initiated_by_type', ReturnInitiator::Partner->value)
+                    ->whereIn('status', $values([
+                        DamageStatus::Reported, DamageStatus::AwaitingReceipt, DamageStatus::Received,
+                        DamageStatus::UnderInspection, DamageStatus::LiabilityReview, DamageStatus::Rejected,
+                    ]))))
             ->with(['order:id,public_id,reference', 'dispositions', 'dispatch', 'statusHistory'])
             ->orderByDesc('id');
     }

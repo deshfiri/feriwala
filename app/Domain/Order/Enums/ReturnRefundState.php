@@ -2,6 +2,8 @@
 
 namespace App\Domain\Order\Enums;
 
+use App\Support\Status\HasTranslatedLabel;
+
 /**
  * What became of the money for a return (§26.3, §28, D17, P6-12).
  *
@@ -17,6 +19,8 @@ namespace App\Domain\Order\Enums;
  */
 enum ReturnRefundState: string
 {
+    use HasTranslatedLabel;
+
     /** Nothing to give back — goods exchanged, or a refused return. */
     case NotRequired = 'not_required';
 
@@ -31,17 +35,6 @@ enum ReturnRefundState: string
 
     /** A person has to settle this one, and has been told so. */
     case ManualReview = 'manual_review';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::NotRequired => 'No refund',
-            self::Pending => 'Refund pending',
-            self::Completed => 'Refunded',
-            self::Failed => 'Refund failed',
-            self::ManualReview => 'Needs manual settlement',
-        };
-    }
 
     /**
      * Whether somebody still has to do something about the money.
@@ -59,5 +52,10 @@ enum ReturnRefundState: string
             self::ManualReview, self::Pending => 'warning',
             self::NotRequired => 'neutral',
         };
+    }
+
+    protected static function statusLabelGroup(): string
+    {
+        return 'return_refund_state';
     }
 }

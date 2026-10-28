@@ -12,3 +12,6 @@ Stored notifications keep an `event` like `account.activated` plus that event's 
 The trap: `__('notification.events.account.activated.title')` does NOT work. The translator splits on dots and looks for a nested `account` array, then silently returns the key. Fetch `__('notification.events')` and index it with the raw event string instead.
 
 A missing line falls back to the raw event name, deliberately — a visible `wallet.topped_up` in the bell is a bug someone fixes; a dropped row is one nobody notices.
+
+## Case notifications come from the models' moveTo(), after commit
+Return/exchange/damage notifications are sent by AnnounceCaseEvent, called from OrderReturn::moveTo, OrderDamage::moveTo, a few actions and Order::moveTo (exchange shipped). Never add a second sender in an action. Ids are uuid5 of event+case+recipient so repeats write one row; sending is wrapped in DB::afterCommit. Bell links for case events are computed at read time in RecentNotifications::caseHref (permission/ownership checked), never stored.

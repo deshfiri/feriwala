@@ -2,6 +2,8 @@
 
 namespace App\Domain\Order\Enums;
 
+use App\Support\Status\HasTranslatedLabel;
+
 /**
  * What a case asks for (D35): the goods back and the money settled, or the
  * goods back and a replacement sent.
@@ -12,19 +14,18 @@ namespace App\Domain\Order\Enums;
  */
 enum ReturnCaseType: string
 {
+    use HasTranslatedLabel;
+
     case Return = 'return';
     case Exchange = 'exchange';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::Return => 'Return',
-            self::Exchange => 'Exchange',
-        };
-    }
 
     public function isExchange(): bool
     {
         return $this === self::Exchange;
+    }
+
+    protected static function statusLabelGroup(): string
+    {
+        return 'return_case_type';
     }
 }

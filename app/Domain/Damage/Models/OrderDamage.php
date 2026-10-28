@@ -16,6 +16,7 @@ use App\Domain\Damage\Enums\DamageStatus;
 use App\Domain\Damage\Enums\DamageValuationBasis;
 use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Notification\Actions\AnnounceCaseEvent;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnInitiator;
 use App\Domain\Order\Enums\ReturnParty;
@@ -279,6 +280,9 @@ class OrderDamage extends Model
     {
         /** @var OrderDamageStatusChange $entry */
         $entry = $this->transitionWithHistory($to, $change, ['source' => $source]);
+
+        // Whoever has to act next, and the Partner, are told once this commits (D35).
+        app(AnnounceCaseEvent::class)->damageMoved($this, $to, $source);
 
         return $entry;
     }

@@ -63,6 +63,15 @@ class WebsitePolicy
     }
 
     /**
+     * Stand a website up for a partner, on their behalf. Platform staff only:
+     * the partner's own request is {@see create()}.
+     */
+    public function provision(User $user): bool
+    {
+        return $user->can(PermissionCatalogue::name(PermissionModule::Website, PermissionAction::Edit));
+    }
+
+    /**
      * Change what the storefront is and what it shows (§16.3).
      */
     public function manage(User $user, Website $website): bool

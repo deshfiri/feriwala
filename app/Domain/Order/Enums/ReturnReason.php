@@ -2,6 +2,8 @@
 
 namespace App\Domain\Order\Enums;
 
+use App\Support\Status\HasTranslatedLabel;
+
 /**
  * Why a customer is sending something back (§18.2, contract §6.3, P6-12).
  *
@@ -12,24 +14,14 @@ namespace App\Domain\Order\Enums;
  */
 enum ReturnReason: string
 {
+    use HasTranslatedLabel;
+
     case Damaged = 'damaged';
     case WrongItem = 'wrong_item';
     case NotAsDescribed = 'not_as_described';
     case MissingParts = 'missing_parts';
     case ChangedMind = 'changed_mind';
     case Other = 'other';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::Damaged => 'Arrived damaged',
-            self::WrongItem => 'Wrong item sent',
-            self::NotAsDescribed => 'Not as described',
-            self::MissingParts => 'Parts missing',
-            self::ChangedMind => 'Changed their mind',
-            self::Other => 'Something else',
-        };
-    }
 
     /**
      * Whether the goods are suspect on arrival because of why they came back.
@@ -48,5 +40,10 @@ enum ReturnReason: string
     public static function values(): array
     {
         return array_map(fn (self $reason) => $reason->value, self::cases());
+    }
+
+    protected static function statusLabelGroup(): string
+    {
+        return 'return_reason';
     }
 }

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Cases\Queries\PartnerCasePayload;
+use App\Domain\Damage\Queries\DamageReportEligibility;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\StoreOrderStep;
@@ -40,6 +42,8 @@ class StoreOrderController extends Controller
         protected CancelStoreOrder $cancel,
         protected PartnerCasePayload $cases,
         protected ReturnEligibility $eligibility,
+        protected CaseLinks $links,
+        protected DamageReportEligibility $damageEligibility,
     ) {}
 
     public function index(Request $request): Response
@@ -86,15 +90,18 @@ class StoreOrderController extends Controller
                 'cancel' => route('store-orders.cancel', $record->public_id),
                 'advance' => null,
                 'request_case' => route('cases.create', $record->public_id),
+                'report_damage' => route('damages.create', $record->public_id),
             ],
             // The Partner reads the whole timeline; they get no next-action button.
             'timeline' => ['next_action' => null] + $timeline,
             // Every return and exchange asked for on this order (D35).
             'cases' => $this->cases->forOrder($record),
+            'exchange_origin' => $this->links->exchangeOriginForPartner($record),
             'can' => [
                 'advance' => false,
                 'cancel' => StoreOrderStep::for($record->status) === StoreOrderStep::Pending && ! $timeline['cancelled'],
                 'request_case' => $this->mayRequestCase($request, $record),
+                'report_damage' => $this->mayReportDamage($request, $record),
             ],
         ]);
     }
@@ -131,6 +138,21 @@ class StoreOrderController extends Controller
         return $user instanceof User
             && $website !== null
             && $this->eligibility->for($order)['eligible']
+            && Gate::forUser($user)->allows('manage', $website);
+    }
+
+    /**
+     * Whether this person may report a damaged item on this order: something on it
+     * can still be reported, and they manage the store it came through.
+     */
+    protected function mayReportDamage(Request $request, Order $order): bool
+    {
+        $user = $request->user();
+        $website = $order->website_id === null ? null : Website::query()->find($order->website_id);
+
+        return $user instanceof User
+            && $website !== null
+            && $this->damageEligibility->for($order)['eligible']
             && Gate::forUser($user)->allows('manage', $website);
     }
 

@@ -927,13 +927,17 @@ describe('My Damages', function () {
             ->and(fn () => app(ConfirmDamageReceivedByPartner::class)->handle($stranger, $mine))->toThrow(AuthorizationException::class);
     });
 
-    it('does not list a case until its loss is decided, or one Banij bears', function () {
+    it('lists the Partner\'s own report while it is looked at (with no loss), and never one Banij bears', function () {
         websiteTestWallet($this->account, '10000.00');
 
-        dmgReviewable(dmgDeliveredOrder());
+        $reported = dmgReviewable(dmgDeliveredOrder());
         dmgFinalized(dmgDeliveredOrder(), ReturnParty::Banij);
 
-        expect(app(MyDamages::class)->paginate($this->account)->total())->toBe(0);
+        $listed = app(MyDamages::class)->paginate($this->account);
+
+        expect($listed->total())->toBe(1)
+            ->and($listed->items()[0]->reference)->toBe($reported->reference)
+            ->and($listed->items()[0]->approved_loss)->toBeNull();
     });
 });
 

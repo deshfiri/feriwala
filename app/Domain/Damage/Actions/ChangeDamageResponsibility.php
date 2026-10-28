@@ -10,6 +10,7 @@ use App\Domain\Damage\Actions\Concerns\GuardsDamageActions;
 use App\Domain\Damage\Exceptions\DamageRefused;
 use App\Domain\Damage\Models\DamageCharge;
 use App\Domain\Damage\Models\OrderDamage;
+use App\Domain\Notification\Actions\AnnounceCaseEvent;
 use App\Domain\Order\Enums\ReturnChargeKind;
 use App\Domain\Order\Enums\ReturnParty;
 use App\Models\User;
@@ -116,6 +117,8 @@ class ChangeDamageResponsibility
                 accountId: $result->business_account_id,
                 module: PermissionModule::Damage->value,
             ));
+
+            app(AnnounceCaseEvent::class)->responsibilityCorrected($result, $result->responsibilityRevision());
         }
 
         $damage->setRawAttributes($result->getAttributes(), sync: true);

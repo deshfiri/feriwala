@@ -9,6 +9,8 @@ use App\Domain\Account\Enums\DeletionRequestStatus;
 use App\Domain\Account\Models\AccountDeletionRequest;
 use App\Domain\Billing\Enums\RefundStatus;
 use App\Domain\Billing\Models\RefundRequest;
+use App\Domain\Damage\Enums\DamageStatus;
+use App\Domain\Damage\Models\OrderDamage;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Notification\Actions\NotifyStaffOfSubmission;
@@ -56,6 +58,8 @@ enum StaffQueue: string
     case AccountWithdrawal = 'account_withdrawal';
     case SupplierWithdrawal = 'supplier_withdrawal';
     case OrderReturn = 'order_return';
+    case ExchangeCase = 'exchange_case';
+    case DamageCase = 'damage_case';
     case RefundRequest = 'refund_request';
     case WebsiteRequest = 'website_request';
     case AccountDeletion = 'account_deletion';
@@ -82,7 +86,10 @@ enum StaffQueue: string
             self::SupplierListing, self::SupplierListingLot => PermissionModule::SupplierListing,
             self::SupplierStockUpdate => PermissionModule::SupplierStock,
             self::AccountWithdrawal, self::SupplierWithdrawal => PermissionModule::Withdrawal,
-            self::OrderReturn => PermissionModule::Order,
+            // Returns, exchanges and damages are each told to whoever may see that kind (D35).
+            self::OrderReturn => PermissionModule::ReturnCase,
+            self::ExchangeCase => PermissionModule::Exchange,
+            self::DamageCase => PermissionModule::Damage,
             self::RefundRequest => PermissionModule::Payment,
             self::WebsiteRequest => PermissionModule::Website,
             self::AccountDeletion => PermissionModule::Account,
@@ -106,6 +113,8 @@ enum StaffQueue: string
             self::AccountWithdrawal => 'account_withdrawals',
             self::SupplierWithdrawal => 'supplier_withdrawals',
             self::OrderReturn => 'returns',
+            self::ExchangeCase => 'exchanges',
+            self::DamageCase => 'damages',
             self::RefundRequest => 'refunds',
             self::WebsiteRequest => 'website_requests',
             self::AccountDeletion => 'account_deletions',
@@ -147,7 +156,9 @@ enum StaffQueue: string
             self::SupplierStockUpdate => route('admin.supplier-stock.index'),
             self::AccountWithdrawal => route('admin.account-withdrawals.index'),
             self::SupplierWithdrawal => route('admin.supplier-withdrawals.index'),
-            self::OrderReturn => route('admin.returns.index'),
+            self::OrderReturn => route('admin.cases.index', ['type' => 'return']),
+            self::ExchangeCase => route('admin.cases.index', ['type' => 'exchange']),
+            self::DamageCase => route('admin.cases.index', ['type' => 'damage']),
             self::RefundRequest => route('admin.payments.index'),
             self::WebsiteRequest => route('admin.websites.index'),
             self::AccountDeletion, self::SupplierDeletion => route('admin.deletions.index'),
@@ -167,7 +178,8 @@ enum StaffQueue: string
             self::SupplierStockUpdate => SupplierStockUpdate::class,
             self::AccountWithdrawal => AccountWithdrawal::class,
             self::SupplierWithdrawal => SupplierWithdrawal::class,
-            self::OrderReturn => OrderReturn::class,
+            self::OrderReturn, self::ExchangeCase => OrderReturn::class,
+            self::DamageCase => OrderDamage::class,
             self::RefundRequest => RefundRequest::class,
             self::WebsiteRequest => Website::class,
             self::AccountDeletion, self::SupplierDeletion => AccountDeletionRequest::class,
@@ -191,9 +203,14 @@ enum StaffQueue: string
             self::SupplierWithdrawal => [SupplierWithdrawalStatus::Requested, SupplierWithdrawalStatus::UnderReview],
             // Waiting on a person at every stage a person has to act: decide it, inspect
             // the parcel, finish the inspection, settle what was approved (D35).
-            self::OrderReturn => [
+            self::OrderReturn, self::ExchangeCase => [
                 ReturnStatus::Requested, ReturnStatus::ParcelReceived,
                 ReturnStatus::UnderInspection, ReturnStatus::InspectionApproved,
+            ],
+            self::DamageCase => [
+                DamageStatus::Reported, DamageStatus::AwaitingReceipt, DamageStatus::Received,
+                DamageStatus::UnderInspection, DamageStatus::LiabilityReview,
+                DamageStatus::FinancialPostingPending, DamageStatus::DispatchRequested,
             ],
             self::RefundRequest => [RefundStatus::Requested],
             self::WebsiteRequest => [WebsiteStatus::SetupPending],
@@ -270,6 +287,9 @@ enum StaffQueue: string
         return match ($this) {
             self::AccountDeletion => $query->whereNotNull('user_id'),
             self::SupplierDeletion => $query->whereNotNull('supplier_id'),
+            // A return and an exchange share a table: each queue counts only its own kind.
+            self::OrderReturn => $query->where('case_type', 'return'),
+            self::ExchangeCase => $query->where('case_type', 'exchange'),
             default => $query,
         };
     }

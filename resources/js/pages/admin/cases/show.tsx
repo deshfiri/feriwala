@@ -3,6 +3,7 @@ import { AlertTriangle, Paperclip } from 'lucide-react';
 import { useState } from 'react';
 import CaseActionDialog from '@/components/cases/case-action-dialog';
 import CaseTimeline from '@/components/cases/case-timeline';
+import LinkedRef from '@/components/cases/linked-ref';
 import EvidenceGallery from '@/components/cases/evidence-gallery';
 import FinancialsPanel from '@/components/cases/financials-panel';
 import FormField from '@/components/forms/form-field';
@@ -169,30 +170,15 @@ export default function AdminCase(props: AdminCaseProps) {
                                 />
                                 <Fact
                                     label={t('cases.facts.original_order')}
-                                    value={
-                                        <Link
-                                            href={c.order.url}
-                                            className="font-mono underline-offset-4 hover:underline"
-                                        >
-                                            {c.order.reference}
-                                        </Link>
-                                    }
+                                    value={<LinkedRef item={c.order} />}
                                 />
                                 {c.exchange_order && (
                                     <Fact
                                         label={t('cases.facts.exchange_order')}
                                         value={
-                                            <span className="font-mono">
-                                                {c.exchange_order.reference}{' '}
-                                                <span className="text-muted-foreground font-sans text-xs">
-                                                    (
-                                                    {
-                                                        c.exchange_order
-                                                            .status_label
-                                                    }
-                                                    )
-                                                </span>
-                                            </span>
+                                            <LinkedRef
+                                                item={c.exchange_order}
+                                            />
                                         }
                                     />
                                 )}
@@ -343,28 +329,24 @@ export default function AdminCase(props: AdminCaseProps) {
                             <ul className="space-y-2 text-sm">
                                 <li>
                                     {t('cases.facts.original_order')}:{' '}
-                                    <Link
-                                        href={c.order.url}
-                                        className="font-mono underline-offset-4 hover:underline"
-                                    >
-                                        {c.order.reference}
-                                    </Link>
+                                    <LinkedRef item={c.order} />
                                 </li>
                                 {c.exchange_order && (
                                     <li>
                                         {t('cases.facts.exchange_order')}:{' '}
-                                        <span className="font-mono">
-                                            {c.exchange_order.reference}
-                                        </span>{' '}
-                                        ({c.exchange_order.status_label})
+                                        <LinkedRef item={c.exchange_order} />
                                     </li>
                                 )}
                                 {c.previous_exchange && (
                                     <li>
                                         {t('cases.facts.previous_exchange')}:{' '}
-                                        <span className="font-mono">
-                                            {c.previous_exchange}
-                                        </span>
+                                        <LinkedRef item={c.previous_exchange} />
+                                    </li>
+                                )}
+                                {c.next_exchange && (
+                                    <li>
+                                        {t('cases.facts.next_exchange')}:{' '}
+                                        <LinkedRef item={c.next_exchange} />
                                     </li>
                                 )}
                                 {c.return && (

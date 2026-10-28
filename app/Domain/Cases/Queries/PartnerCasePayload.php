@@ -28,6 +28,7 @@ class PartnerCasePayload
         protected CaseTimeline $timeline,
         protected EvidencePayload $evidence,
         protected ProductImage $images,
+        protected CaseLinks $links,
     ) {}
 
     /**
@@ -96,10 +97,7 @@ class PartnerCasePayload
                 'created_at' => $case->requested_at->toIso8601String(),
                 'next_step' => $this->nextStep($case),
                 'can_cancel' => $case->status->isOpen() && $case->usesCaseWorkflow(),
-                'previous_exchange' => $case->previousExchange?->exchange_number,
-                'order_url' => route('store-orders.show', $case->order->public_id),
-                'exchange_order_url' => $case->exchangeOrder === null ? null : route('store-orders.show', $case->exchangeOrder->public_id),
-                'exchange_order_status' => $case->exchangeOrder?->status->label(),
+                'links' => $this->links->forPartner($case),
                 'legacy' => ! $case->usesCaseWorkflow(),
             ],
             'items' => $case->items->map(fn (OrderReturnItem $line) => [
