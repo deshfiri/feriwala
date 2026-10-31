@@ -1,5 +1,6 @@
 <?php
 
+use App\Integrations\Sms\Providers\GenNet\GenNetSmsProvider;
 use App\Integrations\Sms\Providers\LogSmsProvider;
 
 return [
@@ -34,6 +35,14 @@ return [
 
         'log' => [
             'driver' => LogSmsProvider::class,
+        ],
+
+        // GenNet Push SMS (API v3.0.0). Its address, token and sender ID are
+        // entered in the SMS settings screen and held encrypted; `timeout` is
+        // the only thing read from here, in seconds.
+        'gennet' => [
+            'driver' => GenNetSmsProvider::class,
+            'timeout' => (int) env('SMS_GENNET_TIMEOUT', 20),
         ],
 
         // Credentials are never read from here directly — they live encrypted

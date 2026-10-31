@@ -27,13 +27,32 @@ return [
         'submit' => 'Save',
     ],
 
+    'balance' => [
+        'check' => 'Check balance',
+        'result' => 'Balance: :balance',
+        'not_reported' => 'This provider does not report a balance.',
+    ],
+
+    'test' => [
+        'title' => 'Send a test message',
+        'recipient' => 'Mobile number',
+        'submit' => 'Send test',
+        'body' => 'Banij test message: this SMS provider is working.',
+        'sent' => 'The provider accepted the test message.',
+        'failed' => 'The test message was not sent: :reason',
+        'unavailable' => 'That SMS provider has no driver, so it cannot be tested.',
+        'not_configured' => 'Save this provider\'s credentials before testing it.',
+    ],
+
     'credentials' => [
         'set' => 'Saved',
         'missing' => 'Not set',
         'blank_help' => 'Stored encrypted. Leave a field blank to keep the stored value.',
         'submit' => 'Save credentials',
         'fields' => [
-            //
+            'base_url' => 'API base address (https)',
+            'api_token' => 'API token',
+            'sid' => 'Sender ID (SID)',
         ],
     ],
 

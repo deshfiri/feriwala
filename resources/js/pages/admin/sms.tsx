@@ -372,6 +372,98 @@ export default function AdminSms({
                                         )}
                                     </Form>
                                 )}
+
+                                {provider.is_implemented &&
+                                    provider.is_configured &&
+                                    provider.name !== 'log' &&
+                                    can.manage && (
+                                        <div className="mt-4 flex flex-wrap items-end gap-3 border-t pt-3">
+                                            <Form
+                                                {...SmsController.checkBalance.form()}
+                                                options={{
+                                                    preserveScroll: true,
+                                                }}
+                                            >
+                                                {({ processing }) => (
+                                                    <>
+                                                        <input
+                                                            type="hidden"
+                                                            name="provider"
+                                                            value={
+                                                                provider.name
+                                                            }
+                                                        />
+                                                        <Button
+                                                            type="submit"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            {t(
+                                                                'sms.balance.check',
+                                                            )}
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </Form>
+
+                                            <Form
+                                                {...SmsController.sendTest.form()}
+                                                options={{
+                                                    preserveScroll: true,
+                                                }}
+                                                className="flex flex-wrap items-end gap-2"
+                                            >
+                                                {({ errors, processing }) => (
+                                                    <>
+                                                        <input
+                                                            type="hidden"
+                                                            name="provider"
+                                                            value={
+                                                                provider.name
+                                                            }
+                                                        />
+                                                        <div className="grid gap-1.5">
+                                                            <Label
+                                                                htmlFor={`${provider.name}-test-recipient`}
+                                                            >
+                                                                {t(
+                                                                    'sms.test.recipient',
+                                                                )}
+                                                            </Label>
+                                                            <input
+                                                                id={`${provider.name}-test-recipient`}
+                                                                name="recipient"
+                                                                type="tel"
+                                                                required
+                                                                maxLength={20}
+                                                                className="border-input bg-background focus-visible:ring-ring w-48 rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                                            />
+                                                            <InputError
+                                                                message={
+                                                                    errors.recipient
+                                                                }
+                                                            />
+                                                        </div>
+                                                        <Button
+                                                            type="submit"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                        >
+                                                            {t(
+                                                                'sms.test.submit',
+                                                            )}
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </Form>
+                                        </div>
+                                    )}
                             </li>
                         ))}
                     </ul>

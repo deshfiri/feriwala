@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\PaymentLogRedactor;
+use App\Domain\Notification\Actions\CheckSmsBalance;
 use App\Domain\Notification\Actions\ConfigureSms;
 use App\Domain\Notification\Actions\ConfigureSmsCredentials;
+use App\Domain\Notification\Actions\SendTestSms;
 use App\Domain\Notification\Actions\ToggleSmsEvent;
 use App\Domain\Notification\Enums\SmsEvent;
 use App\Domain\Notification\Enums\SmsStatus;
@@ -14,6 +16,7 @@ use App\Domain\Notification\SmsEventSwitch;
 use App\Domain\Website\Actions\ConfigureCheckoutVerificationPolicy;
 use App\Domain\Website\CheckoutVerification;
 use App\Http\Controllers\Controller;
+use App\Integrations\Sms\Exceptions\SmsProviderUnavailable;
 use App\Integrations\Sms\SmsProviderManager;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -231,6 +234,61 @@ class SmsController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('sms.credentials_saved')]);
+
+        return back();
+    }
+
+    /**
+     * Ask a provider what balance it has left.
+     */
+    public function checkBalance(Request $request, CheckSmsBalance $check): RedirectResponse
+    {
+        abort_unless(SmsSettingsPolicy::canManage($this->actor($request)), 403);
+
+        $validated = $request->validate([
+            'provider' => ['required', Rule::in($this->providers->available())],
+        ]);
+
+        try {
+            $balance = $check->handle($validated['provider']);
+        } catch (InvalidArgumentException|SmsProviderUnavailable $exception) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => $exception->getMessage()]);
+
+            return back();
+        }
+
+        Inertia::flash('toast', $balance === null
+            ? ['type' => 'info', 'message' => __('sms.balance.not_reported')]
+            : ['type' => 'success', 'message' => __('sms.balance.result', ['balance' => $balance])]);
+
+        return back();
+    }
+
+    /**
+     * Send one test message through a provider, to prove its credentials work.
+     */
+    public function sendTest(Request $request, SendTestSms $send): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        abort_unless(SmsSettingsPolicy::canManage($actor), 403);
+
+        $validated = $request->validate([
+            'provider' => ['required', Rule::in($this->providers->available())],
+            'recipient' => ['required', 'string', 'max:20'],
+        ]);
+
+        try {
+            $result = $send->handle($actor, $validated['provider'], $validated['recipient']);
+        } catch (InvalidArgumentException $exception) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => $exception->getMessage()]);
+
+            return back();
+        }
+
+        Inertia::flash('toast', $result->accepted
+            ? ['type' => 'success', 'message' => __('sms.test.sent')]
+            : ['type' => 'error', 'message' => __('sms.test.failed', ['reason' => $result->error ?? ''])]);
 
         return back();
     }

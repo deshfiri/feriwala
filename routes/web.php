@@ -1122,6 +1122,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         // Per-provider credentials, encrypted at rest (§30.1, §36) -- the
         // same shape as a payment gateway's own credential form.
         Route::put('sms/credentials', [SmsController::class, 'updateCredentials'])->name('sms.credentials.update');
+        // A provider's remaining balance, and one test message through it.
+        Route::post('sms/balance', [SmsController::class, 'checkBalance'])->name('sms.balance');
+        Route::post('sms/test', [SmsController::class, 'sendTest'])->middleware('throttle:6,1')->name('sms.test');
         // §30's per-event switch: one business event's texts on or off.
         Route::put('sms/events', [SmsController::class, 'toggleEvent'])->name('sms.events.toggle');
         // Require the order confirmation code of every storefront (platform policy).

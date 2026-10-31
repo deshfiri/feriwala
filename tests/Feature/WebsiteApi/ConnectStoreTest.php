@@ -105,6 +105,21 @@ it('connects a store once; a second attempt is refused, not duplicated', functio
     expect(WebsiteCredential::query()->count())->toBe(1);
 });
 
+it('takes over an address a closed website still held', function () {
+    Website::factory()->create(['domain' => 'old-shop.example.com'])
+        ->forceFill(['status' => 'closed', 'closed_at' => now()])->save();
+
+    connectStore($this, $this->website, ['address' => 'old-shop.example.com'])->assertCreated();
+
+    expect($this->website->refresh()->domain)->toBe('old-shop.example.com');
+});
+
+it('takes an address as typed, without checking its shape', function () {
+    connectStore($this, $this->website, ['address' => 'https://Shop_Name.example.com/anything'])->assertCreated();
+
+    expect($this->website->refresh()->domain)->toBe('shop_name.example.com');
+});
+
 it('refuses an address that is taken by another website, and leaves nothing half-made', function () {
     Website::factory()->create(['domain' => 'taken.example.com']);
 

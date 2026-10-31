@@ -73,6 +73,8 @@ class ConnectStore
         }
 
         $issued = $this->database->transaction(function () use ($website, $actor, $local, $domain, $termMonths) {
+            app(FreeAddressOfClosedWebsites::class)->handle($domain);
+
             $this->record($website, $domain, $local !== null, $actor, $termMonths);
 
             return $this->credentials->issue(
@@ -238,14 +240,13 @@ class ConnectStore
     protected function normalise(string $address): ?string
     {
         $value = Str::lower(trim($address));
-        $value = (string) preg_replace('#^https?://#', '', $value);
+        $value = (string) preg_replace('#^[a-z][a-z0-9+.\-]*://#', '', $value);
         $value = rtrim(explode('/', $value)[0], '.');
 
-        if (preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/', $value) !== 1
-            || strlen($value) > 253) {
-            return null;
-        }
-
-        return $value;
+        // Taken as typed, apart from what is never a public host: a port or
+        // whitespace (a local address is {@see LocalAddress}'s to accept), or a
+        // name with no dot in it.
+        return $value === '' || strlen($value) > 253 || ! str_contains($value, '.')
+            || preg_match('/[\s:]/', $value) === 1 ? null : $value;
     }
 }

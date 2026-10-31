@@ -97,12 +97,12 @@ describe('resolving a provider', function () {
         // built, never by an absence.
         $catalogue = app(SmsProviderManager::class)->catalogue();
 
-        expect($catalogue)->toHaveCount(5);
+        expect($catalogue)->toHaveCount(6);
 
         $twilio = collect($catalogue)->firstWhere('name', 'twilio');
 
         expect($twilio['is_implemented'])->toBeFalse()
-            ->and(app(SmsProviderManager::class)->available())->toBe(['log']);
+            ->and(app(SmsProviderManager::class)->available())->toBe(['log', 'gennet']);
     });
 
     it('refuses a provider that has no driver', function () {
@@ -201,7 +201,7 @@ describe('the settings screen', function () {
                 ->where('settings.enabled', true)
                 ->where('settings.provider', 'log')
                 ->where('settings.can_send', true)
-                ->has('providers', 5)
+                ->has('providers', 6)
                 ->where('can.manage', true),
             );
     });

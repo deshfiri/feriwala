@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Website\Actions\FreeAddressOfClosedWebsites;
 use App\Domain\Website\Actions\ManageWebsiteBranding;
 use App\Domain\Website\Actions\ManageWebsiteDomainRouting;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
@@ -127,6 +128,8 @@ class WebsiteController extends Controller
         $account = BusinessAccount::query()->where('public_id', $validated['account'])->firstOrFail();
 
         $domain = RequestedAddress::normalize($validated['domain']);
+
+        app(FreeAddressOfClosedWebsites::class)->handle($domain);
 
         $website = $this->attemptRouting(fn () => $requestWebsite->handle(
             $account,
