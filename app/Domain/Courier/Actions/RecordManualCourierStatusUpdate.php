@@ -57,6 +57,7 @@ class RecordManualCourierStatusUpdate
         OrderCourierStatus $to,
         ?User $actor,
         ?string $reason = null,
+        ShipmentStatusChangeSource $source = ShipmentStatusChangeSource::Staff,
     ): Shipment {
         $reason = $reason === null ? null : trim($reason);
 
@@ -64,7 +65,7 @@ class RecordManualCourierStatusUpdate
             throw new InvalidArgumentException('A reason is required for this move.');
         }
 
-        return $this->database->transaction(function () use ($shipment, $to, $actor, $reason) {
+        return $this->database->transaction(function () use ($shipment, $to, $actor, $reason, $source) {
             /** @var Shipment $locked */
             $locked = Shipment::query()->lockForUpdate()->findOrFail($shipment->id);
 
@@ -83,14 +84,14 @@ class RecordManualCourierStatusUpdate
             $locked->transitionWithHistory(
                 $to,
                 new StatusChange(actorId: $actor?->id, reason: $reason),
-                ['source' => ShipmentStatusChangeSource::Staff],
+                ['source' => $source],
             );
 
             $locked->trackingEvents()->create([
                 'event_code' => $to->value,
                 'description' => $reason,
                 'occurred_at' => now(),
-                'source' => 'manual',
+                'source' => $source === ShipmentStatusChangeSource::Staff ? 'manual' : $source->value,
             ]);
 
             /** @var Order $order */
