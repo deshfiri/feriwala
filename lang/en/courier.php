@@ -2,6 +2,38 @@
 
 return [
 
+    'booking' => [
+        'status' => [
+            'pending' => 'Booking in progress',
+            'booked' => 'Booked',
+            'failed' => 'Booking failed',
+            'uncertain' => 'Booking outcome unknown',
+        ],
+        'refused' => [
+            'not_store_order' => 'Only Store Orders can be booked with Steadfast.',
+            'unsupported_currency' => 'Steadfast bookings are in Taka only.',
+            'missing_recipient' => 'This order has no recipient name to send to the courier.',
+            'bad_phone' => 'This order has no valid Bangladesh mobile number to send to the courier.',
+            'missing_address' => 'This order has no delivery address to send to the courier.',
+            'not_dispatched' => 'Dispatch this order before booking a courier.',
+            'already_in_progress' => 'A booking for this order is already in progress.',
+            'needs_reconciliation' => 'An earlier booking for this order has an unknown outcome. Check it first — booking again could create a second parcel.',
+            'already_booked' => 'This order is already booked with Steadfast.',
+            'order_not_ready' => 'This order cannot be booked with a courier in its current state.',
+            'not_uncertain' => 'Only a booking with an unknown outcome can be settled this way.',
+        ],
+        'uncertain_message' => 'Steadfast did not give a clear answer, so it is not known whether the parcel was booked. It has not been booked again.',
+        'not_found_message' => 'Steadfast has no parcel for this order, so booking may be tried again.',
+        'staff_confirmed_message' => 'Confirmed by staff as not booked with Steadfast.',
+        'flash' => [
+            'booked' => 'Booked with Steadfast.',
+            'uncertain' => 'Steadfast did not give a clear answer. The parcel was not booked again — check the booking before trying again.',
+            'failed' => 'Booking failed: :reason',
+            'pending' => 'The booking is still in progress.',
+            'not_booked' => 'Marked as not booked. Booking can be tried again.',
+        ],
+    ],
+
     'admin' => [
         'title' => 'Shipments',
         'description' => 'Every shipment raised for an order, and the courier carrying it.',

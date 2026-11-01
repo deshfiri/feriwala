@@ -2,6 +2,7 @@
 
 use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Integrations\Courier\Drivers\ManualCourierDriver;
+use App\Integrations\Courier\Drivers\SteadfastCourierDriver;
 
 return [
 
@@ -21,6 +22,7 @@ return [
 
     'drivers' => [
         CourierProviderCode::Manual->value => ManualCourierDriver::class,
+        CourierProviderCode::Steadfast->value => SteadfastCourierDriver::class,
     ],
 
     /*

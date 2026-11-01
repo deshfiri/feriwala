@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Admin\SteadfastBookingController;
 use App\Http\Controllers\Admin\SteadfastSettingsController;
 use App\Http\Controllers\Admin\SourcingGroupController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
@@ -1616,6 +1617,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.shipments.store');
         Route::post('shipments/{shipment}/status/advance', [ShipmentController::class, 'advanceStatus'])
             ->name('shipments.status.advance');
+
+        /*
+         * Steadfast booking. Every real call creates a live consignment, so the
+         * throttle is a second line behind the one-live-attempt-per-order rule.
+         * Reconciling settles an uncertain booking without booking again.
+         */
+        Route::post('orders/{order}/steadfast-booking', [SteadfastBookingController::class, 'store'])
+            ->middleware('throttle:10,1')->name('orders.steadfast-booking.store');
+        Route::post('courier/booking-attempts/{attempt}/reconcile', [SteadfastBookingController::class, 'reconcile'])
+            ->middleware('throttle:20,1')->name('courier.booking-attempts.reconcile');
+        Route::post('courier/booking-attempts/{attempt}/not-booked', [SteadfastBookingController::class, 'markNotBooked'])
+            ->name('courier.booking-attempts.not-booked');
 
         /*
          * Delivery-charge configuration (beta-critical batch, Commit 2) --

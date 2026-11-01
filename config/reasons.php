@@ -60,5 +60,9 @@ return [
 
         // So does disconnecting its store, which revokes the same credentials.
         'admin.websites.connection.disconnection',
+
+        // Telling Banij a courier booking never happened lets the same parcel be
+        // booked again, and a chargeable parcel twice if that is wrong.
+        'admin.courier.booking-attempts.not-booked',
     ],
 ];

@@ -63,13 +63,85 @@ class SteadfastClient
     }
 
     /**
-     * One call, with the failure kinds told apart.
+     * Ask Steadfast to take one parcel. **This creates a live, potentially
+     * chargeable consignment.**
      *
-     * @param  array<string, mixed>|null  $payload
+     * `POST /create_order` answers `{"status":200,"consignment":{"consignment_id":…,
+     * "invoice":…,"tracking_code":…,"status":…}}` (package README §1). Only that
+     * shape is a success; a 200 without a consignment id is *not* assumed to be
+     * either way, and is raised as unexpected so the caller treats the outcome as
+     * unknown rather than retrying.
      *
      * @throws SteadfastException
      */
-    protected function send(string $method, string $path, ?array $payload = null): Response
+    public function createOrder(SteadfastOrderRequest $order): SteadfastConsignment
+    {
+        $response = $this->send('POST', '/create_order', $order->toJson());
+        $body = $response->json();
+        $consignment = is_array($body) ? ($body['consignment'] ?? null) : null;
+
+        if (! is_array($consignment)
+            || (int) ($body['status'] ?? 0) !== 200
+            || ! $this->isIdentifier($consignment['consignment_id'] ?? null)
+            || ($consignment['invoice'] ?? null) !== $order->invoice) {
+            throw new SteadfastException(SteadfastFailureKind::Unexpected, $response->status());
+        }
+
+        return new SteadfastConsignment(
+            consignmentId: (string) $consignment['consignment_id'],
+            trackingCode: is_string($consignment['tracking_code'] ?? null) && $consignment['tracking_code'] !== ''
+                ? $consignment['tracking_code']
+                : null,
+            status: is_string($consignment['status'] ?? null) ? $consignment['status'] : null,
+        );
+    }
+
+    /**
+     * What Steadfast says about a parcel, by Banij's own invoice reference.
+     *
+     * `GET /status_by_invoice/{invoice}` answers `{"status":200,"delivery_status":…}`
+     * (package README §3). The answer carries no consignment id.
+     *
+     * A 404 is read as "no such invoice". The package documents no error shape,
+     * so that is an assumption to confirm against the real service; anything
+     * that is neither a clear answer nor a 404 stays inconclusive.
+     *
+     * @throws SteadfastException
+     */
+    public function statusByInvoice(string $invoice): SteadfastStatusLookup
+    {
+        try {
+            $response = $this->send('GET', '/status_by_invoice/'.rawurlencode($invoice));
+        } catch (SteadfastException $exception) {
+            if ($exception->httpStatus === 404) {
+                return new SteadfastStatusLookup(found: false, status: null);
+            }
+
+            throw $exception;
+        }
+
+        $body = $response->json();
+
+        if (! is_array($body) || (int) ($body['status'] ?? 0) !== 200 || ! is_string($body['delivery_status'] ?? null)) {
+            throw new SteadfastException(SteadfastFailureKind::Unexpected, $response->status());
+        }
+
+        return new SteadfastStatusLookup(found: true, status: $body['delivery_status']);
+    }
+
+    protected function isIdentifier(mixed $value): bool
+    {
+        return (is_int($value) && $value > 0) || (is_string($value) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $value) === 1);
+    }
+
+    /**
+     * One call, with the failure kinds told apart.
+     *
+     * @param  string|null  $body  a JSON request body, or null for a plain GET
+     *
+     * @throws SteadfastException
+     */
+    protected function send(string $method, string $path, ?string $body = null): Response
     {
         $baseUrl = $this->credentials->baseUrl();
         $apiKey = $this->credentials->apiKey();
@@ -91,15 +163,12 @@ class SteadfastClient
             ->timeout((int) config('courier.steadfast.timeout', 20));
 
         try {
-            $response = $payload === null
-                ? $request->send($method, $baseUrl.$path)
-                : $request->send($method, $baseUrl.$path, ['json' => $payload]);
+            $response = ($body === null ? $request : $request->withBody($body, 'application/json'))
+                ->send($method, $baseUrl.$path);
         } catch (ConnectionException $exception) {
             $this->logCall($method, $path, null);
 
-            throw new SteadfastException($this->isTimeout($exception)
-                ? SteadfastFailureKind::Timeout
-                : SteadfastFailureKind::Unreachable);
+            throw new SteadfastException($this->classify($exception));
         }
 
         $this->logCall($method, $path, $response->status());
@@ -113,13 +182,21 @@ class SteadfastClient
     }
 
     /**
-     * cURL error 28 is "operation timed out"; everything else that stops a
-     * connection (DNS, refused, TLS) is "unreachable".
+     * Only a failure that provably happened before any request was sent is
+     * "unreachable": cURL error 6 (could not resolve host) and 7 (could not
+     * connect). A timeout may have reached Steadfast. Anything else -- a reset,
+     * an empty reply, a TLS failure -- may have too, so it is not claimed to be
+     * safe: it is "unexpected", whose outcome is unknown.
      */
-    protected function isTimeout(ConnectionException $exception): bool
+    protected function classify(ConnectionException $exception): SteadfastFailureKind
     {
-        return str_contains($exception->getMessage(), 'cURL error 28')
-            || stripos($exception->getMessage(), 'timed out') !== false;
+        $message = $exception->getMessage();
+
+        return match (true) {
+            str_contains($message, 'cURL error 28'), stripos($message, 'timed out') !== false => SteadfastFailureKind::Timeout,
+            str_contains($message, 'cURL error 6:'), str_contains($message, 'cURL error 7:') => SteadfastFailureKind::Unreachable,
+            default => SteadfastFailureKind::Unexpected,
+        };
     }
 
     /**
