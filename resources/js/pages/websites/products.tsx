@@ -4,15 +4,13 @@ import { useState } from 'react';
 import DataTable from '@/components/data-table/data-table';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
-import MoneyInput from '@/components/money-input';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import WebsiteSelectionDialog from '@/components/website-selection-dialog';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
@@ -60,29 +58,6 @@ const syncTones: Record<string, 'success' | 'warning' | 'danger'> = {
 };
 
 /**
- * An instant as a `datetime-local` value, in the browser's own time.
- */
-function toLocalInput(instant: string | null): string {
-    if (!instant) {
-        return '';
-    }
-
-    const date = new Date(instant);
-    const pad = (value: number) => String(value).padStart(2, '0');
-
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/**
- * A `datetime-local` value as an instant with its offset, or null when empty.
- */
-function toInstant(value: unknown): string | null {
-    return typeof value === 'string' && value !== ''
-        ? new Date(value).toISOString()
-        : null;
-}
-
-/**
  * What one storefront sells (§15, §15.1, P5-2–P5-7).
  *
  * Products are **chosen** from the Feriwala catalogue, never written here
@@ -101,6 +76,9 @@ export default function WebsiteProducts({
     const { t, locale } = useTranslation();
     const { setFilter } = useTableQuery({ only: ['selections', 'filters'] });
     const [editing, setEditing] = useState<string | null>(null);
+    // Looked up by id on every render, so a row that has gone from the page
+    // (another page, a filter) takes its dialog with it.
+    const editingRow = selections.data.find((row) => row.id === editing);
 
     const allowance =
         publishing.limit === null
@@ -271,9 +249,7 @@ export default function WebsiteProducts({
                     <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() =>
-                            setEditing(editing === row.id ? null : row.id)
-                        }
+                        onClick={() => setEditing(row.id)}
                     >
                         {t('website.products.edit')}
                     </Button>
@@ -281,177 +257,6 @@ export default function WebsiteProducts({
             ),
         },
     ];
-
-    const editor = (row: WebsiteSelection) => (
-        <Form
-            {...WebsiteProductController.update.form({
-                website: website.id,
-                selection: row.id,
-            })}
-            options={{ preserveScroll: true }}
-            // A window is typed in the browser's own time and sent as an
-            // instant, so the server stores exactly the moment meant (C4).
-            transform={(data) => ({
-                ...data,
-                promotion_starts_at: toInstant(data.promotion_starts_at),
-                promotion_ends_at: toInstant(data.promotion_ends_at),
-            })}
-            className="bg-muted/40 mt-3 space-y-3 rounded-lg p-3"
-        >
-            {({ processing, errors }) => (
-                <>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <MoneyInput
-                            id={`price-${row.id}`}
-                            name="price"
-                            label={t('website.products.price')}
-                            defaultValue={row.price?.amount}
-                            disabled={
-                                !row.terms.allows_user_pricing ||
-                                row.terms.locked_fields.includes('price')
-                            }
-                            error={errors.price}
-                        />
-
-                        <MoneyInput
-                            id={`promo-${row.id}`}
-                            name="promotional_price"
-                            label={t('website.products.promotional_price')}
-                            defaultValue={row.promotional_price?.amount}
-                            disabled={row.terms.locked_fields.includes(
-                                'promotional_price',
-                            )}
-                            error={errors.promotional_price}
-                        />
-
-                        {(
-                            [
-                                ['promotion_starts_at', 'starts'],
-                                ['promotion_ends_at', 'ends'],
-                            ] as const
-                        ).map(([field, key]) => (
-                            <div key={field} className="grid gap-1.5">
-                                <Label htmlFor={`promo-${key}-${row.id}`}>
-                                    {t(`website.products.${field}`)}
-                                </Label>
-                                <Input
-                                    id={`promo-${key}-${row.id}`}
-                                    name={field}
-                                    type="datetime-local"
-                                    defaultValue={toLocalInput(row[field])}
-                                    disabled={row.terms.locked_fields.includes(
-                                        'promotional_price',
-                                    )}
-                                />
-                                <InputError message={errors[field]} />
-                            </div>
-                        ))}
-
-                        <p className="text-muted-foreground text-xs sm:col-span-2">
-                            {t('website.products.promotion_window_help')}
-                        </p>
-
-                        <div className="grid gap-1.5">
-                            <Label htmlFor={`title-${row.id}`}>
-                                {t('website.products.promo_title')}
-                            </Label>
-                            <Input
-                                id={`title-${row.id}`}
-                                name="promo_title"
-                                defaultValue={row.promo_title ?? ''}
-                                maxLength={120}
-                                disabled={row.terms.locked_fields.includes(
-                                    'promo_title',
-                                )}
-                            />
-                            <InputError message={errors.promo_title} />
-                        </div>
-
-                        <div className="grid gap-1.5">
-                            <Label htmlFor={`category-${row.id}`}>
-                                {t('website.products.category')}
-                            </Label>
-                            <select
-                                id={`category-${row.id}`}
-                                name="website_category_id"
-                                defaultValue={row.category?.id ?? ''}
-                                className={selectClass}
-                                disabled={row.terms.locked_fields.includes(
-                                    'website_category',
-                                )}
-                            >
-                                <option value="">
-                                    {t('website.products.uncategorised')}
-                                </option>
-                                {categories.map((category) => (
-                                    <option
-                                        key={category.id}
-                                        value={category.id}
-                                    >
-                                        {category.name}
-                                    </option>
-                                ))}
-                            </select>
-                            <InputError message={errors.website_category_id} />
-                        </div>
-
-                        <div className="grid gap-1.5">
-                            <Label htmlFor={`order-${row.id}`}>
-                                {t('website.products.display_order')}
-                            </Label>
-                            <Input
-                                id={`order-${row.id}`}
-                                name="display_order"
-                                type="number"
-                                min={0}
-                                defaultValue={row.display_order}
-                                disabled={row.terms.locked_fields.includes(
-                                    'display_order',
-                                )}
-                            />
-                            <InputError message={errors.display_order} />
-                        </div>
-
-                        <label className="flex items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                name="is_featured"
-                                value="1"
-                                defaultChecked={row.is_featured}
-                                disabled={row.terms.locked_fields.includes(
-                                    'is_featured',
-                                )}
-                            />
-                            {t('website.products.featured')}
-                        </label>
-                    </div>
-
-                    <div className="grid gap-1.5">
-                        <Label htmlFor={`description-${row.id}`}>
-                            {t('website.products.marketing_description')}
-                        </Label>
-                        <textarea
-                            id={`description-${row.id}`}
-                            name="marketing_description"
-                            rows={3}
-                            maxLength={1000}
-                            defaultValue={row.marketing_description ?? ''}
-                            className="border-input bg-background w-full rounded-lg border px-3 py-2 text-sm"
-                            disabled={row.terms.locked_fields.includes(
-                                'marketing_description',
-                            )}
-                        />
-                        <InputError message={errors.marketing_description} />
-                    </div>
-
-                    <Button type="submit" size="sm" disabled={processing}>
-                        {processing && <Spinner />}
-                        {t('website.products.save')}
-                    </Button>
-                </>
-            )}
-        </Form>
-    );
 
     return (
         <>
@@ -539,11 +344,17 @@ export default function WebsiteProducts({
                     }
                 />
 
-                {selections.data
-                    .filter((row) => row.id === editing)
-                    .map((row) => (
-                        <div key={row.id}>{editor(row)}</div>
-                    ))}
+                {editingRow && (
+                    <WebsiteSelectionDialog
+                        // Keyed by the selection, so each opening starts from
+                        // what is saved for that product alone.
+                        key={editingRow.id}
+                        websiteId={website.id}
+                        row={editingRow}
+                        categories={categories}
+                        onClose={() => setEditing(null)}
+                    />
+                )}
             </PageContainer>
         </>
     );

@@ -203,6 +203,11 @@ return [
         'marketing_description' => 'Marketing description',
         'category' => 'Website category',
         'display_order' => 'Display order',
+        'edit_description' => 'Change the price, promotion and placement of this product on your shop. The price is checked against the allowed range when you save.',
+        'discard_title' => 'Discard your changes?',
+        'discard_body' => 'You have unsaved changes to this product. If you close now they will be lost.',
+        'keep_editing' => 'Keep editing',
+        'discard' => 'Discard changes',
         'columns' => [
             'product' => 'Product',
             'status' => 'Status',

@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { puts } from '@/test/fake-use-form';
 import type { WebsiteSelection } from '@/types/website';
 
 vi.mock('@inertiajs/react', async () => {
     const { createElement } = await import('react');
 
+    const { fakeUseForm } = await import('@/test/fake-use-form');
+
     return {
+        useForm: fakeUseForm,
         Head: () => null,
         Link: ({
             href,
@@ -247,5 +251,180 @@ describe('a storefront’s products', () => {
         expect(
             screen.queryByRole('link', { name: /create/i }),
         ).not.toBeInTheDocument();
+    });
+});
+
+describe('editing a selected product', () => {
+    beforeEach(() => {
+        puts.length = 0;
+    });
+
+    const panjabi = () =>
+        selection({ id: '01A', price: money('2500.00'), promo_title: 'Eid' });
+    const saree = () =>
+        selection({
+            id: '01B',
+            product: {
+                id: '01P2',
+                name: 'Silk saree',
+                sku: 'FW-2001',
+                image: null,
+            },
+            price: money('3600.00'),
+            promo_title: null,
+        });
+
+    const edit = (index: number) =>
+        fireEvent.click(
+            screen.getAllByRole('button', { name: 'website.products.edit' })[
+                index
+            ],
+        );
+
+    // Both layouts of the table may be in the document; the dialog is not one of them.
+    const priceInputs = () =>
+        Array.from(document.querySelectorAll('input[name="price"]'));
+
+    it('opens a dialog for the product clicked, and renders no editor anywhere else', () => {
+        render(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([panjabi(), saree()])}
+            />,
+        );
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(priceInputs()).toHaveLength(0);
+
+        edit(0);
+
+        const dialog = screen.getByRole('dialog', { name: 'Cotton panjabi' });
+
+        // The only price field on the page is the one in the dialog: nothing
+        // is left under the list, hidden or not.
+        expect(priceInputs()).toHaveLength(1);
+        expect(dialog).toContainElement(priceInputs()[0] as HTMLElement);
+        expect(priceInputs()[0]).toHaveValue('2500.00');
+    });
+
+    it('opens another product with its own saved values, not the last one’s edits', () => {
+        render(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([panjabi(), saree()])}
+            />,
+        );
+
+        edit(0);
+        fireEvent.change(priceInputs()[0], { target: { value: '3333.00' } });
+        fireEvent.click(
+            within(screen.getByRole('dialog')).getByRole('button', {
+                name: 'common.actions.cancel',
+            }),
+        );
+        fireEvent.click(
+            screen.getByRole('button', { name: 'website.products.discard' }),
+        );
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        edit(1);
+
+        expect(
+            screen.getByRole('dialog', { name: 'Silk saree' }),
+        ).toBeInTheDocument();
+        expect(priceInputs()).toHaveLength(1);
+        expect(priceInputs()[0]).toHaveValue('3600.00');
+
+        // And the first, reopened, has what was saved, not what was abandoned.
+        fireEvent.click(
+            within(screen.getByRole('dialog')).getByRole('button', {
+                name: 'common.actions.cancel',
+            }),
+        );
+        edit(0);
+
+        expect(priceInputs()[0]).toHaveValue('2500.00');
+    });
+
+    it('closes after a successful save and shows the saved price on the row', () => {
+        const { rerender } = render(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([panjabi()])}
+            />,
+        );
+
+        edit(0);
+        fireEvent.change(priceInputs()[0], { target: { value: '3100.00' } });
+        fireEvent.click(
+            within(screen.getByRole('dialog')).getByRole('button', {
+                name: 'website.products.save',
+            }),
+        );
+
+        // Still open while the server is deciding.
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+        // The server saves and sends the page back with the row as it now is.
+        rerender(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([
+                    selection({ id: '01A', price: money('3100.00') }),
+                ])}
+            />,
+        );
+        act(() => puts[0].succeed());
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(screen.getAllByText(/3100/).length).toBeGreaterThan(0);
+        expect(screen.queryByText(/2500/)).not.toBeInTheDocument();
+    });
+
+    it('stays open with the refusal shown inside it when the save fails', () => {
+        render(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([panjabi()])}
+            />,
+        );
+
+        edit(0);
+        fireEvent.change(priceInputs()[0], { target: { value: '1.00' } });
+        fireEvent.click(
+            within(screen.getByRole('dialog')).getByRole('button', {
+                name: 'website.products.save',
+            }),
+        );
+        act(() => puts[0].fail({ price: 'Below the allowed minimum.' }));
+
+        const dialog = screen.getByRole('dialog');
+
+        expect(
+            within(dialog).getByText('Below the allowed minimum.'),
+        ).toBeInTheDocument();
+        expect(priceInputs()[0]).toHaveValue('1.00');
+    });
+
+    it('drops the dialog when its product is no longer on the page', () => {
+        const { rerender } = render(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([panjabi(), saree()])}
+            />,
+        );
+
+        edit(1);
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+        rerender(
+            <WebsiteProducts
+                {...baseProps}
+                selections={paginator([panjabi()])}
+            />,
+        );
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 });
