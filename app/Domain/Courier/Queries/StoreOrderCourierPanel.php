@@ -91,13 +91,16 @@ class StoreOrderCourierPanel
 
         $shipment->loadMissing('courierProvider', 'statusHistory');
 
+        $history = $shipment->statusHistory;
+        $updatedAt = $history->isNotEmpty() ? $history->last()->changed_at : $shipment->updated_at;
+
         return [
             'name' => $shipment->courierProvider->name,
             'tracking_number' => $shipment->tracking_number,
             'status' => $shipment->status->value,
             'status_label' => $shipment->status->label(),
             'status_tone' => $shipment->status->tone(),
-            'updated_at' => ($shipment->statusHistory->last()?->changed_at ?? $shipment->updated_at)?->toIso8601String(),
+            'updated_at' => $updatedAt->toIso8601String(),
             'events' => $shipment->statusHistory->map(fn ($change) => [
                 'label' => $change->new_status->label(),
                 'at' => $change->changed_at->toIso8601String(),

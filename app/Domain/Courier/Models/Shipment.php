@@ -48,6 +48,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $cancelled_by
  * @property string|null $cancellation_reason
  * @property CarbonImmutable|null $cancelled_at
+ * @property string|null $external_id the provider's own identifier for the parcel
+ * @property string|null $provider_status the provider's raw status, kept as received
+ * @property CarbonImmutable|null $provider_status_at
+ * @property string|null $provider_charge the charge the provider reported, flat Taka; apart from the frozen `delivery_charge`
+ * @property CarbonImmutable|null $provider_synced_at
+ * @property string|null $provider_sync_error a safe failure kind, never the provider's words
+ * @property bool $needs_review a person has to look at this parcel
+ * @property CarbonImmutable $updated_at
  * @property-read Order $order
  * @property-read CourierProvider $courierProvider
  * @property-read User|null $cancelledBy

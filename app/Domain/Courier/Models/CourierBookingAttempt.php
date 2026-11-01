@@ -30,6 +30,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $failure_message
  * @property CarbonImmutable $started_at
  * @property CarbonImmutable|null $completed_at
+ * @property-read Order $order
+ * @property-read Shipment|null $shipment
  */
 class CourierBookingAttempt extends Model
 {
