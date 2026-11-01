@@ -63,10 +63,9 @@ use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\SmsController;
-use App\Http\Controllers\Webhook\SteadfastWebhookController;
+use App\Http\Controllers\Admin\SourcingGroupController;
 use App\Http\Controllers\Admin\SteadfastBookingController;
 use App\Http\Controllers\Admin\SteadfastSettingsController;
-use App\Http\Controllers\Admin\SourcingGroupController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
@@ -136,6 +135,7 @@ use App\Http\Controllers\LocationLookupController;
 use App\Http\Controllers\Webhook\ExternalStoreWebhookController;
 use App\Http\Controllers\Webhook\GatewayReturnController;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
+use App\Http\Controllers\Webhook\SteadfastWebhookController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
@@ -512,8 +512,6 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         // Whether this storefront's cash-on-delivery customers confirm with an SMS code.
         Route::put('websites/{website}/settings/sms-verification', [WebsiteSettingsController::class, 'updateSmsVerification'])
             ->name('websites.settings.sms-verification.update');
-        Route::put('websites/{website}/settings/catalogue-mode', [WebsiteSettingsController::class, 'updateCatalogueMode'])
-            ->name('websites.settings.catalogue-mode.update');
         Route::post('websites/{website}/settings/{asset}', [WebsiteSettingsController::class, 'updateImage'])
             ->whereIn('asset', ['logo', 'banner'])
             ->name('websites.settings.image.update');

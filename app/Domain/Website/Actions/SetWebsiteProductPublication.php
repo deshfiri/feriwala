@@ -110,8 +110,6 @@ class SetWebsiteProductPublication
                 $current = WebsiteProduct::query()
                     ->forAccount($account)
                     ->published()
-                    // What a shop lists by default is not the owner's to publish.
-                    ->chosen()
                     ->whereKeyNot($selection->id)
                     ->count();
 
@@ -126,9 +124,6 @@ class SetWebsiteProductPublication
                         'status' => WebsiteProductStatus::Published,
                         'published_at' => CarbonImmutable::now(),
                         'unpublished_at' => null,
-
-                        // Published by its owner, whatever listed it before.
-                        'auto_listed' => false,
 
                         // The storefront has not been told yet (§17.2).
                         'sync_status' => WebsiteSyncStatus::Pending,
@@ -158,9 +153,6 @@ class SetWebsiteProductPublication
         $selection->forceFill([
             'status' => WebsiteProductStatus::Unpublished,
             'unpublished_at' => CarbonImmutable::now(),
-
-            // Hidden by its owner: the default listing never puts it back.
-            'auto_listed' => false,
             'sync_status' => WebsiteSyncStatus::Pending,
         ])->save();
 

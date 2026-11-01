@@ -78,9 +78,48 @@ class SyncWebsiteCatalogue
                 }
             });
 
+        $announced += $this->withdrawn($website);
+
         if ($everything) {
             $this->categories($website);
         }
+
+        return $announced;
+    }
+
+    /**
+     * Products taken off sale that the storefront has not yet been told about,
+     * announced as unpublished so it stops showing its copy. A product taken
+     * off by something other than the partner's own click — a data correction —
+     * is marked pending and reaches the storefront here.
+     *
+     * @return int the number of products announced
+     */
+    protected function withdrawn(Website $website): int
+    {
+        $announced = 0;
+
+        WebsiteProduct::query()
+            ->where('website_id', $website->id)
+            ->where('status', WebsiteProductStatus::Unpublished->value)
+            ->where('sync_status', WebsiteSyncStatus::Pending->value)
+            ->whereNotExists(fn (QueryBuilder $delivery) => $delivery
+                ->selectRaw('1')
+                ->from('webhook_deliveries')
+                ->where('webhook_deliveries.subject_type', 'website_product')
+                ->whereColumn('webhook_deliveries.subject_id', 'website_products.id')
+                ->whereIn('webhook_deliveries.state', [
+                    WebhookDeliveryState::Pending->value,
+                    WebhookDeliveryState::Retrying->value,
+                ]))
+            ->with(['website', 'product'])
+            ->chunkById(100, function (Collection $selections) use (&$announced) {
+                foreach ($selections as $selection) {
+                    if ($this->product->handle($selection, WebhookEvent::ProductUnpublished) !== null) {
+                        $announced++;
+                    }
+                }
+            });
 
         return $announced;
     }

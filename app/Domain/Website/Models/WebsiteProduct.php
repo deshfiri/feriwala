@@ -38,7 +38,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $website_category_id
  * @property WebsiteProductStatus $status
  * @property bool $is_featured
- * @property bool $auto_listed on sale because the shop lists the whole catalogue, not because its owner chose it
+ * @property bool $auto_listed legacy: the retired whole-catalogue listing marked its rows with this. Unused by the
+ *                             application and always false after 2026_11_19_100000_retire_whole_catalogue_listing;
+ *                             kept for one deployment for migration/history compatibility, to be dropped by a later cleanup migration
  * @property int $display_order
  * @property string $currency_code
  * @property Money|null $price
@@ -204,17 +206,6 @@ class WebsiteProduct extends Model
     public function scopePublished(Builder $query): Builder
     {
         return $query->where('status', WebsiteProductStatus::Published->value);
-    }
-
-    /**
-     * Selections the owner chose, as opposed to those listed by default.
-     *
-     * @param  Builder<WebsiteProduct>  $query
-     * @return Builder<WebsiteProduct>
-     */
-    public function scopeChosen(Builder $query): Builder
-    {
-        return $query->where('auto_listed', false);
     }
 
     /**

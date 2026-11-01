@@ -55,7 +55,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $banner_path
  * @property string|null $banner_link_url
  * @property bool $sms_verification_enabled
- * @property bool $lists_whole_catalogue whether a Non-Conditional account's shop lists the whole eligible catalogue rather than only chosen products
+ * @property bool $lists_whole_catalogue legacy: the retired whole-catalogue listing's switch. Unused by the application
+ *                                       and always false after 2026_11_19_100000_retire_whole_catalogue_listing;
+ *                                       kept for one deployment for migration/history compatibility, to be dropped by a later cleanup migration
  * @property string $primary_color
  * @property string $secondary_color
  * @property WebsiteTheme $theme

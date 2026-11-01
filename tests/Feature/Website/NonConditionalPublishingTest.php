@@ -182,6 +182,16 @@ describe('publishing without buying', function () {
         nonConditionalPlaceOrder()->assertSuccessful();
     });
 
+    it('lists nothing on the storefront until the owner selects and publishes it', function () {
+        nonConditionalMake($this->account);
+        nonConditionalCentralStock(20);
+
+        storefrontCall($this->api[0], $this->api[1], 'products')->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        expect(WebsiteProduct::query()->count())->toBe(0);
+    });
+
     it('still has nothing to publish when central stock is empty', function () {
         nonConditionalMake($this->account);
 
