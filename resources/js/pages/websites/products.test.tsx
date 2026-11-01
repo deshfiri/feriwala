@@ -2,7 +2,7 @@
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { puts } from '@/test/fake-use-form';
+import { requests } from '@/test/fake-use-form';
 import type { WebsiteSelection } from '@/types/website';
 
 vi.mock('@inertiajs/react', async () => {
@@ -256,7 +256,7 @@ describe('a storefront’s products', () => {
 
 describe('editing a selected product', () => {
     beforeEach(() => {
-        puts.length = 0;
+        requests.length = 0;
     });
 
     const panjabi = () =>
@@ -375,7 +375,7 @@ describe('editing a selected product', () => {
                 ])}
             />,
         );
-        act(() => puts[0].succeed());
+        act(() => requests[0].succeed());
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(screen.getAllByText(/3100/).length).toBeGreaterThan(0);
@@ -397,7 +397,7 @@ describe('editing a selected product', () => {
                 name: 'website.products.save',
             }),
         );
-        act(() => puts[0].fail({ price: 'Below the allowed minimum.' }));
+        act(() => requests[0].fail({ price: 'Below the allowed minimum.' }));
 
         const dialog = screen.getByRole('dialog');
 

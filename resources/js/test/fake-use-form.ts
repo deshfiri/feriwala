@@ -10,23 +10,30 @@ type VisitOptions = {
  * One request the component under test made through the fake form, held open
  * until the test decides how it ends — as a slow server would.
  */
-export type PendingPut = {
+export type PendingRequest = {
     url: string;
+    method: string;
     payload: Record<string, unknown>;
     succeed: () => void;
     fail: (errors: Record<string, string>) => void;
 };
 
 /**
- * Every `put` made through {@link fakeUseForm}, oldest first. A test clears it
- * in `beforeEach`.
+ * Every request made through {@link fakeUseForm}, oldest first. A test clears
+ * it in `beforeEach`.
  */
-export const puts: PendingPut[] = [];
+export const requests: PendingRequest[] = [];
 
 /**
  * A stand-in for Inertia's `useForm` that keeps the parts a component can see —
  * data, dirtiness, errors, `processing`, `transform` — in React state, and sends
- * nothing. `put` stays in flight until the test calls `succeed()` or `fail()`.
+ * nothing. A request stays in flight until the test calls `succeed()` or
+ * `fail()`.
+ *
+ * It has `submit` only, taking a route (`{ url, method }`) as Wayfinder
+ * returns one. There is deliberately no `put` or `patch`: a component that
+ * hard-codes a verb must fail here, as it would against a route that declares
+ * another (the real update route is PATCH, and a PUT to it is a 405).
  */
 export function fakeUseForm<T extends Record<string, unknown>>(initial: T) {
     const [data, setDataState] = useState<T>(initial);
@@ -47,12 +54,16 @@ export function fakeUseForm<T extends Record<string, unknown>>(initial: T) {
         transform: (callback: (data: T) => Record<string, unknown>) => {
             transformer.current = callback;
         },
-        put: (url: string, options: VisitOptions = {}) => {
+        submit: (
+            route: { url: string; method: string },
+            options: VisitOptions = {},
+        ) => {
             setProcessing(true);
             setErrors({});
 
-            puts.push({
-                url,
+            requests.push({
+                url: route.url,
+                method: route.method,
                 payload: transformer.current?.(data) ?? data,
                 succeed: () => {
                     options.onSuccess?.();

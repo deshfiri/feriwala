@@ -139,6 +139,53 @@ export default function WebsiteProducts({
         </div>
     );
 
+    // The same actions in the table and in the phone's card layout: without
+    // them in the card, a phone could neither publish nor edit.
+    const rowActions = (row: WebsiteSelection) => (
+        <div className="flex flex-wrap items-center gap-2">
+            <Form
+                {...WebsiteProductController.updatePublication.form({
+                    website: website.id,
+                    selection: row.id,
+                })}
+                options={{ preserveScroll: true }}
+                transform={(data) => ({
+                    ...data,
+                    published: row.status === 'published' ? 0 : 1,
+                })}
+            >
+                {({ processing, errors }) => (
+                    <div className="space-y-1">
+                        <Button
+                            type="submit"
+                            size="sm"
+                            variant={
+                                row.status === 'published'
+                                    ? 'outline'
+                                    : 'default'
+                            }
+                            disabled={processing}
+                        >
+                            {processing && <Spinner />}
+                            {row.status === 'published'
+                                ? t('website.products.unpublish')
+                                : t('website.products.publish')}
+                        </Button>
+                        <InputError message={errors.product ?? errors.price} />
+                    </div>
+                )}
+            </Form>
+
+            <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing(row.id)}
+            >
+                {t('website.products.edit')}
+            </Button>
+        </div>
+    );
+
     const columns: Column<WebsiteSelection>[] = [
         {
             key: 'product',
@@ -209,52 +256,7 @@ export default function WebsiteProducts({
         {
             key: 'actions',
             header: t('website.products.columns.actions'),
-            cell: (row) => (
-                <div className="flex flex-wrap items-center gap-2">
-                    <Form
-                        {...WebsiteProductController.updatePublication.form({
-                            website: website.id,
-                            selection: row.id,
-                        })}
-                        options={{ preserveScroll: true }}
-                        transform={(data) => ({
-                            ...data,
-                            published: row.status === 'published' ? 0 : 1,
-                        })}
-                    >
-                        {({ processing, errors }) => (
-                            <div className="space-y-1">
-                                <Button
-                                    type="submit"
-                                    size="sm"
-                                    variant={
-                                        row.status === 'published'
-                                            ? 'outline'
-                                            : 'default'
-                                    }
-                                    disabled={processing}
-                                >
-                                    {processing && <Spinner />}
-                                    {row.status === 'published'
-                                        ? t('website.products.unpublish')
-                                        : t('website.products.publish')}
-                                </Button>
-                                <InputError
-                                    message={errors.product ?? errors.price}
-                                />
-                            </div>
-                        )}
-                    </Form>
-
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setEditing(row.id)}
-                    >
-                        {t('website.products.edit')}
-                    </Button>
-                </div>
-            ),
+            cell: rowActions,
         },
     ];
 
@@ -326,6 +328,7 @@ export default function WebsiteProducts({
                                 label={row.status_label}
                             />
                             {priceCell(row)}
+                            {rowActions(row)}
                         </div>
                     )}
                     emptyState={

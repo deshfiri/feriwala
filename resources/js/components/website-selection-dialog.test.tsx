@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+    act,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+    within,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { puts } from '@/test/fake-use-form';
+import { requests } from '@/test/fake-use-form';
 import type { WebsiteSelection } from '@/types/website';
 
 vi.mock('@inertiajs/react', async () => {
@@ -88,7 +95,7 @@ const save = () =>
     within(dialog()).getByRole('button', { name: /website\.products\.save/ });
 
 beforeEach(() => {
-    puts.length = 0;
+    requests.length = 0;
 });
 
 describe('the product editing dialog', () => {
@@ -162,10 +169,12 @@ describe('the product editing dialog', () => {
         fireEvent.change(price(), { target: { value: '3100.00' } });
         fireEvent.click(save());
 
-        expect(puts).toHaveLength(1);
-        expect(puts[0].url).toContain('01WEBSITE');
-        expect(puts[0].url).toContain('01SELECTION');
-        expect(puts[0].payload).toMatchObject({
+        expect(requests).toHaveLength(1);
+        // The update route is PATCH; a PUT to it is a 405 in the real app.
+        expect(requests[0].method).toBe('patch');
+        expect(requests[0].url).toContain('01WEBSITE');
+        expect(requests[0].url).toContain('01SELECTION');
+        expect(requests[0].payload).toMatchObject({
             price: '3100.00',
             promo_title: 'Eid offer',
             display_order: '3',
@@ -174,7 +183,7 @@ describe('the product editing dialog', () => {
         });
         expect(onClose).not.toHaveBeenCalled();
 
-        act(() => puts[0].succeed());
+        act(() => requests[0].succeed());
 
         expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -189,9 +198,9 @@ describe('the product editing dialog', () => {
         fireEvent.submit(dialog().querySelector('form') as HTMLFormElement);
         fireEvent.click(save());
 
-        expect(puts).toHaveLength(1);
+        expect(requests).toHaveLength(1);
 
-        act(() => puts[0].succeed());
+        act(() => requests[0].succeed());
     });
 
     it('keeps the dialog open with the values typed when the server refuses, and shows the error inside it', () => {
@@ -199,7 +208,7 @@ describe('the product editing dialog', () => {
 
         fireEvent.change(price(), { target: { value: '1999.00' } });
         fireEvent.click(save());
-        act(() => puts[0].fail({ price: 'Below the allowed minimum.' }));
+        act(() => requests[0].fail({ price: 'Below the allowed minimum.' }));
 
         expect(onClose).not.toHaveBeenCalled();
         expect(
@@ -212,19 +221,34 @@ describe('the product editing dialog', () => {
         fireEvent.change(price(), { target: { value: '2600.00' } });
         fireEvent.click(save());
 
-        expect(puts).toHaveLength(2);
-        expect(puts[1].payload).toMatchObject({ price: '2600.00' });
+        expect(requests).toHaveLength(2);
+        expect(requests[1].payload).toMatchObject({ price: '2600.00' });
     });
 
     it('shows a refusal that is about the product, not a field, inside the dialog too', () => {
         open();
 
         fireEvent.click(save());
-        act(() => puts[0].fail({ website: 'This website is closed.' }));
+        act(() => requests[0].fail({ website: 'This website is closed.' }));
 
         expect(
             within(dialog()).getByText('This website is closed.'),
         ).toBeInTheDocument();
+    });
+
+    it('gives focus back to the control that opened it', async () => {
+        const opener = document.createElement('button');
+        document.body.append(opener);
+        opener.focus();
+
+        const { unmount } = open();
+
+        expect(document.activeElement).not.toBe(opener);
+
+        unmount();
+
+        await waitFor(() => expect(document.activeElement).toBe(opener));
+        opener.remove();
     });
 
     it('closes at once when nothing was changed', () => {
@@ -306,7 +330,7 @@ describe('the product editing dialog', () => {
         expect(onClose).not.toHaveBeenCalled();
         expect(dialog()).toBeInTheDocument();
 
-        act(() => puts[0].succeed());
+        act(() => requests[0].succeed());
     });
 
     it('does not send what the administrator has locked, and disables it', () => {
@@ -327,10 +351,10 @@ describe('the product editing dialog', () => {
 
         fireEvent.click(save());
 
-        expect(puts[0].payload).not.toHaveProperty('price');
-        expect(puts[0].payload).not.toHaveProperty('promo_title');
-        expect(puts[0].payload).not.toHaveProperty('is_featured');
-        expect(puts[0].payload).toHaveProperty('display_order', '3');
+        expect(requests[0].payload).not.toHaveProperty('price');
+        expect(requests[0].payload).not.toHaveProperty('promo_title');
+        expect(requests[0].payload).not.toHaveProperty('is_featured');
+        expect(requests[0].payload).toHaveProperty('display_order', '3');
     });
 
     it('is laid out to fit a phone: bounded height, scrolling body, no fixed widths', () => {

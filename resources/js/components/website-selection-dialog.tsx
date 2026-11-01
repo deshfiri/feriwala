@@ -74,6 +74,14 @@ export default function WebsiteSelectionDialog({
     const priceLocked = !row.terms.allows_user_pricing || locked('price');
     const promotionLocked = locked('promotional_price');
     const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+    // The control that opened this dialog. There is no `DialogTrigger` to give
+    // focus back to, so without this a keyboard user is dropped on the page.
+    const [opener] = useState(() =>
+        document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null,
+    );
+    const cancelButton = useRef<HTMLButtonElement>(null);
     // Set synchronously, because `processing` only flips on the next render and
     // a double click lands before it.
     const submitting = useRef(false);
@@ -138,8 +146,9 @@ export default function WebsiteSelectionDialog({
 
         submitting.current = true;
 
-        form.put(
-            WebsiteProductController.update.url({
+        // Through the route itself, so the verb is the one the route declares.
+        form.submit(
+            WebsiteProductController.update({
                 website: websiteId,
                 selection: row.id,
             }),
@@ -177,6 +186,13 @@ export default function WebsiteSelectionDialog({
                 <DialogContent
                     data-test="website-selection-dialog"
                     className="flex max-h-[90dvh] w-full max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+                    onCloseAutoFocus={(event) => {
+                        event.preventDefault();
+
+                        if (opener?.isConnected) {
+                            opener.focus();
+                        }
+                    }}
                     onEscapeKeyDown={(event) => {
                         if (form.processing) {
                             event.preventDefault();
@@ -205,7 +221,7 @@ export default function WebsiteSelectionDialog({
                                 )}
                             </div>
                             <div className="min-w-0 space-y-0.5 text-left">
-                                <DialogTitle className="truncate leading-snug">
+                                <DialogTitle className="line-clamp-2 leading-snug break-words">
                                     {row.product.name}
                                 </DialogTitle>
                                 <p
@@ -468,6 +484,7 @@ export default function WebsiteSelectionDialog({
 
                         <DialogFooter className="border-t px-4 py-3 sm:px-6 [&>button]:w-full sm:[&>button]:w-auto">
                             <Button
+                                ref={cancelButton}
                                 type="button"
                                 variant="outline"
                                 onClick={requestClose}
@@ -492,7 +509,14 @@ export default function WebsiteSelectionDialog({
                 open={confirmingDiscard}
                 onOpenChange={setConfirmingDiscard}
             >
-                <DialogContent className="sm:max-w-md">
+                <DialogContent
+                    className="sm:max-w-md"
+                    onCloseAutoFocus={(event) => {
+                        // Keep editing: back into the editing dialog.
+                        event.preventDefault();
+                        cancelButton.current?.focus();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>
                             {t('website.products.discard_title')}
