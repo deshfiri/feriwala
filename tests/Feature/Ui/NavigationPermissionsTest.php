@@ -228,7 +228,8 @@ it('gives every P1.F screen real content rather than a blank page', function () 
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('admin/sms')
-            ->has('providers', 5)
+            // Every provider §30.1 names, built or not -- GenNet now among them.
+            ->has('providers', 6)
             ->has('messages')
             ->where('settings.enabled', true),
         );

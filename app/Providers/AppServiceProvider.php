@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Domain\Billing\Models\RefundRequest;
+use App\Domain\Courier\Events\SteadfastStatusNeedsReview;
 use App\Domain\Notification\Listeners\BroadcastStoredNotification;
 use App\Domain\Order\Actions\SyncReturnRefund;
 use App\Domain\Settings\SettingsRepository;
+use App\Listeners\AnnounceSteadfastReview;
 use App\Listeners\RecordEmailVerification;
 use App\Listeners\SecureAccountAfterPasswordReset;
 use App\Support\Security\PasswordPolicy;
@@ -61,6 +63,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Every stored notification reaches its recipient's open tabs live.
         Event::listen(NotificationSent::class, BroadcastStoredNotification::class);
+
+        // A Steadfast parcel flagged for a person to look at is told to staff, once.
+        Event::listen(SteadfastStatusNeedsReview::class, AnnounceSteadfastReview::class);
 
         /*
          * A refund for returned goods tells its return what happened to the

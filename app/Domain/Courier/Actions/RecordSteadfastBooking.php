@@ -8,6 +8,8 @@ use App\Domain\Courier\Enums\CourierBookingStatus;
 use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Models\CourierBookingAttempt;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Notification\Actions\AnnounceCourierEvent;
+use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Models\Order;
 use App\Models\User;
 use App\Support\Money\Currency;
@@ -32,6 +34,7 @@ class RecordSteadfastBooking
         protected DatabaseManager $database,
         protected CreateShipmentFromAllocations $createShipment,
         protected RecordAuditLog $audit,
+        protected AnnounceCourierEvent $announce,
     ) {}
 
     /**
@@ -76,6 +79,8 @@ class RecordSteadfastBooking
                 // code are not known here, so a person is asked to look.
                 'needs_review' => $consignmentId === null,
             ])->save();
+
+            $this->announce->shipmentMoved($shipment->load('courierProvider', 'order'), OrderCourierStatus::Assigned);
 
             $locked->forceFill([
                 'status' => CourierBookingStatus::Booked,

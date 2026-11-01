@@ -7,6 +7,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Courier\Enums\ShipmentStatusChangeSource;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Notification\Actions\AnnounceCourierEvent;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderCourierStatus;
@@ -50,6 +51,7 @@ class RecordManualCourierStatusUpdate
         protected AdvanceOrderCourierStatus $advanceCourier,
         protected AdvanceOrderDeliveryStatus $advanceDelivery,
         protected RecordAuditLog $audit,
+        protected AnnounceCourierEvent $announce,
     ) {}
 
     public function handle(
@@ -120,6 +122,10 @@ class RecordManualCourierStatusUpdate
                     $this->advanceDelivery->handle($order, $deliveryTarget, $actor, $reason);
                 }
             }
+
+            // Told to the Partner after commit, and only for a courier's API
+            // provider -- a manual shipment's notices are unchanged.
+            $this->announce->shipmentMoved($locked, $to);
 
             $this->audit->handle(new AuditEntry(
                 action: 'shipment.status_advanced',

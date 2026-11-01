@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Order\Actions\AdvanceStoreOrder;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Enums\OrderSource;
@@ -38,6 +39,7 @@ class StoreOrderController extends Controller
         protected StoreOrderTimeline $timeline,
         protected AdvanceStoreOrder $advance,
         protected CancelStoreOrder $cancel,
+        protected StoreOrderCourierPanel $courier,
     ) {}
 
     public function index(Request $request): Response
@@ -94,6 +96,7 @@ class StoreOrderController extends Controller
                 ])->all(),
             ],
             'timeline' => $timeline,
+            'courier' => $this->courier->forStaff($record, $actor),
             'urls' => [
                 'back' => route('admin.store-orders.index'),
                 'cancel' => route('admin.store-orders.cancel', $record->public_id),

@@ -7,6 +7,12 @@ import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
+import {
+    PartnerCourierCard,
+    StaffCourierPanel,
+    type PartnerCourierData,
+    type StaffCourierData,
+} from '@/components/store-order-courier';
 import StoreOrderTimeline from '@/components/store-order-timeline';
 import type { StoreOrderTimelineData } from '@/components/store-order-timeline';
 import { Button } from '@/components/ui/button';
@@ -52,6 +58,8 @@ type Props = {
     cases?: PartnerCaseRow[];
     /** For an Exchange Order: the exchange that sent it and the Order it replaces goods of. */
     exchange_origin?: ExchangeOrigin | null;
+    /** Staff get the Steadfast booking panel; a Partner the customer-safe courier card; null when neither applies. */
+    courier?: StaffCourierData | PartnerCourierData | null;
 };
 
 /**
@@ -68,6 +76,7 @@ export default function StoreOrderShow({
     urls,
     cases,
     exchange_origin,
+    courier,
 }: Props) {
     const { t } = useTranslation();
     const cancelForm = useForm({ reason: '' });
@@ -141,6 +150,13 @@ export default function StoreOrderShow({
                                 ))}
                             </ul>
                         </SectionCard>
+
+                        {courier &&
+                            ('enabled' in courier ? (
+                                <StaffCourierPanel courier={courier} />
+                            ) : (
+                                <PartnerCourierCard courier={courier} />
+                            ))}
 
                         {cases !== undefined &&
                             (cases.length > 0 ||

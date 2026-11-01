@@ -8,6 +8,7 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Damage\Queries\MyDamages;
 use App\Domain\Notification\Data\HeaderNotification;
 use App\Domain\Notification\Enums\StaffQueue;
+use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderReturn;
 use App\Models\User;
 use Illuminate\Notifications\DatabaseNotification;
@@ -197,8 +198,45 @@ class RecentNotifications
                     ? route('subscription.receipts.show', $data['payment'])
                     : null),
 
-            default => StaffQueue::fromEvent($event)?->route() ?? $this->caseHref($event, $data, $user),
+            default => StaffQueue::fromEvent($event)?->route()
+                ?? $this->courierHref($event, $data, $user)
+                ?? $this->caseHref($event, $data, $user),
         };
+    }
+
+    /**
+     * Where a courier notification goes: staff to the order in the platform's
+     * Store Orders, the Partner to their own copy of it -- and only if it is theirs.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function courierHref(string $event, array $data, ?User $user): ?string
+    {
+        $order = $data['order'] ?? null;
+
+        if ($user === null || ! is_string($order)) {
+            return null;
+        }
+
+        if (str_starts_with($event, 'courier.staff.')) {
+            return $user->can(PermissionCatalogue::name(PermissionModule::Order, PermissionAction::View))
+                ? route('admin.store-orders.show', $order)
+                : null;
+        }
+
+        if (! str_starts_with($event, 'courier.partner.')) {
+            return null;
+        }
+
+        $account = $user->businessAccount;
+
+        if ($account === null) {
+            return null;
+        }
+
+        return Order::query()->where('public_id', $order)->where('business_account_id', $account->id)->exists()
+            ? route('store-orders.show', $order)
+            : null;
     }
 
     /**

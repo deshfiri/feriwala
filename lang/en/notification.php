@@ -224,6 +224,46 @@ return [
             'title' => 'New damage reported',
             'description' => 'A Partner has reported a damaged item.',
         ],
+        'courier.staff.booking_failed' => [
+            'title' => 'Courier booking failed',
+            'description' => 'Steadfast did not take a parcel. Open the order to see why and try again.',
+        ],
+        'courier.staff.booking_uncertain' => [
+            'title' => 'Courier booking outcome unknown',
+            'description' => 'Steadfast did not give a clear answer. Check the booking before trying again.',
+        ],
+        'courier.staff.status_review' => [
+            'title' => 'A parcel needs review',
+            'description' => 'Steadfast reported something that needs a person to look.',
+        ],
+        'courier.staff.status_unknown' => [
+            'title' => 'Unrecognised courier status',
+            'description' => 'Steadfast sent a status Banij does not know. Nothing was changed.',
+        ],
+        'courier.partner.booked' => [
+            'title' => 'Courier booked',
+            'description' => 'A courier has been booked for your order.',
+        ],
+        'courier.partner.picked_up' => [
+            'title' => 'Parcel picked up',
+            'description' => 'The courier has picked up your order.',
+        ],
+        'courier.partner.in_transit' => [
+            'title' => 'Parcel in transit',
+            'description' => 'Your order is on its way.',
+        ],
+        'courier.partner.delivered' => [
+            'title' => 'Parcel delivered',
+            'description' => 'Your order was delivered.',
+        ],
+        'courier.partner.failed' => [
+            'title' => 'Delivery failed',
+            'description' => 'The courier could not deliver your order. Open it to see where it stands.',
+        ],
+        'courier.partner.returned' => [
+            'title' => 'Parcel returned',
+            'description' => 'Your order is on its way back to us.',
+        ],
         'case.step.inspect' => [
             'title' => 'Inspection required',
             'description' => 'The goods have arrived and are waiting to be inspected.',

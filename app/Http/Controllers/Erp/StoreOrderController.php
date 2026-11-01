@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Erp;
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Cases\Queries\PartnerCasePayload;
+use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Damage\Queries\DamageReportEligibility;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Enums\OrderSource;
@@ -44,6 +45,7 @@ class StoreOrderController extends Controller
         protected ReturnEligibility $eligibility,
         protected CaseLinks $links,
         protected DamageReportEligibility $damageEligibility,
+        protected StoreOrderCourierPanel $courier,
     ) {}
 
     public function index(Request $request): Response
@@ -94,6 +96,8 @@ class StoreOrderController extends Controller
             ],
             // The Partner reads the whole timeline; they get no next-action button.
             'timeline' => ['next_action' => null] + $timeline,
+            // Customer-safe: the courier, its reference and Banij's own status.
+            'courier' => $this->courier->forPartner($record),
             // Every return and exchange asked for on this order (D35).
             'cases' => $this->cases->forOrder($record),
             'exchange_origin' => $this->links->exchangeOriginForPartner($record),

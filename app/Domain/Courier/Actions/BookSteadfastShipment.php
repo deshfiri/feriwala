@@ -12,6 +12,7 @@ use App\Domain\Courier\Models\CourierBookingAttempt;
 use App\Domain\Courier\Models\CourierProvider;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Courier\Queries\SteadfastOrderRequestBuilder;
+use App\Domain\Notification\Actions\AnnounceCourierEvent;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderSource;
@@ -56,6 +57,7 @@ class BookSteadfastShipment
         protected SteadfastClient $client,
         protected RecordSteadfastBooking $record,
         protected RecordAuditLog $audit,
+        protected AnnounceCourierEvent $announce,
     ) {}
 
     /**
@@ -202,6 +204,13 @@ class BookSteadfastShipment
             ])->save();
 
             $this->audit($locked, $actor, $action, ['status' => $status->value, 'failure_code' => $code]);
+
+            // Failed and uncertain bookings both need a person; told after commit.
+            $this->announce->bookingNeedsAttention(
+                $status === CourierBookingStatus::Failed ? 'booking_failed' : 'booking_uncertain',
+                $locked->order,
+                $locked->public_id,
+            );
 
             return $locked;
         });
