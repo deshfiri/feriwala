@@ -142,8 +142,36 @@ it('shows every section and every item to a Super Admin', function () {
             ->has('sections.1.items', 6)
             ->has('sections.2.items', 2)
             ->where('sections.3.key', 'integrations')
-            ->has('sections.3.items', 1)
+            ->has('sections.3.items', 2)
             ->where('sections.3.items.0.key', 'storage')
-            ->where('sections.3.items.0.href', route('admin.storage-settings.index')),
+            ->where('sections.3.items.0.href', route('admin.storage-settings.index'))
+            ->where('sections.3.items.1.key', 'steadfast')
+            ->where('sections.3.items.1.href', route('admin.courier.steadfast.index')),
         );
+});
+
+it('shows only the Steadfast item, under integrations, to a Courier Manager', function () {
+    $staff = testPlatformStaff(PlatformRole::CourierManager);
+
+    $this->actingAs($staff)
+        ->get(route('admin.settings'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/settings/index')
+            ->has('sections', 1)
+            ->where('sections.0.key', 'integrations')
+            ->has('sections.0.items', 1)
+            ->where('sections.0.items.0.key', 'steadfast')
+            ->where('sections.0.items.0.href', route('admin.courier.steadfast.index')),
+        );
+});
+
+it('does not show the Steadfast item to someone without courier.manage_integrations', function () {
+    $staff = testPlatformStaff(PlatformRole::SmsManager);
+
+    $response = $this->actingAs($staff)->get(route('admin.settings'))->assertOk();
+
+    $keys = collect($response->viewData('page')['props']['sections'])->flatMap(fn ($section) => collect($section['items'])->pluck('key'));
+
+    expect($keys->contains('steadfast'))->toBeFalse();
 });

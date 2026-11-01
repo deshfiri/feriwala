@@ -35,6 +35,7 @@ return [
             'sms' => 'The SMS gateway and which notifications it sends.',
             'branding' => 'The platform logo and browser icon.',
             'storage' => 'Where uploaded files are kept, and the Cloudflare R2 connection.',
+            'steadfast' => 'Steadfast Courier keys, the on/off switch, and the callback details to enter in Steadfast.',
         ],
     ],
 ];

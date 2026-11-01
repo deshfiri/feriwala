@@ -198,6 +198,13 @@ class SettingsController extends Controller
                         'route' => 'admin.storage-settings.index',
                         'permission' => PermissionCatalogue::name(PermissionModule::Integration, PermissionAction::View),
                     ],
+                    [
+                        'key' => 'steadfast',
+                        'title' => __('nav.steadfast'),
+                        'description' => __('settings.hub.items.steadfast'),
+                        'route' => 'admin.courier.steadfast.index',
+                        'permission' => PermissionCatalogue::name(PermissionModule::Courier, PermissionAction::ManageIntegrations),
+                    ],
                 ],
             ],
         ];
