@@ -86,6 +86,21 @@ Schedule::call(fn () => app(SweepSubscriptionLifecycle::class)->handle())
     ->description('Move subscription terms through renewal, grace and expiry (§8.4)');
 
 /*
+ * Steadfast status reconciliation: the backstop for a callback that never came.
+ *
+ * Every five minutes, but each parcel is only asked about once its own wait has
+ * passed (courier.steadfast.poll), and only a bounded batch per run, so this is
+ * never a scan of history. It does nothing while Steadfast is switched off.
+ * Idempotent with the webhook -- both apply a status through one locked action --
+ * and guarded like the sweeps above (§41), so two servers cannot ask twice.
+ */
+Schedule::command('courier:steadfast-sync')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Check Steadfast for parcel status changes');
+
+/*
  * The §9 payment deadline: close checkouts nobody paid for.
  *
  * Hourly, because the deadline is configured in hours — a daily pass would make

@@ -17,6 +17,16 @@ return [
         'ok' => 'Connected to Steadfast. Account balance: :balance',
         'failed' => 'Test connection failed: :reason',
     ],
+    'sync' => [
+        'failed' => 'Could not check Steadfast: :reason',
+        'not_found' => 'Steadfast has no record of this parcel. It has been flagged for review.',
+        'updated' => 'Status updated from Steadfast.',
+        'unchanged' => 'Steadfast reports no change.',
+    ],
+    'status' => [
+        'implied' => 'Steadfast reported :status.',
+        'cancelled_at_steadfast' => 'Cancelled at Steadfast.',
+    ],
     'ui' => [
         'title' => 'Steadfast Courier',
         'description' => 'Keys, the switch, and the callback details to enter in Steadfast’s merchant panel.',

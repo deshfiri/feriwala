@@ -74,6 +74,9 @@ class Shipment extends Model
             'delivery_charge_rule_snapshot' => 'array',
             'pickup_requested_at' => 'immutable_datetime',
             'cancelled_at' => 'immutable_datetime',
+            'provider_status_at' => 'immutable_datetime',
+            'provider_synced_at' => 'immutable_datetime',
+            'needs_review' => 'boolean',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

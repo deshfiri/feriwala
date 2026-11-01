@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Webhook\SteadfastWebhookController;
 use App\Http\Controllers\Admin\SteadfastBookingController;
 use App\Http\Controllers\Admin\SteadfastSettingsController;
 use App\Http\Controllers\Admin\SourcingGroupController;
@@ -1629,6 +1630,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->middleware('throttle:20,1')->name('courier.booking-attempts.reconcile');
         Route::post('courier/booking-attempts/{attempt}/not-booked', [SteadfastBookingController::class, 'markNotBooked'])
             ->name('courier.booking-attempts.not-booked');
+        // "Check courier status now": asks Steadfast about one parcel.
+        Route::post('shipments/{shipment}/steadfast-sync', [SteadfastBookingController::class, 'sync'])
+            ->middleware('throttle:20,1')->name('shipments.steadfast-sync');
 
         /*
          * Delivery-charge configuration (beta-critical batch, Commit 2) --
@@ -1967,6 +1971,17 @@ Route::post('webhooks/payment/{gateway}', PaymentWebhookController::class)
 Route::post('webhooks/stores/{store}', ExternalStoreWebhookController::class)
     ->middleware('throttle:store-webhooks')
     ->name('webhooks.stores');
+
+/*
+ * Steadfast's status callback. Authenticated by the Bearer token Banij generated
+ * for it (compared whole, in constant time, before the body is read); CSRF is
+ * exempted in bootstrap/app.php because Steadfast cannot carry our token. The
+ * address is shown on Settings → Steadfast Courier for staff to enter in
+ * Steadfast's merchant panel.
+ */
+Route::post('webhooks/courier/steadfast', SteadfastWebhookController::class)
+    ->middleware('throttle:240,1')
+    ->name('webhooks.courier.steadfast');
 
 /*
  * A gateway posting the payer's browser back (§26.4, §36).

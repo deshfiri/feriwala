@@ -49,6 +49,14 @@ return [
         'allowed_hosts' => ['portal.steadfast.com.bd'],
         'connect_timeout' => 5,
         'timeout' => 20,
+
+        // The scheduled status check: how many parcels per run, and how long to
+        // leave one alone before asking again -- longer after a failed check.
+        'poll' => [
+            'batch' => 50,
+            'interval' => 600,
+            'error_interval' => 1800,
+        ],
     ],
 
 ];

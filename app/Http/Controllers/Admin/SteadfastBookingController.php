@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Courier\Actions\BookSteadfastShipment;
 use App\Domain\Courier\Actions\MarkSteadfastBookingNotBooked;
 use App\Domain\Courier\Actions\ReconcileSteadfastBooking;
+use App\Domain\Courier\Actions\SynchroniseSteadfastShipment;
 use App\Domain\Courier\Enums\CourierBookingStatus;
+use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Exceptions\CourierBookingRefused;
 use App\Domain\Courier\Exceptions\CourierProviderUnavailable;
 use App\Domain\Courier\Models\CourierBookingAttempt;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Models\Order;
 use App\Http\Controllers\Controller;
+use App\Integrations\Courier\Steadfast\SteadfastException;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,6 +59,37 @@ class SteadfastBookingController extends Controller
         Gate::forUser($actor)->authorize('manageShipments', Shipment::class);
 
         $this->announce($reconcile->handle($this->attempt($attempt), $actor));
+
+        return back();
+    }
+
+    /**
+     * "Check courier status now" for one parcel.
+     */
+    public function sync(Request $request, string $shipment, SynchroniseSteadfastShipment $synchronise): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        Gate::forUser($actor)->authorize('manageShipments', Shipment::class);
+
+        /** @var Shipment $record */
+        $record = Shipment::query()->where('public_id', $shipment)->firstOrFail();
+
+        abort_unless($record->courierProvider->code === CourierProviderCode::Steadfast, 404);
+
+        try {
+            $applied = $synchronise->handle($record);
+        } catch (SteadfastException $exception) {
+            Inertia::flash('toast', ['type' => 'error', 'message' => __('steadfast.sync.failed', ['reason' => $exception->kind->message()])]);
+
+            return back();
+        }
+
+        Inertia::flash('toast', match (true) {
+            $applied === null => ['type' => 'warning', 'message' => __('steadfast.sync.not_found')],
+            $applied->changed => ['type' => 'success', 'message' => __('steadfast.sync.updated')],
+            default => ['type' => 'info', 'message' => __('steadfast.sync.unchanged')],
+        });
 
         return back();
     }
