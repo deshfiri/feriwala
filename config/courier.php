@@ -23,4 +23,30 @@ return [
         CourierProviderCode::Manual->value => ManualCourierDriver::class,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Steadfast
+    |--------------------------------------------------------------------------
+    |
+    | Credentials are never configured here: they live encrypted in settings
+    | (`courier.steadfast.*`). This block holds only what is not secret.
+    |
+    | `default_base_url` is the host Steadfast's own maintained package documents
+    | in its README. The package's config file ships a different default
+    | (portal.packzy.com); that host is deliberately not allowed until
+    | Steadfast's merchant panel names it for this account.
+    |
+    | In production the base address must be https and its host must be listed in
+    | `allowed_hosts` -- the API key travels in every request, so an address an
+    | administrator can type must not be able to point it somewhere else.
+    |
+    */
+
+    'steadfast' => [
+        'default_base_url' => 'https://portal.steadfast.com.bd/api/v1',
+        'allowed_hosts' => ['portal.steadfast.com.bd'],
+        'connect_timeout' => 5,
+        'timeout' => 20,
+    ],
+
 ];

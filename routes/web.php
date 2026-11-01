@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\SmsController;
+use App\Http\Controllers\Admin\SteadfastSettingsController;
 use App\Http\Controllers\Admin\SourcingGroupController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
@@ -1129,6 +1130,17 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::put('sms/events', [SmsController::class, 'toggleEvent'])->name('sms.events.toggle');
         // Require the order confirmation code of every storefront (platform policy).
         Route::put('sms/storefront-verification', [SmsController::class, 'updateStorefrontVerification'])->name('sms.storefront-verification.update');
+
+        /*
+         * Steadfast's keys, switch, callback details and Test connection, behind
+         * `courier.manage_integrations`. Test connection reads the balance only.
+         */
+        Route::get('courier/steadfast', [SteadfastSettingsController::class, 'index'])->name('courier.steadfast.index');
+        Route::put('courier/steadfast', [SteadfastSettingsController::class, 'update'])->name('courier.steadfast.update');
+        Route::post('courier/steadfast/webhook-token', [SteadfastSettingsController::class, 'rotateWebhookToken'])
+            ->middleware('throttle:6,1')->name('courier.steadfast.webhook-token');
+        Route::post('courier/steadfast/test', [SteadfastSettingsController::class, 'test'])
+            ->middleware('throttle:6,1')->name('courier.steadfast.test');
 
         /*
          * The platform's logo, browser icon and accent colour, behind `system.manage_settings`.

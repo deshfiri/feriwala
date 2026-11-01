@@ -178,6 +178,8 @@ class HandleInertiaRequests extends Middleware
         // by NavigationPermissionsTest): Shipments, Integrations and the
         // account verification settings.
         [PermissionModule::Courier, PermissionAction::View],
+        // Steadfast's keys and callback details, under Settings.
+        [PermissionModule::Courier, PermissionAction::ManageIntegrations],
         [PermissionModule::Integration, PermissionAction::View],
         [PermissionModule::Account, PermissionAction::ManageSettings],
 

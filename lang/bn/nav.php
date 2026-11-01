@@ -65,6 +65,7 @@ return [
     'platform_staff' => 'প্ল্যাটফর্ম স্টাফ',
     'activity_log' => 'কার্যকলাপের লগ',
     'sms' => 'এসএমএস',
+    'steadfast' => 'স্টেডফাস্ট কুরিয়ার',
     'branding' => 'ব্র্যান্ডিং',
     'storage_settings' => 'স্টোরেজ (R2)',
     'account_verification_settings' => 'অ্যাকাউন্ট ভেরিফিকেশন',

@@ -81,6 +81,7 @@ import { index as partnerCases } from '@/routes/cases';
 import { index as myDamages } from '@/routes/damages';
 import { index as roles } from '@/routes/admin/roles';
 import { index as shipments } from '@/routes/admin/shipments';
+import { index as steadfastSettings } from '@/routes/admin/courier/steadfast';
 import { index as smsSettings } from '@/routes/admin/sms';
 import { index as platformStaffIndex } from '@/routes/admin/staff';
 import { index as storageSettings } from '@/routes/admin/storage-settings';
@@ -390,6 +391,7 @@ export function useNavigation(): {
                 permissions['account.manage_settings'] ||
                 permissions['catalog.view'] ||
                 permissions['sms.view'] ||
+                permissions['courier.manage_integrations'] ||
                 permissions['system.manage_settings'] ||
                 permissions['integration.view'] ||
                 permissions['audit.view_audit_logs']
@@ -969,6 +971,15 @@ export function useNavigation(): {
                           {
                               title: t('nav.sms'),
                               href: smsSettings(),
+                              icon: Settings,
+                          },
+                      ]
+                    : []),
+                ...(permissions['courier.manage_integrations']
+                    ? [
+                          {
+                              title: t('nav.steadfast'),
+                              href: steadfastSettings(),
                               icon: Settings,
                           },
                       ]

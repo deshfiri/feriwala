@@ -71,6 +71,7 @@ return [
     'platform_staff' => 'Platform Staff',
     'activity_log' => 'Activity log',
     'sms' => 'SMS',
+    'steadfast' => 'Steadfast Courier',
     'branding' => 'Branding',
     'storage_settings' => 'Storage (R2)',
     'account_verification_settings' => 'Account verification',
