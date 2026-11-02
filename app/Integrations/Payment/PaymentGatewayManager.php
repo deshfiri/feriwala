@@ -7,10 +7,15 @@ use App\Domain\Settings\SettingsRepository;
 use App\Integrations\Payment\Contracts\PaymentGateway;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
+use App\Integrations\Payment\Gateways\GatewayCredentials;
+use App\Integrations\Payment\Gateways\ScopedGatewaySettings;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Illuminate\Contracts\Container\Container;
 use InvalidArgumentException;
+use ReflectionClass;
+use ReflectionNamedType;
+use ReflectionParameter;
 
 /**
  * Resolves payment gateways by name (§26, D7).
@@ -62,6 +67,41 @@ class PaymentGatewayManager
         $instance = $this->container->make($driver);
 
         return $this->resolved[$name] = $instance;
+    }
+
+    /**
+     * A driver bound to one Partner's own credentials rather than Feriwala's (D36).
+     *
+     * Built fresh every time and never remembered: the manager's own cache holds
+     * the platform drivers, and a Partner's driver sitting in it would be the next
+     * caller's gateway. Every driver takes its credentials through a constructor
+     * argument named `credentials`, so this swaps that one argument for a
+     * {@see ScopedGatewaySettings}-backed copy and touches nothing else.
+     *
+     * @param  array<string, string>  $credentials
+     *
+     * @throws GatewayUnavailable when the gateway has no driver
+     * @throws InvalidArgumentException when the name is not a configured gateway
+     */
+    public function scopedDriver(string $name, string $mode, array $credentials): PaymentGateway
+    {
+        $this->driver($name);
+
+        /** @var class-string<PaymentGateway> $driver */
+        $driver = config("payment.gateways.{$name}.driver");
+
+        $parameter = (new ReflectionClass($driver))->getConstructor()?->getParameters();
+        $type = collect($parameter ?? [])->first(fn (ReflectionParameter $candidate) => $candidate->getName() === 'credentials')?->getType();
+
+        if (! $type instanceof ReflectionNamedType || ! is_subclass_of($type->getName(), GatewayCredentials::class)) {
+            throw GatewayUnavailable::forGateway($name, 'its driver cannot be given separate credentials');
+        }
+
+        $class = $type->getName();
+
+        return $this->container->make($driver, [
+            'credentials' => new $class(new ScopedGatewaySettings($name, $mode, $credentials)),
+        ]);
     }
 
     /**

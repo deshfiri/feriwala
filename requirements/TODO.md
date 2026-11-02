@@ -617,7 +617,7 @@ sized accordingly rather than as one line item under provisioning.
 - [ ] **P5-41** Customer account: register, login, profile, order history (§16.1)
 - [ ] **P5-42** Website-scoped coupons + discounts (§16.1, §16.3)
 - [ ] **P5-43** Shipping methods + rate calculation (§16.1)
-- [ ] **P5-44** Payment methods for website orders routed through **Feriwala-controlled gateways** — partner gateway credentials are explicitly out of scope for v1 (§16.1, §26.3, D12)
+- [ ] **P5-44** Payment methods for website orders routed through **Feriwala-controlled gateways** — partner gateway credentials were explicitly out of scope for v1 (§16.1, §26.3, D12). **Amended 2026-11-02 by D36:** that stays true for Model A (Platform gateway); a Partner may now, where Admin allows it, use their own gateway for eligible Store Orders (Model B), with Feriwala's receivable collected from the Partner Wallet
 - [ ] **P5-45** Order tracking page (§16.1)
 - [ ] **P5-46** Return request + refund request flows (§16.1)
 - [ ] **P5-47** Contact information, legal pages, custom 404 (§16.1, §34.3)

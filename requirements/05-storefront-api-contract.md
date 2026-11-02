@@ -12,8 +12,16 @@ order, and wallet modules are built against a contract that is already frozen.
 > boundary is one of the architecture-locked items in [04-decisions.md](04-decisions.md).
 
 Governing decisions: **D11** (separate storefront application, scoped credentials, no direct
-database access) and **D12** (Feriwala is merchant of record; partner gateway credentials are out
-of scope for v1). Spec basis: §16, §17, §36.
+database access) and **D12** (Feriwala is merchant of record; partner gateway credentials were out
+of scope for v1) — **partially superseded 2026-11-02 by D36**, which keeps D12 as Model A (Platform
+gateway) and adds Model B, where an eligible Store Order may be paid through a Partner-owned gateway.
+Spec basis: §16, §17, §36.
+
+> **D36 and this contract.** Model B changes no field of the frozen `v1` contract. The storefront
+> still never holds a gateway credential, never computes a price, and never learns which gateway
+> credentials exist: Feriwala resolves a Partner's gateway server-side and the payment flow it already
+> returns is unchanged. Any later additive field (for example a payment owner on an order payload)
+> ships into `v1` as a non-breaking addition under §8.
 
 ---
 

@@ -183,6 +183,12 @@ interface PaymentGateway {
 - Registered in a `PaymentGatewayManager` keyed by slug; adding a gateway = one class + one config
   row + one seeder line. No core changes. Same for `SmsProviderManager`, `CourierProviderManager`.
 - Credentials live in a table, **encrypted at rest**, with sandbox/live sets and an enable toggle.
+- **Payment direction (D12, amended by D36).** A payment is collected in one of two directions, frozen
+  on the payment when it is handed to a gateway: **Platform** (Feriwala's gateway; Feriwala is merchant
+  of record) or **Partner** (the Partner's own gateway; the Partner is the payment recipient and
+  Feriwala recovers its receivable from the Partner's Wallet). A Partner's credentials are a separate,
+  versioned, encrypted store; a payment points at the exact version it started with and is verified and
+  reconciled with that, never with the Storefront's current settings.
 - Every driver call is logged (request/response, secrets redacted per §42).
 - Webhooks: signature verification → idempotency key → queue → respond fast. Never process inline.
 

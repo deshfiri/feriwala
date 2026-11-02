@@ -203,6 +203,12 @@ path or a secondary one.
 **I need your answer before Phase 2.** I can build for either, or for a configurable both — but
 building for the wrong one and discovering it in Phase 7 would mean reworking the ledger.
 
+> **Answered twice.** D12 (2026-09) chose **Model 1**: Feriwala is merchant of record. **D36
+> (2026-11-02) partially supersedes that**: Model 1 stays as the Platform-gateway model (Model A), and a
+> Partner may, where Admin allows it, collect into their own gateway (Model B, "Model 2" above) with
+> Feriwala recovering its platform receivable from the Partner's Wallet. D12's text is not edited; see
+> [04-decisions.md](04-decisions.md) D12 and D36.
+
 ## A2 — Are wholesale orders fulfilled and shipped by Feriwala? 🟡
 
 §10.2 ends with "Receive Products", and §20/§21 (fulfillment, courier) read as though written for

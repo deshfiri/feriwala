@@ -4,6 +4,7 @@ namespace App\Domain\Order\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
+use App\Domain\Billing\Enums\GatewayOwnership;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Catalog\Models\ProductAttributeValue;
@@ -261,6 +262,11 @@ class PlaceWebsiteOrder
                 'gateway_mode' => $this->gateways->driver($gateway)->isSandbox()
                     ? GatewayCredentials::SANDBOX
                     : GatewayCredentials::LIVE,
+                // Whose gateway was paid, frozen now and never inferred later (D36).
+                // Feriwala's own gateway is the only one an order is placed with here.
+                'gateway_ownership' => GatewayOwnership::Platform,
+                'funds_destination' => 'platform',
+                'website_id' => $website->id,
                 'expires_at' => $this->paymentDeadline($reservations, $submission->reservationKind()),
             ])->save();
 

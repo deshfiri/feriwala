@@ -8,6 +8,7 @@ use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\AllocationType;
+use App\Domain\Billing\Enums\GatewayOwnership;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\ExchangeRates;
@@ -43,7 +44,12 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property CarbonImmutable|null $cancelled_at
  * @property string|null $reconciliation_reason
  * @property CarbonImmutable|null $reconciliation_required_at
+ * @property GatewayOwnership|null $gateway_ownership whose gateway was paid, frozen when the payment was handed to it; null for a payment recorded before ownership existed
+ * @property string|null $funds_destination where the customer's money went (`platform` or `partner`)
+ * @property int|null $website_id the Storefront the payment was taken for, frozen with its ownership
+ * @property int|null $partner_gateway_configuration_version_id the exact Partner gateway version a Partner-owned payment is verified and reconciled with
  * @property-read BusinessAccount|null $businessAccount
+ * @property-read PartnerGatewayConfigurationVersion|null $partnerGatewayVersion
  */
 class Payment extends Model
 {
@@ -64,6 +70,7 @@ class Payment extends Model
         return [
             'status' => PaymentStatus::class,
             'purpose' => PaymentPurpose::class,
+            'gateway_ownership' => GatewayOwnership::class,
             'amount' => MoneyCast::class,
             'revenue' => MoneyCast::class,
             'settled_amount' => MoneyCast::class.':settled_currency_code',
@@ -125,6 +132,25 @@ class Payment extends Model
     public function businessAccount(): BelongsTo
     {
         return $this->belongsTo(BusinessAccount::class);
+    }
+
+    /**
+     * Whether the customer paid the Partner's own gateway (D36, Model B).
+     *
+     * Read from the ownership frozen on the payment, never from the Storefront's
+     * current settings. A payment with no ownership is not Partner-owned.
+     */
+    public function isPartnerOwned(): bool
+    {
+        return $this->gateway_ownership === GatewayOwnership::Partner;
+    }
+
+    /**
+     * @return BelongsTo<PartnerGatewayConfigurationVersion, $this>
+     */
+    public function partnerGatewayVersion(): BelongsTo
+    {
+        return $this->belongsTo(PartnerGatewayConfigurationVersion::class, 'partner_gateway_configuration_version_id');
     }
 
     /**

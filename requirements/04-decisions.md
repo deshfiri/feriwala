@@ -219,6 +219,12 @@ certificate. Docker and Caddy are production concerns only; D5 still holds for l
 > fulfilment, courier, delivery, returns, and asking for a refund), subject to supplier fulfilment
 > ownership. Platform staff keep every capability across all websites. See D30 §7. Not yet built.
 
+> **PARTIALLY SUPERSEDED 2026-11-02 by D36.** D12 stands unchanged as **Model A** (Platform
+> gateway). D36 adds **Model B** (Partner-owned gateway) and supersedes only these parts of D12, for
+> Model B orders only: step 2's "Feriwala-controlled gateway", the rule that "Partner websites must not
+> use the partner's own gateway credentials in v1", and "the customer payment is still collected and
+> settled through Feriwala". The text below is the historical decision and is not edited.
+
 **Feriwala is the merchant of record for dropshipping orders.**
 
 Approved flow:
@@ -1460,3 +1466,219 @@ went) and staff reasons on decisions. A Supplier's erasure never touches a Partn
   note, not a deletion.
 - The extra amount a dearer replacement costs is recorded, never collected by the system.
 - A refund through a gateway is bounded by that gateway's own refund machinery (D17), unchanged.
+
+## D36 — Partner-owned payment gateways: Model B (2026-11-02) 🔒 — **partially supersedes D12**
+
+**Instructed by the Project Owner on 2026-11-02.** D12 is not rewritten; Model A below _is_ D12,
+unchanged. Only the parts of D12 listed under "What this supersedes" no longer hold, and only for
+Model B orders.
+
+> **Chronology note.** This decision is dated 2026-11-02, the actual date it was taken. D35 (dated
+> 2026-11-16 to 18) and some migrations (for example `2026_11_07_100000`) carry later dates because of
+> an existing repository chronology inconsistency. Those files are historical and are preserved
+> unchanged. D36's migrations are named after the latest existing migration so that they run last.
+
+### Context and reason
+
+D12 fixed Feriwala as merchant of record for every dropshipping order and forbade a Partner website
+from using the Partner's own gateway credentials in v1. The Project Owner has instructed that, where
+Admin allows it, a Partner may collect a Storefront customer's payment into the Partner's own gateway
+account. That is a second **payment direction**, so it is recorded here rather than treated as a
+setting.
+
+### What this supersedes (Model B orders only)
+
+- "Customer pays through a **Feriwala-controlled gateway**" (D12 step 2).
+- "**Partner websites must not use the partner's own gateway credentials in v1.**"
+- "The customer payment is still collected and settled through Feriwala."
+
+Everything else in D12 stands: Feriwala controls inventory, fulfilment, courier and supplier payables;
+"retail margin" is a calculation base, not a separate money path.
+
+### Two payment models
+
+**Model A — Platform gateway (unchanged).** The customer pays a gateway Feriwala configures and owns.
+Feriwala is merchant of record and controls verification, collection, settlement, refund and ledger
+effects. Feriwala never debits the Partner Wallet for an amount already retained from that payment.
+
+**Model B — Partner-owned gateway.** Admin may allow a Partner to configure approved providers for the
+Partner's own Storefront. The customer's payment goes directly to the Partner's gateway account; for
+that transaction the **Partner is the payment recipient** and is responsible for the customer-facing
+collection and refund. Feriwala remains the platform, catalogue, order, stock, courier and service
+provider, and recovers its **platform receivable** from the Partner's Banij Wallet. The Store Order
+continues only once that receivable is collected in full.
+
+| | Model A | Model B |
+| --- | --- | --- |
+| Receives customer payment | Feriwala | Partner |
+| Verifies the payment | Feriwala (its gateway) | Feriwala, server-side, with the Partner's frozen credentials version |
+| Refunds the customer | Feriwala | Partner, through the Partner's gateway; Feriwala records it only after provider verification |
+| Chargeback / dispute risk | Feriwala | Partner |
+| Provider (gateway) fees | Existing behaviour | Borne by the Partner; outside Feriwala's ledger |
+
+Feriwala never records that it received or refunded the customer's gross payment in Model B. The
+standard refund process, which asks a gateway to refund through Feriwala's own credentials, refuses a
+Partner-owned payment and points to the external-refund workflow.
+
+### Eligibility (Model B v1)
+
+A Store Order is eligible only when **all** hold: the account is Non-Conditional; the Storefront and
+Partner are allowed to override (Admin allow-list and global switch); every line has a frozen
+`platform_retained_amount` or the existing canonical fallback (`product_cost`); every line is filled
+from central/platform stock; the currency is supported by the configured Partner gateway; and the whole
+order has one payment owner. Otherwise Partner-gateway checkout is **refused before any payment is
+created**, with a clear message, and the customer may use the Platform gateway. A zero product
+receivable is never calculated silently for an undefined line.
+
+**Non-goals for v1:** Partner-owned or Partner-sourced stock; Supplier-supplied lines with an undefined
+platform entitlement; Conditional accounts; mixed-eligibility orders; ERP wholesale, package, deposit
+or top-up payments; split payments.
+
+### Gateway credentials and the ownership snapshot
+
+Credentials are encrypted at rest in a **versioned configuration store**, scoped to one Partner's own
+Storefront, write-only after saving: masked, never returned to React, never in logs, audit,
+notifications or exception messages. Admin sees that a Storefront uses a Partner gateway, never the
+secret. A Partner reaches only their own configuration through the own-account scope (the D35
+pattern); no platform role, Super Admin included, configures it.
+
+Each payment freezes an **ownership snapshot and a reference to the exact configuration version** it
+used: ownership (`platform` | `partner`), account, website, provider, mode, currency, expected amount,
+and where the collected funds went. **Credentials are never copied** into payment rows, audit logs or
+snapshots. At settlement and reconciliation the frozen version is resolved; the Storefront's current
+credentials are never used for an older attempt. A configuration change affects new attempts only, and
+an initiated payment is never silently moved to another gateway. A payment recorded before this
+decision has no ownership and keeps its existing behaviour; nothing is backfilled.
+
+### Platform receivable
+
+One canonical, server-side calculator, frozen once when the order is placed:
+
+`platform receivable = Σ over lines of OrderItem::recoverableAmount() + frozen delivery charge + frozen delivery tax`
+
+`recoverableAmount()` is `platform_retained_amount` (else `product_cost`, never both) plus the tax on
+the line, so Product tax is never added again. The delivery charge and the tax charged on it are
+**separate immutable component lines**, taken from the authoritative pricing breakdown and never derived
+by subtracting unrelated order totals; Feriwala controls courier operations and remits that tax. The
+snapshot identifies **product/platform recovery**, **tax** and **delivery** with component type, key,
+unit amount, quantity, line amount, total, currency, rule reference and timestamp. It excludes the
+selling price, Partner margin, the Supplier delivery-success fee, Supplier payables, any provider fee, a
+platform commission (none exists) and any estimate of Banij's courier cost. The difference between the
+customer delivery charge and the courier's actual cost remains Banij's operational gain or loss. Exact
+Money arithmetic, flat Taka (D26).
+
+Partner margin, for **reporting only**, is `externally verified gross customer payment − frozen
+receivable`; it is never credited to the Wallet.
+
+### Wallet debit and hold
+
+- Collection is **all-or-nothing** under the receivable row lock and the Wallet row lock: never a
+  partial debit, never a negative balance.
+- Spend uses the existing allocation: `platform_credit` first, then withdrawable, one immutable ledger
+  entry per balance type, no silent conversion. Reserved, held, pending, minimum-balance and (where
+  configured) required-deposit money is unavailable.
+- One deterministic reference and idempotency key per receivable.
+- If the Wallet cannot cover it, the verified customer payment stays **paid**, the receivable stays
+  **outstanding**, and the order is held; required, available and shortfall are recorded.
+
+### Hold, release and the 24-hour deadline
+
+While held the order is `OnHold` with reason `partner_wallet_insufficient`. Admin configures a hold
+deadline, default **24 hours**. Within it the existing reservation is extended to the deadline; nothing
+is committed, dispatched, fulfilled, booked with the courier, or made eligible as a Supplier payable.
+
+After a Wallet credit commits (`WalletCredited`: spendable credits only, never conversions or reversals
+that must not release orders), one account-scoped queued job processes that Partner's holds oldest
+first (`held_at`, then id) **before the new balance becomes withdrawable**, stopping at the first it
+cannot cover in full. Each step re-locks and re-checks the Wallet, the reservation and the order. A
+scheduled sweep and an authorised Admin "Retry Wallet collection" call the same action. Release moves
+the order through the canonical transition to the status it would otherwise have reached (today
+`Paid`).
+
+**Withdrawals.** While an active, collectable hold exists within its deadline, the Partner cannot create
+or submit a withdrawal, and an unprocessed request must not consume money an older matured receivable
+needs. The Wallet cannot reserve a partial amount, so no partial reservation is made. The Partner is
+shown why, with a link to the held orders. Platform credit stays non-withdrawable.
+
+**At the deadline** the reservation is released so stock is not blocked indefinitely; the order stays
+held with reason `wallet_deadline_expired_refund_required`; Partner and staff are told. It is then no
+longer a collectable receivable until stock can be secured again, and it does not block withdrawals. The
+Partner must refund the customer through their own gateway or fund the Wallet and retry. Nothing claims
+the customer was refunded and nothing is cancelled automatically: cancellation follows a verified
+external refund, or an authorised staff outcome recorded with a reason and evidence. If funded later,
+stock is re-reserved **atomically for every line before any debit**; if it cannot be, nothing is
+debited and the order stays held. The receivable is never collected when fulfilment can no longer be
+secured. Held orders have an authorised cancellation path through the canonical cancellation workflow.
+
+### Refund and reversal policy
+
+- **Customer refund** is the Partner's, outside Feriwala's ledger.
+- **Cancelled before dispatch, after collection:** reverse the product/platform component in full, the
+  unincurred delivery component in full, and tax proportionally. Credits go to the balance types
+  originally debited, as compensating entries, exactly once per component; nothing is edited or deleted.
+- **Delivery charge and its tax:** refundable before dispatch and before any courier charge is incurred;
+  after courier booking alone refundable unless Banij has actually incurred a non-refundable courier
+  charge; after dispatch or an incurred charge, non-refundable to the extent incurred. The reason and
+  the actual incurred charge are stored, and an incurred charge is never estimated. Delivery tax is
+  refunded in the same proportion as the delivery charge; if the tax service cannot represent a partial
+  retention safely, the original snapshot stands and staff review it.
+- **Return after dispatch:** the product/platform component and its tax are reversed pro rata for units
+  physically received and accepted through the case workflow, from the immutable per-line receivable
+  snapshot and never from current prices — but only once the returned goods are accepted **and** the
+  Partner's customer refund is verified by the provider or recorded by an authorised staff member with a
+  reason and evidence, the original receivable was actually collected, and the same units have not
+  already been reversed. Until then nothing is credited, the reversal is shown as pending with what is
+  missing, and Banij does not claim to have refunded the customer. Delivery charge and delivery tax stay
+  non-refundable after dispatch except by an authorised correction proving Banij did not incur them.
+  Exchange and damage never trigger the same reversal again.
+- **Provider fee** is the Partner's and is never stored, estimated, reimbursed or included.
+- **Delivery-success fee** is a Supplier-side charge: nothing to reverse before delivery, a later return
+  does not reverse it, only a corrected or voided delivery-success record does.
+- **Supplier payable:** cancelled before dispatch or before eligibility by a compensating status action,
+  never deleted, rate snapshot and audit preserved; once eligible or paid, the existing recovery
+  workflow applies.
+- Cancellation before collection closes the receivable with no debit.
+
+### Accounting and audit
+
+Customer payment and Banij receivable are separate facts. Model B writes **no Partner-profit Wallet
+credit**: the Partner already holds the cash, and the settlement is recorded with collection channel
+`partner_gateway_external`. Every hold, collection attempt, release, retry, reversal and configuration
+change is audited with no secrets and no customer personal data.
+
+### Model A correction recorded with this decision
+
+An online-paid Platform-gateway Store Order must become eligible for Partner-profit settlement from
+verified payment facts. Until now only a staff action (`RecordCodCollection`) supplied the collection
+fact, so such an order did not settle unless staff typed an amount. This is an existing defect. A
+distinct collection channel (`cod`, `platform_gateway`, `partner_gateway_external`) is added; for
+`platform_gateway` the collection fact is the verified settled payment, allocated per line as the line
+total; profit still credits only at the existing delivery boundary, exactly once; COD is unchanged.
+
+### Migration and historical orders
+
+Additive migrations only. Existing payments have no ownership snapshot and keep Model A behaviour;
+nothing is backfilled or reclassified from a Storefront's current settings. Settlement rows that exist
+without a channel are treated as `cod`.
+
+### Failure, retry, reconciliation
+
+Duplicate callbacks, browser return with webhook, reconciliation with webhook, concurrent top-ups,
+top-up with an Admin retry, two workers, release with cancellation, release with refund, release with
+withdrawal, and a gateway-configuration change after initiation are serialised by the payment, order,
+receivable and Wallet row locks, a unique key per receivable, per debit and per release, and the
+existing `payment:settle:{id}` lock. A scheduled sweep repairs a missed event.
+
+### Operational and compliance risks
+
+The Partner holds customer funds, so gateway outage, chargebacks and refund conduct are outside
+Feriwala's control and belong in the Partner terms. Verification depends on credentials the Partner can
+revoke. A held order is a customer-visible delay. Providers differ in server-side verification,
+non-chargeable test calls and refund-status APIs; only providers with a Verify capability may be
+offered.
+
+### Existing code this changes
+
+`ProcessRefund`, `RequestRefund` and the return refund path refuse a Partner-owned payment. The
+Storefront API contract is unchanged in v1; Model B adds no breaking field (see
+[05-storefront-api-contract.md](05-storefront-api-contract.md)).

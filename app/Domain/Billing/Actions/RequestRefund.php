@@ -6,6 +6,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\RefundStatus;
+use App\Domain\Billing\Exceptions\RefundRefused;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Billing\RefundabilityPolicy;
@@ -55,6 +56,12 @@ class RequestRefund
             /** @var Payment $locked */
             $locked = Payment::query()->lockForUpdate()->findOrFail($payment->id);
             $locked->load('allocations');
+
+            // Feriwala never held a Partner-gateway payment, so there is nothing
+            // for it to refund (D36).
+            if ($locked->isPartnerOwned()) {
+                throw new InvalidArgumentException(RefundRefused::partnerOwnedPayment()->getMessage());
+            }
 
             $eligibility = $this->policy->evaluate($locked, $type);
 

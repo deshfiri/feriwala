@@ -3,6 +3,7 @@
 use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\FeeType;
+use App\Domain\Billing\Enums\GatewayOwnership;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Invoice;
@@ -258,6 +259,11 @@ describe('taking the order', function () {
             ->and($payment->business_account_id)->toBe($this->account->id)
             ->and($payment->amount->toDecimal())->toBe('5260.00')
             ->and($payment->gateway)->toBe('sslcommerz')
+            // Whose gateway was paid is frozen with the payment (D36), never read from the Storefront later.
+            ->and($payment->gateway_ownership)->toBe(GatewayOwnership::Platform)
+            ->and($payment->funds_destination)->toBe('platform')
+            ->and($payment->website_id)->toBe($this->website->id)
+            ->and($payment->partner_gateway_configuration_version_id)->toBeNull()
             ->and($payment->expires_at)->not->toBeNull()
             // An order nobody has paid for carries no invoice yet (P4-11).
             ->and($payment->invoice()->exists())->toBeFalse();

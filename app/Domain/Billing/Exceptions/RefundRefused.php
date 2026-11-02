@@ -46,6 +46,19 @@ class RefundRefused extends RuntimeException
         );
     }
 
+    /**
+     * The customer paid the Partner's own gateway (D36, Model B).
+     *
+     * Feriwala never held that money, so it cannot refund it: not through its own
+     * gateway credentials, and not out of a wallet. The Partner refunds the
+     * customer through the Partner's gateway, and the refund is recorded
+     * separately once the provider confirms it.
+     */
+    public static function partnerOwnedPayment(): self
+    {
+        return new self('The customer paid the Partner\'s own gateway, so Feriwala did not receive this money and cannot refund it. The Partner refunds the customer through their gateway.');
+    }
+
     public static function noGateway(): self
     {
         return new self('This payment never reached a gateway, so there is nothing to refund through.');

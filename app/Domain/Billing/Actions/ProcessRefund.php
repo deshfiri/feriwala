@@ -125,6 +125,11 @@ class ProcessRefund
             /** @var Payment $payment */
             $payment = Payment::query()->lockForUpdate()->findOrFail($locked->payment_id);
 
+            // Money Feriwala never held cannot go back from Feriwala (D36).
+            if ($payment->isPartnerOwned()) {
+                throw RefundRefused::partnerOwnedPayment();
+            }
+
             // Money that never arrived cannot go back.
             if (! $payment->status->isSettled() && $payment->status !== PaymentStatus::PartiallyRefunded) {
                 throw RefundRefused::notSettled($payment->status->label());

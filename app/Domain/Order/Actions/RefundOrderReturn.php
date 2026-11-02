@@ -12,6 +12,7 @@ use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Enums\Refundability;
 use App\Domain\Billing\Enums\RefundStatus;
+use App\Domain\Billing\Exceptions\RefundRefused;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Order\Enums\ReturnRefundState;
@@ -251,6 +252,11 @@ class RefundOrderReturn
      */
     protected function openRefund(User $actor, OrderReturn $return, Payment $payment): RefundRequest
     {
+        // The Partner was paid, not Feriwala, so Feriwala has no refund to open (D36).
+        if ($payment->isPartnerOwned()) {
+            throw RefundRefused::partnerOwnedPayment();
+        }
+
         /** @var RefundRequest $refund */
         $refund = RefundRequest::create([
             'payment_id' => $payment->id,
