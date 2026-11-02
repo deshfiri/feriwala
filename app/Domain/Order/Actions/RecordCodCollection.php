@@ -5,6 +5,7 @@ namespace App\Domain\Order\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Order\Enums\CollectionChannel;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderProceedsSettlement;
 use App\Models\User;
@@ -40,6 +41,14 @@ class RecordCodCollection
 
         if (! $item->defersProductCost()) {
             throw new InvalidArgumentException('Only a line whose product cost is recovered from its proceeds has a COD collection to confirm.');
+        }
+
+        // Money a verified payment already collected is not cash on delivery, and
+        // staff do not enter a second fact against it (D36).
+        $channel = OrderProceedsSettlement::query()->where('order_item_id', $item->id)->first()?->collectionChannel();
+
+        if ($channel !== null && $channel !== CollectionChannel::Cod) {
+            throw new InvalidArgumentException('This line was paid through a payment gateway and its collection is already recorded; there is no cash on delivery to confirm.');
         }
 
         return $this->database->transaction(function () use ($actor, $item, $amountCollected) {

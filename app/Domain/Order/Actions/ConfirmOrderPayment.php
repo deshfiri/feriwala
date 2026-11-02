@@ -67,6 +67,7 @@ class ConfirmOrderPayment
         protected DatabaseManager $database,
         protected LogManager $log,
         protected StockEnforcement $enforcement,
+        protected SynchronizeOnlineCollectionWithPayment $onlineCollection,
     ) {}
 
     public function handle(Payment $payment): ?Order
@@ -203,7 +204,30 @@ class ConfirmOrderPayment
         // it is eligible for settlement (D25, P13-22).
         $this->supplierPayment->handle($locked, $settled->completed_at);
 
+        $this->recordOnlineCollection($locked, $settled);
+
         $order->setRawAttributes($locked->getAttributes(), sync: true);
+    }
+
+    /**
+     * The verified payment is the collection fact for the lines' profit (D36).
+     *
+     * In its own savepoint, and never allowed to undo a confirmation that has
+     * already happened: the payment is real whatever becomes of the bookkeeping.
+     * A failure is logged loudly, and delivery asks for the same fact again, so a
+     * missed one is repaired there rather than lost.
+     */
+    protected function recordOnlineCollection(Order $order, Payment $payment): void
+    {
+        try {
+            $this->database->transaction(fn () => $this->onlineCollection->handle($order, $payment));
+        } catch (Throwable $throwable) {
+            $this->log->channel('payment')->critical('Could not record the collection fact for a verified payment', [
+                'order' => $order->reference,
+                'payment' => $payment->reference,
+                'error' => $throwable::class,
+            ]);
+        }
     }
 
     /**

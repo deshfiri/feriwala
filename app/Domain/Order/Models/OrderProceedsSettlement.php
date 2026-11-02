@@ -5,6 +5,7 @@ namespace App\Domain\Order\Models;
 use App\Casts\MoneyCast;
 use App\Concerns\HasPublicId;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Order\Enums\CollectionChannel;
 use App\Domain\Wallet\Models\WalletTransaction;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -27,6 +28,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $delivered_at
  * @property CarbonImmutable|null $cod_collected_at
  * @property Money|null $cod_amount_collected
+ * @property CollectionChannel|null $collection_channel how the money was collected; null on a row from before channels, which is cash on delivery
+ * @property CarbonImmutable|null $payment_collected_at when a verified payment was recorded as this line's collection
+ * @property Money|null $payment_collected_amount the line's share of that verified payment
+ * @property int|null $collection_payment_id the verified payment the collection fact came from
  * @property CarbonImmutable|null $eligible_at
  * @property Money|null $reseller_earning
  * @property Money $reversed_amount how much of the credited earning returns have taken back
@@ -62,6 +67,9 @@ class OrderProceedsSettlement extends Model
             'resale_amount' => MoneyCast::class,
             'recovered_amount' => MoneyCast::class,
             'cod_amount_collected' => MoneyCast::class,
+            'collection_channel' => CollectionChannel::class,
+            'payment_collected_at' => 'immutable_datetime',
+            'payment_collected_amount' => MoneyCast::class,
             'reseller_earning' => MoneyCast::class,
             'reversed_amount' => MoneyCast::class,
             'flagged_for_review' => 'boolean',
@@ -102,6 +110,33 @@ class OrderProceedsSettlement extends Model
     public function walletTransaction(): BelongsTo
     {
         return $this->belongsTo(WalletTransaction::class);
+    }
+
+    /**
+     * The channel this line's money came through: a row with no channel and a
+     * cash fact is from before channels existed, and is cash on delivery.
+     */
+    public function collectionChannel(): ?CollectionChannel
+    {
+        if ($this->collection_channel !== null) {
+            return $this->collection_channel;
+        }
+
+        return $this->cod_collected_at !== null ? CollectionChannel::Cod : null;
+    }
+
+    public function isCollected(): bool
+    {
+        return $this->cod_collected_at !== null || $this->payment_collected_at !== null;
+    }
+
+    /**
+     * What was collected for this line, whichever way: the cash staff confirmed,
+     * or the line's share of the verified payment.
+     */
+    public function collectedAmount(): ?Money
+    {
+        return $this->cod_amount_collected ?? $this->payment_collected_amount;
     }
 
     /**

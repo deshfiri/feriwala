@@ -22,6 +22,7 @@ class SynchronizeOrderProceedsWithDelivery
 {
     public function __construct(
         protected EvaluateOrderProceedsEligibility $eligibility,
+        protected SynchronizeOnlineCollectionWithPayment $onlineCollection,
     ) {}
 
     public function handle(Order $order, OrderDeliveryStatus $to): void
@@ -29,6 +30,11 @@ class SynchronizeOrderProceedsWithDelivery
         if ($to !== OrderDeliveryStatus::Delivered) {
             return;
         }
+
+        // An online order's collection is its verified payment. Recorded when the
+        // payment was confirmed; asked for again here, harmlessly, so a fact a
+        // failed attempt left unwritten is repaired at the delivery boundary.
+        $this->onlineCollection->handle($order, $order->payment);
 
         $order->items
             ->filter(fn (OrderItem $item) => $item->defersProductCost())
