@@ -6,6 +6,7 @@ use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Order\DispatchGate;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
@@ -35,6 +36,7 @@ class AdvanceOrderCourierStatus
     public function __construct(
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected DispatchGate $dispatchGate,
     ) {}
 
     public function handle(
@@ -58,6 +60,11 @@ class AdvanceOrderCourierStatus
         return $this->database->transaction(function () use ($order, $to, $actor, $reason, $source) {
             /** @var Order $locked */
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+            // Asked of the locked row: fulfilment may have moved since this order was loaded.
+            if ($this->dispatchGate->blocksCourier($locked, $to)) {
+                throw new InvalidArgumentException($this->dispatchGate->refusal($locked));
+            }
 
             /** @var OrderCourierStatusChange $entry */
             $entry = $locked->moveCourierTo(

@@ -5,6 +5,7 @@ use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
+use App\Domain\Order\Enums\OrderFulfillmentStatus;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Supplier\Actions\EvaluateSupplierPayableEligibility;
@@ -31,7 +32,7 @@ beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
     $this->staff = testPlatformStaff(PlatformRole::Admin);
-    $this->order = Order::factory()->create();
+    $this->order = Order::factory()->create(['fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]);
     $this->product = websiteTestProduct();
 
     $this->line = OrderItem::create([

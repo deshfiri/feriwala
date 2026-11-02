@@ -2,6 +2,7 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Order\Enums\OrderFulfillmentStatus;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -15,7 +16,7 @@ beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
     $this->manager = testPlatformStaff(PlatformRole::CourierManager);
-    $this->order = Order::factory()->create(['status' => OrderStatus::Shipped]);
+    $this->order = Order::factory()->create(['status' => OrderStatus::Shipped, 'fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]);
 });
 
 it('creates a shipment through the admin screen and redirects to it', function () {

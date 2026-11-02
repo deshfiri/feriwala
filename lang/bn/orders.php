@@ -485,6 +485,9 @@ return [
         'allocated' => 'লাইন বরাদ্দ করা হয়েছে।',
         'commitment_updated' => 'সরবরাহ প্রতিশ্রুতি হালনাগাদ হয়েছে।',
         'lifecycle_updated' => 'অর্ডারের অবস্থা হালনাগাদ হয়েছে।',
+        'refused' => [
+            'fulfilment_first' => 'পরিপূরণ এখন :status। পরিপূরণ :needed না হওয়া পর্যন্ত সরবরাহ ও কুরিয়ার শুরু করা যাবে না।',
+        ],
         'cod_collection_recorded' => 'সিওডি সংগ্রহ রেকর্ড করা হয়েছে।',
         'lifecycle' => [
             'title' => 'পরিপূরণ ও সরবরাহ',
@@ -507,6 +510,7 @@ return [
             'complete' => 'সম্পন্ন',
             'step' => ':total ধাপের মধ্যে :current',
             'next' => 'সাধারণ পরবর্তী ধাপ',
+            'locked' => 'পরিপূরণের অপেক্ষায়',
         ],
         'status_update' => [
             'title' => 'অবস্থা হালনাগাদ করুন',
@@ -538,6 +542,11 @@ return [
             'no_shipments_hint' => 'এখনও কোনো চালান নেই। কুরিয়ার ও ট্র্যাকিং নম্বর যুক্ত করতে নিচের চালান অংশে একটি তৈরি করুন।',
             'no_tracking' => 'এখনও ট্র্যাকিং নম্বর নেই',
             'open_shipment' => 'চালান খুলুন',
+            'locked_tag' => 'বন্ধ',
+            'locked_title' => ':track এখনও শুরু করা যাবে না',
+            'go_to' => ':track এ যান',
+            'continue_title' => 'সংরক্ষিত হয়েছে। এখন :track শুরু করা যাবে।',
+            'continue_to' => ':track এ এগিয়ে যান',
             'effects' => [
                 'order_fulfillment' => [
                     'pending_review' => 'কর্মীর পর্যালোচনার অপেক্ষায়।',

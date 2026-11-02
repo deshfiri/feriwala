@@ -52,6 +52,7 @@ function lifecycleAxis(status: string) {
         is_terminal: false,
         can_manage: false,
         available_actions: [],
+        locked_reason: null,
         history: [],
     };
 }

@@ -43,7 +43,7 @@ test('fulfilment status advances through the happy path and records history', fu
 });
 
 test('delivery status advances through the happy path to Delivered', function () {
-    $order = Order::factory()->create();
+    $order = Order::factory()->create(['fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]);
 
     $advance = app(AdvanceOrderDeliveryStatus::class);
     $advance->handle($order, OrderDeliveryStatus::CourierAssigned, $this->staff);
@@ -55,7 +55,7 @@ test('delivery status advances through the happy path to Delivered', function ()
 });
 
 test('courier status advances through the happy path to Delivered', function () {
-    $order = Order::factory()->create();
+    $order = Order::factory()->create(['fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]);
 
     $advance = app(AdvanceOrderCourierStatus::class);
     $advance->handle($order, OrderCourierStatus::Assigned, $this->staff);

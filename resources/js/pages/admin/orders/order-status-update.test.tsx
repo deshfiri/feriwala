@@ -42,6 +42,7 @@ function axis(
         is_terminal: actions.length === 0,
         can_manage: true,
         available_actions: actions,
+        locked_reason: null,
         history: [],
         ...overrides,
     };
@@ -455,6 +456,142 @@ describe('when there is nothing to change', () => {
         expect(
             screen.queryByRole('button', { name: /status_update\.save/ }),
         ).not.toBeInTheDocument();
+    });
+});
+
+describe('one step at a time', () => {
+    const locked =
+        'Fulfilment is Packing. Delivery and the courier can start only once fulfilment is Ready for dispatch.';
+
+    const waiting = () =>
+        lifecycle({
+            fulfillment: axis('packing', ['ready_for_dispatch', 'on_hold']),
+            delivery: axis('not_shipped', ['on_hold', 'cancelled'], {
+                locked_reason: locked,
+            }),
+            courier: axis('unassigned', ['cancelled'], {
+                locked_reason: locked,
+            }),
+        });
+
+    it('numbers the tracks and marks the ones that cannot start yet', () => {
+        panel({ lifecycle: waiting() });
+
+        const tabs = screen.getAllByRole('button', { pressed: false });
+
+        expect(tabs[0]).toHaveTextContent('2.');
+        expect(tabs[0]).toHaveTextContent(
+            'orders.admin.status_update.locked_tag',
+        );
+        expect(tabs[1]).toHaveTextContent('3.');
+        expect(tabs[1]).toHaveTextContent(
+            'orders.admin.status_update.locked_tag',
+        );
+        expect(screen.getByRole('button', { pressed: true })).toHaveTextContent(
+            '1.',
+        );
+    });
+
+    it('starts on fulfilment, because that is where the work is', () => {
+        panel({ lifecycle: waiting() });
+
+        expect(
+            screen.getByText(
+                'orders.admin.status_update.effects.order_fulfillment.ready_for_dispatch',
+            ),
+        ).toBeInTheDocument();
+    });
+
+    it('says why a later track is waiting, in the server’s words, and takes you back to fulfilment', () => {
+        panel({ lifecycle: waiting() });
+
+        track('orders.admin.lifecycle.delivery_label');
+
+        expect(screen.getByRole('note')).toHaveTextContent(locked);
+        expect(screen.getByRole('note')).toHaveTextContent(
+            'orders.admin.status_update.locked_title',
+        );
+        // Only what the server still allows: holding or cancelling.
+        expect(screen.getAllByRole('radio')).toHaveLength(2);
+        expect(
+            screen.queryByText(
+                'orders.admin.status_update.effects.order_delivery.courier_assigned',
+            ),
+        ).not.toBeInTheDocument();
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'orders.admin.status_update.go_to',
+            }),
+        );
+
+        expect(
+            screen.getByText(
+                'orders.admin.status_update.effects.order_fulfillment.ready_for_dispatch',
+            ),
+        ).toBeInTheDocument();
+    });
+
+    it('offers to continue to the next track once the step is saved and it has opened up', () => {
+        const { rerender } = panel({ lifecycle: waiting() });
+
+        choose('ready_for_dispatch');
+        fireEvent.click(save());
+        act(() => requests[0].succeed());
+
+        // The server's answer: fulfilment is ready, so delivery has opened.
+        rerender(
+            <OrderStatusUpdate
+                orderId="01ORDER"
+                lifecycle={lifecycle({
+                    fulfillment: axis('ready_for_dispatch', [
+                        'fulfilled',
+                        'on_hold',
+                    ]),
+                    delivery: axis('not_shipped', [
+                        'courier_assigned',
+                        'on_hold',
+                        'cancelled',
+                    ]),
+                    courier: axis('unassigned', ['cancelled'], {
+                        locked_reason: locked,
+                    }),
+                })}
+                isStoreOrder={false}
+                shipments={[]}
+                canManageShipments={false}
+            />,
+        );
+
+        expect(screen.getByRole('status')).toHaveTextContent(
+            'orders.admin.status_update.continue_title',
+        );
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'orders.admin.status_update.continue_to',
+            }),
+        );
+
+        expect(
+            screen.getByText(
+                'orders.admin.status_update.effects.order_delivery.courier_assigned',
+            ),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('does not offer to continue while the next track is still waiting', () => {
+        panel({ lifecycle: waiting() });
+
+        choose('on_hold');
+        fireEvent.change(screen.getByRole('textbox'), {
+            target: { value: 'Stock check' },
+        });
+        fireEvent.click(save());
+        act(() => requests[0].succeed());
+
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 });
 

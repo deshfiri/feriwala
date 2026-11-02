@@ -494,6 +494,9 @@ return [
         'allocated' => 'Line allocated.',
         'commitment_updated' => 'Fulfilment commitment updated.',
         'lifecycle_updated' => 'Order status updated.',
+        'refused' => [
+            'fulfilment_first' => 'Fulfilment is :status. Delivery and the courier can start only once fulfilment is :needed.',
+        ],
         'cod_collection_recorded' => 'COD collection recorded.',
         'lifecycle' => [
             'title' => 'Fulfilment & delivery',
@@ -516,6 +519,7 @@ return [
             'complete' => 'Complete',
             'step' => 'Step :current of :total',
             'next' => 'Usual next step',
+            'locked' => 'Waiting for fulfilment',
         ],
         'status_update' => [
             'title' => 'Update status',
@@ -547,6 +551,11 @@ return [
             'no_shipments_hint' => 'No shipment yet. Create one in the Shipments section below to attach a courier and a tracking number.',
             'no_tracking' => 'No tracking number yet',
             'open_shipment' => 'Open shipment',
+            'locked_tag' => 'Locked',
+            'locked_title' => ':track cannot start yet',
+            'go_to' => 'Go to :track',
+            'continue_title' => 'Saved. :track can start now.',
+            'continue_to' => 'Continue to :track',
             'effects' => [
                 'order_fulfillment' => [
                     'pending_review' => 'Waiting for staff to review the order.',

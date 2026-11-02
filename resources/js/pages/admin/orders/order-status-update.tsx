@@ -1,4 +1,5 @@
 import { Link, useForm } from '@inertiajs/react';
+import { Lock } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
 import FormField from '@/components/forms/form-field';
 import TextArea from '@/components/forms/text-area';
@@ -13,6 +14,7 @@ import {
     AXES,
     AXIS_LABEL_KEY,
     AXIS_ROUTE,
+    NEXT_AXIS,
     REASON_REQUIRED,
     STATUS_GROUP,
     usualNextStep,
@@ -50,13 +52,17 @@ export default function OrderStatusUpdate({
     canManageShipments: boolean;
 }) {
     const { t } = useTranslation();
+    // Start where the work is: the first track that has something to do and is
+    // not waiting on an earlier one.
     const [axis, setAxis] = useState<LifecycleAxis>(
         AXES.find(
             (candidate) =>
                 lifecycle[candidate].can_manage &&
+                lifecycle[candidate].locked_reason === null &&
                 lifecycle[candidate].available_actions.length > 0,
         ) ?? 'fulfillment',
     );
+    const [savedTrack, setSavedTrack] = useState<LifecycleAxis | null>(null);
     const form = useForm({ status: '', reason: '' });
     const submitting = useRef(false);
 
@@ -79,13 +85,24 @@ export default function OrderStatusUpdate({
 
         form.reset();
         form.clearErrors();
+        setSavedTrack(null);
         setAxis(next);
     };
 
     const choose = (status: string) => {
         form.setData('status', status);
         form.clearErrors();
+        setSavedTrack(null);
     };
+
+    // After a step is saved, the next one may have just become possible.
+    const following = NEXT_AXIS[axis];
+    const canContinue =
+        savedTrack === axis &&
+        following !== undefined &&
+        lifecycle[following].can_manage &&
+        lifecycle[following].locked_reason === null &&
+        lifecycle[following].available_actions.length > 0;
 
     const save = (event: FormEvent) => {
         event.preventDefault();
@@ -112,7 +129,10 @@ export default function OrderStatusUpdate({
 
         form.submit(AXIS_ROUTE[axis](orderId), {
             preserveScroll: true,
-            onSuccess: () => form.reset(),
+            onSuccess: () => {
+                form.reset();
+                setSavedTrack(axis);
+            },
             onFinish: () => {
                 submitting.current = false;
             },
@@ -147,9 +167,9 @@ export default function OrderStatusUpdate({
                     <div
                         role="group"
                         aria-label={t('orders.admin.status_update.track')}
-                        className="grid gap-2 sm:grid-cols-3"
+                        className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2"
                     >
-                        {AXES.map((candidate) => (
+                        {AXES.map((candidate, position) => (
                             <button
                                 key={candidate}
                                 type="button"
@@ -163,8 +183,22 @@ export default function OrderStatusUpdate({
                                         : 'hover:bg-surface-subtle',
                                 )}
                             >
-                                <span className="text-sm font-medium">
-                                    {t(AXIS_LABEL_KEY[candidate])}
+                                <span className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-sm font-medium">
+                                    <span>
+                                        {position + 1}.{' '}
+                                        {t(AXIS_LABEL_KEY[candidate])}
+                                    </span>
+                                    {lifecycle[candidate].locked_reason && (
+                                        <span className="text-muted-foreground flex items-center gap-1 text-xs font-normal">
+                                            <Lock
+                                                className="size-3"
+                                                aria-hidden="true"
+                                            />
+                                            {t(
+                                                'orders.admin.status_update.locked_tag',
+                                            )}
+                                        </span>
+                                    )}
                                 </span>
                                 <span className="text-muted-foreground text-xs">
                                     {lifecycle[candidate].status_label}
@@ -190,6 +224,56 @@ export default function OrderStatusUpdate({
                         <CourierContext
                             shipments={shipments}
                             canManageShipments={canManageShipments}
+                        />
+                    )}
+
+                    {summary.locked_reason && (
+                        <Notice
+                            tone="warning"
+                            role="note"
+                            inset
+                            title={t(
+                                'orders.admin.status_update.locked_title',
+                                { track: t(AXIS_LABEL_KEY[axis]) },
+                            )}
+                            action={
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => chooseAxis('fulfillment')}
+                                >
+                                    {t('orders.admin.status_update.go_to', {
+                                        track: t(AXIS_LABEL_KEY.fulfillment),
+                                    })}
+                                </Button>
+                            }
+                        >
+                            <p>{summary.locked_reason}</p>
+                        </Notice>
+                    )}
+
+                    {canContinue && following && (
+                        <Notice
+                            tone="success"
+                            role="status"
+                            inset
+                            title={t(
+                                'orders.admin.status_update.continue_title',
+                                { track: t(AXIS_LABEL_KEY[following]) },
+                            )}
+                            action={
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => chooseAxis(following)}
+                                >
+                                    {t(
+                                        'orders.admin.status_update.continue_to',
+                                        { track: t(AXIS_LABEL_KEY[following]) },
+                                    )}
+                                </Button>
+                            }
                         />
                     )}
 

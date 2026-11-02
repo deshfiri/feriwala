@@ -14,6 +14,7 @@ const axis = (status: string) => ({
     is_terminal: false,
     can_manage: true,
     available_actions: [],
+    locked_reason: null,
     history: [],
 });
 

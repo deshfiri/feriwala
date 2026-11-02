@@ -23,6 +23,7 @@ function axis(
         is_terminal: false,
         can_manage: true,
         available_actions: actions,
+        locked_reason: null,
         history,
     };
 }

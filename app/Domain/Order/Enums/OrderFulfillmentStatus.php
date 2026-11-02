@@ -4,6 +4,7 @@ namespace App\Domain\Order\Enums;
 
 use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\RollUpOrderStatus;
+use App\Domain\Order\DispatchGate;
 use App\Support\StateMachine\TransitionableState;
 use App\Support\Status\HasTranslatedLabel;
 
@@ -77,6 +78,15 @@ enum OrderFulfillmentStatus: string implements TransitionableState
 
             self::Cancelled => [],
         };
+    }
+
+    /**
+     * Whether the goods are packed and ready to leave: where delivery and the
+     * courier may begin ({@see DispatchGate}).
+     */
+    public function isReadyForDispatch(): bool
+    {
+        return in_array($this, [self::ReadyForDispatch, self::Fulfilled], true);
     }
 
     public function isTerminal(): bool

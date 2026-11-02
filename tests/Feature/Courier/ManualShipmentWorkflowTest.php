@@ -9,6 +9,7 @@ use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
+use App\Domain\Order\Enums\OrderFulfillmentStatus;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderItem;
@@ -32,7 +33,7 @@ beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
     $this->staff = testPlatformStaff(PlatformRole::Admin);
-    $this->order = Order::factory()->create();
+    $this->order = Order::factory()->create(['fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]);
 });
 
 function courierTestPackage(): array
@@ -89,7 +90,7 @@ it('advances the shipment through to Delivered, hopping the order through OutFor
     // move, the same gap OrderLifecycleStateMachineTest's own rollup test
     // works around. delivery_status is left at its own separate default
     // (NotShipped) so the shipment's CourierAssigned move is still legal.
-    $order = Order::factory()->create(['status' => OrderStatus::Shipped]);
+    $order = Order::factory()->create(['status' => OrderStatus::Shipped, 'fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]);
 
     $shipment = app(CreateShipmentFromAllocations::class)->handle(
         $order,

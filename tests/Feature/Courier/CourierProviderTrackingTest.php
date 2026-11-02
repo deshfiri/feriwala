@@ -7,6 +7,7 @@ use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Enums\ShipmentStatusChangeSource;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Enums\OrderCourierStatus;
+use App\Domain\Order\Enums\OrderFulfillmentStatus;
 use App\Domain\Order\Models\Order;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -26,7 +27,7 @@ beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
     $this->staff = testPlatformStaff(PlatformRole::Admin);
-    $this->order = Order::factory()->create();
+    $this->order = Order::factory()->create(['fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]);
     $this->shipment = app(CreateShipmentFromAllocations::class)->handle(
         $this->order,
         CourierProviderCode::Manual,
@@ -95,7 +96,7 @@ describe('what the provider reports', function () {
         $this->shipment->forceFill(['external_id' => 'C-1001'])->save();
 
         $other = app(CreateShipmentFromAllocations::class)->handle(
-            Order::factory()->create(),
+            Order::factory()->create(['fulfillment_status' => OrderFulfillmentStatus::ReadyForDispatch]),
             CourierProviderCode::Manual,
             Money::fromDecimal('80.00', Currency::BDT),
             [['weight' => '1.000']],

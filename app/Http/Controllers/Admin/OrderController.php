@@ -16,6 +16,7 @@ use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
 use App\Domain\Order\Actions\EvaluateOrderProceedsEligibility;
 use App\Domain\Order\Actions\RecordCodCollection;
 use App\Domain\Order\Data\AllocationCandidate;
+use App\Domain\Order\DispatchGate;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
@@ -47,6 +48,7 @@ use App\Support\Money\DecimalAmount;
 use App\Support\Money\Rules\DecimalAmountRule;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use App\Support\StateMachine\TransitionableState;
+use Closure;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -94,6 +96,7 @@ class OrderController extends Controller
         protected AdvanceOrderFulfilmentStatus $advanceFulfilment,
         protected AdvanceOrderDeliveryStatus $advanceDelivery,
         protected AdvanceOrderCourierStatus $advanceCourier,
+        protected DispatchGate $dispatchGate,
         protected CourierManager $courier,
         protected CaseLinks $caseLinks,
     ) {}
@@ -191,15 +194,21 @@ class OrderController extends Controller
                         $record->fulfillmentStatusHistory,
                         $canAllocate,
                     ),
+                    // Delivery and courier cannot start before the goods are
+                    // packed: the moves that would are left off, and why said.
                     'delivery' => $this->lifecycleSummary(
                         $record->delivery_status,
                         $record->deliveryStatusHistory,
                         $canAllocate,
+                        fn (OrderDeliveryStatus $to) => $this->dispatchGate->blocksDelivery($record, $to),
+                        $this->dispatchGate->refusal($record),
                     ),
                     'courier' => $this->lifecycleSummary(
                         $record->courier_status,
                         $record->courierStatusHistory,
                         $canAllocate,
+                        fn (OrderCourierStatus $to) => $this->dispatchGate->blocksCourier($record, $to),
+                        $this->dispatchGate->refusal($record),
                     ),
                 ],
                 'account' => $record->businessAccount->name,
@@ -933,16 +942,22 @@ class OrderController extends Controller
         OrderFulfillmentStatus|OrderDeliveryStatus|OrderCourierStatus $status,
         Collection $history,
         bool $canManage,
+        ?Closure $blocked = null,
+        ?string $lockedReason = null,
     ): array {
+        $moves = $canManage ? $status->transitionsTo() : [];
+        $held = $blocked === null ? [] : array_filter($moves, $blocked);
+        $offered = array_filter($moves, fn ($to) => ! in_array($to, $held, true));
+
         return [
             'status' => $status->value,
             'status_label' => $status->label(),
             'status_tone' => $status->tone(),
             'is_terminal' => $status->isTerminal(),
             'can_manage' => $canManage,
-            'available_actions' => $canManage
-                ? array_map(fn (OrderFulfillmentStatus|OrderDeliveryStatus|OrderCourierStatus $to) => $to->value, $status->transitionsTo())
-                : [],
+            'available_actions' => array_values(array_map(fn (OrderFulfillmentStatus|OrderDeliveryStatus|OrderCourierStatus $to) => $to->value, $offered)),
+            // Set only when something that would be offered is being held back.
+            'locked_reason' => $held === [] ? null : $lockedReason,
             'history' => $history->map(fn ($change) => [
                 'previous_status' => $change->previous_status?->label(),
                 'new_status' => $change->new_status->label(),

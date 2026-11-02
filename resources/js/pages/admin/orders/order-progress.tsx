@@ -57,7 +57,8 @@ export default function OrderProgress({
                     </Notice>
                 )}
 
-                <div className="grid gap-5 md:grid-cols-3">
+                {/* As many tracks per row as fit: the column is narrow beside the side panels. */}
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-5">
                     {AXES.map((axis) => (
                         <Track key={axis} axis={axis} lifecycle={lifecycle} />
                     ))}
@@ -91,7 +92,7 @@ function Track({
 
     return (
         <div className="min-w-0 space-y-2" data-test={`progress-${axis}`}>
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
                 <p className="text-sm font-medium">{t(AXIS_LABEL_KEY[axis])}</p>
                 <StatusPill
                     tone={summary.status_tone}
@@ -126,7 +127,11 @@ function Track({
                 ))}
             </div>
 
-            <p className="text-muted-foreground text-xs">{caption}</p>
+            <p className="text-muted-foreground text-xs">
+                {summary.locked_reason
+                    ? t('orders.admin.progress.locked')
+                    : caption}
+            </p>
 
             {next !== null && summary.can_manage && (
                 <p className="text-xs">

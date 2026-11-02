@@ -10,6 +10,12 @@ export type LifecycleAxisSummary = {
     is_terminal: boolean;
     can_manage: boolean;
     available_actions: string[];
+    /**
+     * Why this track cannot start yet, in words, when the server is holding
+     * moves back because an earlier track is not finished (fulfilment must be
+     * ready for dispatch before delivery or the courier can begin).
+     */
+    locked_reason: string | null;
     history: {
         previous_status: string | null;
         new_status: string;
@@ -28,6 +34,12 @@ export const STATUS_GROUP = {
     delivery: 'order_delivery',
     courier: 'order_courier',
 } as const;
+
+/** The track that follows each one, in the order work is done. */
+export const NEXT_AXIS: Partial<Record<LifecycleAxis, LifecycleAxis>> = {
+    fulfillment: 'delivery',
+    delivery: 'courier',
+};
 
 export const AXIS_LABEL_KEY: Record<LifecycleAxis, string> = {
     fulfillment: 'orders.admin.lifecycle.fulfilment_label',

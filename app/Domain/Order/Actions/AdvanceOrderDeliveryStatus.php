@@ -5,6 +5,7 @@ namespace App\Domain\Order\Actions;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Order\DispatchGate;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
@@ -50,6 +51,7 @@ class AdvanceOrderDeliveryStatus
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
         protected RollUpOrderStatus $rollUp,
+        protected DispatchGate $dispatchGate,
         protected SynchronizeSupplierPayablesWithDelivery $supplierPayables,
         protected SynchronizeDeliverySuccessFeesWithDelivery $deliverySuccessFees,
         protected SynchronizeOrderProceedsWithDelivery $orderProceeds,
@@ -76,6 +78,11 @@ class AdvanceOrderDeliveryStatus
         return $this->database->transaction(function () use ($order, $to, $actor, $reason, $source) {
             /** @var Order $locked */
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+            // Asked of the locked row: fulfilment may have moved since this order was loaded.
+            if ($this->dispatchGate->blocksDelivery($locked, $to)) {
+                throw new InvalidArgumentException($this->dispatchGate->refusal($locked));
+            }
 
             /** @var OrderDeliveryStatusChange $entry */
             $entry = $locked->moveDeliveryTo(
