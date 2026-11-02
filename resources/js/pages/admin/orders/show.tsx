@@ -30,9 +30,10 @@ import AllocationPanel, {
 import FulfilmentCommitmentPanel, {
     type FulfilmentCommitment,
 } from '@/pages/admin/orders/fulfilment-commitment-panel';
-import OrderLifecyclePanel, {
-    type OrderLifecycle,
-} from '@/pages/admin/orders/order-lifecycle-panel';
+import OrderActivity from '@/pages/admin/orders/order-activity';
+import type { OrderLifecycle } from '@/pages/admin/orders/order-lifecycle';
+import OrderProgress from '@/pages/admin/orders/order-progress';
+import OrderStatusUpdate from '@/pages/admin/orders/order-status-update';
 import ShipmentsPanel, {
     type CourierProviderOption,
     type OrderShipment,
@@ -268,22 +269,27 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                     />
                 )}
 
-                <OrderLifecyclePanel
-                    orderId={order.id}
-                    lifecycle={order.lifecycle}
-                />
-
-                {can.manage_shipments && (
-                    <ShipmentsPanel
-                        orderId={order.id}
-                        orderReference={order.reference}
-                        shipments={order.shipments}
-                        courierProviders={order.courier_providers}
-                    />
-                )}
-
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                     <div className="min-w-0 space-y-6">
+                        <OrderProgress lifecycle={order.lifecycle} />
+
+                        <OrderStatusUpdate
+                            orderId={order.id}
+                            lifecycle={order.lifecycle}
+                            isStoreOrder={order.source === 'website'}
+                            shipments={order.shipments}
+                            canManageShipments={can.manage_shipments}
+                        />
+
+                        {can.manage_shipments && (
+                            <ShipmentsPanel
+                                orderId={order.id}
+                                orderReference={order.reference}
+                                shipments={order.shipments}
+                                courierProviders={order.courier_providers}
+                            />
+                        )}
+
                         <SectionCard
                             title={t('orders.admin.sections.lines')}
                             contentClassName="p-0"
@@ -500,51 +506,10 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                             </ul>
                         </SectionCard>
 
-                        <SectionCard title={t('orders.admin.sections.history')}>
-                            <ol className="border-border space-y-4 border-l pl-4">
-                                {order.history.map((entry, position) => (
-                                    <li key={`${entry.new_status}-${position}`}>
-                                        <p className="text-sm font-medium">
-                                            {t(
-                                                `orders.statuses.${entry.new_status}`,
-                                            )}
-                                        </p>
-                                        <p className="text-muted-foreground text-xs">
-                                            <time dateTime={entry.at}>
-                                                {at(entry.at)}
-                                            </time>
-                                            {' · '}
-                                            {t(
-                                                `orders.admin.change_sources.${entry.source}`,
-                                            )}
-                                            {' · '}
-                                            {entry.actor ??
-                                                t(
-                                                    'orders.admin.history.system',
-                                                )}
-                                        </p>
-                                        {entry.reason && (
-                                            <p className="mt-1 text-sm">
-                                                {t(
-                                                    'orders.admin.history.reason',
-                                                    { reason: entry.reason },
-                                                )}
-                                            </p>
-                                        )}
-                                        {entry.internal_note && (
-                                            <p className="mt-1 text-sm">
-                                                {t(
-                                                    'orders.admin.history.internal',
-                                                    {
-                                                        note: entry.internal_note,
-                                                    },
-                                                )}
-                                            </p>
-                                        )}
-                                    </li>
-                                ))}
-                            </ol>
-                        </SectionCard>
+                        <OrderActivity
+                            history={order.history}
+                            lifecycle={order.lifecycle}
+                        />
                     </div>
 
                     <div className="space-y-6">

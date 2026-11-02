@@ -54,6 +54,8 @@ export function fakeUseForm<T extends Record<string, unknown>>(initial: T) {
         transform: (callback: (data: T) => Record<string, unknown>) => {
             transformer.current = callback;
         },
+        reset: () => setDataState(saved.current),
+        clearErrors: () => setErrors({}),
         submit: (
             route: { url: string; method: string },
             options: VisitOptions = {},
