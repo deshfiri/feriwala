@@ -1,5 +1,6 @@
 <?php
 
+use App\Providers\ApiServiceProvider;
 use App\Providers\AppServiceProvider;
 use App\Providers\AuthorizationServiceProvider;
 use App\Providers\FortifyServiceProvider;
@@ -9,6 +10,7 @@ use App\Providers\StoreServiceProvider;
 use App\Providers\WebsiteServiceProvider;
 
 return [
+    ApiServiceProvider::class,
     AppServiceProvider::class,
     AuthorizationServiceProvider::class,
     FortifyServiceProvider::class,

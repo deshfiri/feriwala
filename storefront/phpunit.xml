@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_URL" value="https://shop.test"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+        <env name="DB_URL" value=""/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="ERP_BASE_URL" value="https://erp.test"/>
+        <env name="STORE_ID" value="wsk_TEST"/>
+        <env name="STORE_TOKEN" value="test-token-secret"/>
+        <env name="ERP_STOREFRONT_HOST" value=""/>
+        <env name="WEBHOOK_SECRET" value="whsec_test_secret_0123456789"/>
+        <env name="WEBHOOK_SECRET_PREVIOUS" value=""/>
+        <env name="MIGRATE_TOKEN" value=""/>
+        <env name="TRUSTED_PROXY" value="0"/>
+    </php>
+</phpunit>

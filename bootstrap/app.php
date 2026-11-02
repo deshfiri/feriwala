@@ -10,6 +10,13 @@ use App\Http\Middleware\EnsureIdentityHasPlatformAccess;
 use App\Http\Middleware\EnsureSupplierIsOperational;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\Mobile\DefaultMobileReasonUnlessSecurity;
+use App\Http\Middleware\Mobile\EnsureMobileBusinessActivated;
+use App\Http\Middleware\Mobile\EnsureMobileIdentityHasAccess;
+use App\Http\Middleware\Mobile\EnsureMobileSupplierIsOperational;
+use App\Http\Middleware\Mobile\RequireMobilePassword;
+use App\Http\Middleware\Mobile\RequireMobileTwoFactor;
+use App\Http\Middleware\Mobile\SetMobileLocale;
 use App\Http\Middleware\PreventSearchIndexing;
 use App\Http\Middleware\RequireTwoFactorForSensitiveRoles;
 use App\Http\Middleware\SetLocale;
@@ -144,6 +151,20 @@ return Application::configure(basePath: dirname(__DIR__))
             'storefront.rate' => LimitStorefrontRate::class,
             'storefront.scope' => RequireStorefrontScope::class,
             'storefront.idempotent' => ReplayStorefrontWrite::class,
+
+            /*
+             * The mobile API's gates (`/api/mobile/v1`). The mobile counterparts
+             * of the web identity gate, the §5.4 funnel gate and SetLocale.
+             */
+            'mobile.access' => EnsureMobileIdentityHasAccess::class,
+            'mobile.activated' => EnsureMobileBusinessActivated::class,
+            'mobile.locale' => SetMobileLocale::class,
+            'mobile.operational' => EnsureMobileSupplierIsOperational::class,
+            // Administration (§36): a second factor, a password on the
+            // sensitive actions, and the default reason on staff screens.
+            'mobile.two-factor' => RequireMobileTwoFactor::class,
+            'mobile.password' => RequireMobilePassword::class,
+            'mobile.reason' => DefaultMobileReasonUnlessSecurity::class,
         ]);
 
         /*

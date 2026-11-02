@@ -155,6 +155,7 @@ pest()->group('location')->in('Feature/Location');
 pest()->group('address')->in('Feature/Address');
 pest()->group('bank')->in('Feature/Bank');
 pest()->group('payout')->in('Feature/Payout');
+pest()->group('mobile')->in('Feature/Mobile');
 
 /*
 |--------------------------------------------------------------------------

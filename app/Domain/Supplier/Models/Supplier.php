@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 /**
  * A Supplier: a wholly separate account domain from Client/Partner (D25,
@@ -77,7 +78,7 @@ use Illuminate\Notifications\Notifiable;
 class Supplier extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<SupplierFactory> */
-    use HasFactory, HasPublicId, HasReference, HasStateMachine, Notifiable, RecordsStatusHistory;
+    use HasApiTokens, HasFactory, HasPublicId, HasReference, HasStateMachine, Notifiable, RecordsStatusHistory;
 
     protected $guarded = [];
 

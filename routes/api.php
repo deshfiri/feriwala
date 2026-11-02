@@ -127,6 +127,18 @@ Route::prefix('storefront/v1')
     });
 
 /*
+ * The mobile app's API, v1 (`routes/mobile.php`, docs/api/mobile.md).
+ *
+ * Bearer-token (Sanctum), stateless, JSON only. Unlike the storefront API this
+ * one acts for a signed-in person, so it is self-scoped exactly as the web ERP
+ * is (§31.3) and reuses the same Actions, Queries and policies.
+ */
+Route::prefix('mobile/v1')
+    ->name('mobile.v1.')
+    ->middleware(['mobile.locale', 'throttle:mobile'])
+    ->group(base_path('routes/mobile.php'));
+
+/*
  * Caddy's certificate pre-issue check for the shared storefront (D30 §4).
  * Not part of the storefront contract: authenticated by the shared ask token,
  * optionally restricted to Caddy's addresses, and off until a token is set.
