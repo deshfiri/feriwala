@@ -102,6 +102,10 @@ class SettlePaymentManually
             return new ManualSettlement($payment, false, ManualSettlement::ALREADY_SETTLED);
         }
 
+        if ($payment->isPartnerOwned()) {
+            throw ManualSettlementRefused::partnerOwned();
+        }
+
         if (! $payment->canBeSettledManually()) {
             throw ManualSettlementRefused::notSettleable($payment->status->label());
         }

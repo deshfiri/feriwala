@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Webhook;
 
 use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Jobs\SettleGatewayNotification;
+use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\PartnerGatewayResolver;
 use App\Domain\Billing\Queries\ResolveNotifiedPayment;
 use App\Http\Controllers\Controller;
 use App\Integrations\Payment\Contracts\PaymentGateway;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayResult;
+use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,6 +56,10 @@ class PaymentWebhookController extends Controller
      */
     protected const ACKNOWLEDGED = ['message' => 'Acknowledged.'];
 
+    /**
+     * @param  string|null  $payment  the payment's public id, on the address a Partner's
+     *                                provider is given (D36); absent on Feriwala's own
+     */
     public function __invoke(
         Request $request,
         string $gateway,
@@ -60,12 +67,38 @@ class PaymentWebhookController extends Controller
         ResolveNotifiedPayment $payments,
         RecordPaymentLog $logs,
         LogManager $log,
+        PartnerGatewayResolver $partnerGateways,
+        ?string $payment = null,
     ): JsonResponse {
         if (! $gateways->isImplemented($gateway)) {
             return response()->json(['message' => 'Unknown gateway.'], 404);
         }
 
-        $driver = $gateways->driver($gateway);
+        /*
+         * A Partner's provider notifies an address that names the payment, because
+         * only the payment says whose credentials can check its signature. Anything
+         * that is not a Partner-owned payment of this very gateway is answered as
+         * an unknown gateway, and the signature is checked with the payment's
+         * frozen version — never with Feriwala's credentials, never with the
+         * Storefront's current ones.
+         */
+        $partnerPayment = null;
+
+        if ($payment !== null) {
+            $partnerPayment = Payment::query()->where('public_id', $payment)->first();
+
+            if ($partnerPayment === null || ! $partnerPayment->isPartnerOwned() || $partnerPayment->gateway !== $gateway) {
+                return response()->json(['message' => 'Unknown gateway.'], 404);
+            }
+        }
+
+        try {
+            $driver = $partnerPayment !== null
+                ? $partnerGateways->driverFor($partnerPayment)
+                : $gateways->driver($gateway);
+        } catch (GatewayUnavailable) {
+            return response()->json(['message' => 'Unknown gateway.'], 404);
+        }
 
         /*
          * A provider that cannot confirm a payment cannot be told one arrived.
@@ -125,7 +158,27 @@ class PaymentWebhookController extends Controller
             return response()->json(self::ACKNOWLEDGED);
         }
 
-        $payment = $payments->handle($gateway, $result);
+        // On a Partner's address the payment is the one the address names, and the
+        // notification has to name it too. On Feriwala's own, a Partner-owned
+        // payment is not notifiable at all: its signature was checked with
+        // credentials that mean nothing for it.
+        $payment = $partnerPayment !== null
+            ? ($this->namesPayment($partnerPayment, $result) ? $partnerPayment : null)
+            : $payments->handle($gateway, $result);
+
+        if ($partnerPayment === null && $payment !== null && $payment->isPartnerOwned()) {
+            $logs->handle(
+                gateway: $gateway,
+                direction: PaymentLog::INBOUND,
+                event: 'ipn',
+                payment: $payment,
+                outcome: 'partner_payment_on_platform_endpoint',
+                httpStatus: 200,
+                request: $request,
+            );
+
+            return response()->json(self::ACKNOWLEDGED);
+        }
 
         if ($payment === null) {
             /*
@@ -181,6 +234,19 @@ class PaymentWebhookController extends Controller
         SettleGatewayNotification::now($payment->id, $result->gatewayReference, 'ipn');
 
         return response()->json(self::ACKNOWLEDGED);
+    }
+
+    /**
+     * Whether a notification names this very payment: by our own reference, or by
+     * the provider transaction already recorded for it.
+     */
+    protected function namesPayment(Payment $payment, GatewayResult $result): bool
+    {
+        $named = $result->reference;
+
+        return is_string($named)
+            && $named !== ''
+            && in_array($named, array_filter([$payment->reference, $payment->gateway_reference]), true);
     }
 
     /**

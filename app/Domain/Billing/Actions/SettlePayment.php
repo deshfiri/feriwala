@@ -5,21 +5,25 @@ namespace App\Domain\Billing\Actions;
 use App\Domain\Account\Actions\ActivateAccountAutomatically;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Events\PartnerGatewayPaymentVerified;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\PartnerGatewayResolver;
 use App\Domain\Order\Actions\CancelUnpaidOrder;
 use App\Domain\Order\Actions\ConfirmOrderPayment;
+use App\Domain\Order\Actions\SynchronizeOnlineCollectionWithPayment;
 use App\Domain\Order\Enums\UnpaidOrderCancellation;
+use App\Domain\Order\Models\Order;
 use App\Domain\Package\Actions\ActivatePackageChange;
 use App\Domain\Package\Actions\ActivateRenewal;
 use App\Domain\Package\Models\UserPackage;
 use App\Domain\Wallet\Actions\CreditSettledPayment;
 use App\Integrations\Payment\Data\GatewayResult;
-use App\Integrations\Payment\PaymentGatewayManager;
 use App\Notifications\Billing\PaymentReceived;
 use App\Support\Concurrency\DistributedLock;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Log\LogManager;
+use Illuminate\Support\Facades\Event;
 use Throwable;
 
 /**
@@ -41,7 +45,6 @@ use Throwable;
 class SettlePayment
 {
     public function __construct(
-        protected PaymentGatewayManager $gateways,
         protected ActivateAccountAutomatically $automaticActivation,
         protected ActivateRenewal $renewals,
         protected ActivatePackageChange $packageChanges,
@@ -49,6 +52,8 @@ class SettlePayment
         protected CreditSettledPayment $walletCredits,
         protected ConfirmOrderPayment $orders,
         protected CancelUnpaidOrder $unpaidOrders,
+        protected PartnerGatewayResolver $partnerGateways,
+        protected SynchronizeOnlineCollectionWithPayment $onlineCollection,
         protected RecordPaymentLog $logs,
         protected DatabaseManager $database,
         protected DistributedLock $lock,
@@ -115,11 +120,14 @@ class SettlePayment
             );
         }
 
-        $gateway = $this->gateways->driver((string) $payment->gateway);
+        // A Partner-owned payment is verified with the exact credentials it was
+        // started with, never with Feriwala's and never with the Storefront's
+        // current ones (D36).
+        $gateway = $this->partnerGateways->driverFor($payment);
 
         // Authoritative. Throws rather than guessing if the gateway cannot be
         // reached, leaving the payment untouched for a later retry.
-        $result = $gateway->verify($gatewayReference);
+        $result = $this->partnerGateways->call($payment, fn () => $gateway->verify($gatewayReference));
 
         /*
          * What the gateway actually said, kept (§42). The authoritative answer
@@ -394,6 +402,17 @@ class SettlePayment
     public function applyPurpose(Payment $payment): void
     {
         /*
+         * The customer paid the Partner's own gateway (D36). Verification proves
+         * that; it does not make the order actionable, and it is not a payment
+         * Feriwala received — so none of what follows applies to it.
+         */
+        if ($payment->isPartnerOwned()) {
+            $this->applyPartnerPayment($payment);
+
+            return;
+        }
+
+        /*
          * A coupon held against this payment becomes a use, whatever the
          * payment was for (§9). Before the purpose switch, because the
          * redemption is a fact about the money arriving rather than about what
@@ -464,6 +483,53 @@ class SettlePayment
             PaymentPurpose::HostingCharge,
             PaymentPurpose::MaintenanceCharge => $this->flagUndeliverable($payment),
         };
+    }
+
+    /**
+     * What a verified Partner-gateway payment does, and what it deliberately does not (D36).
+     *
+     * It records the collection for reporting and announces — once, with
+     * identifiers only — that a Partner-owned payment is verified. It does **not**
+     * confirm the order, commit stock, credit a profit, debit a Wallet or tell
+     * anybody the money "landed": Banij's receivable has to be collected first,
+     * and the step that does that decides whether the order is released or held.
+     *
+     * Wrapped like every other consequence. The payment is real whatever becomes
+     * of the bookkeeping; a collection fact left unwritten is repaired when the
+     * order is delivered, and the announcement is found again by the sweep.
+     */
+    protected function applyPartnerPayment(Payment $payment): void
+    {
+        if ($payment->purpose !== PaymentPurpose::WebsiteOrder) {
+            $this->flagUndeliverable($payment);
+
+            return;
+        }
+
+        $order = Order::query()->where('payment_id', $payment->id)->first();
+
+        try {
+            if ($order !== null) {
+                $this->database->transaction(fn () => $this->onlineCollection->handle($order, $payment));
+            }
+        } catch (Throwable $throwable) {
+            $this->log->channel('payment')->critical('Could not record the collection fact for a verified Partner payment', [
+                'payment' => $payment->reference,
+                'error' => $throwable::class,
+            ]);
+        }
+
+        $this->logs->handle(
+            gateway: (string) $payment->gateway,
+            direction: PaymentLog::OUTBOUND,
+            event: 'settle',
+            payment: $payment,
+            amount: $payment->amount,
+            outcome: 'partner_payment_verified',
+            context: ['order' => $order?->reference],
+        );
+
+        Event::dispatch(new PartnerGatewayPaymentVerified($payment->id, $order?->id));
     }
 
     /**

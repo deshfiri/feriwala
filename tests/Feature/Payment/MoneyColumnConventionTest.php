@@ -47,7 +47,7 @@ const MONEY_COLUMN_INVENTORY = [
     'order_damage_dispatches' => ['delivery_charge'],
     'order_damages' => ['valuation_unit_price', 'max_recoverable_value', 'approved_loss_amount'],
     // What Banij is owed on a Partner-gateway Store Order, frozen at placement (D36).
-    'order_platform_receivable_lines' => ['unit_amount', 'line_amount'],
+    'order_platform_receivable_lines' => ['unit_amount', 'line_amount', 'assessed_amount'],
     'order_platform_receivables' => ['total'],
     // Only the column D36 added is registered here; the table's older money columns
     // are a separate, existing gap in this inventory.

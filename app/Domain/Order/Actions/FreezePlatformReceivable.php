@@ -79,6 +79,7 @@ class FreezePlatformReceivable
                         'quantity' => $line->quantity,
                         'unit_amount' => $line->unitAmount,
                         'line_amount' => $line->amount,
+                        'assessed_amount' => $line->assessedAmount,
                         'currency_code' => $breakdown->currency->value,
                         'rule_reference' => $line->ruleReference,
                     ]);

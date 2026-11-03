@@ -10,6 +10,8 @@ use App\Domain\Website\Models\Website;
 use App\Integrations\Payment\Contracts\PaymentGateway;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use InvalidArgumentException;
 
 /**
@@ -58,6 +60,55 @@ class PartnerGatewayResolver
             && $version->website_id === $website->id
             ? $version
             : null;
+    }
+
+    /**
+     * The driver for any payment: Feriwala's own for a Platform payment, and for a
+     * Partner-owned one the driver bound to the exact credentials it was started
+     * with.
+     *
+     * The one place a payment finds its gateway after it exists. Initiation,
+     * verification, the browser return, the notification and reconciliation all
+     * come here, so none of them can reach a Partner payment through Feriwala's
+     * credentials, or through the Storefront's current ones.
+     *
+     * @throws GatewayUnavailable when a Partner payment's frozen version is not available
+     */
+    public function driverFor(Payment $payment): PaymentGateway
+    {
+        return $payment->isPartnerOwned()
+            ? $this->driverForPayment($payment)
+            : $this->gateways->driver((string) $payment->gateway);
+    }
+
+    /**
+     * Run a call to a Partner's provider without letting its error text escape.
+     *
+     * A provider's HTTP client error can carry the request address, and some
+     * providers take their credentials in the query string. For a Partner-owned
+     * payment those are turned into a plain "could not be reached" that names
+     * only the provider; the original is deliberately not chained, because its
+     * message is the thing being kept out. A Platform payment is called exactly
+     * as before.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $call
+     * @return T
+     *
+     * @throws GatewayUnavailable
+     */
+    public function call(Payment $payment, callable $call): mixed
+    {
+        if (! $payment->isPartnerOwned()) {
+            return $call();
+        }
+
+        try {
+            return $call();
+        } catch (ConnectionException|RequestException) {
+            throw GatewayUnavailable::forGateway((string) $payment->gateway, 'the gateway could not be reached');
+        }
     }
 
     /**

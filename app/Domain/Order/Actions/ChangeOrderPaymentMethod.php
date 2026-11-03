@@ -79,6 +79,12 @@ class ChangeOrderPaymentMethod
         /** @var Payment $payment */
         $payment = Payment::query()->findOrFail($order->payment_id);
 
+        // A payment taken at the Partner's own gateway is never moved to another
+        // one, in either direction (D36): the customer may be mid-payment there.
+        if ($payment->isPartnerOwned()) {
+            throw OrderRefused::partnerGatewayLocked();
+        }
+
         if ($order->status !== OrderStatus::PaymentPending) {
             throw OrderRefused::notAwaitingPayment();
         }

@@ -21,5 +21,7 @@ readonly class ReceivableLine
         public ?Money $unitAmount,
         public Money $amount,
         public string $ruleReference,
+        /** The tax as it was assessed, for a tax component: what it contributes may be less (tax already inside a price is not added again). */
+        public ?Money $assessedAmount = null,
     ) {}
 }

@@ -5,6 +5,7 @@ namespace App\Domain\Billing\Actions;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\PartnerGatewayResolver;
 use App\Domain\Billing\PaymentLogRedactor;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayResult;
@@ -55,6 +56,7 @@ class ReconcileGatewayPayments
 
     public function __construct(
         protected PaymentGatewayManager $gateways,
+        protected PartnerGatewayResolver $partnerGateways,
         protected SettlePayment $settle,
         protected RecordPaymentLog $logs,
         protected PaymentLogRedactor $redactor,
@@ -145,7 +147,15 @@ class ReconcileGatewayPayments
             return 'unchanged';
         }
 
-        $driver = $this->gateways->driver($gateway);
+        // Asked with the credentials the payment was started with, so rotating
+        // or switching off a Partner's configuration later cannot hide a payment
+        // from reconciliation (D36). A frozen version that is gone leaves the
+        // payment as it is for a person, never silently reconciled another way.
+        try {
+            $driver = $this->partnerGateways->driverFor($payment);
+        } catch (GatewayUnavailable) {
+            return 'unchanged';
+        }
 
         /*
          * Only providers that publish a status lookup. bKash has none — its
@@ -159,7 +169,7 @@ class ReconcileGatewayPayments
 
         try {
             // A provider that issued its own attempt id is asked by that id.
-            $result = $driver->status($payment->gateway_reference ?: $payment->reference);
+            $result = $this->partnerGateways->call($payment, fn () => $driver->status($payment->gateway_reference ?: $payment->reference));
         } catch (GatewayUnavailable $exception) {
             /*
              * Could not ask. Nothing is recorded against the payment and

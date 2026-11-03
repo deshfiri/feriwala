@@ -4,9 +4,10 @@ namespace App\Domain\Order\Actions;
 
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
-use App\Domain\Billing\Enums\GatewayOwnership;
+use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Catalog\Models\ProductAttributeValue;
 use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Enums\ReservationKind;
@@ -33,8 +34,6 @@ use App\Domain\Website\CheckoutVerification;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Website\Queries\ResolveWebsitePriceRule;
-use App\Integrations\Payment\Gateways\GatewayCredentials;
-use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Concurrency\DistributedLock;
 use App\Support\Concurrency\Exceptions\LockTimeout;
 use App\Support\Money\Money;
@@ -87,7 +86,6 @@ class PlaceWebsiteOrder
         protected RecordWebsiteCustomer $customers,
         protected RecordPaymentFromQuote $payments,
         protected PartnerStockAvailability $stock,
-        protected PaymentGatewayManager $gateways,
         protected StockReservations $reservations,
         protected CheckoutVerification $verification,
         protected ConfirmCodOrder $codConfirmation,
@@ -97,6 +95,8 @@ class PlaceWebsiteOrder
         protected WholesalePriceResolver $wholesalePrices,
         protected ResolveWebsitePriceRule $priceRules,
         protected Entitlements $entitlements,
+        protected ChooseWebsiteOrderGateway $gatewayChoice,
+        protected RecordPaymentLog $paymentLogs,
     ) {}
 
     /**
@@ -255,20 +255,42 @@ class PlaceWebsiteOrder
          * recorded all the same, so the order has the one payment every order
          * has and §28 has something to settle against.
          */
-        $payment->forceFill($submission->isCashOnDelivery()
-            ? ['expires_at' => $this->paymentDeadline($reservations, $submission->reservationKind())]
-            : [
-                'gateway' => $gateway = $this->rules->gatewayFor($submission->gateway, $quote->currency),
-                'gateway_mode' => $this->gateways->driver($gateway)->isSandbox()
-                    ? GatewayCredentials::SANDBOX
-                    : GatewayCredentials::LIVE,
-                // Whose gateway was paid, frozen now and never inferred later (D36).
-                // Feriwala's own gateway is the only one an order is placed with here.
-                'gateway_ownership' => GatewayOwnership::Platform,
-                'funds_destination' => 'platform',
+        if ($submission->isCashOnDelivery()) {
+            $payment->forceFill(['expires_at' => $this->paymentDeadline($reservations, $submission->reservationKind())])->save();
+        } else {
+            /*
+             * Whose gateway the customer pays, decided once, here, before any
+             * gateway is contacted (D36). For a Partner's own gateway the
+             * receivable snapshot has already been written by the time this
+             * returns, so the payment is never stamped Partner-owned without it —
+             * and whose gateway it is, with the exact configuration version, is
+             * frozen on the payment now and never inferred later.
+             */
+            $choice = $this->gatewayChoice->handle($website, $order, $quote, $reservations, $submission->gateway);
+
+            $payment->forceFill([
+                'gateway' => $choice->gateway,
+                'gateway_mode' => $choice->mode,
+                'gateway_ownership' => $choice->ownership,
+                'funds_destination' => $choice->ownership->value,
                 'website_id' => $website->id,
+                'partner_gateway_configuration_version_id' => $choice->versionId,
                 'expires_at' => $this->paymentDeadline($reservations, $submission->reservationKind()),
             ])->save();
+
+            if ($choice->fallbackReason !== null) {
+                // Why a Storefront that has its own gateway used Feriwala's. A
+                // name from a fixed list and the provider's name: nothing else.
+                $this->paymentLogs->handle(
+                    gateway: $choice->gateway,
+                    direction: PaymentLog::OUTBOUND,
+                    event: 'partner_gateway_not_used',
+                    payment: $payment,
+                    outcome: $choice->fallbackReason->value,
+                    context: ['reason' => $choice->fallbackReason->value, 'partner_provider' => $choice->partnerProvider],
+                );
+            }
+        }
 
         $order->recordPlacement(
             new StatusChange(

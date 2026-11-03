@@ -365,6 +365,8 @@ return [
         'not_awaiting_payment' => 'This order is no longer waiting for payment.',
         'payment_window_closed' => 'The time to pay for this order has run out. Place the order again from your cart.',
         'payment_in_flight' => 'Your payment is still being confirmed. Wait for the result before changing this order.',
+        'partner_gateway_not_ready' => 'This payment cannot be started right now. Please try again shortly.',
+        'partner_gateway_locked' => 'This order is being paid through the shop\'s own payment gateway, so its payment method cannot be changed.',
         'busy' => 'Many people are ordering the same stock right now. Try again in a moment.',
     ],
 

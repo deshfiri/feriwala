@@ -6,10 +6,12 @@ use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\PartnerGatewayResolver;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\OrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderPlatformReceivable;
 use App\Integrations\Payment\Data\PaymentIntent;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\GatewayNavigation;
@@ -40,6 +42,7 @@ class InitiateOrderPayment
 {
     public function __construct(
         protected PaymentGatewayManager $gateways,
+        protected PartnerGatewayResolver $partnerGateways,
         protected RecordPaymentLog $logs,
         protected DistributedLock $lock,
     ) {}
@@ -87,21 +90,40 @@ class InitiateOrderPayment
         }
 
         $gateway = (string) $payment->gateway;
+        $partnerOwned = $payment->isPartnerOwned();
 
-        if (! in_array($gateway, $this->gateways->availableFor($payment->amount->currency), true)) {
+        if ($partnerOwned) {
+            /*
+             * Banij's receivable was frozen when the order was placed, or this
+             * payment would never have been Partner-owned. If it is somehow not
+             * there, the gateway is not contacted at all — and the payment is not
+             * moved to Feriwala's gateway either: it stays what it was made.
+             */
+            if (! OrderPlatformReceivable::query()->where('order_id', $order->id)->exists()) {
+                throw OrderRefused::partnerGatewayNotReady();
+            }
+        } elseif (! in_array($gateway, $this->gateways->availableFor($payment->amount->currency), true)) {
+            // A Partner payment keeps the version it was made with; whether
+            // Feriwala's own gateway is on says nothing about it.
             throw OrderRefused::paymentMethodUnavailable();
         }
 
         try {
-            $redirect = $this->gateways->driver($gateway)->initiate(
+            $driver = $this->partnerGateways->driverFor($payment);
+
+            $redirect = $this->partnerGateways->call($payment, fn () => $driver->initiate(
                 PaymentIntent::forPayment(
                     $payment,
                     successUrl: route($this->returnRoute($order, 'return'), $order->public_id),
                     failUrl: route($this->returnRoute($order, 'failed'), $order->public_id),
                     cancelUrl: route($this->returnRoute($order, 'cancelled'), $order->public_id),
-                    ipnUrl: route('webhooks.payment', $gateway),
+                    // A Partner's provider notifies an address that names the payment,
+                    // because only the payment says whose credentials can verify it.
+                    ipnUrl: $partnerOwned
+                        ? route('webhooks.partner-payment', [$gateway, $payment->public_id])
+                        : route('webhooks.payment', $gateway),
                 ),
-            );
+            ));
         } catch (GatewayUnavailable|ConnectionException $exception) {
             /*
              * Refused or unreachable, it is the same answer to the buyer: the
@@ -116,7 +138,15 @@ class InitiateOrderPayment
                 payment: $payment,
                 amount: $payment->amount,
                 outcome: 'unavailable',
-                context: ['error' => $exception->getMessage(), 'order' => $order->reference],
+                // What a transport error says can include the address it called,
+                // and some providers take credentials in it: for a Partner's
+                // gateway only our own wording is kept.
+                context: [
+                    'error' => $partnerOwned && ! $exception instanceof GatewayUnavailable
+                        ? 'the gateway could not be reached'
+                        : $exception->getMessage(),
+                    'order' => $order->reference,
+                ],
                 request: $request,
             );
 

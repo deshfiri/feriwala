@@ -297,12 +297,6 @@ describe('what it refuses rather than guess', function () {
             ->toThrow(PlatformReceivableRefused::class, 'Line 2');
     });
 
-    it('refuses a Conditional account', function () {
-        $order = receivableOrder([['line_total' => '1200.00', 'platform_retained' => '1000.00']], orderOverrides: ['account_type' => AccountType::Conditional]);
-
-        expect(fn () => receivableCalculate($order))->toThrow(PlatformReceivableRefused::class);
-    });
-
     it('refuses an order that is not a Store Order', function () {
         $order = receivableOrder([['line_total' => '1200.00', 'platform_retained' => '1000.00']], orderOverrides: [
             'source' => OrderSource::ManualEntry,
@@ -381,6 +375,42 @@ describe('freezing it', function () {
         expect($delivery->order_item_id)->toBeNull()
             ->and($delivery->tax_mode)->toBe('exclusive')
             ->and($delivery->line_amount->toDecimal())->toBe('15.00');
+    });
+
+    it('keeps the tax that was assessed, apart from what it adds to the receivable', function () {
+        // 13.04 of tax inside a 100 delivery charge, and 156.52 inside the product's price.
+        $inclusive = receivableOrder(
+            [['line_total' => '1200.00', 'platform_retained' => '1000.00', 'tax_included' => '156.52', 'tax_mode' => 'inclusive']],
+            delivery: '100.00',
+            deliveryTaxIncluded: '13.04',
+        );
+        $receivable = app(FreezePlatformReceivable::class)->handle($inclusive, receivableQuote($inclusive, receivableTax('13.04', TaxMode::Inclusive, '86.96')));
+
+        $delivery = $receivable->lines->firstWhere('component', ReceivableComponent::DeliveryTax);
+        $product = $receivable->lines->firstWhere('component', ReceivableComponent::ProductTax);
+
+        expect($delivery->tax_mode)->toBe('inclusive')
+            // Already inside the delivery charge: it adds nothing, and is still the tax charged.
+            ->and($delivery->line_amount->toDecimal())->toBe('0.00')
+            ->and($delivery->assessed_amount->toDecimal())->toBe('13.04')
+            ->and($product->assessed_amount->toDecimal())->toBe('156.52')
+            ->and($receivable->total->toDecimal())->toBe('1256.52');
+
+        // Added on top: it is both assessed and added.
+        $exclusive = receivableOrder(
+            [['line_subtotal' => '1200.00', 'line_total' => '1380.00', 'platform_retained' => '1000.00', 'tax' => '180.00', 'tax_mode' => 'exclusive']],
+            delivery: '100.00',
+            deliveryTaxAdded: '15.00',
+        );
+        $added = app(FreezePlatformReceivable::class)->handle($exclusive, receivableQuote($exclusive, receivableTax('15.00', TaxMode::Exclusive)));
+        $addedLine = $added->lines->firstWhere('component', ReceivableComponent::DeliveryTax);
+
+        expect($addedLine->line_amount->toDecimal())->toBe('15.00')
+            ->and($addedLine->assessed_amount->toDecimal())->toBe('15.00')
+            ->and($added->total->toDecimal())->toBe('1295.00');
+
+        // Components that are not tax carry no assessed figure.
+        expect($added->lines->firstWhere('component', ReceivableComponent::DeliveryCharge)->assessed_amount)->toBeNull();
     });
 
     it('answers a repeat with the record already there and writes nothing more', function () {

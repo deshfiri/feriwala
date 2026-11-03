@@ -4,6 +4,7 @@ use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Actions\ActivateAccount;
 use App\Domain\Account\Actions\EvaluateActivationReadiness;
 use App\Domain\Account\Enums\AccountStatus;
+use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Address\Actions\SaveSharedAddress;
 use App\Domain\Address\Enums\AddressOwnerType;
@@ -12,11 +13,14 @@ use App\Domain\Address\Enums\SupplierAddressType;
 use App\Domain\Address\Models\SharedAddress;
 use App\Domain\Bank\Models\BdBank;
 use App\Domain\Bank\Models\BdBankBranch;
+use App\Domain\Billing\Actions\ConfigurePartnerGatewayAvailability;
+use App\Domain\Billing\Actions\SavePartnerGateway;
 use App\Domain\Billing\Enums\AllocationType;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\FeeRule;
+use App\Domain\Billing\Models\PartnerGatewayConfigurationVersion;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Catalog\Enums\AccountScope;
 use App\Domain\Catalog\Enums\PackageScope;
@@ -33,11 +37,15 @@ use App\Domain\Inventory\Actions\ReceivePartnerPurchase;
 use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
 use App\Domain\Inventory\Models\PartnerStockItem;
+use App\Domain\Inventory\Models\StockItem;
+use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\PartnerStock;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Location\Enums\BdLocationType;
 use App\Domain\Location\Models\BdLocation;
+use App\Domain\Order\Actions\PlaceWebsiteOrder;
+use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderReturn;
@@ -54,6 +62,8 @@ use App\Domain\Referral\Enums\ReferralTrigger;
 use App\Domain\Referral\Enums\RewardType;
 use App\Domain\Referral\Models\ReferralPlan;
 use App\Domain\Referral\ReferralSettings;
+use App\Domain\Settings\Enums\SettingType;
+use App\Domain\Settings\SettingsRepository;
 use App\Domain\Supplier\Actions\SetSupplierOfferRates;
 use App\Domain\Supplier\Enums\ListingStatus;
 use App\Domain\Supplier\Enums\OfferStatus;
@@ -69,7 +79,11 @@ use App\Domain\Wallet\Models\Wallet;
 use App\Domain\Wallet\WalletService;
 use App\Domain\Website\Actions\ManageWebsiteCredentials;
 use App\Domain\Website\Api\RequestSignature;
+use App\Domain\Website\CodTerms;
+use App\Domain\Website\Data\WebsiteCustomerDetails;
 use App\Domain\Website\Enums\CredentialScope;
+use App\Domain\Website\Enums\WebsiteProductStatus;
+use App\Domain\Website\Enums\WebsiteSyncStatus;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCredential;
 use App\Domain\Website\Models\WebsiteProduct;
@@ -79,13 +93,17 @@ use App\Integrations\Store\Support\ExactJson;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Monolog\Handler\TestHandler;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
@@ -1152,4 +1170,292 @@ function externalStoreRecordOrder(ExternalStore $store, array $overrides = []): 
 function externalStoreSignature(string $body, string $secret = 'webhook-secret'): string
 {
     return 'sha256='.hash_hmac('sha256', $body, $secret);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Partner-owned gateway checkout (D36, Model B)
+|--------------------------------------------------------------------------
+|
+| A Non-Conditional Partner selling from central stock, with their own SSLCommerz
+| account switched on by Admin. The provider is faked and never contacted: it
+| answers from `test()->provider`, and only when the request carries the very
+| credentials the payment was started with — so a test that rotates or switches
+| off the Partner's configuration proves a payment still resolves its frozen
+| version, because the provider would refuse any other.
+|
+*/
+
+/**
+ * Sets `account`, `owner`, `website`, `product`, `selection`, `admin` and `provider`.
+ *
+ * Feriwala's own SSLCommerz credentials are `platform-store` / `platform-pass`;
+ * the Partner's are `partner-store` / `partner-secret-pass`. Delivery is ৳60.
+ */
+function partnerCheckoutWorld(bool $withPartnerGateway = true): void
+{
+    test()->seed(RolesAndPermissionsSeeder::class);
+
+    $settings = app(SettingsRepository::class);
+    $settings->define(CodTerms::ENABLED, 'orders', SettingType::Boolean, true);
+    $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
+    $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'platform-store', isEncrypted: true);
+    $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'platform-pass', isEncrypted: true);
+    websiteTestFee(FeeType::WebsiteDelivery, 6000);
+
+    test()->account = websiteTestAccount(extra: [
+        PackageFeature::DropshippingEnabled->value => '1',
+        PackageFeature::ProductPublishLimit->value => null,
+    ]);
+    test()->account->forceFill(['account_type' => AccountType::NonConditional])->save();
+    test()->owner = test()->account->owner;
+    test()->website = Website::factory()->forAccount(test()->account)->active()->create();
+    test()->product = websiteTestProduct();
+    test()->selection = partnerCheckoutSelection(test()->product);
+
+    $warehouse = Warehouse::create(['code' => 'DHK', 'name' => 'Dhaka', 'is_default' => true]);
+    StockItem::create(['warehouse_id' => $warehouse->id, 'product_id' => test()->product->id, 'available' => 50]);
+
+    test()->admin = testPlatformStaff(PlatformRole::SuperAdmin);
+    test()->provider = new ArrayObject;
+    test()->providerDown = false;
+
+    partnerCheckoutFakeProviders();
+
+    if ($withPartnerGateway) {
+        partnerCheckoutEnable();
+        partnerCheckoutConfigure();
+    }
+}
+
+function partnerCheckoutSelection(Product $product, string $price = '2600.00'): WebsiteProduct
+{
+    return WebsiteProduct::create([
+        'website_id' => test()->website->id,
+        'business_account_id' => test()->account->id,
+        'product_id' => $product->id,
+        'status' => WebsiteProductStatus::Published,
+        'sync_status' => WebsiteSyncStatus::Pending,
+        'currency_code' => 'BDT',
+        'price' => Money::fromDecimal($price, Currency::BDT),
+        'published_at' => now(),
+    ]);
+}
+
+/**
+ * @param  list<string>  $providers
+ */
+function partnerCheckoutEnable(array $providers = ['sslcommerz'], bool $enabled = true): void
+{
+    app(ConfigurePartnerGatewayAvailability::class)->handle(test()->admin, $enabled, $providers);
+}
+
+function partnerCheckoutConfigure(string $store = 'partner-store', string $password = 'partner-secret-pass', string $mode = 'sandbox'): PartnerGatewayConfigurationVersion
+{
+    return app(SavePartnerGateway::class)->handle(
+        test()->owner,
+        test()->website,
+        'sslcommerz',
+        $mode,
+        ['store_id' => $store, 'store_password' => $password],
+    );
+}
+
+/**
+ * A website order for `$lines` (selection, quantity), placed the way a storefront places one.
+ *
+ * @param  list<array{0: WebsiteProduct, 1: int}>|null  $lines  two units of the default selection when null
+ */
+function partnerCheckoutPlace(string $method = 'online', ?string $gateway = null, ?array $lines = null): Order
+{
+    $lines ??= [[test()->selection, 2]];
+    $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
+    test()->website->forceFill(['sms_verification_enabled' => false])->save();
+
+    $subtotal = Money::zero(Currency::BDT);
+
+    foreach ($lines as [$selection, $quantity]) {
+        $subtotal = $subtotal->plus($selection->price->multipliedBy($quantity));
+    }
+
+    $shipping = Money::fromDecimal('60.00', Currency::BDT);
+
+    [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
+        reference: 'SF-PC-'.Str::upper(Str::random(6)),
+        idempotencyKey: (string) Str::uuid(),
+        customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+88017'.random_int(10000000, 99999999)),
+        shippingAddress: $address,
+        billingAddress: $address,
+        items: array_map(fn (array $line) => ['sku' => $line[0]->product->sku, 'quantity' => $line[1]], $lines),
+        claimedUnitPrices: array_map(fn (array $line) => $line[0]->price, $lines),
+        claimedTotals: [
+            'subtotal' => $subtotal,
+            'discount' => Money::zero(Currency::BDT),
+            'shipping' => $shipping,
+            'tax' => Money::zero(Currency::BDT),
+            'grand_total' => $subtotal->plus($shipping),
+        ],
+        paymentMethod: $method,
+        gateway: $gateway,
+    ));
+
+    return $order->refresh();
+}
+
+/**
+ * What the faked provider knows about, answered only to the credentials it was told.
+ */
+function partnerCheckoutFakeProviders(): void
+{
+    Http::fake([
+        '*/gwprocess/v4/api.php' => fn () => test()->providerDown
+            ? Http::response([], 503)
+            : Http::response([
+                'status' => 'SUCCESS',
+                'GatewayPageURL' => 'https://pay.test/go/'.Str::random(6),
+                'sessionkey' => 'sess-'.Str::random(6),
+            ]),
+        '*/validator/api/validationserverAPI.php*' => fn ($request) => Http::response(partnerCheckoutValidation($request)),
+        '*/validator/api/merchantTransIDvalidationAPI.php*' => fn ($request) => Http::response(partnerCheckoutStatus($request)),
+    ]);
+}
+
+/**
+ * @return array<string, string>
+ */
+function partnerCheckoutQuery(Request $request): array
+{
+    parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+    /** @var array<string, string> $query */
+    return $query;
+}
+
+/**
+ * @param  array<string, mixed>  $record
+ * @param  array<string, string>  $query
+ */
+function partnerCheckoutAnswersTo(array $record, array $query): bool
+{
+    return ($record['store_id'] ?? null) === ($query['store_id'] ?? null)
+        && ($record['store_passwd'] ?? null) === ($query['store_passwd'] ?? null);
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function partnerCheckoutValidation(Request $request): array
+{
+    $query = partnerCheckoutQuery($request);
+    $record = test()->provider[$query['val_id'] ?? ''] ?? null;
+
+    if ($record === null || ! partnerCheckoutAnswersTo($record, $query)) {
+        return ['status' => 'INVALID_TRANSACTION'];
+    }
+
+    return [
+        'status' => $record['status'],
+        'tran_id' => $record['tran_id'],
+        'currency_amount' => $record['amount'],
+        'currency_type' => $record['currency'],
+        'bank_tran_id' => $record['bank_tran_id'],
+        'store_amount' => $record['amount'],
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function partnerCheckoutStatus(Request $request): array
+{
+    $query = partnerCheckoutQuery($request);
+    $elements = [];
+
+    foreach (test()->provider->getArrayCopy() as $valId => $record) {
+        if ($record['tran_id'] === ($query['tran_id'] ?? null) && partnerCheckoutAnswersTo($record, $query)) {
+            $elements[] = [
+                'status' => $record['status'],
+                'val_id' => $valId,
+                'currency_amount' => $record['amount'],
+                'currency_type' => $record['currency'],
+                'bank_tran_id' => $record['bank_tran_id'],
+            ];
+        }
+    }
+
+    return ['APIConnect' => 'DONE', 'no_of_trans_found' => count($elements), 'element' => $elements];
+}
+
+/**
+ * The customer pays at the provider: the provider now knows this transaction, and
+ * will confirm it to the credentials the payment was started with.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return string the provider's own transaction id
+ */
+function partnerCheckoutPays(Payment $payment, array $overrides = []): string
+{
+    $credentials = $payment->partnerGatewayVersion?->credentials ?? ['store_id' => 'platform-store', 'store_password' => 'platform-pass'];
+    $valId = (string) ($overrides['val_id'] ?? 'VAL-'.Str::upper(Str::random(8)));
+
+    test()->provider[$valId] = [
+        'store_id' => $credentials['store_id'],
+        'store_passwd' => $credentials['store_password'],
+        'status' => 'VALID',
+        'tran_id' => $payment->reference,
+        'amount' => $payment->amount->toDecimal(),
+        'currency' => 'BDT',
+        'bank_tran_id' => 'BANK-'.Str::upper(Str::random(8)),
+        ...$overrides,
+    ];
+
+    return $valId;
+}
+
+/**
+ * An IPN as SSLCommerz signs it, with the store password of whoever signs it.
+ *
+ * @param  array<string, string>  $fields
+ * @return array<string, string>
+ */
+function partnerCheckoutSigned(array $fields, string $password): array
+{
+    $pairs = [...$fields, 'store_passwd' => md5($password)];
+    ksort($pairs);
+
+    $built = [];
+
+    foreach ($pairs as $key => $value) {
+        $built[] = $key.'='.$value;
+    }
+
+    return [...$fields, 'verify_key' => implode(',', array_keys($fields)), 'verify_sign' => md5(implode('&', $built))];
+}
+
+/**
+ * Every message a payment log channel was given, as one searchable string.
+ */
+function partnerCheckoutCaptureLogs(): TestHandler
+{
+    $handler = new TestHandler;
+
+    foreach (['payment', 'wallet'] as $channel) {
+        Log::channel($channel)->getLogger()->pushHandler($handler);
+    }
+
+    return $handler;
+}
+
+function partnerCheckoutLogText(TestHandler $handler): string
+{
+    return (string) json_encode(array_map(fn ($record) => [$record->message, $record->context], $handler->getRecords()));
+}
+
+/**
+ * Whether a recorded provider request carried this store id, in its query or its form body.
+ */
+function partnerCheckoutSentStore(string $storeId): bool
+{
+    return Http::recorded()->contains(fn (array $pair) => ($pair[0]->data()['store_id'] ?? null) === $storeId
+        || (partnerCheckoutQuery($pair[0])['store_id'] ?? null) === $storeId);
 }

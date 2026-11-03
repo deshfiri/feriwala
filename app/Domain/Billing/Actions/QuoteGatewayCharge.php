@@ -4,6 +4,7 @@ namespace App\Domain\Billing\Actions;
 
 use App\Domain\Billing\ExchangeRates;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Billing\PartnerGatewayResolver;
 use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
 use App\Support\Money\Money;
@@ -30,6 +31,7 @@ class QuoteGatewayCharge
 {
     public function __construct(
         protected PaymentGatewayManager $gateways,
+        protected PartnerGatewayResolver $partnerGateways,
         protected ExchangeRates $rates,
     ) {}
 
@@ -42,6 +44,18 @@ class QuoteGatewayCharge
     {
         $gateway = (string) $payment->gateway;
         $currency = $payment->amount->currency;
+
+        // A Partner is paid exactly what the customer was charged: never an
+        // exchange-rate conversion Feriwala would have to quote and own (D36).
+        // Whether the provider takes this currency was settled before the payment
+        // existed; it is checked again against the credentials it froze.
+        if ($payment->isPartnerOwned()) {
+            if (! in_array($currency, $this->partnerGateways->driverFor($payment)->supportedCurrencies(), true)) {
+                throw GatewayUnavailable::forGateway($gateway, "it cannot take {$currency->value}");
+            }
+
+            return $payment->amount;
+        }
 
         $charge = $this->gateways->chargeCurrencyFor($gateway, $currency);
 

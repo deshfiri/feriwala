@@ -115,6 +115,18 @@ class OrderRefused extends RuntimeException
         return new self(__('orders.refused.payment_in_flight'), 'order');
     }
 
+    /** A Partner-owned payment whose receivable snapshot is missing: the gateway is not contacted (D36). */
+    public static function partnerGatewayNotReady(): self
+    {
+        return new self(__('orders.refused.partner_gateway_not_ready'), 'order');
+    }
+
+    /** A payment taken at the Partner's own gateway is never moved to another one (D36). */
+    public static function partnerGatewayLocked(): self
+    {
+        return new self(__('orders.refused.partner_gateway_locked'), 'payment_method');
+    }
+
     /** Too many people are ordering the same stock at once; trying again works. */
     public static function busy(): self
     {

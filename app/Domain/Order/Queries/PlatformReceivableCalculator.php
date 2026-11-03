@@ -50,10 +50,10 @@ class PlatformReceivableCalculator
             throw PlatformReceivableRefused::notAStoreOrder();
         }
 
-        if (! $order->isNonConditional()) {
-            throw PlatformReceivableRefused::notNonConditional();
-        }
-
+        // Whether the account is Non-Conditional is not asked of the order: a Store
+        // Order does not snapshot it. It does not need to be — the frozen amount a
+        // line is built from is only ever written for a Non-Conditional account's
+        // line filled from central stock, so a line without one is refused below.
         $currency = $delivery->currency;
 
         if ($order->currency_code !== $currency->value) {
@@ -115,6 +115,7 @@ class PlatformReceivableCalculator
                     unitAmount: null,
                     amount: $tax,
                     ruleReference: 'order_item.recoverable_amount:tax',
+                    assessedAmount: $tax,
                 );
             }
 
@@ -165,6 +166,10 @@ class PlatformReceivableCalculator
                 unitAmount: null,
                 amount: $deliveryAddedTax,
                 ruleReference: 'quote.delivery_tax',
+                // The tax as it was assessed, whichever way: when it is already
+                // inside the delivery charge it contributes nothing more, but it
+                // is still the tax that was charged.
+                assessedAmount: $deliveryTax->tax,
             );
         }
 

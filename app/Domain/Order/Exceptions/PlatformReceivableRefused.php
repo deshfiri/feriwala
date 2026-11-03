@@ -18,11 +18,6 @@ class PlatformReceivableRefused extends RuntimeException
         return new self('Only a Store Order has a platform receivable.');
     }
 
-    public static function notNonConditional(): self
-    {
-        return new self('Only a Non-Conditional account sells with a platform receivable.');
-    }
-
     public static function noLines(): self
     {
         return new self('An order with no lines has no platform receivable.');

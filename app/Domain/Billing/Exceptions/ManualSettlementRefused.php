@@ -25,6 +25,17 @@ class ManualSettlementRefused extends RuntimeException
         return new self("This payment is {$status}, so it cannot be marked paid by hand.");
     }
 
+    /**
+     * The customer paid the Partner's own gateway (D36). Whether that money arrived
+     * is between the Partner and their provider, and only Feriwala's own
+     * verification with the Partner's frozen credentials can say so: a person here
+     * cannot attest to a payment Feriwala did not receive.
+     */
+    public static function partnerOwned(): self
+    {
+        return new self('This payment was made to the Partner\'s own gateway, so it cannot be marked paid by hand. It is confirmed only by verifying it with that gateway.');
+    }
+
     public static function referenceTaken(): self
     {
         return new self('That gateway transaction already belongs to another payment.');

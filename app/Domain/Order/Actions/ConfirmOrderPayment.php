@@ -86,6 +86,18 @@ class ConfirmOrderPayment
             return null;
         }
 
+        /*
+         * A payment made to the Partner's own gateway never confirms the order by
+         * itself (D36). Verifying it proves the customer paid the Partner; the
+         * order becomes actionable only once Banij's receivable has been collected
+         * from the Partner's Wallet, and that step is its own. Until it exists, a
+         * verified Partner payment leaves the order exactly as it is — waiting —
+         * whoever asks, including the sweep that confirms paid-but-waiting orders.
+         */
+        if ($payment->isPartnerOwned()) {
+            return $order;
+        }
+
         $wasWaiting = $order->status === OrderStatus::PaymentPending;
 
         try {

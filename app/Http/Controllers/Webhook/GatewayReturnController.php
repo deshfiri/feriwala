@@ -6,6 +6,7 @@ use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Actions\VerifyGatewayReturn;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\PartnerGatewayResolver;
 use App\Domain\Billing\Queries\ResolveNotifiedPayment;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
@@ -47,6 +48,7 @@ class GatewayReturnController extends Controller
 {
     public function __construct(
         protected PaymentGatewayManager $gateways,
+        protected PartnerGatewayResolver $partnerGateways,
         protected ResolveNotifiedPayment $payments,
         protected VerifyGatewayReturn $verify,
         protected RecordPaymentLog $logs,
@@ -186,7 +188,9 @@ class GatewayReturnController extends Controller
             return [null, null];
         }
 
-        $result = $this->read($payment->gateway, $request);
+        // Read the way the payment's own gateway reads it: a Partner-owned
+        // payment with the credentials it was started with (D36).
+        $result = $this->readFor($payment, $request);
 
         if ($result === null || $this->payments->handle($payment->gateway, $result)?->id !== $payment->id) {
             return [null, $result];
@@ -278,6 +282,15 @@ class GatewayReturnController extends Controller
         }
 
         return [$payment, $result];
+    }
+
+    protected function readFor(Payment $payment, Request $request): ?GatewayResult
+    {
+        try {
+            return $this->partnerGateways->driverFor($payment)->handleCallback($request);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     protected function read(string $gateway, Request $request): ?GatewayResult

@@ -5,9 +5,11 @@ namespace App\Domain\Billing\Actions;
 use App\Domain\Billing\Jobs\SettleGatewayNotification;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
+use App\Domain\Billing\PartnerGatewayResolver;
 use App\Integrations\Payment\Contracts\PaymentGateway;
 use App\Integrations\Payment\Data\GatewayCapability;
 use App\Integrations\Payment\Data\GatewayResult;
+use App\Integrations\Payment\Exceptions\GatewayUnavailable;
 use App\Integrations\Payment\PaymentGatewayManager;
 use Illuminate\Http\Request;
 use Throwable;
@@ -34,6 +36,7 @@ class VerifyGatewayReturn
 {
     public function __construct(
         protected PaymentGatewayManager $gateways,
+        protected PartnerGatewayResolver $partnerGateways,
         protected RecordPaymentLog $logs,
     ) {}
 
@@ -54,7 +57,14 @@ class VerifyGatewayReturn
             return false;
         }
 
-        $driver = $this->gateways->driver($gateway);
+        // The credentials the payment was started with, not whatever the
+        // Storefront holds now (D36). A frozen version that cannot be resolved
+        // asks for nothing: a return can only ever ask, never conclude.
+        try {
+            $driver = $this->partnerGateways->driverFor($payment);
+        } catch (GatewayUnavailable) {
+            return false;
+        }
 
         if (! $driver->supports(GatewayCapability::Verify)) {
             return false;

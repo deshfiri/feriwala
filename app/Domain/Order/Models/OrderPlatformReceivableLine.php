@@ -28,7 +28,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $description
  * @property int $quantity
  * @property Money|null $unit_amount
- * @property Money $line_amount
+ * @property Money $line_amount what this line adds to the receivable
+ * @property Money|null $assessed_amount the tax as it was assessed, on a tax component; may exceed `line_amount` when the tax was already inside the price
  * @property string $currency_code
  * @property string $rule_reference
  * @property CarbonImmutable $created_at
@@ -50,6 +51,7 @@ class OrderPlatformReceivableLine extends Model
             'quantity' => 'integer',
             'unit_amount' => MoneyCast::class,
             'line_amount' => MoneyCast::class,
+            'assessed_amount' => MoneyCast::class,
             'created_at' => 'immutable_datetime',
         ];
     }

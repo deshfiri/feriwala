@@ -1961,6 +1961,16 @@ Route::post('webhooks/payment/{gateway}', PaymentWebhookController::class)
     ->name('webhooks.payment');
 
 /*
+ * The same notification, for a payment made to a Partner's own gateway (D36).
+ * The address names the payment by its public id: that is what tells us whose
+ * frozen credentials can check the signature. Exempt from CSRF with the rest of
+ * `webhooks/payment/*`, and answered exactly as the endpoint above is.
+ */
+Route::post('webhooks/payment/{gateway}/{payment}', PaymentWebhookController::class)
+    ->middleware('throttle:payment-webhooks')
+    ->name('webhooks.partner-payment');
+
+/*
  * A partner's external store telling us about its orders (D29). The signature
  * over the raw body, under that store's own secret, is the only thing that
  * authenticates it; CSRF is exempted in bootstrap/app.php for the same reason
