@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * What Banij is owed on one Store Order, frozen when it was placed (D36).
@@ -30,6 +31,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $currency_code
  * @property Money $total
  * @property string $calculation_version
+ * @property string|null $account_type_at_placement the account's type when the decision was made; null on a receivable frozen before it was recorded
+ * @property string|null $eligibility_version
+ * @property string|null $gateway_ownership
  * @property CarbonImmutable $frozen_at
  * @property CarbonImmutable $created_at
  * @property-read Order $order
@@ -44,6 +48,9 @@ class OrderPlatformReceivable extends Model
 
     /** The formula these figures were worked out with. */
     public const CALCULATION_VERSION = 'v1';
+
+    /** The rule that decided this order may be paid to the Partner's own gateway. */
+    public const ELIGIBILITY_VERSION = 'd36.v1';
 
     public const UPDATED_AT = null;
 
@@ -88,6 +95,16 @@ class OrderPlatformReceivable extends Model
     public function website(): BelongsTo
     {
         return $this->belongsTo(Website::class);
+    }
+
+    /**
+     * Whether it has been collected from the Partner's Wallet — the one record about it that moves.
+     *
+     * @return HasOne<OrderReceivableCollection, $this>
+     */
+    public function collection(): HasOne
+    {
+        return $this->hasOne(OrderReceivableCollection::class, 'order_platform_receivable_id');
     }
 
     /**

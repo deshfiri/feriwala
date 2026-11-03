@@ -5,12 +5,14 @@ namespace App\Domain\Order\Actions;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
+use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Exceptions\StoreOrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderHoldReservation;
 use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
@@ -127,6 +129,23 @@ class CancelStoreOrder
                 continue;
             }
 
+            try {
+                $this->reservations->release($reservation, $order->reference.': '.$reason);
+            } catch (InventoryRefused) {
+                // Ended another way under its own lock since it was read.
+            }
+        }
+
+        // Stock set aside again for a Partner-gateway order after its first reservation
+        // lapsed is held by a reservation the line does not point at (D36).
+        $replacements = StockReservation::query()
+            ->whereIn('id', OrderHoldReservation::query()
+                ->whereIn('order_item_id', $order->items()->select('id'))
+                ->select('stock_reservation_id'))
+            ->where('status', StockReservationStatus::Active->value)
+            ->get();
+
+        foreach ($replacements as $reservation) {
             try {
                 $this->reservations->release($reservation, $order->reference.': '.$reason);
             } catch (InventoryRefused) {

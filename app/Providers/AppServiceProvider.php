@@ -2,13 +2,17 @@
 
 namespace App\Providers;
 
+use App\Domain\Billing\Events\PartnerGatewayPaymentVerified;
 use App\Domain\Billing\Models\RefundRequest;
 use App\Domain\Courier\Events\SteadfastStatusNeedsReview;
 use App\Domain\Notification\Listeners\BroadcastStoredNotification;
 use App\Domain\Order\Actions\SyncReturnRefund;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Wallet\Events\WalletCredited;
 use App\Listeners\AnnounceSteadfastReview;
+use App\Listeners\CollectPartnerReceivableOnVerifiedPayment;
 use App\Listeners\RecordEmailVerification;
+use App\Listeners\ReleasePartnerReceivablesOnWalletCredit;
 use App\Listeners\SecureAccountAfterPasswordReset;
 use App\Support\Security\PasswordPolicy;
 use Carbon\CarbonImmutable;
@@ -66,6 +70,14 @@ class AppServiceProvider extends ServiceProvider
 
         // A Steadfast parcel flagged for a person to look at is told to staff, once.
         Event::listen(SteadfastStatusNeedsReview::class, AnnounceSteadfastReview::class);
+
+        /*
+         * Banij's share of a Partner-gateway order is taken from the Partner's Wallet
+         * when the Partner's payment is verified and again whenever money arrives
+         * (D36). Both go through the same oldest-first path and are idempotent.
+         */
+        Event::listen(PartnerGatewayPaymentVerified::class, CollectPartnerReceivableOnVerifiedPayment::class);
+        Event::listen(WalletCredited::class, ReleasePartnerReceivablesOnWalletCredit::class);
 
         /*
          * A refund for returned goods tells its return what happened to the

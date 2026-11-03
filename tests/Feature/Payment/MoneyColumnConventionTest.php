@@ -49,6 +49,8 @@ const MONEY_COLUMN_INVENTORY = [
     // What Banij is owed on a Partner-gateway Store Order, frozen at placement (D36).
     'order_platform_receivable_lines' => ['unit_amount', 'line_amount', 'assessed_amount'],
     'order_platform_receivables' => ['total'],
+    // Whether that receivable has been collected from the Partner's Wallet (D36).
+    'order_receivable_collections' => ['amount'],
     // Only the column D36 added is registered here; the table's older money columns
     // are a separate, existing gap in this inventory.
     'order_proceeds_settlements' => ['payment_collected_amount'],

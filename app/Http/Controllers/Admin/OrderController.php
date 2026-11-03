@@ -234,6 +234,8 @@ class OrderController extends Controller
                 'cancellation_reason' => $record->cancellation_reason,
                 'held_at' => $record->held_at?->toIso8601String(),
                 'hold_reason' => $record->hold_reason,
+                // Whether Banij's share of a Partner-gateway order has been collected (D36); null for every other order.
+                'partner_collection' => $record->receivableCollection?->state()->toArray(),
                 'customer' => $record->customer,
                 'addresses' => [
                     'billing' => $record->billing_address,

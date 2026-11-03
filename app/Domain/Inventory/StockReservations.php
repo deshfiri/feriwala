@@ -18,6 +18,7 @@ use App\Domain\Supplier\Models\SupplierOffer;
 use App\Domain\Supplier\SupplierStockReservations;
 use App\Support\Concurrency\DistributedLock;
 use App\Support\Concurrency\Exceptions\LockTimeout;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
 use InvalidArgumentException;
@@ -357,6 +358,39 @@ class StockReservations
             $reservation->setRawAttributes($locked->getAttributes(), sync: true);
 
             return $locked;
+        }));
+    }
+
+    /**
+     * Keep an active reservation held until `$until`, and no longer (D36).
+     *
+     * An order waiting for a Partner's Wallet to cover Banij's share must not
+     * lose its stock to the ordinary expiry sweep while the deadline is still
+     * running. Only ever later, never earlier, and only while the reservation is
+     * still active: one that has already ended is not revived, and the caller
+     * sets stock aside again under a new reference instead. Idempotent.
+     *
+     * @return bool whether the reservation is active and now held to at least `$until`
+     */
+    public function extend(StockReservation $reservation, CarbonImmutable $until): bool
+    {
+        return $this->locks->run('inventory:reservation:'.$reservation->id, fn () => $this->database->transaction(function () use ($reservation, $until): bool {
+            /** @var StockReservation $locked */
+            $locked = StockReservation::query()->lockForUpdate()->findOrFail($reservation->id);
+
+            if ($locked->status !== StockReservationStatus::Active) {
+                $reservation->setRawAttributes($locked->getAttributes(), sync: true);
+
+                return false;
+            }
+
+            if ($locked->expires_at->lessThan($until)) {
+                $locked->forceFill(['expires_at' => $until])->save();
+            }
+
+            $reservation->setRawAttributes($locked->getAttributes(), sync: true);
+
+            return true;
         }));
     }
 

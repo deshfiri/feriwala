@@ -8,6 +8,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | resources/js/routes/**, resources/js/actions/** | .ai/rules/actions.md |
 | app/Domain/Cases/** | .ai/rules/cases.md |
 | resources/js/components/charts/**, resources/js/lib/chart.ts | .ai/rules/charts.md |
+| tests/Feature/Concurrency/** | .ai/rules/concurrency.md |
 | app/Http/Controllers/DashboardController.php | .ai/rules/controllers.md |
 | **/*.md | .ai/rules/general.md |
 | resources/js/** | .ai/rules/js.md |

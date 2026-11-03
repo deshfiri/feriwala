@@ -14,11 +14,12 @@ use App\Domain\Wallet\Enums\LedgerTransactionType;
 it('knows the direction of every trading type', function () {
     // Twenty-two of the twenty-six are one-directional by nature, and so is
     // each half of a balance conversion and of paying an order from the wallet,
-    // and each of the four charges a return, exchange or damage case posts (D35).
+    // each of the four charges a return, exchange or damage case posts (D35), and
+    // the platform's share of a Partner-gateway order (D36).
     $directed = collect(LedgerTransactionType::cases())
         ->reject(fn (LedgerTransactionType $type) => $type->isCorrection());
 
-    expect($directed)->toHaveCount(30);
+    expect($directed)->toHaveCount(31);
 
     foreach ($directed as $type) {
         expect($type->direction())->not->toBeNull();

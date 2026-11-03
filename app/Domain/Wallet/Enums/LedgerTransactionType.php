@@ -88,6 +88,17 @@ enum LedgerTransactionType: string
     case DamageDeliveryDebit = 'damage_delivery_debit';
 
     /**
+     * What Banij is owed on a Store Order its Partner was paid for through the
+     * Partner's own gateway (D36): the frozen receivable, taken from the Wallet in
+     * one debit before the order may go ahead.
+     *
+     * A debit only. When it is put right the reversal flow answers it with a
+     * {@see self::ReturnAdjustment} credit that points at this entry and goes back
+     * into the kinds of money it spent.
+     */
+    case PartnerGatewayReceivableDebit = 'partner_gateway_receivable_debit';
+
+    /**
      * The kind of money a credit of this type brings in, where that is not a
      * decision somebody has to make (D-new).
      *
@@ -164,6 +175,7 @@ enum LedgerTransactionType: string
             self::ExchangeDeliveryDebit,
             self::DamageLossDebit,
             self::DamageDeliveryDebit,
+            self::PartnerGatewayReceivableDebit,
             self::RefundDebit => LedgerDirection::Debit,
 
             // A correction goes whichever way the thing it corrects went.
@@ -254,6 +266,7 @@ enum LedgerTransactionType: string
             self::ExchangeDeliveryDebit => 'Exchange delivery charge',
             self::DamageLossDebit => 'Damage loss',
             self::DamageDeliveryDebit => 'Damaged-item delivery charge',
+            self::PartnerGatewayReceivableDebit => 'Platform share of a shop order',
         };
     }
 }

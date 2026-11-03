@@ -41,6 +41,15 @@ class AccountWithdrawalRefused extends RuntimeException
         return new self("Only {$available->toDecimal()} {$available->currency->value} is available for withdrawal.");
     }
 
+    /**
+     * A shop order paid to the Partner's own gateway is waiting for Banij's share
+     * to be taken from this Wallet (D36). Says which order and how much — never who bought it.
+     */
+    public static function receivableCollectionPending(string $orderReference, Money $amount): self
+    {
+        return new self("Order {$orderReference} is waiting for {$amount->toDecimal()} {$amount->currency->value} to be collected from your wallet before it can go ahead. New withdrawals resume once it is collected or its deadline has passed.");
+    }
+
     public static function illegalTransition(string $reference, string $currentStatusLabel): self
     {
         return new self("Withdrawal {$reference} is {$currentStatusLabel} and cannot move that way.");

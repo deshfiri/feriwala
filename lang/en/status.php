@@ -290,6 +290,22 @@ return [
         'expired' => 'Expired',
     ],
 
+    'partner_gateway_support' => [
+        'supported_tested' => 'Supported and tested',
+        'implemented_unverified' => 'Implemented, not yet verified',
+        'unsupported' => 'Not supported for Partner gateways',
+    ],
+
+    'receivable_collection' => [
+        'pending_collection' => 'Awaiting Wallet collection',
+        'wallet_insufficient' => 'Wallet insufficient',
+        'reservation_recovery_required' => 'Stock recovery required',
+        'collected' => 'Collected',
+        'deadline_expired_refund_required' => 'Expired, refund required',
+        'partially_reversed' => 'Partially reversed',
+        'reversed' => 'Reversed',
+    ],
+
     'wallet_transaction' => [
         'initiated' => 'Initiated',
         'pending' => 'Pending',

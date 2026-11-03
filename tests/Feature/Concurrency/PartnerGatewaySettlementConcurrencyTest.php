@@ -3,6 +3,7 @@
 use App\Domain\Billing\Actions\ReconcileGatewayPayments;
 use App\Domain\Billing\Actions\SettlePayment;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Events\PartnerGatewayPaymentVerified;
 use App\Domain\Billing\Jobs\SettleGatewayNotification;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
@@ -13,6 +14,7 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Models\OrderProceedsSettlement;
 use App\Domain\Wallet\Models\LedgerEntry;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 
 /*
  * Real-process races for a payment made to a Partner's own gateway (D36): workers
@@ -30,6 +32,10 @@ beforeEach(function () {
     config()->set('database.default', 'partner_gateway_race');
 
     partnerCheckoutWorld();
+
+    // These races are about verifying the payment. What happens to Banij's share
+    // afterwards is the collection's business, and has its own races.
+    Event::fake([PartnerGatewayPaymentVerified::class]);
 });
 
 afterEach(function () {

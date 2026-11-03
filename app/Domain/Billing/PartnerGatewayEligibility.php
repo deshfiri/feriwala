@@ -4,6 +4,7 @@ namespace App\Domain\Billing;
 
 use App\Domain\Billing\Data\PartnerGatewayCandidate;
 use App\Domain\Billing\Enums\PartnerGatewayFallbackReason;
+use App\Domain\Billing\Enums\PartnerGatewayProviderSupport;
 use App\Domain\Billing\Models\PartnerGatewayConfiguration;
 use App\Domain\Website\Models\Website;
 use App\Integrations\Payment\Data\GatewayCapability;
@@ -64,7 +65,10 @@ class PartnerGatewayEligibility
             return PartnerGatewayCandidate::unusable(PartnerGatewayFallbackReason::SandboxNotAllowedInProduction, $provider);
         }
 
-        if (! $this->gateways->isImplemented($version->provider)) {
+        // Whatever its driver can do, a provider that cannot prove a payment on the
+        // server side never carries a Partner's money.
+        if (! PartnerGatewayProviderSupport::for($version->provider)->canCarryPartnerPayments()
+            || ! $this->gateways->isImplemented($version->provider)) {
             return PartnerGatewayCandidate::unusable(PartnerGatewayFallbackReason::ProviderUnsupported, $provider);
         }
 

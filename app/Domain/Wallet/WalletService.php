@@ -7,6 +7,7 @@ use App\Domain\Wallet\Enums\BalanceType;
 use App\Domain\Wallet\Enums\LedgerDirection;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
 use App\Domain\Wallet\Enums\WalletTransactionStatus;
+use App\Domain\Wallet\Events\WalletCredited;
 use App\Domain\Wallet\Exceptions\WalletOperationRefused;
 use App\Domain\Wallet\Models\LedgerEntry;
 use App\Domain\Wallet\Models\Wallet;
@@ -15,6 +16,7 @@ use App\Domain\Wallet\Models\WalletTransactionEvent;
 use App\Support\Money\Money;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
@@ -363,6 +365,8 @@ class WalletService
 
                 $wallet->setRawAttributes($locked->getAttributes(), sync: true);
 
+                $this->announceCredit($locked, $transaction, $isCredit, $type);
+
                 return $transaction;
             });
         } catch (UniqueConstraintViolationException $exception) {
@@ -379,6 +383,24 @@ class WalletService
 
             return $existing;
         }
+    }
+
+    /**
+     * Tell the rest of the application that money arrived, once the posting is durable (D36).
+     *
+     * After commit, so a listener reads the new balance and cannot hold the
+     * posting open — and never for a conversion between the Wallet's own kinds of
+     * money, where no value arrived.
+     */
+    protected function announceCredit(Wallet $wallet, WalletTransaction $transaction, bool $isCredit, LedgerTransactionType $type): void
+    {
+        if (! $isCredit || $type->isConversion()) {
+            return;
+        }
+
+        $this->database->afterCommit(static function () use ($wallet, $transaction): void {
+            Event::dispatch(new WalletCredited($wallet->id, $wallet->business_account_id, $transaction->id));
+        });
     }
 
     /**

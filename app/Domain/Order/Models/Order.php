@@ -36,6 +36,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use LogicException;
 
 /**
@@ -215,6 +216,17 @@ class Order extends Model
     public function payment(): BelongsTo
     {
         return $this->belongsTo(Payment::class);
+    }
+
+    /**
+     * Whether Banij's share of this order has been collected from the Partner's
+     * Wallet — only a Store Order paid to the Partner's own gateway has one (D36).
+     *
+     * @return HasOne<OrderReceivableCollection, $this>
+     */
+    public function receivableCollection(): HasOne
+    {
+        return $this->hasOne(OrderReceivableCollection::class);
     }
 
     /**

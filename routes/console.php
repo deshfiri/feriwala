@@ -9,6 +9,7 @@ use App\Domain\Inventory\Actions\ReleaseExpiredReservations;
 use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
 use App\Domain\Order\Actions\ExpireUnpaidOrders;
+use App\Domain\Order\Actions\ReleaseCollectableReceivables;
 use App\Domain\Order\Actions\RetryCodConfirmationCodes;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
@@ -58,6 +59,22 @@ Schedule::call(fn () => app(SweepKycDeadlines::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Warn and enforce KYC deadlines (§7.4)');
+
+/*
+ * Banij's share of Partner-gateway orders (D36): collect what a missed event left
+ * waiting, and close the holds whose deadline has passed.
+ *
+ * The verified-payment and Wallet-credit listeners do this at once; this is the
+ * repair for a listener that failed or an event that never came, and the only
+ * thing that ends a hold when nobody tops up. Idempotent under row locks, and
+ * guarded against overlap for the same reason as every sweep here (§41).
+ */
+Schedule::call(fn () => app(ReleaseCollectableReceivables::class)->sweep())
+    ->name('partner-receivable-collection-sweep')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Collect and expire Partner-gateway receivables (D36)');
 
 /*
  * The §8.4 subscription clock: renewal due, grace period, expiry.

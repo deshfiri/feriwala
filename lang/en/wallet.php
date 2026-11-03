@@ -133,6 +133,10 @@ return [
         'refund_description' => 'Refund for wholesale order :order',
     ],
 
+    'partner_receivable' => [
+        'description' => 'Banij\'s share of shop order :order, paid to your own payment gateway',
+    ],
+
     'top_up' => [
         'title' => 'Top up your wallet',
         'description' => 'Add money to your wallet. Your account keeps what it is required to hold; the rest is yours to spend.',

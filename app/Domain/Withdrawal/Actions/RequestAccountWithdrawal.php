@@ -8,6 +8,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Kyc\KycRestrictions;
 use App\Domain\Notification\Enums\StaffQueue;
+use App\Domain\Order\Queries\PartnerCollectionHolds;
 use App\Domain\Payout\Enums\PayoutOwnerType;
 use App\Domain\Payout\Models\PayoutMethod;
 use App\Domain\Supplier\Actions\RequestSupplierWithdrawal;
@@ -56,6 +57,7 @@ class RequestAccountWithdrawal
         protected KycRestrictions $kycRestrictions,
         protected RecordAuditLog $audit,
         protected DatabaseManager $database,
+        protected PartnerCollectionHolds $holds,
     ) {}
 
     public function handle(
@@ -105,6 +107,16 @@ class RequestAccountWithdrawal
                 // a withdrawal even on a rule that lets it cover service
                 // charges, and only this stricter figure knows that.
                 $locked = Wallet::query()->lockForUpdate()->findOrFail($wallet->id);
+
+                // Money a Partner-gateway order is still waiting for is Banij's to collect
+                // first (D36). Checked under the Wallet's lock, the same one a collection
+                // takes, so a request and a collection are one after the other, never both.
+                $hold = $this->holds->firstLive($account->id);
+
+                if ($hold !== null) {
+                    throw AccountWithdrawalRefused::receivableCollectionPending($hold->order->reference, $hold->amount);
+                }
+
                 $available = $locked->availableForWithdrawal();
 
                 if ($amount->greaterThan($available)) {

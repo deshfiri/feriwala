@@ -2,6 +2,9 @@
 
 namespace App\Domain\Order\Actions;
 
+use App\Domain\Account\Enums\AccountType;
+use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Enums\GatewayOwnership;
 use App\Domain\Order\Data\ReceivableLine;
 use App\Domain\Order\Data\WebsiteOrderQuote;
 use App\Domain\Order\Exceptions\PlatformReceivableRefused;
@@ -38,7 +41,7 @@ class FreezePlatformReceivable
     /**
      * @throws PlatformReceivableRefused
      */
-    public function handle(Order $order, WebsiteOrderQuote $quote): OrderPlatformReceivable
+    public function handle(Order $order, WebsiteOrderQuote $quote, ?AccountType $accountType = null): OrderPlatformReceivable
     {
         $existing = OrderPlatformReceivable::query()->where('order_id', $order->id)->first();
 
@@ -52,8 +55,12 @@ class FreezePlatformReceivable
             throw new LogicException('A Store Order belongs to a Storefront.');
         }
 
+        // The type the placement decision was made under. Read here only when the
+        // caller did not hand it over, and never again afterwards.
+        $accountType ??= BusinessAccount::query()->findOrFail($order->business_account_id)->account_type;
+
         try {
-            return $this->database->transaction(function () use ($order, $breakdown): OrderPlatformReceivable {
+            return $this->database->transaction(function () use ($order, $breakdown, $accountType): OrderPlatformReceivable {
                 $now = CarbonImmutable::now();
 
                 $receivable = OrderPlatformReceivable::query()->create([
@@ -64,6 +71,9 @@ class FreezePlatformReceivable
                     'currency_code' => $breakdown->currency->value,
                     'total' => $breakdown->total(),
                     'calculation_version' => OrderPlatformReceivable::CALCULATION_VERSION,
+                    'account_type_at_placement' => $accountType->value,
+                    'eligibility_version' => OrderPlatformReceivable::ELIGIBILITY_VERSION,
+                    'gateway_ownership' => GatewayOwnership::Partner->value,
                     'frozen_at' => $now,
                 ]);
 

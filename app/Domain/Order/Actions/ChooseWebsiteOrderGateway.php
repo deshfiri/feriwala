@@ -2,6 +2,7 @@
 
 namespace App\Domain\Order\Actions;
 
+use App\Domain\Account\Enums\AccountType;
 use App\Domain\Billing\Data\PartnerGatewayCandidate;
 use App\Domain\Billing\Enums\GatewayOwnership;
 use App\Domain\Billing\Enums\PartnerGatewayFallbackReason;
@@ -71,7 +72,7 @@ class ChooseWebsiteOrderGateway
 
         $reason = $candidate->reason
             ?? $this->orderReason($website, $order, $reservations, $requested, $candidate)
-            ?? $this->freeze($order, $quote);
+            ?? $this->freeze($order, $quote, $website->businessAccount->account_type);
 
         if ($reason !== null || $candidate->version === null) {
             return $this->platform(
@@ -137,10 +138,10 @@ class ChooseWebsiteOrderGateway
      * In a savepoint, so a refusal or a database error leaves nothing behind and
      * the surrounding placement carries on as a Feriwala-gateway order.
      */
-    protected function freeze(Order $order, WebsiteOrderQuote $quote): ?PartnerGatewayFallbackReason
+    protected function freeze(Order $order, WebsiteOrderQuote $quote, AccountType $accountType): ?PartnerGatewayFallbackReason
     {
         try {
-            $this->database->transaction(fn () => $this->receivables->handle($order->refresh(), $quote));
+            $this->database->transaction(fn () => $this->receivables->handle($order->refresh(), $quote, $accountType));
         } catch (Throwable) {
             return PartnerGatewayFallbackReason::SnapshotIncomplete;
         }

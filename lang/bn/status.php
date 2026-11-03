@@ -274,6 +274,22 @@ return [
         'expired' => 'মেয়াদ শেষ',
     ],
 
+    'partner_gateway_support' => [
+        'supported_tested' => 'সমর্থিত ও পরীক্ষিত',
+        'implemented_unverified' => 'তৈরি আছে, এখনও যাচাই হয়নি',
+        'unsupported' => 'পার্টনার গেটওয়ের জন্য সমর্থিত নয়',
+    ],
+
+    'receivable_collection' => [
+        'pending_collection' => 'ওয়ালেট থেকে আদায়ের অপেক্ষায়',
+        'wallet_insufficient' => 'ওয়ালেটে যথেষ্ট টাকা নেই',
+        'reservation_recovery_required' => 'স্টক পুনরুদ্ধার প্রয়োজন',
+        'collected' => 'আদায় হয়েছে',
+        'deadline_expired_refund_required' => 'সময় শেষ, ফেরত প্রয়োজন',
+        'partially_reversed' => 'আংশিক বাতিল',
+        'reversed' => 'বাতিল',
+    ],
+
     'wallet_transaction' => [
         'initiated' => 'শুরু করা হয়েছে',
         'pending' => 'অপেক্ষমাণ',

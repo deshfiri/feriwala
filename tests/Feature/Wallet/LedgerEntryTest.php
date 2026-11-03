@@ -196,10 +196,12 @@ describe('the transaction types', function () {
                     LedgerTransactionType::WholesaleOrderDebit, LedgerTransactionType::OrderRefundCredit,
                     LedgerTransactionType::ReturnChargeDebit, LedgerTransactionType::ExchangeDeliveryDebit,
                     LedgerTransactionType::DamageLossDebit, LedgerTransactionType::DamageDeliveryDebit,
+                    LedgerTransactionType::PartnerGatewayReceivableDebit,
                 ], true));
 
         // The two halves of a balance conversion, the two of paying an order from
-        // the wallet and the four case charges (D35) are the platform's own, not
+        // the wallet, the four case charges (D35) and the platform's share of a
+        // Partner-gateway order (D36) are the platform's own, not
         // part of §23.1's list.
         expect($named)->toHaveCount(26);
     });
