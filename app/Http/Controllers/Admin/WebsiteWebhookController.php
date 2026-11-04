@@ -57,10 +57,13 @@ class WebsiteWebhookController extends Controller
     {
         Gate::authorize('manageIntegration', $website);
 
-        $endpoint = $this->endpointOf($website);
-        $secret = $this->webhooks->rotate($endpoint, $this->actor($request));
+        try {
+            $result = $this->webhooks->regenerate($website, $this->actor($request));
+        } catch (WebsiteRefused $refused) {
+            throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+        }
 
-        return $this->answer($endpoint, $secret);
+        return $this->answer($result['endpoint'], $result['secret']);
     }
 
     public function disable(Request $request, Website $website): RedirectResponse

@@ -108,6 +108,10 @@ export default function StorefrontWebhook({
     }
 
     const errors = address.errors as Record<string, string | undefined>;
+    const rotationErrors = rotation.errors as Record<
+        string,
+        string | undefined
+    >;
 
     return (
         <>
@@ -151,20 +155,27 @@ export default function StorefrontWebhook({
                         </Button>
                     </form>
 
-                    {webhook && (
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={rotation.processing}
-                                onClick={rotate}
-                            >
-                                {rotation.processing && <Spinner />}
-                                {t('website.integration.rotate')}
-                            </Button>
+                    <InputError
+                        message={rotationErrors.url ?? rotationErrors.website}
+                    />
 
-                            {webhook.is_active && (
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={rotation.processing}
+                            onClick={rotate}
+                        >
+                            {rotation.processing && <Spinner />}
+                            {t(
+                                webhook
+                                    ? 'website.integration.rotate'
+                                    : 'website.integration.generate',
+                            )}
+                        </Button>
+
+                        {webhook?.is_active && (
                                 <Form
                                     {...WebsiteWebhookController.disable.form(
                                         websiteId,
@@ -183,8 +194,7 @@ export default function StorefrontWebhook({
                                     )}
                                 </Form>
                             )}
-                        </div>
-                    )}
+                    </div>
                 </div>
             </SectionCard>
 

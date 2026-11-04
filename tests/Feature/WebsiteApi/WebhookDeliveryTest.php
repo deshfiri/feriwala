@@ -211,6 +211,31 @@ describe('endpoint', function () {
             ->and($endpoint->previous_secret_expires_at)->not->toBeNull();
     });
 
+    it('issues a secret on rotation when connecting left no endpoint', function () {
+        $this->website->forceFill(['domain' => 'shop.example.com'])->save();
+
+        $response = $this->actingAs($this->superAdmin)
+            ->postJson(route('admin.websites.webhook.rotate', $this->website->public_id))
+            ->assertOk();
+
+        $endpoint = WebsiteWebhookEndpoint::query()->where('website_id', $this->website->id)->firstOrFail();
+
+        expect($endpoint->url)->toBe('https://shop.example.com/webhooks/feriwala')
+            ->and($endpoint->is_active)->toBeTrue()
+            ->and($response->json('secret'))->toBe($endpoint->secret)
+            ->and(strlen($endpoint->secret))->toBe(64);
+    });
+
+    it('says why when the address cannot receive a webhook and there is no endpoint', function () {
+        $this->website->forceFill(['domain' => '127.0.0.1'])->save();
+
+        $this->actingAs($this->superAdmin)
+            ->postJson(route('admin.websites.webhook.rotate', $this->website->public_id))
+            ->assertUnprocessable();
+
+        expect(WebsiteWebhookEndpoint::query()->count())->toBe(0);
+    });
+
     it('switches the endpoint off', function () {
         [$endpoint] = webhookTestEndpoint($this->website);
 

@@ -407,6 +407,7 @@ return [
         'webhook_hint' => 'Where the ERP tells your storefront that products, prices or stock changed. One HTTPS address per website; every delivery is signed.',
         'webhook_url' => 'Endpoint address',
         'webhook_save' => 'Save the address',
+        'generate' => 'Generate webhook secret',
         'disabled' => 'Disabled',
         'disable' => 'Disable',
         'sync_now' => 'Synchronise now',

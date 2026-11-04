@@ -74,6 +74,30 @@ class ManageWebhookEndpoint
         return ['endpoint' => $endpoint, 'secret' => $secret];
     }
 
+    /**
+     * A signing secret the operator can hand to the storefront, whatever state
+     * the endpoint is in: rotated when one exists, otherwise the endpoint is
+     * registered at the website's own address first. Connecting skips the
+     * webhook when the storefront is not reachable yet, so there may be none.
+     *
+     * @return array{endpoint: WebsiteWebhookEndpoint, secret: string}
+     *
+     * @throws WebsiteRefused when there is no endpoint and the website's address cannot receive one
+     */
+    public function regenerate(Website $website, User $actor): array
+    {
+        /** @var WebsiteWebhookEndpoint|null $endpoint */
+        $endpoint = WebsiteWebhookEndpoint::query()->where('website_id', $website->id)->first();
+
+        if ($endpoint !== null) {
+            return ['endpoint' => $endpoint, 'secret' => $this->rotate($endpoint, $actor)];
+        }
+
+        $created = $this->configure($website, $actor, 'https://'.$website->host().ConnectStore::WEBHOOK_PATH);
+
+        return ['endpoint' => $created['endpoint'], 'secret' => (string) $created['secret']];
+    }
+
     public function rotate(WebsiteWebhookEndpoint $endpoint, User $actor): string
     {
         $secret = $this->newSecret();

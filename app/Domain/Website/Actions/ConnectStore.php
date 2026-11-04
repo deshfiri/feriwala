@@ -230,8 +230,11 @@ class ConnectStore
             return null;
         }
 
-        // An existing endpoint keeps its secret, which is never shown again.
-        return $result['secret'] === null ? null : ['url' => $url, 'secret' => $result['secret']];
+        // An endpoint left from an earlier connection keeps a secret nobody can
+        // read back, so a new one is issued: the store always leaves with one.
+        $secret = $result['secret'] ?? $this->webhooks->rotate($result['endpoint'], $actor);
+
+        return ['url' => $url, 'secret' => $secret];
     }
 
     /**
