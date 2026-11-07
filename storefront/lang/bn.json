@@ -281,5 +281,13 @@
     "footer.powered": "Banij-এর সহায়তায়",
     "ui.working": "অনুগ্রহ করে অপেক্ষা করুন…",
     "ui.image_missing": "ছবি পাওয়া যায়নি",
-    "footer.top": "উপরে যান"
+    "footer.top": "উপরে যান",
+    "footer.we_accept": "আমরা গ্রহণ করি",
+    "nav.shop": "দোকান",
+    "home.shop_by_category": "বিভাগ অনুযায়ী কিনুন",
+    "home.trending": "এখন জনপ্রিয়",
+    "home.best_sellers": "সর্বাধিক বিক্রিত",
+    "catalog.category_label": "বিভাগ",
+    "catalog.product_count": ":n টি পণ্য",
+    "catalog.category_empty": "এই বিভাগে এখন কোনো পণ্য নেই।"
 }

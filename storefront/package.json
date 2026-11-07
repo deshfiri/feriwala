@@ -1,0 +1,29 @@
+{
+  "name": "banij_storefront",
+  "version": "1.0.0",
+  "description": "A customer-facing shop for one Feriwala partner website, built on **Laravel 13** (PHP 8.3+, MySQL). It speaks to the ERP only through the frozen storefront API ([contract v1](../requirements/05-storefront-api-contract.md)).",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build:css": "tailwindcss -i resources/css/tailwind.css -o public/assets/css/tailwind.css"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deshfiri/banij_storefront.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/deshfiri/banij_storefront/issues"
+  },
+  "homepage": "https://github.com/deshfiri/banij_storefront#readme",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "private": true
+}

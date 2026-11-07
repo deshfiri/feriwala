@@ -254,10 +254,16 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.category_not_found'), 'website_category_id');
     }
 
-    /** A webhook must go to a public HTTPS address (contract §3.3, §7.2). */
-    public static function webhookAddressRefused(): self
+    /**
+     * A webhook must go to a public HTTPS address (contract §3.3, §7.2).
+     *
+     * @param  'scheme'|'credentials'|'port'|'local'|'private'|null  $reason  which rule the address broke, so the operator is told what to change
+     */
+    public static function webhookAddressRefused(?string $reason = null): self
     {
-        return new self(__('website.refused.webhook_address'), 'url');
+        $key = $reason === null ? 'webhook_address' : 'webhook_address_'.$reason;
+
+        return new self(__('website.refused.'.$key), 'url');
     }
 
     /** A delivery that is not in the failed queue has nothing to retry. */

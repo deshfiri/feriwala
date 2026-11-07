@@ -22,7 +22,8 @@ use Carbon\CarbonImmutable;
  * the platform's own network: the ERP is about to POST signed data to whatever
  * this says, and an address of `localhost` or a private range is a way to make
  * the ERP call itself. The name is resolved here and every address it gives
- * must be public ({@see OutboundAddressGuard}); delivery resolves it again.
+ * must be public ({@see OutboundAddressGuard}); a name that does not resolve
+ * yet is accepted, and delivery resolves it again before every attempt.
  *
  * The signing secret is shown once, like a credential secret, and rotation
  * keeps the previous one valid for verification for a window so the storefront
@@ -136,29 +137,41 @@ class ManageWebhookEndpoint
         $parts = parse_url($url);
         $host = is_array($parts) ? strtolower((string) ($parts['host'] ?? '')) : '';
 
-        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || $host === ''
-            || isset($parts['user']) || isset($parts['pass'])
-            || (isset($parts['port']) && $parts['port'] !== 443)) {
-            throw WebsiteRefused::webhookAddressRefused();
+        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || $host === '') {
+            throw WebsiteRefused::webhookAddressRefused('scheme');
+        }
+
+        if (isset($parts['user']) || isset($parts['pass'])) {
+            throw WebsiteRefused::webhookAddressRefused('credentials');
+        }
+
+        if (isset($parts['port']) && $parts['port'] !== 443) {
+            throw WebsiteRefused::webhookAddressRefused('port');
         }
 
         if ($host === 'localhost' || str_ends_with($host, '.localhost') || str_ends_with($host, '.internal')) {
-            throw WebsiteRefused::webhookAddressRefused();
+            throw WebsiteRefused::webhookAddressRefused('local');
         }
 
         $literal = trim($host, '[]');
 
         if (filter_var($literal, FILTER_VALIDATE_IP) !== false
             && filter_var($literal, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-            throw WebsiteRefused::webhookAddressRefused();
+            throw WebsiteRefused::webhookAddressRefused('local');
         }
 
         // What the name resolves to, not what it looks like: every address
-        // must be public (P2 D3). Delivery checks again, every attempt.
+        // must be public (P2 D3). A name that does not resolve yet is accepted,
+        // because DNS often goes live after the webhook is set up; delivery
+        // resolves it again before every attempt and sends nothing until it
+        // does and every address is public. A name that resolves somewhere
+        // private is refused here, as it always was.
         try {
             $this->guard->addressFor($literal);
-        } catch (StorePlatformException) {
-            throw WebsiteRefused::webhookAddressRefused();
+        } catch (StorePlatformException $exception) {
+            if (! $exception->retryable) {
+                throw WebsiteRefused::webhookAddressRefused('private');
+            }
         }
     }
 

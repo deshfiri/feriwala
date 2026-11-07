@@ -154,7 +154,37 @@ final class Catalog
             return [];
         }
 
-        return array_values(array_filter($response['data'] ?? [], 'is_array'));
+        $categories = array_values(array_filter($response['data'] ?? [], 'is_array'));
+
+        return $categories !== [] ? $categories : $this->categoriesOfProducts();
+    }
+
+    /**
+     * The categories the shop's products belong to, for an ERP that lists none of its own.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function categoriesOfProducts(): array
+    {
+        try {
+            $products = $this->products([], null, 48)['products'];
+        } catch (ErpException|RuntimeException) {
+            return [];
+        }
+
+        $found = [];
+
+        foreach ($products as $product) {
+            foreach ((array) ($product['categories'] ?? []) as $category) {
+                $slug = is_array($category) ? ($category['slug'] ?? null) : null;
+
+                if (is_string($slug) && $slug !== '' && ! isset($found[$slug])) {
+                    $found[$slug] = $category;
+                }
+            }
+        }
+
+        return array_values($found);
     }
 
     /**

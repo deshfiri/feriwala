@@ -1,0 +1,233 @@
+
+/* Tailwind CSS v4 */
+
+/* Preserve existing project styles */
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+
+/* Scan Laravel Blade files */
+@source "../views/**/*.blade.php";
+
+/*
+ * Tailwind's `container` utility is capped at its breakpoints and has no gutter, which
+ * overrides the page gutter in app.css and pins content to the screen edge on a phone.
+ * The shop's own container wins.
+ */
+.container {
+    width: min(1280px, 100% - 2rem);
+    max-width: none;
+    margin-inline: auto;
+}
+
+/* =========================================
+   Mini Minds Category Navigation
+========================================= */
+
+.category-navigation {
+    width: 100%;
+    overflow: hidden;
+}
+
+.category-navigation__inner {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 56px;
+    gap: 12px;
+    padding: 6px 16px;
+}
+
+/* Fixed All Products Button */
+
+.category-navigation__all {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: #0284c7;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 200ms ease, color 200ms ease;
+}
+
+.category-navigation__all:hover {
+    background: #0369a1;
+    color: #ffffff;
+}
+
+/* Moving Area */
+
+.category-marquee {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.category-marquee__track {
+    display: flex;
+    width: max-content;
+    animation: category-scroll 40s linear infinite;
+    will-change: transform;
+}
+
+/* A short list does not loop: it stays put and scrolls by hand when it overflows. */
+
+.category-marquee--static {
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.category-marquee--static::-webkit-scrollbar {
+    display: none;
+}
+
+.category-marquee__track--static {
+    animation: none;
+    transform: none;
+}
+
+/* Category Groups */
+
+.category-marquee__group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 10px;
+    padding-right: 10px;
+}
+
+/* Category Buttons */
+
+.category-navigation__link {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 200ms ease, color 200ms ease;
+}
+
+.category-navigation__link:hover {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.category-navigation__link:focus-visible,
+.category-navigation__all:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 3px;
+}
+
+/* Move Right to Left */
+
+@keyframes category-scroll {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+/* Stop when Mouse Hovers */
+
+.category-marquee:hover .category-marquee__track,
+.category-marquee:focus-within .category-marquee__track {
+    animation-play-state: paused;
+}
+
+/* Dark Mode */
+
+.dark .category-navigation__link {
+    color: #cbd5e1;
+}
+
+.dark .category-navigation__link:hover {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+/* Tablet */
+
+@media (max-width: 768px) {
+    .category-navigation__inner {
+        min-height: 52px;
+        gap: 6px;
+        padding: 6px 10px;
+    }
+
+    .category-navigation__all,
+    .category-navigation__link {
+        padding: 9px 11px;
+        font-size: 13px;
+    }
+
+    .category-marquee__track {
+        animation-duration: 32s;
+    }
+
+    .category-marquee__group {
+        gap: 6px;
+        padding-right: 6px;
+    }
+}
+
+/* Mobile */
+
+@media (max-width: 480px) {
+    .category-navigation__inner {
+        min-height: 48px;
+        gap: 4px;
+        padding: 5px 8px;
+    }
+
+    .category-navigation__all {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .category-navigation__link {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .category-marquee__track {
+        animation-duration: 26s;
+    }
+
+    .category-marquee__group {
+        gap: 5px;
+        padding-right: 5px;
+    }
+}
+
+/* Respect Reduced Motion Preference */
+
+@media (prefers-reduced-motion: reduce) {
+    .category-marquee__track {
+        animation: none;
+        transform: none;
+    }
+
+    .category-marquee {
+        overflow-x: auto;
+    }
+}

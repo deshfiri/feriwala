@@ -24,7 +24,7 @@ class AppServiceProvider extends ServiceProvider
 
         // The messages queued by flash_message(), shown once by the layout.
         View::composer('layouts.app', function (ViewInstance $view): void {
-            $view->with('flash', (array) session()->pull('_flash', []));
+            $view->with('flash', (array) session()->pull('storefront_messages', []));
         });
     }
 }

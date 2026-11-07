@@ -281,5 +281,13 @@
     "footer.powered": "Powered by Banij",
     "ui.working": "Please wait…",
     "ui.image_missing": "Image unavailable",
-    "footer.top": "Back to top"
+    "footer.top": "Back to top",
+    "footer.we_accept": "We accept",
+    "nav.shop": "Shop",
+    "home.shop_by_category": "Shop by category",
+    "home.trending": "Trending now",
+    "home.best_sellers": "Best sellers",
+    "catalog.category_label": "Category",
+    "catalog.product_count": ":n products",
+    "catalog.category_empty": "There are currently no products in this category."
 }

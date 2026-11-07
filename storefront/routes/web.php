@@ -6,7 +6,27 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\SystemController;
 use App\Http\Middleware\LoadStorefront;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
+
+
+Route::get('/cc/{token}', function ($token) {
+
+    if (
+        !hash_equals((string) config('services.cc_token'), $token)
+        || !config('services.cc_token')
+    ) {
+        abort(403, 'Unauthorized');
+    }
+
+    Artisan::call('optimize:clear');
+    Artisan::call('key:generate', ['--force' => true]);
+    Artisan::call('migrate', ['--force' => true]);
+    Artisan::call('storage:link');
+
+    return 'All commands executed successfully!';
+
+});
 
 // Everything a customer sees: session, CSRF and the shop's own status come first.
 Route::middleware(LoadStorefront::class)->group(function (): void {
@@ -44,5 +64,5 @@ Route::middleware(LoadStorefront::class)->group(function (): void {
     Route::get('/robots.txt', [SystemController::class, 'robots'])->name('robots');
 
     // An unknown address is a 404 that still wears the shop's layout.
-    Route::fallback(fn () => abort(404));
+    Route::fallback(fn() => abort(404));
 });

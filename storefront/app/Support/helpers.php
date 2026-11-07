@@ -63,7 +63,7 @@ if (! function_exists('flash_message')) {
      */
     function flash_message(string $type, string $message): void
     {
-        session()->push('_flash', ['type' => $type, 'message' => $message]);
+        session()->push('storefront_messages', ['type' => $type, 'message' => $message]);
     }
 }
 
