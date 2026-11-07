@@ -10,7 +10,7 @@
 return [
     'title' => 'Accounts',
     'description' => 'Every Partner business registered on the platform.',
-    'search_placeholder' => 'Account ID, business, owner, email or mobile',
+    'search_placeholder' => 'Partner ID, business, owner, email or mobile',
     'open' => 'Open',
     'verified' => 'verified',
     'unverified' => 'not verified',
@@ -28,6 +28,7 @@ return [
     ],
 
     'columns' => [
+        'partner_number' => 'Partner ID',
         'business' => 'Business',
         'contact' => 'Contact',
         'package' => 'Package',

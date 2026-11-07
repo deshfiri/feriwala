@@ -3,6 +3,10 @@
 /node_modules
 /public/build
 /public/fonts-manifest.dev.json
+# Li Ador Noirrit is licensed by Lipighor, whose EULA forbids uploading the files
+# elsewhere. Copy them to each server by hand; without them Bangla falls back to
+# Noto Sans Bengali.
+/public/fonts
 /public/hot
 /public/storage
 /storage/*.key

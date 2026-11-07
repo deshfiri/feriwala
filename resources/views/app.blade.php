@@ -58,6 +58,33 @@
 
         @fonts
 
+        {{--
+            Li Ador Noirrit, the Bangla face (Lipighor Font Foundry, EULA at
+            lipighor.com/EULA.html). Written here rather than in app.css so the
+            URLs come from `asset()`: a font url() inside the stylesheet resolves
+            against the Vite dev server, which does not serve `public/`. The
+            licensed files are not committed, so a face is only declared when its
+            file exists — a server without them falls back to Noto Sans Bengali
+            with no failed requests. `unicode-range` keeps it to Bengali (plus the
+            danda and the zero-width joiners conjuncts need), so English and
+            digits on a Bangla page stay Poppins. A Medium request lands on Regular.
+        --}}
+        @php($banglaFaces = collect([400 => 'Regular', 600 => 'SemiBold', 700 => 'Bold'])->filter(fn (string $style) => is_file(public_path("fonts/Li Ador Noirrit {$style}.ttf"))))
+        @if ($banglaFaces->isNotEmpty())
+            <style>
+                @foreach ($banglaFaces as $weight => $style)
+                    @font-face {
+                        font-family: 'Li Ador Noirrit';
+                        src: url('{{ asset('fonts/'.rawurlencode("Li Ador Noirrit {$style}.ttf")) }}') format('truetype');
+                        font-weight: {{ $weight }};
+                        font-style: normal;
+                        font-display: swap;
+                        unicode-range: U+0964-0965, U+0980-09FF, U+200C-200D, U+25CC;
+                    }
+                @endforeach
+            </style>
+        @endif
+
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         <x-inertia::head>

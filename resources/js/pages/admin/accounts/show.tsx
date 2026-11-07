@@ -11,6 +11,7 @@ import StaffKycUploadDialog from '@/components/kyc/staff-kyc-upload-dialog';
 import * as kycUpload from '@/routes/admin/accounts/kyc-upload';
 import { useState } from 'react';
 import ManagedAccountController from '@/actions/App/Http/Controllers/Admin/ManagedAccountController';
+import CopyableText from '@/components/copyable-text';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -83,6 +84,8 @@ type Props = {
      */
     business: {
         id: string;
+        /** `BJ` and eleven digits; null until `partners:assign-numbers` reaches an older account. */
+        partner_number: string | null;
         name: string;
         status: string;
         status_label: string;
@@ -357,6 +360,18 @@ export default function AdminAccountShow({
                         }
                     >
                         <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                            <Detail label={t('account.detail.partner_number')}>
+                                {business.partner_number === null ? (
+                                    '—'
+                                ) : (
+                                    <CopyableText
+                                        value={business.partner_number}
+                                        label={t(
+                                            'account.detail.partner_number',
+                                        )}
+                                    />
+                                )}
+                            </Detail>
                             <Detail label={t('account.detail.owner')}>
                                 {business.owner?.name ?? '—'}
                             </Detail>

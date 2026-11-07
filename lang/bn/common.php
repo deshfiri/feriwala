@@ -49,6 +49,11 @@ return [
         'view_tile' => 'টাইল ভিউ',
     ],
 
+    'clipboard' => [
+        'copy' => ':label কপি করুন',
+        'copied' => ':label :value কপি হয়েছে',
+    ],
+
     'language' => [
         'label' => 'ভাষা',
         'switch' => 'ভাষা পরিবর্তন করুন',

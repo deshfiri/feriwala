@@ -6,6 +6,7 @@ return [
         'back_to_queue' => 'Back to queue',
 
         'identity' => 'Identity and contact',
+        'partner_number' => 'Partner ID',
         'owner' => 'Owner',
         'email' => 'Email',
         'mobile' => 'Mobile',

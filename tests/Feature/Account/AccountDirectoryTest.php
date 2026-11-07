@@ -8,6 +8,7 @@ use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Supplier\Models\Supplier;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
 
 /*
  * The staff directory of Client/Partner business accounts.
@@ -40,8 +41,21 @@ describe('reaching the directory', function () {
                 ->component('admin/accounts/index')
                 ->where('accounts.data.0.name', 'Karim Textiles')
                 ->where('accounts.data.0.id', $account->public_id)
+                ->where('accounts.data.0.partner_number', $account->partner_number)
                 ->has('summary')
                 ->has('packages'));
+    });
+
+    it('shows no partner number for an older account that has not been given one yet', function () {
+        $account = directoryAccount(AccountStatus::Active, 'Karim Textiles');
+        DB::table('business_accounts')->where('id', $account->id)->update(['partner_number' => null]);
+
+        $this->actingAs($this->staff)
+            ->get(route('admin.accounts.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('accounts.data.0.id', $account->public_id)
+                ->where('accounts.data.0.partner_number', null));
     });
 
     it('refuses a staff member without the account permission', function () {
@@ -107,6 +121,20 @@ describe('searching', function () {
         ];
 
         foreach ($searches as $search) {
+            $this->actingAs($this->staff)
+                ->get(route('admin.accounts.index', ['search' => $search]))
+                ->assertOk()
+                ->assertInertia(fn ($page) => $page
+                    ->has('accounts.data', 1)
+                    ->where('accounts.data.0.id', $account->public_id));
+        }
+    });
+
+    it('finds an account by its partner number, whole or in part', function () {
+        $account = directoryAccount(AccountStatus::Active, 'Karim Textiles');
+        directoryAccount(AccountStatus::Active, 'Unrelated Trading');
+
+        foreach ([$account->partner_number, strtolower($account->partner_number), substr($account->partner_number, -6)] as $search) {
             $this->actingAs($this->staff)
                 ->get(route('admin.accounts.index', ['search' => $search]))
                 ->assertOk()

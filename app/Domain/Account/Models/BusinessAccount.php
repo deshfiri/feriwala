@@ -2,6 +2,7 @@
 
 namespace App\Domain\Account\Models;
 
+use App\Concerns\HasPartnerNumber;
 use App\Concerns\HasPublicId;
 use App\Concerns\HasSlug;
 use App\Concerns\HasStateMachine;
@@ -51,6 +52,7 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property string $public_id
+ * @property string|null $partner_number
  * @property string $name
  * @property string $slug
  * @property int $owner_id
@@ -80,7 +82,7 @@ use Illuminate\Support\Carbon;
 class BusinessAccount extends Model
 {
     /** @use HasFactory<BusinessAccountFactory> */
-    use HasFactory, HasStateMachine, SoftDeletes;
+    use HasFactory, HasPartnerNumber, HasStateMachine, SoftDeletes;
 
     /*
      * Both traits offer a route key. The public id wins: it is opaque, stable,

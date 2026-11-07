@@ -65,6 +65,7 @@ describe('the screen', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/accounts/show')
                 ->where('business.name', $account->name)
+                ->where('business.partner_number', $account->partner_number)
                 ->where('business.owner.email', $account->owner->email)
                 ->has('kyc_rounds', 1)
                 ->has('status_history')

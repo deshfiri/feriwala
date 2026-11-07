@@ -27,14 +27,21 @@
 
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        'Poppins', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
-    /* Bangla needs a face that actually has the glyphs; falls back gracefully. */
+    /*
+     * Bangla needs a face that actually has the glyphs; falls back gracefully.
+     * Li Ador Noirrit takes the Bengali characters; Poppins is listed before the
+     * Bengali fallbacks so Latin letters on a Bangla page stay Poppins rather
+     * than the fallback's own Latin. Li Ador Noirrit is licensed, so its
+     * `@font-face` is written by resources/views/app.blade.php from the files in
+     * `public/fonts` (not committed, see .gitignore); where they are missing the
+     * list simply moves on to Noto Sans Bengali.
+     */
     --font-bangla:
-        'Noto Sans Bengali', 'Hind Siliguri', 'Instrument Sans', ui-sans-serif,
-        system-ui, sans-serif;
+        'Li Ador Noirrit', 'Poppins', 'Noto Sans Bengali', 'Hind Siliguri',
+        ui-sans-serif, system-ui, sans-serif;
 
     --font-mono:
         ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
@@ -483,7 +490,7 @@ html:not(.dark) {
  * utility, and Tailwind's cascade layers put `utilities` after `base`
  * regardless of selector specificity, so a `:lang(bn)` rule written inside
  * `@layer base` above can never win against it: `body` would keep resolving
- * to Instrument Sans (no Bengali glyphs) for every Bangla page, even with
+ * to Poppins (no Bengali glyphs) for every Bangla page, even with
  * the correct `lang` attribute and a fully loaded Noto Sans Bengali font
  * file. An unlayered rule sits in an implicit final layer that outranks
  * every `@layer` block, layered or not, so this wins regardless of where

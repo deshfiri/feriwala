@@ -13,14 +13,14 @@ export default defineConfig({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             refresh: true,
             fonts: [
-                bunny('Instrument Sans', {
-                    weights: [400, 500, 600],
+                bunny('Poppins', {
+                    weights: [400, 500, 600, 700],
                 }),
                 // `--font-bangla` (app.css) named this face, but nothing
                 // ever bundled it -- it only ever rendered on a visitor
                 // whose OS happened to already have a font of this exact
-                // name installed. Self-hosted the same way Instrument Sans
-                // is, so Bangla text renders correctly everywhere, not by
+                // name installed. Self-hosted the same way Poppins is, so
+                // Bangla text renders correctly everywhere, not by
                 // accident of the visitor's platform (D6).
                 bunny('Noto Sans Bengali', {
                     weights: [400, 500, 600],

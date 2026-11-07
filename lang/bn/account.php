@@ -6,6 +6,7 @@ return [
         'back_to_queue' => 'তালিকায় ফিরুন',
 
         'identity' => 'পরিচয় ও যোগাযোগ',
+        'partner_number' => 'পার্টনার আইডি',
         'owner' => 'মালিক',
         'email' => 'ইমেইল',
         'mobile' => 'মোবাইল',

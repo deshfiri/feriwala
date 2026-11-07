@@ -49,6 +49,11 @@ return [
         'view_tile' => 'Tile view',
     ],
 
+    'clipboard' => [
+        'copy' => 'Copy :label',
+        'copied' => ':label :value copied',
+    ],
+
     'language' => [
         'label' => 'Language',
         'switch' => 'Change language',

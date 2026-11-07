@@ -10,6 +10,8 @@ import type { StatusTone } from '@/lib/status';
 export type AccountDirectoryRow = {
     /** The account's public id (ULID) — never a database id. */
     id: string;
+    /** `BJ` and eleven digits; null until `partners:assign-numbers` reaches an older account. */
+    partner_number: string | null;
     name: string;
     owner: string | null;
     email: string | null;

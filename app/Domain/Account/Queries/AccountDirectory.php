@@ -166,14 +166,16 @@ class AccountDirectory
 
     /**
      * Search across the identifiers a staff member actually has to hand: the
-     * account's public id, its name, and the owner's name, email or mobile.
+     * partner number, the account's public id, its name, and the owner's name,
+     * email or mobile.
      *
      * @param  Builder<BusinessAccount>  $query
      */
     protected function searchBy(Builder $query, string $search): void
     {
         $query->where(fn (Builder $q) => $q
-            ->where('business_accounts.public_id', 'ilike', "%{$search}%")
+            ->where('business_accounts.partner_number', 'ilike', "%{$search}%")
+            ->orWhere('business_accounts.public_id', 'ilike', "%{$search}%")
             ->orWhere('business_accounts.name', 'ilike', "%{$search}%")
             ->orWhereHas('owner', fn ($owner) => $owner
                 ->where('name', 'ilike', "%{$search}%")

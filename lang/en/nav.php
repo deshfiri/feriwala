@@ -23,6 +23,26 @@ return [
         'settings' => 'Settings',
     ],
 
+    /*
+     * The collapsible sections inside Administration. Separate from the item
+     * lines above because the same word can mean a different thing there:
+     * `websites` is a partner's own ("My websites"), this one is the platform's.
+     */
+    'sections' => [
+        'access' => 'Access',
+        'catalogue' => 'Catalogue',
+        'inventory' => 'Inventory',
+        'orders' => 'Orders',
+        'websites' => 'Websites',
+        'partner_network' => 'Partner Network',
+        'accounts' => 'Accounts',
+        'finance' => 'Finance',
+        'supplier_management' => 'Supplier Management',
+        'supplier_operations' => 'Supplier Operations',
+        'supplier_finance' => 'Supplier Finance',
+        'shipments_delivery' => 'Shipments & Delivery',
+    ],
+
     'dashboard' => 'Dashboard',
     'verification' => 'Verification',
     'subscription' => 'Subscription',

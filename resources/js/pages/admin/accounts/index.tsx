@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { Building2 } from 'lucide-react';
+import CopyableText from '@/components/copyable-text';
 import DataTable from '@/components/data-table/data-table';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -112,6 +113,19 @@ export default function AdminAccountsIndex({
     ];
 
     const columns: Column<AccountDirectoryRow>[] = [
+        {
+            key: 'partner_number',
+            header: t('accounts.columns.partner_number'),
+            cell: (row) =>
+                row.partner_number === null ? (
+                    '—'
+                ) : (
+                    <CopyableText
+                        value={row.partner_number}
+                        label={t('accounts.columns.partner_number')}
+                    />
+                ),
+        },
         {
             key: 'name',
             header: t('accounts.columns.business'),

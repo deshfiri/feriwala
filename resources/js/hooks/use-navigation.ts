@@ -413,7 +413,7 @@ export function useNavigation(): {
                 permissions['audit.view_audit_logs']
                     ? [
                           {
-                              title: 'Access',
+                              title: t('nav.sections.access'),
                               href: permissions['access.view']
                                   ? roles()
                                   : activityLog(),
@@ -459,7 +459,7 @@ export function useNavigation(): {
                 ...(permissions['catalog.view']
                     ? [
                           {
-                              title: 'Catalogue',
+                              title: t('nav.sections.catalogue'),
                               href: productCatalogue(),
                               icon: ShoppingBag,
                               items: [
@@ -499,7 +499,7 @@ export function useNavigation(): {
                 ...(permissions['inventory.view']
                     ? [
                           {
-                              title: 'Inventory',
+                              title: t('nav.sections.inventory'),
                               href: stockLevels(),
                               icon: Boxes,
                               items: [
@@ -531,7 +531,7 @@ export function useNavigation(): {
                 ...(permissions['order.view'] || canWorkCases
                     ? [
                           {
-                              title: 'Orders',
+                              title: t('nav.sections.orders'),
                               href: permissions['order.view']
                                   ? adminOrders()
                                   : adminCases(),
@@ -567,7 +567,7 @@ export function useNavigation(): {
                 ...(permissions['website.view']
                     ? [
                           {
-                              title: 'Websites',
+                              title: t('nav.sections.websites'),
                               href: adminWebsites(),
                               icon: MonitorSmartphone,
                               items: [
@@ -583,7 +583,7 @@ export function useNavigation(): {
                 ...(permissions['referral.view']
                     ? [
                           {
-                              title: 'Partner Network',
+                              title: t('nav.sections.partner_network'),
                               href: referralCommissions(),
                               icon: Network,
                               items: [
@@ -605,7 +605,7 @@ export function useNavigation(): {
                 permissions['supplier.delete']
                     ? [
                           {
-                              title: 'Accounts',
+                              title: t('nav.sections.accounts'),
                               href: permissions['account.view']
                                   ? accountDirectory()
                                   : permissions['kyc.view']
@@ -682,7 +682,7 @@ export function useNavigation(): {
                 permissions['withdrawal.view']
                     ? [
                           {
-                              title: 'Finance',
+                              title: t('nav.sections.finance'),
                               href: permissions['payment.view']
                                   ? paymentLog()
                                   : permissions['wallet.view']
@@ -725,7 +725,7 @@ export function useNavigation(): {
                 permissions['supplier_listing.view']
                     ? [
                           {
-                              title: 'Supplier Management',
+                              title: t('nav.sections.supplier_management'),
                               href: permissions['supplier.view']
                                   ? supplierApplications()
                                   : supplierListings(),
@@ -764,7 +764,7 @@ export function useNavigation(): {
                 permissions['supplier_stock.view']
                     ? [
                           {
-                              title: 'Supplier Operations',
+                              title: t('nav.sections.supplier_operations'),
                               href: permissions['supplier_pricing.view']
                                   ? supplierAllocations()
                                   : supplierStock(),
@@ -801,7 +801,7 @@ export function useNavigation(): {
                 permissions['withdrawal.view']
                     ? [
                           {
-                              title: 'Supplier Finance',
+                              title: t('nav.sections.supplier_finance'),
                               href: permissions['supplier_payable.view']
                                   ? supplierPayables()
                                   : supplierWithdrawals(),
@@ -842,7 +842,7 @@ export function useNavigation(): {
                 permissions['delivery_settings.view']
                     ? [
                           {
-                              title: 'Shipments & Delivery',
+                              title: t('nav.sections.shipments_delivery'),
                               href: permissions['courier.view']
                                   ? shipments()
                                   : deliverySettings(),

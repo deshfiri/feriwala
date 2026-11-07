@@ -81,6 +81,7 @@ class AccountController extends Controller
             ->withQueryString()
             ->through(fn (BusinessAccount $account) => [
                 'id' => $account->public_id,
+                'partner_number' => $account->partner_number,
                 'name' => $account->name,
                 'owner' => $account->owner?->name,
                 'email' => $account->owner?->email,

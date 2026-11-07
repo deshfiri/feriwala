@@ -17,6 +17,21 @@ return [
         'settings' => 'সেটিংস',
     ],
 
+    'sections' => [
+        'access' => 'প্রবেশাধিকার',
+        'catalogue' => 'ক্যাটালগ',
+        'inventory' => 'ইনভেন্টরি',
+        'orders' => 'অর্ডার',
+        'websites' => 'ওয়েবসাইট',
+        'partner_network' => 'পার্টনার নেটওয়ার্ক',
+        'accounts' => 'অ্যাকাউন্ট',
+        'finance' => 'অর্থ',
+        'supplier_management' => 'সাপ্লায়ার ব্যবস্থাপনা',
+        'supplier_operations' => 'সাপ্লায়ার কার্যক্রম',
+        'supplier_finance' => 'সাপ্লায়ার অর্থ',
+        'shipments_delivery' => 'শিপমেন্ট ও ডেলিভারি',
+    ],
+
     'dashboard' => 'ড্যাশবোর্ড',
     'verification' => 'যাচাইকরণ',
     'subscription' => 'সাবস্ক্রিপশন',

@@ -42,6 +42,7 @@ class AccountDossier
 
         return [
             'id' => $account->public_id,
+            'partner_number' => $account->partner_number,
             'name' => $account->name,
             'status' => $account->status->value,
             'status_label' => $account->status->label(),
