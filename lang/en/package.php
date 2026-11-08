@@ -175,6 +175,7 @@ return [
         'must_remove' => ':label — you have :current, this plan allows :limit. Remove :count.',
         'current' => 'Your current plan',
         'none' => 'No other plans are available right now.',
+        'no_current_package' => 'You do not have a running package to change.',
     ],
 
     'assign' => [
