@@ -114,6 +114,8 @@ class OrderController extends Controller
             ->with(['businessAccount:id,name', 'payment:id,status', 'website:id,name'])
             ->when($filters['status'] !== null, fn (Builder $query) => $query->where('status', $filters['status']))
             ->when($filters['source'] !== null, fn (Builder $query) => $query->where('source', $filters['source']))
+            ->when($filters['website'] !== null, fn (Builder $query) => $query
+                ->whereHas('website', fn (Builder $website) => $website->where('public_id', $filters['website'])))
             ->when($term !== null, fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
                 ->where('reference', 'ilike', "%{$term}%")
                 ->orWhere('storefront_order_reference', 'ilike', "%{$term}%")
@@ -971,16 +973,19 @@ class OrderController extends Controller
     }
 
     /**
-     * @return array{search: string|null, status: string|null, source: string|null}
+     * @return array{search: string|null, status: string|null, source: string|null, website: string|null}
      */
     protected function filters(Request $request): array
     {
         $search = trim($request->string('search')->toString());
+        $website = trim($request->string('website')->toString());
 
         return [
             'search' => $search === '' ? null : mb_substr($search, 0, 120),
             'status' => OrderStatus::tryFrom($request->string('status')->toString())?->value,
             'source' => OrderSource::tryFrom($request->string('source')->toString())?->value,
+            // One storefront, by its public id: the link from a website's own admin page.
+            'website' => preg_match('/^[0-9A-Za-z]{26}$/', $website) === 1 ? $website : null,
         ];
     }
 

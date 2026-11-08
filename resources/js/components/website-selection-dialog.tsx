@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import AdminWebsiteProductController from '@/actions/App/Http/Controllers/Admin/WebsiteProductController';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
 import type { WebsiteSelection } from '@/types/website';
 
@@ -59,11 +60,14 @@ function toInstant(value: string): string | null {
  * changes asks first.
  */
 export default function WebsiteSelectionDialog({
+    scope = 'partner',
     websiteId,
     row,
     categories,
     onClose,
 }: {
+    /** Saves through the admin route when platform staff are editing for a partner. */
+    scope?: 'partner' | 'admin';
     websiteId: string;
     row: WebsiteSelection;
     categories: Category[];
@@ -148,7 +152,10 @@ export default function WebsiteSelectionDialog({
 
         // Through the route itself, so the verb is the one the route declares.
         form.submit(
-            WebsiteProductController.update({
+            (scope === 'admin'
+                ? AdminWebsiteProductController
+                : WebsiteProductController
+            ).update({
                 website: websiteId,
                 selection: row.id,
             }),

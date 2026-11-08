@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Concerns\ScopesWebsiteRoutes;
 use App\Domain\Website\Actions\ManageWebsiteBranding;
 use App\Domain\Website\Actions\SetWebsiteSmsVerification;
 use App\Domain\Website\BannerLink;
@@ -39,7 +40,7 @@ use Inertia\Response;
  */
 class WebsiteSettingsController extends Controller
 {
-    use ResolvesBusinessAccount;
+    use ResolvesBusinessAccount, ScopesWebsiteRoutes;
 
     public function __construct(
         protected WebsiteOverview $overview,
@@ -54,6 +55,7 @@ class WebsiteSettingsController extends Controller
         Gate::authorize('manage', $record);
 
         return Inertia::render('websites/settings', [
+            'scope' => $this->scope(),
             'website' => $this->overview->detail($record),
             'themes' => array_map(fn (WebsiteTheme $theme) => [
                 'value' => $theme->value,
@@ -90,7 +92,7 @@ class WebsiteSettingsController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.sms_verification_saved')]);
 
-        return to_route('websites.settings.edit', $record->public_id);
+        return to_route($this->named('websites.settings.edit'), $record->public_id);
     }
 
     public function update(Request $request, string $website, ManageWebsiteBranding $branding): RedirectResponse
@@ -130,7 +132,7 @@ class WebsiteSettingsController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.settings_saved')]);
 
-        return to_route('websites.settings.edit', $record->public_id);
+        return to_route($this->named('websites.settings.edit'), $record->public_id);
     }
 
     /**
@@ -164,7 +166,7 @@ class WebsiteSettingsController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.image_saved')]);
 
-        return to_route('websites.settings.edit', $record->public_id);
+        return to_route($this->named('websites.settings.edit'), $record->public_id);
     }
 
     public function destroyImage(
@@ -181,7 +183,7 @@ class WebsiteSettingsController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.image_removed')]);
 
-        return to_route('websites.settings.edit', $record->public_id);
+        return to_route($this->named('websites.settings.edit'), $record->public_id);
     }
 
     /**

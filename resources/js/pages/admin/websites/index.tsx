@@ -96,8 +96,8 @@ export default function AdminWebsites({
                     <div className="text-muted-foreground text-xs">
                         {row.last_synced_at
                             ? new Date(row.last_synced_at).toLocaleString(
-                                  locale,
-                              )
+                                locale,
+                            )
                             : t('website.show.never_synced')}
                     </div>
                 </div>

@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, setLayoutProps } from '@inertiajs/react';
 import { FolderTree } from 'lucide-react';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
@@ -11,12 +11,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import AdminWebsiteCategoryController from '@/actions/App/Http/Controllers/Admin/WebsiteCategoryController';
 import WebsiteCategoryController from '@/actions/App/Http/Controllers/Erp/WebsiteCategoryController';
+import {
+    index as adminWebsitesIndex,
+    show as adminWebsiteShow,
+} from '@/routes/admin/websites';
+import { index as adminWebsiteProducts } from '@/routes/admin/websites/products';
 import { index as websitesIndex } from '@/routes/websites';
 import { index as websiteProducts } from '@/routes/websites/products';
 import type { WebsiteCategoryRow, WebsiteSummary } from '@/types/website';
 
 type Props = {
+    /** Whose screen this is; platform staff arrive on the admin routes. */
+    scope?: 'partner' | 'admin';
     website: WebsiteSummary;
     categories: WebsiteCategoryRow[];
 };
@@ -28,8 +36,24 @@ type Props = {
  * belong to the platform (§11.3) and are not editable here — nor is anything
  * about a product itself.
  */
-export default function WebsiteCategories({ website, categories }: Props) {
+export default function WebsiteCategories({
+    scope = 'partner',
+    website,
+    categories,
+}: Props) {
     const { t } = useTranslation();
+    const admin = scope === 'admin';
+    const api = admin
+        ? AdminWebsiteCategoryController
+        : WebsiteCategoryController;
+
+    if (admin) {
+        setLayoutProps({
+            breadcrumbs: [
+                { title: 'nav.partner_websites', href: adminWebsitesIndex() },
+            ],
+        });
+    }
 
     return (
         <>
@@ -42,13 +66,25 @@ export default function WebsiteCategories({ website, categories }: Props) {
                     actions={
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" variant="outline" asChild>
-                                <Link href={websiteProducts(website.id)}>
+                                <Link
+                                    href={
+                                        admin
+                                            ? adminWebsiteProducts(website.id)
+                                            : websiteProducts(website.id)
+                                    }
+                                >
                                     {t('website.products.title')}
                                 </Link>
                             </Button>
                             <Button size="sm" variant="ghost" asChild>
-                                <Link href={websitesIndex()}>
-                                    {t('website.title')}
+                                <Link
+                                    href={
+                                        admin
+                                            ? adminWebsiteShow(website.id)
+                                            : websitesIndex()
+                                    }
+                                >
+                                    {admin ? website.name : t('website.title')}
                                 </Link>
                             </Button>
                         </div>
@@ -57,7 +93,7 @@ export default function WebsiteCategories({ website, categories }: Props) {
 
                 <SectionCard title={t('website.categories.add')}>
                     <Form
-                        {...WebsiteCategoryController.store.form(website.id)}
+                        {...api.store.form(website.id)}
                         options={{ preserveScroll: true }}
                         className="space-y-3"
                         resetOnSuccess
@@ -129,12 +165,10 @@ export default function WebsiteCategories({ website, categories }: Props) {
 
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Form
-                                            {...WebsiteCategoryController.update.form(
-                                                {
-                                                    website: website.id,
-                                                    category: category.id,
-                                                },
-                                            )}
+                                            {...api.update.form({
+                                                website: website.id,
+                                                category: category.id,
+                                            })}
                                             options={{ preserveScroll: true }}
                                             transform={(data) => ({
                                                 ...data,
@@ -162,12 +196,10 @@ export default function WebsiteCategories({ website, categories }: Props) {
                                         </Form>
 
                                         <Form
-                                            {...WebsiteCategoryController.destroy.form(
-                                                {
-                                                    website: website.id,
-                                                    category: category.id,
-                                                },
-                                            )}
+                                            {...api.destroy.form({
+                                                website: website.id,
+                                                category: category.id,
+                                            })}
                                             options={{ preserveScroll: true }}
                                         >
                                             {({ processing, errors }) => (

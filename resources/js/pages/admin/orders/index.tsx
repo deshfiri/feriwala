@@ -34,6 +34,8 @@ type Props = {
         search: string | null;
         status: string | null;
         source: string | null;
+        /** One storefront's public id, from a website's own admin page. */
+        website?: string | null;
     };
     statuses: string[];
     sources: string[];
@@ -58,7 +60,7 @@ export default function AdminOrders({
     const { t, locale } = useTranslation();
     const { setFilter } = useTableQuery({ only: ['orders', 'filters'] });
     const filtered = Boolean(
-        filters.search || filters.status || filters.source,
+        filters.search || filters.status || filters.source || filters.website,
     );
 
     const status = (row: OrderRow) => (

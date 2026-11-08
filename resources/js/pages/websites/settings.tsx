@@ -1,4 +1,4 @@
-﻿import { Form, Head, Link } from '@inertiajs/react';
+﻿import { Form, Head, Link, setLayoutProps } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
@@ -11,12 +11,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import AdminWebsiteSettingsController from '@/actions/App/Http/Controllers/Admin/WebsiteSettingsController';
 import WebsiteSettingsController from '@/actions/App/Http/Controllers/Erp/WebsiteSettingsController';
+import {
+    index as adminWebsitesIndex,
+    show as adminWebsiteShow,
+} from '@/routes/admin/websites';
 import { show } from '@/routes/websites';
 import { index } from '@/routes/websites';
 import type { WebsiteDetail } from '@/types/website';
 
 type Props = {
+    /**
+     * Whose screen this is. A platform administrator editing a partner's
+     * storefront gets the same page, posting to the admin routes; the default
+     * is the partner's own.
+     */
+    scope?: 'partner' | 'admin';
     website: WebsiteDetail;
     themes: { value: string; label: string }[];
     image_limits: { max_bytes: number; accepted: string[] };
@@ -35,12 +46,25 @@ const controlClass =
  * P5-14).
  */
 export default function WebsiteSettings({
+    scope = 'partner',
     website,
     themes,
     image_limits: imageLimits,
     sms_verification: smsVerification,
 }: Props) {
     const { t } = useTranslation();
+    const admin = scope === 'admin';
+    const settings = admin
+        ? AdminWebsiteSettingsController
+        : WebsiteSettingsController;
+
+    if (admin) {
+        setLayoutProps({
+            breadcrumbs: [
+                { title: 'nav.partner_websites', href: adminWebsitesIndex() },
+            ],
+        });
+    }
 
     return (
         <>
@@ -52,7 +76,13 @@ export default function WebsiteSettings({
                     description={t('website.settings.subtitle')}
                     actions={
                         <Button variant="ghost" size="sm" asChild>
-                            <Link href={show(website.id)}>
+                            <Link
+                                href={
+                                    admin
+                                        ? adminWebsiteShow(website.id)
+                                        : show(website.id)
+                                }
+                            >
                                 <ArrowLeft aria-hidden="true" />
                                 {website.name}
                             </Link>
@@ -71,22 +101,20 @@ export default function WebsiteSettings({
                                 : website.banner_url
                         }
                         limits={imageLimits}
-                        uploadForm={WebsiteSettingsController.updateImage.form({
+                        uploadForm={settings.updateImage.form({
                             website: website.id,
                             asset,
                         })}
-                        removeForm={WebsiteSettingsController.destroyImage.form(
-                            {
-                                website: website.id,
-                                asset,
-                            },
-                        )}
+                        removeForm={settings.destroyImage.form({
+                            website: website.id,
+                            asset,
+                        })}
                     />
                 ))}
 
                 <SectionCard title={t('website.settings.information')}>
                     <Form
-                        {...WebsiteSettingsController.update.form(website.id)}
+                        {...settings.update.form(website.id)}
                         options={{ preserveScroll: true }}
                         className="space-y-4"
                     >
@@ -284,9 +312,7 @@ export default function WebsiteSettings({
                     description={t('website.settings.sms_hint')}
                 >
                     <Form
-                        {...WebsiteSettingsController.updateSmsVerification.form(
-                            website.id,
-                        )}
+                        {...settings.updateSmsVerification.form(website.id)}
                         options={{ preserveScroll: true }}
                         className="space-y-3"
                     >

@@ -599,9 +599,9 @@ describe('supplier administration navigation', () => {
         SUPPLIER_DOORS.forEach((title) => expect(titles).toContain(title));
         expect(sidebarTitles).toEqual(
             expect.arrayContaining([
-                'Supplier Management',
-                'Supplier Operations',
-                'Supplier Finance',
+                'nav.sections.supplier_management',
+                'nav.sections.supplier_operations',
+                'nav.sections.supplier_finance',
             ]),
         );
     });

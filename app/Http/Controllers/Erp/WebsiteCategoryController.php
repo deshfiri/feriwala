@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Concerns\ScopesWebsiteRoutes;
 use App\Domain\Website\Actions\ManageWebsiteCategories;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
@@ -26,7 +27,7 @@ use Inertia\Response;
  */
 class WebsiteCategoryController extends Controller
 {
-    use ResolvesBusinessAccount;
+    use ResolvesBusinessAccount, ScopesWebsiteRoutes;
 
     public function __construct(
         protected WebsiteOverview $overview,
@@ -40,6 +41,7 @@ class WebsiteCategoryController extends Controller
         Gate::authorize('manage', $record);
 
         return Inertia::render('websites/categories', [
+            'scope' => $this->scope(),
             'website' => $this->overview->summary($record),
             'categories' => $this->catalogue->categories($record),
         ]);

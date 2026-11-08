@@ -1,4 +1,4 @@
-import { Form, Head, Link } from '@inertiajs/react';
+import { Form, Head, Link, setLayoutProps } from '@inertiajs/react';
 import { PackageSearch } from 'lucide-react';
 import { useState } from 'react';
 import DataTable from '@/components/data-table/data-table';
@@ -10,10 +10,18 @@ import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import WebsiteProductPicker from '@/components/website-product-picker';
+import type { ProductCandidate } from '@/components/website-product-picker';
 import WebsiteSelectionDialog from '@/components/website-selection-dialog';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
+import AdminWebsiteProductController from '@/actions/App/Http/Controllers/Admin/WebsiteProductController';
 import WebsiteProductController from '@/actions/App/Http/Controllers/Erp/WebsiteProductController';
+import {
+    index as adminWebsitesIndex,
+    show as adminWebsiteShow,
+} from '@/routes/admin/websites';
+import { index as adminWebsiteCategories } from '@/routes/admin/websites/categories';
 import { index as dropshippingCatalogue } from '@/routes/catalog';
 import { index as websiteCategories } from '@/routes/websites/categories';
 import { index as websitesIndex, show as websiteShow } from '@/routes/websites';
@@ -21,6 +29,15 @@ import type { Column, Paginator } from '@/types';
 import type { WebsiteSelection, WebsiteSummary } from '@/types/website';
 
 type Props = {
+    /**
+     * Whose screen this is. Platform staff editing a partner's storefront get
+     * the same page on the admin routes, with a search for adding products in
+     * place of the partner's own catalogue pages.
+     */
+    scope?: 'partner' | 'admin';
+    /** The picker's search and its matches; only the admin side sends them. */
+    find?: string;
+    candidates?: ProductCandidate[];
     website: WebsiteSummary;
     selections: Paginator<WebsiteSelection>;
     filters: {
@@ -66,6 +83,9 @@ const syncTones: Record<string, 'success' | 'warning' | 'danger'> = {
  * within; every figure is checked again when it is saved.
  */
 export default function WebsiteProducts({
+    scope = 'partner',
+    find = '',
+    candidates = [],
     website,
     selections,
     filters,
@@ -74,6 +94,19 @@ export default function WebsiteProducts({
     publishing,
 }: Props) {
     const { t, locale } = useTranslation();
+    const admin = scope === 'admin';
+    const api = admin
+        ? AdminWebsiteProductController
+        : WebsiteProductController;
+
+    if (admin) {
+        setLayoutProps({
+            breadcrumbs: [
+                { title: 'nav.partner_websites', href: adminWebsitesIndex() },
+            ],
+        });
+    }
+
     const { setFilter } = useTableQuery({ only: ['selections', 'filters'] });
     const [editing, setEditing] = useState<string | null>(null);
     // Looked up by id on every render, so a row that has gone from the page
@@ -144,7 +177,7 @@ export default function WebsiteProducts({
     const rowActions = (row: WebsiteSelection) => (
         <div className="flex flex-wrap items-center gap-2">
             <Form
-                {...WebsiteProductController.updatePublication.form({
+                {...api.updatePublication.form({
                     website: website.id,
                     selection: row.id,
                 })}
@@ -271,23 +304,49 @@ export default function WebsiteProducts({
                     actions={
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" variant="outline" asChild>
-                                <Link href={websiteCategories(website.id)}>
+                                <Link
+                                    href={
+                                        admin
+                                            ? adminWebsiteCategories(website.id)
+                                            : websiteCategories(website.id)
+                                    }
+                                >
                                     {t('website.products.categories')}
                                 </Link>
                             </Button>
-                            <Button size="sm" asChild>
-                                <Link href={dropshippingCatalogue()}>
-                                    {t('website.products.choose')}
-                                </Link>
-                            </Button>
+                            {/* The partner's own catalogue pages are theirs;
+                                staff add products with the search below. */}
+                            {!admin && (
+                                <Button size="sm" asChild>
+                                    <Link href={dropshippingCatalogue()}>
+                                        {t('website.products.choose')}
+                                    </Link>
+                                </Button>
+                            )}
                             <Button size="sm" variant="ghost" asChild>
-                                <Link href={websiteShow(website.id)}>
+                                <Link
+                                    href={
+                                        admin
+                                            ? adminWebsiteShow(website.id)
+                                            : websiteShow(website.id)
+                                    }
+                                >
                                     {website.name}
                                 </Link>
                             </Button>
                         </div>
                     }
                 />
+
+                {admin && (
+                    <WebsiteProductPicker
+                        find={find}
+                        candidates={candidates}
+                        storeForm={AdminWebsiteProductController.store.form(
+                            website.id,
+                        )}
+                    />
+                )}
 
                 <DataTable
                     columns={columns}
@@ -337,11 +396,13 @@ export default function WebsiteProducts({
                             title={t('website.products.empty')}
                             description={t('website.products.empty_help')}
                             action={
-                                <Button asChild>
-                                    <Link href={dropshippingCatalogue()}>
-                                        {t('website.products.choose')}
-                                    </Link>
-                                </Button>
+                                admin ? undefined : (
+                                    <Button asChild>
+                                        <Link href={dropshippingCatalogue()}>
+                                            {t('website.products.choose')}
+                                        </Link>
+                                    </Button>
+                                )
                             }
                         />
                     }
@@ -352,6 +413,7 @@ export default function WebsiteProducts({
                         // Keyed by the selection, so each opening starts from
                         // what is saved for that product alone.
                         key={editingRow.id}
+                        scope={scope}
                         websiteId={website.id}
                         row={editingRow}
                         categories={categories}

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Order\Models\Order;
 use App\Domain\Website\Actions\FreeAddressOfClosedWebsites;
 use App\Domain\Website\Actions\ManageWebsiteBranding;
 use App\Domain\Website\Actions\ManageWebsiteDomainRouting;
+use App\Domain\Website\Actions\ManageWebsiteRecords;
 use App\Domain\Website\Actions\MoveWebsiteStatus;
 use App\Domain\Website\Actions\ProvisionWebsiteService;
 use App\Domain\Website\Actions\RequestWebsite;
@@ -17,6 +19,7 @@ use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCredential;
 use App\Domain\Website\Models\WebsiteDomain;
+use App\Domain\Website\Models\WebsiteHosting;
 use App\Domain\Website\Models\WebsiteWebhookEndpoint;
 use App\Domain\Website\Queries\WebsiteOverview;
 use App\Domain\Website\RequestedAddress;
@@ -27,6 +30,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\StatusHistory\StatusChange;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,6 +59,9 @@ class WebsiteController extends Controller
 {
     /** Staff must say why, at least this fully. */
     protected const MINIMUM_REASON = 10;
+
+    /** A real domain name: labels of letters, digits and hyphens, with at least one dot. */
+    protected const DOMAIN_RULE = 'regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i';
 
     public function __construct(
         protected WebsiteOverview $overview,
@@ -202,6 +209,9 @@ class WebsiteController extends Controller
             'can' => [
                 'administer' => $request->user()?->can('administer', $website) ?? false,
                 'manage_integration' => $managesIntegration,
+                // The website's orders are the platform's order list, filtered to
+                // it, so they need the order permission and not only this one.
+                'view_orders' => $request->user()?->can('viewAny', Order::class) ?? false,
             ],
             'image_limits' => [
                 'max_bytes' => WebsiteImageStore::MAX_BYTES,
@@ -435,6 +445,112 @@ class WebsiteController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.hosting_recorded')]);
 
         return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Correct the website's own domain, term and maintenance note.
+     *
+     * The domain is the one address a person types: a real name, held by no
+     * other website. The platform's generated subdomain label and the address the
+     * partner first asked for are internal and are not editable here. The dates
+     * are instants, typed by staff in their own time and sent with an offset.
+     */
+    public function updateDetails(Request $request, Website $website, ManageWebsiteRecords $records): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $request->merge([
+            'domain' => $request->filled('domain') ? RequestedAddress::normalize($request->string('domain')->toString()) : null,
+        ]);
+
+        $validated = $request->validate([
+            'domain' => ['nullable', 'string', 'max:253', self::DOMAIN_RULE],
+            'expires_at' => ['nullable', 'date'],
+            'grace_ends_at' => ['nullable', 'date', function (string $attribute, mixed $value, Closure $fail) use ($request): void {
+                $expires = $request->input('expires_at');
+
+                if (filled($value) && filled($expires) && CarbonImmutable::parse((string) $value)->lt(CarbonImmutable::parse((string) $expires))) {
+                    $fail(__('website.refused.grace_before_expiry'));
+                }
+            }],
+            'maintenance_message' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $this->attemptRouting(fn () => $records->updateDetails($website, $this->person($request), [
+            ...$validated,
+            'expires_at' => $this->instant($validated['expires_at'] ?? null),
+            'grace_ends_at' => $this->instant($validated['grace_ends_at'] ?? null),
+        ]));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.details_saved')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Correct a registered domain: its name, registrar, term, and whether it is
+     * the website's address. Renaming it starts its proof over.
+     */
+    public function updateDomain(Request $request, Website $website, int $domain, ManageWebsiteRecords $records): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $request->merge(['domain' => RequestedAddress::normalize($request->string('domain')->toString())]);
+
+        $validated = $request->validate([
+            'domain' => ['required', 'string', 'max:253', self::DOMAIN_RULE],
+            'registrar' => ['nullable', 'string', 'max:120'],
+            'expires_at' => ['required', 'date'],
+            'auto_renew' => ['required', 'boolean'],
+            'make_primary' => ['nullable', 'boolean'],
+        ]);
+
+        $this->attemptRouting(fn () => $records->updateDomain($this->domainOf($website, $domain), $this->person($request), [
+            ...$validated,
+            'expires_at' => $this->instant($validated['expires_at']),
+            'auto_renew' => (bool) $validated['auto_renew'],
+            'make_primary' => (bool) ($validated['make_primary'] ?? false),
+        ]));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.domain_updated')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * Correct a hosting term: its plan, provider and when it runs out.
+     */
+    public function updateHosting(Request $request, Website $website, int $hosting, ManageWebsiteRecords $records): RedirectResponse
+    {
+        Gate::authorize('administer', $website);
+
+        $validated = $request->validate([
+            'plan' => ['required', 'string', 'max:120'],
+            'provider' => ['nullable', 'string', 'max:120'],
+            'expires_at' => ['required', 'date'],
+            'auto_renew' => ['required', 'boolean'],
+        ]);
+
+        /** @var WebsiteHosting $record */
+        $record = $website->hostings()->whereKey($hosting)->firstOrFail();
+
+        $this->attemptRouting(fn () => $records->updateHosting($record, $this->person($request), [
+            ...$validated,
+            'expires_at' => $this->instant($validated['expires_at']),
+            'auto_renew' => (bool) $validated['auto_renew'],
+        ]));
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('website.flash.hosting_updated')]);
+
+        return to_route('admin.websites.show', $website->public_id);
+    }
+
+    /**
+     * A typed instant as a moment, or null when it was left blank.
+     */
+    protected function instant(mixed $value): ?CarbonImmutable
+    {
+        return filled($value) ? CarbonImmutable::parse((string) $value) : null;
     }
 
     /**

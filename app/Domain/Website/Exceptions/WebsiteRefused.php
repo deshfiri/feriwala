@@ -257,7 +257,7 @@ class WebsiteRefused extends RuntimeException
     /**
      * A webhook must go to a public HTTPS address (contract §3.3, §7.2).
      *
-     * @param  'scheme'|'credentials'|'port'|'local'|'private'|null  $reason  which rule the address broke, so the operator is told what to change
+     * @param  'scheme'|'credentials'|'port'|'local'|'unresolved'|'private'|null  $reason  which rule the address broke, so the operator is told what to change
      */
     public static function webhookAddressRefused(?string $reason = null): self
     {

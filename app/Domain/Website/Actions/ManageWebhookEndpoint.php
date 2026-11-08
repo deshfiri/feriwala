@@ -22,8 +22,9 @@ use Carbon\CarbonImmutable;
  * the platform's own network: the ERP is about to POST signed data to whatever
  * this says, and an address of `localhost` or a private range is a way to make
  * the ERP call itself. The name is resolved here and every address it gives
- * must be public ({@see OutboundAddressGuard}); a name that does not resolve
- * yet is accepted, and delivery resolves it again before every attempt.
+ * must be public ({@see OutboundAddressGuard}); delivery resolves it again before
+ * every attempt. A name that does not resolve yet is refused, except when staff
+ * typing an address by hand ask for it to be accepted anyway.
  *
  * The signing secret is shown once, like a credential secret, and rotation
  * keeps the previous one valid for verification for a window so the storefront
@@ -39,17 +40,22 @@ class ManageWebhookEndpoint
     /**
      * Set the address, issuing a secret the first time.
      *
+     * @param  bool  $acceptUnresolved  accept a name that does not resolve yet. Only for
+     *                                  staff typing an address by hand, who know their DNS is
+     *                                  still going live; every automatic path (connecting a
+     *                                  store, rotating) keeps the strict default and skips the
+     *                                  webhook rather than register one nobody can reach.
      * @return array{endpoint: WebsiteWebhookEndpoint, secret: string|null}
      *
      * @throws WebsiteRefused
      */
-    public function configure(Website $website, User $actor, string $url): array
+    public function configure(Website $website, User $actor, string $url, bool $acceptUnresolved = false): array
     {
         if ($website->status->isTerminal()) {
             throw WebsiteRefused::notEditable();
         }
 
-        $this->assertDeliverable($url);
+        $this->assertDeliverable($url, $acceptUnresolved);
 
         /** @var WebsiteWebhookEndpoint|null $endpoint */
         $endpoint = WebsiteWebhookEndpoint::query()->where('website_id', $website->id)->first();
@@ -132,7 +138,7 @@ class ManageWebhookEndpoint
     /**
      * @throws WebsiteRefused
      */
-    protected function assertDeliverable(string $url): void
+    protected function assertDeliverable(string $url, bool $acceptUnresolved = false): void
     {
         $parts = parse_url($url);
         $host = is_array($parts) ? strtolower((string) ($parts['host'] ?? '')) : '';
@@ -161,16 +167,20 @@ class ManageWebhookEndpoint
         }
 
         // What the name resolves to, not what it looks like: every address
-        // must be public (P2 D3). A name that does not resolve yet is accepted,
-        // because DNS often goes live after the webhook is set up; delivery
-        // resolves it again before every attempt and sends nothing until it
-        // does and every address is public. A name that resolves somewhere
-        // private is refused here, as it always was.
+        // must be public (P2 D3). A name that resolves somewhere private is
+        // always refused. A name that does not resolve at all is refused too,
+        // unless staff typing it by hand have said DNS is still going live
+        // ($acceptUnresolved): delivery resolves it again before every attempt
+        // and sends nothing until it does and every address is public.
         try {
             $this->guard->addressFor($literal);
         } catch (StorePlatformException $exception) {
             if (! $exception->retryable) {
                 throw WebsiteRefused::webhookAddressRefused('private');
+            }
+
+            if (! $acceptUnresolved) {
+                throw WebsiteRefused::webhookAddressRefused('unresolved');
             }
         }
     }

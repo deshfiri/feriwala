@@ -20,14 +20,21 @@ import {
     websiteServiceTone,
     websiteStatusTone,
 } from '@/lib/website';
+import { index as adminOrders } from '@/routes/admin/orders';
 import { index } from '@/routes/admin/websites';
+import { index as websiteCategories } from '@/routes/admin/websites/categories';
+import { index as websiteProducts } from '@/routes/admin/websites/products';
+import { edit as websiteSettings } from '@/routes/admin/websites/settings';
 import type { StatusTone } from '@/lib/status';
 import type { WebsiteDetail, WebsiteDomainRow } from '@/types/website';
 import ReasonTextarea from '@/components/forms/reason-textarea';
 import type { CredentialRow } from '@/components/website-credential-list';
 import type { WebhookRow } from '@/components/website-webhook-summary';
 import ConnectStore from './connect-store';
+import DomainEditForm from './domain-edit-form';
+import HostingEditForm from './hosting-edit-form';
 import StorefrontWebhook from './storefront-webhook';
+import WebsiteDetailsForm from './website-details-form';
 import StorefrontCredentials, {
     type CredentialPresetOption,
     type CredentialScopeOption,
@@ -36,7 +43,12 @@ import StorefrontCredentials, {
 
 type Props = {
     website: WebsiteDetail;
-    can: { administer: boolean; manage_integration?: boolean };
+    can: {
+        administer: boolean;
+        manage_integration?: boolean;
+        /** Whether the viewer may open the platform's order list. */
+        view_orders?: boolean;
+    };
     transitions: { value: string; label: string }[];
     credentials?: CredentialRow[];
     webhook?: WebhookRow | null;
@@ -68,6 +80,9 @@ export default function AdminWebsiteShow({
     image_limits: imageLimits,
 }: Props) {
     const { t, locale } = useTranslation();
+    // A closed website is finished with: the server refuses edits to it, so the
+    // screen does not offer them.
+    const editable = can.administer && website.status !== 'closed';
 
     const date = (value: string | null) =>
         value ? new Date(value).toLocaleDateString(locale) : '—';
@@ -105,6 +120,51 @@ export default function AdminWebsiteShow({
                         </span>
                     )}
                 </div>
+
+                {/* Everything the partner can change about their own shop,
+                    changeable here on their behalf. Paying a charge is not
+                    among them: that is the partner's wallet. */}
+                {can.administer && (
+                    <SectionCard
+                        title={t('website.admin.manage_title')}
+                        description={t('website.admin.manage_hint')}
+                    >
+                        <div
+                            className="flex flex-wrap gap-2"
+                            data-test="manage-storefront"
+                        >
+                            <Button size="sm" variant="outline" asChild>
+                                <Link href={websiteSettings(website.id)}>
+                                    {t('website.admin.manage_settings')}
+                                </Link>
+                            </Button>
+                            <Button size="sm" variant="outline" asChild>
+                                <Link href={websiteProducts(website.id)}>
+                                    {t('website.admin.manage_products')}
+                                </Link>
+                            </Button>
+                            <Button size="sm" variant="outline" asChild>
+                                <Link href={websiteCategories(website.id)}>
+                                    {t('website.admin.manage_categories')}
+                                </Link>
+                            </Button>
+                            {can.view_orders && (
+                                <Button size="sm" variant="outline" asChild>
+                                    <Link
+                                        href={adminOrders({
+                                            query: {
+                                                website: website.id,
+                                                source: 'website',
+                                            },
+                                        })}
+                                    >
+                                        {t('website.admin.manage_orders')}
+                                    </Link>
+                                </Button>
+                            )}
+                        </div>
+                    </SectionCard>
+                )}
 
                 {can.administer &&
                     (['logo', 'banner'] as const).map((asset) => (
@@ -360,6 +420,8 @@ export default function AdminWebsiteShow({
                         </SectionCard>
                     )}
 
+                {editable && <WebsiteDetailsForm website={website} />}
+
                 <SectionCard
                     title={t('website.show.domains')}
                     description={t('website.admin.domain_hint')}
@@ -398,6 +460,15 @@ export default function AdminWebsiteShow({
                                         websiteId={website.id}
                                         domain={domain}
                                         canAdminister={can.administer}
+                                    />
+                                )}
+                                {editable && (
+                                    <DomainEditForm
+                                        websiteId={website.id}
+                                        domain={domain}
+                                        isPrimary={
+                                            website.domain === domain.domain
+                                        }
                                     />
                                 )}
                             </li>
@@ -500,6 +571,12 @@ export default function AdminWebsiteShow({
                                         ? ` · ${hosting.provider}`
                                         : ''}
                                 </div>
+                                {editable && (
+                                    <HostingEditForm
+                                        websiteId={website.id}
+                                        hosting={hosting}
+                                    />
+                                )}
                             </li>
                         ))}
                     </ul>

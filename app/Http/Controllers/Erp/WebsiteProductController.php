@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
+use App\Concerns\ScopesWebsiteRoutes;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\ProductEligibility;
@@ -42,7 +43,7 @@ use Inertia\Response;
  */
 class WebsiteProductController extends Controller
 {
-    use ResolvesBusinessAccount;
+    use ResolvesBusinessAccount, ScopesWebsiteRoutes;
 
     public function __construct(
         protected WebsiteOverview $overview,
@@ -72,6 +73,7 @@ class WebsiteProductController extends Controller
             ->count();
 
         return Inertia::render('websites/products', [
+            'scope' => $this->scope(),
             'website' => $this->overview->summary($record),
             // The whole paginator, so the table has its range and page size.
             'selections' => $selections->through(
@@ -95,7 +97,20 @@ class WebsiteProductController extends Controller
                     $published,
                 ),
             ],
+
+            ...$this->extraIndexProps($request, $record),
         ]);
+    }
+
+    /**
+     * Props only one side's page needs. The partner picks products from the
+     * catalogue's own pages, so there is nothing to add here.
+     *
+     * @return array<string, mixed>
+     */
+    protected function extraIndexProps(Request $request, Website $website): array
+    {
+        return [];
     }
 
     /**

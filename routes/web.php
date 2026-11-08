@@ -86,10 +86,13 @@ use App\Http\Controllers\Admin\WalletController as AdminWalletController;
 use App\Http\Controllers\Admin\WalletConversionController;
 use App\Http\Controllers\Admin\WalletCreditRetryController;
 use App\Http\Controllers\Admin\WarehouseController;
+use App\Http\Controllers\Admin\WebsiteCategoryController as AdminWebsiteCategoryController;
 use App\Http\Controllers\Admin\WebsiteConnectionController as AdminWebsiteConnectionController;
 use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\Admin\WebsiteCredentialController as AdminWebsiteCredentialController;
 use App\Http\Controllers\Admin\WebsitePricingController;
+use App\Http\Controllers\Admin\WebsiteProductController as AdminWebsiteProductController;
+use App\Http\Controllers\Admin\WebsiteSettingsController as AdminWebsiteSettingsController;
 use App\Http\Controllers\Admin\WebsiteWebhookController as AdminWebsiteWebhookController;
 use App\Http\Controllers\Admin\WithdrawalLimitsController;
 use App\Http\Controllers\BankLookupController;
@@ -1819,6 +1822,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('websites/{website}/hostings', [AdminWebsiteController::class, 'storeHosting'])
             ->name('websites.hostings.store');
 
+        // Correcting what was recorded: the website's own address and term, a
+        // registered domain (renaming it starts its proof over), a hosting term.
+        // Money is not among them; fees and charges are financial records.
+        Route::put('websites/{website}/details', [AdminWebsiteController::class, 'updateDetails'])
+            ->name('websites.details.update');
+        Route::put('websites/{website}/domains/{domain}', [AdminWebsiteController::class, 'updateDomain'])
+            ->whereNumber('domain')
+            ->name('websites.domains.update');
+        Route::put('websites/{website}/hostings/{hosting}', [AdminWebsiteController::class, 'updateHosting'])
+            ->whereNumber('hosting')
+            ->name('websites.hostings.update');
+
         // Proving and activating a custom domain for the shared storefront (D30 §3).
         Route::post('websites/{website}/domains/{domain}/verification', [AdminWebsiteController::class, 'issueDomainVerification'])
             ->whereNumber('domain')
@@ -1863,6 +1878,49 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('websites.webhook.rotate');
         Route::delete('websites/{website}/webhook', [AdminWebsiteWebhookController::class, 'disable'])
             ->name('websites.webhook.disable');
+
+        /*
+         * A partner's storefront settings, products and categories, edited by
+         * staff on the partner's behalf. The partner's own controllers, subclassed
+         * (see ResolvesWebsiteForStaff): the same fields, validation and actions,
+         * with `website.edit` required by name and the website found among every
+         * website. **Paying a charge or a renewal is not here** — that spends the
+         * partner's wallet and stays the partner's own act (WebsitePolicy::pay).
+         */
+        Route::get('websites/{website}/settings', [AdminWebsiteSettingsController::class, 'edit'])
+            ->name('websites.settings.edit');
+        Route::put('websites/{website}/settings', [AdminWebsiteSettingsController::class, 'update'])
+            ->name('websites.settings.update');
+        Route::put('websites/{website}/settings/sms-verification', [AdminWebsiteSettingsController::class, 'updateSmsVerification'])
+            ->name('websites.settings.sms-verification.update');
+        Route::post('websites/{website}/settings/{asset}', [AdminWebsiteSettingsController::class, 'updateImage'])
+            ->whereIn('asset', ['logo', 'banner'])
+            ->name('websites.settings.image.update');
+        Route::delete('websites/{website}/settings/{asset}', [AdminWebsiteSettingsController::class, 'destroyImage'])
+            ->whereIn('asset', ['logo', 'banner'])
+            ->name('websites.settings.image.destroy');
+
+        Route::get('websites/{website}/products', [AdminWebsiteProductController::class, 'index'])
+            ->name('websites.products.index');
+        Route::post('websites/{website}/products', [AdminWebsiteProductController::class, 'store'])
+            ->name('websites.products.store');
+        Route::patch('websites/{website}/products/{selection}', [AdminWebsiteProductController::class, 'update'])
+            ->name('websites.products.update');
+        Route::put('websites/{website}/products/{selection}/publication', [AdminWebsiteProductController::class, 'updatePublication'])
+            ->name('websites.products.publication.update');
+        Route::delete('websites/{website}/products/{selection}', [AdminWebsiteProductController::class, 'destroy'])
+            ->name('websites.products.destroy');
+
+        Route::get('websites/{website}/categories', [AdminWebsiteCategoryController::class, 'index'])
+            ->name('websites.categories.index');
+        Route::post('websites/{website}/categories', [AdminWebsiteCategoryController::class, 'store'])
+            ->name('websites.categories.store');
+        Route::post('websites/{website}/categories/order', [AdminWebsiteCategoryController::class, 'reorder'])
+            ->name('websites.categories.reorder');
+        Route::patch('websites/{website}/categories/{category}', [AdminWebsiteCategoryController::class, 'update'])
+            ->name('websites.categories.update');
+        Route::delete('websites/{website}/categories/{category}', [AdminWebsiteCategoryController::class, 'destroy'])
+            ->name('websites.categories.destroy');
 
         /*
          * What partners may charge for what they sell (§15.1, P5-5). Behind
