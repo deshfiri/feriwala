@@ -1,5 +1,11 @@
 * text=auto eol=lf
 
+# Fonts are binary: never let a line-ending rule touch their bytes.
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+
 *.blade.php diff=html
 *.css diff=css
 *.html diff=html

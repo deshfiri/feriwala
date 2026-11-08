@@ -34,10 +34,10 @@
      * Bangla needs a face that actually has the glyphs; falls back gracefully.
      * Li Ador Noirrit takes the Bengali characters; Poppins is listed before the
      * Bengali fallbacks so Latin letters on a Bangla page stay Poppins rather
-     * than the fallback's own Latin. Li Ador Noirrit is licensed, so its
-     * `@font-face` is written by resources/views/app.blade.php from the files in
-     * `public/fonts` (not committed, see .gitignore); where they are missing the
-     * list simply moves on to Noto Sans Bengali.
+     * than the fallback's own Latin. Li Ador Noirrit is served from
+     * `public/fonts`, and its `@font-face` is written by
+     * resources/views/app.blade.php from the files that are there; where one is
+     * missing the list simply moves on to Noto Sans Bengali.
      */
     --font-bangla:
         'Li Ador Noirrit', 'Poppins', 'Noto Sans Bengali', 'Hind Siliguri',

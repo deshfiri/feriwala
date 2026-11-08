@@ -63,9 +63,9 @@
             lipighor.com/EULA.html). Written here rather than in app.css so the
             URLs come from `asset()`: a font url() inside the stylesheet resolves
             against the Vite dev server, which does not serve `public/`. The
-            licensed files are not committed, so a face is only declared when its
-            file exists — a server without them falls back to Noto Sans Bengali
-            with no failed requests. `unicode-range` keeps it to Bengali (plus the
+            files live in `public/fonts`, and a face is only declared when its
+            file exists — a deployment missing one falls back to Noto Sans
+            Bengali with no failed requests. `unicode-range` keeps it to Bengali (plus the
             danda and the zero-width joiners conjuncts need), so English and
             digits on a Bangla page stay Poppins. A Medium request lands on Regular.
         --}}
