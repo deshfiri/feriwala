@@ -42,7 +42,7 @@ Route::prefix('storefront/v1')
     ->name('storefront.v1.')
     ->group(function () {
         // Liveness. Unauthenticated, and says nothing but that it is alive.
-        Route::get('health', fn () => response()->json(['status' => 'ok']))
+        Route::get('health', fn() => response()->json(['status' => 'ok']))
             ->middleware('storefront.log')
             ->name('health');
 

@@ -73,9 +73,9 @@ class Payment extends Model
             'gateway_ownership' => GatewayOwnership::class,
             'amount' => MoneyCast::class,
             'revenue' => MoneyCast::class,
-            'settled_amount' => MoneyCast::class.':settled_currency_code',
-            'gateway_fee' => MoneyCast::class.':gateway_fee_currency_code',
-            'charge_amount' => MoneyCast::class.':charge_currency_code',
+            'settled_amount' => MoneyCast::class . ':settled_currency_code',
+            'gateway_fee' => MoneyCast::class . ':gateway_fee_currency_code',
+            'charge_amount' => MoneyCast::class . ':charge_currency_code',
             'fx_quoted_at' => 'immutable_datetime',
             'payer_address_snapshot' => 'array',
             'initiated_at' => 'immutable_datetime',
@@ -268,7 +268,7 @@ class Payment extends Model
      */
     public function transitionToPaidManually(): static
     {
-        if (! $this->canBeSettledManually()) {
+        if (!$this->canBeSettledManually()) {
             throw IllegalStateTransition::between(static::class, $this->status, PaymentStatus::Paid);
         }
 
