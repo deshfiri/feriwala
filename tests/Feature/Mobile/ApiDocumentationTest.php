@@ -31,7 +31,8 @@ test('the mobile document declares bearer authentication and leaves login public
 test('Swagger UI renders for each API', function (string $api) {
     $this->get("docs/{$api}")
         ->assertOk()
-        ->assertSee("{$api}.json", false)
+        ->assertSee("url: \"\\/docs\\/{$api}.json\"", false)
+        ->assertDontSee('http://', false)
         ->assertSee('swagger-ui', false);
 })->with(['mobile', 'storefront']);
 

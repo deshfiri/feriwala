@@ -127,7 +127,10 @@ class ApiServiceProvider extends ServiceProvider
         Route::middleware(['web', RestrictedDocsAccess::class])
             ->get('docs/{api}', fn (string $api) => view('docs.swagger', [
                 'title' => self::DOCUMENTS[$api],
-                'specUrl' => url("docs/{$api}.json"),
+                // Relative on purpose: an absolute url() takes its scheme from the
+                // request, which is `http` behind a TLS-terminating proxy and makes
+                // the browser block the spec as mixed content.
+                'specUrl' => "/docs/{$api}.json",
             ]))
             ->whereIn('api', array_keys(self::DOCUMENTS))
             ->name('docs.swagger');
