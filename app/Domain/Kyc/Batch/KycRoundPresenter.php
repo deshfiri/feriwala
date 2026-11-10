@@ -53,6 +53,8 @@ final class KycRoundPresenter
 
                 $options[] = [
                     'key' => $requirement['key'],
+                    // The same value, under the name the app sends it as.
+                    'document_type' => $requirement['key'],
                     'name' => KycRoundDefinition::localized($requirement, 'name'),
                     'instructions' => KycRoundDefinition::localized($requirement, 'instructions') ?: null,
                     'required' => $requirement['required'],

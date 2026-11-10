@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Mobile\Supplier\Kyc;
 
+use App\Http\Requests\Mobile\Kyc\Concerns\AcceptsDocumentType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class KycEvidenceFileRequest extends FormRequest
 {
+    use AcceptsDocumentType;
+
     /**
      * @return array<string, mixed>
      */
@@ -15,6 +18,8 @@ class KycEvidenceFileRequest extends FormRequest
         return [
             /** The requirement `key`, from `batch.groups[].options[].key`. */
             'requirement' => ['required', 'string', 'max:64'],
+            /** The same requirement `key`, under the name the flat list uses. Send this or `requirement`. */
+            'document_type' => ['nullable', 'string', 'max:64'],
             /** The slot `key` within that requirement. */
             'slot' => ['required', 'string', 'max:48'],
             /** The file, as `multipart/form-data`. Up to 10 MB; the slot lists what it accepts. */
