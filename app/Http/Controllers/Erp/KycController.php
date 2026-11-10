@@ -99,7 +99,7 @@ class KycController extends Controller
             throw ValidationException::withMessages(['file' => __('kyc.batch.refused.use_new_form')]);
         }
 
-        if (! $submission->status->isEditable()) {
+        if (!$submission->status->isEditable()) {
             throw ValidationException::withMessages([
                 'file' => 'This submission is being reviewed and cannot be changed.',
             ]);
@@ -128,7 +128,7 @@ class KycController extends Controller
             );
         }
 
-        return back()->with('success', $type->name.' saved.');
+        return back()->with('success', $type->name . ' saved.');
     }
 
     /**

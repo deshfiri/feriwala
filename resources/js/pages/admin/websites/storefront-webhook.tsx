@@ -176,24 +176,24 @@ export default function StorefrontWebhook({
                         </Button>
 
                         {webhook?.is_active && (
-                                <Form
-                                    {...WebsiteWebhookController.disable.form(
-                                        websiteId,
-                                    )}
-                                    options={{ preserveScroll: true }}
-                                >
-                                    {({ processing }) => (
-                                        <Button
-                                            type="submit"
-                                            size="sm"
-                                            variant="ghost"
-                                            disabled={processing}
-                                        >
-                                            {t('website.integration.disable')}
-                                        </Button>
-                                    )}
-                                </Form>
-                            )}
+                            <Form
+                                {...WebsiteWebhookController.disable.form(
+                                    websiteId,
+                                )}
+                                options={{ preserveScroll: true }}
+                            >
+                                {({ processing }) => (
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={processing}
+                                    >
+                                        {t('website.integration.disable')}
+                                    </Button>
+                                )}
+                            </Form>
+                        )}
                     </div>
                 </div>
             </SectionCard>
