@@ -12,8 +12,8 @@ class BankBranchesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            /** `id` of a district from the locations lookup. */
-            'district_id' => ['required', 'integer'],
+            /** `id` of a district from the locations lookup. Leave it out to get every branch of the bank. */
+            'district_id' => ['nullable', 'integer'],
         ];
     }
 }

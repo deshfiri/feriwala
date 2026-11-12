@@ -24,55 +24,8 @@
     --accent: #c2410c;
     --on-accent: #ffffff;
     font-size: 16px;
-    color-scheme: light dark;
-}
-
-/*
- * Light and dark. With no saved choice the page follows the visitor's system;
- * the header switch (theme.js / app.js) sets data-theme="light|dark" on <html>
- * and that wins over the system either way. The dark values are written twice
- * because a media query and an attribute selector cannot share one rule.
- */
-:root[data-theme='light'] {
+    /* The storefront is light only: no system or saved theme changes it. */
     color-scheme: light;
-}
-
-:root[data-theme='dark'] {
-    color-scheme: dark;
-    --bg: #f8fafc;
-    --surface: #f8fafc;
-    --surface-2: #f8fafc;
-    --text: #1b1a18;
-    --muted: #6a645e;
-    --line: #e6e3df;
-    --danger: #b42318;
-    --ok: #157f3b;
-    --warn: #9a5b00;
-    --shadow: 0 1px 2px rgba(20, 16, 10, 0.05), 0 6px 18px rgba(20, 16, 10, 0.05);
-}
-
-/* The brand colour is chosen for a light page; on a dark one text links are lifted. */
-:root[data-theme='dark'] a:not(.btn):not(.banner-link) {
-    color: color-mix(in srgb, var(--brand) 45%, #fff);
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) {
-        --bg: #f8fafc;
-        --surface: #f8fafc;
-        --surface-2: #f8fafc;
-        --text: #1b1a18;
-        --muted: #6a645e;
-        --line: #e6e3df;
-        --danger: #b42318;
-        --ok: #157f3b;
-        --warn: #9a5b00;
-        --shadow: 0 1px 2px rgba(20, 16, 10, 0.05), 0 6px 18px rgba(20, 16, 10, 0.05);
-    }
-
-    :root:not([data-theme='light']) a:not(.btn):not(.banner-link) {
-        color: color-mix(in srgb, var(--brand) 45%, #fff);
-    }
 }
 
 *,
@@ -1286,50 +1239,6 @@ section {
     --surface: #f8fafc;
     --surface-2: #f8fafc;
 }
-:root[data-theme='dark'] {
-    --bg: #f8fafc;
-    --surface: #f8fafc;
-    --surface-2: #f8fafc;
-}
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) {
-        --bg: #f8fafc;
-        --surface: #f8fafc;
-        --surface-2: #f8fafc;
-    }
-}
-
-.theme-toggle {
-    display: inline-grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-    cursor: pointer;
-}
-.theme-toggle[hidden] {
-    display: none;
-}
-.theme-toggle .icon-sun {
-    display: none;
-}
-:root[data-theme='dark'] .theme-toggle .icon-moon {
-    display: none;
-}
-:root[data-theme='dark'] .theme-toggle .icon-sun {
-    display: block;
-}
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) .theme-toggle .icon-moon {
-        display: none;
-    }
-    :root:not([data-theme='light']) .theme-toggle .icon-sun {
-        display: block;
-    }
-}
 .container {
     width: min(1280px, 100%);
 }
@@ -1724,8 +1633,7 @@ a.btn.btn-accent {
 
 /* ==========================================================================
    Checkout form (`.co`). Scoped: nothing here styles another page.
-   Tokens come from :root (--brand, --accent, --surface, --line …), so a shop's
-   own colours and the dark theme carry through.
+   Surfaces and lines come from :root; the blue is the storefront's own.
    ========================================================================== */
 .co {
     --co-radius: 16px;
@@ -2464,4 +2372,31 @@ html[dir='rtl'] .co-btn-arrow {
     .co .steps li + li::before {
         width: 0.7rem;
     }
+}
+
+/* ==========================================================================
+   Button text: a button with a colour fill has a white label; every other
+   button (outline, transparent, white, light grey) has a black one.
+   Kept last, because the blanket "black" rule above is !important.
+   ========================================================================== */
+.btn,
+a.btn,
+button.btn,
+.btn.btn-quiet,
+.btn.btn-accent,
+.btn.track-submit,
+.co-btn,
+.search button,
+.storefront-header-search button,
+button.bg-sky-600,
+a.bg-sky-600 {
+    color: #fff !important;
+}
+.storefront-header-search button svg {
+    color: #fff !important;
+}
+/* Unfilled buttons turn blue on hover and their label turns white with them (rules above); at rest, black. */
+button.link,
+.storefront-mobile-menu-panel .storefront-mobile-menu-locale-button {
+    color: #000 !important;
 }

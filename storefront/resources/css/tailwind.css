@@ -5,6 +5,9 @@
 @import "tailwindcss/theme";
 @import "tailwindcss/utilities";
 
+/* Light only: `dark:` utilities apply only under [data-theme=dark], which nothing sets (theme.js forces light). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* Scan Laravel Blade files */
 @source "../views/**/*.blade.php";
 

@@ -29,6 +29,7 @@
     @endif
 
     <meta name="theme-color" content="#F8FAFC">
+    <meta name="color-scheme" content="light">
 
     @if (!empty($image))
         <meta property="og:image" content="{{ safe_url($image) }}">

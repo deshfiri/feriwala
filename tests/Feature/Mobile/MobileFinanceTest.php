@@ -391,12 +391,29 @@ describe('bank and location lookups', function () {
 
         $this->getJson(route('mobile.v1.banks.index'))
             ->assertOk()->assertJsonPath('data.0.bank_code', '001');
-        $this->getJson(route('mobile.v1.banks.branches', '001'))
-            ->assertUnprocessable()->assertJsonValidationErrors('district_id');
         $this->getJson(route('mobile.v1.banks.branches', ['bankCode' => '001', 'district_id' => $chain['district']->id]))
             ->assertOk()->assertJsonPath('data', []);
 
         expect($branch->routing_number)->toBe('001120100');
+
+        // The bank list carries every identifier and name, and the whole directory is one request away.
+        $this->getJson(route('mobile.v1.banks.index'))
+            ->assertJsonPath('data.0.id', $branch->bank_id)
+            ->assertJsonStructure(['data' => [['id', 'bank_code', 'name', 'slug', 'aliases', 'branch_count']]]);
+
+        $all = $this->getJson(route('mobile.v1.banks.index', ['include' => 'branches']))->assertOk();
+        $all->assertJsonPath('data.0.branches.0.routing_number', $branch->routing_number)
+            ->assertJsonPath('data.0.branches.0.id', $branch->id)
+            ->assertJsonPath('data.0.branches.0.bank_code', '001')
+            ->assertJsonStructure(['data' => [['branches' => [[
+                'id', 'bank_code', 'routing_number', 'name', 'slug', 'branch_code', 'original_branch_code',
+                'district_id', 'district_name_en', 'district_name_bn', 'district_source_name',
+                'swift_code', 'address', 'telephone', 'email', 'fax',
+            ]]]]]);
+
+        // Without a district, every branch of the bank; with one, only that district's.
+        $this->getJson(route('mobile.v1.banks.branches', '001'))
+            ->assertOk()->assertJsonPath('data.0.routing_number', $branch->routing_number);
     });
 
     test('divisions, then the places inside a place', function () {

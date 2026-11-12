@@ -1,13 +1,11 @@
-// Loaded in the head, before first paint, so a saved light/dark choice never flashes the other.
-// With no saved choice nothing is set and the stylesheet follows the visitor's system.
+// The storefront is light only. Nothing a visitor or their system prefers can change that:
+// the page is marked light, and a "dark" choice saved by an earlier version is forgotten.
 (function () {
-    try {
-        var saved = window.localStorage.getItem('theme');
+    document.documentElement.setAttribute('data-theme', 'light');
 
-        if (saved === 'light' || saved === 'dark') {
-            document.documentElement.setAttribute('data-theme', saved);
-        }
+    try {
+        window.localStorage.removeItem('theme');
     } catch (error) {
-        // Storage blocked: the system preference still applies.
+        // Storage blocked: nothing was saved, nothing to forget.
     }
 })();
