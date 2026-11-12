@@ -177,8 +177,8 @@
                         {{ t('catalog.in_stock_only') }}</label>
 
                     <div class="actions">
-                        <button class="btn" type="submit">{{ t('catalog.apply') }}</button>
-                        <a class="btn btn-quiet" href="{{ $resetUrl }}">{{ t('catalog.reset') }}</a>
+                        <button class="btn !text-white" type="submit">{{ t('catalog.apply') }}</button>
+                        <a class="btn btn-quiet !text-white" href="{{ $resetUrl }}">{{ t('catalog.reset') }}</a>
                     </div>
                 </form>
             </details>
@@ -204,8 +204,8 @@
 
                     <a href="{{ route('products.index') }}"
                         class="mt-6 inline-flex items-center justify-center rounded-md
-                   bg-slate-900 px-6 py-3 text-sm font-semibold text-white
-                   transition hover:bg-amber-500">
+                   bg-sky-600 px-6 py-3 text-sm font-semibold text-white
+                   transition hover:bg-sky-700">
                         {{ t('catalog.browse_all') }}
                     </a>
 

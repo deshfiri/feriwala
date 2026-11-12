@@ -19,8 +19,9 @@ use App\Support\Money\Money;
  * `payment_config`, then a platform default in settings. There is deliberately
  * no third: cash on delivery is switched on per shop by somebody who knows that
  * shop's couriers, and the platform default exists so that a new shop starts
- * where the platform wants it to (off, until §28's collection and settlement
- * are built).
+ * where the platform wants it to: **on**, because cash on delivery is how
+ * Bangladeshi customers pay and a shop that cannot take it cannot trade. The
+ * platform setting or a shop's own `payment_config` can still switch it off.
  *
  * The ceiling is the same shape. An unpaid parcel is credit extended to a
  * stranger, and the ceiling is what limits how much of it one order can be.
@@ -45,7 +46,7 @@ class CodTerms
             return $own;
         }
 
-        return (bool) $this->settings->get(self::ENABLED, false);
+        return (bool) $this->settings->get(self::ENABLED, true);
     }
 
     /**

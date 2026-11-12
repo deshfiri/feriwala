@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Erp\ErpException;
 use App\Http\Requests\CheckoutDetailsRequest;
 use App\Models\Checkout;
+use App\Services\BasketQuote;
 use App\Services\Checkouts;
 use App\Services\Orders;
 use App\Services\Site;
@@ -20,6 +21,7 @@ class CheckoutController extends Controller
         private readonly Checkouts $checkouts,
         private readonly Orders $orders,
         private readonly Site $site,
+        private readonly BasketQuote $quotes,
     ) {}
 
     public function form(Request $request): View|RedirectResponse
@@ -33,10 +35,31 @@ class CheckoutController extends Controller
         }
 
         $site = $this->site->get(fresh: true);
+        $items = $basket->items();
+
+        // The same ERP figures the cart shows. If the ERP cannot answer, the form
+        // still works and the total is confirmed on the review step.
+        try {
+            $quote = $this->quotes->for($items);
+        } catch (ErpException $exception) {
+            if (! $exception->isUnavailable() && ! $exception->is('product_unavailable') && ! $exception->is('website_not_accepting_orders')) {
+                report($exception);
+            }
+
+            $quote = null;
+        }
+
+        $prices = [];
+
+        foreach ((array) ($quote['items'] ?? []) as $line) {
+            $prices[(string) $line['sku']] = $line;
+        }
 
         return view('checkout.form', [
             'title' => t('checkout.title'),
-            'items' => $basket->items(),
+            'items' => $items,
+            'quote' => $quote,
+            'prices' => $prices,
             'methods' => (array) $site['payment_methods'],
             'gateways' => (array) $site['gateways'],
         ]);

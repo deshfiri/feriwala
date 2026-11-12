@@ -60,6 +60,8 @@ return [
         'searching' => 'Searching…',
         'change_product' => 'Choose a different product',
         'note' => 'Note for the order (optional)',
+        'summary' => 'Order summary',
+        'summary_empty' => 'Add a product to see the price.',
         'discount' => 'Discount',
         'discount_label' => 'Discount (optional)',
         'discount_help' => 'Taken off the goods and shared across the products. It comes out of your own earnings; the delivery charge is Feriwala\'s and is added as shown.',

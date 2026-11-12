@@ -189,19 +189,206 @@
     });
 
     // A second click must not send an order twice.
+    // Buttons may sit outside the form and name it with the `form` attribute.
+    var submitButtons = function (form) {
+        var own = Array.prototype.slice.call(
+            form.querySelectorAll('button[type="submit"]'),
+        );
+
+        if (form.id) {
+            document
+                .querySelectorAll(
+                    'button[type="submit"][form="' + form.id + '"]',
+                )
+                .forEach(function (button) {
+                    if (own.indexOf(button) === -1) {
+                        own.push(button);
+                    }
+                });
+        }
+
+        return own;
+    };
+
     document.querySelectorAll('form[data-once]').forEach(function (form) {
-        form.addEventListener('submit', function () {
-            form.querySelectorAll('button[type="submit"]').forEach(
-                function (button) {
-                    button.setAttribute('aria-busy', 'true');
-                    // Disabled on the next tick: disabling inside the submit handler can cancel the submit in some browsers.
-                    window.setTimeout(function () {
-                        button.disabled = true;
-                    }, 0);
-                },
-            );
+        var labels = new WeakMap();
+
+        form.addEventListener('submit', function (event) {
+            // A submit that something else stopped (e.g. a field to fix) sends nothing.
+            if (event.defaultPrevented) {
+                return;
+            }
+
+            submitButtons(form).forEach(function (button) {
+                var label = button.querySelector('.co-btn-label');
+
+                button.setAttribute('aria-busy', 'true');
+
+                if (label && button.getAttribute('data-busy')) {
+                    labels.set(button, label.textContent);
+                    label.textContent = button.getAttribute('data-busy');
+                }
+
+                // Disabled on the next tick: disabling inside the submit handler can cancel the submit in some browsers.
+                window.setTimeout(function () {
+                    button.disabled = true;
+                }, 0);
+            });
+        });
+
+        // Coming back with the browser's Back button must not leave the page locked.
+        window.addEventListener('pageshow', function (event) {
+            if (!event.persisted) {
+                return;
+            }
+
+            submitButtons(form).forEach(function (button) {
+                var label = button.querySelector('.co-btn-label');
+
+                button.removeAttribute('aria-busy');
+                button.disabled = false;
+
+                if (label && labels.has(button)) {
+                    label.textContent = labels.get(button);
+                }
+            });
         });
     });
+
+    // Checkout form: say what is wrong beside the field, before the round trip.
+    // Display only: the server validates again and has the last word.
+    var checkout = document.querySelector('form[data-checkout]');
+
+    if (checkout) {
+        var rules = {
+            phone: function (value) {
+                var digits = value.replace(/\D/g, '');
+
+                return (
+                    /^[0-9+\-\s()]+$/.test(value) &&
+                    digits.length >= 10 &&
+                    digits.length <= 15
+                );
+            },
+            email: function (value) {
+                return value === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+            },
+            name: function (value) {
+                return value.length >= 2;
+            },
+        };
+
+        var message = function (field, text) {
+            var id = 'err-' + field.id;
+            var existing = document.getElementById(id);
+
+            if (!text) {
+                if (existing) {
+                    existing.remove();
+                }
+
+                field.removeAttribute('aria-describedby');
+                field.removeAttribute('aria-invalid');
+
+                return;
+            }
+
+            if (!existing) {
+                existing = document.createElement('p');
+                existing.className = 'co-error';
+                existing.id = id;
+                existing.setAttribute('role', 'alert');
+                field.parentNode.appendChild(existing);
+            }
+
+            existing.textContent = text;
+            field.setAttribute('aria-invalid', 'true');
+            field.setAttribute('aria-describedby', id);
+        };
+
+        var check = function (field) {
+            var value = field.value.trim();
+            var rule = rules[field.id];
+            var ok = field.required
+                ? value !== '' && (!rule || rule(value))
+                : !rule || rule(value);
+
+            message(field, ok ? '' : field.getAttribute('data-msg'));
+            field.classList.toggle('is-valid', ok && value !== '');
+
+            return ok;
+        };
+
+        var fields = checkout.querySelectorAll('input[data-msg]');
+
+        fields.forEach(function (field) {
+            field.addEventListener('blur', function () {
+                if (field.value !== '' || field.required) {
+                    check(field);
+                }
+            });
+
+            // Once flagged, tell the customer the moment it is fixed.
+            field.addEventListener('input', function () {
+                if (field.getAttribute('aria-invalid') === 'true') {
+                    check(field);
+                }
+            });
+        });
+
+        // Capture phase: runs before the double-submit guard, which respects a cancelled submit.
+        checkout.addEventListener(
+            'submit',
+            function (event) {
+                var first = null;
+
+                fields.forEach(function (field) {
+                    if (!check(field) && first === null) {
+                        first = field;
+                    }
+                });
+
+                if (first !== null) {
+                    event.preventDefault();
+                    first.focus();
+                    first.scrollIntoView({
+                        block: 'center',
+                        behavior: window.matchMedia(
+                            '(prefers-reduced-motion: reduce)',
+                        ).matches
+                            ? 'auto'
+                            : 'smooth',
+                    });
+                }
+            },
+            true,
+        );
+    }
+
+    // Order summary: always open beside the form on a wide screen, folded
+    // away on a phone (where the bar below the page still shows the total).
+    var summary = document.querySelector('details[data-summary]');
+
+    if (summary && window.matchMedia) {
+        var wide = window.matchMedia('(min-width: 901px)');
+        var head = summary.querySelector('summary');
+
+        var fit = function () {
+            summary.open = wide.matches;
+        };
+
+        head.addEventListener('click', function (event) {
+            if (wide.matches) {
+                event.preventDefault();
+            }
+        });
+
+        fit();
+
+        if (wide.addEventListener) {
+            wide.addEventListener('change', fit);
+        }
+    }
 
     document.querySelectorAll('form[data-confirm]').forEach(function (form) {
         form.addEventListener('submit', function (event) {
@@ -241,6 +428,10 @@
         var district = document.getElementById('district');
         var city = document.getElementById('city');
 
+        // The selects start empty, so a value carried over from a failed
+        // submit would name an area the customer cannot see.
+        hidden.value = '';
+
         var fill = function (select, list) {
             while (select.options.length > 1) {
                 select.remove(1);
@@ -260,10 +451,18 @@
             select.disabled = list.length === 0;
         };
 
+        // A newer request for the same select supersedes an older, slower one.
+        var tickets = new WeakMap();
+
         var load = function (parent, select) {
+            var ticket = (tickets.get(select) || 0) + 1;
             var url =
                 '/api/areas' +
                 (parent ? '?parent=' + encodeURIComponent(parent) : '');
+
+            tickets.set(select, ticket);
+            select.setAttribute('aria-busy', 'true');
+            select.parentNode.classList.add('is-loading');
 
             return fetch(url, {
                 headers: { Accept: 'application/json' },
@@ -273,30 +472,62 @@
                     return response.ok ? response.json() : { data: [] };
                 })
                 .then(function (body) {
-                    fill(select, body.data || []);
+                    if (tickets.get(select) === ticket) {
+                        fill(select, body.data || []);
+                    }
                 })
                 .catch(function () {
                     /* the address field still works */
+                })
+                .then(function () {
+                    if (tickets.get(select) === ticket) {
+                        select.removeAttribute('aria-busy');
+                        select.parentNode.classList.remove('is-loading');
+                    }
                 });
+        };
+
+        // Remember what we typed into a text field ourselves, so a changed
+        // selection may replace it but something the customer wrote never is.
+        var written = new WeakMap();
+
+        var suggest = function (field, text) {
+            if (field && (!field.value || field.value === written.get(field))) {
+                field.value = text;
+                written.set(field, text);
+            }
+        };
+
+        var invalidate = function (select) {
+            // Cancel any request still in flight for a level below.
+            tickets.set(select, (tickets.get(select) || 0) + 1);
+            select.removeAttribute('aria-busy');
+            select.parentNode.classList.remove('is-loading');
+            fill(select, []);
         };
 
         selects.forEach(function (select, level) {
             select.addEventListener('change', function () {
                 for (var i = level + 1; i < selects.length; i++) {
-                    fill(selects[i], []);
+                    invalidate(selects[i]);
                 }
 
                 var chosen = select.value;
-                hidden.value = chosen;
-
                 var label = select.options[select.selectedIndex].textContent;
 
-                if (chosen && level === 1 && district && !district.value) {
-                    district.value = label;
+                // The most specific area chosen so far is the one submitted.
+                hidden.value = chosen;
+
+                if (!chosen && level > 0) {
+                    hidden.value = selects[level - 1].value;
                 }
 
-                if (chosen && level === 2 && city && !city.value) {
-                    city.value = label;
+                if (level === 1) {
+                    suggest(district, chosen ? label : '');
+                }
+
+                if (level === 2) {
+                    suggest(city, chosen ? label : '');
                 }
 
                 if (chosen && level < selects.length - 1) {

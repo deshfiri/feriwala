@@ -5,7 +5,7 @@
         // than the screen. A short list stays put and scrolls by hand instead.
         $marquee = count($categories) >= 8;
     @endphp
-    <nav class="category-navigation w-full  dark:bg-slate-950" aria-label="{{ t('nav.categories') }}">
+    <nav class="category-navigation w-full" aria-label="{{ t('nav.categories') }}">
 
         <div class="category-navigation__inner">
 

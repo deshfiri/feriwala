@@ -10,50 +10,60 @@
     $other = $locale === 'bn' ? 'en' : 'bn';
     $cartCount = $cartCount ?? 0;
 @endphp
+
 <!doctype html>
 <html lang="{{ $locale }}">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <title>{{ $pageTitle }}</title>
+
     @if (!empty($description))
         <meta name="description" content="{{ $description }}">
     @endif
+
     @if (!empty($noindex))
         <meta name="robots" content="noindex, nofollow">
     @endif
-    <meta name="theme-color" content="{{ $primary }}">
+
+    <meta name="theme-color" content="#F8FAFC">
+
     @if (!empty($image))
         <meta property="og:image" content="{{ safe_url($image) }}">
         <meta property="og:title" content="{{ $title ?? '' }}">
     @endif
+
     <style>
         :root {
             --brand: {{ $primary }};
             --on-brand: {{ on_colour($primary) }};
             --accent: {{ $secondary }};
-            --on-accent: {{ on_colour($secondary) }}
+            --on-accent: {{ on_colour($secondary) }};
         }
     </style>
+
     <link rel="stylesheet" href="{{ versioned_asset('css/app.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/css/tailwind.css') }}">
     <script src="{{ versioned_asset('js/theme.js') }}"></script>
 </head>
 
-<body class="">
+<body class="bg-[#F8FAFC] text-slate-800">
+
     <a class="skip" href="#main">{{ t('nav.skip') }}</a>
 
-
     @php
-        // Shared Tailwind classes. Presentation only, nothing functional.
-        // Sky "soft" button: used by track, language, theme toggle and menu button.
+        // Shared navigation button styling.
         $navBtn =
-            'items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-[15px] font-medium text-sky-800 cursor-pointer transition-colors hover:border-sky-700 hover:bg-sky-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:border-sky-900 dark:bg-sky-950/60 dark:text-sky-200 dark:hover:border-sky-700 dark:hover:bg-sky-700 dark:hover:text-white dark:focus-visible:ring-offset-slate-900';
+            'inline-flex items-center justify-center rounded-xl border border-sky-600 bg-sky-600 text-[15px] font-semibold text-white cursor-pointer transition-all duration-200 hover:border-sky-700 hover:bg-sky-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:border-sky-600 dark:bg-sky-600 dark:text-white dark:hover:border-sky-700 dark:hover:bg-sky-700 dark:hover:text-white';
 
-        // Items inside the dropdown menu.
+        $trackBtn =
+            'inline-flex items-center justify-center rounded-xl border border-slate-300 bg-transparent text-[15px] font-semibold text-black cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-600 hover:bg-sky-600 hover:text-white hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2';
+
+        // Dropdown menu items.
         $menuItem =
-            'block w-full rounded-lg px-3 py-2.5 text-start text-[15px] font-medium text-slate-700 cursor-pointer transition-colors hover:bg-sky-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:text-slate-200 dark:hover:bg-sky-700 dark:hover:text-white';
+            'block w-full rounded-lg px-3 py-2.5 text-start text-[15px] font-medium text-slate-700 cursor-pointer transition-colors hover:bg-sky-50 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-sky-400';
 
         // Category pills.
         $chip =
@@ -61,18 +71,17 @@
     @endphp
 
     <header
-        class="relative z-50 w-full border-b border-slate-100  text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+        class="relative z-50 w-full border-b border-slate-200 bg-[#F8FAFC] text-slate-900 shadow-[0_4px_14px_rgba(15,23,42,0.06)]">
 
         {{-- Main Header --}}
-        <div class="mx-auto w-full max-w-[1600px] px-4 py-3 md:px-8">
+        <div class="mx-auto w-full max-w-[1280px] px-4 py-3 md:px-6">
 
-            {{-- Phone: row 1 = logo + actions, row 2 = search. Tablet and desktop: one row. --}}
             <div
-                class="flex min-h-[56px] flex-wrap items-center gap-x-3 gap-y-3 md:min-h-[64px] md:flex-nowrap md:gap-x-5">
+                class="storefront-header-row flex min-h-[56px] flex-wrap items-center gap-x-3 gap-y-3 md:min-h-[64px] md:flex-nowrap md:gap-x-5">
 
                 {{-- Brand Logo --}}
                 <a href="{{ route('home') }}" aria-label="{{ $shopName }}"
-                    class="order-1 flex min-w-0 max-w-[130px] shrink-0 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 min-[380px]:max-w-[160px] sm:max-w-[220px]">
+                    class="storefront-header-brand order-1 flex min-w-0 max-w-[calc(100%-7rem)] shrink-0 items-center rounded-lg no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 min-[380px]:max-w-[calc(100%-8rem)] sm:max-w-[220px]">
 
                     @if ($logo !== '')
                         <img src="{{ $logo }}" alt="{{ $shopName }}" width="240" height="64"
@@ -85,7 +94,7 @@
 
                     @if ($logo === '')
                         <span
-                            class="brand-name ml-2 min-w-0 truncate text-lg font-extrabold  tracking-tight text-sky-600 sm:text-xl md:text-2xl">
+                            class="brand-name storefront-header-brand-name ml-2 min-w-0 truncate text-base font-extrabold tracking-tight text-sky-600 sm:text-xl md:text-2xl">
                             {{ $shopName }}
                         </span>
                     @endif
@@ -93,76 +102,65 @@
 
                 {{-- Search Form --}}
                 <form action="{{ route('search') }}" method="get" role="search"
-                    class="order-3 flex h-11 w-full min-w-0 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm transition focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-100 md:order-2 md:h-12 md:w-auto md:max-w-3xl md:flex-1 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:ring-sky-900">
+                    class="storefront-header-search order-3 flex h-11 w-full min-w-0 overflow-hidden rounded-xl border border-slate-300 bg-[#F8FAFC] shadow-sm transition-all duration-200 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-100 md:order-2 md:h-12 md:w-auto md:max-w-3xl md:flex-1 dark:border-slate-300 dark:bg-[#F8FAFC]">
 
                     <label class="sr-only" for="q">
                         {{ t('nav.search') }}
                     </label>
 
-                    <input id="q" name="q" type="search" maxlength="100" value="{{ $searchTerm ?? '' }}"
-                        placeholder="{{ t('nav.search_placeholder') }}"
-                        class="w-full min-w-0 flex-1 border-0 bg-transparent px-3 text-base text-slate-700 outline-none placeholder:text-slate-400 focus:ring-0 md:px-4 dark:text-slate-100 dark:placeholder:text-slate-500">
+                    {{-- Search Input --}}
+                    <div class="flex min-w-0 flex-1 items-center px-4 md:px-5">
 
+                        <input id="q" name="q" type="search" maxlength="100"
+                            value="{{ $searchTerm ?? '' }}" placeholder="{{ t('nav.search_placeholder') }}"
+                            class="h-full w-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-base font-normal text-slate-700 outline-none ring-0 placeholder:text-slate-400 focus:border-0 focus:outline-none focus:ring-0">
+
+                    </div>
+
+                    {{-- Search Button --}}
                     <button type="submit" aria-label="{{ t('nav.search') }}"
-                        class="flex w-11 shrink-0 items-center justify-center bg-sky-600 text-white transition-colors hover:bg-sky-700 focus-visible:bg-sky-800 focus-visible:outline-none md:w-14">
+                        class="group m-1 flex w-11 shrink-0 items-center justify-center rounded-lg border-0 bg-sky-600 text-white outline-none ring-0 transition-all duration-200 hover:bg-sky-700 focus:outline-none focus:ring-0 active:scale-95 md:w-12">
 
-                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
-                            class="h-5 w-5 md:h-[22px] md:w-[22px]">
-                            <circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="2" />
-                            <path d="m16 16 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                            stroke-linejoin="round" class="transition-transform duration-200 group-hover:scale-110">
+
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="m21 21-4.35-4.35" />
+
                         </svg>
 
                     </button>
+
                 </form>
 
-
-                <nav class="order-2 ml-auto flex items-center gap-1 sm:gap-1.5 md:order-3 [&_a]:no-underline [&_button]:no-underline"
+                {{-- Header Actions --}}
+                <nav class="storefront-header-actions order-2 ml-auto flex items-center gap-1 sm:gap-1.5 md:order-3 [&_a]:no-underline [&_button]:no-underline"
                     aria-label="{{ t('nav.account') }}">
 
-                    {{-- Track order: Large screens --}}
+                    {{-- Track Order --}}
                     <a href="{{ route('track.form') }}"
-                        class="{{ $navBtn }} hidden h-10 px-3.5 lg:inline-flex no-underline hover:no-underline">
+                        class="{{ $trackBtn }} storefront-track-btn hidden h-10 px-3.5 lg:inline-flex no-underline hover:no-underline">
                         {{ t('nav.track') }}
                     </a>
 
-                    {{-- Language switch: Large screens --}}
+                    {{-- Language Switch --}}
                     <form action="{{ route('locale.update') }}" method="post" class="hidden lg:block">
                         @csrf
                         <input type="hidden" name="locale" value="{{ $other }}">
 
                         <button type="submit" lang="{{ $other }}"
-                            class="{{ $navBtn }} inline-flex h-10 px-3.5 no-underline hover:no-underline">
+                            class="storefront-locale-btn inline-flex h-10 items-center justify-center rounded-xl border border-slate-400 bg-transparent px-3.5 text-[15px] font-normal text-black cursor-pointer transition-colors hover:border-sky-600 hover:bg-sky-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 no-underline hover:no-underline">
                             {{ $other === 'en' ? 'English' : 'বাংলা' }}
                         </button>
                     </form>
 
-                    {{-- Theme toggle
-                    <button type="button" data-theme-toggle data-label-dark="{{ t('nav.theme_to_dark') }}"
-                        data-label-light="{{ t('nav.theme_to_light') }}" aria-label="{{ t('nav.theme_to_dark') }}"
-                        hidden class="{{ $navBtn }} inline-flex h-11 w-11 md:h-10 md:w-10 [&[hidden]]:hidden">
-
-                        <svg class="block dark:hidden" viewBox="0 0 24 24" width="22" height="22"
-                            aria-hidden="true" focusable="false">
-                            <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor"
-                                stroke-width="1.8" stroke-linejoin="round" />
-                        </svg>
-
-                        <svg class="hidden dark:block" viewBox="0 0 24 24" width="22" height="22"
-                            aria-hidden="true" focusable="false">
-                            <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor"
-                                stroke-width="1.8" />
-                            <path
-                                d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"
-                                fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                        </svg>
-                    </button> --}}
-
                     {{-- Cart --}}
                     <a href="{{ route('cart.show') }}"
-                        class="relative inline-flex h-11 w-11 items-center justify-center gap-2 rounded-xl bg-sky-700 px-3.5 text-[15px] font-semibold text-white no-underline transition-all duration-200 hover:bg-sky-800 hover:text-white hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 sm:w-auto md:h-10 dark:focus-visible:ring-offset-slate-900">
+                        class="group relative inline-flex h-11 w-11 items-center justify-center gap-2 rounded-xl border border-sky-600 bg-sky-600 px-3.5 text-[15px] font-semibold text-white no-underline transition-all duration-200 hover:border-sky-700 hover:bg-sky-700 hover:text-white hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 sm:w-auto md:h-10">
 
                         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"
-                            class="shrink-0">
+                            class="shrink-0 text-white">
                             <path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.76L20 8H6.2" fill="none"
                                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                                 stroke-linejoin="round" />
@@ -174,18 +172,18 @@
 
                         @if ($cartCount > 0)
                             <span
-                                class="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-900 px-1.5 text-xs font-bold leading-none text-white ring-2 ring-white sm:static sm:ring-0 dark:ring-slate-900"
+                                class="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-900 px-1.5 text-xs font-bold leading-none text-white ring-2 ring-white sm:static sm:ring-0"
                                 aria-label="{{ t('nav.cart_items', ['n' => (string) $cartCount]) }}">
                                 {{ num($cartCount) }}
                             </span>
                         @endif
                     </a>
 
-                    {{-- Mobile / Tablet Menu: Hidden on large screens --}}
-                    <details class="group relative lg:hidden">
+                    {{-- Mobile / Tablet Menu --}}
+                    <details class="storefront-mobile-menu group relative lg:hidden">
 
                         <summary aria-label="{{ t('nav.menu_open') }}"
-                            class="{{ $navBtn }} inline-flex h-11 w-11 list-none select-none rounded-xl group-open:border-sky-700 group-open:bg-sky-700 group-open:text-white md:h-10 md:w-10 [&::-webkit-details-marker]:hidden">
+                            class="{{ $navBtn }} storefront-mobile-menu-trigger inline-flex h-11 w-11 list-none select-none touch-manipulation rounded-xl md:h-10 md:w-10 [&::-webkit-details-marker]:hidden">
 
                             <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"
                                 focusable="false">
@@ -197,8 +195,7 @@
                         </summary>
 
                         {{-- Dropdown --}}
-                        <div
-                            class="absolute end-0 top-full z-50 mt-2 flex max-h-[calc(100vh-6rem)] w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
+                        <div class="storefront-mobile-menu-panel">
 
                             <a href="{{ route('track.form') }}"
                                 class="{{ $menuItem }} no-underline hover:no-underline">
@@ -216,37 +213,23 @@
                             </a>
 
                             <form action="{{ route('locale.update') }}" method="post"
-                                class="mt-1 border-t border-slate-200 pt-2 dark:border-slate-700">
+                                class="storefront-mobile-menu-locale">
                                 @csrf
                                 <input type="hidden" name="locale" value="{{ $other }}">
 
                                 <button type="submit" lang="{{ $other }}"
-                                    class="{{ $menuItem }} w-full text-left no-underline hover:no-underline">
+                                    class="storefront-mobile-menu-locale-button {{ $menuItem }} w-full text-left no-underline hover:no-underline">
                                     {{ $other === 'en' ? 'English' : 'বাংলা' }}
                                 </button>
                             </form>
                         </div>
                     </details>
                 </nav>
-
             </div>
-
-            {{-- Categories: one scrollable row on phones, wrapping pills from tablet up --}}
-            {{-- @if (!empty($categories))
-                <nav class="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800"
-                    aria-label="{{ t('nav.categories') }}">
-                    <div
-                        class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden">
-                        <a href="{{ route('products.index') }}" class="{{ $chip }}">{{ t('nav.all') }}</a>
-                        @foreach ($categories as $category)
-                            <a href="{{ route('categories.show', ['slug' => (string) ($category['slug'] ?? '')]) }}"
-                                class="{{ $chip }}">{{ $category['name'] ?? '' }}</a>
-                        @endforeach
-                    </div>
-                </nav>
-            @endif --}}
         </div>
     </header>
+
+
     @include('partials.category_navigation')
 
 
@@ -279,34 +262,40 @@
                 $bannerLabel = t('home.banner_label', ['name' => $shopName]);
                 $bannerClasses = 'block h-auto w-full object-cover object-center';
             @endphp
-            <section class="relative mt-5 w-full px-3 pb-4 sm:px-6 sm:pb-6 lg:px-8" aria-label="{{ $bannerLabel }}">
+            <section class="relative mt-5 w-full pb-4 sm:pb-6" aria-label="{{ $bannerLabel }}">
 
-                <div class="banner {{ $banner === '' ? 'banner-plain ' : '' }}mx-auto mb-0 w-full max-w-[1700px] sm:rounded-2xl">
+                <div class="mx-auto w-full max-w-[1280px] px-4 md:px-6">
+                    <div class="banner {{ $banner === '' ? 'banner-plain ' : '' }}mb-0 w-full sm:rounded-2xl">
 
-                    @if ($banner !== '')
-                        @if ($bannerLink !== null)
-                            <a class="banner-link" href="{{ $bannerLink['url'] }}"{!! $bannerLink['external'] ? ' target="_blank" rel="noopener noreferrer"' : '' !!}
-                                aria-label="{{ $bannerLabel }}">
+                        @if ($banner !== '')
+                            @if ($bannerLink !== null)
+                                <a class="banner-link" href="{{ $bannerLink['url'] }}"{!! $bannerLink['external'] ? ' target="_blank" rel="noopener noreferrer"' : '' !!}
+                                    aria-label="{{ $bannerLabel }}">
+                                    <img src="{{ $banner }}" alt="" width="1600" height="560"
+                                        class="{{ $bannerClasses }}" fetchpriority="high" decoding="async"
+                                        data-fallback="banner-fallback">
+                                </a>
+                            @else
                                 <img src="{{ $banner }}" alt="" width="1600" height="560"
                                     class="{{ $bannerClasses }}" fetchpriority="high" decoding="async"
                                     data-fallback="banner-fallback">
-                            </a>
+                            @endif
+                            <div class="banner-fallback" hidden>
+                                <h1>{{ $shopName }}</h1>
+                                @if (!empty($brand['tagline']))
+                                    <p>{{ $brand['tagline'] }}</p>
+                                @endif
+                            </div>
                         @else
-                            <img src="{{ $banner }}" alt="" width="1600" height="560"
-                                class="{{ $bannerClasses }}" fetchpriority="high" decoding="async"
-                                data-fallback="banner-fallback">
+                            <div class="banner-fallback">
+                                <h1>{{ $shopName }}</h1>
+                                @if (!empty($brand['tagline']))
+                                    <p>{{ $brand['tagline'] }}</p>
+                                @endif
+                            </div>
                         @endif
-                        <div class="banner-fallback" hidden>
-                            <h1>{{ $shopName }}</h1>
-                            @if (!empty($brand['tagline']))<p>{{ $brand['tagline'] }}</p>@endif
-                        </div>
-                    @else
-                        <div class="banner-fallback">
-                            <h1>{{ $shopName }}</h1>
-                            @if (!empty($brand['tagline']))<p>{{ $brand['tagline'] }}</p>@endif
-                        </div>
-                    @endif
 
+                    </div>
                 </div>
 
             </section>
@@ -319,7 +308,8 @@
         @endif
 
         {{-- Existing Page Content --}}
-        <div class="container">
+        <div
+            class="{{ request()->routeIs('products.*', 'categories.show', 'search') ? 'catalog-page-container' : 'container' }}">
             @yield('content')
 
         </div>
@@ -333,10 +323,10 @@
     @include('partials.trending') --}}
 
 
-    <footer class="w-full border-t border-gray-200 bg-gray-50 text-slate-700">
+    <footer class="w-full border-t border-gray-200 bg-[#F8FAFC] text-slate-700">
 
         {{-- Main Footer --}}
-        <div class="mx-auto max-w-[1600px] px-5 py-12 sm:px-8 lg:px-12 lg:py-16">
+        <div class="mx-auto max-w-[1280px] px-4 py-12 sm:px-6 lg:py-16">
 
             <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12">
 
@@ -347,8 +337,9 @@
                         aria-label="{{ $shopName }}">
 
                         @if ($logo !== '')
-                            <img src="{{ $logo }}" alt="" class="h-14 w-auto max-w-[180px] object-contain"
-                                loading="lazy" data-fallback="footer-brand-name">
+                            <img src="{{ $logo }}" alt=""
+                                class="h-14 w-auto max-w-[180px] object-contain" loading="lazy"
+                                data-fallback="footer-brand-name">
                         @endif
 
                         <span class="footer-brand-name text-lg font-extrabold text-sky-600"
@@ -459,10 +450,10 @@
 
 
         {{-- Bottom Footer --}}
-        <div class="border-t border-gray-200 bg-white">
+        <div class="border-t border-gray-200 bg-[#F8FAFC]">
 
             <div
-                class="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-5 px-5 py-6 text-center sm:px-8 md:flex-row md:text-left lg:px-12">
+                class="mx-auto flex max-w-[1280px] flex-col items-center justify-between gap-5 px-4 py-6 text-center sm:px-6 md:flex-row md:text-left">
 
                 <p class="text-xs text-slate-500">
                     {{ t('footer.rights', ['year' => gmdate('Y'), 'name' => $shopName]) }}

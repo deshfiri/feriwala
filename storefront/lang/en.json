@@ -289,5 +289,17 @@
     "home.best_sellers": "Best sellers",
     "catalog.category_label": "Category",
     "catalog.product_count": ":n products",
-    "catalog.category_empty": "There are currently no products in this category."
+    "catalog.category_empty": "There are currently no products in this category.",
+    "checkout.required_note": "Fields marked * are required.",
+    "checkout.contact_help": "We use these to confirm and deliver your order.",
+    "checkout.delivery_flat": "Delivery is a flat :amount, whichever area you choose.",
+    "checkout.delivery_free": "Delivery is free on this order.",
+    "checkout.payment_help": "Choose how you would like to pay.",
+    "checkout.trust_review": "You review everything before the order is placed.",
+    "checkout.trust_pay": "Online payments are made on the payment provider's own secure page.",
+    "checkout.summary_toggle": "Show order summary",
+    "checkout.items_count": ":n items",
+    "checkout.submitting": "Please wait…",
+    "checkout.price_unavailable": "The total is confirmed on the next step.",
+    "checkout.continue_hint": "Next: review your order. Nothing is charged yet."
 }

@@ -1,6 +1,6 @@
 @if (!empty($categories))
-    <section class="w-full bg-gray-50 py-6 md:py-8 dark:bg-slate-900" aria-labelledby="shop-by-category-title">
-        <div class="mx-auto w-full max-w-[1600px] px-4 md:px-8">
+    <section class="w-full bg-[#F8FAFC] py-6 md:py-8 dark:bg-[#F8FAFC]" aria-labelledby="shop-by-category-title">
+        <div class="mx-auto w-full max-w-[1280px] px-4 md:px-6">
 
             <h2 id="shop-by-category-title"
                 class="mb-5 flex items-center gap-3 text-xl font-bold tracking-tight text-slate-900 md:text-2xl dark:text-white">

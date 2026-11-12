@@ -14,9 +14,17 @@
  * The shop's own container wins.
  */
 .container {
-    width: min(1280px, 100% - 2rem);
-    max-width: none;
+    box-sizing: border-box;
+    width: min(1280px, 100%);
+    max-width: 1280px;
     margin-inline: auto;
+    padding-inline: clamp(1rem, 1.6vw, 1.5rem);
+}
+
+@media (max-width: 520px) {
+    .container {
+        width: 100%;
+    }
 }
 
 /* =========================================
@@ -29,12 +37,15 @@
 }
 
 .category-navigation__inner {
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     width: 100%;
+    max-width: 1280px;
     min-height: 56px;
     gap: 12px;
-    padding: 6px 16px;
+    margin-inline: auto;
+    padding: 6px clamp(1rem, 3.125vw, 1.5rem);
 }
 
 /* Fixed All Products Button */
@@ -171,7 +182,7 @@
     .category-navigation__inner {
         min-height: 52px;
         gap: 6px;
-        padding: 6px 10px;
+        padding-block: 6px;
     }
 
     .category-navigation__all,
@@ -196,7 +207,7 @@
     .category-navigation__inner {
         min-height: 48px;
         gap: 4px;
-        padding: 5px 8px;
+        padding-block: 5px;
     }
 
     .category-navigation__all {
@@ -230,4 +241,48 @@
     .category-marquee {
         overflow-x: auto;
     }
+}
+/* =========================================
+   Storefront Header Search & Navigation
+========================================= */
+
+.storefront-header-search {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.storefront-header-search:focus-within {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgb(2 132 199 / 10%);
+}
+
+.storefront-header-search input {
+    color: #0f172a;
+}
+
+.storefront-header-search input::placeholder {
+    color: #94a3b8;
+}
+
+.storefront-header-search input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.storefront-header-search__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9999px;
+    background: #0284c7;
+    color: #ffffff;
+    transition: background-color 200ms ease, transform 200ms ease;
+}
+
+.storefront-header-search button:hover .storefront-header-search__icon {
+    background: #0369a1;
+    transform: scale(1.06);
 }

@@ -289,5 +289,17 @@
     "home.best_sellers": "সর্বাধিক বিক্রিত",
     "catalog.category_label": "বিভাগ",
     "catalog.product_count": ":n টি পণ্য",
-    "catalog.category_empty": "এই বিভাগে এখন কোনো পণ্য নেই।"
+    "catalog.category_empty": "এই বিভাগে এখন কোনো পণ্য নেই।",
+    "checkout.required_note": "* চিহ্নিত ঘরগুলো পূরণ করা আবশ্যক।",
+    "checkout.contact_help": "অর্ডার নিশ্চিত করতে ও পৌঁছে দিতে আমরা এগুলো ব্যবহার করি।",
+    "checkout.delivery_flat": "যেকোনো এলাকা বেছে নিলেও ডেলিভারি চার্জ নির্দিষ্ট :amount।",
+    "checkout.delivery_free": "এই অর্ডারে ডেলিভারি বিনামূল্যে।",
+    "checkout.payment_help": "কীভাবে মূল্য পরিশোধ করবেন তা বেছে নিন।",
+    "checkout.trust_review": "অর্ডার দেওয়ার আগে আপনি সবকিছু দেখে নিতে পারবেন।",
+    "checkout.trust_pay": "অনলাইন পেমেন্ট পেমেন্ট প্রদানকারীর নিজস্ব নিরাপদ পেজে সম্পন্ন হয়।",
+    "checkout.summary_toggle": "অর্ডারের সারসংক্ষেপ দেখুন",
+    "checkout.items_count": ":n টি পণ্য",
+    "checkout.submitting": "অপেক্ষা করুন…",
+    "checkout.price_unavailable": "মোট মূল্য পরের ধাপে নিশ্চিত করা হবে।",
+    "checkout.continue_hint": "পরের ধাপ: অর্ডার দেখে নিন। এখনও কিছু কাটা হচ্ছে না।"
 }

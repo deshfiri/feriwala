@@ -15,7 +15,7 @@
         <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true" focusable="false"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.76L20 8H6.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="20" r="1.3" fill="currentColor"/><circle cx="17" cy="20" r="1.3" fill="currentColor"/></svg>
         <p><strong>{{ t('cart.empty') }}</strong></p>
         <p class="muted">{{ t('cart.empty_hint') }}</p>
-        <a class="btn" href="{{ route('products.index') }}">{{ t('cart.continue') }}</a>
+        <a class="btn !text-white" href="{{ route('products.index') }}">{{ t('cart.continue') }}</a>
     </div>
 @else
     @if ($problem !== null)<p class="flash flash-warning" role="status">{{ t($problem) }}</p>@endif
@@ -80,7 +80,7 @@
             @else
                 <a class="btn btn-accent btn-wide" href="{{ route('checkout.form') }}">{{ t('cart.checkout') }}</a>
             @endif
-            <a class="btn btn-quiet btn-wide" href="{{ route('products.index') }}">{{ t('cart.continue') }}</a>
+            <a class="btn btn-quiet btn-wide !text-white" href="{{ route('products.index') }}">{{ t('cart.continue') }}</a>
         </aside>
     </div>
 @endif

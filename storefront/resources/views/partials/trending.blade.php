@@ -6,8 +6,8 @@
     $trendingIsNewest = $featuredIsNewest ?? false;
 @endphp
 
-<section class="w-full bg-white py-6 md:py-8 dark:bg-slate-900" aria-labelledby="trending-title">
-    <div class="mx-auto w-full max-w-[1600px] px-4 md:px-8">
+<section class="w-full bg-[#F8FAFC] py-6 md:py-8 dark:bg-[#F8FAFC]" aria-labelledby="trending-title">
+    <div class="mx-auto w-full max-w-[1280px] px-4 md:px-6">
 
         {{-- Heading + See All --}}
         <div class="mb-4 flex items-center justify-between gap-4 md:mb-6">

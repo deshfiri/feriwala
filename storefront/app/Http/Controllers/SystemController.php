@@ -26,7 +26,8 @@ class SystemController extends Controller
     {
         $parent = request_string($request, 'parent');
 
-        if ($parent !== '' && preg_match('/^[a-z]+:[0-9:]+$/', $parent) !== 1) {
+        // `{type}:{parent source id}:{source id}`; a Division has no parent, written `-` (contract §5.5).
+        if ($parent !== '' && preg_match('/^[a-z_]+:(?:-|[A-Za-z0-9_]+):[A-Za-z0-9_]+$/', $parent) !== 1) {
             return response()->json(['data' => []], 422);
         }
 

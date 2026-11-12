@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Erp\Client;
 use App\Erp\ErpException;
 use App\Services\Basket;
+use App\Services\BasketQuote;
 use App\Services\Catalog;
-use App\Services\Site;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,9 +15,8 @@ use Illuminate\View\View;
 class CartController extends Controller
 {
     public function __construct(
-        private readonly Client $erp,
         private readonly Catalog $catalog,
-        private readonly Site $site,
+        private readonly BasketQuote $quotes,
     ) {}
 
     public static function basket(Request $request): Basket
@@ -34,7 +32,7 @@ class CartController extends Controller
 
         if ($items !== []) {
             try {
-                $quote = $this->quote($items);
+                $quote = $this->quotes->for($items);
             } catch (ErpException $exception) {
                 $problem = match (true) {
                     $exception->is('website_not_accepting_orders') => 'cart.not_accepting',
@@ -175,52 +173,6 @@ class CartController extends Controller
         self::basket($request)->remove(request_string($request, 'sku'));
 
         return redirect()->route('cart.show');
-    }
-
-    /**
-     * Price a basket. The ERP is asked for a payment method it will take, so the
-     * quote answers about the cart and not about a method nobody chose.
-     *
-     * @param  list<array{sku: string, quantity: int}>  $items
-     * @return array<string, mixed>
-     *
-     * @throws ErpException
-     */
-    private function quote(array $items): array
-    {
-        $methods = (array) $this->site->get()['payment_methods'];
-        $response = $this->erp->post('/checkout/quote', [
-            'items' => array_map(static fn (array $line): array => ['sku' => $line['sku'], 'quantity' => $line['quantity']], $items),
-            'payment_method' => (string) ($methods[0] ?? 'online'),
-        ]);
-
-        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
-        $lines = [];
-
-        foreach ((array) ($data['items'] ?? []) as $line) {
-            if (! is_array($line)) {
-                continue;
-            }
-
-            $availability = is_array($line['availability'] ?? null) ? $line['availability'] : [];
-            $lines[] = [
-                'sku' => (string) ($line['sku'] ?? ''),
-                'quantity' => (int) ($line['quantity'] ?? 0),
-                'unit_price' => is_array($line['unit_price'] ?? null) ? $line['unit_price'] : null,
-                'line_total' => is_array($line['line_total'] ?? null) ? $line['line_total'] : null,
-                'in_stock' => (bool) ($availability['in_stock'] ?? true),
-                'reservable' => (bool) ($availability['reservable'] ?? true),
-            ];
-        }
-
-        return [
-            'items' => $lines,
-            'subtotal' => is_array($data['subtotal'] ?? null) ? $data['subtotal'] : null,
-            'discount' => is_array($data['discount'] ?? null) ? $data['discount'] : null,
-            'shipping' => is_array($data['shipping'] ?? null) ? $data['shipping'] : null,
-            'tax' => is_array($data['tax'] ?? null) ? $data['tax'] : null,
-            'grand_total' => is_array($data['grand_total'] ?? null) ? $data['grand_total'] : null,
-        ];
     }
 
     /**
